@@ -1,0 +1,12 @@
+name: Chore
+description: Dependency updates, config changes, tooling, or dev environment work
+title: "[Chore]: "
+labels: ["chore"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: "e.g. Upgrade Flutter to the latest stable and run flutter pub upgrade"
+    validations:
+      required: true
