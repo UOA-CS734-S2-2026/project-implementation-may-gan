@@ -1,0 +1,32 @@
+name: Refactor
+description: Improving existing code without changing behaviour
+title: "[Refactor]: "
+labels: ["refactor"]
+body:
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does this code need to change? What problem does it solve?
+      placeholder: "e.g. The feed visibility check is duplicated across two resolvers — extract to a shared helper"
+    validations:
+      required: true
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: Proposed changes
+      description: What will be restructured, extracted, or simplified?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: guarantees
+    attributes:
+      label: Guarantees
+      description: Confirm scope before starting
+      options:
+        - label: No behaviour changes — existing tests must still pass
+          required: true
+        - label: No new features are bundled into this refactor
+          required: true

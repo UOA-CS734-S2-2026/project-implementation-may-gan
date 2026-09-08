@@ -1,0 +1,38 @@
+name: Feature / Task
+description: A new feature or planned task from the project phases
+title: "[Feature]: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What needs to be built? What is the expected behaviour?
+      placeholder: "e.g. Build the daily post composer — camera capture, up to 10 images, day rating 1–10, prompt response"
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How do we know this is done? Use checkboxes.
+      placeholder: |
+        - [ ] User can capture a photo in-app
+        - [ ] Day rating constrained to 1–10
+        - [ ] A second post on the same local day is rejected
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: high_risk
+    attributes:
+      label: High Risk?
+      description: Does this touch any high-risk area from ARCHITECTURE.md?
+      options:
+        - label: Auth (Firebase ID-token verification via Admin SDK)
+        - label: Timezone / unlock enforcement (local_date UNIQUE index + midnight scheduler)
+        - label: Event-driven fan-out (FCM topic subscription correctness)
+        - label: API security (GraphQL depth/complexity limiting — DoS surface)
+        - label: Message privacy (end-to-end encryption + mutual-friend visibility contract)
+        - label: Media access rules (Firebase Storage security rules / key exposure)

@@ -1,0 +1,37 @@
+name: Testing
+description: Writing or improving tests (unit, widget, integration, device, or E2E)
+title: "[Test]: "
+labels: ["testing"]
+body:
+  - type: dropdown
+    id: test_type
+    attributes:
+      label: Test type
+      options:
+        - "Unit — API resolver (Vitest)"
+        - "Unit — Dart logic (flutter_test)"
+        - "Widget (flutter_test)"
+        - "Integration (Vitest / integration_test)"
+        - "E2E (Patrol / integration_test)"
+        - "Device (manual iOS / Android matrix)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be tested?
+      placeholder: "e.g. Integration tests for the createPost mutation — happy path, duplicate post, after midnight, unauthenticated"
+    validations:
+      required: true
+
+  - type: textarea
+    id: cases
+    attributes:
+      label: Test cases
+      placeholder: |
+        - [ ] Happy path
+        - [ ] Unauthenticated request is rejected
+        - [ ] Duplicate post same local day is rejected
+    validations:
+      required: true
