@@ -1,39 +1,25 @@
-# Dayli architecture proposal
+# Dayli proposal
 
-Status: proposed design, not implemented.
+Status: design only, not implemented.
 
-Dayli helps university students share one daily reflection with close friends. Mobile leads with camera capture and reminders. Web retains posting and messaging, while adding a calendar, mood history, and year-in-review.
+Dayli lets students share one daily reflection with friends. Capture on Flutter; reflect through Next.js calendars, mood history, and recaps. Web also supports posting and messaging.
 
-## Decisions
+Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better Auth, and useful existing code. Use R2 for media and Durable Objects/WebSockets for realtime.
 
-- Flutter for iOS/Android, Next.js for web, and a separate Hono API on Cloudflare Workers.
-- Keep PostgreSQL, Drizzle, Better Auth, and useful WDCC services and tests.
-- REST/OpenAPI for both clients. Durable Objects and WebSockets replace process-local SSE and the earlier Ably proposal.
-- R2 for private media, Hyperdrive for PostgreSQL connections, and Worker scheduled handlers for jobs.
-- One monorepo in `project-implementation-may-gan`, with separate web and API deployments.
+## Read by topic
 
-Posts and messages use HTTPS, encryption at rest, and server-side access controls. The backend can read them. There is no end-to-end encryption or Matrix service. Normal account recovery restores server-held history; biometric lock protects local access.
+- [MVP](mvp.md): features and build order.
+- [Existing code](existing-implementation.md): reuse and known gaps.
+- [Tech stack](tech-stack.md): tools and deployment.
+- [Architecture](architecture.md): components and request flows.
+- [Scalability](scalability.md): capacity, costs, and upgrade triggers.
+- [Security](security.md): privacy and permissions.
+- [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 
-## Developer reading guide
+## Fixed rules
 
-| Document | Read it for |
-| --- | --- |
-| [MVP](mvp.md) | User experience, full feature scope, platform fallbacks, and build phases. |
-| [Existing implementation](existing-implementation.md) | Code to keep, adapt, or replace. |
-| [Tech stack](tech-stack.md) | Frameworks, providers, deployment, and remaining compatibility checks. |
-| [Architecture](architecture.md) | API boundaries, database changes, posting, realtime, and jobs. |
-| [Scalability](scalability.md) | Midnight load, database capacity, media costs, Durable Objects, and upgrade triggers. |
-| [Security](security.md) | Permissions, sessions, local protection, and OWASP controls. |
-| [Testing and delivery](testing-and-delivery.md) | Release tests, migration, CI, and course evidence. |
+One post per Auckland day, released at midnight. Server acceptance determines eligibility; offline drafts cannot be backdated. Solo entries stay owner-only unless explicitly shared. Share links require signup and grant one post.
 
-## Product rules
+Content is server-readable, protected by HTTPS, encryption at rest, and permissions. No end-to-end encryption. Normal account recovery restores server history.
 
-One post per day, with a shared release at midnight in `Pacific/Auckland`. The server decides submission eligibility. Offline drafts survive restarts, but must reach the backend before midnight to count for that day. Solo entries are owner-only unless explicitly shared. Selected-post links require signup and do not create friendships.
-
-All agreed additions remain in the course scope with supported platform fallbacks. Prefer free tiers, but budget for real storage, database capacity, and distribution costs as usage grows.
-
-## Repository and course boundaries
-
-The four-person team works in `UOA-CS734-S2-2026/project-implementation-may-gan`. Use its board, issues, reviewed PRs, and weekly minutes for assessed evidence. WDCC supplies reusable code and receives a reference copy of these docs.
-
-The team reports lecturer approval to reuse the idea. Record that approval and code attribution in the course repo. No application code, infrastructure, or hosted data has been changed by this proposal. Native auth, Worker dependencies, and Next.js hosting compatibility still need tests.
+Use the May Gan monorepo and course GitHub board. Record lecturer reuse approval and WDCC code attribution. Prefer free tiers without promising permanently free hosting.
