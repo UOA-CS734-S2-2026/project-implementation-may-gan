@@ -1,0 +1,7 @@
+{
+  "name": "@dayli/domain",
+  "private": true,
+  "type": "module",
+  "scripts": { "typecheck": "tsc" },
+  "devDependencies": { "typescript": "6.0.3" }
+}

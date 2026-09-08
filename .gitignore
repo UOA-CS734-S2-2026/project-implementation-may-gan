@@ -3,6 +3,15 @@
 
 .DS_Store
 node_modules
+.next
+.wrangler
+coverage
+
+# Flutter and Dart
+.dart_tool
+.flutter-plugins*
+.pub-cache
+build
 
 # Environment variables - Edit if necessary
 .env
