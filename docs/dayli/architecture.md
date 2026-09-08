@@ -61,4 +61,4 @@ Keep existing content tables. Add audiences/releases, revisions, private upload 
 
 A Cron Trigger invokes the Worker's scheduled handler directly. Claim bounded leased jobs, retry safely, and discard expired reminders. Push handles suspended apps. SQL calculates owner-scoped mood history and recaps. Single-use signup invitations grant one post, with forwarding risk disclosed.
 
-[Security rules](security.md) · [Scaling and failure handling](scalability.md)
+[Security rules](security.md) · [Scaling and failure handling](scalability.md) · [Implementation details](implementation-reference.md)

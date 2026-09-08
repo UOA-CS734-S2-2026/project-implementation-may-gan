@@ -15,6 +15,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
+- [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 
 ## Fixed rules
 

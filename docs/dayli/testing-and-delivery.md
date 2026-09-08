@@ -13,6 +13,8 @@
 
 Emulators do not prove hardware key protection or every sensor feature. Android screenshot detection excludes ADB captures. Test deployed bindings in isolated staging too.
 
+Use the [implementation reference](implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
+
 ## Release gates
 
 - Concurrent posts/messages and retries never duplicate accepted content or bypass daily/request limits.

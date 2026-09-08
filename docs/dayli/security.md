@@ -18,6 +18,8 @@ Enforce checks on every list/detail/export/preview route. Public profiles never 
 
 ## Sessions and sockets
 
+Detailed ticket, alarm, and revocation behaviour is in the [implementation reference](implementation-reference.md).
+
 Better Auth is the sole identity authority. Browser cookies need Secure/HttpOnly settings, appropriate SameSite, exact credentialed CORS, and CSRF/origin checks. Flutter stores bearer sessions in protected native storage. OAuth needs safe state, redirects, PKCE where supported, and no reusable credentials in URLs.
 
 Socket tickets are short-lived, single-use, session-bound, and atomically consumed. Validate browser origins. Only internal bindings publish updates. Persist expiry metadata and enforce revocation after hibernation; ordinary timers are insufficient. Fetch message bodies through authorised REST.

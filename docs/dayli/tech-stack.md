@@ -36,4 +36,6 @@ Test Better Auth, Drizzle/Hyperdrive transactions, FCM, and sockets in the Worke
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push.
 
+Use the [implementation reference](implementation-reference.md) for runtime checks and deployment pitfalls.
+
 [Hono deployment](https://hono.dev/docs/getting-started/cloudflare-workers) · [Wrangler](https://developers.cloudflare.com/workers/wrangler/) · [Next.js hosting](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/) · [Scaling and costs](scalability.md)

@@ -10,6 +10,8 @@ Design for midnight bursts, database pressure, and retained media. Registered-us
 
 Storage assumes one 1 MB photo per user/day over 30 days, excluding thumbnails, audio, revisions, and backups. At growth scale, 1,000 viewers making three requests over ten seconds means roughly 300 requests/second. Include socket handshakes and message-triggered fetches separately.
 
+For index candidates, transaction boundaries, leases, and socket expiry mechanisms, see the [implementation reference](implementation-reference.md).
+
 ## Build these controls now
 
 | Area | Rule |
