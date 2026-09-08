@@ -1,52 +1,38 @@
 # Existing implementation
 
-Reference repository: `732-workspace/group-project-wdcc`, commit `7d2dfd6`, reviewed from `hotfix/ratelimit-fail-open`. This was a targeted source review, not a full audit or runtime test run.
+Reference: `732-workspace/group-project-wdcc`, commit `7d2dfd6`, reviewed from `hotfix/ratelimit-fail-open`. This was a targeted source review, not a full audit or runtime test run.
 
-## Keep and adapt
+## Keep, adapt, replace
 
-| Existing code | Finding | Recommendation |
-| --- | --- | --- |
-| `package.json` | Next.js 16.2, React 19, tRPC 11, TanStack Query, Zod, Drizzle, Better Auth, Cloudinary, Upstash | Keep the main framework, database, auth, validation, and query libraries. Replace the client API contract gradually. |
-| `server/api/routers/*` | Schemas, handlers, services, and tests are separated by domain | Keep this structure. Remove transport-specific errors and request contexts from reusable services. |
-| `lib/db/schemas/posts-schema.ts` | Plaintext application fields, rating check, unique author/date index, ordered image/video media | Retain server-readable fields and relational constraints. Add audience, release time, revision, and private media lifecycle. |
-| `server/api/routers/posts/createPost/createPost.service.ts` | Checks the Auckland date and writes post/media transactionally | Keep. Add idempotency, completed-upload ownership checks, and concurrent unique-conflict handling. |
-| `server/api/routers/posts/getMoodWeek/getMoodWeek.service.ts` | Queries weekly ratings with SQL | Keep and extend to date ranges and recap aggregates. This is compatible with the revised privacy decision. |
-| `server/api/routers/users/getCurrentStreak/getCurrentStreak.service.ts` | Computes streaks from posting dates | Reuse its calendar-date approach and test daylight-saving boundaries. |
-| `server/api/routers/friends/` | Requests, acceptance, decline, cancellation, removal, lists, counts, and status | Keep workflows. Add blocks and post-level sharing checks. |
-| `components/ui/PostCard.tsx`, `components/ui/MoodWeekGraph.tsx`, `app/(main)/post/_components/PostForm.tsx` | Existing web post, mood, and composer UI | Retain useful components and web posting. Add archive and year-in-review views. |
-| `server/api/routers/messages/sendMessage/sendMessage.service.ts` | Stores message bodies in PostgreSQL, checks participants and request status, updates conversation activity | Keep this backend. Add concurrency-safe request limits, idempotency, durable events, and retention controls. |
-| `components/messages/`, other message services | Conversation lists, request acceptance, read state, and chat UI | Adapt to shared REST and managed realtime notifications. No Matrix migration. |
-| `lib/auth/index.ts` | Better Auth with email/password, Google, username, and admin plugins | Retain identity provider. Prove native sessions and recovery flows. Supabase currently supplies PostgreSQL, not authentication. |
-| `.github/workflows/ci.yml` | Lint, formatting, types, PostgreSQL tests, browser setup, schema checks, build | Port to course repo. Add Flutter, contract, realtime, and performance tests. |
+| Existing path | Decision |
+| --- | --- |
+| `package.json`, web components | Keep Next.js/React, Tailwind, TanStack Query, Zod, Drizzle, PostgreSQL, Better Auth, and useful UI. |
+| `server/api/routers/*` | Keep domain services/tests. Replace tRPC handlers with Hono REST adapters; remove transport-specific contexts/errors from services. |
+| `lib/db/schemas/posts-schema.ts` | Retain content fields, rating checks, author/date uniqueness, and media ordering. Add audience, release time, revisions, and private-object lifecycle. |
+| `server/api/routers/posts/createPost/createPost.service.ts` | Keep server date authority and transactions. Add idempotency, owned-upload checks, and race handling. |
+| `server/api/routers/posts/getMoodWeek/getMoodWeek.service.ts`, user streak service | Keep SQL mood queries and calendar-based streaks; extend bounded history/recaps. |
+| `server/api/routers/friends/`, comments and likes | Keep workflows; add blocks and shared post-level visibility rules. |
+| `server/api/routers/messages/`, `components/messages/` | Keep PostgreSQL message/history/read-state model and acceptance UX. Add idempotency, transactional request limits, and outbox events. |
+| `lib/messages/pubsub.ts`, `app/api/messages/stream/route.ts` | Replace process-local SSE with per-user Durable Objects and WebSockets. |
+| `lib/auth/index.ts` | Move Better Auth authority to Hono. Prove Worker dependencies, native sessions, and recovery. Supabase currently hosts PostgreSQL, not auth. |
+| `app/api/cloudinary/sign/route.ts` | Replace private-post delivery with R2. Cloudinary public avatars may stay temporarily. |
+| `lib/ratelimit.ts` | Port policy tests; replace Upstash with Cloudflare abuse controls and strict database quotas. Do not inherit fail-open behaviour blindly. |
+| `.github/workflows/ci.yml`, `fly.toml` | Reuse CI lessons and deployment fallback, but create separate Worker/web release targets in the course repo. |
 
-There are 41 server test files. This establishes existing test infrastructure, not passing coverage. The build workflow uses configured secrets; new pull-request builds should not require production credentials.
+The source tree contains 41 server test files. That establishes useful infrastructure, not passing tests or coverage. New PR builds must not require production credentials.
 
-## Fix permission and calendar gaps
+## Known permission and calendar gaps
 
-The README describes friends-only content, but the code also permits public-profile posts. `server/api/lib/visibility.ts` returns public posts before checking authentication. `getUserPostsService` permits public access too. Public profile discoverability must not imply access to journal content in the revised app.
+The README says friends-only, but `server/api/lib/visibility.ts` and `getUserPostsService` also permit public-profile posts. Separate profile discovery from journal access. Existing `private` visibility means friends plus owner, not solo mode.
 
-Existing `private` profile visibility means friends plus owner, not a solo journal. Add a separate post audience with an explicit owner-only option.
+`getFeedService` filters yesterday's friends' posts, while detail/profile helpers do not apply the same release rule. Centralise midnight checks across all routes, including media, previews, comments, and sharing. Replace its 24-hour subtraction with Auckland calendar arithmetic and daylight-saving tests.
 
-`getFeedService` selects yesterday's friends' posts, but the shared visibility helper and profile-post query do not apply the same midnight gate. Centralise the check across posts, media, previews, comments, likes, and sharing. The owner may read their own entry early; other viewers must satisfy the release rule.
+Existing message publication happens after commit through an in-memory map. Events do not cross instances and can be lost on a crash. Keep PostgreSQL history, add a transactional outbox, and deliver small updates through Durable Objects. Reconnect fetches missed history through REST.
 
-The feed computes yesterday by subtracting 24 hours. Replace that with Auckland calendar arithmetic. Days around daylight-saving changes are not always 24 hours long.
-
-## Replace delivery, not the message model
-
-`lib/messages/pubsub.ts` uses a process-local subscriber map. `app/api/messages/stream/route.ts` exposes authenticated SSE, but events and connection limits do not cross instances. There is no durable replay, and a crash between committing a message and publishing its event can lose the update.
-
-Retain PostgreSQL as the message source of truth. Write an outbox record in the same transaction as a message, then publish a minimal invalidation through Ably. Clients fetch authorised messages through REST. Reconnects fetch missed history using a cursor. Managed realtime replaces the process-local delivery mechanism, not the stored conversation model.
-
-## Media and deployment
-
-`app/api/cloudinary/sign/route.ts` signs image/video uploads, and `post_media` stores Cloudinary IDs and URLs. Upload authentication does not by itself establish private download access. Do not retain permanent public post URLs for friends-only or solo content.
-
-Recommend private R2 objects with API-authorised short-lived downloads. Cloudinary can remain for explicitly public avatars. Retaining Cloudinary for posts is an alternative only after proving its authenticated delivery, expiry, transformation access, and plan costs. Client-side image compression can stay; server-side processing is now permitted when useful.
-
-`fly.toml` defines a Sydney machine that may stop at zero traffic. Preserve Docker portability, but do not use an in-process timer as the sole source of scheduled reminders.
+Signing a Cloudinary upload does not prove the resulting URL is private. Do not carry permanent public post URLs into the new private-media design.
 
 ## Import boundaries
 
-Import reusable application code into the course repository with attribution and reuse permission. Exclude `.env`, caches, build output, and `node_modules`. Preserve the course README and submission history. Distinguish imported work from new implementation in pull requests.
+Import into the course repo with reuse permission and source attribution. Exclude `.env`, `.dev.vars`, caches, build output, and dependencies. Preserve the course README/submission history and distinguish imported code from new contributions.
 
-There are no real user migrations to preserve. A fresh development database is reasonable. That does not authorise deleting an existing hosted database or changing shared credentials during documentation work.
+A fresh development database is reasonable because there are no real users to migrate. That does not authorise destructive changes to existing hosted data or credentials. See [Testing and delivery](testing-and-delivery.md) for the migration sequence.

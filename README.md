@@ -4,7 +4,7 @@ Welcome to the project for COMPSCI 734 - Mobile, Web & Enterprise Computing. We 
 
 ## Dayli proposal
 
-Start with the [Dayli developer onboarding and architecture proposal](docs/dayli/README.md). It covers the MVP, existing code reuse, recommended stack, architecture, security, and testing plan. This is proposed work, not an implemented application.
+Start with the [Dayli developer onboarding and architecture proposal](docs/dayli/README.md). It covers the MVP, code reuse, Hono/Cloudflare stack, architecture, scalability, security, and testing. This is proposed work, not an implemented application.
 
 Your team members are:
 - Andrew Qiu (aqiu604)

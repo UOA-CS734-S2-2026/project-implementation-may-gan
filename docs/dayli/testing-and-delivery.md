@@ -1,108 +1,64 @@
 # Testing and delivery
 
-## Test from the first working flow
+## Test ownership
 
-Every feature issue needs an acceptance scenario and test evidence. Retain existing service tests, but update assertions where the revised post privacy rules intentionally remove public journal access.
+Every feature issue needs acceptance criteria and evidence. Keep useful WDCC tests and update assertions where the new privacy rules remove public access. No runtime tests have been executed as part of this documentation change.
 
-| Level | Tests | Tools/evidence |
-| --- | --- | --- |
-| Domain units | Auckland dates, visibility, reminder expiry, retry states, recap calculations | Vitest and Dart tests with injected clocks. |
-| Database integration | Constraints, duplicate daily submissions, message-request races, grants, rollback, job leases, idempotency | Disposable PostgreSQL and Drizzle migrations. |
-| API contracts | OpenAPI generation, Dart/TS DTOs, JSON semantics, errors, compatibility with older mobile clients | Generate, compile, and fail CI on contract drift. |
-| Web end-to-end | Login, posting, gated feed, history, sharing, messaging, password recovery | Playwright with isolated users. |
-| Flutter UI | Composer states, denied permissions, local lock, retry UX | Widget tests with repository/native-service fakes. |
-| Native integration | Camera, mic, local data protection, biometrics, resume, deep links, assistant actions, push, screenshots | `integration_test` plus physical iOS/Android evidence. |
-| Messaging integration | Committed message notification, failed publication, duplicate events, reconnect catch-up, scoped tokens | API/Ably test environment and controlled fault injection. |
-| Security | Cross-user access attempts, private URLs, expired sessions, invitation races, cache/log leakage | Automated negative tests and documented manual review. |
-| Performance | Midnight traffic, upload completion, date-range aggregates, chat bursts, cold starts | k6 plus physical-device/browser timings. |
+| Level | Coverage |
+| --- | --- |
+| Units | Calendar rules, visibility, retry state, recaps; Vitest and Dart fakes. |
+| PostgreSQL integration | Constraints, transactions, message-request races, grants, idempotency, outbox leases. |
+| Workers runtime | Hono routes, bindings, scheduled handlers, Durable Object hibernation and alarms; Workers Vitest integration and Wrangler. |
+| Contracts | Generate/compile Dart and TypeScript clients, stable JSON/errors, older-client compatibility. |
+| Web | Playwright login, posting, history, sharing, chat, and recovery. |
+| Mobile | Widget tests plus physical iOS/Android capture, permissions, secure storage, biometrics, deep links, push, and supported assistants. |
+| Security/realtime | Socket auth/expiry/revocation, lost events, reconnect catch-up, duplicate events, cross-user access, cache/log leakage. |
+| Load | k6 and device timings using the workloads in [Scalability](scalability.md). |
 
-No cross-language E2EE vectors or encryption-key recovery tests are required under the revised design. Test local encryption at rest, TLS, provider configuration, session recovery, and permissions instead.
-
-Emulators do not prove every native behaviour. Android screenshot detection excludes ADB captures; test its supported physical action. Simulator biometric success does not establish hardware-backed storage protection.
+Emulators do not prove every native feature. Android's screenshot API excludes ADB screenshots, and simulated biometric prompts do not prove hardware-backed storage behaviour. Test hibernation and deployed bindings in an isolated Cloudflare environment as well as locally.
 
 ## Release-blocking scenarios
 
-1. Two requests submit one user's day simultaneously. Exactly one post exists. Retrying an accepted idempotency key returns the original result.
-2. Submit before, exactly at, and after Auckland midnight with incorrect device clocks. Test both daylight-saving transitions and leap days.
-3. Try another user's post, media, grant, conversation, note, recap, and export IDs. No alternate route or shared cache leaks content.
-4. Remove a friend, block a user, or revoke a share during access. Future API access stops; document remaining signed-URL lifetime and downloaded-copy limits.
-5. Send multiple pending conversation messages concurrently. The one-message-before-acceptance limit cannot be bypassed.
-6. Crash after persisting a message but before realtime publish. The outbox retries, and reconnect retrieves history. Duplicate events never duplicate stored or displayed messages.
-7. Crash after push dispatch but before job completion. Retry is bounded and uses available collapse/dedupe mechanisms. Do not promise exactly-once OS notifications.
-8. Complete an upload but fail final submission. The draft survives, retries are safe, and orphan cleanup removes unused media.
-9. Fail PostgreSQL, Ably, Upstash, weather, R2, or FCM. Preserve drafts, use bounded retry/fallback, and distinguish accepted, failed, pending, and read states.
-10. Reset a password and sign in on a fresh phone/browser. Server-held history returns; unsynced drafts on a lost device do not. Revoked sessions cannot fetch content.
-11. Race two claims against a single-use share token. Only one succeeds. Expired/revoked links and unrelated recap/history access are denied.
-12. Inspect logs, telemetry, browser caches, mobile files, signed URLs, and push payloads using seeded canary content. Content in its authorised database is expected; content in an unrelated log or another user's response is not.
-
-## Performance targets
-
-These are proposed targets, not current measurements.
-
-- 100 daily active users and 50 simultaneous midnight viewers.
-- Warm metadata API p95 below 500 ms, with fewer than 1% unexpected errors under the defined workload. Record cold starts separately.
-- A 20-entry feed becomes useful on a mid-range phone within two seconds after metadata arrives on the recorded network. Load thumbnails before full images.
-- Measure owner-scoped yearly aggregate queries and browser chart rendering separately. Bound date ranges and avoid sending every full post/media object just to draw a graph.
-- Measure message persistence-to-visible-update latency under normal delivery and the delayed outbox-retry path. Aim for p95 under two seconds while realtime is healthy; report failed-provider recovery separately.
-- Dispatch ordinary due reminders within two minutes at baseline. Measure OS push arrival separately from backend dispatch.
-
-Run a ramp, midnight burst, cold start, and sustained test. Record hosting plan, region, test network, hardware, dataset, request mix, payload sizes, and realtime fan-out. Use only owned/authorised staging systems and respect third-party load-test limits.
-
-Repeat at 500 daily users and 200 simultaneous viewers. Inspect SQL plans, database pool saturation, realtime quotas, worker lag, and storage growth before adding instances. Include message-event-triggered REST reads in the workload.
-
-## Four-person ownership
-
-Assign actual owners in GitHub after team agreement.
-
-| Lead area | First responsibility | Review partner |
-| --- | --- | --- |
-| Mobile | Composer, drafts, camera, native integrations, biometric UX | Web lead checks shared user journeys. |
-| Backend/cloud | REST contracts, PostgreSQL, uploads, jobs, hosting | Messaging/security lead reviews authorisation and failure modes. |
-| Web/reflection | Port queries, archive, mood history, recap, sharing | Mobile lead checks cross-client behaviour. |
-| Messaging/security | Existing DM services, Ably integration, sessions/recovery, security tests | Backend lead reviews transactions and deployment boundaries. |
-
-Everyone writes tests and reviews work outside their primary area. AI-generated code needs an owner who can explain its request flow, assumptions, and failure cases. Rotate demo and review responsibilities for individual interview readiness.
+1. Concurrent daily submissions create one post; retries return the original accepted result. Test midnight, daylight-saving transitions, leap days, and incorrect device clocks.
+2. No list/detail/media/export route exposes another user's content, unreleased posts, or private recap. Block/revocation stops future access within the documented URL/session limits.
+3. Concurrent pending-conversation sends cannot bypass the one-message limit. Message retries and duplicate events do not create duplicate bubbles.
+4. A crash after commit but before publication leaves retriable outbox work. Reconnect fetches missed history even without an event.
+5. Socket tickets cannot be reused, swapped between users, or used after expiry. Revocation and expiry still work after hibernation; internal publish operations are unreachable to clients.
+6. Failed final submission preserves a draft and permits safe retries. Orphan cleanup removes unused media without deleting attached objects.
+7. Fail PostgreSQL, Hyperdrive, realtime delivery, rate-limit bindings, weather, R2, and push. Preserve data, bound retries, and report pending/failed/accepted states honestly.
+8. Scheduled work catches up after interruption, discards obsolete nudges, and tolerates duplicate execution. Do not promise exactly-once OS push arrival.
+9. Recovery on a fresh phone/browser returns server history, not lost unsynced drafts. Revoked sessions cannot fetch content.
+10. Race single-use invitation claims and inspect seeded canary content in logs, URLs, caches, telemetry, and push payloads.
 
 ## Migration sequence
 
-1. Record lecturer approval, reuse permission, and baseline attribution in the course repository.
-2. Import useful Next.js code without secrets/build output. Port CI and isolated local/test data. Do not carry over automatic production deployment credentials or targets.
-3. Prove native authentication, private media, realtime catch-up, push, and local storage protection.
-4. Extract transport-independent services and add REST/OpenAPI adapters. Temporarily retain tRPC against the same service layer.
-5. Add audience/release fields, media reservations, explicit grants, jobs/outbox, and message idempotency. Keep existing content columns and mood SQL. Use a new development database rather than automatically resetting a hosted one.
-6. Deliver the daily loop and cross-client messaging. Validate deadline and permission rules through direct API tests.
-7. Build the remaining context, memory, assistant, and reflection phases. Remove obsolete tRPC calls and process-local SSE once both clients use the new interfaces.
-8. Run security/load tests, rehearse deployment and backup restoration, freeze a demo build, and document limitations.
+1. Record lecturer approval, reuse permission, and imported commit attribution in the course repo.
+2. Import useful Next.js UI/services/tests without secrets or build output. Set up pnpm workspaces, Flutter tooling, and isolated data.
+3. Prove Better Auth, Drizzle/Hyperdrive, private uploads, FCM, and native clients against a Hono Worker. Test the Next.js hosting adapter separately.
+4. Extract domain services, add REST/OpenAPI adapters in `apps/api`, and move auth authority there. Temporarily keep old tRPC routes as compatibility proxies to Hono where needed; do not leave a competing write/auth backend in Next.js.
+5. Add audience/release fields, private-media lifecycle, explicit grants, jobs/outbox, socket tickets, and message idempotency. Keep content columns and SQL mood queries.
+6. Replace process-local SSE with Durable Objects/WebSockets. Complete the daily loop and cross-client chat, then the remaining [MVP phases](mvp.md).
+7. Remove obsolete tRPC/auth/write routes once clients migrate. Run security/load tests, rehearse restore/deploy, and freeze a documented demo build.
 
-The earlier Matrix/E2EE migration is cancelled. Do not add its schemas, crypto dependencies, recovery codes, or infrastructure.
+## CI and release
 
-No hours-per-week commitment was established during discovery. Use dependency phases instead of inventing a delivery guarantee. Track progress against the course implementation deadline of 4 October 2026 and raise feasibility problems early.
+PRs run formatting, lint, types, contract generation, backend/runtime tests, Flutter analysis/tests, and relevant browser checks. Changes to shared packages trigger all affected clients' tests. Add emulator checks within runner limits; use approved Mac/device workflows for iOS. Never expose signing secrets to untrusted PRs.
 
-## CI and deployment
+Deploy API with Wrangler and web independently. Use separate local, test, and deployed credentials/bindings. Apply reviewed PostgreSQL migrations as a controlled step; declare Durable Object migrations in Wrangler configuration. Neither schema migration should be hidden inside an HTTP handler.
 
-Pull requests run formatting, lint, types, generated-contract checks, backend tests, Flutter analysis/tests, and relevant browser tests. Add emulator smoke tests within runner limits. Use an approved Mac workflow or documented device process for iOS; do not expose signing keys to untrusted pull requests.
+Use additive changes while older mobile binaries remain active. Document rollback, database/media backup retention, and restoration procedures. Free plans may lack automatic backups or an SLA. Operational targets and upgrade triggers live in [Scalability](scalability.md).
 
-Separate local, test, and deployed environments. Secret values belong in platform secret stores, not tracked config or generated clients. Check dependency/licence changes and enforce branch review.
+## Team and course evidence
 
-Use additive schema changes while older web/mobile clients remain active. A code rollback does not undo a destructive migration. Back up database and private media, restrict backup access, verify backup encryption, document retention, and test restoration. Provider disk encryption is not a backup strategy. Free plans may lack automatic backups or an SLA.
-
-Monitor API failures, denied access, auth abuse, realtime quota use, message publication lag, reminder lag, storage growth, and pool saturation. Keep payload bodies, passwords, reset tokens, and signed URL credentials out of telemetry.
-
-## Course evidence
-
-| Requirement | Evidence |
+| Lead area | First responsibility |
 | --- | --- |
-| Target users | Student interviews and daily-capture/reflection stories. |
-| Flutter on both platforms | iOS/Android builds and physical-device demonstrations. |
-| Mobile capabilities | Camera, coarse-location context, mic, biometrics, push, and supported native shortcuts. |
-| Distinct web app | Calendar, long-term mood analysis, year-in-review, with posting fallback. |
-| Shared cloud backend | REST/OpenAPI, common PostgreSQL, private storage, and authenticated realtime updates. |
-| Protocol selection | REST versus tRPC/GraphQL decision; durable REST history versus ephemeral realtime/push. |
-| Scaling | Midnight tests, storage forecast, bottleneck measurements, upgrade triggers. |
-| Testing | Unit, integration, contract, browser, physical-device, failure, and load evidence. |
-| Cybersecurity | OWASP review, permissions, session recovery, storage/TLS checks, explicit server-readable privacy model. |
-| Beyond lectures | Native integrations, durable outbox delivery, cross-language contracts, cloud trade-offs. |
-| Team practice | Course board, issues, reviewed PRs, weekly minutes, individual contributions. |
-| Reuse restriction | Written lecturer approval and attribution of imported 732 code. |
+| Mobile | Composer, drafts, native capabilities, local lock. |
+| Backend/cloud | Hono, contracts, PostgreSQL, R2, jobs, deployment. |
+| Web/reflection | Port API calls, calendar, mood history, recaps, sharing. |
+| Messaging/security | Durable Objects, socket lifecycle, sessions/recovery, negative tests. |
 
-Use the provided course GitHub project board for assessed tracking. The WDCC documentation copy is a reference, not a replacement for course-repository evidence.
+Assign actual owners through the course GitHub board. Everyone writes tests and reviews outside their primary area. Authors must explain AI-assisted code and its failure cases. Keep weekly meeting minutes and rotate demo ownership for individual interview readiness.
+
+Use the supplied repository for user research, issues, PRs, minutes, architecture decisions, and test evidence. Demonstrate distinct mobile capture and web reflection, shared API protocols, native features, cloud scaling, OWASP controls, and original contributions beyond imported code. Preserve written reuse approval.
+
+No hours-per-week commitment was established. Track dependency phases against the 4 October 2026 implementation deadline rather than inventing a delivery guarantee.
