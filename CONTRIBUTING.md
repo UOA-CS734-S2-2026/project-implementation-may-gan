@@ -1,7 +1,7 @@
 # Contributing Guidelines
 
-_Team May Gan · COMPSCI 734. Adapted from our COMPSCI 732 standards for the 734 hybrid stack
-(Flutter client + Node/GraphQL API + Firebase)._
+_Team May Gan · COMPSCI 734. Standards for the Dayli monorepo: Flutter, Next.js,
+Hono on Cloudflare Workers, and PostgreSQL._
 
 ## Issues
 
@@ -37,20 +37,26 @@ merge conflicts that make rebasing impractical.
 Run the formatter and linter for **whichever package you touched**, and fix any errors, before
 opening a PR:
 
-**Flutter client**
+**TypeScript workspace (web, API, and shared packages)**
+
+Run these commands from the repository root:
 
 ```bash
-dart format .        # auto-fix formatting
-flutter analyze      # static analysis / lint
-flutter test         # unit + widget tests
+pnpm lint             # ESLint checks
+pnpm typecheck        # TypeScript checks across all workspaces
+pnpm test             # API and shared tests
+pnpm build            # production web build
 ```
 
-**Node / GraphQL API**
+**Flutter client**
+
+Run these commands from `apps/mobile`:
 
 ```bash
-pnpm format          # auto-fix formatting
-pnpm lint            # check for lint errors
-pnpm test            # resolver unit/integration tests
+dart format .
+flutter analyze
+flutter test
+flutter build apk --debug
 ```
 
 If CI fails on your PR due to formatting or lint, fix it locally and fold the fix into your last

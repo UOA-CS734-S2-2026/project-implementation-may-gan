@@ -17,6 +17,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build
   flutter:
     runs-on: ubuntu-latest
     defaults:
@@ -28,7 +29,8 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter pub get
+      - run: flutter pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
       - run: flutter test
+      - run: flutter build apk --debug
