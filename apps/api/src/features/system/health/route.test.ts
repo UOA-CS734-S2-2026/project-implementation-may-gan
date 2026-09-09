@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { app } from "../src";
+import { app } from "../../../app";
 
 describe("health route", () => {
   it("reports that the API is available", async () => {

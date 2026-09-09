@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { app } from "../src";
+import { app } from "../../../app";
 
 describe("API contracts", () => {
   it("serves an OpenAPI 3.1 document", async () => {
