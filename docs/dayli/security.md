@@ -7,14 +7,14 @@ Content is server-readable. HTTPS, encryption at rest, and permissions protect i
 | Resource | Access |
 | --- | --- |
 | Solo post | Owner unless explicitly shared. |
-| Friends post | Owner before release; authorised friends afterward, subject to blocks. |
-| Shared post | Active grant recipients after release. No broader archive access. |
+| Friends post | Owner before release; active friends afterward, including friends who joined after release, subject to blocks. |
+| Public shared post | Anyone with its active opaque link after release; it remains unlisted. Private-account links grant no access. |
 | Messages | Authorised participants, subject to request/block policy. |
 | Mood history, recap, future note | Owner. |
 | Media | Same permission/release checks as its post; pending uploads owner-only. |
 | Socket | Verified user's own Durable Object. |
 
-Enforce checks on every list/detail/export/preview route. Public profiles never grant journal access. Restrict database exposure; privileged Drizzle connections can bypass RLS, so services must authorise independently. Keep private responses out of shared caches.
+Enforce checks on every list/detail/export/preview route. A public profile does not expose a journal through profile or discovery views; only an active opaque link exposes its linked released post. Restrict database exposure; privileged Drizzle connections can bypass RLS, so services must authorise independently. Keep private responses out of shared caches.
 
 ## Sessions and sockets
 
@@ -28,11 +28,11 @@ Password recovery uses expiring one-time tokens, throttling, safe email delivery
 
 ## Data and device protection
 
-Keep R2 private; validate real types/sizes and issue short-lived downloads. Redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Document deletion and backup retention.
+Keep R2 private; validate actual types and enforce three attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. Issue short-lived private downloads and redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
 
 Protect local drafts/credentials and hide app-switcher previews. `local_auth` alone does not prove protected key storage. Test passcode fallback, lockout, enrolment changes, and reinstall. Minimise browser persistence and temporary files.
 
-Push defaults to generic text. Remove account token associations on logout. Location/microphone need informed consent and preview. Screenshot reporting is best-effort. Hash invitation tokens, expire them, and enforce atomic use limits; disclose forwarding risk.
+Push defaults to generic text. Remove account token associations on logout. Location/microphone need informed consent and preview. Screenshot reporting is best-effort. Store only hashes of public share tokens and support immediate revocation. Disclose that forwarded links work until invalidated.
 
 ## Required review
 

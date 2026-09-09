@@ -1,0 +1,37 @@
+# Product decisions
+
+These decisions were agreed by the team in September 2026. Change them through a reviewed documentation update before changing dependent permissions or schemas.
+
+## Friendship and post history
+
+When a friendship becomes active, both users can read all previously released posts with the `friends` audience. Ending or blocking the friendship removes journal access. Solo posts remain owner-only.
+
+Authors may edit released posts. Each edit creates an immutable revision. Readers see an `Edited` marker and can inspect earlier versions when they still have permission to read the post.
+
+## Blocking and messages
+
+Blocking immediately prevents new messages, read receipts, typing or presence events, profile access, and journal access. Existing direct-message history remains readable by both users. Neither user can resume the conversation until the block is removed.
+
+## Shared links
+
+Shared links do not create account grants.
+
+A public account can create an opaque, unlisted link for a released non-solo post. Anyone with the link can view that post without signing in. The post does not become discoverable through profile or search views. Links do not expire automatically, but the author can revoke them. Deleting the post or making the account private also invalidates its links. Forwarded links work until invalidated, and downloaded copies cannot be recalled.
+
+For a private account, a link grants no access. A viewer must sign in and be an active friend. Solo posts cannot have public links.
+
+## Media and supported devices
+
+A post accepts up to three attachments in any mix of photos and videos. Each attachment is limited to 10 MB, the post total is limited to 25 MB, and each video is limited to 15 seconds. Clients compress media before upload. Keep the schema capable of supporting a higher attachment count later.
+
+The initial release supports iOS 16 and newer and Android 10, API 29, and newer. Features unavailable on a supported device need a documented fallback.
+
+## Deletion, backups, and recovery
+
+Deleted posts and accounts become inaccessible through the application immediately. A tracked job removes active database records and media. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
+
+For course and pilot stages, the recovery point objective is 24 hours and the recovery time objective is 8 hours. These are targets until a recorded restoration exercise verifies them.
+
+## Existing frontend reuse
+
+Andrew Meads approved reuse of the existing frontend around August 2026 on the condition that the team rebuilds the backend. Keep the approval evidence in the team's course records. Attribute imported code to `732-workspace/group-project-wdcc` and its source commit. Do not import credentials, dependencies, build output, or obsolete backend code.

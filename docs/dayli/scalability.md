@@ -4,11 +4,11 @@ Design for midnight bursts, database pressure, and retained media. Registered-us
 
 | Stage | Daily users | Midnight viewers | Photo growth/month |
 | --- | --- | --- | --- |
-| Course | 100 | 50 | 3 GB |
-| Pilot | 500 | 200 | 15 GB |
-| Growth | 5,000 | 1,000 | 150 GB |
+| Course | 100 | 50 | Up to 75 GB |
+| Pilot | 500 | 200 | Up to 375 GB |
+| Growth | 5,000 | 1,000 | Up to 3.75 TB |
 
-Storage assumes one 1 MB photo per user/day over 30 days, excluding thumbnails, audio, revisions, and backups. At growth scale, 1,000 viewers making three requests over ten seconds means roughly 300 requests/second. Include socket handshakes and message-triggered fetches separately.
+Storage shows the worst case at the 25 MB per-post upload cap over 30 days. Actual growth should be measured because client compression and posts with fewer attachments may reduce it. Figures exclude thumbnails, revisions, and backups. At growth scale, 1,000 viewers making three requests over ten seconds means roughly 300 requests/second. Include socket handshakes and message-triggered fetches separately.
 
 For index candidates, transaction boundaries, leases, and socket expiry mechanisms, see the [implementation reference](implementation-reference.md).
 
@@ -41,6 +41,6 @@ Run authorised staging burst, sustained, cold-start, and recovery tests. Record 
 
 Upgrade database capacity after query optimisation. Add Cloudflare Queues for measured job backlog, retaining the transactional outbox. Add a processing service for work that exceeds Worker limits. No Kubernetes, sharding, or microservices yet.
 
-Cloudflare rate limits are location-local and approximate; exact quotas belong in transactional storage. Billing alerts are not spending caps. Plan for paid storage/database capacity, email, distribution, and backups. Test database/media restoration and define acceptable data loss and recovery time before launch. Never delete memories simply because a free tier fills.
+Cloudflare rate limits are location-local and approximate; exact quotas belong in transactional storage. Billing alerts are not spending caps. Plan for paid storage/database capacity, email, distribution, and backups. Test database/media restoration against the 24-hour RPO and 8-hour RTO. Never delete memories simply because a free tier fills.
 
 [Hyperdrive caching](https://developers.cloudflare.com/hyperdrive/concepts/query-caching/) · [Hibernation](https://developers.cloudflare.com/durable-objects/best-practices/websockets/) · [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) · [R2 pricing](https://developers.cloudflare.com/r2/pricing/) · [Supabase pricing](https://supabase.com/pricing)

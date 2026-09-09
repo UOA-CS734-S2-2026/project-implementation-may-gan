@@ -8,7 +8,7 @@ Reference: `732-workspace/group-project-wdcc`, commit `7d2dfd6`. Targeted source
 | --- | --- |
 | Next.js UI, TanStack Query | Keep components, composer, mood chart, and messaging UX. |
 | `server/api/routers/*` | Reuse services/tests; replace tRPC adapters with Hono REST. Remove transport-specific contexts/errors. |
-| `lib/db/schemas/*` | Keep PostgreSQL/Drizzle and content fields. Add audiences, release times, revisions, grants, and jobs. |
+| `lib/db/schemas/*` | Keep PostgreSQL/Drizzle and content fields. Add audiences, release times, immutable revisions, public share tokens, and jobs. |
 | Post/mood/streak services | Keep SQL and constraints; add idempotency and calendar tests. |
 | Friend/comment/like services | Keep workflows; centralise permissions and add blocks. |
 | Messaging services | Keep PostgreSQL history/read state; add transactional request limits and outbox. |

@@ -34,7 +34,7 @@ Choose indexes against measured query plans, starting with:
 | --- | --- |
 | Daily post | Unique `(author_id, local_date)`; use `DATE` and `TIMESTAMPTZ` for day/release respectively. |
 | Friend lookup | Both participant lookup directions; prevent duplicate friendship pairs. |
-| Explicit post grant | Unique `(post_id, recipient_id)` with recipient-first lookup index where needed. |
+| Public share link | Unique token hash with post lookup, revocation state, and creation timestamp. |
 | Message history | Unique `(conversation_id, sequence)` for ordered pagination. |
 | Message retries | Unique `(sender_id, client_message_id)` with stored request fingerprint. |
 | Due jobs | Index over pending state and `due_at`, plus lease-expiry lookup for abandoned work. |
@@ -94,9 +94,10 @@ The architecture is sufficient to start a compatibility experiment. These items 
 - Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores.
 - Pass one vertical slice: native/web login, a Hono database transaction, private media access, and a WebSocket update with reconnect. Select the Next.js deployment adapter only after its compatibility check.
 - Write the first OpenAPI schemas, error contracts, database migration, and shared fixtures. Generated clients and record shapes are not yet specified by the overview tables.
-- Confirm whether new friends can see older posts, whether released posts remain editable, and how blocks affect historical message visibility. Lock those rules before writing permission endpoints.
-- Confirm proposed media limits, invitation redemption policy, supported OS/device versions, and fallback acceptance criteria. Define deletion/backup retention and recovery targets before storing real user data.
-- Assign the first issues and reviewers in the course board. Record reuse approval, test evidence, and service-account ownership. Do not create a separate project-management system.
+- Implement the agreed rules in [Product decisions](product-decisions.md): friends see earlier released friends posts, released edits retain visible revision history, and blocks stop interaction while preserving message history.
+- Enforce three mixed attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. Test iOS 16+ and Android 10/API 29+ plus documented fallbacks.
+- Apply immediate application deletion, 30-day backup expiry, and the initial 24-hour RPO and 8-hour RTO. Verify the recovery targets through a recorded restoration exercise.
+- Assign the first issues and reviewers in the course board. Keep frontend reuse approval, test evidence, and service-account ownership in team records. Do not create a separate project-management system.
 
 Begin with the compatibility slice, not a complete backend rewrite or all native additions at once. Resolve product-policy questions before their dependent features, rather than blocking unrelated setup.
 
