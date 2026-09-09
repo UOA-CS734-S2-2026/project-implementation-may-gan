@@ -18,6 +18,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.
+- [API client generation](client-generation.md): regenerate and verify the TypeScript and Dart clients.
 
 ## Fixed rules
 
