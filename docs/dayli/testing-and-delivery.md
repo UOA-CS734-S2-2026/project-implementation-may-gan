@@ -5,7 +5,7 @@
 | Level | Tool and coverage |
 | --- | --- |
 | Units | Vitest/Dart: dates, permissions, retries, recaps. |
-| Database | Isolated PostgreSQL: transactions, constraints, races, grants, outbox. |
+| Database | Isolated PostgreSQL: transactions, constraints, races, share-token revocation, outbox. |
 | Runtime | Workers Vitest/Wrangler: Hono, bindings, schedules, hibernation, alarms. |
 | Contracts | Generate/compile Dart and TypeScript clients; test old-client compatibility. |
 | Web/mobile | Playwright, Flutter widgets, physical iOS/Android workflows. |
@@ -24,22 +24,22 @@ Use the [implementation reference](implementation-reference.md) to turn mechanis
 - Ticket replay, expiry, logout, and revocation remain safe after hibernation.
 - Failed uploads preserve drafts; cleanup never deletes attached media.
 - Provider outages use bounded retries and honest pending/failed states.
-- Recovery restores server history; invitation races allow one valid claim.
+- Recovery meets the tested 24-hour RPO and 8-hour RTO; revoked public links cannot be reused.
 - No private content or credentials leak through logs, telemetry, URLs, or push.
 
 Performance workloads and targets live in [Scalability](scalability.md).
 
 ## Migration and release
 
-1. Record lecturer approval/reuse attribution. Import useful WDCC code without secrets or build output.
+1. Record the August 2026 frontend reuse approval and source attribution. Import useful WDCC frontend code without secrets or build output.
 2. Establish the monorepo and prove auth/database/native compatibility on Workers.
 3. Move reusable services and auth authority into Hono. Temporary tRPC proxies may call Hono, but must not become a competing backend.
-4. Add release/audience fields, private uploads, grants, idempotency, tickets, and jobs. Replace process-local SSE with Durable Objects.
+4. Add release/audience fields, private uploads, public share tokens, idempotency, socket tickets, and jobs. Replace process-local SSE with Durable Objects.
 5. Complete [MVP phases](mvp.md), remove obsolete routes, run failure/load tests, and rehearse restore/deploy.
 
 CI checks formatting, types, contracts, relevant backend/runtime and frontend tests. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
 
-Prefer additive changes for older mobile clients. Document rollback, backup retention, acceptable data loss, and restoration. No runtime tests were run for this documentation-only proposal.
+Prefer additive changes for older mobile clients. Deleted data becomes inaccessible immediately and expires from encrypted backups within 30 days. Start with a 24-hour RPO and 8-hour RTO, then verify both through restoration tests. No runtime tests were run for the original documentation-only proposal.
 
 ## Team evidence
 

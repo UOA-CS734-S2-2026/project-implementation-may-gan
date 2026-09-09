@@ -33,10 +33,10 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 
 Add calendar, mood history, comparisons, and year-in-review backed by bounded SQL. Show missing data/sample sizes; avoid diagnostic claims.
 
-Share links require signup and grant one post after release. Proposed default: expiring single-use links, with forwarding risk disclosed and recipient-bound sharing as a stronger option.
+Public accounts can create opaque, unlisted links to released non-solo posts. Anyone with the link can view the post without signing in. Links remain valid until revoked, the post is deleted, or the account becomes private. Private-account links grant no access; viewers must sign in and be active friends.
 
 Siri/App Intents and supported Android App Actions open today's composer, optionally prefilling a validated rating. Require unlock and submission confirmation. Use launcher/deep-link fallback where voice support is unavailable; do not claim identical phrases work everywhere.
 
-Start with one photo, thumbnail, and optional audio, targeting a 1 MB photo and 5 MB total cap. Existing video is explicitly deferred. Permission denial must not block basic posting.
+Start with up to three mixed photo or video attachments. Limit each attachment to 10 MB, each post to 25 MB total, and each video to 15 seconds after client compression. Support iOS 16 and newer and Android 10/API 29 and newer. Permission denial must not block text-only posting.
 
 [Apple native APIs](https://developer.apple.com/documentation/) · [Android screenshot limits](https://developer.android.com/about/versions/14/features/screenshot-detection) · [Android App Actions](https://developer.android.com/develop/devices/assistant/overview)
