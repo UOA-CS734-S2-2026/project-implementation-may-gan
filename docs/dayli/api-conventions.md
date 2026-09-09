@@ -54,3 +54,21 @@ Retriable commands use `Idempotency-Key`. An identical retry returns the origina
 `GET /api/v1/openapi.json` serves OpenAPI 3.1. Every route declares a stable `operationId`, tag, summary, parameters, request body, successful responses, expected errors, authentication, and examples where useful. Route-adjacent Zod schemas are the source for runtime validation and client generation.
 
 Private responses start with `Cache-Control: no-store`. Public-link caching must not be introduced until revocation behavior is tested.
+
+## Feature structure and dependencies
+
+Organise API code as operation-based vertical slices:
+
+```text
+apps/api/src/features/{domain}/{operation}/
+├── contract.ts
+├── route.ts
+├── service.ts
+└── route.test.ts
+```
+
+Only create files an operation needs. Contracts define transport schemas, routes handle Hono validation and responses, and services contain transport-independent orchestration. Shared business policies, public contract primitives, and database implementations may move into `packages/domain`, `packages/contracts`, and `packages/db` when they have multiple consumers.
+
+Dependencies flow from routes to services and from services to repository or provider interfaces. Services must not import Hono, Cloudflare runtime modules, HTTP routes, or concrete database implementations. Contracts must not import routes, handlers, services, or database code. A route must not import or call another internal route; operations share a service or policy instead. Domain-level composition modules are responsible for registering routes.
+
+ESLint enforces these boundaries for conventionally named `route.ts`, `service.ts`, and `contract.ts` files. Keeping those names consistent is therefore part of the architecture contract.
