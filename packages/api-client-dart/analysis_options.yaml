@@ -1,0 +1,4 @@
+# Generated client compatibility settings.
+analyzer:
+  errors:
+    unawaited_return_in_try_block: ignore

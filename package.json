@@ -2,18 +2,27 @@
   "name": "dayli",
   "private": true,
   "packageManager": "pnpm@10.32.1",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "pnpm -r --if-present build",
     "dev": "pnpm --parallel --filter './apps/*' dev",
-    "lint": "eslint apps/api packages && pnpm --filter @dayli/web lint",
+    "generate:openapi": "tsx scripts/generate-openapi.ts",
+    "generate:client:typescript": "openapi-generator-cli generate -i packages/contracts/openapi.json -g typescript-fetch -o packages/api-client-typescript --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=npmName=@dayli/api-client,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true",
+    "generate:client:dart": "openapi-generator-cli generate -i packages/contracts/openapi.json -g dart -o packages/api-client-dart --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=pubName=dayli_api_client,pubVersion=0.1.0,useEnumExtension=true,useFinalProperties=true",
+    "generate:clients": "pnpm generate:openapi && tsx scripts/clean-generated-clients.ts && pnpm generate:client:typescript && pnpm generate:client:dart && tsx scripts/finalize-generated-clients.ts && dart format packages/api-client-dart",
+    "generate:clients:check": "pnpm generate:clients && git diff --exit-code -- packages/api-client-typescript packages/api-client-dart packages/contracts/openapi.json",
+    "lint": "eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
+    "@openapitools/openapi-generator-cli": "2.41.0",
     "eslint": "9.39.4",
     "globals": "17.12.0",
+    "tsx": "4.20.6",
     "typescript-eslint": "8.70.0"
   }
 }
