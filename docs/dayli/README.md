@@ -16,11 +16,12 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Security](security.md): privacy and permissions.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
+- [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 
 ## Fixed rules
 
-One post per Auckland day, released at midnight. Server acceptance determines eligibility; offline drafts cannot be backdated. Solo entries stay owner-only unless explicitly shared. Share links require signup and grant one post.
+One post per Auckland day, released at midnight. Server acceptance determines eligibility; offline drafts cannot be backdated. Solo entries stay owner-only. Public accounts can create revocable, unlisted links to released non-solo posts; private-account links grant no access.
 
 Content is server-readable, protected by HTTPS, encryption at rest, and permissions. No end-to-end encryption. Normal account recovery restores server history.
 
-Use the May Gan monorepo and course GitHub board. Record lecturer reuse approval and WDCC code attribution. Prefer free tiers without promising permanently free hosting.
+Use the May Gan monorepo and course GitHub board. Andrew Meads approved frontend reuse around August 2026, subject to rebuilding the backend and attributing imported WDCC code. Prefer free tiers without promising permanently free hosting.

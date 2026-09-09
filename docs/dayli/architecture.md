@@ -43,7 +43,7 @@ Routes authenticate and validate; services enforce rules; repositories execute S
 3. Submit with an idempotency key. Transactionally check the deadline, audience, media, and unique author/day constraint.
 4. Retry lost responses with the same key. If acceptance misses midnight, retain the draft rather than backdating it.
 
-Store a timezone-correct `release_at`. Owners can read early; everyone else needs release plus an authorised audience/grant. Apply this to media and every alternate route. No midnight bulk update is needed.
+Store a timezone-correct `release_at`. Owners can read early. Friends need release, an active friendship, and no block; friendship grants access to earlier released friends posts. Public-link readers need release and an active opaque share token from a public account. Apply this to media and every alternate route. No midnight bulk update is needed.
 
 ## Messaging and sockets
 
@@ -57,8 +57,8 @@ Authenticate upgrades with short-lived, single-use tickets bound to verified ses
 
 ## Supporting records and jobs
 
-Keep existing content tables. Add audiences/releases, revisions, private upload reservations, explicit post grants, message idempotency, socket tickets, invitations, future notes, and outbox/jobs.
+Keep existing content tables. Add audiences/releases, immutable revisions, private upload reservations, revocable public share tokens, message idempotency, socket tickets, future notes, and outbox/jobs.
 
-A Cron Trigger invokes the Worker's scheduled handler directly. Claim bounded leased jobs, retry safely, and discard expired reminders. Push handles suspended apps. SQL calculates owner-scoped mood history and recaps. Single-use signup invitations grant one post, with forwarding risk disclosed.
+A Cron Trigger invokes the Worker's scheduled handler directly. Claim bounded leased jobs, retry safely, and discard expired reminders. Push handles suspended apps. SQL calculates owner-scoped mood history and recaps. Public share links are unlisted bearer links, remain valid until invalidated, and can be forwarded.
 
 [Security rules](security.md) · [Scaling and failure handling](scalability.md) · [Implementation details](implementation-reference.md)
