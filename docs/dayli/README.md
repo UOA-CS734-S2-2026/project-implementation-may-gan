@@ -17,6 +17,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
+- [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.
 
 ## Fixed rules
 
