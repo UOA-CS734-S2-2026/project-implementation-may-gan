@@ -46,6 +46,8 @@ jobs:
         working-directory: packages/api-client-dart
       - run: dart analyze
         working-directory: packages/api-client-dart
+      - run: dart test
+        working-directory: packages/api-client-dart
       - run: flutter pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze

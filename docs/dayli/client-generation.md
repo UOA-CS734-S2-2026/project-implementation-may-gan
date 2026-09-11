@@ -40,6 +40,19 @@ Commit the OpenAPI document, both generated clients, and the lockfile changes to
 
 ## CI checks
 
-CI regenerates both clients and runs `git diff --exit-code`. A contract change fails CI when its generated output was not committed. CI also builds the TypeScript workspace and runs `dart analyze` against the Dart package.
+CI regenerates both clients and checks scoped `git status --porcelain --untracked-files=all` output. This catches changed, deleted, and newly generated files. CI also builds the TypeScript workspace, analyzes the Dart package, and runs its smoke test.
+
+## Base URLs
+
+Applications must pass a base URL when constructing a client. Do not rely on the generator's `http://localhost` fallback.
+
+| Environment | Typical URL |
+| --- | --- |
+| Local browser or iOS Simulator | `http://localhost:8787` |
+| Android Emulator | `http://10.0.2.2:8787` |
+| Physical device | Development machine address reachable from the device |
+| Staging or production | URL supplied by application configuration |
+
+The exact environment-file and secret-loading setup belongs to issue #6. This package only requires callers to provide the resulting URL.
 
 The clients handle HTTP paths, parameters, JSON conversion, and response types. Authentication token storage, retries, offline state, and user-facing errors remain application code.
