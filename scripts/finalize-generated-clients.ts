@@ -1,0 +1,122 @@
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
+
+const textExtensions = new Set([".dart", ".json", ".md", ".ts", ".yaml"]);
+
+const typescriptReadme = `# @dayli/api-client
+
+Generated TypeScript Fetch client for the Dayli API. Do not edit this package by hand.
+
+## Usage
+
+Pass the API URL explicitly when the application starts:
+
+\`\`\`ts
+import { Configuration, SystemApi } from "@dayli/api-client";
+
+const configuration = new Configuration({
+  basePath: process.env.NEXT_PUBLIC_API_URL,
+  credentials: "include",
+});
+const systemApi = new SystemApi(configuration);
+const health = await systemApi.systemHealth();
+\`\`\`
+
+Do not rely on the generator's localhost fallback. The application configuration owns the URL and authentication settings.
+
+Regenerate this package from the repository root with \`pnpm generate:clients\`.
+`;
+
+const dartReadme = `# dayli_api_client
+
+Generated Dart client for the Dayli API. Do not edit this package by hand.
+
+## Usage
+
+Add this workspace package to the Flutter application with a path dependency, then pass the API URL explicitly:
+
+\`\`\`dart
+import 'package:dayli_api_client/api.dart';
+
+final client = ApiClient(basePath: apiBaseUrl);
+final systemApi = SystemApi(client);
+final health = await systemApi.systemHealth();
+\`\`\`
+
+Typical local URLs are \`http://localhost:8787\` for iOS Simulator and \`http://10.0.2.2:8787\` for Android Emulator. Physical devices need the development machine's reachable network address. Staging and production URLs must come from application configuration.
+
+Regenerate this package from the repository root with \`pnpm generate:clients\`.
+`;
+
+const dartSmokeTest = `import 'package:dayli_api_client/api.dart';
+import 'package:test/test.dart';
+
+void main() {
+  test('constructs the public client with an explicit base URL', () {
+    const baseUrl = 'http://10.0.2.2:8787';
+    final client = ApiClient(basePath: baseUrl);
+    final api = SystemApi(client);
+
+    expect(api.apiClient.basePath, baseUrl);
+  });
+}
+`;
+
+async function normalizeTextFiles(directory: string): Promise<void> {
+  const entries = await readdir(directory, { withFileTypes: true });
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        await normalizeTextFiles(path);
+      } else if (textExtensions.has(extname(entry.name))) {
+        const source = await readFile(path, "utf8");
+        const normalized = `${source.replace(/[ \t]+$/gm, "").trimEnd()}\n`;
+        await writeFile(path, normalized);
+      }
+    }),
+  );
+}
+
+async function finalizeGeneratedClients() {
+  const dartPubspecPath = "packages/api-client-dart/pubspec.yaml";
+  const dartPubspec = await readFile(dartPubspecPath, "utf8");
+
+  await mkdir("packages/api-client-dart/test", { recursive: true });
+  await Promise.all([
+    rm("packages/api-client-dart/.travis.yml", { force: true }),
+    rm("packages/api-client-dart/git_push.sh", { force: true }),
+    writeFile("packages/api-client-typescript/README.md", typescriptReadme),
+    writeFile("packages/api-client-dart/README.md", dartReadme),
+    writeFile("packages/api-client-dart/test/client_smoke_test.dart", dartSmokeTest),
+    writeFile(
+      dartPubspecPath,
+      dartPubspec.replace(
+        "test: '>=1.21.6 <1.22.0'",
+        "test: '>=1.25.0 <2.0.0'",
+      ),
+    ),
+    writeFile(
+      "packages/api-client-dart/analysis_options.yaml",
+      [
+        "# Generated client compatibility settings.",
+        "analyzer:",
+        "  errors:",
+        "    unawaited_return_in_try_block: ignore",
+        "",
+      ].join("\n"),
+    ),
+  ]);
+
+  await Promise.all([
+    normalizeTextFiles("packages/api-client-typescript"),
+    normalizeTextFiles("packages/api-client-dart"),
+  ]);
+}
+
+finalizeGeneratedClients().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});

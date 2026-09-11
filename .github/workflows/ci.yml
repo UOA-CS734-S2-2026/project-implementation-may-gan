@@ -25,10 +25,29 @@ jobs:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - run: pnpm generate:clients:check
+        working-directory: .
+      - run: dart pub get
+        working-directory: packages/api-client-dart
+      - run: dart analyze
+        working-directory: packages/api-client-dart
+      - run: dart test
+        working-directory: packages/api-client-dart
       - run: flutter pub get --enforce-lockfile
       - run: dart format --output=none --set-exit-if-changed .
       - run: flutter analyze
