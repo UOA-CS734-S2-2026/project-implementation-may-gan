@@ -1,6 +1,6 @@
 # Dayli database package
 
-This package owns the Drizzle/PostgreSQL connection helpers and smoke check.
+This package owns the Drizzle/PostgreSQL connection helpers and smoke check. See the [environment guide](../../docs/dayli/environments.md) for the local PostgreSQL 16 lifecycle and credential handling.
 
 ## Local smoke check
 

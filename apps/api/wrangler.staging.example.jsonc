@@ -1,9 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "REPLACE_WITH_STAGING_API_SERVICE_NAME",
+  "name": "dayli-api-staging",
   "main": "src/index.ts",
   "compatibility_date": "2026-03-10",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
   "observability": { "enabled": true },
   "hyperdrive": [
     {

@@ -1,6 +1,19 @@
 name: Staging Hyperdrive integration
 
 on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+    paths:
+      - "apps/api/**"
+      - "packages/db/**"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/staging-hyperdrive.yml"
   workflow_dispatch:
   push:
     branches:
@@ -14,12 +27,21 @@ on:
 permissions:
   contents: read
 
+# A PR's runs are serialized, so an older cleanup cannot delete a newer preview.
+# Main and manual staging runs share a separate lock.
 concurrency:
-  group: staging-hyperdrive
+  group: staging-hyperdrive-${{ github.event.pull_request.number || 'staging' }}
   cancel-in-progress: false
 
 jobs:
   check:
+    # Do not use pull_request_target. Forks never receive the staging environment
+    # or its credentials. Same-repository PR branches are the trusted PR source.
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.fork == false))
     environment: staging
     runs-on: ubuntu-latest
     steps:
@@ -30,25 +52,72 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Write credentialed Wrangler configurations
+      - name: Write and validate credentialed Wrangler configurations
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
           STAGING_API_SERVICE_NAME: ${{ vars.STAGING_API_SERVICE_NAME }}
+          STAGING_HYPERDRIVE_NAME: ${{ vars.STAGING_HYPERDRIVE_NAME }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node <<'NODE'
           import { writeFileSync } from "node:fs";
 
-          const required = [
-            "CLOUDFLARE_ACCOUNT_ID",
-            "CLOUDFLARE_STAGING_HYPERDRIVE_ID",
-            "STAGING_API_SERVICE_NAME",
-          ];
+          const expectedStagingWorkerName = "dayli-api-staging";
+          const workerNamePattern = /^[a-z][a-z0-9-]{0,62}$/;
+          const idPattern = /^[a-f0-9]{32}$/;
+          const hyperdriveNamePattern = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$/;
 
-          for (const name of required) {
-            if (!process.env[name]) {
-              throw new Error(`The staging environment must provide ${name}.`);
+          function required(name) {
+            const value = process.env[name];
+            if (!value) throw new Error(`The staging environment must provide ${name}.`);
+            return value;
+          }
+
+          function assertWorkerName(name) {
+            if (!workerNamePattern.test(name)) {
+              throw new Error("Refusing an invalid Worker name.");
             }
+          }
+
+          const accountId = required("CLOUDFLARE_ACCOUNT_ID");
+          const apiToken = required("CLOUDFLARE_API_TOKEN");
+          const hyperdriveId = required("CLOUDFLARE_STAGING_HYPERDRIVE_ID");
+          const configuredStagingWorkerName = required("STAGING_API_SERVICE_NAME");
+          const expectedHyperdriveName = required("STAGING_HYPERDRIVE_NAME");
+
+          if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) {
+            throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");
+          }
+          if (configuredStagingWorkerName !== expectedStagingWorkerName) {
+            throw new Error("STAGING_API_SERVICE_NAME must be dayli-api-staging.");
+          }
+          if (!hyperdriveNamePattern.test(expectedHyperdriveName)) {
+            throw new Error("Refusing an invalid expected Hyperdrive name.");
+          }
+
+          const isPullRequest = process.env.EVENT_NAME === "pull_request";
+          const prNumber = process.env.PR_NUMBER;
+          if (isPullRequest && !/^[1-9][0-9]*$/.test(prNumber ?? "")) {
+            throw new Error("Refusing an invalid pull request number.");
+          }
+
+          const previewWorkerName = isPullRequest ? `dayli-api-pr-${prNumber}` : undefined;
+          if (previewWorkerName) assertWorkerName(previewWorkerName);
+          assertWorkerName(expectedStagingWorkerName);
+
+          const response = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/hyperdrive/configs/${hyperdriveId}`,
+            { headers: { Authorization: `Bearer ${apiToken}` } },
+          );
+          if (!response.ok) {
+            throw new Error(`Could not read the configured staging Hyperdrive (HTTP ${response.status}).`);
+          }
+          const payload = await response.json();
+          if (payload?.result?.name !== expectedHyperdriveName) {
+            throw new Error("CLOUDFLARE_STAGING_HYPERDRIVE_ID is not the expected staging Hyperdrive.");
           }
 
           const shared = {
@@ -57,47 +126,48 @@ jobs:
             compatibility_date: "2026-03-10",
             compatibility_flags: ["nodejs_compat"],
           };
+          const apiConfig = {
+            ...shared,
+            name: previewWorkerName ?? expectedStagingWorkerName,
+            // dayli-api-staging is public for staging web and mobile clients.
+            workers_dev: !isPullRequest,
+            observability: { enabled: true },
+            hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId }],
+          };
+          const testConfig = {
+            ...shared,
+            name: isPullRequest
+              ? `dayli-api-hyperdrive-test-pr-${prNumber}`
+              : "dayli-api-hyperdrive-integration-test",
+            // The remote-binding test proxy must not receive a public workers.dev URL.
+            workers_dev: false,
+            services: [{
+              binding: "STAGING_API",
+              service: apiConfig.name,
+              entrypoint: "HyperdriveIntegrationEntrypoint",
+              remote: true,
+            }],
+          };
 
           writeFileSync(
-            "apps/api/wrangler.staging.jsonc",
-            `${JSON.stringify(
-              {
-                ...shared,
-                name: process.env.STAGING_API_SERVICE_NAME,
-                observability: { enabled: true },
-                hyperdrive: [
-                  {
-                    binding: "HYPERDRIVE",
-                    id: process.env.CLOUDFLARE_STAGING_HYPERDRIVE_ID,
-                  },
-                ],
-              },
-              null,
-              2,
-            )}\n`,
+            isPullRequest
+              ? "apps/api/wrangler.preview.jsonc"
+              : "apps/api/wrangler.staging.jsonc",
+            `${JSON.stringify(apiConfig, null, 2)}\n`,
           );
-
           writeFileSync(
             "apps/api/wrangler.hyperdrive-test.jsonc",
-            `${JSON.stringify(
-              {
-                ...shared,
-                name: "dayli-api-hyperdrive-integration-test",
-                services: [
-                  {
-                    binding: "STAGING_API",
-                    service: process.env.STAGING_API_SERVICE_NAME,
-                    entrypoint: "HyperdriveIntegrationEntrypoint",
-                    remote: true,
-                  },
-                ],
-              },
-              null,
-              2,
-            )}\n`,
+            `${JSON.stringify(testConfig, null, 2)}\n`,
           );
           NODE
-      - name: Deploy the staging API binding
+      - name: Deploy the isolated PR API Worker
+        if: github.event_name == 'pull_request'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm --dir apps/api exec wrangler deploy --config wrangler.preview.jsonc
+      - name: Deploy the public staging API Worker
+        if: github.event_name != 'pull_request'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -107,3 +177,104 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: pnpm --filter @dayli/api test:hyperdrive:staging
+      - name: Delete the isolated PR API Worker
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          preview_worker="dayli-api-pr-${PR_NUMBER}"
+          if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Refusing to delete an invalid preview Worker name." >&2
+            exit 1
+          fi
+          pnpm --dir apps/api exec wrangler delete "${preview_worker}" --force
+  cleanup-closed-preview:
+    # This job does not check out or execute PR code. It only removes the exact
+    # preview for a trusted same-repository PR after it closes.
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.fork == false
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Delete an abandoned closed-PR preview Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node <<'NODE'
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+          const prNumber = process.env.PR_NUMBER;
+
+          if (!/^[a-f0-9]{32}$/.test(accountId ?? "")) {
+            throw new Error("Refusing an invalid Cloudflare account ID.");
+          }
+          if (!apiToken) throw new Error("CLOUDFLARE_API_TOKEN is required.");
+          if (!/^[1-9][0-9]*$/.test(prNumber ?? "")) {
+            throw new Error("Refusing an invalid pull request number.");
+          }
+
+          const workerName = `dayli-api-pr-${prNumber}`;
+          if (!/^dayli-api-pr-[1-9][0-9]*$/.test(workerName)) {
+            throw new Error("Refusing an invalid preview Worker name.");
+          }
+
+          async function request(path, method) {
+            const response = await fetch(
+              `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
+              { method, headers: { Authorization: `Bearer ${apiToken}` } },
+            );
+            let payload;
+            try {
+              payload = await response.json();
+            } catch {
+              throw new Error(`Cloudflare ${method} ${path} returned invalid JSON (HTTP ${response.status}).`);
+            }
+            return { response, payload };
+          }
+
+          function requireSuccess({ response, payload }, path, method) {
+            if (!response.ok || payload?.success !== true) {
+              throw new Error(`Cloudflare ${method} ${path} failed (HTTP ${response.status}).`);
+            }
+            return payload;
+          }
+
+          async function listScripts() {
+            const payload = requireSuccess(
+              await request("/workers/scripts", "GET"),
+              "/workers/scripts",
+              "GET",
+            );
+            if (!Array.isArray(payload.result)) {
+              throw new Error("Cloudflare returned an invalid Worker list.");
+            }
+            return payload.result;
+          }
+
+          const scripts = await listScripts();
+          if (!scripts.some((script) => script?.id === workerName)) {
+            console.log(`Preview Worker ${workerName} is already absent.`);
+          } else {
+            const deletion = await request(`/workers/scripts/${workerName}`, "DELETE");
+            if (!deletion.response.ok || deletion.payload?.success !== true) {
+              if (deletion.response.status === 404) {
+                const remainingScripts = await listScripts();
+                if (!remainingScripts.some((script) => script?.id === workerName)) {
+                  console.log(`Preview Worker ${workerName} was removed by a concurrent cleanup.`);
+                  process.exit(0);
+                }
+              }
+              requireSuccess(deletion, `/workers/scripts/${workerName}`, "DELETE");
+            }
+            console.log(`Deleted closed-PR preview Worker ${workerName}.`);
+          }
+          NODE

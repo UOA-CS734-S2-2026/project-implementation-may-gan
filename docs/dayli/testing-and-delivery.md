@@ -15,7 +15,7 @@ Emulators do not prove hardware key protection or every sensor feature. Android 
 
 ## Credentialed staging checks
 
-The API Hyperdrive check runs `select 1 as ok` through Drizzle inside the deployed staging Worker. It reaches a non-HTTP Worker service entrypoint, not a public health route. The `staging-hyperdrive.yml` workflow runs after relevant changes merge into `main`, supports manual dispatch, uses the protected GitHub `staging` environment, and is never triggered by pull requests. Setup, required environment values, and the local command are in [`apps/api/README.md`](../../apps/api/README.md).
+The API Hyperdrive check runs `select 1 as ok` through Drizzle inside a deployed Worker. It reaches a non-HTTP Worker service entrypoint, not a public health route. `staging-hyperdrive.yml` runs before merge for relevant same-repository PR changes, after relevant changes reach `main`, and on manual dispatch. PR runs deploy a private `dayli-api-pr-<number>` Worker and attempt cleanup after the test and again when the PR closes. Fork PRs are skipped before they can receive staging credentials. Push and manual runs deploy only the public `dayli-api-staging` Worker for staging web and mobile clients. Setup, access expectations, required environment values, and the local command are in [`apps/api/README.md`](../../apps/api/README.md). The [environment guide](environments.md) covers local PostgreSQL, local Hyperdrive simulation, and production boundaries.
 
 Use the [implementation reference](implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
 

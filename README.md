@@ -44,4 +44,4 @@ flutter pub get
 flutter run
 ```
 
-See [`docs/dayli`](docs/dayli/README.md) for the proposed architecture and implementation order.
+See [`docs/dayli`](docs/dayli/README.md) for the proposed architecture and implementation order. The [environment guide](docs/dayli/environments.md) has local PostgreSQL, local Worker, and staging setup.
