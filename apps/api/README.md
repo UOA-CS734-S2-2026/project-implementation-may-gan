@@ -23,18 +23,27 @@ The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntry
 
 ### Reproduce locally
 
-Run this only from a trusted machine with an account ID and an API token that can deploy the staging Worker and use the remote binding. Deploy the current checkout immediately before testing. Do not test a Worker left over from another commit.
+Run this only from a trusted machine with an account ID and an API token that can deploy the staging Worker and use the remote binding. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout immediately before testing. Do not test a Worker left over from another commit.
 
 ```bash
+bash <<'BASH'
+set -euo pipefail
+read -r -p "Cloudflare account ID: " CLOUDFLARE_ACCOUNT_ID </dev/tty
+read -r -s -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN </dev/tty
+printf "\n"
+export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN
+trap 'unset CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN' EXIT
+: "${CLOUDFLARE_ACCOUNT_ID:?Cloudflare account ID is required}"
+: "${CLOUDFLARE_API_TOKEN:?Cloudflare API token is required}"
+
 commit_sha="$(git rev-parse HEAD)"
-CLOUDFLARE_ACCOUNT_ID="..." CLOUDFLARE_API_TOKEN="..." \
-  pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
-CLOUDFLARE_ACCOUNT_ID="..." CLOUDFLARE_API_TOKEN="..." \
-  pnpm --filter @dayli/api test:hyperdrive:staging
+pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
+pnpm --filter @dayli/api test:hyperdrive:staging
 printf 'Hyperdrive check commit: %s\n' "$commit_sha"
+BASH
 ```
 
-Record the commit SHA, date, runtime versions, and pass/fail result. Do not record Hyperdrive IDs, database hosts, connection strings, credentials, or query logs.
+If a secure credential tool supplies the values instead, replace the `read` commands but keep the required-variable guards. A deploy failure stops the test and prevents the SHA from printing. Record the commit SHA, date, runtime versions, and pass/fail result. Do not record Hyperdrive IDs, database hosts, connection strings, credentials, or query logs.
 
 ### Protected GitHub workflow
 
@@ -46,6 +55,6 @@ Record the commit SHA, date, runtime versions, and pass/fail result. Do not reco
 - variable `STAGING_API_SERVICE_NAME`, set exactly to `dayli-api-staging`;
 - variable `STAGING_HYPERDRIVE_NAME`, set to the expected staging Hyperdrive configuration name.
 
-For a same-repository PR, the workflow deploys `dayli-api-pr-<number>` with `workers_dev: false` and points the private test binding at it. The normal job attempts deletion in an `always()` cleanup step. A separate trusted closed-PR job makes an idempotent deletion attempt without checking out PR code. Runs for one PR are serialized, which prevents a late cleanup from deleting a newer preview. Fork PR jobs are skipped before they receive the staging environment or its credentials. The workflow does not use `pull_request_target`.
+For a same-repository PR, the workflow deploys `dayli-api-pr-<number>` with `workers_dev: false` and points the private test binding at it. The normal job attempts deletion in an `always()` cleanup step. `.github/workflows/cleanup-hyperdrive-preview.yml` makes a separate idempotent deletion attempt when a trusted PR to `main` closes, without checking out PR code. Both workflows use the same per-PR concurrency group, so close cleanup cannot race an in-flight test. Fork PR jobs are skipped before they receive the staging environment or its credentials. The workflows do not use `pull_request_target`.
 
 Pushes to `main` and manual runs deploy only `dayli-api-staging`. The workflow rejects any other staging service name and reads the Hyperdrive configuration from Cloudflare to check its expected name before it deploys. It never targets the default `dayli-api` Worker.

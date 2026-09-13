@@ -167,18 +167,27 @@ flutter run
 
 Staging has a public Worker named `dayli-api-staging`, an isolated staging PostgreSQL database, and a real Cloudflare Hyperdrive configuration. The public Worker exists so staging web and mobile clients can reach the ordinary API. Its normal authentication and authorization still apply. It is not a production endpoint.
 
-Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Use the protected staging values only on a trusted machine. Deploy the current checkout before running the real binding check:
+Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Use the protected staging values only on a trusted machine. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout before running the real binding check:
 
 ```bash
+bash <<'BASH'
+set -euo pipefail
+read -r -p "Cloudflare account ID: " CLOUDFLARE_ACCOUNT_ID </dev/tty
+read -r -s -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN </dev/tty
+printf "\n"
+export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN
+trap 'unset CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN' EXIT
+: "${CLOUDFLARE_ACCOUNT_ID:?Cloudflare account ID is required}"
+: "${CLOUDFLARE_API_TOKEN:?Cloudflare API token is required}"
+
 commit_sha="$(git rev-parse HEAD)"
-CLOUDFLARE_ACCOUNT_ID="..." CLOUDFLARE_API_TOKEN="..." \
-  pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
-CLOUDFLARE_ACCOUNT_ID="..." CLOUDFLARE_API_TOKEN="..." \
-  pnpm --filter @dayli/api test:hyperdrive:staging
+pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
+pnpm --filter @dayli/api test:hyperdrive:staging
 printf 'Hyperdrive check commit: %s\n' "$commit_sha"
+BASH
 ```
 
-Use the configured staging Worker URL as the future staging web/mobile base URL. It is intentionally not written here. Do not route a client to a PR preview because previews set `workers_dev: false` and have no public endpoint.
+If a secure credential tool supplies the values instead, replace the `read` commands but keep the required-variable guards. A deploy failure stops the test and prevents the SHA from printing. Use the configured staging Worker URL as the future staging web/mobile base URL. It is intentionally not written here. Do not route a client to a PR preview because previews set `workers_dev: false` and have no public endpoint.
 
 The GitHub `staging` environment contains:
 
@@ -188,7 +197,7 @@ The GitHub `staging` environment contains:
 - variable `STAGING_API_SERVICE_NAME`, exactly `dayli-api-staging`;
 - variable `STAGING_HYPERDRIVE_NAME`, the expected staging Hyperdrive configuration name.
 
-The credentialed workflow runs for relevant same-repository PR changes, relevant pushes to `main`, and manual dispatch. It never uses `pull_request_target`. Fork PRs are skipped before they receive the staging environment or its credentials. For an eligible PR, it deploys `dayli-api-pr-<number>` and tests it only through a private service binding. The normal job attempts deletion in an `always()` step. When a trusted same-repository PR closes, a separate job makes an idempotent deletion attempt without checking out PR code. Per-PR concurrency prevents an old cleanup from deleting a newer preview.
+The credentialed deploy/test workflow runs for relevant same-repository PR changes, relevant pushes to `main`, and manual dispatch. It never uses `pull_request_target`. Fork PRs are skipped before they receive the staging environment or its credentials. For an eligible PR, it deploys `dayli-api-pr-<number>` and tests it only through a private service binding. The normal job attempts deletion in an `always()` step. The separate `cleanup-hyperdrive-preview.yml` workflow runs for every trusted PR to `main` close, without checking out PR code, and makes an idempotent deletion attempt. Both workflows use the same per-PR concurrency group, so close cleanup cannot race an in-flight test.
 
 The proposal names Supabase as the intended PostgreSQL provider, but the current staging Worker and Hyperdrive configuration are provider-neutral. They do not record or verify a provider in Git. Treat the selected staging provider and its operational ownership as a pending deployment decision. Do not infer a production provider, host, or account from these documents.
 

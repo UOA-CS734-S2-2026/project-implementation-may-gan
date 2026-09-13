@@ -1,0 +1,106 @@
+name: Clean up closed Hyperdrive preview
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+
+permissions:
+  contents: read
+
+# Use the same lock as the deploy/test workflow. A close event waits for any
+# in-flight check for this PR before it can remove the preview Worker.
+concurrency:
+  group: staging-hyperdrive-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    # Do not use pull_request_target. Forks never receive the staging environment
+    # or its credentials. This job does not check out or execute PR code.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.fork == false
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Delete the closed PR preview Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node <<'NODE'
+          const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+          const prNumber = process.env.PR_NUMBER;
+
+          if (!/^[a-f0-9]{32}$/.test(accountId ?? "")) {
+            throw new Error("Refusing an invalid Cloudflare account ID.");
+          }
+          if (!apiToken) throw new Error("CLOUDFLARE_API_TOKEN is required.");
+          if (!/^[1-9][0-9]*$/.test(prNumber ?? "")) {
+            throw new Error("Refusing an invalid pull request number.");
+          }
+
+          const workerName = `dayli-api-pr-${prNumber}`;
+          if (!/^dayli-api-pr-[1-9][0-9]*$/.test(workerName)) {
+            throw new Error("Refusing an invalid preview Worker name.");
+          }
+
+          async function request(path, method) {
+            const response = await fetch(
+              `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
+              { method, headers: { Authorization: `Bearer ${apiToken}` } },
+            );
+            let payload;
+            try {
+              payload = await response.json();
+            } catch {
+              throw new Error(`Cloudflare ${method} ${path} returned invalid JSON (HTTP ${response.status}).`);
+            }
+            return { response, payload };
+          }
+
+          function requireSuccess({ response, payload }, path, method) {
+            if (!response.ok || payload?.success !== true) {
+              throw new Error(`Cloudflare ${method} ${path} failed (HTTP ${response.status}).`);
+            }
+            return payload;
+          }
+
+          async function listScripts() {
+            const payload = requireSuccess(
+              await request("/workers/scripts", "GET"),
+              "/workers/scripts",
+              "GET",
+            );
+            if (!Array.isArray(payload.result)) {
+              throw new Error("Cloudflare returned an invalid Worker list.");
+            }
+            return payload.result;
+          }
+
+          const scripts = await listScripts();
+          if (!scripts.some((script) => script?.id === workerName)) {
+            console.log(`Preview Worker ${workerName} is already absent.`);
+          } else {
+            const deletion = await request(`/workers/scripts/${workerName}`, "DELETE");
+            if (!deletion.response.ok || deletion.payload?.success !== true) {
+              if (deletion.response.status === 404) {
+                const remainingScripts = await listScripts();
+                if (!remainingScripts.some((script) => script?.id === workerName)) {
+                  console.log(`Preview Worker ${workerName} was removed by a concurrent cleanup.`);
+                  process.exit(0);
+                }
+              }
+              requireSuccess(deletion, `/workers/scripts/${workerName}`, "DELETE");
+            }
+            console.log(`Deleted closed-PR preview Worker ${workerName}.`);
+          }
+          NODE
