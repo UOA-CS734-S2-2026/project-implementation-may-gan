@@ -1,1 +1,47 @@
-export {};
+import { sql } from "drizzle-orm";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres, { type Sql } from "postgres";
+
+export type DayliDatabase = PostgresJsDatabase<Record<string, never>>;
+
+export interface DayliDatabaseClient {
+  db: DayliDatabase;
+  client: Sql;
+  close: () => Promise<void>;
+}
+
+export function createPostgresClient(connectionString: string): Sql {
+  if (connectionString.trim().length === 0) {
+    throw new Error("A PostgreSQL connection string is required.");
+  }
+
+  return postgres(connectionString, {
+    max: 1,
+    prepare: false,
+  });
+}
+
+export function createDatabase(client: Sql): DayliDatabase {
+  return drizzle(client);
+}
+
+export function createDayliDatabase(connectionString: string): DayliDatabaseClient {
+  const client = createPostgresClient(connectionString);
+
+  return {
+    client,
+    db: createDatabase(client),
+    close: () => client.end({ timeout: 5 }),
+  };
+}
+
+export async function proveDatabaseConnection(db: DayliDatabase): Promise<{ ok: 1 }> {
+  const result = await db.execute(sql`select 1 as ok`);
+  const [row] = result;
+
+  if (row?.ok !== 1) {
+    throw new Error("PostgreSQL smoke query returned an unexpected result.");
+  }
+
+  return { ok: 1 };
+}

@@ -2,6 +2,19 @@
   "name": "@dayli/db",
   "private": true,
   "type": "module",
-  "scripts": { "typecheck": "tsc" },
-  "devDependencies": { "typescript": "6.0.3" }
+  "exports": "./src/index.ts",
+  "scripts": {
+    "db:check": "tsx src/check.ts",
+    "test": "vitest run",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "24.12.0",
+    "typescript": "6.0.3",
+    "vitest": "3.2.7"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  }
 }
