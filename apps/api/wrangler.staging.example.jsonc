@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "REPLACE_WITH_STAGING_API_SERVICE_NAME",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_STAGING_HYPERDRIVE_ID"
+    }
+  ]
+}

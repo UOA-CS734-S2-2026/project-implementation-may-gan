@@ -1,5 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["@cloudflare/workers-types"] },
-  "include": ["src", "test", "vitest.config.ts"]
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers"]
+  },
+  "include": ["src", "test", "vitest.config.ts", "vitest.hyperdrive.staging.config.ts"]
 }

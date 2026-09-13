@@ -13,6 +13,10 @@
 
 Emulators do not prove hardware key protection or every sensor feature. Android screenshot detection excludes ADB captures. Test deployed bindings in isolated staging too.
 
+## Credentialed staging checks
+
+The API Hyperdrive check runs `select 1 as ok` through Drizzle inside the deployed staging Worker. It reaches a non-HTTP Worker service entrypoint, not a public health route. The manual-only `staging-hyperdrive.yml` workflow uses the protected GitHub `staging` environment and is never triggered by pull requests. Setup, required environment values, and the local command are in [`apps/api/README.md`](../../apps/api/README.md).
+
 Use the [implementation reference](implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
 
 ## Release gates

@@ -6,10 +6,12 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "vitest run",
+    "test:hyperdrive:staging": "vitest run --config vitest.hyperdrive.staging.config.ts",
     "typecheck": "tsc"
   },
   "dependencies": {
     "@dayli/contracts": "workspace:*",
+    "@dayli/db": "workspace:*",
     "@hono/zod-openapi": "1.6.3",
     "@scalar/hono-api-reference": "0.12.1",
     "hono": "4.13.7",

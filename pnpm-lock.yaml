@@ -32,6 +32,9 @@ importers:
       '@dayli/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dayli/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@hono/zod-openapi':
         specifier: 1.6.3
         version: 1.6.3(hono@4.13.7)(zod@4.5.4)

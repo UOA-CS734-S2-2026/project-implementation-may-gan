@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dayli-api-hyperdrive-integration-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-03-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "STAGING_API",
+      "service": "REPLACE_WITH_STAGING_API_SERVICE_NAME",
+      "entrypoint": "HyperdriveIntegrationEntrypoint",
+      "remote": true
+    }
+  ]
+}
