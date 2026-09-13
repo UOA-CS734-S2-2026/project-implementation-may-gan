@@ -1,0 +1,6 @@
+# Database schema and migrations require Anton's review.
+/packages/db/src/schema/ @AntGa
+/packages/db/migrations/ @AntGa
+/packages/db/admin/ @AntGa
+/packages/db/drizzle.config.ts @AntGa
+/drizzle.config.ts @AntGa

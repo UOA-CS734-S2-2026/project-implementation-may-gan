@@ -26,6 +26,10 @@ A post accepts up to three attachments in any mix of photos and videos. Each att
 
 The initial release supports iOS 16 and newer and Android 10, API 29, and newer. Features unavailable on a supported device need a documented fallback.
 
+## Database provider and migrations
+
+Neon PostgreSQL 18 is the database provider. The project uses a `production` parent branch and a `staging` child branch. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected workflow documented in [Database migrations](database-migrations.md).
+
 ## Deletion, backups, and recovery
 
 Deleted posts and accounts become inaccessible through the application immediately. A tracked job removes active database records and media. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.

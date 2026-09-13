@@ -1,0 +1,99 @@
+name: Run database migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Protected environment to migrate
+        required: true
+        type: choice
+        options: [staging, production]
+      production_backup_checked:
+        description: Type 'checked' after confirming a recent Neon restore point/backup for production
+        required: false
+        type: string
+
+concurrency:
+  group: database-migration-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      MIGRATION_TARGET: ${{ inputs.target }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      CONFIRM_PRODUCTION_MIGRATION: ${{ inputs.target == 'production' && 'MIGRATE production' || '' }}
+      CONFIRM_NEON_BACKUP_CHECKED: ${{ inputs.target == 'production' && inputs.production_backup_checked == 'checked' && 'true' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Require staging success before production
+        if: inputs.target == 'production'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const {data} = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id: 'run-database-migrations.yml',
+              branch: 'main',
+              status: 'success',
+              per_page: 50,
+            });
+            let ok = false;
+            for (const run of data.workflow_runs.filter((candidate) => candidate.head_sha === context.sha && candidate.id !== context.runId)) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { owner, repo, run_id: run.id, per_page: 100 });
+              ok = artifacts.some((artifact) => artifact.name === `database-migration-evidence-staging-${context.sha}`);
+              if (ok) break;
+            }
+            if (!ok) {
+              core.setFailed('Production requires a prior successful staging migration workflow for this main commit.');
+            }
+      - name: Check migrations
+        run: pnpm db:check
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Verify migrations
+        run: pnpm db:verify
+      - name: Write sanitized evidence
+        if: always()
+        run: |
+          mkdir -p migration-evidence
+          node <<'NODE'
+          const { createHash } = require('node:crypto');
+          const { readFileSync, readdirSync, writeFileSync } = require('node:fs');
+          const path = require('node:path');
+          const root = 'packages/db/migrations';
+          const journal = JSON.parse(readFileSync(path.join(root, 'meta/_journal.json'), 'utf8'));
+          const migrations = journal.entries.map((entry) => {
+            const body = readFileSync(path.join(root, `${entry.tag}.sql`));
+            return { name: entry.tag, sha256: createHash('sha256').update(body).digest('hex') };
+          });
+          writeFileSync('migration-evidence/evidence.json', JSON.stringify({
+            commit: process.env.GITHUB_SHA,
+            target: process.env.MIGRATION_TARGET,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            generatedAt: new Date().toISOString(),
+            migrations,
+            outcomes: 'see workflow step conclusions; connection details intentionally omitted'
+          }, null, 2));
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: database-migration-evidence-${{ inputs.target }}-${{ github.sha }}
+          path: migration-evidence/evidence.json
+          retention-days: 90

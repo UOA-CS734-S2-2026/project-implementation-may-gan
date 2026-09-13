@@ -18,6 +18,7 @@ build
 .env.*
 !.env.example
 !.env.test
+!.env.test.example
 .dev.vars
 .dev.vars.*
 !.dev.vars.example

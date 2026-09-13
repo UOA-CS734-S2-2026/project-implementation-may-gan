@@ -1,0 +1,92 @@
+name: Database migrations
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: database-migrations-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  database-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: dayli_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dayli_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      MIGRATION_TARGET: local
+      DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_test
+      TEST_DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_test
+      TEST_APP_DATABASE_URL: postgresql://app:app@localhost:5433/dayli_test
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install psql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Provision local migration roles
+        run: |
+          psql -h localhost -p 5433 -U postgres -d dayli_test <<'SQL'
+          CREATE ROLE migrator LOGIN PASSWORD 'migrator';
+          CREATE ROLE app LOGIN PASSWORD 'app';
+          GRANT CONNECT ON DATABASE dayli_test TO migrator, app;
+          GRANT CREATE ON DATABASE dayli_test TO migrator;
+          GRANT USAGE, CREATE ON SCHEMA public TO migrator;
+          GRANT USAGE ON SCHEMA public TO app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app;
+          REVOKE CREATE ON SCHEMA public FROM app;
+          CREATE SCHEMA drizzle AUTHORIZATION migrator;
+          GRANT USAGE, CREATE ON SCHEMA drizzle TO migrator;
+          REVOKE ALL ON SCHEMA drizzle FROM app;
+          SQL
+      - name: Check migration metadata, drift, immutability, and safety
+        run: pnpm db:check
+      - name: Apply baseline migrations to fresh PostgreSQL 18
+        run: pnpm db:migrate
+      - name: Verify migration state is read-only and strict
+        run: pnpm db:verify
+      - name: Repeat migration application is idempotent
+        run: pnpm db:migrate
+      - name: Run migration integration tests
+        run: pnpm db:test
+      - name: Safe failure for missing credentials
+        run: |
+          if env -u DATABASE_URL pnpm db:verify >missing.out 2>&1; then
+            echo "db:verify unexpectedly succeeded without DATABASE_URL"
+            exit 1
+          fi
+          if grep -E "postgresql://|migrator:migrator|app:app|localhost" missing.out; then
+            echo "credential material leaked in missing-credential output"
+            exit 1
+          fi
+      - name: Safe failure for invalid credentials
+        run: |
+          if DATABASE_URL='not-a-url' pnpm db:verify >invalid.out 2>&1; then
+            echo "db:verify unexpectedly succeeded with invalid DATABASE_URL"
+            exit 1
+          fi
+          if grep -E "postgresql://|migrator:migrator|app:app|localhost" invalid.out; then
+            echo "credential material leaked in invalid-credential output"
+            exit 1
+          fi

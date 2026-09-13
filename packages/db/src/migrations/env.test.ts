@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { validateMigrationConnectionString } from "./env";
+
+describe("validateMigrationConnectionString", () => {
+  it("accepts the local migrator test database", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_test", "local"),
+    ).not.toThrow();
+  });
+
+  it("rejects local non-test databases", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
+    ).toThrow("Local migrations must target localhost:5433/dayli_test.");
+  });
+
+  it("accepts direct Neon migrator URLs with required TLS", () => {
+    expect(() =>
+      validateMigrationConnectionString(
+        "postgresql://migrator:secret@example.us-east-1.aws.neon.tech/dayli?sslmode=require",
+        "staging",
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects wrong roles", () => {
+    expect(() =>
+      validateMigrationConnectionString(
+        "postgresql://owner:secret@example.us-east-1.aws.neon.tech/dayli?sslmode=require",
+        "staging",
+      ),
+    ).toThrow("Migration connection string must use the migrator role.");
+  });
+
+  it("rejects pooled Neon URLs", () => {
+    expect(() =>
+      validateMigrationConnectionString(
+        "postgresql://migrator:secret@example-pooler.us-east-1.aws.neon.tech/dayli?sslmode=require",
+        "production",
+      ),
+    ).toThrow("Migrations must use an unpooled Neon connection.");
+  });
+
+  it("rejects Neon URLs without required TLS", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:secret@example.us-east-1.aws.neon.tech/dayli", "production"),
+    ).toThrow("Neon migrations require sslmode=require or stricter.");
+  });
+});
