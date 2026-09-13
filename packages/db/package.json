@@ -5,11 +5,13 @@
   "exports": "./src/index.ts",
   "scripts": {
     "db:check": "tsx src/check.ts",
+    "test": "vitest run",
     "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/node": "24.12.0",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "3.2.7"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
