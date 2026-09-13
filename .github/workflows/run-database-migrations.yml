@@ -62,15 +62,21 @@ jobs:
               core.setFailed('Production requires a prior successful staging migration workflow for this main commit.');
             }
       - name: Check migrations
+        id: check
         run: pnpm db:check
       - name: Apply migrations
+        id: apply
         run: pnpm db:migrate
       - name: Verify migrations
+        id: verify
         run: pnpm db:verify
       - name: Write sanitized evidence
         if: always()
         run: |
           mkdir -p migration-evidence
+          export CHECK_OUTCOME='${{ steps.check.outcome }}'
+          export APPLY_OUTCOME='${{ steps.apply.outcome }}'
+          export VERIFY_OUTCOME='${{ steps.verify.outcome }}'
           node <<'NODE'
           const { createHash } = require('node:crypto');
           const { readFileSync, readdirSync, writeFileSync } = require('node:fs');
@@ -88,7 +94,11 @@ jobs:
             runAttempt: process.env.GITHUB_RUN_ATTEMPT,
             generatedAt: new Date().toISOString(),
             migrations,
-            outcomes: 'see workflow step conclusions; connection details intentionally omitted'
+            outcomes: {
+              check: process.env.CHECK_OUTCOME,
+              apply: process.env.APPLY_OUTCOME,
+              verify: process.env.VERIFY_OUTCOME,
+            },
           }, null, 2));
           NODE
       - uses: actions/upload-artifact@v4

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { repoPath, repoRoot } from "./migrations/paths";
+import { parseMigrationReview } from "./migrations/reviews";
 import { readLocalMigrations } from "./migrations/state";
 
 const execFileAsync = promisify(execFile);
@@ -165,11 +166,7 @@ async function ensureSquawkReviews(): Promise<void> {
         fail(`Missing Squawk review document for ${path.basename(migration.path)} suppression ${rule}.`);
       }
 
-      for (const field of ["reason", "affected_data_and_clients", "rollout_sequence", "backup_checkpoint", "forward_fix_plan", "reviewer"]) {
-        if (!new RegExp(`^${field}:\\s*\\S`, "m").test(review)) {
-          fail(`Squawk review ${path.basename(expected)} is missing ${field}.`);
-        }
-      }
+      parseMigrationReview(review, path.basename(expected));
     }
   }
 
