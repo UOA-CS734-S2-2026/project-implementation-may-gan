@@ -12,6 +12,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
 - [Architecture](architecture.md): components and request flows.
+- [Environments](environments.md): local PostgreSQL, local Workers, staging, and production release boundaries.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.

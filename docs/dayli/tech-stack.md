@@ -7,7 +7,7 @@
 | API | Hono on Cloudflare Workers, Zod, REST/OpenAPI. |
 | Contracts | Generated Dart/Dio client and TypeScript models. |
 | Auth | Better Auth, browser cookies, native bearer sessions. |
-| Database | Supabase PostgreSQL, Drizzle, Hyperdrive connection pooling. |
+| Database | PostgreSQL, proposed provider: Supabase, Drizzle, Hyperdrive connection pooling. |
 | Realtime | Per-user Durable Objects with hibernating WebSockets. |
 | Media | Private Cloudflare R2. |
 | Jobs | PostgreSQL outbox and Worker scheduled handler. |
@@ -34,7 +34,7 @@ Declare bindings, compatibility settings, scheduled triggers, and Durable Object
 
 Test Better Auth, Drizzle/Hyperdrive transactions, FCM, and sockets in the Workers runtime first. Next.js on Workers also needs a compatible deployment adapter; retain its existing host as fallback. Heavy media processing may need another service.
 
-Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push.
+Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. The current staging configuration is provider-neutral, so Supabase remains a proposal until the team records the selected staging provider and owner. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 
 Use the [implementation reference](implementation-reference.md) for runtime checks and deployment pitfalls.
 

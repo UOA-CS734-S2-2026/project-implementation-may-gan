@@ -1,6 +1,6 @@
 # Dayli database package
 
-This package owns the Drizzle/PostgreSQL connection helpers and smoke check.
+This package owns the Drizzle/PostgreSQL connection helpers and smoke check. See the [environment guide](../../docs/dayli/environments.md) for the local PostgreSQL 16 lifecycle and credential handling.
 
 ## Local smoke check
 
@@ -16,6 +16,8 @@ The command reads `DATABASE_URL` at execution time, runs `select 1 as ok` throug
 
 Run the smoke check against an approved isolated local or staging database before a release that depends on PostgreSQL. Record the command outcome without the connection string, credentials, database host, or private data. CI intentionally does not run it: the repository contains no database credentials and no shared database is available to untrusted pull requests.
 
-## Future Worker binding
+## Workers Hyperdrive check
 
-When the API begins making database requests, provision a distinct Hyperdrive resource per environment with query caching disabled. Add its binding through the approved Cloudflare environment/dashboard configuration; do not commit database URLs, passwords, or environment-specific resource IDs. Verify that binding through isolated staging before deploying dependent API routes.
+The API's credentialed staging check uses `createHyperdriveDatabase(env.HYPERDRIVE)`. It creates the Drizzle client for one Worker service-binding call, runs `select 1 as ok`, and closes it in `finally`.
+
+See [`apps/api/README.md`](../../apps/api/README.md) for the protected staging setup and command. The check is not part of ordinary CI. It uses an isolated staging database, a real deployed Worker binding, and no public HTTP route.

@@ -10,6 +10,10 @@ export interface DayliDatabaseClient {
   close: () => Promise<void>;
 }
 
+export interface HyperdriveBinding {
+  connectionString: string;
+}
+
 export function createPostgresClient(connectionString: string): Sql {
   if (connectionString.trim().length === 0) {
     throw new Error("A PostgreSQL connection string is required.");
@@ -33,6 +37,12 @@ export function createDayliDatabase(connectionString: string): DayliDatabaseClie
     db: createDatabase(client),
     close: () => client.end({ timeout: 5 }),
   };
+}
+
+export function createHyperdriveDatabase(
+  hyperdrive: HyperdriveBinding,
+): DayliDatabaseClient {
+  return createDayliDatabase(hyperdrive.connectionString);
 }
 
 export async function proveDatabaseConnection(db: DayliDatabase): Promise<{ ok: 1 }> {
