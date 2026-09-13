@@ -6,7 +6,7 @@
 
 It does not add a health route or an OpenAPI operation. A public request cannot call a `WorkerEntrypoint`; only a Worker with a configured service binding can call it.
 
-The ordinary API test configuration excludes `*.staging.test.ts`. The staging command needs an ignored Wrangler configuration and Cloudflare credentials, so it cannot run in ordinary or untrusted pull-request tests.
+The ordinary API test configuration excludes `*.staging.test.ts`. The staging command needs an ignored Wrangler configuration and Cloudflare credentials, so it cannot run in ordinary or untrusted pull-request tests. GitHub runs it after relevant changes merge into `main`, and maintainers can also trigger it manually.
 
 ### One-time Cloudflare setup
 
@@ -37,11 +37,11 @@ Record only the command, commit SHA, date, runtime versions, and pass/fail resul
 
 ### Protected GitHub workflow
 
-`.github/workflows/staging-hyperdrive.yml` is manual-only and uses the GitHub `staging` environment. Before dispatching it, configure that environment with required reviewers and add:
+`.github/workflows/staging-hyperdrive.yml` runs after relevant API or database changes merge into `main`, also supports manual dispatch, and uses the GitHub `staging` environment. Configure that environment with required reviewers and add:
 
 - secret `CLOUDFLARE_API_TOKEN`, scoped to deploy the staging Worker and use its remote service binding;
 - secret `CLOUDFLARE_STAGING_HYPERDRIVE_ID`;
 - variable `CLOUDFLARE_ACCOUNT_ID`;
 - variable `STAGING_API_SERVICE_NAME`.
 
-The workflow writes ignored Wrangler files on the runner, deploys the staging Worker with `HYPERDRIVE`, then runs the integration test. It has no `pull_request` trigger. Do not move these values to repository-level variables or secrets that untrusted workflows can read.
+The workflow writes ignored Wrangler files on the runner, deploys the staging Worker with `HYPERDRIVE`, then runs the integration test. It has no `pull_request` trigger, so credentialed code runs only from `main` or an approved manual dispatch. Do not move these values to repository-level variables or secrets that untrusted workflows can read.
