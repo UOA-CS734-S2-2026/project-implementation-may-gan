@@ -24,7 +24,7 @@ Before porting every endpoint, prove these in the actual Worker runtime:
 
 Pin working dependencies and OpenAPI generators. Follow driver-specific connection lifecycle guidance; request-scoped connection objects must not leak across Worker invocations. Supply Better Auth with the fresh-read database client.
 
-Wrangler deploys code/bindings, not PostgreSQL migrations. Apply additive Drizzle migrations through a controlled connection before dependent releases. Declare Durable Object migrations separately. Keep secrets and `.dev.vars` untracked, and separate staging/production resources. Test old mobile clients and document rollback before removing fields/routes.
+Wrangler deploys code/bindings, not PostgreSQL migrations. Apply additive Drizzle migrations through the controlled Neon workflow in [Database migrations](database-migrations.md) before dependent releases. Declare Durable Object migrations separately. Keep secrets and `.dev.vars` untracked, and separate staging/production resources. Test old mobile clients and document rollback before removing fields/routes.
 
 ## 3. PostgreSQL constraints and indexes
 

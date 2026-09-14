@@ -13,6 +13,14 @@
     "generate:client:dart": "openapi-generator-cli generate -i packages/contracts/openapi.json -g dart -o packages/api-client-dart --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=pubName=dayli_api_client,pubVersion=0.1.0,useEnumExtension=true,useFinalProperties=true",
     "generate:clients": "pnpm generate:openapi && tsx scripts/clean-generated-clients.ts && pnpm generate:client:typescript && pnpm generate:client:dart && tsx scripts/finalize-generated-clients.ts && dart format packages/api-client-dart",
     "generate:clients:check": "pnpm generate:clients && tsx scripts/check-generated-clients.ts",
+    "db:generate": "pnpm --filter @dayli/db db:generate",
+    "db:check": "pnpm --filter @dayli/db db:check",
+    "db:migrate": "pnpm --filter @dayli/db db:migrate",
+    "db:verify": "pnpm --filter @dayli/db db:verify",
+    "db:smoke": "pnpm --filter @dayli/db db:smoke",
+    "db:test:up": "docker compose -f packages/db/docker-compose.yml up -d --wait",
+    "db:test": "TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://migrator:migrator@localhost:5433/dayli_test} TEST_APP_DATABASE_URL=${TEST_APP_DATABASE_URL:-postgresql://app:app@localhost:5433/dayli_test} pnpm --filter @dayli/db db:test",
+    "db:test:down": "docker compose -f packages/db/docker-compose.yml down -v",
     "lint": "eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
@@ -20,8 +28,10 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@openapitools/openapi-generator-cli": "2.41.0",
+    "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "globals": "17.12.0",
+    "squawk-cli": "2.65.0",
     "tsx": "4.20.6",
     "typescript-eslint": "8.70.0"
   }

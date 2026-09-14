@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
+import { schema } from "./schema";
 
-export type DayliDatabase = PostgresJsDatabase<Record<string, never>>;
+export type DayliDatabase = PostgresJsDatabase<typeof schema>;
 
 export interface DayliDatabaseClient {
   db: DayliDatabase;
@@ -26,7 +27,7 @@ export function createPostgresClient(connectionString: string): Sql {
 }
 
 export function createDatabase(client: Sql): DayliDatabase {
-  return drizzle(client);
+  return drizzle(client, { schema });
 }
 
 export function createDayliDatabase(connectionString: string): DayliDatabaseClient {

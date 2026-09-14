@@ -1,0 +1,2 @@
+-- Empty baseline migration for Dayli's additive PostgreSQL migration history.
+-- Product tables are intentionally out of scope for issue #8.

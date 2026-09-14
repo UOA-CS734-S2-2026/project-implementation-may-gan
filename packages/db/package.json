@@ -4,17 +4,24 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "db:check": "tsx src/check.ts",
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:check": "tsx src/check-migrations.ts",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:verify": "tsx src/verify.ts",
+    "db:smoke": "tsx src/check.ts",
+    "db:test": "REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts",
     "test": "vitest run",
     "typecheck": "tsc"
   },
   "devDependencies": {
     "@types/node": "24.12.0",
+    "drizzle-kit": "0.31.10",
     "typescript": "6.0.3",
-    "vitest": "3.2.7"
+    "vitest": "3.2.7",
+    "yaml": "2.9.1"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.9"
+    "drizzle-orm": "0.45.2",
+    "postgres": "3.4.9"
   }
 }
