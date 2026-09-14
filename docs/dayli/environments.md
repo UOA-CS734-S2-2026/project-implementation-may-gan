@@ -24,9 +24,9 @@ pnpm install --frozen-lockfile
 
 Keep credentials in your shell, a password manager, GitHub environment secrets, or ignored local files. `.env*` and `.dev.vars*` are ignored. Do not put credentials in `wrangler.jsonc`, source files, test fixtures, or generated clients.
 
-## Local PostgreSQL 16
+## Local PostgreSQL 18
 
-The repository has no committed Docker configuration, migrations, or seed data. The following commands create an empty, persistent PostgreSQL 16 database for development. They use a Docker volume, so stopping or removing the container does not remove the data. The block generates a password only for a new volume and refuses to replace a missing credential for existing data.
+The repository includes a PostgreSQL 18 Docker test fixture for development and integration tests. It is separate from product data and uses an isolated database. They use a Docker volume, so stopping or removing the container does not remove the data. The block generates a password only for a new volume and refuses to replace a missing credential for existing data.
 
 ```bash
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dayli"
@@ -94,7 +94,7 @@ DATABASE_URL="postgres://dayli:${POSTGRES_PASSWORD}@127.0.0.1:5432/dayli" \
   pnpm --filter @dayli/db db:check
 ```
 
-The check runs `select 1 as ok` and closes the connection. It does not create tables. `packages/db` currently has connection helpers only. There is no Drizzle migration configuration, migration directory, schema, seed command, or rollback command yet. Before application data is introduced, add reviewed, additive migrations and a documented rollback or forward-fix procedure. Do not treat `wrangler deploy` as a database migration.
+The local transaction proof applies the staging-only probe fixture as `migrator`, then uses the restricted `app` role to prove Drizzle commit, explicit rollback, constraint recovery, cleanup, and authorization. The fixture is never a product migration. Do not treat `wrangler deploy` as a database migration.
 
 ## Local API and clients
 
@@ -199,7 +199,7 @@ The GitHub `staging` environment contains:
 
 The credentialed deploy/test workflow runs for relevant same-repository PR changes, relevant pushes to `main`, and manual dispatch. It never uses `pull_request_target`. Fork PRs are skipped before they receive the staging environment or its credentials. For an eligible PR, it deploys `dayli-api-pr-<number>` and tests it only through a private service binding. The normal job attempts deletion in an `always()` step. The separate `cleanup-hyperdrive-preview.yml` workflow runs for every trusted PR to `main` close, without checking out PR code, and makes an idempotent deletion attempt. Both workflows use the same per-PR concurrency group, so close cleanup cannot race an in-flight test.
 
-The proposal names Supabase as the intended PostgreSQL provider, but the current staging Worker and Hyperdrive configuration are provider-neutral. They do not record or verify a provider in Git. Treat the selected staging provider and its operational ownership as a pending deployment decision. Do not infer a production provider, host, or account from these documents.
+Staging uses the administrator-provisioned Neon PostgreSQL database through Hyperdrive. This is staging-only; production remains unprovisioned and must use separate resources.
 
 ## Future production
 

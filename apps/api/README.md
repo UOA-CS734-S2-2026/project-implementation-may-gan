@@ -4,7 +4,7 @@ For local PostgreSQL, local Worker, staging, and future production setup, see th
 
 ## Staging Hyperdrive check
 
-`test:hyperdrive:staging` proves that a deployed API Worker can use its `HYPERDRIVE` binding. The Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. The entrypoint creates a Drizzle client, runs `select 1 as ok`, checks `{ ok: 1 }`, and closes the client in `finally`.
+`test:hyperdrive:staging` proves that a deployed API Worker can use its `HYPERDRIVE` binding. The Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. It retains the connectivity check and additionally proves Drizzle commit, explicit rollback, post-error recovery, all four constraint classes, restricted-role authorization, and visibility from a fresh invocation. Clients are created per invocation; Hyperdrive manages edge cleanup and query caching must be disabled.
 
 The entrypoint is not an HTTP route or an OpenAPI operation. Only a Worker with its service binding can call it.
 
@@ -17,7 +17,7 @@ The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntry
 ### One-time Cloudflare setup
 
 1. Create a PostgreSQL database used only for staging. Do not reuse production data or credentials. Use a least-privilege database user and require TLS when the provider supports it.
-2. In **Workers & Pages** > **Hyperdrive**, create a configuration for that staging database. Disable query caching. Keep its ID out of Git.
+2. In **Workers & Pages** > **Hyperdrive**, create a configuration for that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.
 3. Copy `wrangler.staging.example.jsonc` to the ignored `wrangler.staging.jsonc`. Keep its name as `dayli-api-staging`, replace the Hyperdrive ID placeholder, and keep the binding name `HYPERDRIVE`.
 4. Copy `wrangler.hyperdrive-test.example.jsonc` to the ignored `wrangler.hyperdrive-test.jsonc`. Set its service placeholder to `dayli-api-staging`. It declares the private remote service binding and contains no database connection string.
 
@@ -57,4 +57,4 @@ If a secure credential tool supplies the values instead, replace the `read` comm
 
 For a same-repository PR, the workflow deploys `dayli-api-pr-<number>` with `workers_dev: false` and points the private test binding at it. The normal job attempts deletion in an `always()` cleanup step. `.github/workflows/cleanup-hyperdrive-preview.yml` makes a separate idempotent deletion attempt when a trusted PR to `main` closes, without checking out PR code. Both workflows use the same per-PR concurrency group, so close cleanup cannot race an in-flight test. Fork PR jobs are skipped before they receive the staging environment or its credentials. The workflows do not use `pull_request_target`.
 
-Pushes to `main` and manual runs deploy only `dayli-api-staging`. The workflow rejects any other staging service name and reads the Hyperdrive configuration from Cloudflare to check its expected name before it deploys. It never targets the default `dayli-api` Worker.
+Pushes to `main` and manual runs deploy only `dayli-api-staging`. The workflow rejects any other staging service name, reads the Hyperdrive configuration from Cloudflare, and fails unless query caching is disabled before deployment. Configure the `staging` environment with one required reviewer from the GitHub `May Gan` team and prevent the triggering actor from approving their own deployment. Its final `gate` status is required and path-aware, so unrelated changes receive a successful no-op. It never targets the default `dayli-api` Worker.

@@ -2,22 +2,10 @@ name: Staging Hyperdrive integration
 
 on:
   pull_request:
-    branches:
-      - main
-    paths:
-      - "apps/api/**"
-      - "packages/db/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/staging-hyperdrive.yml"
+    branches: [main]
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths:
-      - "apps/api/**"
-      - "packages/db/**"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/staging-hyperdrive.yml"
+    branches: [main]
 
 permissions:
   contents: read
@@ -29,13 +17,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: filter
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == workflow_dispatch ]]; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            base="$BEFORE"; [[ "$EVENT" == pull_request ]] && base="$BASE"
+            if git diff --name-only "$base" "$SHA" | grep -Eq '^(apps/api/|packages/db/|pnpm-lock.yaml$|.github/workflows/staging-hyperdrive.yml$)'; then
+              echo 'relevant=true' >> "$GITHUB_OUTPUT"
+            else
+              echo 'relevant=false' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
   check:
+    needs: changes
+    if: >-
+      needs.changes.outputs.relevant == 'true' &&
+      (github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.repo.fork == false))
     # Do not use pull_request_target. Forks never receive the staging environment
     # or its credentials. Same-repository PR branches are the trusted PR source.
-    if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.repo.fork == false)
     environment: staging
     runs-on: ubuntu-latest
     steps:
@@ -113,6 +130,9 @@ jobs:
           if (payload?.result?.name !== expectedHyperdriveName) {
             throw new Error("CLOUDFLARE_STAGING_HYPERDRIVE_ID is not the expected staging Hyperdrive.");
           }
+          if (payload?.result?.caching?.disabled !== true) {
+            throw new Error("The staging Hyperdrive must have caching disabled.");
+          }
 
           const shared = {
             $schema: "node_modules/wrangler/config-schema.json",
@@ -171,6 +191,14 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: pnpm --filter @dayli/api test:hyperdrive:staging
+      - name: Upload sanitized Hyperdrive evidence
+        if: ${{ always() && needs.changes.outputs.relevant == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperdrive-proof-${{ github.sha }}
+          path: apps/api/hyperdrive-proof-evidence.json
+          retention-days: 90
+          if-no-files-found: warn
       - name: Delete the isolated PR API Worker
         if: ${{ always() && github.event_name == 'pull_request' }}
         env:
@@ -201,6 +229,7 @@ jobs:
               `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
               { method, headers: { Authorization: `Bearer ${apiToken}` } },
             );
+            if (response.status === 204) return { response, payload: { success: true } };
             let payload;
             try {
               payload = await response.json();
@@ -247,3 +276,15 @@ jobs:
             console.log(`Deleted preview Worker ${workerName}.`);
           }
           NODE
+
+  gate:
+    if: always()
+    needs: [changes, check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Required staging proof gate
+        if: needs.changes.outputs.relevant != 'true' || needs.check.result == 'success' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
+        run: echo "Staging proof gate passed or was not required."
+      - name: Reject a failed relevant staging proof
+        if: needs.changes.outputs.relevant == 'true' && needs.check.result != 'success' && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork)
+        run: exit 1

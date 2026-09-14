@@ -1,7 +1,7 @@
 # @dayli/db
 
 `packages/db` owns the Dayli Drizzle schema, PostgreSQL migration history, and direct migration tooling. See the [environment guide](../../docs/dayli/environments.md) for local PostgreSQL lifecycle and credential handling.
-Runtime Workers will later use Hyperdrive with the restricted `app` role; migration commands connect directly to Neon with the `migrator` role and an unpooled URL.
+Runtime Workers use Hyperdrive with the restricted `app` role; migration commands connect directly to Neon with the `migrator` role and an unpooled URL.
 
 ## Commands
 
@@ -25,7 +25,7 @@ Local tests must use `localhost:5433/dayli_test`. Staging and production must us
 
 ## Workers Hyperdrive check
 
-The API's credentialed staging check uses `createHyperdriveDatabase(env.HYPERDRIVE)`. It creates the Drizzle client for one Worker service-binding call, runs `select 1 as ok`, and closes it in `finally`.
+The API's credentialed staging check uses `createHyperdriveDatabase(env.HYPERDRIVE)`. It creates a fresh Drizzle client per Worker invocation, retains `select 1 as ok`, and proves transactions and constraints through the private entrypoint. The Hyperdrive path does not call `sql.end()`; direct PostgreSQL tooling retains explicit close behavior. Run `admin/bootstrap-staging-probe.sql` once as an administrator in staging; it is not a migration.
 
 See [`apps/api/README.md`](../../apps/api/README.md) for the protected staging setup and command. The check is not part of ordinary CI. It uses an isolated staging database, a real deployed Worker binding, and no public HTTP route.
 

@@ -46,7 +46,7 @@ Return the original result for an identical idempotent retry. Reusing its key wi
 
 Keep transactions short. Never call R2, FCM, or Durable Objects while holding database locks. Check posting eligibility with server time at the authoritative write, not only when a request first arrives. Treat the transaction's accepted write as the deadline decision; network response time is not eligibility.
 
-Hyperdrive pools connections, not database CPU. Start with caching explicitly disabled: it defaults on, and writes do not invalidate cached reads. Keep sessions, permissions, blocks, and immediate history reads fresh. Any later cache-enabled client needs a separate, deliberate use case.
+Hyperdrive pools connections, not database CPU. Caching must be explicitly disabled for this application because writes do not invalidate cached reads. Workers create postgres.js/Drizzle clients per invocation and let Cloudflare manage edge cleanup; do not depend on session state across transactions. The staging proof records transaction behavior and sanitized constraint categories using a least-privilege `app` role.
 
 ## 4. Socket authentication and hibernation
 
