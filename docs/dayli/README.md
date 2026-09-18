@@ -15,6 +15,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Environments](environments.md): local PostgreSQL, local Workers, staging, and production release boundaries.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
+- [Authentication compatibility](authentication-compatibility.md): Better Auth Worker and Flutter proof, plus deployment prerequisites.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Database migrations](database-migrations.md): Neon PostgreSQL roles, additive migration commands, and release runbook.
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
