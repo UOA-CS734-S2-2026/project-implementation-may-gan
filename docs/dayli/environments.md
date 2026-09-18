@@ -201,6 +201,10 @@ The credentialed deploy/test workflow runs for relevant same-repository PR chang
 
 Staging uses the administrator-provisioned Neon PostgreSQL database through Hyperdrive. This is staging-only; production remains unprovisioned and must use separate resources.
 
+## Legacy Supabase migration inventory
+
+Do not reuse a Neon, application, owner, or service-role credential to inspect the legacy Supabase database. Before an approved rehearsal, a legacy administrator must provision a separate `LEGACY_SUPABASE_READONLY_DATABASE_URL` role with `CONNECT` and `SELECT` only on the approved legacy tables. `pnpm db:migration:inventory` requires TLS, opens `BEGIN READ ONLY`, and emits aggregate counts only. Do not run it during this planning phase or against production without explicit authorisation. Keep its output in an approved protected evidence location rather than Git. See [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md) for its fixed table boundary and rehearsal gates.
+
 ## Future production
 
 Production is not provisioned. Do not deploy the default `dayli-api` Worker as a shortcut for staging or testing. Before the first production deploy, provision and document separately:

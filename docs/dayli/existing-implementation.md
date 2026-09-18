@@ -25,4 +25,4 @@ The feed subtracts 24 hours to find yesterday. Use Auckland calendar arithmetic 
 
 There are 41 server test files, not a verified passing coverage result. Import with attribution and permission, excluding credentials, dependencies, and build artefacts. Use isolated development data; documentation work does not authorise deleting hosted data.
 
-[Migration plan](testing-and-delivery.md)
+[Migration plan](testing-and-delivery.md). The approved Supabase to Neon source boundary, fixture rules, and Cloudinary checkpoint are in [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md).
