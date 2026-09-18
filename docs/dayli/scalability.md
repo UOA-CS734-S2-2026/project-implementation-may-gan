@@ -25,7 +25,7 @@ For index candidates, transaction boundaries, leases, and socket expiry mechanis
 | Jobs | Bounded batches, leases, capped retries, dedupe keys, and failed-job review. |
 | Releases | Version APIs and use additive migrations while older mobile clients remain installed. |
 
-Workers scaling does not add PostgreSQL capacity. Measure origin latency and pool saturation; do not blindly stack poolers or reuse process-global connections. Hyperdrive caching is enabled by default and writes do not invalidate cached reads, so explicitly configure fresh application reads.
+Workers scaling does not add PostgreSQL capacity. Measure origin latency and pool saturation; do not blindly stack poolers or reuse process-global connections. Create database clients inside each invocation and let Hyperdrive clean up edge connections. Keep caching disabled unless a separate freshness proof exists; writes do not invalidate cached reads.
 
 ## Durable Object costs
 

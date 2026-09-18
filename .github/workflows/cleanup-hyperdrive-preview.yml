@@ -58,6 +58,7 @@ jobs:
               `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
               { method, headers: { Authorization: `Bearer ${apiToken}` } },
             );
+            if (response.status === 204) return { response, payload: { success: true } };
             let payload;
             try {
               payload = await response.json();
