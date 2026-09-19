@@ -1,6 +1,26 @@
 # Supabase to Neon migration boundary
 
-Status: phase one policy and inventory only. No legacy or production data has been copied, modified, or queried for this document.
+Status: the repository contains a users-and-login-accounts direct-transfer script. No legacy or production data has been copied, modified, or queried for this document.
+
+## Implemented users and accounts import scope
+
+`pnpm db:migration:users-and-accounts` is a direct PostgreSQL to PostgreSQL transfer, not an export/import workflow. It reads only `public.user` and `public.account` from Supabase with a separately provisioned `LEGACY_SUPABASE_USERS_ACCOUNTS_READONLY_DATABASE_URL` credential, then writes only those two tables in Neon with the protected `users_accounts_importer` role. It preserves text user and account IDs, profile fields other than legacy bans, timestamps, Better Auth provider IDs and account IDs, account-to-user links, and compatible credential password hashes.
+
+The command is a dry run unless `--apply` and `APPLY_USERS_ACCOUNTS_IMPORT="IMPORT users and accounts"` are both supplied. It validates both complete table shapes, uses a read-only source transaction, requires exactly the known three fixture users and zero fixture-owned accounts, checks user, account, and provider identity uniqueness, uses a transaction-scoped advisory lock plus serializable apply transaction, and never updates an existing target row. An exact replay is accepted without a write. A user ID, email, username, account ID, or `(provider_id, account_id)` collision blocks the whole import. The JSON report has aggregate counts only.
+
+This implemented scope is narrower than the full-data boundary below. Posts, post media, friendships, requests, conversations, messages, read state, comments, likes, `session`, and `verification` are not read or transferred. Omitted records are not deleted from Supabase or Neon. The full-data policy remains the contract for a future separately approved importer.
+
+### Account compatibility and sensitive-material policy
+
+The local legacy code uses Better Auth 1.5.6 with its default email/password setting. Its installed implementation and the target Better Auth 1.7.5 implementation both use the `salt:derived-key` lowercase hexadecimal format produced by scrypt with `N=16384`, `r=16`, `p=1`, a 16-byte salt, and a 64-byte derived key. The importer copies a password only for `provider_id="credential"`, requires `account_id=user_id`, and rejects any hash outside that exact format. It does not transform passwords. Other hash formats, custom password hooks, credential account mappings other than `account_id=user_id`, password material on non-credential accounts, and providers other than the locally configured `google` are blockers, not fallback/reset behavior.
+
+For a Google account the importer preserves only `id`, `user_id`, `provider_id`, `account_id`, and account timestamps. It intentionally does not select or copy `access_token`, `refresh_token`, `id_token`, token expiry fields, or `scope`. These fields are sensitive, may be expired or revoked, and Better Auth 1.7.5 can be configured to encrypt OAuth tokens, whereas the target currently does not enable that option. A source token cannot therefore be assumed to be plaintext or compatible with a target encryption configuration. OAuth tokens and scopes are reacquired only after a fresh provider authorization.
+
+Structural account copy is not proof of Google sign-in. The new deployment must independently configure the Google client ID, client secret, approved target callback URI, trusted origins, consent screen, and the Better Auth Google provider before a tested Google authorization can use the copied `(provider_id, account_id)` mapping. The current target worker has no Google provider configuration. A conflicting email or provider subject must block or follow an explicitly approved account-linking policy, never be merged by this importer.
+
+The user approved discarding legacy bans because they have no meaningful source ban history. The importer never selects or copies `banned`, `ban_reason`, or `ban_expires`. New target users retain the schema defaults of `false`, `null`, and `null`; replay never clears or replaces any target ban fields. The schema columns remain available for future moderation. Sessions and verification records are deliberately excluded, so all users must establish a new session. Credential users can sign in only when the supported hash validation succeeds; no password reset is performed by the importer.
+
+Before a rehearsal, an administrator must provision the source role with `CONNECT` and `SELECT` on `public.user` and `public.account` only. On Neon, run the role bootstrap after both Better Auth target tables exist, set the `users_accounts_importer` password outside Git, and grant it only `USAGE` on `public` plus `SELECT` and `INSERT` on `public.user` and `public.account`. Use direct TLS URLs from a protected secret store. Do not run the command against a live database without the source-freeze, rehearsal, backup, and release approvals in this document.
 
 Dayli will move from the legacy Supabase PostgreSQL database in the WDCC implementation to Neon PostgreSQL. Neon is the only target. This document fixes the data boundary for later rehearsal and cutover work. It does not approve a production cutover, create a Neon schema, change application connections, or transfer data.
 
@@ -21,7 +41,7 @@ The boundary was derived from the legacy repository at `732-workspace/group-proj
 | Legacy table | Policy | Import condition or note |
 | --- | --- | --- |
 | `user` | Include | Preserve every non-fixture row and its `id`. Preserve profile metadata subject to the target privacy model. |
-| `account` | Deferred | Contains provider IDs, access tokens, refresh tokens, ID tokens, and password material. Do not copy it until the target authentication and reauthentication plan is approved. |
+| `account` | Include with restrictive field policy | Preserve account ID, user link, provider ID, provider account ID, credential password hash only when it matches the documented Better Auth format, and timestamps. Never select or copy OAuth tokens, token expiry fields, or scope. |
 | `session` | Exclude | Deliberately invalidated at cutover. |
 | `verification` | Exclude | Deliberately invalidated at cutover. |
 | `daily_prompts` | Recreate as reference data | The known prompt catalog is seed data but non-fixture posts reference it. Recreate the approved catalog with stable prompt IDs before importing posts, then verify its ID coverage. Do not silently omit it. |
@@ -35,7 +55,7 @@ The boundary was derived from the legacy repository at `732-workspace/group-proj
 | `comments` | Include | Preserve IDs, post and author links, reply hierarchy, text, and timestamps. |
 | `post_likes` | Include | Preserve composite keys and timestamps. |
 
-The expected dependency order for a later import is reference prompts, users, posts, post media, friendships and requests, conversations, messages, conversation reads, comments, then likes. The later implementation may use an equivalent transaction-safe order, but it must not disable constraints and leave unresolved references.
+The expected dependency order for a later full-data import is reference prompts, users and accounts, posts, post media, friendships and requests, conversations, messages, conversation reads, comments, then likes. The users-and-accounts importer does not transfer dependent content. The later full-data implementation may use an equivalent transaction-safe order, but it must not disable constraints and leave unresolved references.
 
 ## Known fixture baseline
 
@@ -44,6 +64,7 @@ These static counts come from the legacy seed source, not from a hosted database
 | Fixture set | Expected rows | Identity rule |
 | --- | ---: | --- |
 | users | 3 | Exact IDs: `seed_user_alice`, `seed_user_bob`, `seed_user_carol` |
+| accounts | 0 | No fixture-owned accounts are allowed. Any such row blocks the import. |
 | posts | 12 | The exact post ID and author pairs in the closure below |
 | post media | 0 | No post-media seed exists |
 | friendships | 4 | The exact composite keys in the closure below |
@@ -117,7 +138,7 @@ A later migration implementation may proceed only when all of these checks pass:
 3. **Target shape:** Neon has reviewed schema constraints and the recreated prompt catalog before dependent rows are imported. The importer uses the source IDs directly.
 4. **Row reconciliation:** for every included table, Neon counts equal the source counts after subtracting the approved fixture closure. The check records aggregate counts only.
 5. **Identity and relationship integrity:** every expected non-fixture user ID exists exactly once in Neon. All post, media, friendship, request, conversation, message, read-state, comment, reply, and like foreign keys resolve. Duplicate composite relationships remain absent.
-6. **Exclusions:** Neon contains zero imported legacy `session` and `verification` records. `account` has not been copied unless a separate approved authentication plan replaces this policy.
+6. **Exclusions:** Neon contains zero imported legacy `session` and `verification` records. The account reconciliation confirms every imported account links to an imported user, has a unique `(provider_id, account_id)`, and has null token, token-expiry, and scope columns.
 7. **Application evidence:** a rehearsal verifies sign-in or reauthentication, posts with media metadata, social relationships, requests, messaging, comments, and likes against the imported target. It must also verify that legacy URLs or Cloudinary references follow the approved media decision.
 8. **Recovery:** the rehearsal records the Neon restore point, the forward-fix plan, and a tested decision to return the application to the previously read-only legacy service only before cutover approval. After the Neon switch, use the Neon restore and forward-fix procedures in [Database migrations](database-migrations.md).
 
@@ -136,7 +157,7 @@ The decision must address post media and profile images, ownership and credentia
 
 ## Open decisions and blockers
 
-- **Authentication transition:** approve the target authentication model for legacy `account` rows. The default boundary is no credential, token, or password-material copy, which means users need reauthentication or a separately designed reset/linking flow while retaining their user IDs.
+- **OAuth deployment:** configure and test the Google provider independently. Copied provider identity mappings do not prove a Google callback, client registration, linking decision, or token refresh will work.
 - **Prompt catalog ownership:** approve the exact target prompt catalog and stable ID strategy. Existing non-fixture posts require every referenced legacy prompt ID to exist before import.
 - **Fixture closure:** confirm the static fixture baseline against the final aggregate inventory. Unexpected records linked to fixture identities block deletion until reviewed.
 - **Cloudinary:** select retention or authorised R2 migration before any claim of media completeness.
