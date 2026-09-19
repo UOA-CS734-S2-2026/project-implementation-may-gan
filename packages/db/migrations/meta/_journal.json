@@ -15,6 +15,13 @@
       "when": 1789781573029,
       "tag": "0001_better_auth_postgres",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789789341864,
+      "tag": "0002_add_better_auth_rate_limit",
+      "breakpoints": true
     }
   ]
 }

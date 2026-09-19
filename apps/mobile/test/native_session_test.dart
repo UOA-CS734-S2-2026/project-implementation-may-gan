@@ -1,7 +1,18 @@
+import 'dart:convert';
+
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+class FakeGoogleIdTokenProvider implements GoogleIdTokenProvider {
+  FakeGoogleIdTokenProvider(this.token);
+
+  final String token;
+
+  @override
+  Future<String> authenticate() async => token;
+}
 
 class MemorySessionTokenStore implements SessionTokenStore {
   String? value;
@@ -53,6 +64,44 @@ void main() {
       expect(sessionRequest.headers['authorization'], 'Bearer worker-token');
     },
   );
+
+  test('exchanges a Google SDK ID token for the existing native session handoff', () async {
+    final tokenStore = MemorySessionTokenStore();
+    late Map<String, dynamic> signInBody;
+    final client = MockClient((request) async {
+      signInBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response('', 200, headers: {'set-auth-token': 'worker-token'});
+    });
+    final session = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokenStore,
+      client: client,
+    );
+
+    await session.signInWithGoogle(FakeGoogleIdTokenProvider('google-id-token'));
+
+    expect(tokenStore.value, 'worker-token');
+    expect(signInBody, {
+      'provider': 'google',
+      'idToken': {'token': 'google-id-token'},
+    });
+  });
+
+  test('does not persist a token when Google sign-in is rejected', () async {
+    final tokenStore = MemorySessionTokenStore();
+    final client = MockClient((request) async => http.Response('', 401));
+    final session = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokenStore,
+      client: client,
+    );
+
+    await expectLater(
+      session.signInWithGoogle(FakeGoogleIdTokenProvider('invalid-google-id-token')),
+      throwsA(isA<AuthenticationFailure>()),
+    );
+    expect(tokenStore.value, isNull);
+  });
 
   test(
     'clears the protected token only after Better Auth confirms logout',

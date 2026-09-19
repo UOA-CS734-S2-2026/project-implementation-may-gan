@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 const _sessionTokenKey = 'dayli.auth.session-token';
@@ -35,6 +36,38 @@ class ProtectedSessionTokenStore implements SessionTokenStore {
       _storage.write(key: _sessionTokenKey, value: token);
 }
 
+abstract interface class GoogleIdTokenProvider {
+  Future<String> authenticate();
+}
+
+/// Obtains a short-lived Google ID token for Better Auth. No Google API scope
+/// is requested, and the token is immediately exchanged for a Dayli session.
+class FlutterGoogleIdTokenProvider implements GoogleIdTokenProvider {
+  FlutterGoogleIdTokenProvider({
+    required String webClientId,
+    required String iosClientId,
+  }) : _initialize = GoogleSignIn.instance.initialize(
+         clientId: iosClientId,
+         serverClientId: webClientId,
+       );
+
+  final Future<void> _initialize;
+
+  @override
+  Future<String> authenticate() async {
+    await _initialize;
+    if (!GoogleSignIn.instance.supportsAuthenticate()) {
+      throw const AuthenticationFailure('google-sign-in', 501);
+    }
+    final account = await GoogleSignIn.instance.authenticate();
+    final idToken = account.authentication.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw const AuthenticationFailure('google-sign-in', 401);
+    }
+    return idToken;
+  }
+}
+
 class AuthenticationFailure implements Exception {
   const AuthenticationFailure(this.operation, this.statusCode);
 
@@ -51,12 +84,13 @@ class BetterAuthNativeSession {
     required SessionTokenStore tokenStore,
     http.Client? client,
   }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), ''),
-       _client = client ?? http.Client(),
-       _tokenStore = tokenStore;
+       _client = client ?? http.Client() {
+    _tokenStore = tokenStore;
+  }
 
   final String _baseUrl;
   final http.Client _client;
-  final SessionTokenStore _tokenStore;
+  late final SessionTokenStore _tokenStore;
 
   Future<void> signIn({required String email, required String password}) async {
     final response = await _client.post(
@@ -65,6 +99,19 @@ class BetterAuthNativeSession {
       body: jsonEncode({'email': email, 'password': password}),
     );
     await _storeNativeToken(response, 'sign-in');
+  }
+
+  Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+    final idToken = await provider.authenticate();
+    final response = await _client.post(
+      _uri('/api/auth/sign-in/social'),
+      headers: const {'content-type': 'application/json'},
+      body: jsonEncode({
+        'provider': 'google',
+        'idToken': {'token': idToken},
+      }),
+    );
+    await _storeNativeToken(response, 'google-sign-in');
   }
 
   Future<http.Response> getSession() async {

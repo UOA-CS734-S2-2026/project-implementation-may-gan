@@ -63,10 +63,12 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   ));
 
   beforeAll(async () => {
-    await migrator.client.unsafe('drop table if exists public.account, public.session, public.verification, public."user" cascade');
+    await migrator.client.unsafe('drop table if exists public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
     await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier cascade');
-    const migration = await readFile(new URL("../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
-    await migrator.client.unsafe(migration);
+    const authMigration = await readFile(new URL("../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
+    const rateLimitMigration = await readFile(new URL("../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
+    await migrator.client.unsafe(authMigration);
+    await migrator.client.unsafe(rateLimitMigration);
   });
 
   beforeEach(async () => {
@@ -153,6 +155,21 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));
     await expect(expired.json()).resolves.toBeNull();
+  });
+
+  it("shares recovery limits across fresh Worker app instances using Cloudflare's edge IP", async () => {
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await createProductionApp().fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.10" },
+        body: JSON.stringify({ email: "not-a-user@example.test", redirectTo: `${origin}/reset-password` }),
+      }));
+      statuses.push(response.status);
+    }
+
+    expect(statuses.slice(0, 3)).toEqual([400, 400, 400]);
+    expect(statuses[3]).toBe(429);
   });
 
   it("rejects invalid credentials and does not mount auth with incomplete bindings", async () => {

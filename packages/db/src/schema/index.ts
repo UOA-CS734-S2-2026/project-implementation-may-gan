@@ -1,6 +1,8 @@
 import {
+  bigint,
   boolean,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -72,4 +74,12 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
 }, (table) => [index("verification_identifier_idx").on(table.identifier)]);
 
-export const schema = { account, session, user, verification };
+/** Persistent Better Auth rate limiting shared across Worker isolates. */
+export const rateLimit = pgTable("rateLimit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
+export const schema = { account, session, user, verification, rateLimit };
