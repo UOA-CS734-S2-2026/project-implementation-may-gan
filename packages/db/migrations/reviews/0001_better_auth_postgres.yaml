@@ -1,0 +1,6 @@
+reason: Add the empty Better Auth 1.7.5 PostgreSQL target schema before Worker auth is enabled. Its snapshot starts the first non-empty schema chain because the immutable empty baseline uses Drizzle's zero sentinel as both its ID and parent ID.
+affected_data_and_clients: No data exists in the target at migration time. Existing clients remain compatible because this creates new tables only.
+rollout_sequence: Merge the additive schema, apply it through the protected staging migration workflow, verify PostgreSQL auth integration, then deploy the Worker configuration.
+backup_checkpoint: Confirm the required Neon restore point before any protected-environment migration.
+forward_fix_plan: Use a new additive migration if the target shape needs correction. Do not alter this migration or copy legacy sessions or verification rows.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.

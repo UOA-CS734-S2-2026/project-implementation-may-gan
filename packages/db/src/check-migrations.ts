@@ -156,7 +156,7 @@ async function ensureSquawkReviews(): Promise<void> {
 
   for (const migration of migrations) {
     const sql = await readFile(migration.path, "utf8");
-    const suppressions = [...sql.matchAll(/squawk-ignore\s+([a-z0-9-]+)/gi)].map((match) => match[1]);
+    const suppressions = [...sql.matchAll(/squawk-ignore(?:-file)?\s+([a-z0-9-]+)/gi)].map((match) => match[1]);
 
     for (const rule of suppressions) {
       const expected = path.join(reviewsDir, `${path.basename(migration.path, ".sql")}.${rule}.yaml`);

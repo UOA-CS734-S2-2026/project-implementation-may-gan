@@ -8,6 +8,13 @@
       "when": 1789276010384,
       "tag": "0000_empty_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789781573029,
+      "tag": "0001_better_auth_postgres",
+      "breakpoints": true
     }
   ]
 }

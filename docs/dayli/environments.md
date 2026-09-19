@@ -167,7 +167,7 @@ flutter run
 
 Staging has a public Worker named `dayli-api-staging`, an isolated staging PostgreSQL database, and a real Cloudflare Hyperdrive configuration. The public Worker exists so staging web and mobile clients can reach the ordinary API. Its normal authentication and authorization still apply. It is not a production endpoint.
 
-Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Use the protected staging values only on a trusted machine. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout before running the real binding check:
+Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set `BETTER_AUTH_BASE_URL` and `BETTER_AUTH_TRUSTED_ORIGINS` in the ignored staging configuration to exact public HTTPS origins, then add `BETTER_AUTH_SECRET` with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. The secret must be at least 32 characters and must not appear in configuration, shell history, or Git. Auth stays unmounted if any binding is absent or invalid. Use the protected staging values only on a trusted machine. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout before running the real binding check:
 
 ```bash
 bash <<'BASH'
@@ -213,7 +213,7 @@ Production is not provisioned. Do not deploy the default `dayli-api` Worker as a
 2. A production-only PostgreSQL database and Hyperdrive configuration.
 3. A least-privilege production token and separate secret store entries. Never reuse the staging token, database, Hyperdrive ID, or Worker name.
 4. Reviewed additive database migrations, backups, restore testing, a rollback or forward-fix plan, and compatibility checks for existing mobile clients.
-5. Production authentication secrets, CORS/origin policy, observability, alerts, and an approved release owner.
+5. A Better Auth secret stored as a Worker secret, a public HTTPS base URL, exact trusted browser origins, CORS/origin policy, observability, alerts, and an approved release owner.
 
 Deploy migrations through a controlled database connection before code that requires them. Keep destructive changes behind a compatible release and verify rollback against a restored copy. Production should gain its own protected GitHub environment and approvals before it receives credentials.
 
