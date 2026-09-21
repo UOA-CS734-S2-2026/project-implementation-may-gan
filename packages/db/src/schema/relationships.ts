@@ -8,6 +8,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { user } from "./users";
 
 export const friendshipState = pgEnum("friendship_state", ["active", "ended"]);
 export const friendRequestStatus = pgEnum("friend_request_status", [
@@ -19,8 +20,8 @@ export const friendRequestStatus = pgEnum("friend_request_status", [
 
 /** The current directional projection; accepted friendships always write both rows. */
 export const friendships = pgTable("friendships", {
-  userId: text("user_id").notNull(),
-  friendId: text("friend_id").notNull(),
+  userId: text("user_id").notNull().references(() => user.id),
+  friendId: text("friend_id").notNull().references(() => user.id),
   state: friendshipState("state").notNull(),
   stateChangedAt: timestamp("state_changed_at", { withTimezone: true }).notNull(),
 }, (table) => [
@@ -32,8 +33,8 @@ export const friendships = pgTable("friendships", {
 /** Requests retain terminal rows so send throttling counts every send attempt. */
 export const friendRequests = pgTable("friend_requests", {
   id: text("id").primaryKey(),
-  senderId: text("sender_id").notNull(),
-  recipientId: text("recipient_id").notNull(),
+  senderId: text("sender_id").notNull().references(() => user.id),
+  recipientId: text("recipient_id").notNull().references(() => user.id),
   status: friendRequestStatus("status").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
@@ -52,8 +53,8 @@ export const friendRequests = pgTable("friend_requests", {
 
 /** Active blocks are directional and retained as a current projection. */
 export const relationshipBlocks = pgTable("relationship_blocks", {
-  blockerId: text("blocker_id").notNull(),
-  blockedId: text("blocked_id").notNull(),
+  blockerId: text("blocker_id").notNull().references(() => user.id),
+  blockedId: text("blocked_id").notNull().references(() => user.id),
   blockedAt: timestamp("blocked_at", { withTimezone: true }).notNull(),
   unblockedAt: timestamp("unblocked_at", { withTimezone: true }),
 }, (table) => [
