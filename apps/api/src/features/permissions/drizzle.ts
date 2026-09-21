@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, lte, not, or, sql } from "drizzle-orm";
+import { and, desc, eq, lte, not, or, sql } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
@@ -22,39 +22,39 @@ function activeFriendship(authorId: typeof schema.posts.authorId, viewerId: stri
   // #73 persists an active friendship in both directions. Requiring both rows
   // avoids treating a stale or partially-written directional projection as a
   // grant.
-  const authorToViewer = exists(
-    sql`select 1 from ${schema.friendships}
+  const authorToViewer = sql`exists (
+    select 1 from ${schema.friendships}
       where ${schema.friendships.userId} = ${authorId}
         and ${schema.friendships.friendId} = ${viewerId}
-        and ${schema.friendships.state} = 'active'`,
-  );
-  const viewerToAuthor = exists(
-    sql`select 1 from ${schema.friendships}
+        and ${schema.friendships.state} = 'active'
+  )`;
+  const viewerToAuthor = sql`exists (
+    select 1 from ${schema.friendships}
       where ${schema.friendships.userId} = ${viewerId}
         and ${schema.friendships.friendId} = ${authorId}
-        and ${schema.friendships.state} = 'active'`,
-  );
+        and ${schema.friendships.state} = 'active'
+  )`;
   return and(authorToViewer, viewerToAuthor);
 }
 
 function activeBlock(authorId: typeof schema.posts.authorId, viewerId: string) {
-  return exists(
-    sql`select 1 from ${schema.relationshipBlocks}
+  return sql`exists (
+    select 1 from ${schema.relationshipBlocks}
       where ${schema.relationshipBlocks.unblockedAt} is null
         and ((${schema.relationshipBlocks.blockerId} = ${authorId}
           and ${schema.relationshipBlocks.blockedId} = ${viewerId})
           or (${schema.relationshipBlocks.blockerId} = ${viewerId}
-          and ${schema.relationshipBlocks.blockedId} = ${authorId}))`,
-  );
+          and ${schema.relationshipBlocks.blockedId} = ${authorId}))
+  )`;
 }
 
 function attachedMedia(postId: typeof schema.posts.id, mediaId?: string) {
-  return exists(
-    sql`select 1 from ${schema.postMedia}
+  return sql`exists (
+    select 1 from ${schema.postMedia}
       where ${schema.postMedia.postId} = ${postId}
         and ${schema.postMedia.detachedAt} is null
-        ${mediaId === undefined ? sql`` : sql`and ${schema.postMedia.id} = ${mediaId}`}`,
-  );
+        ${mediaId === undefined ? sql`` : sql`and ${schema.postMedia.id} = ${mediaId}`}
+  )`;
 }
 
 /**
