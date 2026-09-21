@@ -1,8 +1,10 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   registerBetterAuthCompatibilityRoutes,
+  registerPostgresBetterAuthRoutes,
 } from "./features/auth/route";
 import type { BetterAuthCompatibilitySlice } from "./features/auth/better-auth";
+import type { ApiEnv } from "./env";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
@@ -46,4 +48,12 @@ export function createApp(auth?: BetterAuthCompatibilitySlice) {
   return api;
 }
 
+/** Build a Worker request app. Auth remains absent until validated bindings exist. */
+export function createAppForEnv(env: ApiEnv) {
+  const api = createApp();
+  registerPostgresBetterAuthRoutes(api, env);
+  return api;
+}
+
+/** The default app is intentionally database and auth free for local route work. */
 export const app = createApp();

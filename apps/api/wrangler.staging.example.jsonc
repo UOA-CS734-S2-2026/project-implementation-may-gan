@@ -6,6 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "observability": { "enabled": true },
+  "vars": {
+    "BETTER_AUTH_BASE_URL": "https://api-staging.example.test",
+    "BETTER_AUTH_TRUSTED_ORIGINS": "https://api-staging.example.test,https://web-staging.example.test"
+  },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

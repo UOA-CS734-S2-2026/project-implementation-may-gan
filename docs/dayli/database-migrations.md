@@ -11,6 +11,10 @@ Run `packages/db/admin/bootstrap-roles.sql` separately on both Neon branches as 
 
 Migrations use an unpooled direct Neon `DATABASE_URL` with `sslmode=require` or stricter. Worker runtime access will later use the restricted `app` role through Hyperdrive; Hyperdrive binding setup is separate from this foundation.
 
+## Better Auth target schema
+
+`0001_better_auth_postgres` is the additive Better Auth 1.7.5 target schema. It creates `user`, `account`, `session`, and `verification` with text primary and foreign keys. The `user` table retains legacy profile metadata and the `account` table retains its legacy-compatible provider and credential columns. This migration creates an empty Neon target only. It does not connect to Supabase and does not import `account`, `session`, or `verification` records. A later separately approved import may preserve user IDs and profile values, while users establish new target sessions.
+
 ## Legacy Supabase boundary
 
 The legacy Supabase database is not a Neon migration target and must never use the `migrator` connection. `pnpm db:migration:inventory` uses a separately provisioned `LEGACY_SUPABASE_READONLY_DATABASE_URL`, starts a read-only transaction, and returns aggregate counts only. It does not copy data. The full preservation, fixture, rehearsal, and Cloudinary policy is in [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md).

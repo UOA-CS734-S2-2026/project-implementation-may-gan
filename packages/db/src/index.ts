@@ -3,6 +3,8 @@ import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres, { type Sql } from "postgres";
 import { schema } from "./schema";
 
+export { schema } from "./schema";
+
 export type DayliDatabase = PostgresJsDatabase<typeof schema>;
 
 export interface DayliDatabaseClient {
@@ -43,9 +45,9 @@ export function createDayliDatabase(connectionString: string): DayliDatabaseClie
 export function createHyperdriveDatabase(
   hyperdrive: HyperdriveBinding,
 ): DayliDatabaseClient {
-  const database = createDayliDatabase(hyperdrive.connectionString);
-  // Hyperdrive owns the edge connection lifecycle; do not call sql.end() here.
-  return { ...database, close: async () => undefined };
+  // Each Worker request owns this client and must close it in a finally block.
+  // Closing the postgres.js client returns its Hyperdrive connection promptly.
+  return createDayliDatabase(hyperdrive.connectionString);
 }
 
 function isInsufficientPrivilegeError(error: unknown): boolean {
