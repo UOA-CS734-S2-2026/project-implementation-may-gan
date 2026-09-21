@@ -411,6 +411,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
             (${`cross-post-revision-${otherPostId}`}, ${otherPostId}, 1, 'Prior reflection', 8, 'friends', ${promptId}, ${savepoint.json(validRevisionRefs)})
         `)).rejects.toMatchObject({ code: "23503" });
 
+        await expect(tx.savepoint((savepoint) => savepoint`
+          update public.post_media
+          set post_id = ${otherPostId}
+          where id = ${`media-${postId}-1`}
+        `)).rejects.toMatchObject({ code: "55000" });
+
         const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
           await expect(tx.savepoint((savepoint) => savepoint`
             insert into public.post_revisions
