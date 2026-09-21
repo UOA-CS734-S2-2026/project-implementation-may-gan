@@ -1,7 +1,6 @@
 import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import {
   RelationshipStoreError,
-  type PendingRequestDirection,
   type PendingRequestPage,
   type RelationshipStore,
   type RelationshipTransaction,

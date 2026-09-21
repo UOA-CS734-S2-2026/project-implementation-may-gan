@@ -1,6 +1,5 @@
 import {
   bigint,
-  boolean,
   check,
   date,
   foreignKey,
@@ -16,8 +15,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
-import { friendRequestStatus, friendRequests, friendships, friendshipState, relationshipBlocks } from "./relationships";
-import { profileVisibility, tier, user } from "./users";
+import { friendRequests, friendships, relationshipBlocks } from "./relationships";
+import { user } from "./users";
 
 export { profileVisibility, tier, user } from "./users";
 
