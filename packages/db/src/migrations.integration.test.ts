@@ -108,6 +108,24 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       values
         ('prompt-02-31-v2', '02-31', 'Impossible February date', 2, '2099-02-01', 'dayli-test', 'test')
     `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-04-30-v2', '04-29', 'Mismatched prompt day', 2, '2099-04-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-04-30', '04-30', 'Missing version suffix', 2, '2099-04-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-04-30-v3', '04-30', 'Mismatched prompt version', 2, '2099-04-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
 
     const leapDay = await migrator`
       select id from public.daily_prompts where month_day = '02-29'

@@ -34,6 +34,14 @@ describe("daily prompt catalog", () => {
     const duplicate = [...dailyPromptCatalog];
     duplicate[1] = { ...duplicate[1], monthDay: "01-01" };
     expect(() => validateDailyPromptCatalog(duplicate)).toThrow("unexpected month-day");
+
+    const mismatchedDay = [...dailyPromptCatalog];
+    mismatchedDay[1] = { ...mismatchedDay[1], id: "prompt-01-01" };
+    expect(() => validateDailyPromptCatalog(mismatchedDay)).toThrow("unstable ID");
+
+    const mismatchedVersion = [...dailyPromptCatalog];
+    mismatchedVersion[1] = { ...mismatchedVersion[1], id: "prompt-01-02-v2" };
+    expect(() => validateDailyPromptCatalog(mismatchedVersion)).toThrow("unstable ID");
   });
 
   it("accepts leap day and rejects impossible calendar dates", () => {

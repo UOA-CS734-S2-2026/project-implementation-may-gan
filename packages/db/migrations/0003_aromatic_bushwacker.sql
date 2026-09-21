@@ -15,6 +15,7 @@ CREATE TABLE "daily_prompts" (
 	CONSTRAINT "daily_prompts_month_day_version_unique" UNIQUE("month_day","version"),
 	CONSTRAINT "daily_prompts_month_day_effective_date_unique" UNIQUE("month_day","effective_date"),
 	CONSTRAINT "daily_prompts_id_format_check" CHECK ("daily_prompts"."id" ~ '^prompt-[0-9]{2}-[0-9]{2}(-v[0-9]+)?$'),
+	CONSTRAINT "daily_prompts_id_canonical_check" CHECK ("daily_prompts"."id" = 'prompt-' || "daily_prompts"."month_day" || case when "daily_prompts"."version" = 1 then '' else '-v' || "daily_prompts"."version"::text end),
 	CONSTRAINT "daily_prompts_month_day_format_check" CHECK ("daily_prompts"."month_day" ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'),
 	CONSTRAINT "daily_prompts_month_day_calendar_check" CHECK (case
 		when "daily_prompts"."month_day" !~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' then false

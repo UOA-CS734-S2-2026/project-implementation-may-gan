@@ -55,6 +55,10 @@ export const dailyPrompts = pgTable(
       sql`${table.id} ~ '^prompt-[0-9]{2}-[0-9]{2}(-v[0-9]+)?$'`,
     ),
     check(
+      "daily_prompts_id_canonical_check",
+      sql`${table.id} = 'prompt-' || ${table.monthDay} || case when ${table.version} = 1 then '' else '-v' || ${table.version}::text end`,
+    ),
+    check(
       "daily_prompts_month_day_format_check",
       sql`${table.monthDay} ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'`,
     ),
