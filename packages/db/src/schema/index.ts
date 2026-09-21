@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { dailyPrompts } from "./daily-prompts";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -82,4 +83,6 @@ export const rateLimit = pgTable("rateLimit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
-export const schema = { account, session, user, verification, rateLimit };
+export { dailyPrompts } from "./daily-prompts";
+
+export const schema = { account, dailyPrompts, session, user, verification, rateLimit };
