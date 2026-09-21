@@ -145,6 +145,7 @@ export const legacyCloudinaryMedia = pgTable("legacy_cloudinary_media", {
   mediaId: text("media_id").primaryKey().references(() => postMedia.id),
   cloudinaryPublicId: text("cloudinary_public_id").notNull(),
   cloudinaryUrl: text("cloudinary_url").notNull(),
+  legacyType: text("legacy_type"),
 });
 
 /**

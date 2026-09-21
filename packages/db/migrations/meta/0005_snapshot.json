@@ -237,6 +237,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "legacy_type": {
+          "name": "legacy_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},

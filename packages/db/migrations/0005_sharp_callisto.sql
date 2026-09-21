@@ -65,7 +65,8 @@ $function$;--> statement-breakpoint
 CREATE TABLE "legacy_cloudinary_media" (
 	"media_id" text PRIMARY KEY NOT NULL,
 	"cloudinary_public_id" text NOT NULL,
-	"cloudinary_url" text NOT NULL
+	"cloudinary_url" text NOT NULL,
+	"legacy_type" text
 );
 --> statement-breakpoint
 CREATE TABLE "post_media" (
@@ -152,6 +153,41 @@ $function$;--> statement-breakpoint
 CREATE TRIGGER post_revisions_immutable_trigger
 BEFORE UPDATE OR DELETE ON public.post_revisions
 FOR EACH ROW EXECUTE FUNCTION public.dayli_post_revision_immutable();--> statement-breakpoint
+
+-- A JSON metadata snapshot cannot use a normal foreign key for its media IDs.
+-- Validate only shape-valid snapshots here so malformed values still report
+-- through the dedicated JSON shape check below.
+CREATE FUNCTION public.dayli_post_revision_attachment_refs_post_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  attachment jsonb;
+  referenced_media_id text;
+BEGIN
+  IF NOT public.dayli_attachment_refs_valid(NEW.previous_attachment_refs) THEN
+    RETURN NEW;
+  END IF;
+
+  FOR attachment IN SELECT jsonb_array_elements(NEW.previous_attachment_refs) LOOP
+    referenced_media_id := attachment->>'media_id';
+    IF NOT EXISTS (
+      SELECT 1
+      FROM public.post_media
+      WHERE id = referenced_media_id
+        AND post_id = NEW.post_id
+    ) THEN
+      RAISE EXCEPTION 'revision attachment media ID must belong to revision post' USING ERRCODE = '23503';
+    END IF;
+  END LOOP;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER post_revisions_attachment_refs_post_guard_trigger
+BEFORE INSERT ON public.post_revisions
+FOR EACH ROW EXECUTE FUNCTION public.dayli_post_revision_attachment_refs_post_guard();--> statement-breakpoint
 
 -- Store the first readable Auckland date with the note. Application reads
 -- must still require the note author and compare this date with Auckland day.
