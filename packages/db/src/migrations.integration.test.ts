@@ -87,7 +87,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
   });
 
   it("seeds all prompts and enforces immutable scheduled versions", async () => {
-    const count = await migrator`select count(*)::int as count from public.daily_prompts`;
+    const count = await migrator`select count(*)::int as count from public.daily_prompts where version = 1`;
     expect(count[0]?.count).toBe(366);
 
     await expect(migrator`
@@ -229,7 +229,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       const rows = await migrator`
         select id, version, effective_date
         from public.daily_prompts
-        where month_day = '12-31' and version > 1
+        where month_day = '12-31' and version in (${nextVersion}, ${nextVersionAfterRace})
       `;
       expect(rows).toHaveLength(1);
     } finally {
