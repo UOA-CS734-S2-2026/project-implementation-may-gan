@@ -58,6 +58,15 @@ export const dailyPrompts = pgTable(
       "daily_prompts_month_day_format_check",
       sql`${table.monthDay} ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'`,
     ),
+    check(
+      "daily_prompts_month_day_calendar_check",
+      sql`case
+        when ${table.monthDay} !~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' then false
+        when substring(${table.monthDay}, 1, 2) in ('01', '03', '05', '07', '08', '10', '12') then substring(${table.monthDay}, 4, 2)::integer <= 31
+        when substring(${table.monthDay}, 1, 2) in ('04', '06', '09', '11') then substring(${table.monthDay}, 4, 2)::integer <= 30
+        else substring(${table.monthDay}, 4, 2)::integer <= 29
+      end`,
+    ),
     check("daily_prompts_version_positive_check", sql`${table.version} > 0`),
     check(
       "daily_prompts_text_length_check",
@@ -452,6 +461,17 @@ function monthDayForIndex(index: number): string {
   throw new Error(`No Auckland month-day exists for prompt index ${index}.`);
 }
 
+export function isValidDailyPromptMonthDay(monthDay: string): boolean {
+  const match = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/.exec(monthDay);
+  if (!match) {
+    return false;
+  }
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  return day <= DAILY_PROMPT_MONTH_LENGTHS[month - 1];
+}
+
 function buildDailyPromptCatalog(): DailyPromptSeed[] {
   return LEGACY_PROMPT_TEXTS.map((text, index) => {
     const monthDay = monthDayForIndex(index);
@@ -483,6 +503,9 @@ export function validateDailyPromptCatalog(
   const monthDays = new Set<string>();
 
   for (const [index, prompt] of catalog.entries()) {
+    if (!isValidDailyPromptMonthDay(prompt.monthDay)) {
+      throw new Error(`Prompt ${prompt.id} has an invalid month-day.`);
+    }
     const expectedMonthDay = monthDayForIndex(index);
     if (prompt.id !== `prompt-${expectedMonthDay}`) {
       throw new Error(`Prompt ${index + 1} has an unstable ID.`);
