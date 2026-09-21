@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
+import { friendRequests, friendships, relationshipBlocks } from "./relationships";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -227,17 +228,35 @@ export const mediaReservation = pgTable("media_reservation", {
 
 export { dailyPrompts } from "./daily-prompts";
 
+<<<<<<< HEAD
 export const schema = {
   account,
   mediaReservation,
   dailyPrompts,
+  friendRequests,
+  friendships,
   legacyCloudinaryMedia,
   postMedia,
   postRevisions,
   posts,
   rateLimit,
+  relationshipBlocks,
   session,
   tomorrowNotes,
   user,
   verification,
+=======
+export { friendRequests, friendships, relationshipBlocks } from "./relationships";
+
+export const schema = {
+  account,
+  dailyPrompts,
+  friendRequests,
+  friendships,
+  relationshipBlocks,
+  session,
+  user,
+  verification,
+  rateLimit,
+>>>>>>> 2678c3b (feat: persist relationship state)
 };
