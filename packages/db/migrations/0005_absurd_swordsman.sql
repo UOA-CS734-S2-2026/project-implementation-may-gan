@@ -42,8 +42,76 @@ ALTER TABLE "relationship_blocks" ADD CONSTRAINT "relationship_blocks_blocker_id
 ALTER TABLE "relationship_blocks" ADD CONSTRAINT "relationship_blocks_blocked_id_user_id_fk" FOREIGN KEY ("blocked_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "friend_requests_pending_pair_unique" ON "friend_requests" USING btree (least("sender_id", "recipient_id"),greatest("sender_id", "recipient_id")) WHERE "friend_requests"."status" = 'pending';--> statement-breakpoint
 CREATE INDEX "friend_requests_recipient_status_created_idx" ON "friend_requests" USING btree ("recipient_id","status","created_at","id");--> statement-breakpoint
-CREATE INDEX "friend_requests_sender_created_idx" ON "friend_requests" USING btree ("sender_id","created_at");--> statement-breakpoint
+CREATE INDEX "friend_requests_sender_recipient_created_idx" ON "friend_requests" USING btree ("sender_id","recipient_id","created_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "friendships_pair_unique" ON "friendships" USING btree ("user_id","friend_id");--> statement-breakpoint
 CREATE INDEX "friendships_friend_id_idx" ON "friendships" USING btree ("friend_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "relationship_blocks_pair_unique" ON "relationship_blocks" USING btree ("blocker_id","blocked_id");--> statement-breakpoint
 CREATE INDEX "relationship_blocks_blocked_id_idx" ON "relationship_blocks" USING btree ("blocked_id");--> statement-breakpoint
+
+-- Friendships are a directional projection of one undirected relationship.
+-- The constraint trigger runs against the transaction's final state, allowing
+-- both directions to be inserted, updated, or deleted in one transaction while
+-- rejecting a one-sided change at commit.
+CREATE FUNCTION public.dayli_friendship_pair_guard_check(left_user_id text, right_user_id text)
+RETURNS void
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+  pair_count integer;
+BEGIN
+  SELECT count(*)::integer
+  INTO pair_count
+  FROM public.friendships
+  WHERE (user_id = left_user_id AND friend_id = right_user_id)
+     OR (user_id = right_user_id AND friend_id = left_user_id);
+
+  IF pair_count = 0 THEN
+    RETURN;
+  END IF;
+
+  IF pair_count <> 2 OR EXISTS (
+    SELECT 1
+    FROM public.friendships friendship
+    WHERE (
+      (friendship.user_id = left_user_id AND friendship.friend_id = right_user_id)
+      OR (friendship.user_id = right_user_id AND friendship.friend_id = left_user_id)
+    )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.friendships reciprocal
+        WHERE reciprocal.user_id = friendship.friend_id
+          AND reciprocal.friend_id = friendship.user_id
+          AND reciprocal.state = friendship.state
+      )
+  ) THEN
+    RAISE EXCEPTION 'friendship rows must exist as two reciprocal rows with the same state' USING ERRCODE = '23514';
+  END IF;
+END;
+$function$;--> statement-breakpoint
+
+CREATE FUNCTION public.dayli_friendship_pair_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    PERFORM public.dayli_friendship_pair_guard_check(OLD.user_id, OLD.friend_id);
+  END IF;
+
+  IF TG_OP <> 'DELETE' THEN
+    PERFORM public.dayli_friendship_pair_guard_check(NEW.user_id, NEW.friend_id);
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE CONSTRAINT TRIGGER friendships_pair_guard_trigger
+AFTER INSERT OR UPDATE OR DELETE ON public.friendships
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION public.dayli_friendship_pair_guard();--> statement-breakpoint

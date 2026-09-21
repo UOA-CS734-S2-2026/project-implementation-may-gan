@@ -1,5 +1,5 @@
 {
-  "id": "782df911-208a-4bfa-802f-d9b8e014caa5",
+  "id": "6fc71f36-3d6a-4b77-b5b2-a46ec3b5cbde",
   "prevId": "3be974ce-bca2-4c8a-9bcc-edeb29e0e3cc",
   "version": "7",
   "dialect": "postgresql",
@@ -318,11 +318,17 @@
           "method": "btree",
           "with": {}
         },
-        "friend_requests_sender_created_idx": {
-          "name": "friend_requests_sender_created_idx",
+        "friend_requests_sender_recipient_created_idx": {
+          "name": "friend_requests_sender_recipient_created_idx",
           "columns": [
             {
               "expression": "sender_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recipient_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
