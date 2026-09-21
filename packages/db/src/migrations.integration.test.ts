@@ -255,4 +255,200 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       await second.end({ timeout: 5 });
     }
   });
+
+  it("enforces the post foundation, active media replacement, and historical metadata rules", async () => {
+    const columns = await migrator`
+      select table_name, column_name, data_type, is_nullable, column_default
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name in ('posts', 'post_media', 'post_revisions', 'tomorrow_notes')
+        and column_name in ('local_date', 'accepted_at', 'released_at', 'detached_at', 'previous_attachment_refs', 'audience')
+      order by table_name, column_name
+    `;
+    const column = (tableName: string, columnName: string) => columns.find(
+      (row) => row.table_name === tableName && row.column_name === columnName,
+    );
+
+    expect(column("posts", "local_date")).toMatchObject({ data_type: "date", is_nullable: "NO" });
+    expect(column("posts", "accepted_at")).toMatchObject({ data_type: "timestamp with time zone" });
+    expect(column("posts", "released_at")).toMatchObject({ data_type: "timestamp with time zone", is_nullable: "NO" });
+    expect(column("post_media", "detached_at")).toMatchObject({ data_type: "timestamp with time zone", is_nullable: "YES" });
+    expect(column("post_revisions", "previous_attachment_refs")).toMatchObject({ data_type: "jsonb", is_nullable: "NO" });
+    expect(column("posts", "audience")).toMatchObject({ is_nullable: "NO", column_default: null });
+
+    const authorId = `post-foundation-author-${crypto.randomUUID()}`;
+    const postId = `post-foundation-${crypto.randomUUID()}`;
+    const promptId = "prompt-01-01";
+    const rollbackSentinel = new Error("rollback post foundation fixtures");
+    let transactionError: unknown;
+
+    try {
+      await migrator.begin(async (tx) => {
+        await tx`
+          insert into public."user" (id, name, email)
+          values (${authorId}, 'Post Foundation Fixture', ${`${authorId}@example.test`})
+        `;
+        await tx`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at)
+          values
+            (${postId}, ${authorId}, '2026-09-22', ${promptId}, 'A valid reflection', 'A valid caption', 8, 'friends', '2026-09-22T10:00:00+12:00', '2026-09-22T10:00:01+12:00')
+        `;
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`duplicate-${postId}`}, ${authorId}, '2026-09-22', ${promptId}, 'Another reflection', 7, 'solo', '2026-09-22T10:00:00+12:00', '2026-09-22T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23505" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`same-time-release-${postId}`}, ${authorId}, '2026-09-23', ${promptId}, 'Same instant is invalid', 7, 'solo', '2026-09-23T10:00:00+12:00', '2026-09-23T10:00:00+12:00')
+        `)).rejects.toMatchObject({ code: "23514" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`bad-rating-${postId}`}, ${authorId}, '2026-09-24', ${promptId}, 'Bad rating', 11, 'solo', '2026-09-24T10:00:00+12:00', '2026-09-24T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23514" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`bad-answer-${postId}`}, ${authorId}, '2026-09-25', ${promptId}, ${"🙂".repeat(4_001)}, 7, 'solo', '2026-09-25T10:00:00+12:00', '2026-09-25T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23514" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at)
+          values
+            (${`bad-caption-${postId}`}, ${authorId}, '2026-09-26', ${promptId}, 'Bad caption', ${"🙂".repeat(1_001)}, 7, 'solo', '2026-09-26T10:00:00+12:00', '2026-09-26T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23514" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, accepted_at, released_at)
+          values
+            (${`missing-audience-${postId}`}, ${authorId}, '2026-09-28', ${promptId}, 'Missing audience', 7, '2026-09-28T10:00:00+12:00', '2026-09-28T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23502" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`bad-author-${postId}`}, 'missing-author', '2026-09-29', ${promptId}, 'Missing author', 7, 'solo', '2026-09-29T10:00:00+12:00', '2026-09-29T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23503" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${`bad-prompt-${postId}`}, ${authorId}, '2026-09-30', 'missing-prompt', 'Missing prompt', 7, 'solo', '2026-09-30T10:00:00+12:00', '2026-09-30T10:00:01+12:00')
+        `)).rejects.toMatchObject({ code: "23503" });
+
+        for (let order = 0; order < 4; order += 1) {
+          await tx`
+            insert into public.post_media (id, post_id, attachment_order)
+            values (${`media-${postId}-${order}`}, ${postId}, ${order})
+          `;
+        }
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.post_media (id, post_id, attachment_order)
+          values (${`duplicate-media-${postId}`}, ${postId}, 2)
+        `)).rejects.toMatchObject({ code: "23505" });
+
+        await tx`
+          update public.post_media
+          set detached_at = '2026-09-22T12:00:00+12:00'
+          where id = ${`media-${postId}-0`}
+        `;
+        await tx`
+          insert into public.post_media (id, post_id, attachment_order)
+          values (${`replacement-media-${postId}`}, ${postId}, 0)
+        `;
+        const mediaCounts = await tx`
+          select count(*)::int as total,
+                 count(*) filter (where detached_at is null)::int as active
+          from public.post_media
+          where post_id = ${postId}
+        `;
+        expect(mediaCounts[0]).toEqual({ total: 5, active: 4 });
+
+        await tx`
+          insert into public.legacy_cloudinary_media (media_id, cloudinary_public_id, cloudinary_url)
+          values (${`media-${postId}-1`}, 'legacy/public-id', 'https://res.cloudinary.com/example/image/upload/legacy')
+        `;
+
+        const validRevisionRefs = [
+          { media_id: `media-${postId}-0`, attachment_order: 0, status: "detached" },
+          { media_id: `media-${postId}-1`, attachment_order: 1, status: "attached" },
+        ];
+        await tx`
+          insert into public.post_revisions
+            (id, post_id, revision_number, previous_reflective_answer, previous_caption, previous_rating, previous_audience, previous_prompt_id, previous_attachment_refs)
+          values
+            (${`revision-${postId}-1`}, ${postId}, 1, 'Prior reflection', 'Prior caption', 8, 'friends', ${promptId}, ${tx.json(validRevisionRefs)})
+        `;
+
+        const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
+          await expect(tx.savepoint((savepoint) => savepoint`
+            insert into public.post_revisions
+              (id, post_id, revision_number, previous_reflective_answer, previous_rating, previous_audience, previous_prompt_id, previous_attachment_refs)
+            values
+              (${id}, ${postId}, 2, 'Prior reflection', 8, 'friends', ${promptId}, ${savepoint.json(refs)})
+          `)).rejects.toMatchObject({ code: "23514" });
+        };
+        await invalidRevision(`invalid-not-array-${postId}`, { media_id: "x" });
+        await invalidRevision(`invalid-array-element-${postId}`, [null]);
+        await invalidRevision(`invalid-extra-key-${postId}`, [{ media_id: "x", attachment_order: 0, status: "attached", url: "forbidden" }]);
+        await invalidRevision(`invalid-duplicate-id-${postId}`, [
+          { media_id: "x", attachment_order: 0, status: "attached" },
+          { media_id: "x", attachment_order: 1, status: "detached" },
+        ]);
+        await invalidRevision(`invalid-order-${postId}`, [
+          { media_id: "x", attachment_order: 1, status: "attached" },
+          { media_id: "y", attachment_order: 1, status: "detached" },
+        ]);
+        await invalidRevision(`invalid-status-${postId}`, [{ media_id: "x", attachment_order: 0, status: "removed" }]);
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          update public.post_revisions
+          set previous_rating = 9
+          where id = ${`revision-${postId}-1`}
+        `)).rejects.toMatchObject({ code: "55000" });
+        await expect(tx.savepoint((savepoint) => savepoint`
+          delete from public.post_revisions where id = ${`revision-${postId}-1`}
+        `)).rejects.toMatchObject({ code: "55000" });
+
+        await tx`
+          insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
+          values (${`note-${postId}`}, ${postId}, ${authorId}, 'Read this tomorrow', '2026-09-23')
+        `;
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
+          values (${`early-note-${postId}`}, ${postId}, ${authorId}, 'Too early', '2026-09-22')
+        `)).rejects.toMatchObject({ code: "23514" });
+        await expect(tx.savepoint((savepoint) => savepoint`
+          update public.tomorrow_notes set note = 'changed' where id = ${`note-${postId}`}
+        `)).rejects.toMatchObject({ code: "55000" });
+
+        const noteRows = await tx`
+          select note, available_on::text as available_on from public.tomorrow_notes where id = ${`note-${postId}`}
+        `;
+        expect(noteRows).toEqual([{ note: "Read this tomorrow", available_on: "2026-09-23" }]);
+
+        throw rollbackSentinel;
+      });
+    } catch (error) {
+      transactionError = error;
+    }
+
+    expect(transactionError).toBe(rollbackSentinel);
+  });
 });
