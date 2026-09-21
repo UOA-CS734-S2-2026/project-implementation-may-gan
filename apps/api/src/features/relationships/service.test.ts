@@ -4,7 +4,6 @@ import {
   deriveRelationshipAccess,
   deriveRelationshipState,
   hasActiveFriendship,
-  RelationshipServiceError,
   RelationshipStoreError,
   type RelationshipStore,
   type RelationshipTransaction,
