@@ -4,6 +4,7 @@
 README.md
 package.json
 src/apis/PostingDaysApi.ts
+src/apis/RelationshipsApi.ts
 src/apis/SystemApi.ts
 src/apis/index.ts
 src/index.ts
@@ -13,6 +14,11 @@ src/models/ApiErrorError.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPromptResponse.ts
 src/models/HealthResponse.ts
+src/models/PendingRelationshipRequest.ts
+src/models/PendingRequestPage.ts
+src/models/RelationshipState.ts
+src/models/RelationshipStatus.ts
+src/models/SendRelationshipRequest.ts
 src/models/TestResponse.ts
 src/models/index.ts
 src/runtime.ts

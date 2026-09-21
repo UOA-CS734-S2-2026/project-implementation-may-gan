@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { createApp } from "../../app";
 import { registerRelationshipsRoutes } from "./route";
 import { RelationshipServiceError, type RelationshipsService } from "./service";
 
@@ -60,6 +61,18 @@ function expectNoStore(response: Response) {
 }
 
 describe("relationships routes", () => {
+  it("registers relationship paths on the default app OpenAPI document", async () => {
+    const response = await createApp().request("/api/v1/openapi.json");
+    const document = await response.json<{ paths: Record<string, Record<string, { security?: unknown }>> }>();
+
+    expect(response.status).toBe(200);
+    expect(document.paths).toHaveProperty("/api/v1/relationships/requests");
+    expect(document.paths["/api/v1/relationships/requests"]?.get?.security).toEqual([
+      { BearerAuth: [] },
+      { cookieAuth: [] },
+    ]);
+  });
+
   it("requires an authenticated Better Auth session at the route boundary", async () => {
     const { app, service } = createTestApp({ authenticated: false });
     const response = await app.request("/api/v1/relationships/user_bob");
@@ -179,14 +192,14 @@ describe("relationships routes", () => {
 
     expect(response.status).toBe(200);
     expect(operation?.security).toEqual([
-      { bearerAuth: [] },
+      { BearerAuth: [] },
       { cookieAuth: [] },
     ]);
     const components = document as unknown as {
       components?: { securitySchemes?: Record<string, { type: string; in?: string; scheme?: string }> };
     };
     expect(components.components?.securitySchemes).toMatchObject({
-      bearerAuth: { type: "http", scheme: "bearer" },
+      BearerAuth: { type: "http", scheme: "bearer" },
       cookieAuth: { type: "apiKey", in: "cookie" },
     });
   });

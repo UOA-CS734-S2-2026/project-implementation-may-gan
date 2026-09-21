@@ -25,20 +25,25 @@ async function checkGeneratedClients() {
     process.exitCode = 1;
   }
 
-  const [typescriptModel, dartModel, typescriptApi, dartClient, dartAuth] = await Promise.all([
+  const [typescriptModel, dartModel, typescriptApi, typescriptRelationshipsApi, dartClient, dartAuth, dartRelationshipsApi] = await Promise.all([
     readFile("packages/api-client-typescript/src/models/CurrentPostingDayResponse.ts", "utf8"),
     readFile("packages/api-client-dart/lib/model/current_posting_day_response.dart", "utf8"),
     readFile("packages/api-client-typescript/src/apis/PostingDaysApi.ts", "utf8"),
+    readFile("packages/api-client-typescript/src/apis/RelationshipsApi.ts", "utf8"),
     readFile("packages/api-client-dart/lib/api_client.dart", "utf8"),
     readFile("packages/api-client-dart/lib/auth/http_bearer_auth.dart", "utf8"),
+    readFile("packages/api-client-dart/lib/api/relationships_api.dart", "utf8"),
   ]);
 
   const checks: Array<[string, boolean]> = [
     ["TypeScript localDate is a date-only string", /localDate: string;/.test(typescriptModel)],
     ["Dart localDate is a date-only string", /final String localDate;/.test(dartModel)],
     ["TypeScript posting-day client declares bearer auth", /accessToken/.test(typescriptApi)],
+    ["TypeScript relationship client declares bearer auth", /accessToken/.test(typescriptRelationshipsApi)],
+    ["TypeScript relationship client exposes all operations", /relationshipsAcceptRequest/.test(typescriptRelationshipsApi) && /relationshipsListPendingRequests/.test(typescriptRelationshipsApi) && /relationshipsUnblock/.test(typescriptRelationshipsApi)],
     ["Dart client accepts configured authentication", /authentication\?\.applyToParams/.test(dartClient)],
     ["Dart client provides bearer authentication", /headerParams\['Authorization'\] = 'Bearer/.test(dartAuth)],
+    ["Dart relationship client exposes all operations", /relationshipsAcceptRequest/.test(dartRelationshipsApi) && /relationshipsListPendingRequests/.test(dartRelationshipsApi) && /relationshipsUnblock/.test(dartRelationshipsApi)],
     ["Dart localDate stays a string during JSON conversion", /localDate: mapValueOfType<String>/.test(dartModel)],
   ];
   const failedChecks = checks.filter(([, passed]) => !passed).map(([description]) => description);

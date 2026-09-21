@@ -10,7 +10,10 @@ import {
   type BetterAuthCompatibilitySlice,
 } from "./features/auth/better-auth";
 import type { ApiEnv } from "./env";
-import { registerRelationshipsRoutes } from "./features/relationships/route";
+import {
+  registerRelationshipsRoutes,
+  type RelationshipsRouteDependencies,
+} from "./features/relationships/route";
 import { createHyperdriveRelationshipsStore } from "./features/relationships/postgres-store";
 import { createRelationshipsService } from "./features/relationships/service";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
@@ -29,6 +32,7 @@ import { createAucklandDayService } from "@dayli/domain";
 export function createApp(
   auth?: BetterAuthCompatibilitySlice,
   postingDay?: CurrentPostingDayRouteDependencies,
+  relationships: RelationshipsRouteDependencies = unavailableRelationships,
 ) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
@@ -64,6 +68,7 @@ export function createApp(
   registerCurrentPostingDayRoute(api, postingDay ?? {
     authenticate: async () => null,
   });
+  registerRelationshipsRoutes(api, relationships);
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -81,10 +86,7 @@ export function createApp(
 export function createAppForEnv(env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
-  const api = createApp(undefined, postingDay);
-  if (!configuration) return api;
-  registerPostgresBetterAuthRoutes(api, env);
-  registerRelationshipsRoutes(api, {
+  const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     resolveSession: (request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({
@@ -98,9 +100,27 @@ export function createAppForEnv(env: ApiEnv) {
       const session = await auth.api.getSession({ headers: request.headers });
       return session?.user?.id ? { userId: session.user.id } : null;
     }),
-  });
+  } satisfies RelationshipsRouteDependencies : undefined;
+  const api = createApp(undefined, postingDay, relationships);
+  if (!configuration) return api;
+  registerPostgresBetterAuthRoutes(api, env);
   return api;
 }
+
+const unavailableRelationships: RelationshipsRouteDependencies = {
+  service: {
+    getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
+    listPendingRequests: async () => { throw new Error("Relationship storage is unavailable."); },
+    sendRequest: async () => { throw new Error("Relationship storage is unavailable."); },
+    acceptRequest: async () => { throw new Error("Relationship storage is unavailable."); },
+    declineRequest: async () => { throw new Error("Relationship storage is unavailable."); },
+    cancelRequest: async () => { throw new Error("Relationship storage is unavailable."); },
+    removeFriendship: async () => { throw new Error("Relationship storage is unavailable."); },
+    block: async () => { throw new Error("Relationship storage is unavailable."); },
+    unblock: async () => { throw new Error("Relationship storage is unavailable."); },
+  },
+  resolveSession: async () => null,
+};
 
 function createPostingDayDependencies(
   configuration: NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>,

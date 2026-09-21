@@ -35,7 +35,7 @@ export interface RelationshipsRouteDependencies {
 // signature, while this shape also documents bearer and cookie auth as
 // alternatives (rather than requiring both credentials).
 const security: Array<Record<string, string[]>> = [
-  { bearerAuth: [] },
+  { BearerAuth: [] },
   { cookieAuth: [] },
 ];
 
@@ -238,11 +238,10 @@ async function getSession(context: Context, resolveSession: ResolveRelationshipS
 }
 
 export function registerRelationshipsRoutes(app: OpenAPIHono, dependencies: RelationshipsRouteDependencies) {
-  app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
+  app.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
     type: "http",
     scheme: "bearer",
-    bearerFormat: "Better Auth session token",
-    description: "Native clients may authenticate with the Better Auth bearer session.",
+    bearerFormat: "Dayli session token",
   });
   app.openAPIRegistry.registerComponent("securitySchemes", "cookieAuth", {
     type: "apiKey",
