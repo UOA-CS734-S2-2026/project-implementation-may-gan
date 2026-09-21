@@ -140,6 +140,11 @@ function enabledDatabaseUrl(): string | undefined {
       `;
     });
 
+    await migrator.begin((tx) => tx`
+      delete from public.friendships
+      where (user_id = ${a} and friend_id = ${c}) or (user_id = ${c} and friend_id = ${a})
+    `);
+
     await migrator.begin(async (tx) => {
       await tx`
         insert into public.friendships (user_id, friend_id, state, state_changed_at)
@@ -166,7 +171,7 @@ function enabledDatabaseUrl(): string | undefined {
       `;
     });
 
-    await expect(migrator.begin(async (tx) => {
+    await migrator.begin(async (tx) => {
       await tx`
         insert into public.friendships (user_id, friend_id, state, state_changed_at)
         values (${a}, ${b}, 'active', ${at})
@@ -175,7 +180,7 @@ function enabledDatabaseUrl(): string | undefined {
         insert into public.friendships (user_id, friend_id, state, state_changed_at)
         values (${b}, ${a}, 'active', ${at})
       `;
-    })).resolves.toBeDefined();
+    });
 
     await migrator`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
