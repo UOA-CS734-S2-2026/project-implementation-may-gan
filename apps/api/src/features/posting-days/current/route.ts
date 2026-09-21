@@ -19,6 +19,7 @@ const currentPostingDayRoute = createRoute({
   tags: ["Posting Days"],
   operationId: "postingDays.current",
   summary: "Read the current Auckland posting day",
+  security: [{ BearerAuth: [] }],
   responses: {
     200: {
       description: "The server-owned current posting day and scheduled prompt.",

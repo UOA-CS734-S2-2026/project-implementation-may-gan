@@ -34,7 +34,7 @@ export interface CurrentPostingDayResponse {
     /**
      *
      */
-    localDate: Date;
+    localDate: string;
     /**
      *
      */
@@ -77,7 +77,7 @@ export function CurrentPostingDayResponseFromJSONTyped(json: any, ignoreDiscrimi
     return {
 
         'serverNow': (json['serverNow'] == null ? json['serverNow'] : parseDateTime(json['serverNow'])),
-        'localDate': (json['localDate'] == null ? json['localDate'] : parseDate(json['localDate'])),
+        'localDate': json['localDate'],
         'deadlineAt': (json['deadlineAt'] == null ? json['deadlineAt'] : parseDateTime(json['deadlineAt'])),
         'releaseAt': (json['releaseAt'] == null ? json['releaseAt'] : parseDateTime(json['releaseAt'])),
         'prompt': DailyPromptResponseFromJSON(json['prompt']),
@@ -97,7 +97,7 @@ export function CurrentPostingDayResponseToJSONTyped(value?: CurrentPostingDayRe
     return {
 
         'serverNow': value['serverNow'] == null ? value['serverNow'] : serializeDateTime(value['serverNow']),
-        'localDate': value['localDate'] == null ? value['localDate'] : serializeDate(value['localDate']),
+        'localDate': value['localDate'],
         'deadlineAt': value['deadlineAt'] == null ? value['deadlineAt'] : serializeDateTime(value['deadlineAt']),
         'releaseAt': value['releaseAt'] == null ? value['releaseAt'] : serializeDateTime(value['releaseAt']),
         'prompt': DailyPromptResponseToJSON(value['prompt']),

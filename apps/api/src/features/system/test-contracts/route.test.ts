@@ -4,12 +4,22 @@ import { app } from "../../../app";
 describe("API contracts", () => {
   it("serves an OpenAPI 3.1 document", async () => {
     const response = await app.request("/api/v1/openapi.json");
-    const document = await response.json<Record<string, unknown>>();
+    const document = await response.json<{
+      openapi: string;
+      paths: Record<string, { get?: { security?: Array<Record<string, string[]>> } }>;
+      components?: { securitySchemes?: Record<string, { type: string; scheme?: string; bearerFormat?: string }> };
+    }>();
 
     expect(response.status).toBe(200);
     expect(document.openapi).toBe("3.1.0");
     expect(document.paths).toHaveProperty("/api/v1/test");
     expect(document.paths).toHaveProperty("/api/v1/posting-days/current");
+    expect(document.components?.securitySchemes?.BearerAuth).toEqual({
+      type: "http",
+      scheme: "bearer",
+      bearerFormat: "Dayli session token",
+    });
+    expect(document.paths["/api/v1/posting-days/current"]?.get?.security).toEqual([{ BearerAuth: [] }]);
   });
 
   it("applies the default pagination limit to the test route", async () => {

@@ -6,6 +6,13 @@
     "description": "REST API shared by the Dayli mobile and web clients."
   },
   "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Dayli session token"
+      }
+    },
     "schemas": {
       "HealthResponse": {
         "type": "object",
@@ -252,6 +259,11 @@
         ],
         "operationId": "postingDays.current",
         "summary": "Read the current Auckland posting day",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "The server-owned current posting day and scheduled prompt.",
