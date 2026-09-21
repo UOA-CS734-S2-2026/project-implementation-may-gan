@@ -201,6 +201,10 @@
           "name": "daily_prompts_id_format_check",
           "value": "\"daily_prompts\".\"id\" ~ '^prompt-[0-9]{2}-[0-9]{2}(-v[0-9]+)?$'"
         },
+        "daily_prompts_id_canonical_check": {
+          "name": "daily_prompts_id_canonical_check",
+          "value": "\"daily_prompts\".\"id\" = 'prompt-' || \"daily_prompts\".\"month_day\" || case when \"daily_prompts\".\"version\" = 1 then '' else '-v' || \"daily_prompts\".\"version\"::text end"
+        },
         "daily_prompts_month_day_format_check": {
           "name": "daily_prompts_month_day_format_check",
           "value": "\"daily_prompts\".\"month_day\" ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'"
