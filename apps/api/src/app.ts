@@ -10,7 +10,7 @@ import { createHyperdriveMediaReservationRuntime, registerMediaReservationRoutes
 import { readR2RuntimeConfiguration } from "./lib/r2";
 import { registerCurrentPostingDayRoute, type CurrentPostingDayRouteDependencies } from "./features/posting-days/current/route";
 import { createCurrentPostingDayService } from "./features/posting-days/current/service";
-import { createDailyPromptRepository } from "./features/posting-days/current/repository";
+import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
 import { createAucklandDayService } from "@dayli/domain";
 
 type SecondaryDependencies = MediaReservationRuntime | CurrentPostingDayRouteDependencies;
@@ -57,6 +57,7 @@ function createPostingDayDependencies(configuration: NonNullable<ReturnType<type
       clock,
       dayService,
       prompts: { findActivePrompt: (monthDay, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createDailyPromptRepository(database).findActivePrompt(monthDay, localDate)) },
+      hasPosted: (userId, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => hasPostedOnDay(database, userId, localDate)),
       onOperationalAlert: (alert) => console.error("dayli posting-day operational alert", alert),
     }),
   };
