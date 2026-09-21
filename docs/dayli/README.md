@@ -17,6 +17,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Security](security.md): privacy and permissions.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Database migrations](database-migrations.md): Neon PostgreSQL roles, additive migration commands, and release runbook.
+- [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md): legacy inventory, preservation and exclusion policy, rehearsal gates, and Cloudinary checkpoint.
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.

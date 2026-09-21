@@ -12,6 +12,7 @@ Run from the repository root:
 - `pnpm db:migrate` — apply pending migrations for `MIGRATION_TARGET`.
 - `pnpm db:verify` — strict read-only migration-state verification.
 - `pnpm db:smoke` — connection smoke check.
+- `pnpm db:migration:inventory`: aggregate-only, read-only inventory of the legacy Supabase schema for the approved migration boundary.
 - `pnpm db:test:up`, `pnpm db:test`, `pnpm db:test:down` — local PostgreSQL 18 integration workflow.
 
 ## Required environment
@@ -20,6 +21,7 @@ Run from the repository root:
 - `DATABASE_URL`: direct migration connection for `migrator`.
 - `TEST_DATABASE_URL`: local `migrator` test connection.
 - `TEST_APP_DATABASE_URL`: local restricted `app` test connection.
+- `LEGACY_SUPABASE_READONLY_DATABASE_URL`: separately provisioned TLS Supabase `SELECT`-only connection, used only by `db:migration:inventory`.
 
 Local tests must use `localhost:5433/dayli_test`. Staging and production must use a direct `*.neon.tech` host, must not use `-pooler`, and must include `sslmode=require` or stricter. Production also requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`.
 
@@ -34,3 +36,5 @@ See [`apps/api/README.md`](../../apps/api/README.md) for the protected staging s
 Migration history is forward-only and additive by default. Existing migration SQL and Drizzle snapshots are immutable; `_journal.json` is append-only. Squawk suppressions are allowed only for the exact rule and require a matching YAML review document in `packages/db/migrations/reviews/` with the required rollout, backup, forward-fix, and reviewer fields.
 
 `packages/db/admin/bootstrap-roles.sql` is run by an administrator on each Neon branch. It provisions `migrator` for schema ownership and `app` for DML-only access to new `public` tables. Do not commit passwords, URLs, branch IDs, screenshots containing private hostnames, or workflow logs containing secrets.
+
+The legacy Supabase inventory is not a Neon migration command. It starts a read-only transaction and emits aggregate counts only, but its database role must also be restricted to `CONNECT` and `SELECT` on the approved legacy tables. See [the Supabase to Neon migration boundary](../../docs/dayli/supabase-neon-migration-boundary.md) for the fixed scope, fixture rules, and evidence requirements.
