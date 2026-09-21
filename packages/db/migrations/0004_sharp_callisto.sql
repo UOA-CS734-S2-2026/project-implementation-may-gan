@@ -140,6 +140,25 @@ ALTER TABLE "tomorrow_notes" ADD CONSTRAINT "tomorrow_notes_author_id_user_id_fk
 ALTER TABLE "tomorrow_notes" ADD CONSTRAINT "tomorrow_notes_post_author_fk" FOREIGN KEY ("post_id","author_id") REFERENCES "public"."posts"("id","author_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "post_media_active_post_order_unique" ON "post_media" USING btree ("post_id","attachment_order") WHERE "post_media"."detached_at" is null;--> statement-breakpoint
 
+-- Media ownership is part of the identity used by revision attachment refs.
+-- Reassignment would invalidate already-inserted historical snapshots.
+CREATE FUNCTION public.dayli_post_media_post_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.post_id IS DISTINCT FROM OLD.post_id THEN
+    RAISE EXCEPTION 'post_media post ownership is immutable' USING ERRCODE = '55000';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER post_media_post_immutable_trigger
+BEFORE UPDATE OF post_id ON public.post_media
+FOR EACH ROW EXECUTE FUNCTION public.dayli_post_media_post_immutable();--> statement-breakpoint
+
 -- Revisions are historical snapshots, not an editable projection.
 CREATE FUNCTION public.dayli_post_revision_immutable()
 RETURNS trigger

@@ -125,7 +125,9 @@ export const posts = pgTable("posts", {
 ]);
 
 /** Rows in this table represent accepted attachments only; upload reservation,
- * validation, authorization, and cleanup belong to the later media issues. */
+ * validation, authorization, and cleanup belong to the later media issues.
+ * postId ownership is immutable at the database level because revisions retain
+ * historical media IDs in JSON metadata. */
 export const postMedia = pgTable("post_media", {
   id: text("id").primaryKey(),
   postId: text("post_id").notNull().references(() => posts.id),
