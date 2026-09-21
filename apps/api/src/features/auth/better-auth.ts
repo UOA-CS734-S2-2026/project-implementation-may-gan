@@ -1,8 +1,9 @@
-import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { betterAuth } from "better-auth/minimal";
 import { bearer } from "better-auth/plugins/bearer";
+import { withHyperdriveDatabase } from "../../lib/hyperdrive";
 import {
   passwordResetEmail,
   sendResendAuthEmail,
@@ -262,26 +263,6 @@ export function readBetterAuthRuntimeConfiguration(
   }
 
   return { baseURL, secret, trustedOrigins, hyperdrive, google: google.value, resend: resend.value };
-}
-
-export type HyperdriveDatabaseFactory = typeof createHyperdriveDatabase;
-
-/**
- * Bounds every Hyperdrive client to one completed operation. Better Auth completes
- * its database work before its handler resolves, so closing here cannot consume a
- * response body or leave a client alive in a Worker isolate.
- */
-export async function withHyperdriveDatabase<T>(
-  hyperdrive: HyperdriveBinding,
-  operation: (database: DayliDatabase) => Promise<T>,
-  createDatabase: HyperdriveDatabaseFactory = createHyperdriveDatabase,
-): Promise<T> {
-  const database = createDatabase(hyperdrive);
-  try {
-    return await operation(database.db);
-  } finally {
-    await database.close();
-  }
 }
 
 export async function handlePostgresBetterAuthRequest(
