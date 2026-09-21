@@ -17,13 +17,18 @@ Migrations use an unpooled direct Neon `DATABASE_URL` with `sslmode=require` or 
 
 ## Legacy Supabase boundary
 
-The legacy Supabase database is not a Neon migration target and must never use the `migrator` connection. `pnpm db:migration:inventory` uses a separately provisioned `LEGACY_SUPABASE_READONLY_DATABASE_URL`, starts a read-only transaction, and returns aggregate counts only. It does not copy data. The full preservation, fixture, rehearsal, and Cloudinary policy is in [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md).
+The legacy Supabase database is not a Neon migration target and must never use the `migrator` connection. `pnpm db:migration:inventory` uses a separately provisioned `LEGACY_SUPABASE_READONLY_DATABASE_URL`, starts a read-only transaction, and returns aggregate counts only. It does not copy data.
+
+`pnpm db:migration:users-and-accounts` is a separately controlled direct users-and-login-accounts transfer. It requires a Supabase `LEGACY_SUPABASE_USERS_ACCOUNTS_READONLY_DATABASE_URL` credential with `CONNECT` and `SELECT` on `public.user` and `public.account` only, plus a direct TLS `NEON_USERS_ACCOUNTS_IMPORT_DATABASE_URL` for the protected `users_accounts_importer` role. The role has only `SELECT` and `INSERT` on those two Neon tables, not application-wide DML or migration privileges. The command is dry-run by default. Applying also requires `--apply` and `APPLY_USERS_ACCOUNTS_IMPORT="IMPORT users and accounts"`. It copies compatible Better Auth credential hashes and the provider identity mapping, but never reads or copies OAuth tokens, token expiry fields, scope, sessions, verification records, posts, or other dependent content. See [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md) for compatibility limits, fixture rules, rehearsal gates, and required OAuth deployment work.
 
 ## Commands
 
 ```bash
 pnpm db:generate
 pnpm db:check
+pnpm db:migration:users-and-accounts
+# Apply only after approval, with protected environment variables set:
+pnpm db:migration:users-and-accounts -- --apply
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:migrate
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:verify
 pnpm db:test:up && pnpm db:test && pnpm db:test:down

@@ -57,6 +57,18 @@ flutter test
 flutter analyze
 ```
 
+## Google OAuth and email setup plan
+
+These integrations are planned, not implemented by the database importer. Better Auth remains the session authority. Google supplies identity; Resend is the selected transactional email provider.
+
+1. Configure Google Auth Platform branding, audience, and basic `openid`, `email`, and `profile` access in a team-owned Google Cloud project. Use separate staging and production credentials and register test users while the app is in testing mode.
+2. Create a web OAuth client with exact browser origins and the API callback `https://api.example.test/api/auth/callback/google`, replacing the placeholder with the deployed API origin. Configure Better Auth's Google provider with the client ID and a Worker-held client secret. Never ship the secret to web or mobile clients.
+3. Register iOS and Android clients for the actual bundle ID, Android package name, and signing certificate fingerprints. Flutter will obtain a Google ID token through the native SDK and submit it to Better Auth. Explicitly configure the accepted token audiences for the chosen SDK flow and pinned Better Auth version, rather than accepting arbitrary client IDs.
+4. Better Auth must verify the Google identity and resolve migrated `google` account subjects to existing user IDs before issuing the normal browser cookie or signed native bearer token. Test that existing accounts are reused, untrusted tokens fail, and email collisions cannot silently merge identities.
+5. Verify a sending domain in Resend, publish the required DNS records, and store its API key as a Worker secret. Wire Better Auth's verification and password-reset callbacks to Resend's HTTPS API. Add rate limits, generic recovery responses, expiring single-use links, and delivery-failure handling before enabling recovery.
+
+Old Google access and refresh tokens are not imported. Users authorize again; password users retain only the supported imported password hashes. Legacy bans are explicitly omitted from the users-and-accounts transfer; the target schema is unchanged.
+
 ## Before deployment
 
 Before staging deployment, apply the reviewed migration through the protected migration workflow. Configure `BETTER_AUTH_SECRET` with `wrangler secret put BETTER_AUTH_SECRET` and place only the public base URL and exact browser origins in ignored staging configuration. Do not put a secret, connection string, Hyperdrive ID, or private hostname in Git. A deployed staging check and native device coverage remain required before release.
