@@ -3,8 +3,16 @@ import {
   registerBetterAuthCompatibilityRoutes,
   registerPostgresBetterAuthRoutes,
 } from "./features/auth/route";
-import type { BetterAuthCompatibilitySlice } from "./features/auth/better-auth";
+import {
+  createPostgresBetterAuth,
+  readBetterAuthRuntimeConfiguration,
+  withHyperdriveDatabase,
+  type BetterAuthCompatibilitySlice,
+} from "./features/auth/better-auth";
 import type { ApiEnv } from "./env";
+import { registerRelationshipsRoutes } from "./features/relationships/route";
+import { createHyperdriveRelationshipsStore } from "./features/relationships/postgres-store";
+import { createRelationshipsService } from "./features/relationships/service";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
@@ -17,11 +25,6 @@ import {
 } from "./features/posting-days/current/service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
 import { createAucklandDayService } from "@dayli/domain";
-import {
-  createPostgresBetterAuth,
-  readBetterAuthRuntimeConfiguration,
-  withHyperdriveDatabase,
-} from "./features/auth/better-auth";
 
 export function createApp(
   auth?: BetterAuthCompatibilitySlice,
@@ -79,7 +82,23 @@ export function createAppForEnv(env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const api = createApp(undefined, postingDay);
+  if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env);
+  registerRelationshipsRoutes(api, {
+    service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
+    resolveSession: (request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const auth = createPostgresBetterAuth({
+        baseURL: configuration.baseURL,
+        secret: configuration.secret,
+        trustedOrigins: configuration.trustedOrigins,
+        database,
+        google: configuration.google,
+        resend: configuration.resend,
+      });
+      const session = await auth.api.getSession({ headers: request.headers });
+      return session?.user?.id ? { userId: session.user.id } : null;
+    }),
+  });
   return api;
 }
 
