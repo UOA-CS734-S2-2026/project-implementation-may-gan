@@ -59,7 +59,7 @@ function enabledDatabaseUrl(): string | undefined {
     expect(indexes.map((row) => row.indexname)).toEqual(expect.arrayContaining([
       "friend_requests_pending_pair_unique",
       "friend_requests_recipient_status_created_idx",
-      "friend_requests_sender_created_idx",
+      "friend_requests_sender_recipient_created_idx",
       "friendships_pair_unique",
       "friendships_friend_id_idx",
       "relationship_blocks_pair_unique",
@@ -108,6 +108,75 @@ function enabledDatabaseUrl(): string | undefined {
       values (${a}, ${b}, 'ended', ${at})
     `).rejects.toMatchObject({ code: "23505" });
 
+    await expect(migrator.begin((tx) => tx`
+      insert into public.friendships (user_id, friend_id, state, state_changed_at)
+      values (${a}, ${c}, 'active', ${at})
+    `)).rejects.toMatchObject({ code: "23514" });
+
+    await expect(migrator.begin(async (tx) => {
+      await tx`
+        update public.friendships
+        set state = 'ended', state_changed_at = ${at}
+        where user_id = ${a} and friend_id = ${b}
+      `;
+    })).rejects.toMatchObject({ code: "23514" });
+
+    await expect(migrator.begin(async (tx) => {
+      await tx`
+        delete from public.friendships
+        where user_id = ${a} and friend_id = ${b}
+      `;
+    })).rejects.toMatchObject({ code: "23514" });
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        insert into public.friendships (user_id, friend_id, state, state_changed_at)
+        values (${a}, ${c}, 'active', ${at}), (${c}, ${a}, 'active', ${at})
+      `;
+      await tx`
+        update public.friendships
+        set state = 'ended', state_changed_at = ${at}
+        where (user_id = ${a} and friend_id = ${c}) or (user_id = ${c} and friend_id = ${a})
+      `;
+    });
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        insert into public.friendships (user_id, friend_id, state, state_changed_at)
+        values (${a}, ${c}, 'active', ${at}), (${c}, ${a}, 'active', ${at})
+      `;
+      await tx`
+        delete from public.friendships
+        where (user_id = ${a} and friend_id = ${c}) or (user_id = ${c} and friend_id = ${a})
+      `;
+    });
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        update public.friendships
+        set state = 'ended', state_changed_at = ${at}
+        where (user_id = ${a} and friend_id = ${b}) or (user_id = ${b} and friend_id = ${a})
+      `;
+    });
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        delete from public.friendships
+        where (user_id = ${a} and friend_id = ${b}) or (user_id = ${b} and friend_id = ${a})
+      `;
+    });
+
+    await expect(migrator.begin(async (tx) => {
+      await tx`
+        insert into public.friendships (user_id, friend_id, state, state_changed_at)
+        values (${a}, ${b}, 'active', ${at})
+      `;
+      await tx`
+        insert into public.friendships (user_id, friend_id, state, state_changed_at)
+        values (${b}, ${a}, 'active', ${at})
+      `;
+    })).resolves.toBeDefined();
+
     await migrator`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
       values (${a}, ${b}, ${at}), (${b}, ${a}, ${at})
@@ -124,6 +193,10 @@ function enabledDatabaseUrl(): string | undefined {
       insert into public.friend_requests (id, sender_id, recipient_id, status, created_at)
       values (${crypto.randomUUID()}, ${a}, ${c}, 'pending', ${at})
     `).resolves.toBeDefined();
+
+    await expect(migrator`
+      delete from public."user" where id = ${a}
+    `).rejects.toMatchObject({ code: "23503" });
   });
 
   it("serializes opposite-direction pending requests through the canonical pair index", async () => {

@@ -43,7 +43,7 @@ export const friendRequests = pgTable("friend_requests", {
     .on(sql`least(${table.senderId}, ${table.recipientId})`, sql`greatest(${table.senderId}, ${table.recipientId})`)
     .where(sql`${table.status} = 'pending'`),
   index("friend_requests_recipient_status_created_idx").on(table.recipientId, table.status, table.createdAt, table.id),
-  index("friend_requests_sender_created_idx").on(table.senderId, table.createdAt),
+  index("friend_requests_sender_recipient_created_idx").on(table.senderId, table.recipientId, table.createdAt),
   check("friend_requests_distinct_users_check", sql`${table.senderId} <> ${table.recipientId}`),
   check(
     "friend_requests_resolution_check",

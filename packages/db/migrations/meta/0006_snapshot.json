@@ -1,11 +1,6 @@
 {
-<<<<<<< HEAD
-  "id": "3be974ce-bca2-4c8a-9bcc-edeb29e0e3cc",
-  "prevId": "1aabc77a-9529-43f1-aab8-0653905c99f9",
-=======
-  "id": "782df911-208a-4bfa-802f-d9b8e014caa5",
+  "id": "6fc71f36-3d6a-4b77-b5b2-a46ec3b5cbde",
   "prevId": "3be974ce-bca2-4c8a-9bcc-edeb29e0e3cc",
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -210,13 +205,10 @@
           "name": "daily_prompts_month_day_format_check",
           "value": "\"daily_prompts\".\"month_day\" ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'"
         },
-<<<<<<< HEAD
-=======
         "daily_prompts_month_day_calendar_check": {
           "name": "daily_prompts_month_day_calendar_check",
           "value": "case\n        when \"daily_prompts\".\"month_day\" !~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' then false\n        when substring(\"daily_prompts\".\"month_day\", 1, 2) in ('01', '03', '05', '07', '08', '10', '12') then substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 31\n        when substring(\"daily_prompts\".\"month_day\", 1, 2) in ('04', '06', '09', '11') then substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 30\n        else substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 29\n      end"
         },
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
         "daily_prompts_version_positive_check": {
           "name": "daily_prompts_version_positive_check",
           "value": "\"daily_prompts\".\"version\" > 0"
@@ -228,8 +220,6 @@
       },
       "isRLSEnabled": false
     },
-<<<<<<< HEAD
-=======
     "public.friend_requests": {
       "name": "friend_requests",
       "schema": "",
@@ -328,11 +318,17 @@
           "method": "btree",
           "with": {}
         },
-        "friend_requests_sender_created_idx": {
-          "name": "friend_requests_sender_created_idx",
+        "friend_requests_sender_recipient_created_idx": {
+          "name": "friend_requests_sender_recipient_created_idx",
           "columns": [
             {
               "expression": "sender_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "recipient_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -500,7 +496,6 @@
       },
       "isRLSEnabled": false
     },
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
     "public.legacy_cloudinary_media": {
       "name": "legacy_cloudinary_media",
       "schema": "",
@@ -964,8 +959,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-<<<<<<< HEAD
-=======
     "public.relationship_blocks": {
       "name": "relationship_blocks",
       "schema": "",
@@ -1072,7 +1065,6 @@
       },
       "isRLSEnabled": false
     },
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
     "public.session": {
       "name": "session",
       "schema": "",
@@ -1498,8 +1490,6 @@
     }
   },
   "enums": {
-<<<<<<< HEAD
-=======
     "public.friend_request_status": {
       "name": "friend_request_status",
       "schema": "public",
@@ -1518,7 +1508,6 @@
         "ended"
       ]
     },
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
     "public.post_audience": {
       "name": "post_audience",
       "schema": "public",
@@ -1554,8 +1543,4 @@
     "schemas": {},
     "tables": {}
   }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> c84b96c (feat(db): add relationship persistence migration)
