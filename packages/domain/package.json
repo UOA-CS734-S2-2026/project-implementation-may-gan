@@ -2,6 +2,10 @@
   "name": "@dayli/domain",
   "private": true,
   "type": "module",
-  "scripts": { "typecheck": "tsc" },
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "typecheck": "tsc"
+  },
   "devDependencies": { "typescript": "6.0.3" }
 }
