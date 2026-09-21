@@ -112,6 +112,57 @@
           "INTERNAL_ERROR",
           "SERVICE_UNAVAILABLE"
         ]
+      },
+      "CurrentPostingDayResponse": {
+        "type": "object",
+        "properties": {
+          "serverNow": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "deadlineAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "releaseAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/DailyPromptResponse"
+          },
+          "hasPosted": {
+            "type": "boolean",
+            "example": false
+          }
+        },
+        "required": [
+          "serverNow",
+          "localDate",
+          "deadlineAt",
+          "releaseAt",
+          "prompt",
+          "hasPosted"
+        ]
+      },
+      "DailyPromptResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "example": "prompt-09-22"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "example": "What made you smile today?"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
       }
     },
     "parameters": {}
@@ -183,6 +234,47 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posting-days/current": {
+      "get": {
+        "tags": [
+          "Posting Days"
+        ],
+        "operationId": "postingDays.current",
+        "summary": "Read the current Auckland posting day",
+        "responses": {
+          "200": {
+            "description": "The server-owned current posting day and scheduled prompt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentPostingDayResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The prompt or posting-state dependency is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

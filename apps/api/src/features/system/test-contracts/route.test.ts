@@ -9,6 +9,7 @@ describe("API contracts", () => {
     expect(response.status).toBe(200);
     expect(document.openapi).toBe("3.1.0");
     expect(document.paths).toHaveProperty("/api/v1/test");
+    expect(document.paths).toHaveProperty("/api/v1/posting-days/current");
   });
 
   it("applies the default pagination limit to the test route", async () => {

@@ -14,9 +14,12 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/api/posting_days_api.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
+lib/model/current_posting_day_response.dart
+lib/model/daily_prompt_response.dart
 lib/model/health_response.dart
 lib/model/test_response.dart
 pubspec.yaml

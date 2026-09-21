@@ -13,9 +13,11 @@
   "dependencies": {
     "@dayli/contracts": "workspace:*",
     "@dayli/db": "workspace:*",
+    "@dayli/domain": "workspace:*",
     "@hono/zod-openapi": "1.6.3",
     "@scalar/hono-api-reference": "0.12.1",
     "better-auth": "1.7.5",
+    "drizzle-orm": "0.45.2",
     "hono": "4.13.7",
     "zod": "4.5.4"
   },
