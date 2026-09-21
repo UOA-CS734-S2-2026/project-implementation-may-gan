@@ -182,7 +182,8 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         const countRows = rows<{ count: number | string; oldest: string | null }>(await queryable.execute(sql`
           select count(*)::int as count, min(created_at) as oldest
           from public.friend_requests
-          where sender_id = ${senderId} and created_at >= ${createdAt}::timestamptz - interval '24 hours'
+          where sender_id = ${senderId} and recipient_id = ${recipientId}
+            and created_at >= ${createdAt}::timestamptz - interval '24 hours'
         `));
         const count = Number(countRows[0]?.count ?? 0);
         if (count >= 5) {
