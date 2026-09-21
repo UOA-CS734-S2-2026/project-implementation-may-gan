@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPostVisibilityFilter } from "./filters";
-import type { SqlFragment } from "./policy";
+import type { PostVisibilityFilterInput, SqlFragment } from "./policy";
 
 const column = (text: string): SqlFragment => ({ text, params: [] });
 const columns = {
@@ -86,5 +86,33 @@ describe("post visibility database filter", () => {
 
     expect(exported.where.text).not.toContain("f.active");
     expect(media.where.text).toContain("m.attached");
+  });
+
+  it("fails closed for media when attachment state is unavailable", () => {
+    const { mediaAttached: _mediaAttached, ...withoutMediaState } = columns;
+    void _mediaAttached;
+    const result = buildPostVisibilityFilter({
+      columns: withoutMediaState,
+      viewer: { userId: "viewer-1" },
+      now: new Date("2026-09-22T00:00:00Z"),
+      action: "media",
+    } as PostVisibilityFilterInput);
+
+    expect(result.where.text).toContain("and false and");
+    expect(result.where.text).not.toContain("m.attached");
+  });
+
+  it("fails closed for signed-in viewers when block state is unavailable", () => {
+    const { blocked: _blocked, ...withoutBlockState } = columns;
+    void _blocked;
+    const result = buildPostVisibilityFilter({
+      columns: withoutBlockState,
+      viewer: { userId: "viewer-1" },
+      now: new Date("2026-09-22T00:00:00Z"),
+      validatedPublicLinkGrant: { postId: "post-1", active: true },
+    });
+
+    expect(result.where.text).toContain("not (true)");
+    expect(result.where.params).toContain("post-1");
   });
 });

@@ -154,14 +154,23 @@ export interface PostVisibilityColumns {
   mediaAttached?: SqlFragment;
 }
 
-export interface PostVisibilityFilterInput {
-  columns: PostVisibilityColumns;
+interface PostVisibilityFilterInputBase {
   viewer: Viewer;
   now: Date;
-  action?: PermissionAction;
   /** Supplied only by #41 after validating an active grant for this post. */
   validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
 }
+
+export type PostVisibilityFilterInput = PostVisibilityFilterInputBase & (
+  | {
+      action: "media";
+      columns: PostVisibilityColumns & { mediaAttached: SqlFragment };
+    }
+  | {
+      action?: Exclude<PermissionAction, "media">;
+      columns: PostVisibilityColumns;
+    }
+);
 
 export interface PostVisibilityFilterResult {
   /** Apply this in WHERE before LIMIT/OFFSET/cursor pagination. */
