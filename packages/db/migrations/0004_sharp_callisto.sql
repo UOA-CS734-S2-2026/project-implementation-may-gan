@@ -159,6 +159,38 @@ CREATE TRIGGER post_media_post_immutable_trigger
 BEFORE UPDATE OF post_id ON public.post_media
 FOR EACH ROW EXECUTE FUNCTION public.dayli_post_media_post_immutable();--> statement-breakpoint
 
+-- Media IDs are durable historical references. Detach rows instead of deleting
+-- them, and never mutate an ID that may already occur in a revision snapshot.
+CREATE FUNCTION public.dayli_post_media_id_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.id IS DISTINCT FROM OLD.id THEN
+    RAISE EXCEPTION 'post_media IDs are immutable; detach media instead of replacing its ID' USING ERRCODE = '55000';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER post_media_id_immutable_trigger
+BEFORE UPDATE OF id ON public.post_media
+FOR EACH ROW EXECUTE FUNCTION public.dayli_post_media_id_immutable();--> statement-breakpoint
+
+CREATE FUNCTION public.dayli_post_media_delete_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'post_media rows cannot be deleted; detach media instead' USING ERRCODE = '55000';
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER post_media_delete_guard_trigger
+BEFORE DELETE ON public.post_media
+FOR EACH ROW EXECUTE FUNCTION public.dayli_post_media_delete_guard();--> statement-breakpoint
+
 -- Revisions are historical snapshots, not an editable projection.
 CREATE FUNCTION public.dayli_post_revision_immutable()
 RETURNS trigger
@@ -233,6 +265,25 @@ $function$;--> statement-breakpoint
 CREATE TRIGGER tomorrow_notes_visibility_guard_trigger
 BEFORE INSERT ON public.tomorrow_notes
 FOR EACH ROW EXECUTE FUNCTION public.dayli_tomorrow_note_visibility_guard();--> statement-breakpoint
+
+-- The note availability date is derived from the accepted post's local date.
+-- Accepted posts cannot be moved to another Auckland day afterward.
+CREATE FUNCTION public.dayli_accepted_post_local_date_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF OLD.accepted_at IS NOT NULL AND NEW.local_date IS DISTINCT FROM OLD.local_date THEN
+    RAISE EXCEPTION 'accepted post local_date is immutable' USING ERRCODE = '55000';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER posts_accepted_local_date_immutable_trigger
+BEFORE UPDATE OF local_date ON public.posts
+FOR EACH ROW EXECUTE FUNCTION public.dayli_accepted_post_local_date_immutable();--> statement-breakpoint
 
 CREATE FUNCTION public.dayli_tomorrow_note_immutable()
 RETURNS trigger

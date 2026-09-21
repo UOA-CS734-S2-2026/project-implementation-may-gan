@@ -93,8 +93,9 @@ export const rateLimit = pgTable("rateLimit", {
 
 /**
  * A post is one accepted response for one author and Auckland calendar day.
- * Audience is deliberately required without a default so legacy imports cannot
- * silently acquire a visibility policy.
+ * Once accepted, localDate is immutable because tomorrow-note availability is
+ * derived from it. Audience is deliberately required without a default so
+ * legacy imports cannot silently acquire a visibility policy.
  */
 export const posts = pgTable("posts", {
   id: text("id").primaryKey(),
@@ -126,8 +127,9 @@ export const posts = pgTable("posts", {
 
 /** Rows in this table represent accepted attachments only; upload reservation,
  * validation, authorization, and cleanup belong to the later media issues.
- * postId ownership is immutable at the database level because revisions retain
- * historical media IDs in JSON metadata. */
+ * postId and id ownership are immutable at the database level because revisions
+ * retain historical media IDs in JSON metadata. Removal is represented by
+ * detachedAt; post_media rows must never be physically deleted. */
 export const postMedia = pgTable("post_media", {
   id: text("id").primaryKey(),
   postId: text("post_id").notNull().references(() => posts.id),
