@@ -15,7 +15,7 @@ import {
 import {
   createCurrentPostingDayService,
 } from "./features/posting-days/current/service";
-import { createDailyPromptRepository } from "./features/posting-days/current/repository";
+import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
 import { createAucklandDayService } from "@dayli/domain";
 import {
   createPostgresBetterAuth,
@@ -104,8 +104,9 @@ function createPostingDayDependencies(
           createDailyPromptRepository(database).findActivePrompt(monthDay, localDate)
         )),
       },
-      // #13 will provide the posts query. Absence is deliberately surfaced as
-      // 503 instead of being interpreted as an untrue posting state.
+      hasPosted: (userId, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        hasPostedOnDay(database, userId, localDate)
+      )),
       onOperationalAlert: (alert) => {
         console.error("dayli posting-day operational alert", alert);
       },

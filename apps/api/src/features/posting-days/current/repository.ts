@@ -26,3 +26,12 @@ export function createDailyPromptRepository(database: DayliDatabase): DailyPromp
     },
   };
 }
+
+export async function hasPostedOnDay(database: DayliDatabase, userId: string, localDate: string): Promise<boolean> {
+  const rows = await database
+    .select({ id: schema.posts.id })
+    .from(schema.posts)
+    .where(and(eq(schema.posts.authorId, userId), eq(schema.posts.localDate, localDate)))
+    .limit(1);
+  return rows.length > 0;
+}
