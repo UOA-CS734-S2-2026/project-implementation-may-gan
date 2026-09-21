@@ -24,6 +24,11 @@ export function createApp(auth?: BetterAuthCompatibilitySlice, secondary?: Secon
     },
   });
   if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
+  api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "Dayli session token",
+  });
   registerHealthRoute(api);
   registerTestContractsRoute(api);
   registerMediaReservationRoutes(api, media);

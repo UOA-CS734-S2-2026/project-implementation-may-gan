@@ -23,7 +23,7 @@ class CurrentPostingDayResponse {
 
   final DateTime serverNow;
 
-  final DateTime localDate;
+  final String localDate;
 
   final DateTime deadlineAt;
 
@@ -58,7 +58,7 @@ class CurrentPostingDayResponse {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
       json[r'serverNow'] = this.serverNow.toUtc().toIso8601String();
-      json[r'localDate'] = _dateFormatter.format(this.localDate);
+      json[r'localDate'] = this.localDate;
       json[r'deadlineAt'] = this.deadlineAt.toUtc().toIso8601String();
       json[r'releaseAt'] = this.releaseAt.toUtc().toIso8601String();
       json[r'prompt'] = this.prompt;
@@ -70,7 +70,7 @@ class CurrentPostingDayResponse {
   /// properties have changed.
   CurrentPostingDayResponse copyWith({
     DateTime? serverNow,
-    DateTime? localDate,
+    String? localDate,
     DateTime? deadlineAt,
     DateTime? releaseAt,
     DailyPromptResponse? prompt,
@@ -112,7 +112,7 @@ class CurrentPostingDayResponse {
 
       return CurrentPostingDayResponse(
         serverNow: mapDateTime(json, r'serverNow', r'')!,
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         deadlineAt: mapDateTime(json, r'deadlineAt', r'')!,
         releaseAt: mapDateTime(json, r'releaseAt', r'')!,
         prompt: DailyPromptResponse.fromJson(json[r'prompt'])!,
