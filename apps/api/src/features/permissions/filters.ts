@@ -63,10 +63,15 @@ export function buildPostVisibilityFilter(
     )
     : raw("false");
   const nonOwner = and(released, or(friends, publicLink));
-  const blocked = viewer.userId != null && c.blocked ? equals(c.blocked, true) : raw("false");
+  // A signed-in viewer must have block state available. If the join/column is
+  // omitted, fail closed instead of allowing the rest of the predicate through.
+  const blocked = viewer.userId != null
+    ? c.blocked ? equals(c.blocked, true) : raw("true")
+    : raw("false");
   const access = input.action === "export" ? owner : or(owner, nonOwner);
-  const media = input.action === "media" && c.mediaAttached
-    ? equals(c.mediaAttached, true)
+  // Media access must never be authorised without the attachment state.
+  const media = input.action === "media"
+    ? c.mediaAttached ? equals(c.mediaAttached, true) : raw("false")
     : raw("true");
 
   return {
