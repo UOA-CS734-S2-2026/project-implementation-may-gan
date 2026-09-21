@@ -417,6 +417,17 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           where id = ${`media-${postId}-1`}
         `)).rejects.toMatchObject({ code: "55000" });
 
+        await expect(tx.savepoint((savepoint) => savepoint`
+          update public.post_media
+          set id = ${`reused-media-${postId}`}
+          where id = ${`media-${postId}-1`}
+        `)).rejects.toMatchObject({ code: "55000" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          delete from public.post_media
+          where id = ${`media-${postId}-0`}
+        `)).rejects.toMatchObject({ code: "55000" });
+
         const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
           await expect(tx.savepoint((savepoint) => savepoint`
             insert into public.post_revisions
@@ -451,6 +462,11 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
           values (${`note-${postId}`}, ${postId}, ${authorId}, 'Read this tomorrow', '2026-09-23')
         `;
+        await expect(tx.savepoint((savepoint) => savepoint`
+          update public.posts
+          set local_date = '2026-09-23'
+          where id = ${postId}
+        `)).rejects.toMatchObject({ code: "55000" });
         await expect(tx.savepoint((savepoint) => savepoint`
           insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
           values (${`early-note-${postId}`}, ${postId}, ${authorId}, 'Too early', '2026-09-22')
