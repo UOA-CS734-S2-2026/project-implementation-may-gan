@@ -85,4 +85,79 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       await second.end({ timeout: 5 });
     }
   });
+
+  it("seeds all prompts and enforces immutable scheduled versions", async () => {
+    const count = await migrator`select count(*)::int as count from public.daily_prompts`;
+    expect(count[0]?.count).toBe(366);
+
+    await expect(migrator`
+      update public.daily_prompts
+      set text = 'mutated'
+      where id = 'prompt-01-01'
+    `).rejects.toMatchObject({ code: "55000" });
+    await expect(migrator`
+      delete from public.daily_prompts
+      where id = 'prompt-01-01'
+    `).rejects.toMatchObject({ code: "55000" });
+
+    const futurePrompt = {
+      id: "prompt-01-01-v2",
+      monthDay: "01-01",
+      text: "A scheduled future prompt",
+      version: 2,
+      effectiveDate: "2099-01-01",
+      source: "dayli-test",
+      sourceCommit: "test",
+    };
+
+    const rollbackSentinel = new Error("rollback prompt fixture");
+    let observedBeforeEffectiveDate: string | undefined;
+    let observedAtEffectiveDate: string | undefined;
+    let transactionError: unknown;
+    try {
+      await migrator.begin(async (tx) => {
+        await tx`
+        insert into public.daily_prompts
+          (id, month_day, text, version, effective_date, source, source_commit)
+        values
+          (${futurePrompt.id}, ${futurePrompt.monthDay}, ${futurePrompt.text}, ${futurePrompt.version}, ${futurePrompt.effectiveDate}, ${futurePrompt.source}, ${futurePrompt.sourceCommit})
+      `;
+        const beforeEffectiveDate = await tx`
+        select id
+        from public.daily_prompts
+        where month_day = ${futurePrompt.monthDay} and effective_date <= '2098-12-31'
+        order by effective_date desc, version desc
+        limit 1
+      `;
+        const atEffectiveDate = await tx`
+        select id
+        from public.daily_prompts
+        where month_day = ${futurePrompt.monthDay} and effective_date <= '2099-01-01'
+        order by effective_date desc, version desc
+        limit 1
+      `;
+        observedBeforeEffectiveDate = beforeEffectiveDate[0]?.id as string | undefined;
+        observedAtEffectiveDate = atEffectiveDate[0]?.id as string | undefined;
+        throw rollbackSentinel;
+      });
+    } catch (error) {
+      transactionError = error;
+    }
+    expect(transactionError).toBe(rollbackSentinel);
+    expect(observedBeforeEffectiveDate).toBe("prompt-01-01");
+    expect(observedAtEffectiveDate).toBe(futurePrompt.id);
+
+    await expect(migrator.begin((tx) => tx`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-01-01-v3', '01-01', 'Earlier prompt', 3, '1969-12-31', 'dayli-test', 'test')
+    `)).rejects.toMatchObject({ code: "23514" });
+
+    const leftover = await migrator`
+      select id from public.daily_prompts
+      where id in (${futurePrompt.id}, ${"prompt-01-01-v3"})
+    `;
+    expect(leftover).toHaveLength(0);
+  });
 });
