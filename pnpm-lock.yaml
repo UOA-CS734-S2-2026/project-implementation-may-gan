@@ -69,6 +69,9 @@ importers:
       '@vitest/snapshot':
         specifier: 3.2.7
         version: 3.2.7
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       typescript:
         specifier: 6.0.3
         version: 6.0.3

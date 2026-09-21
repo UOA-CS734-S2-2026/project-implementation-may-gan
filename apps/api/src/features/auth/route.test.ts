@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../app";
 import {
   createBetterAuthCompatibilitySlice,
+  readAuthIntegrationConfiguration,
   readBetterAuthRuntimeConfiguration,
   withHyperdriveDatabase,
 } from "./better-auth";
@@ -81,6 +82,27 @@ describe("Better Auth compatibility route", () => {
     });
     expect(readBetterAuthRuntimeConfiguration({ ...bindings, BETTER_AUTH_SECRET: "too-short" })).toBeUndefined();
     expect(readBetterAuthRuntimeConfiguration({ ...bindings, BETTER_AUTH_TRUSTED_ORIGINS: "https://web.example.test" })).toBeUndefined();
+  });
+
+  it("distinguishes disabled, configured, and partial provider bindings without returning secrets", () => {
+    const disabled = readAuthIntegrationConfiguration({});
+    expect(disabled).toEqual({ state: "disabled", google: "disabled", resend: "disabled" });
+
+    const configured = readAuthIntegrationConfiguration({
+      GOOGLE_WEB_CLIENT_ID: "web-client-id",
+      GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+      GOOGLE_ANDROID_CLIENT_ID: "android-client-id",
+      GOOGLE_CLIENT_SECRET: "worker-only-google-secret",
+      RESEND_API_KEY: "worker-only-resend-key",
+      RESEND_FROM: "Dayli <auth@example.test>",
+    });
+    expect(configured).toEqual({ state: "configured", google: "configured", resend: "configured" });
+    expect(readAuthIntegrationConfiguration({ GOOGLE_WEB_CLIENT_ID: "web-client-id" })).toEqual({
+      state: "invalid", google: "invalid", resend: "disabled",
+    });
+    expect(readAuthIntegrationConfiguration({ RESEND_API_KEY: "worker-only-resend-key" })).toEqual({
+      state: "invalid", google: "disabled", resend: "invalid",
+    });
   });
 
   it("answers allowed credentialed preflight requests and rejects disallowed origins", async () => {
@@ -218,6 +240,128 @@ describe("Better Auth compatibility route", () => {
       await expect(response.json()).resolves.toBeNull();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("keeps recovery enumeration-safe and consumes reset tokens once", async () => {
+    const deliveredBodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input, init) => {
+      deliveredBodies.push(String(init?.body));
+      return new Response("{}", { status: 200 });
+    }));
+    try {
+      const app = createApp(createBetterAuthCompatibilitySlice({
+        baseURL: origin,
+        secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+        database: { account: [], session: [], user: [], verification: [] },
+        resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
+      }));
+      await signUp(app);
+      const known = await app.fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "compatibility@example.test",
+          redirectTo: `${origin}/reset-password`,
+        }),
+      }));
+      const unknown = await app.fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "not-a-user@example.test",
+          redirectTo: `${origin}/reset-password`,
+        }),
+      }));
+
+      expect(known.status).toBe(200);
+      expect(await known.json()).toEqual(await unknown.json());
+      expect(deliveredBodies).toHaveLength(1);
+      const token = deliveredBodies[0]?.match(/\/reset-password\/([^?\\"]+)/)?.[1];
+      expect(token).toBeTruthy();
+
+      const firstReset = await app.fetch(request("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, newPassword: "updated-not-a-real-password" }),
+      }));
+      const replay = await app.fetch(request("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, newPassword: "updated-not-a-real-password" }),
+      }));
+      expect(firstReset.status).toBe(200);
+      expect(replay.status).toBe(400);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps recovery responses generic when Resend rejects delivery", async () => {
+    const fetchMock = vi.fn(async () => new Response("provider failure", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const app = createApp(createBetterAuthCompatibilitySlice({
+        baseURL: origin,
+        secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+        database: { account: [], session: [], user: [], verification: [] },
+        resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
+      }));
+      await signUp(app);
+      const known = await app.fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "compatibility@example.test", redirectTo: `${origin}/reset-password` }),
+      }));
+      const unknown = await app.fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "not-a-user@example.test", redirectTo: `${origin}/reset-password` }),
+      }));
+
+      expect(known.status).toBe(200);
+      expect(await known.json()).toEqual(await unknown.json());
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("sends an expiring verification link that Better Auth can redeem", async () => {
+    const deliveredBodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input, init) => {
+      deliveredBodies.push(String(init?.body));
+      return new Response("{}", { status: 200 });
+    }));
+    try {
+      const app = createApp(createBetterAuthCompatibilitySlice({
+        baseURL: origin,
+        secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+        database: { account: [], session: [], user: [], verification: [] },
+        resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
+      }));
+      const token = nativeToken(await signUp(app));
+      const requested = await app.fetch(request("/api/auth/send-verification-email", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ email: "compatibility@example.test", callbackURL: origin }),
+      }));
+      expect(requested.status).toBe(200);
+      const verificationToken = deliveredBodies[0]?.match(/verify-email\?token=([^&\\"]+)/)?.[1];
+      expect(verificationToken).toBeTruthy();
+
+      const verificationUrl = `${origin}/api/auth/verify-email?token=${encodeURIComponent(verificationToken!)}&callbackURL=${encodeURIComponent(origin)}`;
+      const verified = await app.fetch(new Request(verificationUrl));
+      const replay = await app.fetch(new Request(verificationUrl));
+      expect(verified.status).toBe(302);
+      // Better Auth 1.7.5 verification JWTs expire but are not consumed on use.
+      expect(replay.status).toBe(302);
+      const session = await app.fetch(request("/api/auth/get-session", {
+        headers: { authorization: `Bearer ${token}` },
+      }));
+      await expect(session.json()).resolves.toMatchObject({ user: { emailVerified: true } });
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 
