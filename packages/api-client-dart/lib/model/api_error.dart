@@ -19,20 +19,20 @@ class ApiError {
   final ApiErrorError error;
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) || other is ApiError && other.error == error;
+  bool operator ==(Object other) => identical(this, other) || other is ApiError &&
+    other.error == error;
 
   @override
   int get hashCode =>
-      // ignore: unnecessary_parenthesis
-      (error.hashCode);
+    // ignore: unnecessary_parenthesis
+    (error.hashCode);
 
   @override
   String toString() => 'ApiError[error=$error]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'error'] = this.error;
+      json[r'error'] = this.error;
     return json;
   }
 
@@ -40,10 +40,9 @@ class ApiError {
   /// properties have changed.
   ApiError copyWith({
     ApiErrorError? error,
-  }) =>
-      ApiError(
-        error: error ?? this.error,
-      );
+  }) => ApiError(
+    error: error ?? this.error,
+  );
 
   /// Returns a new [ApiError] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
@@ -56,10 +55,8 @@ class ApiError {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'error'),
-            'Required key "ApiError[error]" is missing from JSON.');
-        assert(json[r'error'] != null,
-            'Required key "ApiError[error]" has a null value in JSON.');
+        assert(json.containsKey(r'error'), 'Required key "ApiError[error]" is missing from JSON.');
+        assert(json[r'error'] != null, 'Required key "ApiError[error]" has a null value in JSON.');
         return true;
       }());
 
@@ -70,10 +67,7 @@ class ApiError {
     return null;
   }
 
-  static List<ApiError> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<ApiError> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <ApiError>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -101,19 +95,13 @@ class ApiError {
   }
 
   // maps a json object with a list of ApiError-objects as value to a dart map
-  static Map<String, List<ApiError>> mapListFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static Map<String, List<ApiError>> mapListFromJson(dynamic json, {bool growable = false,}) {
     final map = <String, List<ApiError>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = ApiError.listFromJson(
-          entry.value,
-          growable: growable,
-        );
+        map[entry.key] = ApiError.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

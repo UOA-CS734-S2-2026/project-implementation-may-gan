@@ -11,13 +11,16 @@
 part of openapi.api;
 
 
-enum MediaReservationStatus {
-  pending._(r'pending'),
-  expired._(r'expired'),
+enum RelationshipState {
+  none._(r'none'),
+  outgoingPending._(r'outgoing_pending'),
+  incomingPending._(r'incoming_pending'),
+  friends._(r'friends'),
+  blocked._(r'blocked'),
   ;
 
   /// Instantiate a new enum with the provided value.
-  const MediaReservationStatus._(this._value);
+  const RelationshipState._(this._value);
 
   /// The underlying value of this enum member.
   final String _value;
@@ -28,17 +31,17 @@ enum MediaReservationStatus {
   /// Encodes this enum as a value suitable for JSON.
   String toJson() => _value;
 
-  /// Returns the instance of [MediaReservationStatus] that was successfully decoded
+  /// Returns the instance of [RelationshipState] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static MediaReservationStatus? fromJson(dynamic value) => MediaReservationStatusTypeTransformer().decode(value);
+  static RelationshipState? fromJson(dynamic value) => RelationshipStateTypeTransformer().decode(value);
 
-  /// Returns a [List] containing instances of [MediaReservationStatus]
+  /// Returns a [List] containing instances of [RelationshipState]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<MediaReservationStatus> listFromJson(dynamic json, {bool growable = false,}) {
-    final result = <MediaReservationStatus>[];
+  static List<RelationshipState> listFromJson(dynamic json, {bool growable = false,}) {
+    final result = <RelationshipState>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = MediaReservationStatus.fromJson(row);
+        final value = RelationshipState.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -48,17 +51,17 @@ enum MediaReservationStatus {
   }
 }
 
-/// Transformation class that can [encode] an instance of [MediaReservationStatus] to String,
-/// and [decode] dynamic data back to [MediaReservationStatus].
-class MediaReservationStatusTypeTransformer {
-  factory MediaReservationStatusTypeTransformer() => _instance ??= const MediaReservationStatusTypeTransformer._();
+/// Transformation class that can [encode] an instance of [RelationshipState] to String,
+/// and [decode] dynamic data back to [RelationshipState].
+class RelationshipStateTypeTransformer {
+  factory RelationshipStateTypeTransformer() => _instance ??= const RelationshipStateTypeTransformer._();
 
-  const MediaReservationStatusTypeTransformer._();
+  const RelationshipStateTypeTransformer._();
 
   /// Encodes this enum as a value suitable for JSON.
-  String encode(MediaReservationStatus data) => data._value;
+  String encode(RelationshipState data) => data._value;
 
-  /// Returns the instance of [MediaReservationStatus] that was successfully decoded
+  /// Returns the instance of [RelationshipState] that was successfully decoded
   /// from the passed [data] value on success, null otherwise.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
@@ -67,14 +70,17 @@ class MediaReservationStatusTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  MediaReservationStatus? decode(dynamic data, {bool allowNull = true}) {
-    if (data is MediaReservationStatus) {
+  RelationshipState? decode(dynamic data, {bool allowNull = true}) {
+    if (data is RelationshipState) {
       return data;
     }
     if (data != null) {
       switch (data) {
-        case r'pending': return MediaReservationStatus.pending;
-        case r'expired': return MediaReservationStatus.expired;
+        case r'none': return RelationshipState.none;
+        case r'outgoing_pending': return RelationshipState.outgoingPending;
+        case r'incoming_pending': return RelationshipState.incomingPending;
+        case r'friends': return RelationshipState.friends;
+        case r'blocked': return RelationshipState.blocked;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -85,5 +91,5 @@ class MediaReservationStatusTypeTransformer {
   }
 
   /// The singleton instance of this transformer.
-  static MediaReservationStatusTypeTransformer? _instance;
+  static RelationshipStateTypeTransformer? _instance;
 }

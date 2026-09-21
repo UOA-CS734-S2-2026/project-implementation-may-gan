@@ -10,6 +10,7 @@
 
 part of openapi.api;
 
+
 enum MediaContentType {
   imageSlashJpeg._(r'image/jpeg'),
   imageSlashPng._(r'image/png'),
@@ -33,15 +34,11 @@ enum MediaContentType {
 
   /// Returns the instance of [MediaContentType] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static MediaContentType? fromJson(dynamic value) =>
-      MediaContentTypeTypeTransformer().decode(value);
+  static MediaContentType? fromJson(dynamic value) => MediaContentTypeTypeTransformer().decode(value);
 
   /// Returns a [List] containing instances of [MediaContentType]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<MediaContentType> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<MediaContentType> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <MediaContentType>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -58,8 +55,7 @@ enum MediaContentType {
 /// Transformation class that can [encode] an instance of [MediaContentType] to String,
 /// and [decode] dynamic data back to [MediaContentType].
 class MediaContentTypeTypeTransformer {
-  factory MediaContentTypeTypeTransformer() =>
-      _instance ??= const MediaContentTypeTypeTransformer._();
+  factory MediaContentTypeTypeTransformer() => _instance ??= const MediaContentTypeTypeTransformer._();
 
   const MediaContentTypeTypeTransformer._();
 
@@ -81,18 +77,12 @@ class MediaContentTypeTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'image/jpeg':
-          return MediaContentType.imageSlashJpeg;
-        case r'image/png':
-          return MediaContentType.imageSlashPng;
-        case r'image/webp':
-          return MediaContentType.imageSlashWebp;
-        case r'image/heic':
-          return MediaContentType.imageSlashHeic;
-        case r'video/mp4':
-          return MediaContentType.videoSlashMp4;
-        case r'video/quicktime':
-          return MediaContentType.videoSlashQuicktime;
+        case r'image/jpeg': return MediaContentType.imageSlashJpeg;
+        case r'image/png': return MediaContentType.imageSlashPng;
+        case r'image/webp': return MediaContentType.imageSlashWebp;
+        case r'image/heic': return MediaContentType.imageSlashHeic;
+        case r'video/mp4': return MediaContentType.videoSlashMp4;
+        case r'video/quicktime': return MediaContentType.videoSlashQuicktime;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

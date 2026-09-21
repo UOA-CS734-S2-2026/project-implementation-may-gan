@@ -38,13 +38,6 @@
       "breakpoints": true
     },
     {
-      "idx": 4,
-      "version": "7",
-      "when": 1790038040785,
-      "tag": "0004_aromatic_bushwacker",
-      "breakpoints": true
-    },
-    {
       "idx": 5,
       "version": "7",
       "when": 1790038040786,
@@ -52,10 +45,10 @@
       "breakpoints": true
     },
     {
-      "idx": 5,
+      "idx": 6,
       "version": "7",
-      "when": 1790030929251,
-      "tag": "0005_absurd_swordsman",
+      "when": 1790038040787,
+      "tag": "0006_absurd_swordsman",
       "breakpoints": true
     }
   ]
