@@ -73,7 +73,8 @@ export interface RelationshipTransaction {
   /**
    * Must lock the canonical unordered participant pair, reject blocks and
    * every pending request in either direction, and atomically count persistent
-   * sends in the rolling 24-hour window before inserting the new request. A
+   * sends for this sender-recipient pair in the rolling 24-hour window before
+   * inserting the new request. A
    * declined or cancelled request must not prevent an immediate re-request
    * unless the rolling limit is reached. This exclusivity is what prevents a
    * reverse send from becoming a crossed request or an implicit acceptance.

@@ -75,12 +75,23 @@ suite("Postgres relationship persistence", () => {
 
   it("enforces five sends in a rolling 24-hour window", async () => {
     for (let index = 0; index < 5; index += 1) {
-      const recipient = users[index + 2]!;
-      const result = await service.sendRequest(users[0]!, recipient);
+      const result = await service.sendRequest(users[2]!, users[3]!);
       expect(result.status).toBe("outgoing_pending");
-      await service.cancelRequest(users[0]!, result.outgoingRequest!.id);
+      if (index % 2 === 0) {
+        await service.cancelRequest(users[2]!, result.outgoingRequest!.id);
+      } else {
+        await service.declineRequest(users[3]!, result.outgoingRequest!.id);
+      }
     }
 
-    await expect(service.sendRequest(users[0]!, users[1]!)).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(service.sendRequest(users[2]!, users[3]!)).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(service.sendRequest(users[2]!, users[4]!)).resolves.toMatchObject({ status: "outgoing_pending" });
+
+    const [history] = await database.client`
+      select count(*)::int as count
+      from public.friend_requests
+      where sender_id = ${users[2]!} and recipient_id = ${users[3]!}
+    `;
+    expect(history?.count).toBe(5);
   });
 });
