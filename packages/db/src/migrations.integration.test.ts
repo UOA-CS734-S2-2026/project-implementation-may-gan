@@ -258,11 +258,11 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
 
   it("enforces the post foundation, active media replacement, and historical metadata rules", async () => {
     const columns = await migrator`
-      select table_name, column_name, data_type, is_nullable, column_default
+      select table_name, column_name, data_type, udt_name, is_nullable, column_default
       from information_schema.columns
       where table_schema = 'public'
-        and table_name in ('posts', 'post_media', 'post_revisions', 'tomorrow_notes')
-        and column_name in ('local_date', 'accepted_at', 'released_at', 'detached_at', 'previous_attachment_refs', 'audience')
+        and table_name in ('posts', 'post_media', 'post_revisions', 'legacy_cloudinary_media', 'tomorrow_notes')
+        and column_name in ('local_date', 'accepted_at', 'released_at', 'detached_at', 'previous_attachment_refs', 'audience', 'legacy_type')
       order by table_name, column_name
     `;
     const column = (tableName: string, columnName: string) => columns.find(
@@ -274,10 +274,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     expect(column("posts", "released_at")).toMatchObject({ data_type: "timestamp with time zone", is_nullable: "NO" });
     expect(column("post_media", "detached_at")).toMatchObject({ data_type: "timestamp with time zone", is_nullable: "YES" });
     expect(column("post_revisions", "previous_attachment_refs")).toMatchObject({ data_type: "jsonb", is_nullable: "NO" });
+    expect(column("legacy_cloudinary_media", "legacy_type")).toMatchObject({ data_type: "text", is_nullable: "YES" });
     expect(column("posts", "audience")).toMatchObject({ is_nullable: "NO", column_default: null });
 
     const authorId = `post-foundation-author-${crypto.randomUUID()}`;
     const postId = `post-foundation-${crypto.randomUUID()}`;
+    const otherPostId = `post-foundation-other-${crypto.randomUUID()}`;
     const promptId = "prompt-01-01";
     const rollbackSentinel = new Error("rollback post foundation fixtures");
     let transactionError: unknown;
@@ -293,6 +295,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
             (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at)
           values
             (${postId}, ${authorId}, '2026-09-22', ${promptId}, 'A valid reflection', 'A valid caption', 8, 'friends', '2026-09-22T10:00:00+12:00', '2026-09-22T10:00:01+12:00')
+        `;
+        await tx`
+          insert into public.posts
+            (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+          values
+            (${otherPostId}, ${authorId}, '2026-10-01', ${promptId}, 'Another valid reflection', 8, 'friends', '2026-10-01T10:00:00+12:00', '2026-10-01T10:00:01+12:00')
         `;
 
         await expect(tx.savepoint((savepoint) => savepoint`
@@ -381,8 +389,8 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
         expect(mediaCounts[0]).toEqual({ total: 5, active: 4 });
 
         await tx`
-          insert into public.legacy_cloudinary_media (media_id, cloudinary_public_id, cloudinary_url)
-          values (${`media-${postId}-1`}, 'legacy/public-id', 'https://res.cloudinary.com/example/image/upload/legacy')
+          insert into public.legacy_cloudinary_media (media_id, cloudinary_public_id, cloudinary_url, legacy_type)
+          values (${`media-${postId}-1`}, 'legacy/public-id', 'https://res.cloudinary.com/example/image/upload/legacy', 'IMAGE')
         `;
 
         const validRevisionRefs = [
@@ -395,6 +403,13 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           values
             (${`revision-${postId}-1`}, ${postId}, 1, 'Prior reflection', 'Prior caption', 8, 'friends', ${promptId}, ${tx.json(validRevisionRefs)})
         `;
+
+        await expect(tx.savepoint((savepoint) => savepoint`
+          insert into public.post_revisions
+            (id, post_id, revision_number, previous_reflective_answer, previous_rating, previous_audience, previous_prompt_id, previous_attachment_refs)
+          values
+            (${`cross-post-revision-${otherPostId}`}, ${otherPostId}, 1, 'Prior reflection', 8, 'friends', ${promptId}, ${savepoint.json(validRevisionRefs)})
+        `)).rejects.toMatchObject({ code: "23503" });
 
         const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
           await expect(tx.savepoint((savepoint) => savepoint`
