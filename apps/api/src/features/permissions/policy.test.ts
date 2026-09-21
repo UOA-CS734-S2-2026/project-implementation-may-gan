@@ -57,6 +57,10 @@ describe("post permission policy", () => {
     expect(decide({ deleted: true }, "alice").allowed).toBe(false);
     expect(decide({ mediaAttached: false }, "alice", "media").allowed).toBe(false);
   });
+
+  it("denies media when attachment state is omitted", () => {
+    expect(decide({}, "alice", "media").allowed).toBe(false);
+  });
 });
 
 describe("tomorrow note policy", () => {

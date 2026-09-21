@@ -81,7 +81,7 @@ export function decidePostPermission(request: PermissionRequest): PermissionDeci
   const isOwner = viewer.userId != null && viewer.userId === post.authorId;
 
   if (post.deleted) return denied("deleted");
-  if (request.action === "media" && post.mediaAttached === false) return denied("detached_media");
+  if (request.action === "media" && post.mediaAttached !== true) return denied("detached_media");
   if (request.action === "export" && !isOwner) return denied("not_owner");
   if (post.blocked && viewer.userId != null) return denied("blocked");
 
