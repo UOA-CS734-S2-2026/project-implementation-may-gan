@@ -5,6 +5,7 @@ import {
   DAILY_PROMPT_VERSION_1_EFFECTIVE_DATE,
   dailyPromptCatalog,
   dailyPrompts,
+  isValidDailyPromptMonthDay,
   selectDailyPromptVersion,
   validateDailyPromptCatalog,
 } from "./daily-prompts";
@@ -33,6 +34,17 @@ describe("daily prompt catalog", () => {
     const duplicate = [...dailyPromptCatalog];
     duplicate[1] = { ...duplicate[1], monthDay: "01-01" };
     expect(() => validateDailyPromptCatalog(duplicate)).toThrow("unexpected month-day");
+  });
+
+  it("accepts leap day and rejects impossible calendar dates", () => {
+    expect(isValidDailyPromptMonthDay("02-29")).toBe(true);
+    expect(isValidDailyPromptMonthDay("04-30")).toBe(true);
+    expect(isValidDailyPromptMonthDay("04-31")).toBe(false);
+    expect(isValidDailyPromptMonthDay("02-30")).toBe(false);
+
+    const invalidDate = [...dailyPromptCatalog];
+    invalidDate[0] = { ...invalidDate[0], monthDay: "04-31" };
+    expect(() => validateDailyPromptCatalog(invalidDate)).toThrow("invalid month-day");
   });
 
   it("exports the versioned immutable table shape", () => {

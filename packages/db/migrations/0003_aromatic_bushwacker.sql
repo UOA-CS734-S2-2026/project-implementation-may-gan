@@ -16,6 +16,12 @@ CREATE TABLE "daily_prompts" (
 	CONSTRAINT "daily_prompts_month_day_effective_date_unique" UNIQUE("month_day","effective_date"),
 	CONSTRAINT "daily_prompts_id_format_check" CHECK ("daily_prompts"."id" ~ '^prompt-[0-9]{2}-[0-9]{2}(-v[0-9]+)?$'),
 	CONSTRAINT "daily_prompts_month_day_format_check" CHECK ("daily_prompts"."month_day" ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'),
+	CONSTRAINT "daily_prompts_month_day_calendar_check" CHECK (case
+		when "daily_prompts"."month_day" !~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' then false
+		when substring("daily_prompts"."month_day", 1, 2) in ('01', '03', '05', '07', '08', '10', '12') then substring("daily_prompts"."month_day", 4, 2)::integer <= 31
+		when substring("daily_prompts"."month_day", 1, 2) in ('04', '06', '09', '11') then substring("daily_prompts"."month_day", 4, 2)::integer <= 30
+		else substring("daily_prompts"."month_day", 4, 2)::integer <= 29
+	end),
 	CONSTRAINT "daily_prompts_version_positive_check" CHECK ("daily_prompts"."version" > 0),
 	CONSTRAINT "daily_prompts_text_length_check" CHECK (char_length("daily_prompts"."text") between 1 and 4000)
 );
@@ -407,6 +413,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+  -- Serialize schedules for one month-day so concurrent inserts cannot both
+  -- pass the visibility check before either transaction commits.
+  PERFORM pg_advisory_xact_lock(734003, hashtext(NEW.month_day));
+
   IF EXISTS (
     SELECT 1
     FROM public.daily_prompts existing

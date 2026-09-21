@@ -205,6 +205,10 @@
           "name": "daily_prompts_month_day_format_check",
           "value": "\"daily_prompts\".\"month_day\" ~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'"
         },
+        "daily_prompts_month_day_calendar_check": {
+          "name": "daily_prompts_month_day_calendar_check",
+          "value": "case\n        when \"daily_prompts\".\"month_day\" !~ '^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$' then false\n        when substring(\"daily_prompts\".\"month_day\", 1, 2) in ('01', '03', '05', '07', '08', '10', '12') then substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 31\n        when substring(\"daily_prompts\".\"month_day\", 1, 2) in ('04', '06', '09', '11') then substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 30\n        else substring(\"daily_prompts\".\"month_day\", 4, 2)::integer <= 29\n      end"
+        },
         "daily_prompts_version_positive_check": {
           "name": "daily_prompts_version_positive_check",
           "value": "\"daily_prompts\".\"version\" > 0"

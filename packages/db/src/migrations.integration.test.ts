@@ -91,6 +91,30 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     expect(count[0]?.count).toBe(366);
 
     await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-04-31-v2', '04-31', 'Impossible date', 2, '2099-04-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-02-30-v2', '02-30', 'Impossible February date', 2, '2099-02-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.daily_prompts
+        (id, month_day, text, version, effective_date, source, source_commit)
+      values
+        ('prompt-02-31-v2', '02-31', 'Impossible February date', 2, '2099-02-01', 'dayli-test', 'test')
+    `).rejects.toMatchObject({ code: "23514" });
+
+    const leapDay = await migrator`
+      select id from public.daily_prompts where month_day = '02-29'
+    `;
+    expect(leapDay).toEqual([{ id: "prompt-02-29" }]);
+
+    await expect(migrator`
       update public.daily_prompts
       set text = 'mutated'
       where id = 'prompt-01-01'
@@ -159,5 +183,58 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       where id in (${futurePrompt.id}, ${"prompt-01-01-v3"})
     `;
     expect(leftover).toHaveLength(0);
+  });
+
+  it("serializes concurrent schedules for the same month-day", async () => {
+    const first = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const second = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+
+    try {
+      const existing = await migrator`
+        select
+          coalesce(max(version), 1)::int as version,
+          greatest(
+            coalesce(max(effective_date), date '1970-01-01') + interval '1 year',
+            current_date + interval '1 year'
+          )::date::text as effective_date
+        from public.daily_prompts
+        where month_day = '12-31'
+      `;
+      const nextVersion = Number(existing[0]?.version ?? 1) + 1;
+      const nextVersionAfterRace = nextVersion + 1;
+      const effectiveDate = String(existing[0]?.effective_date ?? "2099-12-31");
+
+      const firstInsert = first.begin(async (tx) => {
+        await tx`
+          insert into public.daily_prompts
+            (id, month_day, text, version, effective_date, source, source_commit)
+          values
+            (${`prompt-12-31-v${nextVersion}`}, '12-31', 'Concurrent first prompt', ${nextVersion}, ${effectiveDate}, 'dayli-test', 'test')
+        `;
+      });
+
+      const secondInsert = second.begin((tx) => tx`
+          insert into public.daily_prompts
+            (id, month_day, text, version, effective_date, source, source_commit)
+          values
+          (${`prompt-12-31-v${nextVersionAfterRace}`}, '12-31', 'Concurrent second prompt', ${nextVersionAfterRace}, ${effectiveDate}, 'dayli-test', 'test')
+      `);
+
+      const results = await Promise.allSettled([firstInsert, secondInsert]);
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
+      expect(rejected?.status === "rejected" ? rejected.reason : undefined).toMatchObject({ code: "23514" });
+
+      const rows = await migrator`
+        select id, version, effective_date
+        from public.daily_prompts
+        where month_day = '12-31' and version > 1
+      `;
+      expect(rows).toHaveLength(1);
+    } finally {
+      await first.end({ timeout: 5 });
+      await second.end({ timeout: 5 });
+    }
   });
 });
