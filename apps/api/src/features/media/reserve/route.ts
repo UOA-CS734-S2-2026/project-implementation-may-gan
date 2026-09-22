@@ -1,9 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
-import type { HyperdriveBinding } from "@dayli/db";
 import { apiErrorResponse } from "../../../lib/api-error";
-import { withHyperdriveDatabase } from "../../../lib/hyperdrive";
-import type { R2RuntimeConfiguration } from "../../../lib/r2";
-import { resolveSession, type SessionRuntimeConfiguration } from "../../../lib/session";
 import {
   apiErrorSchema,
   createMediaReservationRequestSchema,
@@ -11,15 +7,11 @@ import {
   mediaReservationIdParamSchema,
   mediaReservationResponseSchema,
 } from "./contract";
-import { createDrizzleMediaReservationRepository } from "./repository";
 import { createMediaReservation, getMediaReservation } from "./service";
+import type { MediaReservationRuntime } from "./runtime";
 
-/** Bindings the media-reservation routes need. Absent means the routes 503. */
-export interface MediaReservationRuntime {
-  hyperdrive: HyperdriveBinding;
-  session: SessionRuntimeConfiguration;
-  r2: R2RuntimeConfiguration;
-}
+export type { MediaReservationRuntime } from "./runtime";
+export { createHyperdriveMediaReservationRuntime } from "./runtime";
 
 const noStoreHeaders = { "cache-control": "no-store" };
 
@@ -94,14 +86,12 @@ export function registerMediaReservationRoutes(app: OpenAPIHono, media?: MediaRe
       );
     }
 
-    return withHyperdriveDatabase(media.hyperdrive, async (db) => {
-      const user = await resolveSession(context.req.raw, media.session, db);
+    return media.withRequestContext(context.req.raw, async ({ user, repository }) => {
       if (!user) {
         return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Sign in to reserve a media upload.");
       }
 
       const body = context.req.valid("json");
-      const repository = createDrizzleMediaReservationRepository(db);
       const result = await createMediaReservation({ repository, r2: media.r2 }, user.userId, body);
 
       if (result.outcome === "quota_exceeded") {
@@ -127,14 +117,12 @@ export function registerMediaReservationRoutes(app: OpenAPIHono, media?: MediaRe
       );
     }
 
-    return withHyperdriveDatabase(media.hyperdrive, async (db) => {
-      const user = await resolveSession(context.req.raw, media.session, db);
+    return media.withRequestContext(context.req.raw, async ({ user, repository }) => {
       if (!user) {
         return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Sign in to read a media reservation.");
       }
 
       const { id } = context.req.valid("param");
-      const repository = createDrizzleMediaReservationRepository(db);
       const result = await getMediaReservation({ repository }, user.userId, id);
 
       if (result.outcome === "not_found") {

@@ -87,6 +87,12 @@ export async function createPresignedUploadUrl(
     service: "s3",
     region: "auto",
     signQuery: true,
+    // aws4fetch excludes content-type/content-length from signing by default (most
+    // HTTP clients set/rewrite them, so they're normally untrustworthy to pin) —
+    // allHeaders overrides that so the declared size/type are actually enforced by
+    // R2 rejecting a mismatched PUT, not just advisory. Confirm this holds against
+    // real R2 in staging (docs/dayli plan's deferred manual verification step).
+    allHeaders: true,
     datetime: toAmzDatetime(input.now ?? new Date()),
   });
   const signed = await signer.sign();
