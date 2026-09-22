@@ -8,7 +8,11 @@ import type { ApiEnv } from "./env";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
-import { registerMediaReservationRoutes, type MediaReservationRuntime } from "./features/media/reserve/route";
+import {
+  createHyperdriveMediaReservationRuntime,
+  registerMediaReservationRoutes,
+  type MediaReservationRuntime,
+} from "./features/media/reserve/route";
 import { readR2RuntimeConfiguration } from "./lib/r2";
 
 export function createApp(auth?: BetterAuthCompatibilitySlice, media?: MediaReservationRuntime) {
@@ -60,15 +64,11 @@ export function createAppForEnv(env: ApiEnv) {
   const authRuntime = readBetterAuthRuntimeConfiguration(env);
   const r2Runtime = readR2RuntimeConfiguration(env);
   const media: MediaReservationRuntime | undefined = authRuntime && r2Runtime
-    ? {
-        hyperdrive: authRuntime.hyperdrive,
-        session: {
-          baseURL: authRuntime.baseURL,
-          secret: authRuntime.secret,
-          trustedOrigins: authRuntime.trustedOrigins,
-        },
-        r2: r2Runtime,
-      }
+    ? createHyperdriveMediaReservationRuntime(
+        authRuntime.hyperdrive,
+        { baseURL: authRuntime.baseURL, secret: authRuntime.secret, trustedOrigins: authRuntime.trustedOrigins },
+        r2Runtime,
+      )
     : undefined;
 
   const api = createApp(undefined, media);
