@@ -8,7 +8,9 @@
   "observability": { "enabled": true },
   "vars": {
     "BETTER_AUTH_BASE_URL": "https://api-staging.example.test",
-    "BETTER_AUTH_TRUSTED_ORIGINS": "https://api-staging.example.test,https://web-staging.example.test"
+    "BETTER_AUTH_TRUSTED_ORIGINS": "https://api-staging.example.test,https://web-staging.example.test",
+    "R2_ACCOUNT_ID": "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID",
+    "R2_BUCKET_NAME": "REPLACE_WITH_STAGING_R2_BUCKET_NAME"
   },
   "hyperdrive": [
     {
