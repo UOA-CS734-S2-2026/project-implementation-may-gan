@@ -82,4 +82,20 @@ export const rateLimit = pgTable("rateLimit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
-export const schema = { account, session, user, verification, rateLimit };
+/**
+ * An owned, opaque R2 object path reserved before a direct client upload. No status
+ * column: pending/expired is derived from expiresAt at read time, no confirm/complete
+ * state machine yet. objectKey is persisted rather than recomputed so we won't need to
+ * re-derive the path-construction convention independently later.
+ */
+export const mediaReservation = pgTable("media_reservation", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  objectKey: text("object_key").notNull().unique(),
+  contentType: text("content_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => [index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt)]);
+
+export const schema = { account, session, user, verification, rateLimit, mediaReservation};
