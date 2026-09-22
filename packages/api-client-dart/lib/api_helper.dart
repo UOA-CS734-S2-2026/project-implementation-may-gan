@@ -68,6 +68,12 @@ String parameterToString(dynamic value) {
   if (value is ApiErrorCode) {
     return ApiErrorCodeTypeTransformer().encode(value).toString();
   }
+  if (value is MediaContentType) {
+    return MediaContentTypeTypeTransformer().encode(value).toString();
+  }
+  if (value is MediaReservationStatus) {
+    return MediaReservationStatusTypeTransformer().encode(value).toString();
+  }
   return value.toString();
 }
 

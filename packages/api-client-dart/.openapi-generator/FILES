@@ -5,6 +5,7 @@ README.md
 analysis_options.yaml
 git_push.sh
 lib/api.dart
+lib/api/media_api.dart
 lib/api/system_api.dart
 lib/api_client.dart
 lib/api_exception.dart
@@ -17,6 +18,12 @@ lib/auth/oauth.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
+lib/model/create_media_reservation_request.dart
+lib/model/create_media_reservation_response.dart
 lib/model/health_response.dart
+lib/model/media_content_type.dart
+lib/model/media_reservation.dart
+lib/model/media_reservation_status.dart
+lib/model/media_reservation_upload.dart
 lib/model/test_response.dart
 pubspec.yaml
