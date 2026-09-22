@@ -112,6 +112,144 @@
           "INTERNAL_ERROR",
           "SERVICE_UNAVAILABLE"
         ]
+      },
+      "CreateMediaReservationResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/MediaContentType"
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/MediaReservationStatus"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/MediaReservationUpload"
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "byteSize",
+          "status",
+          "createdAt",
+          "expiresAt",
+          "upload"
+        ]
+      },
+      "OpaqueId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "example": "post_01K4Y6P8K2"
+      },
+      "MediaContentType": {
+        "type": "string",
+        "enum": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "video/mp4",
+          "video/quicktime"
+        ]
+      },
+      "MediaReservationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "expired"
+        ]
+      },
+      "MediaReservationUpload": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ]
+          },
+          "requiredHeaders": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "url",
+          "method",
+          "requiredHeaders"
+        ]
+      },
+      "CreateMediaReservationRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "$ref": "#/components/schemas/MediaContentType"
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 10485760
+          }
+        },
+        "required": [
+          "contentType",
+          "byteSize"
+        ]
+      },
+      "MediaReservation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/MediaContentType"
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/MediaReservationStatus"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "byteSize",
+          "status",
+          "createdAt",
+          "expiresAt"
+        ]
       }
     },
     "parameters": {}
@@ -183,6 +321,137 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media-reservations": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "operationId": "media.reservations.create",
+        "summary": "Reserve an opaque, owned R2 object path for a direct upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMediaReservationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The reservation and a short-lived, single-object presigned upload URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateMediaReservationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request body is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many pending reservations for this owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media reservations are not currently configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media-reservations/{id}": {
+      "get": {
+        "tags": [
+          "Media"
+        ],
+        "operationId": "media.reservations.get",
+        "summary": "Read the caller's own media reservation",
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The reservation's current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaReservation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No reservation with that id owned by the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media reservations are not currently configured.",
             "content": {
               "application/json": {
                 "schema": {

@@ -210,8 +210,20 @@ class ApiClient {
           return ApiErrorCodeTypeTransformer().decode(value);
         case 'ApiErrorError':
           return ApiErrorError.fromJson(value);
+        case 'CreateMediaReservationRequest':
+          return CreateMediaReservationRequest.fromJson(value);
+        case 'CreateMediaReservationResponse':
+          return CreateMediaReservationResponse.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'MediaContentType':
+          return MediaContentTypeTypeTransformer().decode(value);
+        case 'MediaReservation':
+          return MediaReservation.fromJson(value);
+        case 'MediaReservationStatus':
+          return MediaReservationStatusTypeTransformer().decode(value);
+        case 'MediaReservationUpload':
+          return MediaReservationUpload.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
         default:
