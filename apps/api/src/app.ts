@@ -3,13 +3,15 @@ import {
   registerBetterAuthCompatibilityRoutes,
   registerPostgresBetterAuthRoutes,
 } from "./features/auth/route";
-import type { BetterAuthCompatibilitySlice } from "./features/auth/better-auth";
+import { readBetterAuthRuntimeConfiguration, type BetterAuthCompatibilitySlice } from "./features/auth/better-auth";
 import type { ApiEnv } from "./env";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
+import { registerMediaReservationRoutes, type MediaReservationRuntime } from "./features/media/reserve/route";
+import { readR2RuntimeConfiguration } from "./lib/r2";
 
-export function createApp(auth?: BetterAuthCompatibilitySlice) {
+export function createApp(auth?: BetterAuthCompatibilitySlice, media?: MediaReservationRuntime) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) {
@@ -34,6 +36,7 @@ export function createApp(auth?: BetterAuthCompatibilitySlice) {
 
   registerHealthRoute(api);
   registerTestContractsRoute(api);
+  registerMediaReservationRoutes(api, media);
   registerApiDocsRoute(api);
 
   api.doc("/api/v1/openapi.json", {
@@ -48,9 +51,27 @@ export function createApp(auth?: BetterAuthCompatibilitySlice) {
   return api;
 }
 
-/** Build a Worker request app. Auth remains absent until validated bindings exist. */
+/**
+ * Build a Worker request app. Auth remains absent until validated bindings exist.
+ * Media reservations go down whenever Better Auth's own bindings are invalid too,
+ * since reservations resolve sessions through that same authority.
+ */
 export function createAppForEnv(env: ApiEnv) {
-  const api = createApp();
+  const authRuntime = readBetterAuthRuntimeConfiguration(env);
+  const r2Runtime = readR2RuntimeConfiguration(env);
+  const media: MediaReservationRuntime | undefined = authRuntime && r2Runtime
+    ? {
+        hyperdrive: authRuntime.hyperdrive,
+        session: {
+          baseURL: authRuntime.baseURL,
+          secret: authRuntime.secret,
+          trustedOrigins: authRuntime.trustedOrigins,
+        },
+        r2: r2Runtime,
+      }
+    : undefined;
+
+  const api = createApp(undefined, media);
   registerPostgresBetterAuthRoutes(api, env);
   return api;
 }

@@ -12,4 +12,8 @@ export interface ApiEnv {
   GOOGLE_ANDROID_CLIENT_ID?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
+  R2_ACCOUNT_ID?: string;
+  R2_BUCKET_NAME?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
 }
