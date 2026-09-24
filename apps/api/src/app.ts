@@ -6,34 +6,43 @@ import {
 import {
   createPostgresBetterAuth,
   readBetterAuthRuntimeConfiguration,
-  withHyperdriveDatabase,
   type BetterAuthCompatibilitySlice,
 } from "./features/auth/better-auth";
+import { withHyperdriveDatabase } from "./lib/hyperdrive";
 import type { ApiEnv } from "./env";
+import {
+  createHyperdriveMediaReservationRuntime,
+  registerMediaReservationRoutes,
+  type MediaReservationRuntime,
+} from "./features/media/reserve/route";
 import {
   registerRelationshipsRoutes,
   type RelationshipsRouteDependencies,
 } from "./features/relationships/route";
 import { createHyperdriveRelationshipsStore } from "./features/relationships/postgres-store";
 import { createRelationshipsService } from "./features/relationships/service";
-import { registerApiDocsRoute } from "./features/system/api-docs/route";
-import { registerHealthRoute } from "./features/system/health/route";
-import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import {
   registerCurrentPostingDayRoute,
   type CurrentPostingDayRouteDependencies,
 } from "./features/posting-days/current/route";
-import {
-  createCurrentPostingDayService,
-} from "./features/posting-days/current/service";
+import { createCurrentPostingDayService } from "./features/posting-days/current/service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
 import { createAucklandDayService } from "@dayli/domain";
+import { registerApiDocsRoute } from "./features/system/api-docs/route";
+import { registerHealthRoute } from "./features/system/health/route";
+import { registerTestContractsRoute } from "./features/system/test-contracts/route";
+import { readR2RuntimeConfiguration } from "./lib/r2";
+
+type SecondaryDependencies = MediaReservationRuntime | CurrentPostingDayRouteDependencies;
 
 export function createApp(
   auth?: BetterAuthCompatibilitySlice,
-  postingDay?: CurrentPostingDayRouteDependencies,
+  secondary?: SecondaryDependencies,
   relationships: RelationshipsRouteDependencies = unavailableRelationships,
+  mediaOverride?: MediaReservationRuntime,
 ) {
+  const media = mediaOverride ?? (secondary && "withRequestContext" in secondary ? secondary : undefined);
+  const postingDay = secondary && "authenticate" in secondary ? secondary : undefined;
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) {
@@ -52,9 +61,7 @@ export function createApp(
     },
   });
 
-  if (auth) {
-    registerBetterAuthCompatibilityRoutes(api, auth);
-  }
+  if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
 
   api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
     type: "http",
@@ -64,10 +71,9 @@ export function createApp(
 
   registerHealthRoute(api);
   registerTestContractsRoute(api);
+  registerMediaReservationRoutes(api, media);
   registerApiDocsRoute(api);
-  registerCurrentPostingDayRoute(api, postingDay ?? {
-    authenticate: async () => null,
-  });
+  registerCurrentPostingDayRoute(api, postingDay ?? { authenticate: async () => null });
   registerRelationshipsRoutes(api, relationships);
 
   api.doc("/api/v1/openapi.json", {
@@ -82,13 +88,21 @@ export function createApp(
   return api;
 }
 
-/** Build a Worker request app. Auth remains absent until validated bindings exist. */
+/** Build a Worker request app with all configured database-backed feature runtimes. */
 export function createAppForEnv(env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
+  const r2Runtime = readR2RuntimeConfiguration(env);
+  const media = configuration && r2Runtime
+    ? createHyperdriveMediaReservationRuntime(
+        configuration.hyperdrive,
+        { baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins },
+        r2Runtime,
+      )
+    : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
-    resolveSession: (request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+    resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({
         baseURL: configuration.baseURL,
         secret: configuration.secret,
@@ -101,7 +115,12 @@ export function createAppForEnv(env: ApiEnv) {
       return session?.user?.id ? { userId: session.user.id } : null;
     }),
   } satisfies RelationshipsRouteDependencies : undefined;
-  const api = createApp(undefined, postingDay, relationships);
+  const api = createApp(
+    undefined,
+    postingDay,
+    relationships,
+    media,
+  );
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env);
   return api;
@@ -152,9 +171,7 @@ function createPostingDayDependencies(
       hasPosted: (userId, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
         hasPostedOnDay(database, userId, localDate)
       )),
-      onOperationalAlert: (alert) => {
-        console.error("dayli posting-day operational alert", alert);
-      },
+      onOperationalAlert: (alert) => console.error("dayli posting-day operational alert", alert),
     }),
   };
 }

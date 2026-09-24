@@ -23,6 +23,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.
 - [API client generation](client-generation.md): regenerate and verify the TypeScript and Dart clients.
+- [Media reservations](media-reservations.md): R2 presigned upload reservations, one-time bucket setup, and quota/expiry defaults.
 
 ## Fixed rules
 

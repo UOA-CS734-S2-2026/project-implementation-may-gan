@@ -203,12 +203,24 @@ export {
   relationshipBlocks,
 } from "./relationships";
 
+/** An owned, opaque R2 object path reserved before a direct client upload. */
+export const mediaReservation = pgTable("media_reservation", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  objectKey: text("object_key").notNull().unique(),
+  contentType: text("content_type").notNull(),
+  byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => [index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt)]);
+
 export const schema = {
   account,
   dailyPrompts,
   friendRequests,
   friendships,
   legacyCloudinaryMedia,
+  mediaReservation,
   postMedia,
   postRevisions,
   posts,

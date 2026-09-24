@@ -5,7 +5,7 @@ export default defineConfig({
     environment: "node",
     fileParallelism: false,
     include: [
-      "src/features/auth/postgres.integration.test.ts",
+      "src/features/**/postgres.integration.test.ts",
       "src/features/permissions/**/*.test.ts",
     ],
   },

@@ -1,8 +1,8 @@
 .gitignore
 .npmignore
-.openapi-generator-ignore
 README.md
 package.json
+src/apis/MediaApi.ts
 src/apis/PostingDaysApi.ts
 src/apis/RelationshipsApi.ts
 src/apis/SystemApi.ts
@@ -11,9 +11,15 @@ src/index.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts
+src/models/CreateMediaReservationRequest.ts
+src/models/CreateMediaReservationResponse.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPromptResponse.ts
 src/models/HealthResponse.ts
+src/models/MediaContentType.ts
+src/models/MediaReservation.ts
+src/models/MediaReservationStatus.ts
+src/models/MediaReservationUpload.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/RelationshipState.ts

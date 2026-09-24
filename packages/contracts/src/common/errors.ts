@@ -13,6 +13,7 @@ export const apiErrorCodes = [
 ] as const;
 
 export const apiErrorCodeSchema = z.enum(apiErrorCodes).openapi("ApiErrorCode");
+export type ApiErrorCode = (typeof apiErrorCodes)[number];
 
 export const fieldErrorSchema = z
   .object({

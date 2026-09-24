@@ -4,9 +4,7 @@ import {
   createBetterAuthCompatibilitySlice,
   readAuthIntegrationConfiguration,
   readBetterAuthRuntimeConfiguration,
-  withHyperdriveDatabase,
 } from "./better-auth";
-import type { DayliDatabaseClient } from "@dayli/db";
 
 const origin = "https://worker.test";
 
@@ -171,22 +169,6 @@ describe("Better Auth compatibility route", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
     await expect(response.json()).resolves.toMatchObject({ user: { email: "compatibility@example.test" } });
-  });
-
-  it("closes Hyperdrive clients after successful and failing operations", async () => {
-    const close = vi.fn(async () => undefined);
-    const createDatabase = vi.fn(() => ({
-      db: {} as DayliDatabaseClient["db"],
-      client: {} as DayliDatabaseClient["client"],
-      close,
-    }));
-    const binding = { connectionString: "postgresql://app:app@localhost:5433/dayli_test" };
-
-    await expect(withHyperdriveDatabase(binding, async () => "ok", createDatabase)).resolves.toBe("ok");
-    await expect(withHyperdriveDatabase(binding, async () => {
-      throw new Error("failure");
-    }, createDatabase)).rejects.toThrow("failure");
-    expect(close).toHaveBeenCalledTimes(2);
   });
 
   it("rejects state-changing browser requests from an untrusted origin", async () => {
