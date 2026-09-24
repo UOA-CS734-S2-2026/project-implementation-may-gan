@@ -6,7 +6,6 @@ analysis_options.yaml
 git_push.sh
 lib/api.dart
 lib/api/posting_days_api.dart
-lib/api/relationships_api.dart
 lib/api/system_api.dart
 lib/api_client.dart
 lib/api_exception.dart
@@ -22,10 +21,5 @@ lib/model/api_error_error.dart
 lib/model/current_posting_day_response.dart
 lib/model/daily_prompt_response.dart
 lib/model/health_response.dart
-lib/model/pending_relationship_request.dart
-lib/model/pending_request_page.dart
-lib/model/relationship_state.dart
-lib/model/relationship_status.dart
-lib/model/send_relationship_request.dart
 lib/model/test_response.dart
 pubspec.yaml
