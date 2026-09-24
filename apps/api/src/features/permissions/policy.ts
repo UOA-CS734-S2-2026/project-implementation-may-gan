@@ -34,12 +34,20 @@ export interface PostPermissionState {
   publicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
-export interface PermissionRequest {
-  action: PermissionAction;
-  viewer: Viewer;
-  post: PostPermissionState;
-  now?: Date;
-}
+export type PermissionRequest =
+  | {
+      action: "media";
+      viewer: Viewer;
+      post: PostPermissionState;
+      mediaId: string;
+      now?: Date;
+    }
+  | {
+      action: Exclude<PermissionAction, "media">;
+      viewer: Viewer;
+      post: PostPermissionState;
+      now?: Date;
+    };
 
 export type DenialReason =
   | "anonymous"

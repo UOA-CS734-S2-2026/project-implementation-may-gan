@@ -3,15 +3,24 @@ import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
 
-export interface DrizzlePostVisibilityInput {
+interface DrizzlePostVisibilityInputBase {
   viewer: Viewer;
   now: Date;
-  action?: PermissionAction;
   /** This value is accepted only after #41 has validated the bearer token. */
   validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
-  /** Required for a media-byte check; an old revision reference is not enough. */
-  mediaId?: string;
 }
+
+export type DrizzlePostVisibilityInput = DrizzlePostVisibilityInputBase & (
+  | {
+      action: "media";
+      /** Required for a media-byte check; an old revision reference is not enough. */
+      mediaId: string;
+    }
+  | {
+      action?: Exclude<PermissionAction, "media">;
+      mediaId?: never;
+    }
+);
 
 export interface VisiblePostPage {
   limit: number;
@@ -53,7 +62,7 @@ function attachedMedia(postId: typeof schema.posts.id, mediaId?: string) {
     select 1 from ${schema.postMedia}
       where ${schema.postMedia.postId} = ${postId}
         and ${schema.postMedia.detachedAt} is null
-        ${mediaId === undefined ? sql`` : sql`and ${schema.postMedia.id} = ${mediaId}`}
+        and ${schema.postMedia.id} = ${mediaId}
   )`;
 }
 
@@ -136,7 +145,7 @@ export async function findVisiblePost(
 export async function findVisiblePostRevision(
   database: DayliDatabase,
   revisionId: string,
-  input: Omit<DrizzlePostVisibilityInput, "action">,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
 ) {
   const [row] = await database
     .select({ revision: schema.postRevisions, post: schema.posts })
@@ -155,7 +164,7 @@ export async function findVisiblePostRevision(
 export function findVisiblePostPreview(
   database: DayliDatabase,
   postId: string,
-  input: Omit<DrizzlePostVisibilityInput, "action">,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
 ) {
   return findVisiblePost(database, postId, { ...input, action: "preview" });
 }
@@ -164,7 +173,7 @@ export function findVisiblePostPreview(
 export function findVisiblePostExport(
   database: DayliDatabase,
   postId: string,
-  input: Omit<DrizzlePostVisibilityInput, "action">,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
 ) {
   return findVisiblePost(database, postId, { ...input, action: "export" });
 }

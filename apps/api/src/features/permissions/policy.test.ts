@@ -19,7 +19,9 @@ const base: PostPermissionState = {
 };
 
 const decide = (overrides: Partial<PostPermissionState>, viewer: string | null = "bob", action: PermissionAction = "detail") =>
-  decidePostPermission({ action, post: { ...base, ...overrides }, viewer: { userId: viewer }, now });
+  decidePostPermission(action === "media"
+    ? { action, mediaId: "media-1", post: { ...base, ...overrides }, viewer: { userId: viewer }, now }
+    : { action, post: { ...base, ...overrides }, viewer: { userId: viewer }, now });
 
 describe("post permission policy", () => {
   it.each([
