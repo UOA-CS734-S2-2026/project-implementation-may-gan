@@ -38,6 +38,7 @@ import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import { readR2RuntimeConfiguration } from "./lib/r2";
+import { registerApplicationCors } from "./lib/cors";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -45,9 +46,18 @@ export interface AppDependencies {
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
+  /** Exact browser origins allowed to call /api/v1 with credentials. */
+  trustedOrigins?: readonly string[];
 }
 
-export function createApp({ auth, media, postingDay, posts, relationships = unavailableRelationships }: AppDependencies = {}) {
+export function createApp({
+  auth,
+  media,
+  postingDay,
+  posts,
+  relationships = unavailableRelationships,
+  trustedOrigins = [],
+}: AppDependencies = {}) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) {
@@ -66,6 +76,8 @@ export function createApp({ auth, media, postingDay, posts, relationships = unav
     },
   });
 
+  // Middleware must precede the routes it wraps.
+  if (trustedOrigins.length > 0) registerApplicationCors(api, trustedOrigins);
   if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
 
   api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
@@ -127,7 +139,13 @@ export function createAppForEnv(env: ApiEnv) {
       return session?.user?.id ? { userId: session.user.id } : null;
     }),
   } satisfies RelationshipsRouteDependencies : undefined;
-  const api = createApp({ postingDay, posts, media, relationships });
+  const api = createApp({
+    postingDay,
+    posts,
+    media,
+    relationships,
+    trustedOrigins: configuration?.trustedOrigins,
+  });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env);
   return api;

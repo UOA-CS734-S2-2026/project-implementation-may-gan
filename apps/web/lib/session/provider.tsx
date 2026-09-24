@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 import { authClient } from "@/lib/auth/client";
 
 type Session = typeof authClient.$Infer.Session.session;
@@ -18,15 +18,21 @@ const SessionContext = createContext<SessionContextValue>({
   isPending: true,
 });
 
+const subscribeToNothing = () => () => {};
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const { data, isPending } = authClient.useSession();
+  // The session lives on the API origin, so the server always renders the
+  // signed-out pending state. Report pending until hydration completes so the
+  // first client render matches the server HTML.
+  const hydrated = useSyncExternalStore(subscribeToNothing, () => true, () => false);
 
   return (
     <SessionContext.Provider
       value={{
-        user: data?.user ?? null,
-        session: data?.session ?? null,
-        isPending,
+        user: hydrated ? data?.user ?? null : null,
+        session: hydrated ? data?.session ?? null : null,
+        isPending: !hydrated || isPending,
       }}
     >
       {children}

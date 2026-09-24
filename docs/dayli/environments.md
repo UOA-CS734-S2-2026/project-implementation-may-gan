@@ -146,7 +146,7 @@ Start the web shell with:
 pnpm --dir apps/web dev
 ```
 
-It normally listens on `http://localhost:3000`. The web and Flutter apps do not yet have an API base-URL setting or a client call to configure. When that work is added, use these addresses for the local Worker:
+It normally listens on `http://localhost:3000`. The web app reads the API origin from `NEXT_PUBLIC_API_BASE_URL` (see `apps/web/.env.example`) and calls it with the browser's Better Auth session cookie. The API returns credentialed CORS headers for `/api/v1/*` only to origins in `BETTER_AUTH_TRUSTED_ORIGINS`, which must be exact HTTPS origins, so a browser session against a local Worker needs HTTPS origins for both. Use these addresses for the local Worker:
 
 - Browser on the development machine: `http://127.0.0.1:8787`
 - Android emulator: `http://10.0.2.2:8787`

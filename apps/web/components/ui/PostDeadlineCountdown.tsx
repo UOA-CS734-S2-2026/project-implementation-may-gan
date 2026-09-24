@@ -8,51 +8,42 @@ interface TimeComponents {
   seconds: string;
 }
 
-export function PostDeadlineCountdown() {
+interface PostDeadlineCountdownProps {
+  /** The server's deadline for today's post, from the posting-day API. */
+  deadlineAt: Date;
+  /** The server clock when the deadline was read, used to correct device clock skew. */
+  serverNow: Date;
+}
+
+function toComponents(remainingMs: number): TimeComponents {
+  const diff = Math.max(0, remainingMs);
+  return {
+    hours: String(Math.floor(diff / (1000 * 60 * 60))).padStart(2, "0"),
+    minutes: String(Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, "0"),
+    seconds: String(Math.floor((diff % (1000 * 60)) / 1000)).padStart(2, "0"),
+  };
+}
+
+export function PostDeadlineCountdown({ deadlineAt, serverNow }: PostDeadlineCountdownProps) {
   const [time, setTime] = useState<TimeComponents>({
     hours: "00",
     minutes: "00",
     seconds: "00",
   });
 
+  const deadline = deadlineAt.getTime();
+  const serverTime = serverNow.getTime();
+
   useEffect(() => {
-    function calculateTimeRemaining() {
-      const now = new Date();
+    // Count down to the server deadline instead of the device's midnight, so
+    // daylight-saving days and a wrong device clock cannot mislead the author.
+    const skew = serverTime - Date.now();
+    const tick = () => setTime(toComponents(deadline - (Date.now() + skew)));
 
-      const nzFormatter = new Intl.DateTimeFormat("en-NZ", {
-        timeZone: "Pacific/Auckland",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: false,
-      });
-
-      const timeStr = nzFormatter.format(now);
-      const [hour, minute, second] = timeStr.split(":").map(Number);
-
-      const msSinceMidnightNZ = ((hour * 60 + minute) * 60 + second) * 1000;
-      const diff = 24 * 60 * 60 * 1000 - msSinceMidnightNZ;
-
-      if (diff <= 0) {
-        setTime({ hours: "00", minutes: "00", seconds: "00" });
-        return;
-      }
-
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      setTime({
-        hours: String(hours).padStart(2, "0"),
-        minutes: String(minutes).padStart(2, "0"),
-        seconds: String(seconds).padStart(2, "0"),
-      });
-    }
-
-    calculateTimeRemaining();
-    const id = setInterval(calculateTimeRemaining, 1000);
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [deadline, serverTime]);
 
   return (
     <div className="flex gap-2 items-center justify-center font-serif">

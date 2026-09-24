@@ -1,24 +1,24 @@
-import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useSession } from "@/lib/session/hooks";
 
 import GallerySquiggle1 from "@/assets/GallerySquiggle01";
 import GallerySquiggle2 from "@/assets/GallerySquiggle02";
 import GallerySquiggle3 from "@/assets/GallerySquiggle03";
 
-export default async function App() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+export default function App() {
+  const router = useRouter();
+  const { user } = useSession();
 
-  {
-    /* If user is logged in, redirect them to the logged in dashboard (/home) */
-  }
-  if (session) {
-    redirect("/home");
-  }
+  // Signed-in users go straight to their dashboard. The session lives on the
+  // API origin, so the check runs in the browser rather than on the server.
+  useEffect(() => {
+    if (user) router.replace("/home");
+  }, [router, user]);
 
   return (
     <main className="overflow-hidden relative min-h-screen">

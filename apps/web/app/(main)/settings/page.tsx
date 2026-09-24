@@ -1,15 +1,21 @@
-import { redirect } from "next/navigation";
-import { trpcServer } from "@/lib/trpc/server";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/session/hooks";
+import { ThemeMenu } from "@/components/theme/ThemeMenu";
 import { SignOutButton } from "./_components/SignOutButton";
-import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
 
-export default async function SettingsPage() {
-  const user = await trpcServer.auth.me().catch(() => null);
+// Username and profile visibility return with the profile API (#68).
+export default function SettingsPage() {
+  const router = useRouter();
+  const { user, isPending } = useSession();
 
-  if (!user) redirect("/sign-in");
+  useEffect(() => {
+    if (!isPending && !user) router.replace("/sign-in");
+  }, [isPending, router, user]);
 
-  const visibility =
-    (user.profileVisibility as "public" | "private") ?? "public";
+  if (isPending || !user) return null;
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
@@ -20,20 +26,14 @@ export default async function SettingsPage() {
         </div>
 
         <div className="space-y-3 rounded-lg border border-foreground/10 p-4">
-          <Row label="Username" value={`@${user.username}`} />
           <Row label="Name" value={user.name} />
           <Row label="Email" value={user.email} />
-          {/* Paid features — hidden until billing is wired up */}
-          {/* <Row label="Plan" value={user.tier ?? "free"} /> */}
-          {/* <Row label="Role" value={user.role ?? "user"} /> */}
         </div>
 
-        <ProfileVisibilityToggle initialVisibility={visibility} />
-
-        {/* Paid features — hidden until billing is wired up */}
-        {/* <ProfileGateDemo /> */}
-
-        <SignOutButton />
+        <div className="flex items-center justify-between">
+          <ThemeMenu />
+          <SignOutButton />
+        </div>
       </div>
     </div>
   );
@@ -43,7 +43,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between text-sm">
       <span className="text-foreground/60">{label}</span>
-      <span className="font-medium capitalize">{value}</span>
+      <span className="font-medium">{value}</span>
     </div>
   );
 }

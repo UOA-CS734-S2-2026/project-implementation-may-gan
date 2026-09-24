@@ -1,15 +1,9 @@
 import { createAuthClient } from "better-auth/react";
-import {
-  adminClient,
-  inferAdditionalFields,
-  usernameClient,
-} from "better-auth/client/plugins";
-import type { auth } from "./index";
+import { apiBaseUrl } from "@/lib/api/config";
 
+// Better Auth lives on the Hono API. The browser keeps its secure session
+// cookie for that origin, so every call includes credentials.
 export const authClient = createAuthClient({
-  plugins: [
-    adminClient(),
-    inferAdditionalFields<typeof auth>(),
-    usernameClient(),
-  ],
+  baseURL: apiBaseUrl,
+  fetchOptions: { credentials: "include" },
 });

@@ -4,7 +4,11 @@ import { authClient } from "@/lib/auth/client";
 
 export function GoogleSignInButton() {
   async function handleGoogleSignIn() {
-    await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+    // The API runs on another origin, so return to an absolute web URL.
+    await authClient.signIn.social({
+      provider: "google",
+      callbackURL: `${window.location.origin}/home`,
+    });
   }
 
   return (

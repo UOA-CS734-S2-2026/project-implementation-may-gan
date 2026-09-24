@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
 import { useForm } from "react-hook-form";
@@ -11,7 +12,7 @@ import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 const signInSchema = z.object({
-  identifier: z.string().min(1, "Email or username is required"),
+  email: z.email("Enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -27,22 +28,18 @@ export default function SignInPage() {
     formState: { isSubmitting, errors },
   } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { identifier: "", password: "" },
+    defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = async ({ identifier, password }: SignInValues) => {
-    const isEmail = identifier.includes("@");
-
-    const { error } = isEmail
-      ? await authClient.signIn.email({ email: identifier, password })
-      : await authClient.signIn.username({ username: identifier, password });
+  const onSubmit = async ({ email, password }: SignInValues) => {
+    const { error } = await authClient.signIn.email({ email, password });
 
     if (error) {
       setError("root", { message: error.message ?? "Invalid credentials." });
       return;
     }
 
-    router.push("/");
+    router.push("/home");
   };
 
   return (
@@ -68,10 +65,11 @@ export default function SignInPage() {
 
         <FormInput
           control={control}
-          name="identifier"
-          label="Email or username"
-          autoComplete="username"
-          placeholder="you@example.com or @handle"
+          name="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
         />
         <FormInput
           control={control}
@@ -83,6 +81,12 @@ export default function SignInPage() {
         {errors.root && (
           <p className="text-sm text-danger">{errors.root.message}</p>
         )}
+        <Link
+          href="/forgot-password"
+          className="self-end text-xs text-foreground-secondary hover:text-foreground-accent"
+        >
+          Forgot password?
+        </Link>
       </div>
 
       {/* Footer */}
