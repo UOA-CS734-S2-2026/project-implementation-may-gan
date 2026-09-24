@@ -1,6 +1,5 @@
 import {
   bigint,
-  boolean,
   check,
   date,
   foreignKey,
@@ -16,36 +15,16 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
+import { friendRequests, friendships, relationshipBlocks } from "./relationships";
+import { user } from "./users";
+
+export { profileVisibility, tier, user } from "./users";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
  * Import work will preserve their existing values and stable text user IDs.
  */
-export const profileVisibility = pgEnum("profile_visibility", ["public", "private"]);
-export const tier = pgEnum("tier", ["free", "pro"]);
 export const postAudience = pgEnum("post_audience", ["solo", "friends"]);
-
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  username: text("username").unique(),
-  displayUsername: text("display_username"),
-  bio: text("bio"),
-  mbti: text("mbti"),
-  whatIDo: text("what_i_do"),
-  listeningTo: text("listening_to"),
-  profileVisibility: profileVisibility("profile_visibility").default("public").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
-  tier: tier("tier").default("free").notNull(),
-  role: text("role"),
-  banned: boolean("banned").default(false),
-  banReason: text("ban_reason"),
-  banExpires: timestamp("ban_expires"),
-});
 
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
@@ -227,15 +206,26 @@ export const mediaReservation = pgTable("media_reservation", {
 
 export { dailyPrompts } from "./daily-prompts";
 
+export {
+  friendRequestStatus,
+  friendRequests,
+  friendships,
+  friendshipState,
+  relationshipBlocks,
+} from "./relationships";
+
 export const schema = {
   account,
   mediaReservation,
   dailyPrompts,
+  friendRequests,
+  friendships,
   legacyCloudinaryMedia,
   postMedia,
   postRevisions,
   posts,
   rateLimit,
+  relationshipBlocks,
   session,
   tomorrowNotes,
   user,

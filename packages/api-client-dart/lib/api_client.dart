@@ -228,6 +228,16 @@ class ApiClient {
           return MediaReservationStatusTypeTransformer().decode(value);
         case 'MediaReservationUpload':
           return MediaReservationUpload.fromJson(value);
+        case 'PendingRelationshipRequest':
+          return PendingRelationshipRequest.fromJson(value);
+        case 'PendingRequestPage':
+          return PendingRequestPage.fromJson(value);
+        case 'RelationshipState':
+          return RelationshipStateTypeTransformer().decode(value);
+        case 'RelationshipStatus':
+          return RelationshipStatus.fromJson(value);
+        case 'SendRelationshipRequest':
+          return SendRelationshipRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
         default:

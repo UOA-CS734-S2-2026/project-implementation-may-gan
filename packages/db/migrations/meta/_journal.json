@@ -43,6 +43,13 @@
       "when": 1790038040786,
       "tag": "0005_sharp_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790038040787,
+      "tag": "0006_absurd_swordsman",
+      "breakpoints": true
     }
   ]
 }

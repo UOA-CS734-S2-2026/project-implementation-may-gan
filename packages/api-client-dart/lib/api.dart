@@ -30,6 +30,7 @@ part 'auth/http_bearer_auth.dart';
 
 part 'api/media_api.dart';
 part 'api/posting_days_api.dart';
+part 'api/relationships_api.dart';
 part 'api/system_api.dart';
 
 part 'model/api_error.dart';
@@ -44,6 +45,11 @@ part 'model/media_content_type.dart';
 part 'model/media_reservation.dart';
 part 'model/media_reservation_status.dart';
 part 'model/media_reservation_upload.dart';
+part 'model/pending_relationship_request.dart';
+part 'model/pending_request_page.dart';
+part 'model/relationship_state.dart';
+part 'model/relationship_status.dart';
+part 'model/send_relationship_request.dart';
 part 'model/test_response.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from
