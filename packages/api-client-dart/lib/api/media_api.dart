@@ -10,6 +10,7 @@
 
 part of openapi.api;
 
+
 class MediaApi {
   MediaApi([ApiClient? apiClient]) : apiClient = apiClient ?? defaultApiClient;
 
@@ -22,10 +23,7 @@ class MediaApi {
   /// Parameters:
   ///
   /// * [CreateMediaReservationRequest] createMediaReservationRequest:
-  Future<Response> mediaReservationsCreateWithHttpInfo({
-    CreateMediaReservationRequest? createMediaReservationRequest,
-    Future<void>? abortTrigger,
-  }) async {
+  Future<Response> mediaReservationsCreateWithHttpInfo({ CreateMediaReservationRequest? createMediaReservationRequest, Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/media-reservations';
 
@@ -37,6 +35,7 @@ class MediaApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>['application/json'];
+
 
     return apiClient.invokeAPI(
       path,
@@ -55,26 +54,17 @@ class MediaApi {
   /// Parameters:
   ///
   /// * [CreateMediaReservationRequest] createMediaReservationRequest:
-  Future<CreateMediaReservationResponse?> mediaReservationsCreate({
-    CreateMediaReservationRequest? createMediaReservationRequest,
-    Future<void>? abortTrigger,
-  }) async {
-    final response = await mediaReservationsCreateWithHttpInfo(
-      createMediaReservationRequest: createMediaReservationRequest,
-      abortTrigger: abortTrigger,
-    );
+  Future<CreateMediaReservationResponse?> mediaReservationsCreate({ CreateMediaReservationRequest? createMediaReservationRequest, Future<void>? abortTrigger, }) async {
+    final response = await mediaReservationsCreateWithHttpInfo(createMediaReservationRequest: createMediaReservationRequest, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'CreateMediaReservationResponse',
-      ) as CreateMediaReservationResponse;
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'CreateMediaReservationResponse',) as CreateMediaReservationResponse;
+
     }
     return null;
   }
@@ -86,12 +76,10 @@ class MediaApi {
   /// Parameters:
   ///
   /// * [String] id (required):
-  Future<Response> mediaReservationsGetWithHttpInfo(
-    String id, {
-    Future<void>? abortTrigger,
-  }) async {
+  Future<Response> mediaReservationsGetWithHttpInfo(String id, { Future<void>? abortTrigger, }) async {
     // ignore: prefer_const_declarations
-    final path = r'/api/v1/media-reservations/{id}'.replaceAll('{id}', id);
+    final path = r'/api/v1/media-reservations/{id}'
+      .replaceAll('{id}', id);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -101,6 +89,7 @@ class MediaApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
+
 
     return apiClient.invokeAPI(
       path,
@@ -119,26 +108,17 @@ class MediaApi {
   /// Parameters:
   ///
   /// * [String] id (required):
-  Future<MediaReservation?> mediaReservationsGet(
-    String id, {
-    Future<void>? abortTrigger,
-  }) async {
-    final response = await mediaReservationsGetWithHttpInfo(
-      id,
-      abortTrigger: abortTrigger,
-    );
+  Future<MediaReservation?> mediaReservationsGet(String id, { Future<void>? abortTrigger, }) async {
+    final response = await mediaReservationsGetWithHttpInfo(id, abortTrigger: abortTrigger,);
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty &&
-        response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(
-        await _decodeBodyBytes(response),
-        'MediaReservation',
-      ) as MediaReservation;
+    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'MediaReservation',) as MediaReservation;
+
     }
     return null;
   }
