@@ -34,7 +34,7 @@ function createDependencies(
 
 describe("GET /api/v1/posting-days/current", () => {
   it("requires a session and never permits caching", async () => {
-    const response = await createApp(undefined, createDependencies()).request("/api/v1/posting-days/current");
+    const response = await createApp({ postingDay: createDependencies() }).request("/api/v1/posting-days/current");
     const body = await response.json<{ error: { code: string } }>();
 
     expect(response.status).toBe(401);
@@ -43,7 +43,7 @@ describe("GET /api/v1/posting-days/current", () => {
   });
 
   it("uses the authenticated user and server Auckland day", async () => {
-    const response = await createApp(undefined, createDependencies()).request(
+    const response = await createApp({ postingDay: createDependencies() }).request(
       "/api/v1/posting-days/current",
       { headers: { authorization: "Bearer test-token" } },
     );
@@ -74,13 +74,13 @@ describe("GET /api/v1/posting-days/current", () => {
       secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
       database: { account: [], session: [], user: [], verification: [] },
     });
-    const authApp = createApp(auth, {
+    const authApp = createApp({ auth, postingDay: {
       authenticate: async (request) => {
         const session = await auth.auth.api.getSession({ headers: request.headers });
         return session?.user.id ?? null;
       },
       service: createDependencies().service,
-    });
+    } });
     const signedUp = await authApp.fetch(new Request("https://worker.test/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -99,6 +99,36 @@ describe("GET /api/v1/posting-days/current", () => {
     await expect(response.json()).resolves.toMatchObject({ hasPosted: true });
   });
 
+  it("accepts a real Better Auth cookie session", async () => {
+    const auth = createBetterAuthCompatibilitySlice({
+      baseURL: "https://worker.test",
+      secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+      database: { account: [], session: [], user: [], verification: [] },
+    });
+    const authApp = createApp({ auth, postingDay: {
+      authenticate: async (request) => {
+        const session = await auth.auth.api.getSession({ headers: request.headers });
+        return session?.user.id ?? null;
+      },
+      service: createDependencies().service,
+    } });
+    const signedUp = await authApp.fetch(new Request("https://worker.test/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Cookie User", email: "cookie-posting-day@example.test", password: "not-a-real-password" }),
+    }));
+    const setCookie = signedUp.headers.get("set-cookie");
+    expect(signedUp.status).toBe(200);
+    expect(setCookie).toBeTruthy();
+
+    const response = await authApp.fetch(new Request("https://worker.test/api/v1/posting-days/current", {
+      headers: { cookie: setCookie!.split(";", 1)[0] },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ hasPosted: true });
+  });
+
   it("returns a temporary error instead of inventing hasPosted", async () => {
     const clock = { now: () => fixedNow };
     const service = createCurrentPostingDayService({
@@ -109,7 +139,7 @@ describe("GET /api/v1/posting-days/current", () => {
       },
       onOperationalAlert: vi.fn(),
     });
-    const response = await createApp(undefined, createDependencies({ service })).request(
+    const response = await createApp({ postingDay: createDependencies({ service }) }).request(
       "/api/v1/posting-days/current",
       { headers: { authorization: "Bearer test-token" } },
     );
@@ -131,7 +161,7 @@ describe("GET /api/v1/posting-days/current", () => {
       hasPosted: async () => false,
     });
 
-    const response = await createApp(undefined, createDependencies({ service })).request(
+    const response = await createApp({ postingDay: createDependencies({ service }) }).request(
       "/api/v1/posting-days/current",
       { headers: { authorization: "Bearer test-token" } },
     );

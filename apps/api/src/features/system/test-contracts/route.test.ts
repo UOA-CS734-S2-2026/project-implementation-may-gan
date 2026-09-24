@@ -7,7 +7,7 @@ describe("API contracts", () => {
     const document = await response.json<{
       openapi: string;
       paths: Record<string, { get?: { security?: Array<Record<string, string[]>> } }>;
-      components?: { securitySchemes?: Record<string, { type: string; scheme?: string; bearerFormat?: string }> };
+      components?: { securitySchemes?: Record<string, { type: string; scheme?: string; bearerFormat?: string; in?: string; name?: string; description?: string }> };
     }>();
 
     expect(response.status).toBe(200);
@@ -19,7 +19,16 @@ describe("API contracts", () => {
       scheme: "bearer",
       bearerFormat: "Dayli session token",
     });
-    expect(document.paths["/api/v1/posting-days/current"]?.get?.security).toEqual([{ BearerAuth: [] }]);
+    expect(document.components?.securitySchemes?.cookieAuth).toEqual({
+      type: "apiKey",
+      in: "cookie",
+      name: "better-auth.session_token",
+      description: "Browser clients may authenticate with the Better Auth secure session cookie.",
+    });
+    expect(document.paths["/api/v1/posting-days/current"]?.get?.security).toEqual([
+      { BearerAuth: [] },
+      { cookieAuth: [] },
+    ]);
   });
 
   it("applies the default pagination limit to the test route", async () => {

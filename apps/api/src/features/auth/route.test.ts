@@ -16,7 +16,7 @@ function createCompatibilityApp(sessionExpiresIn?: number) {
     sessionExpiresIn,
   });
 
-  return createApp(auth);
+  return createApp({ auth });
 }
 
 function request(path: string, init: RequestInit = {}, requestOrigin = origin) {
@@ -232,12 +232,12 @@ describe("Better Auth compatibility route", () => {
       return new Response("{}", { status: 200 });
     }));
     try {
-      const app = createApp(createBetterAuthCompatibilitySlice({
+      const app = createApp({ auth: createBetterAuthCompatibilitySlice({
         baseURL: origin,
         secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
         database: { account: [], session: [], user: [], verification: [] },
         resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
-      }));
+      }) });
       await signUp(app);
       const known = await app.fetch(request("/api/auth/request-password-reset", {
         method: "POST",
@@ -283,12 +283,12 @@ describe("Better Auth compatibility route", () => {
     const fetchMock = vi.fn(async () => new Response("provider failure", { status: 503 }));
     vi.stubGlobal("fetch", fetchMock);
     try {
-      const app = createApp(createBetterAuthCompatibilitySlice({
+      const app = createApp({ auth: createBetterAuthCompatibilitySlice({
         baseURL: origin,
         secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
         database: { account: [], session: [], user: [], verification: [] },
         resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
-      }));
+      }) });
       await signUp(app);
       const known = await app.fetch(request("/api/auth/request-password-reset", {
         method: "POST",
@@ -316,12 +316,12 @@ describe("Better Auth compatibility route", () => {
       return new Response("{}", { status: 200 });
     }));
     try {
-      const app = createApp(createBetterAuthCompatibilitySlice({
+      const app = createApp({ auth: createBetterAuthCompatibilitySlice({
         baseURL: origin,
         secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
         database: { account: [], session: [], user: [], verification: [] },
         resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
-      }));
+      }) });
       const token = nativeToken(await signUp(app));
       const requested = await app.fetch(request("/api/auth/send-verification-email", {
         method: "POST",
