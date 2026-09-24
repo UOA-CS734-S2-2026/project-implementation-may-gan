@@ -8,8 +8,25 @@ import type { ApiEnv } from "./env";
 import { registerApiDocsRoute } from "./features/system/api-docs/route";
 import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
+import {
+  registerCurrentPostingDayRoute,
+  type CurrentPostingDayRouteDependencies,
+} from "./features/posting-days/current/route";
+import {
+  createCurrentPostingDayService,
+} from "./features/posting-days/current/service";
+import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
+import { createAucklandDayService } from "@dayli/domain";
+import {
+  createPostgresBetterAuth,
+  readBetterAuthRuntimeConfiguration,
+  withHyperdriveDatabase,
+} from "./features/auth/better-auth";
 
-export function createApp(auth?: BetterAuthCompatibilitySlice) {
+export function createApp(
+  auth?: BetterAuthCompatibilitySlice,
+  postingDay?: CurrentPostingDayRouteDependencies,
+) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) {
@@ -32,9 +49,18 @@ export function createApp(auth?: BetterAuthCompatibilitySlice) {
     registerBetterAuthCompatibilityRoutes(api, auth);
   }
 
+  api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
+    type: "http",
+    scheme: "bearer",
+    bearerFormat: "Dayli session token",
+  });
+
   registerHealthRoute(api);
   registerTestContractsRoute(api);
   registerApiDocsRoute(api);
+  registerCurrentPostingDayRoute(api, postingDay ?? {
+    authenticate: async () => null,
+  });
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -50,9 +76,48 @@ export function createApp(auth?: BetterAuthCompatibilitySlice) {
 
 /** Build a Worker request app. Auth remains absent until validated bindings exist. */
 export function createAppForEnv(env: ApiEnv) {
-  const api = createApp();
+  const configuration = readBetterAuthRuntimeConfiguration(env);
+  const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
+  const api = createApp(undefined, postingDay);
   registerPostgresBetterAuthRoutes(api, env);
   return api;
+}
+
+function createPostingDayDependencies(
+  configuration: NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>,
+): CurrentPostingDayRouteDependencies {
+  const clock = { now: () => new Date() };
+  const dayService = createAucklandDayService(clock);
+
+  return {
+    authenticate: (request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const auth = createPostgresBetterAuth({
+        baseURL: configuration.baseURL,
+        secret: configuration.secret,
+        trustedOrigins: configuration.trustedOrigins,
+        database,
+        google: configuration.google,
+        resend: configuration.resend,
+      });
+      const session = await auth.api.getSession({ headers: request.headers });
+      return session?.user?.id ?? null;
+    }),
+    service: createCurrentPostingDayService({
+      clock,
+      dayService,
+      prompts: {
+        findActivePrompt: (monthDay, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+          createDailyPromptRepository(database).findActivePrompt(monthDay, localDate)
+        )),
+      },
+      hasPosted: (userId, localDate) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        hasPostedOnDay(database, userId, localDate)
+      )),
+      onOperationalAlert: (alert) => {
+        console.error("dayli posting-day operational alert", alert);
+      },
+    }),
+  };
 }
 
 /** The default app is intentionally database and auth free for local route work. */

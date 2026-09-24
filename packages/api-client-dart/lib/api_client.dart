@@ -210,6 +210,10 @@ class ApiClient {
           return ApiErrorCodeTypeTransformer().decode(value);
         case 'ApiErrorError':
           return ApiErrorError.fromJson(value);
+        case 'CurrentPostingDayResponse':
+          return CurrentPostingDayResponse.fromJson(value);
+        case 'DailyPromptResponse':
+          return DailyPromptResponse.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
         case 'TestResponse':

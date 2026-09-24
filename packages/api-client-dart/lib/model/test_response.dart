@@ -23,7 +23,7 @@ class TestResponse {
 
   final DateTime timestamp;
 
-  final DateTime aucklandDate;
+  final String aucklandDate;
 
   final int requestedLimit;
 
@@ -52,7 +52,7 @@ class TestResponse {
     final json = <String, dynamic>{};
     json[r'message'] = this.message;
     json[r'timestamp'] = this.timestamp.toUtc().toIso8601String();
-    json[r'aucklandDate'] = _dateFormatter.format(this.aucklandDate);
+    json[r'aucklandDate'] = this.aucklandDate;
     json[r'requestedLimit'] = this.requestedLimit;
     return json;
   }
@@ -62,7 +62,7 @@ class TestResponse {
   TestResponse copyWith({
     TestResponseMessageEnum? message,
     DateTime? timestamp,
-    DateTime? aucklandDate,
+    String? aucklandDate,
     int? requestedLimit,
   }) =>
       TestResponse(
@@ -105,7 +105,7 @@ class TestResponse {
       return TestResponse(
         message: TestResponseMessageEnum.fromJson(json[r'message'])!,
         timestamp: mapDateTime(json, r'timestamp', r'')!,
-        aucklandDate: mapDateTime(json, r'aucklandDate', r'')!,
+        aucklandDate: mapValueOfType<String>(json, r'aucklandDate')!,
         requestedLimit: mapValueOfType<int>(json, r'requestedLimit')!,
       );
     }
