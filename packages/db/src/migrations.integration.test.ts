@@ -30,10 +30,20 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
   const migrator = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
   const app = postgres(appConnection, { max: 1, prepare: false, onnotice: () => undefined });
 
+  async function cleanupPromptFixtures(): Promise<void> {
+    await migrator`alter table public.daily_prompts disable trigger user`;
+    try {
+      await migrator`delete from public.daily_prompts where source = 'dayli-test'`;
+    } finally {
+      await migrator`alter table public.daily_prompts enable trigger user`;
+    }
+  }
+
   beforeAll(async () => {
     await migrator`drop table if exists public.dayli_migration_fixture cascade`;
     await migrator`drop table if exists public.dayli_migration_rollback_probe cascade`;
     await migrator`drop table if exists public.dayli_app_denied cascade`;
+    await cleanupPromptFixtures();
   });
 
   afterAll(async () => {
@@ -90,6 +100,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     const count = await migrator`select count(*)::int as count from public.daily_prompts where version = 1`;
     expect(count[0]?.count).toBe(366);
 
+    await migrator`
+      insert into public.daily_prompts
+      select * from public.daily_prompts where id = 'prompt-01-01'
+      on conflict do nothing
+    `;
+
     await expect(migrator`
       insert into public.daily_prompts
         (id, month_day, text, version, effective_date, source, source_commit)
@@ -114,12 +130,14 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       values
         ('prompt-04-30-v2', '04-29', 'Mismatched prompt day', 2, '2099-04-01', 'dayli-test', 'test')
     `).rejects.toMatchObject({ code: "23514" });
+    // The v1 row already owns this ID, so the immutability guard rejects the
+    // changed replay before the canonical-ID check can run.
     await expect(migrator`
       insert into public.daily_prompts
         (id, month_day, text, version, effective_date, source, source_commit)
       values
         ('prompt-04-30', '04-30', 'Missing version suffix', 2, '2099-04-01', 'dayli-test', 'test')
-    `).rejects.toMatchObject({ code: "23514" });
+    `).rejects.toMatchObject({ code: "55000" });
     await expect(migrator`
       insert into public.daily_prompts
         (id, month_day, text, version, effective_date, source, source_commit)
@@ -251,6 +269,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       `;
       expect(rows).toHaveLength(1);
     } finally {
+      await cleanupPromptFixtures();
       await first.end({ timeout: 5 });
       await second.end({ timeout: 5 });
     }
@@ -278,6 +297,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     expect(column("posts", "audience")).toMatchObject({ is_nullable: "NO", column_default: null });
 
     const authorId = `post-foundation-author-${crypto.randomUUID()}`;
+    const otherAuthorId = `post-foundation-other-author-${crypto.randomUUID()}`;
     const postId = `post-foundation-${crypto.randomUUID()}`;
     const otherPostId = `post-foundation-other-${crypto.randomUUID()}`;
     const promptId = "prompt-01-01";
@@ -288,7 +308,9 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       await migrator.begin(async (tx) => {
         await tx`
           insert into public."user" (id, name, email)
-          values (${authorId}, 'Post Foundation Fixture', ${`${authorId}@example.test`})
+          values
+            (${authorId}, 'Post Foundation Fixture', ${`${authorId}@example.test`}),
+            (${otherAuthorId}, 'Other Post Foundation Fixture', ${`${otherAuthorId}@example.test`})
         `;
         await tx`
           insert into public.posts
@@ -418,14 +440,15 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
         `)).rejects.toMatchObject({ code: "55000" });
 
         await expect(tx.savepoint((savepoint) => savepoint`
-          update public.post_media
-          set id = ${`reused-media-${postId}`}
-          where id = ${`media-${postId}-1`}
+          update public.posts
+          set author_id = ${otherAuthorId}
+          where id = ${postId}
         `)).rejects.toMatchObject({ code: "55000" });
 
         await expect(tx.savepoint((savepoint) => savepoint`
-          delete from public.post_media
-          where id = ${`media-${postId}-0`}
+          update public.post_media
+          set id = ${`reused-media-${postId}`}
+          where id = ${`media-${postId}-1`}
         `)).rejects.toMatchObject({ code: "55000" });
 
         const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
@@ -454,9 +477,6 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           set previous_rating = 9
           where id = ${`revision-${postId}-1`}
         `)).rejects.toMatchObject({ code: "55000" });
-        await expect(tx.savepoint((savepoint) => savepoint`
-          delete from public.post_revisions where id = ${`revision-${postId}-1`}
-        `)).rejects.toMatchObject({ code: "55000" });
 
         await tx`
           insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
@@ -480,6 +500,22 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
         `;
         expect(noteRows).toEqual([{ note: "Read this tomorrow", available_on: "2026-09-23" }]);
 
+        // The tracked migrator cleanup is the only supported physical-delete
+        // path for immutable post history. Keep this fixture transactional.
+        await tx`delete from public.tomorrow_notes where post_id = ${postId}`;
+        await tx`delete from public.post_revisions where post_id = ${postId}`;
+        await tx`delete from public.legacy_cloudinary_media where media_id like ${`media-${postId}-%`}`;
+        await tx`delete from public.post_media where post_id = ${postId}`;
+        await tx`delete from public.posts where id = ${postId}`;
+        const deletedRows = await tx`
+          select
+            (select count(*) from public.posts where id = ${postId})::int as posts,
+            (select count(*) from public.post_media where post_id = ${postId})::int as media,
+            (select count(*) from public.post_revisions where post_id = ${postId})::int as revisions,
+            (select count(*) from public.tomorrow_notes where post_id = ${postId})::int as notes
+        `;
+        expect(deletedRows[0]).toEqual({ posts: 0, media: 0, revisions: 0, notes: 0 });
+
         throw rollbackSentinel;
       });
     } catch (error) {
@@ -487,5 +523,66 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     }
 
     expect(transactionError).toBe(rollbackSentinel);
+  });
+
+  it("denies app deletes of immutable post history and allows migrator cleanup", async () => {
+    // The app role runs on its own connection, so these fixtures must be
+    // committed; the migrator cleanup path below removes them again.
+    const authorId = `post-cleanup-author-${crypto.randomUUID()}`;
+    const postId = `post-cleanup-${crypto.randomUUID()}`;
+    const mediaId = `media-${postId}`;
+    const revisionId = `revision-${postId}`;
+    const noteId = `note-${postId}`;
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        insert into public."user" (id, name, email)
+        values (${authorId}, 'Post Cleanup Fixture', ${`${authorId}@example.test`})
+      `;
+      await tx`
+        insert into public.posts
+          (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+        values
+          (${postId}, ${authorId}, '2026-09-22', 'prompt-01-01', 'A valid reflection', 8, 'friends', '2026-09-22T10:00:00+12:00', '2026-09-22T10:00:01+12:00')
+      `;
+      await tx`
+        insert into public.post_media (id, post_id, attachment_order)
+        values (${mediaId}, ${postId}, 0)
+      `;
+      await tx`
+        insert into public.post_revisions
+          (id, post_id, revision_number, previous_reflective_answer, previous_rating, previous_audience, previous_prompt_id, previous_attachment_refs)
+        values
+          (${revisionId}, ${postId}, 1, 'Prior reflection', 8, 'friends', 'prompt-01-01', ${tx.json([{ media_id: mediaId, attachment_order: 0, status: "attached" }])})
+      `;
+      await tx`
+        insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
+        values (${noteId}, ${postId}, ${authorId}, 'Read this tomorrow', '2026-09-23')
+      `;
+    });
+
+    try {
+      await expect(app`delete from public.tomorrow_notes where id = ${noteId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.post_revisions where id = ${revisionId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.post_media where id = ${mediaId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.daily_prompts where id = 'prompt-01-01'`).rejects.toMatchObject({ code: "55000" });
+    } finally {
+      await migrator.begin(async (tx) => {
+        await tx`delete from public.tomorrow_notes where post_id = ${postId}`;
+        await tx`delete from public.post_revisions where post_id = ${postId}`;
+        await tx`delete from public.post_media where post_id = ${postId}`;
+        await tx`delete from public.posts where id = ${postId}`;
+        await tx`delete from public."user" where id = ${authorId}`;
+      });
+    }
+
+    const remaining = await migrator`
+      select
+        (select count(*) from public.posts where id = ${postId})::int as posts,
+        (select count(*) from public.post_media where post_id = ${postId})::int as media,
+        (select count(*) from public.post_revisions where post_id = ${postId})::int as revisions,
+        (select count(*) from public.tomorrow_notes where post_id = ${postId})::int as notes
+    `;
+    expect(remaining[0]).toEqual({ posts: 0, media: 0, revisions: 0, notes: 0 });
   });
 });

@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import {
   DAILY_PROMPT_SOURCE,
@@ -9,6 +10,7 @@ import {
   selectDailyPromptVersion,
   validateDailyPromptCatalog,
 } from "./daily-prompts";
+import { repoPath } from "../migrations/paths";
 
 describe("daily prompt catalog", () => {
   it("contains one attributed version-one prompt for every Auckland month-day", () => {
@@ -27,6 +29,23 @@ describe("daily prompt catalog", () => {
     expect(new Set(dailyPromptCatalog.map((prompt) => prompt.id)).size).toBe(366);
     expect(new Set(dailyPromptCatalog.map((prompt) => prompt.monthDay)).size).toBe(366);
     expect(dailyPromptCatalog.filter((prompt) => prompt.text === "What are you proud of today?")).toHaveLength(2);
+  });
+
+  it("keeps the checked-in migration seed identical to the TypeScript catalog", async () => {
+    const migration = await readFile(repoPath("packages/db/migrations/0004_aromatic_bushwacker.sql"), "utf8");
+    const rows = [...migration.matchAll(
+      /\('([^']+)',\s*'([^']+)',\s*'((?:''|[^'])*)',\s*(\d+),\s*'([^']+)',\s*'([^']+)',\s*'([^']+)'\)/g,
+    )].map((match) => ({
+      id: match[1],
+      monthDay: match[2],
+      text: match[3]?.replaceAll("''", "'"),
+      version: Number(match[4]),
+      effectiveDate: match[5],
+      source: match[6],
+      sourceCommit: match[7],
+    }));
+
+    expect(rows).toEqual(dailyPromptCatalog);
   });
 
   it("rejects missing or reordered days before seed data can be generated", () => {

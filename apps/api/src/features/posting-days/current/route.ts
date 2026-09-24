@@ -2,8 +2,6 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute } from "@hono/zod-openapi";
 import { apiErrorSchema } from "./contract";
 import {
-  MissingDailyPromptError,
-  PostingDayDependencyUnavailableError,
   type CurrentPostingDayService,
 } from "./service";
 import { currentPostingDayResponseSchema } from "./contract";
@@ -85,10 +83,7 @@ export function registerCurrentPostingDayRoute(
         prompt: postingDay.prompt,
         hasPosted: postingDay.hasPosted,
       }, 200);
-    } catch (error) {
-      if (error instanceof MissingDailyPromptError || error instanceof PostingDayDependencyUnavailableError) {
-        return errorResponse(context, 503, "SERVICE_UNAVAILABLE", "The posting-day service is temporarily unavailable.");
-      }
+    } catch {
       return errorResponse(context, 503, "SERVICE_UNAVAILABLE", "The posting-day service is temporarily unavailable.");
     }
   });

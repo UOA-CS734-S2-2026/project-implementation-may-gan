@@ -10,7 +10,6 @@
 
 part of openapi.api;
 
-
 enum RelationshipState {
   none._(r'none'),
   outgoingPending._(r'outgoing_pending'),
@@ -33,11 +32,15 @@ enum RelationshipState {
 
   /// Returns the instance of [RelationshipState] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static RelationshipState? fromJson(dynamic value) => RelationshipStateTypeTransformer().decode(value);
+  static RelationshipState? fromJson(dynamic value) =>
+      RelationshipStateTypeTransformer().decode(value);
 
   /// Returns a [List] containing instances of [RelationshipState]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<RelationshipState> listFromJson(dynamic json, {bool growable = false,}) {
+  static List<RelationshipState> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final result = <RelationshipState>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -54,7 +57,8 @@ enum RelationshipState {
 /// Transformation class that can [encode] an instance of [RelationshipState] to String,
 /// and [decode] dynamic data back to [RelationshipState].
 class RelationshipStateTypeTransformer {
-  factory RelationshipStateTypeTransformer() => _instance ??= const RelationshipStateTypeTransformer._();
+  factory RelationshipStateTypeTransformer() =>
+      _instance ??= const RelationshipStateTypeTransformer._();
 
   const RelationshipStateTypeTransformer._();
 
@@ -76,11 +80,16 @@ class RelationshipStateTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'none': return RelationshipState.none;
-        case r'outgoing_pending': return RelationshipState.outgoingPending;
-        case r'incoming_pending': return RelationshipState.incomingPending;
-        case r'friends': return RelationshipState.friends;
-        case r'blocked': return RelationshipState.blocked;
+        case r'none':
+          return RelationshipState.none;
+        case r'outgoing_pending':
+          return RelationshipState.outgoingPending;
+        case r'incoming_pending':
+          return RelationshipState.incomingPending;
+        case r'friends':
+          return RelationshipState.friends;
+        case r'blocked':
+          return RelationshipState.blocked;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

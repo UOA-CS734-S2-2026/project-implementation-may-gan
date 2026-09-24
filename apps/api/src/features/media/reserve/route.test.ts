@@ -57,7 +57,7 @@ function createTestApp(repository: MediaReservationRepository = createFakeReposi
     secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
     database: { account: [], session: [], user: [], verification: [] },
   });
-  const app = createApp(auth, createFakeMediaRuntime(auth, repository));
+  const app = createApp({ auth, media: createFakeMediaRuntime(auth, repository) });
   return { app, auth, repository };
 }
 
@@ -163,7 +163,7 @@ describe("POST /api/v1/media-reservations", () => {
       secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
       database: { account: [], session: [], user: [], verification: [] },
     });
-    const app = createApp(auth, undefined);
+    const app = createApp({ auth });
     const token = await signUpAndGetToken(app);
 
     const response = await createReservation(app, token);
@@ -240,7 +240,7 @@ describe("GET /api/v1/media-reservations/{id}", () => {
       secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
       database: { account: [], session: [], user: [], verification: [] },
     });
-    const app = createApp(auth, undefined);
+    const app = createApp({ auth });
     const token = await signUpAndGetToken(app);
 
     const response = await app.fetch(

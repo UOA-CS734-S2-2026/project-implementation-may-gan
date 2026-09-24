@@ -33,16 +33,14 @@ import { registerHealthRoute } from "./features/system/health/route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import { readR2RuntimeConfiguration } from "./lib/r2";
 
-type SecondaryDependencies = MediaReservationRuntime | CurrentPostingDayRouteDependencies;
+export interface AppDependencies {
+  auth?: BetterAuthCompatibilitySlice;
+  media?: MediaReservationRuntime;
+  postingDay?: CurrentPostingDayRouteDependencies;
+  relationships?: RelationshipsRouteDependencies;
+}
 
-export function createApp(
-  auth?: BetterAuthCompatibilitySlice,
-  secondary?: SecondaryDependencies,
-  relationships: RelationshipsRouteDependencies = unavailableRelationships,
-  mediaOverride?: MediaReservationRuntime,
-) {
-  const media = mediaOverride ?? (secondary && "withRequestContext" in secondary ? secondary : undefined);
-  const postingDay = secondary && "authenticate" in secondary ? secondary : undefined;
+export function createApp({ auth, media, postingDay, relationships = unavailableRelationships }: AppDependencies = {}) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) {
@@ -68,7 +66,12 @@ export function createApp(
     scheme: "bearer",
     bearerFormat: "Dayli session token",
   });
-
+  api.openAPIRegistry.registerComponent("securitySchemes", "cookieAuth", {
+    type: "apiKey",
+    in: "cookie",
+    name: "better-auth.session_token",
+    description: "Browser clients may authenticate with the Better Auth secure session cookie.",
+  });
   registerHealthRoute(api);
   registerTestContractsRoute(api);
   registerMediaReservationRoutes(api, media);
@@ -115,12 +118,7 @@ export function createAppForEnv(env: ApiEnv) {
       return session?.user?.id ? { userId: session.user.id } : null;
     }),
   } satisfies RelationshipsRouteDependencies : undefined;
-  const api = createApp(
-    undefined,
-    postingDay,
-    relationships,
-    media,
-  );
+  const api = createApp({ postingDay, media, relationships });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env);
   return api;

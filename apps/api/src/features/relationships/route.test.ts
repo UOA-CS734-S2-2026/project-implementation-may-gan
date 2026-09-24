@@ -150,7 +150,8 @@ describe("relationships routes", () => {
     expect(body.error.requestId).not.toBe("client-controlled");
   });
 
-  it("sanitizes unexpected relationship adapter failures", async () => {
+  it("logs unexpected relationship adapter failures and returns a sanitized 503", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { app } = createTestApp({
       service: {
         getStatus: vi.fn(async () => {
@@ -161,11 +162,13 @@ describe("relationships routes", () => {
     const response = await app.request("/api/v1/relationships/user_bob");
     const body = await response.text();
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(503);
     expectNoStore(response);
-    expect(body).toContain("INTERNAL_ERROR");
+    expect(body).toContain("SERVICE_UNAVAILABLE");
     expect(body).not.toContain("postgres password");
     expect(body).not.toContain("private request payload");
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
   });
 
   it("registers pending reads and every request/friendship/block transition", async () => {

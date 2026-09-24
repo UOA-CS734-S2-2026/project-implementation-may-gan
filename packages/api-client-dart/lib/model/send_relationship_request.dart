@@ -19,20 +19,21 @@ class SendRelationshipRequest {
   final String recipientId;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is SendRelationshipRequest &&
-    other.recipientId == recipientId;
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SendRelationshipRequest && other.recipientId == recipientId;
 
   @override
   int get hashCode =>
-    // ignore: unnecessary_parenthesis
-    (recipientId.hashCode);
+      // ignore: unnecessary_parenthesis
+      (recipientId.hashCode);
 
   @override
   String toString() => 'SendRelationshipRequest[recipientId=$recipientId]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-      json[r'recipientId'] = this.recipientId;
+    json[r'recipientId'] = this.recipientId;
     return json;
   }
 
@@ -40,9 +41,10 @@ class SendRelationshipRequest {
   /// properties have changed.
   SendRelationshipRequest copyWith({
     String? recipientId,
-  }) => SendRelationshipRequest(
-    recipientId: recipientId ?? this.recipientId,
-  );
+  }) =>
+      SendRelationshipRequest(
+        recipientId: recipientId ?? this.recipientId,
+      );
 
   /// Returns a new [SendRelationshipRequest] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
@@ -55,8 +57,10 @@ class SendRelationshipRequest {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'recipientId'), 'Required key "SendRelationshipRequest[recipientId]" is missing from JSON.');
-        assert(json[r'recipientId'] != null, 'Required key "SendRelationshipRequest[recipientId]" has a null value in JSON.');
+        assert(json.containsKey(r'recipientId'),
+            'Required key "SendRelationshipRequest[recipientId]" is missing from JSON.');
+        assert(json[r'recipientId'] != null,
+            'Required key "SendRelationshipRequest[recipientId]" has a null value in JSON.');
         return true;
       }());
 
@@ -67,7 +71,10 @@ class SendRelationshipRequest {
     return null;
   }
 
-  static List<SendRelationshipRequest> listFromJson(dynamic json, {bool growable = false,}) {
+  static List<SendRelationshipRequest> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final result = <SendRelationshipRequest>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -95,13 +102,19 @@ class SendRelationshipRequest {
   }
 
   // maps a json object with a list of SendRelationshipRequest-objects as value to a dart map
-  static Map<String, List<SendRelationshipRequest>> mapListFromJson(dynamic json, {bool growable = false,}) {
+  static Map<String, List<SendRelationshipRequest>> mapListFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final map = <String, List<SendRelationshipRequest>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = SendRelationshipRequest.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = SendRelationshipRequest.listFromJson(
+          entry.value,
+          growable: growable,
+        );
       }
     }
     return map;

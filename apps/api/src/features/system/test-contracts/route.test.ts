@@ -7,7 +7,7 @@ describe("API contracts", () => {
     const document = await response.json<{
       openapi: string;
       paths: Record<string, { get?: { security?: Array<Record<string, string[]>> } }>;
-      components?: { securitySchemes?: Record<string, { type: string; scheme?: string; bearerFormat?: string; in?: string; name?: string }> };
+      components?: { securitySchemes?: Record<string, { type: string; scheme?: string; bearerFormat?: string; in?: string; name?: string; description?: string }> };
     }>();
 
     expect(response.status).toBe(200);

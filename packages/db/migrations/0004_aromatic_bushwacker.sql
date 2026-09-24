@@ -26,6 +26,16 @@ CREATE TABLE "daily_prompts" (
 	CONSTRAINT "daily_prompts_version_positive_check" CHECK ("daily_prompts"."version" > 0),
 	CONSTRAINT "daily_prompts_text_length_check" CHECK (char_length("daily_prompts"."text") between 1 and 4000)
 );
+
+-- Prompt versions are deployed by the migrator, never authored by the app.
+DO $function$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app') THEN
+    EXECUTE 'REVOKE INSERT ON public.daily_prompts FROM app';
+  END IF;
+END;
+$function$;
+
 -- Immutable version-one catalog seed from 732-workspace/group-project-wdcc@7d2dfd6.
 INSERT INTO "daily_prompts" ("id", "month_day", "text", "version", "effective_date", "source", "source_commit") VALUES
   ('prompt-01-01', '01-01', 'What''s something you want to achieve this year?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6'),
@@ -393,7 +403,8 @@ INSERT INTO "daily_prompts" ("id", "month_day", "text", "version", "effective_da
   ('prompt-12-28', '12-28', 'What surprised you about yourself today?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6'),
   ('prompt-12-29', '12-29', 'What''s something you''re saying goodbye to?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6'),
   ('prompt-12-30', '12-30', 'What''s something you''re saying hello to?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6'),
-  ('prompt-12-31', '12-31', 'Looking back, what was this year about?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6');
+  ('prompt-12-31', '12-31', 'Looking back, what was this year about?', 1, '1970-01-01', '732-workspace/group-project-wdcc', '7d2dfd6')
+ON CONFLICT DO NOTHING;
 
 -- Prompt rows are insert-only and scheduled versions must advance monotonically.
 CREATE FUNCTION public.dayli_daily_prompt_immutable()
@@ -417,6 +428,30 @@ BEGIN
   -- Serialize schedules for one month-day so concurrent inserts cannot both
   -- pass the visibility check before either transaction commits.
   PERFORM pg_advisory_xact_lock(734003, hashtext(NEW.month_day));
+
+  -- Replaying the reference seed is safe only when the existing row is
+  -- byte-for-byte identical.  The trigger runs before ON CONFLICT, so exact
+  -- duplicates must be accepted here for seedDailyPrompts() to be idempotent.
+  IF EXISTS (SELECT 1 FROM public.daily_prompts existing WHERE existing.id = NEW.id) THEN
+    IF EXISTS (
+      SELECT 1
+      FROM public.daily_prompts existing
+      WHERE existing.id = NEW.id
+        AND existing.month_day = NEW.month_day
+        AND existing.text = NEW.text
+        AND existing.version = NEW.version
+        AND existing.effective_date = NEW.effective_date
+        AND existing.source = NEW.source
+        AND existing.source_commit = NEW.source_commit
+    ) THEN
+      RETURN NULL;
+    END IF;
+    RAISE EXCEPTION 'daily_prompts rows are immutable' USING ERRCODE = '55000';
+  END IF;
+
+  IF NEW.version > 1 AND NEW.effective_date <= current_date THEN
+    RAISE EXCEPTION 'scheduled prompt versions must take effect in the future' USING ERRCODE = '23514';
+  END IF;
 
   IF EXISTS (
     SELECT 1
