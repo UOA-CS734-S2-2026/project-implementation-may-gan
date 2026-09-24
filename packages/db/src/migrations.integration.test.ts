@@ -30,10 +30,20 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
   const migrator = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
   const app = postgres(appConnection, { max: 1, prepare: false, onnotice: () => undefined });
 
+  async function cleanupPromptFixtures(): Promise<void> {
+    await migrator`alter table public.daily_prompts disable trigger user`;
+    try {
+      await migrator`delete from public.daily_prompts where source = 'dayli-test'`;
+    } finally {
+      await migrator`alter table public.daily_prompts enable trigger user`;
+    }
+  }
+
   beforeAll(async () => {
     await migrator`drop table if exists public.dayli_migration_fixture cascade`;
     await migrator`drop table if exists public.dayli_migration_rollback_probe cascade`;
     await migrator`drop table if exists public.dayli_app_denied cascade`;
+    await cleanupPromptFixtures();
   });
 
   afterAll(async () => {
@@ -89,6 +99,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
   it("seeds all prompts and enforces immutable scheduled versions", async () => {
     const count = await migrator`select count(*)::int as count from public.daily_prompts where version = 1`;
     expect(count[0]?.count).toBe(366);
+
+    await migrator`
+      insert into public.daily_prompts
+      select * from public.daily_prompts where id = 'prompt-01-01'
+      on conflict do nothing
+    `;
 
     await expect(migrator`
       insert into public.daily_prompts
@@ -251,6 +267,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       `;
       expect(rows).toHaveLength(1);
     } finally {
+      await cleanupPromptFixtures();
       await first.end({ timeout: 5 });
       await second.end({ timeout: 5 });
     }
