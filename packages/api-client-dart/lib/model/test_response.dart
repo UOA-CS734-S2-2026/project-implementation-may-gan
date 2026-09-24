@@ -28,32 +28,29 @@ class TestResponse {
   final int requestedLimit;
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is TestResponse &&
-          other.message == message &&
-          other.timestamp == timestamp &&
-          other.aucklandDate == aucklandDate &&
-          other.requestedLimit == requestedLimit;
+  bool operator ==(Object other) => identical(this, other) || other is TestResponse &&
+    other.message == message &&
+    other.timestamp == timestamp &&
+    other.aucklandDate == aucklandDate &&
+    other.requestedLimit == requestedLimit;
 
   @override
   int get hashCode =>
-      // ignore: unnecessary_parenthesis
-      (message.hashCode) +
-      (timestamp.hashCode) +
-      (aucklandDate.hashCode) +
-      (requestedLimit.hashCode);
+    // ignore: unnecessary_parenthesis
+    (message.hashCode) +
+    (timestamp.hashCode) +
+    (aucklandDate.hashCode) +
+    (requestedLimit.hashCode);
 
   @override
-  String toString() =>
-      'TestResponse[message=$message, timestamp=$timestamp, aucklandDate=$aucklandDate, requestedLimit=$requestedLimit]';
+  String toString() => 'TestResponse[message=$message, timestamp=$timestamp, aucklandDate=$aucklandDate, requestedLimit=$requestedLimit]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'message'] = this.message;
-    json[r'timestamp'] = this.timestamp.toUtc().toIso8601String();
-    json[r'aucklandDate'] = this.aucklandDate;
-    json[r'requestedLimit'] = this.requestedLimit;
+      json[r'message'] = this.message;
+      json[r'timestamp'] = this.timestamp.toUtc().toIso8601String();
+      json[r'aucklandDate'] = this.aucklandDate;
+      json[r'requestedLimit'] = this.requestedLimit;
     return json;
   }
 
@@ -64,13 +61,12 @@ class TestResponse {
     DateTime? timestamp,
     String? aucklandDate,
     int? requestedLimit,
-  }) =>
-      TestResponse(
-        message: message ?? this.message,
-        timestamp: timestamp ?? this.timestamp,
-        aucklandDate: aucklandDate ?? this.aucklandDate,
-        requestedLimit: requestedLimit ?? this.requestedLimit,
-      );
+  }) => TestResponse(
+    message: message ?? this.message,
+    timestamp: timestamp ?? this.timestamp,
+    aucklandDate: aucklandDate ?? this.aucklandDate,
+    requestedLimit: requestedLimit ?? this.requestedLimit,
+  );
 
   /// Returns a new [TestResponse] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
@@ -83,22 +79,14 @@ class TestResponse {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'message'),
-            'Required key "TestResponse[message]" is missing from JSON.');
-        assert(json[r'message'] != null,
-            'Required key "TestResponse[message]" has a null value in JSON.');
-        assert(json.containsKey(r'timestamp'),
-            'Required key "TestResponse[timestamp]" is missing from JSON.');
-        assert(json[r'timestamp'] != null,
-            'Required key "TestResponse[timestamp]" has a null value in JSON.');
-        assert(json.containsKey(r'aucklandDate'),
-            'Required key "TestResponse[aucklandDate]" is missing from JSON.');
-        assert(json[r'aucklandDate'] != null,
-            'Required key "TestResponse[aucklandDate]" has a null value in JSON.');
-        assert(json.containsKey(r'requestedLimit'),
-            'Required key "TestResponse[requestedLimit]" is missing from JSON.');
-        assert(json[r'requestedLimit'] != null,
-            'Required key "TestResponse[requestedLimit]" has a null value in JSON.');
+        assert(json.containsKey(r'message'), 'Required key "TestResponse[message]" is missing from JSON.');
+        assert(json[r'message'] != null, 'Required key "TestResponse[message]" has a null value in JSON.');
+        assert(json.containsKey(r'timestamp'), 'Required key "TestResponse[timestamp]" is missing from JSON.');
+        assert(json[r'timestamp'] != null, 'Required key "TestResponse[timestamp]" has a null value in JSON.');
+        assert(json.containsKey(r'aucklandDate'), 'Required key "TestResponse[aucklandDate]" is missing from JSON.');
+        assert(json[r'aucklandDate'] != null, 'Required key "TestResponse[aucklandDate]" has a null value in JSON.');
+        assert(json.containsKey(r'requestedLimit'), 'Required key "TestResponse[requestedLimit]" is missing from JSON.');
+        assert(json[r'requestedLimit'] != null, 'Required key "TestResponse[requestedLimit]" has a null value in JSON.');
         return true;
       }());
 
@@ -112,10 +100,7 @@ class TestResponse {
     return null;
   }
 
-  static List<TestResponse> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<TestResponse> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <TestResponse>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -143,19 +128,13 @@ class TestResponse {
   }
 
   // maps a json object with a list of TestResponse-objects as value to a dart map
-  static Map<String, List<TestResponse>> mapListFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static Map<String, List<TestResponse>> mapListFromJson(dynamic json, {bool growable = false,}) {
     final map = <String, List<TestResponse>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = TestResponse.listFromJson(
-          entry.value,
-          growable: growable,
-        );
+        map[entry.key] = TestResponse.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;
@@ -169,6 +148,7 @@ class TestResponse {
     'requestedLimit',
   };
 }
+
 
 enum TestResponseMessageEnum {
   dayliAPIContractsAreAvailablePeriod._(r'Dayli API contracts are available.'),
@@ -188,15 +168,11 @@ enum TestResponseMessageEnum {
 
   /// Returns the instance of [TestResponseMessageEnum] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static TestResponseMessageEnum? fromJson(dynamic value) =>
-      TestResponseMessageEnumTypeTransformer().decode(value);
+  static TestResponseMessageEnum? fromJson(dynamic value) => TestResponseMessageEnumTypeTransformer().decode(value);
 
   /// Returns a [List] containing instances of [TestResponseMessageEnum]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<TestResponseMessageEnum> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<TestResponseMessageEnum> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <TestResponseMessageEnum>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -213,8 +189,7 @@ enum TestResponseMessageEnum {
 /// Transformation class that can [encode] an instance of [TestResponseMessageEnum] to String,
 /// and [decode] dynamic data back to [TestResponseMessageEnum].
 class TestResponseMessageEnumTypeTransformer {
-  factory TestResponseMessageEnumTypeTransformer() =>
-      _instance ??= const TestResponseMessageEnumTypeTransformer._();
+  factory TestResponseMessageEnumTypeTransformer() => _instance ??= const TestResponseMessageEnumTypeTransformer._();
 
   const TestResponseMessageEnumTypeTransformer._();
 
@@ -235,8 +210,7 @@ class TestResponseMessageEnumTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'Dayli API contracts are available.':
-          return TestResponseMessageEnum.dayliAPIContractsAreAvailablePeriod;
+        case r'Dayli API contracts are available.': return TestResponseMessageEnum.dayliAPIContractsAreAvailablePeriod;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

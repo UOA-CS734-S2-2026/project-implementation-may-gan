@@ -11,7 +11,7 @@
     "db:smoke": "tsx src/check.ts",
     "db:migration:inventory": "tsx src/migration-inventory.ts",
     "db:migration:users-and-accounts": "tsx src/users-import.ts",
-    "db:test": "REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/transactions.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/users-import.integration.test.ts",
+    "db:test": "REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/transactions.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/users-import.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/relationships.integration.test.ts",
     "test": "vitest run",
     "typecheck": "tsc"
   },
