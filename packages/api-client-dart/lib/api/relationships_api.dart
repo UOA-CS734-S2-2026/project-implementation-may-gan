@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-
 class RelationshipsApi {
-  RelationshipsApi([ApiClient? apiClient]) : apiClient = apiClient ?? defaultApiClient;
+  RelationshipsApi([ApiClient? apiClient])
+      : apiClient = apiClient ?? defaultApiClient;
 
   final ApiClient apiClient;
 
@@ -23,10 +23,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<Response> relationshipsAcceptRequestWithHttpInfo(String requestId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsAcceptRequestWithHttpInfo(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/requests/{requestId}/accept'
-      .replaceAll('{requestId}', requestId);
+        .replaceAll('{requestId}', requestId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -36,7 +39,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -55,17 +57,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<RelationshipStatus?> relationshipsAcceptRequest(String requestId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsAcceptRequestWithHttpInfo(requestId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsAcceptRequest(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsAcceptRequestWithHttpInfo(
+      requestId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -77,10 +88,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<Response> relationshipsBlockWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsBlockWithHttpInfo(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
-    final path = r'/api/v1/relationships/{userId}/block'
-      .replaceAll('{userId}', userId);
+    final path =
+        r'/api/v1/relationships/{userId}/block'.replaceAll('{userId}', userId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -90,7 +104,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -109,17 +122,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<RelationshipStatus?> relationshipsBlock(String userId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsBlockWithHttpInfo(userId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsBlock(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsBlockWithHttpInfo(
+      userId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -131,10 +153,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<Response> relationshipsCancelRequestWithHttpInfo(String requestId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsCancelRequestWithHttpInfo(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/requests/{requestId}/cancel'
-      .replaceAll('{requestId}', requestId);
+        .replaceAll('{requestId}', requestId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -144,7 +169,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -163,17 +187,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<RelationshipStatus?> relationshipsCancelRequest(String requestId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsCancelRequestWithHttpInfo(requestId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsCancelRequest(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsCancelRequestWithHttpInfo(
+      requestId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -185,10 +218,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<Response> relationshipsDeclineRequestWithHttpInfo(String requestId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsDeclineRequestWithHttpInfo(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/requests/{requestId}/decline'
-      .replaceAll('{requestId}', requestId);
+        .replaceAll('{requestId}', requestId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -198,7 +234,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -217,17 +252,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] requestId (required):
-  Future<RelationshipStatus?> relationshipsDeclineRequest(String requestId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsDeclineRequestWithHttpInfo(requestId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsDeclineRequest(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsDeclineRequestWithHttpInfo(
+      requestId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -239,10 +283,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<Response> relationshipsGetStatusWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsGetStatusWithHttpInfo(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
-    final path = r'/api/v1/relationships/{userId}'
-      .replaceAll('{userId}', userId);
+    final path =
+        r'/api/v1/relationships/{userId}'.replaceAll('{userId}', userId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -252,7 +299,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -271,17 +317,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<RelationshipStatus?> relationshipsGetStatus(String userId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsGetStatusWithHttpInfo(userId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsGetStatus(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsGetStatusWithHttpInfo(
+      userId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -298,7 +353,12 @@ class RelationshipsApi {
   /// * [int] limit:
   ///
   /// * [String] direction:
-  Future<Response> relationshipsListPendingRequestsWithHttpInfo({ String? cursor, int? limit, String? direction, Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsListPendingRequestsWithHttpInfo({
+    String? cursor,
+    int? limit,
+    String? direction,
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/requests';
 
@@ -321,7 +381,6 @@ class RelationshipsApi {
 
     const contentTypes = <String>[];
 
-
     return apiClient.invokeAPI(
       path,
       'GET',
@@ -344,17 +403,30 @@ class RelationshipsApi {
   /// * [int] limit:
   ///
   /// * [String] direction:
-  Future<PendingRequestPage?> relationshipsListPendingRequests({ String? cursor, int? limit, String? direction, Future<void>? abortTrigger, }) async {
-    final response = await relationshipsListPendingRequestsWithHttpInfo(cursor: cursor, limit: limit, direction: direction, abortTrigger: abortTrigger,);
+  Future<PendingRequestPage?> relationshipsListPendingRequests({
+    String? cursor,
+    int? limit,
+    String? direction,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsListPendingRequestsWithHttpInfo(
+      cursor: cursor,
+      limit: limit,
+      direction: direction,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'PendingRequestPage',) as PendingRequestPage;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PendingRequestPage',
+      ) as PendingRequestPage;
     }
     return null;
   }
@@ -366,10 +438,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<Response> relationshipsRemoveFriendshipWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsRemoveFriendshipWithHttpInfo(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/{userId}/friendship'
-      .replaceAll('{userId}', userId);
+        .replaceAll('{userId}', userId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -379,7 +454,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -398,17 +472,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<RelationshipStatus?> relationshipsRemoveFriendship(String userId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsRemoveFriendshipWithHttpInfo(userId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsRemoveFriendship(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsRemoveFriendshipWithHttpInfo(
+      userId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -420,7 +503,10 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [SendRelationshipRequest] sendRelationshipRequest:
-  Future<Response> relationshipsSendRequestWithHttpInfo({ SendRelationshipRequest? sendRelationshipRequest, Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsSendRequestWithHttpInfo({
+    SendRelationshipRequest? sendRelationshipRequest,
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/relationships/requests';
 
@@ -432,7 +518,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>['application/json'];
-
 
     return apiClient.invokeAPI(
       path,
@@ -451,17 +536,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [SendRelationshipRequest] sendRelationshipRequest:
-  Future<RelationshipStatus?> relationshipsSendRequest({ SendRelationshipRequest? sendRelationshipRequest, Future<void>? abortTrigger, }) async {
-    final response = await relationshipsSendRequestWithHttpInfo(sendRelationshipRequest: sendRelationshipRequest, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsSendRequest({
+    SendRelationshipRequest? sendRelationshipRequest,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsSendRequestWithHttpInfo(
+      sendRelationshipRequest: sendRelationshipRequest,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }
@@ -473,10 +567,13 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<Response> relationshipsUnblockWithHttpInfo(String userId, { Future<void>? abortTrigger, }) async {
+  Future<Response> relationshipsUnblockWithHttpInfo(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
-    final path = r'/api/v1/relationships/{userId}/block'
-      .replaceAll('{userId}', userId);
+    final path =
+        r'/api/v1/relationships/{userId}/block'.replaceAll('{userId}', userId);
 
     // ignore: prefer_final_locals
     Object? postBody;
@@ -486,7 +583,6 @@ class RelationshipsApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -505,17 +601,26 @@ class RelationshipsApi {
   /// Parameters:
   ///
   /// * [String] userId (required):
-  Future<RelationshipStatus?> relationshipsUnblock(String userId, { Future<void>? abortTrigger, }) async {
-    final response = await relationshipsUnblockWithHttpInfo(userId, abortTrigger: abortTrigger,);
+  Future<RelationshipStatus?> relationshipsUnblock(
+    String userId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await relationshipsUnblockWithHttpInfo(
+      userId,
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'RelationshipStatus',) as RelationshipStatus;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'RelationshipStatus',
+      ) as RelationshipStatus;
     }
     return null;
   }

@@ -134,6 +134,7 @@ export const relationshipServiceErrorCodes = [
   "CONFLICT",
   "RATE_LIMITED",
   "SELF_RELATIONSHIP",
+  "VALIDATION_FAILED",
 ] as const;
 
 export type RelationshipServiceErrorCode = (typeof relationshipServiceErrorCodes)[number];
@@ -216,6 +217,8 @@ function mapStoreError(error: unknown): never {
     case "REQUEST_EXISTS":
     case "INVALID_STATE":
       throw new RelationshipServiceError("CONFLICT", "The relationship is in a conflicting state.");
+    default:
+      throw error;
   }
 }
 
