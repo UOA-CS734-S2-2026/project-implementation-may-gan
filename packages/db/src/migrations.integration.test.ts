@@ -451,11 +451,6 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           where id = ${`media-${postId}-1`}
         `)).rejects.toMatchObject({ code: "55000" });
 
-        await expect(tx.savepoint((savepoint) => savepoint`
-          delete from public.post_media
-          where id = ${`media-${postId}-0`}
-        `)).rejects.toMatchObject({ code: "55000" });
-
         const invalidRevision = async (id: string, refs: Parameters<typeof tx.json>[0]) => {
           await expect(tx.savepoint((savepoint) => savepoint`
             insert into public.post_revisions
@@ -481,9 +476,6 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           update public.post_revisions
           set previous_rating = 9
           where id = ${`revision-${postId}-1`}
-        `)).rejects.toMatchObject({ code: "55000" });
-        await expect(tx.savepoint((savepoint) => savepoint`
-          delete from public.post_revisions where id = ${`revision-${postId}-1`}
         `)).rejects.toMatchObject({ code: "55000" });
 
         await tx`
@@ -531,5 +523,66 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     }
 
     expect(transactionError).toBe(rollbackSentinel);
+  });
+
+  it("denies app deletes of immutable post history and allows migrator cleanup", async () => {
+    // The app role runs on its own connection, so these fixtures must be
+    // committed; the migrator cleanup path below removes them again.
+    const authorId = `post-cleanup-author-${crypto.randomUUID()}`;
+    const postId = `post-cleanup-${crypto.randomUUID()}`;
+    const mediaId = `media-${postId}`;
+    const revisionId = `revision-${postId}`;
+    const noteId = `note-${postId}`;
+
+    await migrator.begin(async (tx) => {
+      await tx`
+        insert into public."user" (id, name, email)
+        values (${authorId}, 'Post Cleanup Fixture', ${`${authorId}@example.test`})
+      `;
+      await tx`
+        insert into public.posts
+          (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+        values
+          (${postId}, ${authorId}, '2026-09-22', 'prompt-01-01', 'A valid reflection', 8, 'friends', '2026-09-22T10:00:00+12:00', '2026-09-22T10:00:01+12:00')
+      `;
+      await tx`
+        insert into public.post_media (id, post_id, attachment_order)
+        values (${mediaId}, ${postId}, 0)
+      `;
+      await tx`
+        insert into public.post_revisions
+          (id, post_id, revision_number, previous_reflective_answer, previous_rating, previous_audience, previous_prompt_id, previous_attachment_refs)
+        values
+          (${revisionId}, ${postId}, 1, 'Prior reflection', 8, 'friends', 'prompt-01-01', ${tx.json([{ media_id: mediaId, attachment_order: 0, status: "attached" }])})
+      `;
+      await tx`
+        insert into public.tomorrow_notes (id, post_id, author_id, note, available_on)
+        values (${noteId}, ${postId}, ${authorId}, 'Read this tomorrow', '2026-09-23')
+      `;
+    });
+
+    try {
+      await expect(app`delete from public.tomorrow_notes where id = ${noteId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.post_revisions where id = ${revisionId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.post_media where id = ${mediaId}`).rejects.toMatchObject({ code: "55000" });
+      await expect(app`delete from public.daily_prompts where id = 'prompt-01-01'`).rejects.toMatchObject({ code: "55000" });
+    } finally {
+      await migrator.begin(async (tx) => {
+        await tx`delete from public.tomorrow_notes where post_id = ${postId}`;
+        await tx`delete from public.post_revisions where post_id = ${postId}`;
+        await tx`delete from public.post_media where post_id = ${postId}`;
+        await tx`delete from public.posts where id = ${postId}`;
+        await tx`delete from public."user" where id = ${authorId}`;
+      });
+    }
+
+    const remaining = await migrator`
+      select
+        (select count(*) from public.posts where id = ${postId})::int as posts,
+        (select count(*) from public.post_media where post_id = ${postId})::int as media,
+        (select count(*) from public.post_revisions where post_id = ${postId})::int as revisions,
+        (select count(*) from public.tomorrow_notes where post_id = ${postId})::int as notes
+    `;
+    expect(remaining[0]).toEqual({ posts: 0, media: 0, revisions: 0, notes: 0 });
   });
 });
