@@ -13,13 +13,18 @@ export interface CurrentPostingDayRouteDependencies {
   service?: CurrentPostingDayService;
 }
 
+const security: Array<Record<string, string[]>> = [
+  { BearerAuth: [] },
+  { cookieAuth: [] },
+];
+
 const currentPostingDayRoute = createRoute({
   method: "get",
   path: "/api/v1/posting-days/current",
   tags: ["Posting Days"],
   operationId: "postingDays.current",
   summary: "Read the current Auckland posting day",
-  security: [{ BearerAuth: [] }],
+  security,
   responses: {
     200: {
       description: "The server-owned current posting day and scheduled prompt.",
