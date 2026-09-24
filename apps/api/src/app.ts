@@ -13,11 +13,13 @@ import { createCurrentPostingDayService } from "./features/posting-days/current/
 import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
 import { createAucklandDayService } from "@dayli/domain";
 
-type SecondaryDependencies = MediaReservationRuntime | CurrentPostingDayRouteDependencies;
+export interface AppDependencies {
+  auth?: BetterAuthCompatibilitySlice;
+  media?: MediaReservationRuntime;
+  postingDay?: CurrentPostingDayRouteDependencies;
+}
 
-export function createApp(auth?: BetterAuthCompatibilitySlice, secondary?: SecondaryDependencies, mediaOverride?: MediaReservationRuntime) {
-  const media = mediaOverride ?? (secondary && "withRequestContext" in secondary ? secondary : undefined);
-  const postingDay = secondary && "authenticate" in secondary ? secondary : undefined;
+export function createApp({ auth, media, postingDay }: AppDependencies = {}) {
   const api = new OpenAPIHono({
     defaultHook: (result, context) => {
       if (!result.success) return context.json({ error: { code: "VALIDATION_FAILED" as const, message: "The request contains invalid values.", requestId: crypto.randomUUID(), details: { issues: result.error.issues } } }, 422);
@@ -28,6 +30,12 @@ export function createApp(auth?: BetterAuthCompatibilitySlice, secondary?: Secon
     type: "http",
     scheme: "bearer",
     bearerFormat: "Dayli session token",
+  });
+  api.openAPIRegistry.registerComponent("securitySchemes", "cookieAuth", {
+    type: "apiKey",
+    in: "cookie",
+    name: "better-auth.session_token",
+    description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
   registerHealthRoute(api);
   registerTestContractsRoute(api);
@@ -43,7 +51,7 @@ export function createAppForEnv(env: ApiEnv) {
   const r2Runtime = readR2RuntimeConfiguration(env);
   const media = configuration && r2Runtime ? createHyperdriveMediaReservationRuntime(configuration.hyperdrive, { baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins }, r2Runtime) : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
-  const api = createApp(undefined, postingDay, media);
+  const api = createApp({ postingDay, media });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env);
   return api;

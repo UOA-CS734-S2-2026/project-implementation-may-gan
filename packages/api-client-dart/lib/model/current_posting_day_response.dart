@@ -34,35 +34,38 @@ class CurrentPostingDayResponse {
   final bool hasPosted;
 
   @override
-  bool operator ==(Object other) => identical(this, other) || other is CurrentPostingDayResponse &&
-    other.serverNow == serverNow &&
-    other.localDate == localDate &&
-    other.deadlineAt == deadlineAt &&
-    other.releaseAt == releaseAt &&
-    other.prompt == prompt &&
-    other.hasPosted == hasPosted;
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CurrentPostingDayResponse &&
+          other.serverNow == serverNow &&
+          other.localDate == localDate &&
+          other.deadlineAt == deadlineAt &&
+          other.releaseAt == releaseAt &&
+          other.prompt == prompt &&
+          other.hasPosted == hasPosted;
 
   @override
   int get hashCode =>
-    // ignore: unnecessary_parenthesis
-    (serverNow.hashCode) +
-    (localDate.hashCode) +
-    (deadlineAt.hashCode) +
-    (releaseAt.hashCode) +
-    (prompt.hashCode) +
-    (hasPosted.hashCode);
+      // ignore: unnecessary_parenthesis
+      (serverNow.hashCode) +
+      (localDate.hashCode) +
+      (deadlineAt.hashCode) +
+      (releaseAt.hashCode) +
+      (prompt.hashCode) +
+      (hasPosted.hashCode);
 
   @override
-  String toString() => 'CurrentPostingDayResponse[serverNow=$serverNow, localDate=$localDate, deadlineAt=$deadlineAt, releaseAt=$releaseAt, prompt=$prompt, hasPosted=$hasPosted]';
+  String toString() =>
+      'CurrentPostingDayResponse[serverNow=$serverNow, localDate=$localDate, deadlineAt=$deadlineAt, releaseAt=$releaseAt, prompt=$prompt, hasPosted=$hasPosted]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-      json[r'serverNow'] = this.serverNow.toUtc().toIso8601String();
-      json[r'localDate'] = this.localDate;
-      json[r'deadlineAt'] = this.deadlineAt.toUtc().toIso8601String();
-      json[r'releaseAt'] = this.releaseAt.toUtc().toIso8601String();
-      json[r'prompt'] = this.prompt;
-      json[r'hasPosted'] = this.hasPosted;
+    json[r'serverNow'] = this.serverNow.toUtc().toIso8601String();
+    json[r'localDate'] = this.localDate;
+    json[r'deadlineAt'] = this.deadlineAt.toUtc().toIso8601String();
+    json[r'releaseAt'] = this.releaseAt.toUtc().toIso8601String();
+    json[r'prompt'] = this.prompt;
+    json[r'hasPosted'] = this.hasPosted;
     return json;
   }
 
@@ -75,14 +78,15 @@ class CurrentPostingDayResponse {
     DateTime? releaseAt,
     DailyPromptResponse? prompt,
     bool? hasPosted,
-  }) => CurrentPostingDayResponse(
-    serverNow: serverNow ?? this.serverNow,
-    localDate: localDate ?? this.localDate,
-    deadlineAt: deadlineAt ?? this.deadlineAt,
-    releaseAt: releaseAt ?? this.releaseAt,
-    prompt: prompt ?? this.prompt,
-    hasPosted: hasPosted ?? this.hasPosted,
-  );
+  }) =>
+      CurrentPostingDayResponse(
+        serverNow: serverNow ?? this.serverNow,
+        localDate: localDate ?? this.localDate,
+        deadlineAt: deadlineAt ?? this.deadlineAt,
+        releaseAt: releaseAt ?? this.releaseAt,
+        prompt: prompt ?? this.prompt,
+        hasPosted: hasPosted ?? this.hasPosted,
+      );
 
   /// Returns a new [CurrentPostingDayResponse] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
@@ -95,18 +99,30 @@ class CurrentPostingDayResponse {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'serverNow'), 'Required key "CurrentPostingDayResponse[serverNow]" is missing from JSON.');
-        assert(json[r'serverNow'] != null, 'Required key "CurrentPostingDayResponse[serverNow]" has a null value in JSON.');
-        assert(json.containsKey(r'localDate'), 'Required key "CurrentPostingDayResponse[localDate]" is missing from JSON.');
-        assert(json[r'localDate'] != null, 'Required key "CurrentPostingDayResponse[localDate]" has a null value in JSON.');
-        assert(json.containsKey(r'deadlineAt'), 'Required key "CurrentPostingDayResponse[deadlineAt]" is missing from JSON.');
-        assert(json[r'deadlineAt'] != null, 'Required key "CurrentPostingDayResponse[deadlineAt]" has a null value in JSON.');
-        assert(json.containsKey(r'releaseAt'), 'Required key "CurrentPostingDayResponse[releaseAt]" is missing from JSON.');
-        assert(json[r'releaseAt'] != null, 'Required key "CurrentPostingDayResponse[releaseAt]" has a null value in JSON.');
-        assert(json.containsKey(r'prompt'), 'Required key "CurrentPostingDayResponse[prompt]" is missing from JSON.');
-        assert(json[r'prompt'] != null, 'Required key "CurrentPostingDayResponse[prompt]" has a null value in JSON.');
-        assert(json.containsKey(r'hasPosted'), 'Required key "CurrentPostingDayResponse[hasPosted]" is missing from JSON.');
-        assert(json[r'hasPosted'] != null, 'Required key "CurrentPostingDayResponse[hasPosted]" has a null value in JSON.');
+        assert(json.containsKey(r'serverNow'),
+            'Required key "CurrentPostingDayResponse[serverNow]" is missing from JSON.');
+        assert(json[r'serverNow'] != null,
+            'Required key "CurrentPostingDayResponse[serverNow]" has a null value in JSON.');
+        assert(json.containsKey(r'localDate'),
+            'Required key "CurrentPostingDayResponse[localDate]" is missing from JSON.');
+        assert(json[r'localDate'] != null,
+            'Required key "CurrentPostingDayResponse[localDate]" has a null value in JSON.');
+        assert(json.containsKey(r'deadlineAt'),
+            'Required key "CurrentPostingDayResponse[deadlineAt]" is missing from JSON.');
+        assert(json[r'deadlineAt'] != null,
+            'Required key "CurrentPostingDayResponse[deadlineAt]" has a null value in JSON.');
+        assert(json.containsKey(r'releaseAt'),
+            'Required key "CurrentPostingDayResponse[releaseAt]" is missing from JSON.');
+        assert(json[r'releaseAt'] != null,
+            'Required key "CurrentPostingDayResponse[releaseAt]" has a null value in JSON.');
+        assert(json.containsKey(r'prompt'),
+            'Required key "CurrentPostingDayResponse[prompt]" is missing from JSON.');
+        assert(json[r'prompt'] != null,
+            'Required key "CurrentPostingDayResponse[prompt]" has a null value in JSON.');
+        assert(json.containsKey(r'hasPosted'),
+            'Required key "CurrentPostingDayResponse[hasPosted]" is missing from JSON.');
+        assert(json[r'hasPosted'] != null,
+            'Required key "CurrentPostingDayResponse[hasPosted]" has a null value in JSON.');
         return true;
       }());
 
@@ -122,7 +138,10 @@ class CurrentPostingDayResponse {
     return null;
   }
 
-  static List<CurrentPostingDayResponse> listFromJson(dynamic json, {bool growable = false,}) {
+  static List<CurrentPostingDayResponse> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final result = <CurrentPostingDayResponse>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -150,13 +169,19 @@ class CurrentPostingDayResponse {
   }
 
   // maps a json object with a list of CurrentPostingDayResponse-objects as value to a dart map
-  static Map<String, List<CurrentPostingDayResponse>> mapListFromJson(dynamic json, {bool growable = false,}) {
+  static Map<String, List<CurrentPostingDayResponse>> mapListFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final map = <String, List<CurrentPostingDayResponse>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = CurrentPostingDayResponse.listFromJson(entry.value, growable: growable,);
+        map[entry.key] = CurrentPostingDayResponse.listFromJson(
+          entry.value,
+          growable: growable,
+        );
       }
     }
     return map;

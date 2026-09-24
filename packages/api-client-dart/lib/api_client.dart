@@ -214,6 +214,10 @@ class ApiClient {
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
           return CreateMediaReservationResponse.fromJson(value);
+        case 'CurrentPostingDayResponse':
+          return CurrentPostingDayResponse.fromJson(value);
+        case 'DailyPromptResponse':
+          return DailyPromptResponse.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
         case 'MediaContentType':

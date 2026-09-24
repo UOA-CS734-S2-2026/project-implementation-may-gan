@@ -10,16 +10,18 @@
 
 part of openapi.api;
 
-
 class PostingDaysApi {
-  PostingDaysApi([ApiClient? apiClient]) : apiClient = apiClient ?? defaultApiClient;
+  PostingDaysApi([ApiClient? apiClient])
+      : apiClient = apiClient ?? defaultApiClient;
 
   final ApiClient apiClient;
 
   /// Read the current Auckland posting day
   ///
   /// Note: This method returns the HTTP [Response].
-  Future<Response> postingDaysCurrentWithHttpInfo({ Future<void>? abortTrigger, }) async {
+  Future<Response> postingDaysCurrentWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/posting-days/current';
 
@@ -31,7 +33,6 @@ class PostingDaysApi {
     final formParams = <String, String>{};
 
     const contentTypes = <String>[];
-
 
     return apiClient.invokeAPI(
       path,
@@ -46,17 +47,24 @@ class PostingDaysApi {
   }
 
   /// Read the current Auckland posting day
-  Future<CurrentPostingDayResponse?> postingDaysCurrent({ Future<void>? abortTrigger, }) async {
-    final response = await postingDaysCurrentWithHttpInfo(abortTrigger: abortTrigger,);
+  Future<CurrentPostingDayResponse?> postingDaysCurrent({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postingDaysCurrentWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
     if (response.statusCode >= HttpStatus.badRequest) {
       throw ApiException(response.statusCode, await _decodeBodyBytes(response));
     }
     // When a remote server returns no body with a status of 204, we shall not decode it.
     // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
     // FormatException when trying to decode an empty string.
-    if (response.body.isNotEmpty && response.statusCode != HttpStatus.noContent) {
-      return await apiClient.deserializeAsync(await _decodeBodyBytes(response), 'CurrentPostingDayResponse',) as CurrentPostingDayResponse;
-
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'CurrentPostingDayResponse',
+      ) as CurrentPostingDayResponse;
     }
     return null;
   }
