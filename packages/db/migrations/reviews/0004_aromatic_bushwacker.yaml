@@ -1,0 +1,6 @@
+reason: Add the immutable daily prompt catalog with canonical IDs that encode each row's month-day and version. The migration remains unpublished, so the second-pass constraint correction is included in this reviewed schema.
+affected_data_and_clients: No prompt rows exist in the target at migration time. Existing clients remain compatible because this creates a new server-owned reference table only.
+rollout_sequence: Merge the additive schema, apply it through the protected staging migration workflow, verify the 366-row catalog and canonical ID checks, then deploy prompt-consuming clients.
+backup_checkpoint: Confirm the required Neon restore point before any protected-environment migration.
+forward_fix_plan: This migration remains unpublished, so reviewed schema corrections are made in place before rollout; after publication, use a separately reviewed additive migration for any prompt schema or catalog correction.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.
