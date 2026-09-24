@@ -8,12 +8,6 @@ When a friendship becomes active, both users can read all previously released po
 
 Authors may edit released posts. Each edit creates an immutable revision. Readers see an `Edited` marker and can inspect earlier versions when they still have permission to read the post.
 
-## Daily prompt versions and tomorrow notes
-
-The server owns the daily prompt for each Auckland calendar day. Version-one reference data reuses the 366 prompts and stable `prompt-MM-DD` IDs from `732-workspace/group-project-wdcc` at source commit `7d2dfd6`. Prompt rows are immutable. A changed prompt is a new versioned row with a new ID and an Auckland effective date; historical posts continue to reference the original prompt row and text.
-
-The submitted tomorrow note is an immutable author-only note stored outside ordinary post and revision projections. It becomes visible only to its author from the following Auckland day. It is separate from a chosen-date future-self note. Editing post content never exposes the tomorrow note early or to another reader.
-
 ## Blocking and messages
 
 Blocking immediately prevents new messages, read receipts, typing or presence events, profile access, and journal access. Existing direct-message history remains readable by both users. Neither user can resume the conversation until the block is removed.

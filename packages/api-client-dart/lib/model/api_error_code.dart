@@ -10,7 +10,6 @@
 
 part of openapi.api;
 
-
 enum ApiErrorCode {
   BAD_REQUEST._(r'BAD_REQUEST'),
   UNAUTHENTICATED._(r'UNAUTHENTICATED'),
@@ -37,11 +36,15 @@ enum ApiErrorCode {
 
   /// Returns the instance of [ApiErrorCode] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static ApiErrorCode? fromJson(dynamic value) => ApiErrorCodeTypeTransformer().decode(value);
+  static ApiErrorCode? fromJson(dynamic value) =>
+      ApiErrorCodeTypeTransformer().decode(value);
 
   /// Returns a [List] containing instances of [ApiErrorCode]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<ApiErrorCode> listFromJson(dynamic json, {bool growable = false,}) {
+  static List<ApiErrorCode> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
     final result = <ApiErrorCode>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -58,7 +61,8 @@ enum ApiErrorCode {
 /// Transformation class that can [encode] an instance of [ApiErrorCode] to String,
 /// and [decode] dynamic data back to [ApiErrorCode].
 class ApiErrorCodeTypeTransformer {
-  factory ApiErrorCodeTypeTransformer() => _instance ??= const ApiErrorCodeTypeTransformer._();
+  factory ApiErrorCodeTypeTransformer() =>
+      _instance ??= const ApiErrorCodeTypeTransformer._();
 
   const ApiErrorCodeTypeTransformer._();
 
@@ -80,15 +84,24 @@ class ApiErrorCodeTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'BAD_REQUEST': return ApiErrorCode.BAD_REQUEST;
-        case r'UNAUTHENTICATED': return ApiErrorCode.UNAUTHENTICATED;
-        case r'FORBIDDEN': return ApiErrorCode.FORBIDDEN;
-        case r'NOT_FOUND': return ApiErrorCode.NOT_FOUND;
-        case r'CONFLICT': return ApiErrorCode.CONFLICT;
-        case r'VALIDATION_FAILED': return ApiErrorCode.VALIDATION_FAILED;
-        case r'RATE_LIMITED': return ApiErrorCode.RATE_LIMITED;
-        case r'INTERNAL_ERROR': return ApiErrorCode.INTERNAL_ERROR;
-        case r'SERVICE_UNAVAILABLE': return ApiErrorCode.SERVICE_UNAVAILABLE;
+        case r'BAD_REQUEST':
+          return ApiErrorCode.BAD_REQUEST;
+        case r'UNAUTHENTICATED':
+          return ApiErrorCode.UNAUTHENTICATED;
+        case r'FORBIDDEN':
+          return ApiErrorCode.FORBIDDEN;
+        case r'NOT_FOUND':
+          return ApiErrorCode.NOT_FOUND;
+        case r'CONFLICT':
+          return ApiErrorCode.CONFLICT;
+        case r'VALIDATION_FAILED':
+          return ApiErrorCode.VALIDATION_FAILED;
+        case r'RATE_LIMITED':
+          return ApiErrorCode.RATE_LIMITED;
+        case r'INTERNAL_ERROR':
+          return ApiErrorCode.INTERNAL_ERROR;
+        case r'SERVICE_UNAVAILABLE':
+          return ApiErrorCode.SERVICE_UNAVAILABLE;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

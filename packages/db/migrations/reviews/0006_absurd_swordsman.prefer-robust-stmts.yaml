@@ -1,6 +1,0 @@
-reason: The migration runner applies this additive relationship batch atomically; IF NOT EXISTS would hide an incompatible partial schema. The deferred friendship constraint trigger and paired-direction index are part of the same atomic relationship schema.
-affected_data_and_clients: Three new empty relationship tables and their enums, constraints, foreign keys, and indexes; no legacy rows are moved or rewritten.
-rollout_sequence: Apply through the protected migration workflow, then run the relationship integration and concurrency checks before promotion.
-backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
-forward_fix_plan: Add a new reviewed migration for any relationship schema correction; never edit this migration after release.
-reviewer: Required database CODEOWNER review in the pull request before protected migration execution.
