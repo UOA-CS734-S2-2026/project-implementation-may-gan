@@ -38,41 +38,38 @@ class CreateMediaReservationResponse {
   final MediaReservationUpload upload;
 
   @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CreateMediaReservationResponse &&
-          other.id == id &&
-          other.contentType == contentType &&
-          other.byteSize == byteSize &&
-          other.status == status &&
-          other.createdAt == createdAt &&
-          other.expiresAt == expiresAt &&
-          other.upload == upload;
+  bool operator ==(Object other) => identical(this, other) || other is CreateMediaReservationResponse &&
+    other.id == id &&
+    other.contentType == contentType &&
+    other.byteSize == byteSize &&
+    other.status == status &&
+    other.createdAt == createdAt &&
+    other.expiresAt == expiresAt &&
+    other.upload == upload;
 
   @override
   int get hashCode =>
-      // ignore: unnecessary_parenthesis
-      (id.hashCode) +
-      (contentType.hashCode) +
-      (byteSize.hashCode) +
-      (status.hashCode) +
-      (createdAt.hashCode) +
-      (expiresAt.hashCode) +
-      (upload.hashCode);
+    // ignore: unnecessary_parenthesis
+    (id.hashCode) +
+    (contentType.hashCode) +
+    (byteSize.hashCode) +
+    (status.hashCode) +
+    (createdAt.hashCode) +
+    (expiresAt.hashCode) +
+    (upload.hashCode);
 
   @override
-  String toString() =>
-      'CreateMediaReservationResponse[id=$id, contentType=$contentType, byteSize=$byteSize, status=$status, createdAt=$createdAt, expiresAt=$expiresAt, upload=$upload]';
+  String toString() => 'CreateMediaReservationResponse[id=$id, contentType=$contentType, byteSize=$byteSize, status=$status, createdAt=$createdAt, expiresAt=$expiresAt, upload=$upload]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'id'] = this.id;
-    json[r'contentType'] = this.contentType;
-    json[r'byteSize'] = this.byteSize;
-    json[r'status'] = this.status;
-    json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
-    json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
-    json[r'upload'] = this.upload;
+      json[r'id'] = this.id;
+      json[r'contentType'] = this.contentType;
+      json[r'byteSize'] = this.byteSize;
+      json[r'status'] = this.status;
+      json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
+      json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
+      json[r'upload'] = this.upload;
     return json;
   }
 
@@ -86,16 +83,15 @@ class CreateMediaReservationResponse {
     DateTime? createdAt,
     DateTime? expiresAt,
     MediaReservationUpload? upload,
-  }) =>
-      CreateMediaReservationResponse(
-        id: id ?? this.id,
-        contentType: contentType ?? this.contentType,
-        byteSize: byteSize ?? this.byteSize,
-        status: status ?? this.status,
-        createdAt: createdAt ?? this.createdAt,
-        expiresAt: expiresAt ?? this.expiresAt,
-        upload: upload ?? this.upload,
-      );
+  }) => CreateMediaReservationResponse(
+    id: id ?? this.id,
+    contentType: contentType ?? this.contentType,
+    byteSize: byteSize ?? this.byteSize,
+    status: status ?? this.status,
+    createdAt: createdAt ?? this.createdAt,
+    expiresAt: expiresAt ?? this.expiresAt,
+    upload: upload ?? this.upload,
+  );
 
   /// Returns a new [CreateMediaReservationResponse] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
@@ -108,34 +104,20 @@ class CreateMediaReservationResponse {
       // Note 1: the values aren't checked for validity beyond being non-null.
       // Note 2: this code is stripped in release mode!
       assert(() {
-        assert(json.containsKey(r'id'),
-            'Required key "CreateMediaReservationResponse[id]" is missing from JSON.');
-        assert(json[r'id'] != null,
-            'Required key "CreateMediaReservationResponse[id]" has a null value in JSON.');
-        assert(json.containsKey(r'contentType'),
-            'Required key "CreateMediaReservationResponse[contentType]" is missing from JSON.');
-        assert(json[r'contentType'] != null,
-            'Required key "CreateMediaReservationResponse[contentType]" has a null value in JSON.');
-        assert(json.containsKey(r'byteSize'),
-            'Required key "CreateMediaReservationResponse[byteSize]" is missing from JSON.');
-        assert(json[r'byteSize'] != null,
-            'Required key "CreateMediaReservationResponse[byteSize]" has a null value in JSON.');
-        assert(json.containsKey(r'status'),
-            'Required key "CreateMediaReservationResponse[status]" is missing from JSON.');
-        assert(json[r'status'] != null,
-            'Required key "CreateMediaReservationResponse[status]" has a null value in JSON.');
-        assert(json.containsKey(r'createdAt'),
-            'Required key "CreateMediaReservationResponse[createdAt]" is missing from JSON.');
-        assert(json[r'createdAt'] != null,
-            'Required key "CreateMediaReservationResponse[createdAt]" has a null value in JSON.');
-        assert(json.containsKey(r'expiresAt'),
-            'Required key "CreateMediaReservationResponse[expiresAt]" is missing from JSON.');
-        assert(json[r'expiresAt'] != null,
-            'Required key "CreateMediaReservationResponse[expiresAt]" has a null value in JSON.');
-        assert(json.containsKey(r'upload'),
-            'Required key "CreateMediaReservationResponse[upload]" is missing from JSON.');
-        assert(json[r'upload'] != null,
-            'Required key "CreateMediaReservationResponse[upload]" has a null value in JSON.');
+        assert(json.containsKey(r'id'), 'Required key "CreateMediaReservationResponse[id]" is missing from JSON.');
+        assert(json[r'id'] != null, 'Required key "CreateMediaReservationResponse[id]" has a null value in JSON.');
+        assert(json.containsKey(r'contentType'), 'Required key "CreateMediaReservationResponse[contentType]" is missing from JSON.');
+        assert(json[r'contentType'] != null, 'Required key "CreateMediaReservationResponse[contentType]" has a null value in JSON.');
+        assert(json.containsKey(r'byteSize'), 'Required key "CreateMediaReservationResponse[byteSize]" is missing from JSON.');
+        assert(json[r'byteSize'] != null, 'Required key "CreateMediaReservationResponse[byteSize]" has a null value in JSON.');
+        assert(json.containsKey(r'status'), 'Required key "CreateMediaReservationResponse[status]" is missing from JSON.');
+        assert(json[r'status'] != null, 'Required key "CreateMediaReservationResponse[status]" has a null value in JSON.');
+        assert(json.containsKey(r'createdAt'), 'Required key "CreateMediaReservationResponse[createdAt]" is missing from JSON.');
+        assert(json[r'createdAt'] != null, 'Required key "CreateMediaReservationResponse[createdAt]" has a null value in JSON.');
+        assert(json.containsKey(r'expiresAt'), 'Required key "CreateMediaReservationResponse[expiresAt]" is missing from JSON.');
+        assert(json[r'expiresAt'] != null, 'Required key "CreateMediaReservationResponse[expiresAt]" has a null value in JSON.');
+        assert(json.containsKey(r'upload'), 'Required key "CreateMediaReservationResponse[upload]" is missing from JSON.');
+        assert(json[r'upload'] != null, 'Required key "CreateMediaReservationResponse[upload]" has a null value in JSON.');
         return true;
       }());
 
@@ -152,10 +134,7 @@ class CreateMediaReservationResponse {
     return null;
   }
 
-  static List<CreateMediaReservationResponse> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<CreateMediaReservationResponse> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <CreateMediaReservationResponse>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -183,19 +162,13 @@ class CreateMediaReservationResponse {
   }
 
   // maps a json object with a list of CreateMediaReservationResponse-objects as value to a dart map
-  static Map<String, List<CreateMediaReservationResponse>> mapListFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static Map<String, List<CreateMediaReservationResponse>> mapListFromJson(dynamic json, {bool growable = false,}) {
     final map = <String, List<CreateMediaReservationResponse>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = CreateMediaReservationResponse.listFromJson(
-          entry.value,
-          growable: growable,
-        );
+        map[entry.key] = CreateMediaReservationResponse.listFromJson(entry.value, growable: growable,);
       }
     }
     return map;

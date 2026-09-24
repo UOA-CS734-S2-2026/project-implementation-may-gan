@@ -10,6 +10,7 @@
 
 part of openapi.api;
 
+
 enum MediaReservationStatus {
   pending._(r'pending'),
   expired._(r'expired'),
@@ -29,15 +30,11 @@ enum MediaReservationStatus {
 
   /// Returns the instance of [MediaReservationStatus] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static MediaReservationStatus? fromJson(dynamic value) =>
-      MediaReservationStatusTypeTransformer().decode(value);
+  static MediaReservationStatus? fromJson(dynamic value) => MediaReservationStatusTypeTransformer().decode(value);
 
   /// Returns a [List] containing instances of [MediaReservationStatus]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<MediaReservationStatus> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
+  static List<MediaReservationStatus> listFromJson(dynamic json, {bool growable = false,}) {
     final result = <MediaReservationStatus>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
@@ -54,8 +51,7 @@ enum MediaReservationStatus {
 /// Transformation class that can [encode] an instance of [MediaReservationStatus] to String,
 /// and [decode] dynamic data back to [MediaReservationStatus].
 class MediaReservationStatusTypeTransformer {
-  factory MediaReservationStatusTypeTransformer() =>
-      _instance ??= const MediaReservationStatusTypeTransformer._();
+  factory MediaReservationStatusTypeTransformer() => _instance ??= const MediaReservationStatusTypeTransformer._();
 
   const MediaReservationStatusTypeTransformer._();
 
@@ -77,10 +73,8 @@ class MediaReservationStatusTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'pending':
-          return MediaReservationStatus.pending;
-        case r'expired':
-          return MediaReservationStatus.expired;
+        case r'pending': return MediaReservationStatus.pending;
+        case r'expired': return MediaReservationStatus.expired;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

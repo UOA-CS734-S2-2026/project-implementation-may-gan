@@ -4,6 +4,7 @@ import postgres, { type Sql } from "postgres";
 import { schema } from "./schema";
 
 export { schema } from "./schema";
+export { sql } from "drizzle-orm";
 export * from "./content-validation";
 
 export type DayliDatabase = PostgresJsDatabase<typeof schema>;
