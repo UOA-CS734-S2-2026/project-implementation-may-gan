@@ -108,7 +108,9 @@ export const relationshipStoreErrorCodes = [
   "ALREADY_FRIENDS",
   "REQUEST_EXISTS",
   "INVALID_STATE",
+  "INVALID_CURSOR",
   "SELF_RELATIONSHIP",
+  "VALIDATION_FAILED",
   "THROTTLED",
 ] as const;
 
@@ -208,6 +210,8 @@ function mapStoreError(error: unknown): never {
       });
     case "SELF_RELATIONSHIP":
       throw new RelationshipServiceError("SELF_RELATIONSHIP", "A relationship target must be another user.");
+    case "INVALID_CURSOR":
+      throw new RelationshipServiceError("VALIDATION_FAILED", "The pagination cursor is invalid.");
     case "ALREADY_FRIENDS":
     case "REQUEST_EXISTS":
     case "INVALID_STATE":
@@ -225,12 +229,15 @@ function toPendingRequest(request: StoredPendingRequest | null): PendingRelation
   return request;
 }
 
-export function toRelationshipStatus(snapshot: StoredRelationshipSnapshot): RelationshipStatus {
-  if (!snapshot.targetExists) {
+export function toRelationshipStatus(
+  snapshot: StoredRelationshipSnapshot,
+  options: { concealBlocked?: boolean } = {},
+): RelationshipStatus {
+  const blocked = snapshot.blocks.actorBlocksSubject || snapshot.blocks.subjectBlocksActor;
+  if (!snapshot.targetExists || (options.concealBlocked && blocked)) {
     throw new RelationshipServiceError("NOT_FOUND", "The requested relationship resource was not found.");
   }
 
-  const blocked = snapshot.blocks.actorBlocksSubject || snapshot.blocks.subjectBlocksActor;
   const incomingRequest = blocked ? null : toPendingRequest(snapshot.requests.incoming);
   // Unordered-pair pending exclusivity makes this branch unreachable for a
   // valid store. Suppress the reverse row if defensive projection sees both.
@@ -281,7 +288,10 @@ export function createRelationshipsService(
   return {
     async getStatus(actorId, subjectId) {
       assertDifferentUsers(actorId, subjectId);
-      return toRelationshipStatus(await inTransaction((transaction) => transaction.getSnapshot(actorId, subjectId)));
+      return toRelationshipStatus(
+        await inTransaction((transaction) => transaction.getSnapshot(actorId, subjectId)),
+        { concealBlocked: true },
+      );
     },
 
     async listPendingRequests(actorId, direction, limit, cursor) {

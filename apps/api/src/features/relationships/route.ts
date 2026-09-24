@@ -204,10 +204,10 @@ function sessionUnavailable(context: Context) {
 
 function serviceError(context: Context, error: unknown) {
   if (!(error instanceof RelationshipServiceError)) {
-    // Repository and adapter failures must not cross the API boundary. The
-    // composition root may log the original error with its own redaction
-    // policy, but clients only receive the stable public error contract.
-    return context.json(errorBody("INTERNAL_ERROR", "The relationship operation could not be completed."), 500);
+    // Repository and adapter failures must not cross the API boundary. Keep a
+    // server-side breadcrumb while returning the documented outage response.
+    console.error("dayli relationship operation failed", error);
+    return context.json(errorBody("SERVICE_UNAVAILABLE", "Relationship storage is temporarily unavailable."), 503);
   }
 
   switch (error.code) {
@@ -222,6 +222,8 @@ function serviceError(context: Context, error: unknown) {
         ...(error.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: error.retryAfterSeconds }),
       }), 429);
     case "SELF_RELATIONSHIP":
+      return context.json(errorBody("VALIDATION_FAILED", error.message), 422);
+    case "VALIDATION_FAILED":
       return context.json(errorBody("VALIDATION_FAILED", error.message), 422);
   }
 }

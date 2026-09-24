@@ -220,7 +220,7 @@ describe("relationship service transaction boundary", () => {
     });
   });
 
-  it("does not expose stale request details when a block is present", async () => {
+  it("conceals blocked targets from relationship status reads", async () => {
     const getSnapshot = vi.fn(async () => snapshot({
       blocks: { actorBlocksSubject: false, subjectBlocksActor: true },
       requests: {
@@ -230,11 +230,8 @@ describe("relationship service transaction boundary", () => {
     }));
     const service = createRelationshipsService(testStore({ getSnapshot }), { now: () => fixedNow });
 
-    await expect(service.getStatus("user_alice", "user_bob")).resolves.toEqual({
-      userId: "user_bob",
-      status: "blocked",
-      incomingRequest: null,
-      outgoingRequest: null,
+    await expect(service.getStatus("user_alice", "user_bob")).rejects.toMatchObject({
+      code: "NOT_FOUND",
     });
   });
 });

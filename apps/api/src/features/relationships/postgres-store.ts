@@ -16,16 +16,30 @@ function rows<T extends Row>(value: unknown): T[] {
 }
 
 function pairKey(left: string, right: string): string {
-  return [left, right].sort().join("\u0000");
+  return [left, right]
+    .sort()
+    .map((value) => `${value.length}:${value}`)
+    .join(":");
 }
 
 function cursorValue(cursor: string | undefined): { createdAt: string; id: string } | undefined {
   if (!cursor) return undefined;
   try {
-    const parsed = JSON.parse(atob(cursor.replaceAll("-", "+").replaceAll("_", "/"))) as { createdAt?: unknown; id?: unknown };
-    if (typeof parsed.createdAt === "string" && typeof parsed.id === "string") return parsed as { createdAt: string; id: string };
-  } catch { /* Invalid cursors are treated as the first page. */ }
-  return undefined;
+    const normalized = cursor.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    const parsed = JSON.parse(atob(padded)) as { createdAt?: unknown; id?: unknown };
+    if (
+      typeof parsed.createdAt === "string"
+      && !Number.isNaN(Date.parse(parsed.createdAt))
+      && typeof parsed.id === "string"
+      && parsed.id.length > 0
+    ) {
+      return parsed as { createdAt: string; id: string };
+    }
+  } catch {
+    // Fall through to the stable public validation error below.
+  }
+  throw new RelationshipStoreError("INVALID_CURSOR");
 }
 
 function nextCursor(createdAt: string, id: string): string {

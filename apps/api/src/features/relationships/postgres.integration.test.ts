@@ -4,7 +4,7 @@ import { createHyperdriveRelationshipsStore } from "./postgres-store";
 import { createRelationshipsService } from "./service";
 
 /**
- * These tests must use a disposable database containing migration 0005.
+ * These tests must use a disposable database containing migration 0006.
  * Refuse the shared local fixture: other agents use it concurrently.
  */
 const connectionString = process.env.RELATIONSHIP_TEST_DATABASE_URL;
@@ -30,8 +30,17 @@ suite("Postgres relationship persistence", () => {
   });
 
   afterAll(async () => {
-    await database.client`delete from public."user" where id = any(${users}::text[])`;
-    await database.close();
+    try {
+      // Relationship foreign keys intentionally use NO ACTION. Remove child
+      // projections before deleting fixture users, then always close the
+      // request-scoped database even if cleanup reports a failure.
+      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
+      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
+      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
+      await database.client`delete from public."user" where id = any(${users}::text[])`;
+    } finally {
+      await database.close();
+    }
   });
 
   it("serializes reverse sends so exactly one pending request survives", async () => {
