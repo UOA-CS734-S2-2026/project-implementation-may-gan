@@ -1,0 +1,6 @@
+reason: Author and post foreign keys on a new empty table keep idempotency records owned; cascade lets post and account cleanup remove them first.
+affected_data_and_clients: post_idempotency_keys only; the brief SHARE ROW EXCLUSIVE lock on user and posts is taken while the table is empty.
+rollout_sequence: Apply during the protected workflow before the dependent Worker release.
+forward_fix_plan: Add a new reviewed migration for any key correction; never edit this migration after release.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.

@@ -210,12 +210,20 @@ class ApiClient {
           return ApiErrorCodeTypeTransformer().decode(value);
         case 'ApiErrorError':
           return ApiErrorError.fromJson(value);
+        case 'CreateDailyPostRequest':
+          return CreateDailyPostRequest.fromJson(value);
         case 'CreateMediaReservationRequest':
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
           return CreateMediaReservationResponse.fromJson(value);
         case 'CurrentPostingDayResponse':
           return CurrentPostingDayResponse.fromJson(value);
+        case 'DailyPost':
+          return DailyPost.fromJson(value);
+        case 'DailyPostPrompt':
+          return DailyPostPrompt.fromJson(value);
+        case 'DailyPostTomorrowNote':
+          return DailyPostTomorrowNote.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
         case 'HealthResponse':
@@ -232,6 +240,8 @@ class ApiClient {
           return PendingRelationshipRequest.fromJson(value);
         case 'PendingRequestPage':
           return PendingRequestPage.fromJson(value);
+        case 'PostAudience':
+          return PostAudienceTypeTransformer().decode(value);
         case 'RelationshipState':
           return RelationshipStateTypeTransformer().decode(value);
         case 'RelationshipStatus':

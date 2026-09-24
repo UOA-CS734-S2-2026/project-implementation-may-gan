@@ -44,7 +44,8 @@ Friendship rows are a paired directional projection. Migration `0006_absurd_swor
 Application deletion first makes the post or account inaccessible. A tracked
 cleanup job then connects as `migrator` and removes dependent rows in child-first
 order. For a post, delete `tomorrow_notes`, `post_revisions`,
-`legacy_cloudinary_media`, and `post_media` before `posts`; for an account,
+`legacy_cloudinary_media`, and `post_media` before `posts`
+(`post_idempotency_keys` rows cascade with their post); for an account,
 remove relationship rows and post children before the `user` row. The immutable
 history triggers permit deletes only for the `migrator` role, and the job must
 record each batch and retry failed batches. Ordinary app connections cannot
