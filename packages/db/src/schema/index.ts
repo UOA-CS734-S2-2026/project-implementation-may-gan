@@ -8,6 +8,7 @@ import {
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { dailyPrompts } from "./daily-prompts";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -98,4 +99,6 @@ export const mediaReservation = pgTable("media_reservation", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt)]);
 
-export const schema = { account, session, user, verification, rateLimit, mediaReservation };
+export { dailyPrompts } from "./daily-prompts";
+
+export const schema = { account, dailyPrompts, session, user, verification, rateLimit, mediaReservation };
