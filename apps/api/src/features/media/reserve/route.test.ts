@@ -18,15 +18,18 @@ function createFakeRepository(): MediaReservationRepository & { records: Map<str
   const records = new Map<string, MediaReservationRecord>();
   return {
     records,
-    async countActiveForOwner(ownerId, now) {
+    // No `await` between the count and the write; whole body runs as one; 
+    // equivalent to the real repository's transaction + advisory lock so 
+    // concurrency tests behave the same way against both
+    async reserveIfUnderQuota(ownerId, maxPending, now, record) {
       let count = 0;
-      for (const record of records.values()) {
-        if (record.ownerId === ownerId && record.expiresAt.getTime() > now.getTime()) count += 1;
+      for (const existing of records.values()) {
+        if (existing.ownerId === ownerId && existing.expiresAt.getTime() > now.getTime()) count += 1;
       }
-      return count;
-    },
-    async insert(record) {
+      if (count >= maxPending) return "quota_exceeded";
+
       records.set(record.id, record);
+      return "inserted";
     },
     async findById(id) {
       return records.get(id);

@@ -45,10 +45,22 @@ function request(path: string, init: RequestInit = {}) {
   return new Request(`${origin}${path}`, { ...init, headers });
 }
 
+/**
+ * Better Auth's rate limiter buckets by `cf-connecting-ip`. Requests with no such
+ * header all share one bucket, so this file's several distinct test users would
+ * otherwise collide and get silently rate-limited after a handful of sign-ups.
+ * Give each simulated user their own synthetic IP, like a real distinct user would have.
+ */
+function syntheticIpFor(email: string): string {
+  let hash = 0;
+  for (const char of email) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `203.0.113.${(hash % 254) + 1}`;
+}
+
 async function signUp(app: ReturnType<typeof createProductionApp>, email: string) {
   const response = await app.fetch(request("/api/auth/sign-up/email", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cf-connecting-ip": syntheticIpFor(email) },
     body: JSON.stringify({ name: "Media Test User", email, password: "not-a-real-password" }),
   }));
   const token = response.headers.get("set-auth-token");
@@ -119,6 +131,27 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     expect((await reserve(app, token)).status).toBe(429);
 
     const [row] = await migrator.client`select count(*)::int as count from public.media_reservation`;
+    expect(row?.count).toBe(MAX_PENDING_RESERVATIONS_PER_OWNER);
+  });
+
+  it("serialises concurrent reservation attempts so the quota is never exceeded", async () => {
+    const app = createProductionApp();
+    const token = await signUp(app, "concurrent-owner@example.test");
+
+    const attempts = MAX_PENDING_RESERVATIONS_PER_OWNER + 10;
+    const responses = await Promise.all(
+      Array.from({ length: attempts }, () => reserve(app, token)),
+    );
+
+    const succeeded = responses.filter((response) => response.status === 201);
+    const quotaExceeded = responses.filter((response) => response.status === 429);
+    expect(succeeded).toHaveLength(MAX_PENDING_RESERVATIONS_PER_OWNER);
+    expect(quotaExceeded).toHaveLength(attempts - MAX_PENDING_RESERVATIONS_PER_OWNER);
+
+    const [row] = await migrator.client`
+      select count(*)::int as count from public.media_reservation
+      where owner_id = (select id from public."user" where email = 'concurrent-owner@example.test')
+    `;
     expect(row?.count).toBe(MAX_PENDING_RESERVATIONS_PER_OWNER);
   });
 

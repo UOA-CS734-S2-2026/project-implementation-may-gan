@@ -28,15 +28,14 @@ export async function createMediaReservation(
   request: CreateMediaReservationRequest,
 ): Promise<CreateMediaReservationResult> {
   const now = (deps.clock ?? (() => new Date()))();
-  const activeCount = await deps.repository.countActiveForOwner(ownerId, now);
-  if (activeCount >= MAX_PENDING_RESERVATIONS_PER_OWNER) {
-    return { outcome: "quota_exceeded" };
-  }
-
   const id = (deps.generateId ?? defaultGenerateId)();
   const objectKey = `media/${ownerId}/${id}`;
   const expiresAt = new Date(now.getTime() + RESERVATION_TTL_SECONDS * 1000);
 
+  // Presigning is a pure local computation (no DB/R2 network call), so it's safe to
+  // do before the transaction. If the quota check below rejects, it is simply
+  // discarded; nothing was persisted or uploaded, so there is nothing to clean up.
+  
   const upload = await createPresignedUploadUrl(deps.r2, {
     objectKey,
     contentType: request.contentType,
@@ -45,7 +44,7 @@ export async function createMediaReservation(
     now,
   });
 
-  await deps.repository.insert({
+  const outcome = await deps.repository.reserveIfUnderQuota(ownerId, MAX_PENDING_RESERVATIONS_PER_OWNER, now, {
     id,
     ownerId,
     objectKey,
@@ -54,6 +53,9 @@ export async function createMediaReservation(
     createdAt: now,
     expiresAt,
   });
+  if (outcome === "quota_exceeded") {
+    return { outcome: "quota_exceeded" };
+  }
 
   return {
     outcome: "created",
