@@ -130,12 +130,14 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       values
         ('prompt-04-30-v2', '04-29', 'Mismatched prompt day', 2, '2099-04-01', 'dayli-test', 'test')
     `).rejects.toMatchObject({ code: "23514" });
+    // The v1 row already owns this ID, so the immutability guard rejects the
+    // changed replay before the canonical-ID check can run.
     await expect(migrator`
       insert into public.daily_prompts
         (id, month_day, text, version, effective_date, source, source_commit)
       values
         ('prompt-04-30', '04-30', 'Missing version suffix', 2, '2099-04-01', 'dayli-test', 'test')
-    `).rejects.toMatchObject({ code: "23514" });
+    `).rejects.toMatchObject({ code: "55000" });
     await expect(migrator`
       insert into public.daily_prompts
         (id, month_day, text, version, effective_date, source, source_commit)
