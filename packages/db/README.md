@@ -39,4 +39,15 @@ Friendship rows are a paired directional projection. Migration `0006_absurd_swor
 
 `packages/db/admin/bootstrap-roles.sql` is run by an administrator on each Neon branch. It provisions `migrator` for schema ownership and `app` for DML-only access to new `public` tables. Do not commit passwords, URLs, branch IDs, screenshots containing private hostnames, or workflow logs containing secrets.
 
+## Deletion cleanup
+
+Application deletion first makes the post or account inaccessible. A tracked
+cleanup job then connects as `migrator` and removes dependent rows in child-first
+order. For a post, delete `tomorrow_notes`, `post_revisions`,
+`legacy_cloudinary_media`, and `post_media` before `posts`; for an account,
+remove relationship rows and post children before the `user` row. The immutable
+history triggers permit deletes only for the `migrator` role, and the job must
+record each batch and retry failed batches. Ordinary app connections cannot
+delete immutable history or prompt rows.
+
 The legacy Supabase inventory is not a Neon migration command. It starts a read-only transaction and emits aggregate counts only, but its database role must also be restricted to `CONNECT` and `SELECT` on the approved legacy tables. See [the Supabase to Neon migration boundary](../../docs/dayli/supabase-neon-migration-boundary.md) for the fixed scope, fixture rules, and evidence requirements.

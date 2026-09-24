@@ -32,6 +32,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app;
 
+-- Prompt versions are deployment data, not app-authored content.
+DO $$
+BEGIN
+  IF to_regclass('public.daily_prompts') IS NOT NULL THEN
+    REVOKE INSERT ON TABLE public.daily_prompts FROM app;
+  END IF;
+END
+$$;
+
 -- This protected import role is intentionally not included in app default grants.
 -- It receives only the user and account transfer rights after the target tables exist.
 DO $$
