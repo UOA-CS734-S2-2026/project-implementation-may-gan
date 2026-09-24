@@ -28,7 +28,7 @@ async function signedGoogleToken(audience: string, subject = "migrated-google-su
 }
 
 function createGoogleApp() {
-  return createApp(createBetterAuthCompatibilitySlice({
+  return createApp({ auth: createBetterAuthCompatibilitySlice({
     baseURL: origin,
     secret,
     google: { clientIds, clientSecret: "worker-only-google-secret" },
@@ -52,7 +52,7 @@ function createGoogleApp() {
       session: [],
       verification: [],
     },
-  }));
+  }) });
 }
 
 function request(body: object) {
