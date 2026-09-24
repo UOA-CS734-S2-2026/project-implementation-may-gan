@@ -1,13 +1,20 @@
 import {
   bigint,
   boolean,
+  check,
+  date,
+  foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
 
 /**
@@ -16,6 +23,7 @@ import { dailyPrompts } from "./daily-prompts";
  */
 export const profileVisibility = pgEnum("profile_visibility", ["public", "private"]);
 export const tier = pgEnum("tier", ["free", "pro"]);
+export const postAudience = pgEnum("post_audience", ["solo", "friends"]);
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -84,11 +92,129 @@ export const rateLimit = pgTable("rateLimit", {
 });
 
 /**
- * An owned, opaque R2 object path reserved before a direct client upload. No status
- * column: pending/expired is derived from expiresAt at read time, no confirm/complete
- * state machine yet. objectKey is persisted rather than recomputed so we won't need to
- * re-derive the path-construction convention independently later.
+ * A post is one accepted response for one author and Auckland calendar day.
+ * Once accepted, localDate is immutable because tomorrow-note availability is
+ * derived from it. Audience is deliberately required without a default so
+ * legacy imports cannot silently acquire a visibility policy.
  */
+export const posts = pgTable("posts", {
+  id: text("id").primaryKey(),
+  authorId: text("author_id").notNull().references(() => user.id),
+  localDate: date("local_date", { mode: "string" }).notNull(),
+  promptId: text("prompt_id").notNull().references(() => dailyPrompts.id),
+  reflectiveAnswer: text("reflective_answer").notNull(),
+  caption: text("caption"),
+  rating: integer("rating").notNull(),
+  audience: postAudience("audience").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
+  releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("posts_author_local_date_unique").on(table.authorId, table.localDate),
+  unique("posts_id_author_unique").on(table.id, table.authorId),
+  check("posts_rating_check", sql`${table.rating} between 1 and 10`),
+  check(
+    "posts_reflective_answer_length_check",
+    sql`char_length(${table.reflectiveAnswer}) between 1 and 4000 and ${table.reflectiveAnswer} = btrim(${table.reflectiveAnswer})`,
+  ),
+  check(
+    "posts_caption_length_check",
+    sql`${table.caption} is null or char_length(${table.caption}) <= 1000`,
+  ),
+  check("posts_release_after_acceptance_check", sql`${table.releasedAt} > ${table.acceptedAt}`),
+]);
+
+/** Rows in this table represent accepted attachments only; upload reservation,
+ * validation, authorization, and cleanup belong to the later media issues.
+ * postId and id ownership are immutable at the database level because revisions
+ * retain historical media IDs in JSON metadata. Removal is represented by
+ * detachedAt; post_media rows must never be physically deleted. */
+export const postMedia = pgTable("post_media", {
+  id: text("id").primaryKey(),
+  postId: text("post_id").notNull().references(() => posts.id),
+  attachmentOrder: integer("attachment_order").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).defaultNow().notNull(),
+  detachedAt: timestamp("detached_at", { withTimezone: true }),
+}, (table) => [
+  uniqueIndex("post_media_active_post_order_unique")
+    .on(table.postId, table.attachmentOrder)
+    .where(sql`${table.detachedAt} is null`),
+  check("post_media_attachment_order_check", sql`${table.attachmentOrder} >= 0`),
+]);
+
+/** Legacy-only Cloudinary identifiers and URLs. A URL here is provenance
+ * metadata, never an authorization or serving grant. */
+export const legacyCloudinaryMedia = pgTable("legacy_cloudinary_media", {
+  mediaId: text("media_id").primaryKey().references(() => postMedia.id),
+  cloudinaryPublicId: text("cloudinary_public_id").notNull(),
+  cloudinaryUrl: text("cloudinary_url").notNull(),
+  legacyType: text("legacy_type"),
+});
+
+/**
+ * Revisions capture the complete prior post projection. Attachment refs are a
+ * JSON metadata snapshot rather than a serving relation, so a removed media
+ * row can remain historically describable without retaining byte access.
+ */
+export const postRevisions = pgTable("post_revisions", {
+  id: text("id").primaryKey(),
+  postId: text("post_id").notNull().references(() => posts.id),
+  revisionNumber: integer("revision_number").notNull(),
+  previousReflectiveAnswer: text("previous_reflective_answer").notNull(),
+  previousCaption: text("previous_caption"),
+  previousRating: integer("previous_rating").notNull(),
+  previousAudience: postAudience("previous_audience").notNull(),
+  previousPromptId: text("previous_prompt_id").notNull().references(() => dailyPrompts.id),
+  previousAttachmentRefs: jsonb("previous_attachment_refs").$type<ReadonlyArray<{
+    media_id: string;
+    attachment_order: number;
+    status: "attached" | "detached";
+  }>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  unique("post_revisions_post_number_unique").on(table.postId, table.revisionNumber),
+  check("post_revisions_revision_number_check", sql`${table.revisionNumber} > 0`),
+  check("post_revisions_previous_rating_check", sql`${table.previousRating} between 1 and 10`),
+  check(
+    "post_revisions_previous_answer_length_check",
+    sql`char_length(${table.previousReflectiveAnswer}) between 1 and 4000 and ${table.previousReflectiveAnswer} = btrim(${table.previousReflectiveAnswer})`,
+  ),
+  check(
+    "post_revisions_previous_caption_length_check",
+    sql`${table.previousCaption} is null or char_length(${table.previousCaption}) <= 1000`,
+  ),
+  check(
+    "post_revisions_attachment_refs_array_check",
+    sql`public.dayli_attachment_refs_valid(${table.previousAttachmentRefs})`,
+  ),
+]);
+
+/**
+ * Tomorrow notes intentionally live outside post and revision projections.
+ * availableOn is the first Auckland date on which the author may read it;
+ * application authorization must still require that author identity.
+ */
+export const tomorrowNotes = pgTable("tomorrow_notes", {
+  id: text("id").primaryKey(),
+  postId: text("post_id").notNull().unique().references(() => posts.id),
+  authorId: text("author_id").notNull().references(() => user.id),
+  note: text("note").notNull(),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+  availableOn: date("available_on", { mode: "string" }).notNull(),
+}, (table) => [
+  foreignKey({
+    columns: [table.postId, table.authorId],
+    foreignColumns: [posts.id, posts.authorId],
+    name: "tomorrow_notes_post_author_fk",
+  }),
+  check(
+    "tomorrow_notes_length_check",
+    sql`char_length(${table.note}) between 1 and 1000`,
+  ),
+]);
+
+/** An owned, opaque R2 object path reserved before a direct client upload. */
 export const mediaReservation = pgTable("media_reservation", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -101,4 +227,17 @@ export const mediaReservation = pgTable("media_reservation", {
 
 export { dailyPrompts } from "./daily-prompts";
 
-export const schema = { account, dailyPrompts, session, user, verification, rateLimit, mediaReservation };
+export const schema = {
+  account,
+  mediaReservation,
+  dailyPrompts,
+  legacyCloudinaryMedia,
+  postMedia,
+  postRevisions,
+  posts,
+  rateLimit,
+  session,
+  tomorrowNotes,
+  user,
+  verification,
+};
