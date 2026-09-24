@@ -78,6 +78,11 @@ CREATE TABLE "post_media" (
 	CONSTRAINT "post_media_attachment_order_check" CHECK ("post_media"."attachment_order" >= 0)
 );
 --> statement-breakpoint
+
+-- The schema deliberately remains capable of more than three attachments for
+-- future product changes. The post write service must enforce the current
+-- three-attachment, 25 MB, and video-duration limits atomically.
+
 CREATE TABLE "post_revisions" (
 	"id" text PRIMARY KEY NOT NULL,
 	"post_id" text NOT NULL,
@@ -183,6 +188,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+  IF current_user = 'migrator' THEN
+    RETURN OLD;
+  END IF;
+
   RAISE EXCEPTION 'post_media rows cannot be deleted; detach media instead' USING ERRCODE = '55000';
 END;
 $function$;--> statement-breakpoint
@@ -197,6 +206,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+  IF TG_OP = 'DELETE' AND current_user = 'migrator' THEN
+    RETURN OLD;
+  END IF;
+
   RAISE EXCEPTION 'post_revisions rows are immutable' USING ERRCODE = '55000';
 END;
 $function$;--> statement-breakpoint
@@ -273,7 +286,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
-  IF OLD.accepted_at IS NOT NULL AND NEW.local_date IS DISTINCT FROM OLD.local_date THEN
+  IF NEW.local_date IS DISTINCT FROM OLD.local_date THEN
     RAISE EXCEPTION 'accepted post local_date is immutable' USING ERRCODE = '55000';
   END IF;
 
@@ -290,6 +303,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $function$
 BEGIN
+  IF TG_OP = 'DELETE' AND current_user = 'migrator' THEN
+    RETURN OLD;
+  END IF;
+
   RAISE EXCEPTION 'tomorrow_notes rows are immutable' USING ERRCODE = '55000';
 END;
 $function$;--> statement-breakpoint
@@ -297,3 +314,23 @@ $function$;--> statement-breakpoint
 CREATE TRIGGER tomorrow_notes_immutable_trigger
 BEFORE UPDATE OR DELETE ON public.tomorrow_notes
 FOR EACH ROW EXECUTE FUNCTION public.dayli_tomorrow_note_immutable();
+
+-- A post's author and Auckland date are part of its identity. The migrator
+-- bypass above is intentionally limited to deletion cleanup; normal writes
+-- cannot move a post between accounts or days.
+CREATE FUNCTION public.dayli_post_identity_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.author_id IS DISTINCT FROM OLD.author_id THEN
+    RAISE EXCEPTION 'post author_id is immutable' USING ERRCODE = '55000';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$;--> statement-breakpoint
+
+CREATE TRIGGER posts_author_immutable_trigger
+BEFORE UPDATE OF author_id ON public.posts
+FOR EACH ROW EXECUTE FUNCTION public.dayli_post_identity_immutable();

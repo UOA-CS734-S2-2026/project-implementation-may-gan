@@ -278,6 +278,7 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     expect(column("posts", "audience")).toMatchObject({ is_nullable: "NO", column_default: null });
 
     const authorId = `post-foundation-author-${crypto.randomUUID()}`;
+    const otherAuthorId = `post-foundation-other-author-${crypto.randomUUID()}`;
     const postId = `post-foundation-${crypto.randomUUID()}`;
     const otherPostId = `post-foundation-other-${crypto.randomUUID()}`;
     const promptId = "prompt-01-01";
@@ -288,7 +289,9 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
       await migrator.begin(async (tx) => {
         await tx`
           insert into public."user" (id, name, email)
-          values (${authorId}, 'Post Foundation Fixture', ${`${authorId}@example.test`})
+          values
+            (${authorId}, 'Post Foundation Fixture', ${`${authorId}@example.test`}),
+            (${otherAuthorId}, 'Other Post Foundation Fixture', ${`${otherAuthorId}@example.test`})
         `;
         await tx`
           insert into public.posts
@@ -418,6 +421,12 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
         `)).rejects.toMatchObject({ code: "55000" });
 
         await expect(tx.savepoint((savepoint) => savepoint`
+          update public.posts
+          set author_id = ${otherAuthorId}
+          where id = ${postId}
+        `)).rejects.toMatchObject({ code: "55000" });
+
+        await expect(tx.savepoint((savepoint) => savepoint`
           update public.post_media
           set id = ${`reused-media-${postId}`}
           where id = ${`media-${postId}-1`}
@@ -479,6 +488,22 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
           select note, available_on::text as available_on from public.tomorrow_notes where id = ${`note-${postId}`}
         `;
         expect(noteRows).toEqual([{ note: "Read this tomorrow", available_on: "2026-09-23" }]);
+
+        // The tracked migrator cleanup is the only supported physical-delete
+        // path for immutable post history. Keep this fixture transactional.
+        await tx`delete from public.tomorrow_notes where post_id = ${postId}`;
+        await tx`delete from public.post_revisions where post_id = ${postId}`;
+        await tx`delete from public.legacy_cloudinary_media where media_id like ${`media-${postId}-%`}`;
+        await tx`delete from public.post_media where post_id = ${postId}`;
+        await tx`delete from public.posts where id = ${postId}`;
+        const deletedRows = await tx`
+          select
+            (select count(*) from public.posts where id = ${postId})::int as posts,
+            (select count(*) from public.post_media where post_id = ${postId})::int as media,
+            (select count(*) from public.post_revisions where post_id = ${postId})::int as revisions,
+            (select count(*) from public.tomorrow_notes where post_id = ${postId})::int as notes
+        `;
+        expect(deletedRows[0]).toEqual({ posts: 0, media: 0, revisions: 0, notes: 0 });
 
         throw rollbackSentinel;
       });
