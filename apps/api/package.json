@@ -13,7 +13,6 @@
   "dependencies": {
     "@dayli/contracts": "workspace:*",
     "@dayli/db": "workspace:*",
-    "@dayli/domain": "workspace:*",
     "@hono/zod-openapi": "1.6.3",
     "@scalar/hono-api-reference": "0.12.1",
     "aws4fetch": "1.0.20",

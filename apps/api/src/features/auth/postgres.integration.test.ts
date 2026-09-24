@@ -1,5 +1,6 @@
 import { createDayliDatabase } from "@dayli/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAppForEnv } from "../../app";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
@@ -61,8 +62,17 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     "TEST_DATABASE_URL",
   ));
 
+  beforeAll(async () => {
+    await migrator.client.unsafe('drop table if exists public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
+    await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier cascade');
+    const authMigration = await readFile(new URL("../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
+    const rateLimitMigration = await readFile(new URL("../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
+    await migrator.client.unsafe(authMigration);
+    await migrator.client.unsafe(rateLimitMigration);
+  });
+
   beforeEach(async () => {
-    await migrator.client.unsafe('truncate table public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
+    await migrator.client.unsafe('truncate table public.account, public.session, public.verification, public."user" cascade');
   });
 
   afterAll(async () => {

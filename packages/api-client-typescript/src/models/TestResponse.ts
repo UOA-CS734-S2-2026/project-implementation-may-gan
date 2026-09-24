@@ -30,7 +30,7 @@ export interface TestResponse {
     /**
      *
      */
-    aucklandDate: string;
+    aucklandDate: Date;
     /**
      *
      */
@@ -72,7 +72,7 @@ export function TestResponseFromJSONTyped(json: any, ignoreDiscriminator: boolea
 
         'message': json['message'],
         'timestamp': (json['timestamp'] == null ? json['timestamp'] : parseDateTime(json['timestamp'])),
-        'aucklandDate': json['aucklandDate'],
+        'aucklandDate': (json['aucklandDate'] == null ? json['aucklandDate'] : parseDate(json['aucklandDate'])),
         'requestedLimit': json['requestedLimit'],
     };
 }
@@ -90,7 +90,7 @@ export function TestResponseToJSONTyped(value?: TestResponse | null, ignoreDiscr
 
         'message': value['message'],
         'timestamp': value['timestamp'] == null ? value['timestamp'] : serializeDateTime(value['timestamp']),
-        'aucklandDate': value['aucklandDate'],
+        'aucklandDate': value['aucklandDate'] == null ? value['aucklandDate'] : serializeDate(value['aucklandDate']),
         'requestedLimit': value['requestedLimit'],
     };
 }
