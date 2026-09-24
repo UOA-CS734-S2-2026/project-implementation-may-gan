@@ -65,27 +65,36 @@ void main() {
     },
   );
 
-  test('exchanges a Google SDK ID token for the existing native session handoff', () async {
-    final tokenStore = MemorySessionTokenStore();
-    late Map<String, dynamic> signInBody;
-    final client = MockClient((request) async {
-      signInBody = jsonDecode(request.body) as Map<String, dynamic>;
-      return http.Response('', 200, headers: {'set-auth-token': 'worker-token'});
-    });
-    final session = BetterAuthNativeSession(
-      baseUrl: 'https://api.example.test',
-      tokenStore: tokenStore,
-      client: client,
-    );
+  test(
+    'exchanges a Google SDK ID token for the existing native session handoff',
+    () async {
+      final tokenStore = MemorySessionTokenStore();
+      late Map<String, dynamic> signInBody;
+      final client = MockClient((request) async {
+        signInBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response(
+          '',
+          200,
+          headers: {'set-auth-token': 'worker-token'},
+        );
+      });
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: client,
+      );
 
-    await session.signInWithGoogle(FakeGoogleIdTokenProvider('google-id-token'));
+      await session.signInWithGoogle(
+        FakeGoogleIdTokenProvider('google-id-token'),
+      );
 
-    expect(tokenStore.value, 'worker-token');
-    expect(signInBody, {
-      'provider': 'google',
-      'idToken': {'token': 'google-id-token'},
-    });
-  });
+      expect(tokenStore.value, 'worker-token');
+      expect(signInBody, {
+        'provider': 'google',
+        'idToken': {'token': 'google-id-token'},
+      });
+    },
+  );
 
   test('does not persist a token when Google sign-in is rejected', () async {
     final tokenStore = MemorySessionTokenStore();
@@ -97,7 +106,9 @@ void main() {
     );
 
     await expectLater(
-      session.signInWithGoogle(FakeGoogleIdTokenProvider('invalid-google-id-token')),
+      session.signInWithGoogle(
+        FakeGoogleIdTokenProvider('invalid-google-id-token'),
+      ),
       throwsA(isA<AuthenticationFailure>()),
     );
     expect(tokenStore.value, isNull);

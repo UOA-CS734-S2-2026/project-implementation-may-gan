@@ -78,6 +78,18 @@ class AuthenticationFailure implements Exception {
   String toString() => 'AuthenticationFailure($operation, $statusCode)';
 }
 
+class SessionUser {
+  const SessionUser({
+    required this.id,
+    required this.name,
+    required this.email,
+  });
+
+  final String id;
+  final String name;
+  final String email;
+}
+
 class BetterAuthNativeSession {
   BetterAuthNativeSession({
     required String baseUrl,
@@ -99,6 +111,19 @@ class BetterAuthNativeSession {
       body: jsonEncode({'email': email, 'password': password}),
     );
     await _storeNativeToken(response, 'sign-in');
+  }
+
+  Future<void> signUp({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final response = await _client.post(
+      _uri('/api/auth/sign-up/email'),
+      headers: const {'content-type': 'application/json'},
+      body: jsonEncode({'name': name, 'email': email, 'password': password}),
+    );
+    await _storeNativeToken(response, 'sign-up');
   }
 
   Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
@@ -129,6 +154,31 @@ class BetterAuthNativeSession {
     }
     return response;
   }
+
+  /// The signed-in user, or null when there is no valid session. A missing,
+  /// expired, or revoked session clears the stored token.
+  Future<SessionUser?> currentUser() async {
+    if (await _tokenStore.read() == null) return null;
+    final response = await getSession();
+    if (response.statusCode == 401) return null;
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('get-session', response.statusCode);
+    }
+    final body = jsonDecode(response.body);
+    if (body is! Map<String, dynamic>) return null;
+    final user = body['user'];
+    if (user is! Map<String, dynamic>) return null;
+    final id = user['id'];
+    if (id is! String || id.isEmpty) return null;
+    return SessionUser(
+      id: id,
+      name: user['name'] is String ? user['name'] as String : '',
+      email: user['email'] is String ? user['email'] as String : '',
+    );
+  }
+
+  /// The stored bearer token for application API calls, if any.
+  Future<String?> bearerToken() => _tokenStore.read();
 
   Future<void> signOut() async {
     final token = await _tokenStore.read();

@@ -1,0 +1,159 @@
+import 'dart:convert';
+
+import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/posting_day_client.dart';
+import 'package:dayli_mobile/app/app_scope.dart';
+import 'package:dayli_mobile/auth/native_session.dart';
+import 'package:dayli_mobile/auth/session_controller.dart';
+import 'package:dayli_mobile/drafts/daily_post_draft.dart';
+import 'package:dayli_mobile/drafts/draft_store.dart';
+import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+class MemoryTokenStore implements SessionTokenStore {
+  String? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<String?> read() async => value;
+
+  @override
+  Future<void> write(String token) async => value = token;
+}
+
+class MemoryUserCache implements SessionUserCache {
+  SessionUser? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<SessionUser?> read() async => value;
+
+  @override
+  Future<void> write(SessionUser user) async => value = user;
+}
+
+class MemoryDraftStore implements DraftStore {
+  final drafts = <String, DailyPostDraft>{};
+  int writes = 0;
+
+  @override
+  Future<void> clear(String userId) async => drafts.remove(userId);
+
+  @override
+  Future<DraftReadResult> read(String userId) async =>
+      DraftReadResult(drafts[userId]);
+
+  @override
+  Future<void> write(DailyPostDraft draft) async {
+    writes++;
+    drafts[draft.userId] = draft;
+  }
+}
+
+class FakePostingDayClient implements PostingDayClient {
+  FakePostingDayClient(this.result);
+
+  ApiResult<PostingDay> result;
+  int calls = 0;
+
+  @override
+  Future<ApiResult<PostingDay>> current() async {
+    calls++;
+    return result;
+  }
+}
+
+class FakeSubmitter implements DailyPostSubmitter {
+  FakeSubmitter(this.result);
+
+  SubmissionResult result;
+  final submitted = <DailyPostDraft>[];
+
+  @override
+  Future<SubmissionResult> submit(DailyPostDraft draft) async {
+    submitted.add(draft);
+    return result;
+  }
+}
+
+PostingDay postingDay({
+  String localDate = '2026-09-25',
+  String promptId = 'prompt-09-25',
+  String promptText = 'What made you smile today?',
+  bool hasPosted = false,
+}) => PostingDay(
+  serverNow: DateTime.utc(2026, 9, 25, 3),
+  localDate: localDate,
+  deadlineAt: DateTime.utc(2026, 9, 25, 12),
+  promptId: promptId,
+  promptText: promptText,
+  hasPosted: hasPosted,
+);
+
+/// A signed-out-by-default app wired to in-memory fakes. A Better Auth mock
+/// accepts `jos@example.test` / `correct-password`.
+class TestHarness {
+  TestHarness({ApiResult<PostingDay>? day, SubmissionResult? submission})
+    : postingDays = FakePostingDayClient(day ?? ApiSuccess(postingDay())),
+      submitter = FakeSubmitter(
+        submission ??
+            const SubmissionAccepted(postId: 'post-1', replayed: false),
+      ) {
+    final client = MockClient((request) async {
+      final path = request.url.path;
+      if (path.endsWith('/sign-in/email')) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        return body['password'] == 'correct-password'
+            ? http.Response('{}', 200, headers: {'set-auth-token': 'token-1'})
+            : http.Response('{}', 401);
+      }
+      if (path.endsWith('/get-session')) {
+        return request.headers['authorization'] == 'Bearer token-1'
+            ? http.Response(
+                jsonEncode({
+                  'user': {
+                    'id': 'user-1',
+                    'name': 'Jos',
+                    'email': 'jos@example.test',
+                  },
+                  'session': {'id': 's1'},
+                }),
+                200,
+              )
+            : http.Response('null', 200);
+      }
+      if (path.endsWith('/sign-out')) return http.Response('{}', 200);
+      return http.Response('{}', 404);
+    });
+    session = SessionController(
+      session: BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokens,
+        client: client,
+      ),
+      tokenStore: tokens,
+      userCache: users,
+      drafts: drafts,
+    );
+  }
+
+  final tokens = MemoryTokenStore();
+  final users = MemoryUserCache();
+  final drafts = MemoryDraftStore();
+  final FakePostingDayClient postingDays;
+  final FakeSubmitter submitter;
+  late final SessionController session;
+
+  AppServices get services => AppServices(
+    session: session,
+    postingDays: postingDays,
+    drafts: drafts,
+    submitter: submitter,
+    clock: () => DateTime.utc(2026, 9, 25, 3),
+  );
+}
