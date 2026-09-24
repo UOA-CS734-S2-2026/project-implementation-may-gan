@@ -60,9 +60,14 @@ suite("Postgres relationship persistence", () => {
   });
 
   it("persists paired friendship rows and block cleanup atomically", async () => {
-    const status = await service.acceptRequest(users[1]!, (await database.client`
-      select id from public.friend_requests where status = 'pending' limit 1
-    `)[0]!.id as string);
+    // Either reverse send may have won the previous race, so accept as
+    // whichever fixture user actually received the surviving request.
+    const [pending] = await database.client`
+      select id, recipient_id from public.friend_requests
+      where status = 'pending' and ((sender_id = ${users[0]!} and recipient_id = ${users[1]!})
+        or (sender_id = ${users[1]!} and recipient_id = ${users[0]!}))
+    `;
+    const status = await service.acceptRequest(pending!.recipient_id as string, pending!.id as string);
     expect(status.status).toBe("friends");
 
     const [friendshipRows] = await database.client`
