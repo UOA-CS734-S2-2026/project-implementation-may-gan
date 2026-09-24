@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAppForEnv } from "../../../apps/api/src/app";
@@ -44,10 +43,6 @@ const profileColumns = "id, name, username, display_username, bio, mbti, what_i_
 
   beforeAll(async () => {
     await admin.unsafe("drop schema if exists legacy_source cascade");
-    await admin.unsafe('drop table if exists public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
-    await admin.unsafe("drop type if exists public.profile_visibility, public.tier cascade");
-    await admin.unsafe(await readFile(new URL("../migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8"));
-    await admin.unsafe(await readFile(new URL("../migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8"));
     await admin.unsafe("create schema legacy_source");
     await admin.unsafe("create type legacy_source.profile_visibility as enum ('public', 'private')");
     await admin.unsafe("create type legacy_source.tier as enum ('free', 'pro')");

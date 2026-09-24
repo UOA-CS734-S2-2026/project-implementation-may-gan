@@ -38,7 +38,7 @@ Neon PostgreSQL 18 is the database provider. The project uses a `production` par
 
 ## Deletion, backups, and recovery
 
-Deleted posts and accounts become inaccessible through the application immediately. A tracked job removes active database records and media. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
+Deleted posts and accounts become inaccessible through the application immediately. A tracked cleanup job running as the `migrator` role removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Immutable-history triggers allow this bypass only for that cleanup role; every batch is recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
 
 For course and pilot stages, the recovery point objective is 24 hours and the recovery time objective is 8 hours. These are targets until a recorded restoration exercise verifies them.
 
