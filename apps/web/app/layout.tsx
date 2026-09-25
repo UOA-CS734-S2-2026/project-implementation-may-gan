@@ -21,7 +21,7 @@ const spectral = Spectral({
 
 export const metadata: Metadata = {
   title: "Dayli",
-  description: "One reflection a day",
+  description: "An application to catchup with your friends",
   referrer: "no-referrer",
 };
 

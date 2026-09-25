@@ -12,7 +12,7 @@ import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 const signInSchema = z.object({
-  email: z.email("Enter a valid email address"),
+  identifier: z.string().min(1, "Email or username is required"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -28,11 +28,19 @@ export default function SignInPage() {
     formState: { isSubmitting, errors },
   } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { identifier: "", password: "" },
   });
 
-  const onSubmit = async ({ email, password }: SignInValues) => {
-    const { error } = await authClient.signIn.email({ email, password });
+  const onSubmit = async ({ identifier, password }: SignInValues) => {
+    const isEmail = identifier.includes("@");
+
+    // Username sign-in arrives with usernames on the profile API (#68).
+    if (!isEmail) {
+      setError("root", { message: "Sign in with your email for now." });
+      return;
+    }
+
+    const { error } = await authClient.signIn.email({ email: identifier, password });
 
     if (error) {
       setError("root", { message: error.message ?? "Invalid credentials." });
@@ -65,11 +73,10 @@ export default function SignInPage() {
 
         <FormInput
           control={control}
-          name="email"
-          label="Email"
-          type="email"
-          autoComplete="email"
-          placeholder="you@example.com"
+          name="identifier"
+          label="Email or username"
+          autoComplete="username"
+          placeholder="you@example.com or @handle"
         />
         <FormInput
           control={control}
