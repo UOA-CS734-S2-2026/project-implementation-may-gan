@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../ui/surfaces.dart';
 import 'theme.dart';
 
 class SplashScreen extends StatelessWidget {
@@ -7,14 +8,10 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: Center(
-      child: Text(
-        'Dayli',
-        style: Theme.of(context).textTheme.displaySmall?.copyWith(
-          color: DayliColors.of(context).accent,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
+    backgroundColor: DayliColors.of(context).background,
+    body: const DayliPage(
+      tilted: true,
+      child: Center(child: DayliLogo(width: 250)),
     ),
   );
 }

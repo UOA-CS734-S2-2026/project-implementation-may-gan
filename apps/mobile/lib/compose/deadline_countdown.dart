@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../app/theme.dart';
 
 /// Counts down to the server's posting deadline, corrected for device clock
-/// skew, like the web app's countdown.
+/// skew. Styled as WDCC's PostDeadlineCountdown.
 class DeadlineCountdown extends StatefulWidget {
   const DeadlineCountdown({
     super.key,
@@ -58,8 +58,26 @@ class _DeadlineCountdownState extends State<DeadlineCountdown> {
       (two(remaining.inSeconds.remainder(60)), 'secs'),
     ];
     final colors = DayliColors.of(context);
-    final serif = Theme.of(context).textTheme.titleLarge;
+    final digits = DayliText.serif(
+      context,
+      size: DayliTextSize.lg,
+      weight: FontWeight.w600,
+      tracking: DayliTracking.tight,
+      color: colors.foregroundAccent,
+    );
+    final colon = DayliText.serif(
+      context,
+      size: DayliTextSize.lg,
+      weight: FontWeight.w600,
+      color: colors.foregroundSecondary,
+    ).copyWith(height: 1);
+    final unit = DayliText.serif(
+      context,
+      size: DayliTextSize.sm,
+      color: colors.foregroundSecondary,
+    );
 
+    // WDCC's PostDeadlineCountdown markup.
     return Semantics(
       label:
           'Time left to post: ${remaining.inHours} hours '
@@ -67,14 +85,15 @@ class _DeadlineCountdownState extends State<DeadlineCountdown> {
       excludeSemantics: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final (index, (value, unit)) in parts.indexed) ...[
+          for (final (index, (value, label)) in parts.indexed) ...[
             if (index > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 18, left: 4, right: 4),
-                child: Text(
-                  ':',
-                  style: serif?.copyWith(color: colors.foregroundSecondary),
+              SizedBox(
+                height: 48,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                  child: Center(child: Text(':', style: colon)),
                 ),
               ),
             Column(
@@ -87,22 +106,10 @@ class _DeadlineCountdownState extends State<DeadlineCountdown> {
                     color: colors.backgroundAccent,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    value,
-                    style: serif?.copyWith(
-                      fontSize: 18,
-                      color: colors.foregroundAccent,
-                    ),
-                  ),
+                  child: Text(value, style: digits),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  unit,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colors.foregroundSecondary,
-                  ),
-                ),
+                Text(label, style: unit),
               ],
             ),
           ],

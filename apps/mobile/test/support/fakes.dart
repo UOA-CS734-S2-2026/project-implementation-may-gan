@@ -5,6 +5,7 @@ import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
+import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
@@ -53,6 +54,19 @@ class MemoryDraftStore implements DraftStore {
     writes++;
     drafts[draft.userId] = draft;
   }
+}
+
+class FakeMediaPicker implements MediaPicker {
+  var picks = 0;
+
+  @override
+  Future<DraftAttachment?> pickPhoto() async => _next();
+
+  @override
+  Future<DraftAttachment?> pickPhotoOrVideo() async => _next();
+
+  DraftAttachment _next() =>
+      DraftAttachment(localPath: '/photos/${picks++}.jpg', mediaType: 'image');
 }
 
 class FakePostingDayClient implements PostingDayClient {
@@ -147,6 +161,7 @@ class TestHarness {
   final drafts = MemoryDraftStore();
   final FakePostingDayClient postingDays;
   final FakeSubmitter submitter;
+  final mediaPicker = FakeMediaPicker();
   late final SessionController session;
 
   AppServices get services => AppServices(
@@ -154,6 +169,7 @@ class TestHarness {
     postingDays: postingDays,
     drafts: drafts,
     submitter: submitter,
+    mediaPicker: mediaPicker,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }

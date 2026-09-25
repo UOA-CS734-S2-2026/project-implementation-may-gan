@@ -17,6 +17,9 @@ abstract final class DailyPostLimits {
   static const reflectiveAnswerMax = 4000;
   static const captionMax = 1000;
   static const tomorrowNoteMax = 1000;
+
+  /// WDCC's media rule: up to three photos, or one video.
+  static const photosMax = 3;
 }
 
 int codePointLength(String value) => value.runes.length;
@@ -40,18 +43,21 @@ enum ComposerPhase {
 
 class ComposerFieldErrors {
   const ComposerFieldErrors({
+    this.media,
     this.rating,
     this.reflectiveAnswer,
     this.caption,
     this.tomorrowNote,
   });
 
+  final String? media;
   final String? rating;
   final String? reflectiveAnswer;
   final String? caption;
   final String? tomorrowNote;
 
   bool get isEmpty =>
+      media == null &&
       rating == null &&
       reflectiveAnswer == null &&
       caption == null &&
@@ -62,14 +68,15 @@ ComposerFieldErrors validateDraft(DailyPostDraft draft) {
   final answer = draft.reflectiveAnswer.trim();
   final rating = draft.rating;
   return ComposerFieldErrors(
+    media: draft.attachments.isEmpty ? 'Please upload at least one file' : null,
     rating:
         rating == null ||
             rating < DailyPostLimits.ratingMin ||
             rating > DailyPostLimits.ratingMax
-        ? 'Rate your day from 1 to 10.'
+        ? 'Rating must be between 1 and 10'
         : null,
     reflectiveAnswer: answer.isEmpty
-        ? 'Please respond to the daily prompt.'
+        ? 'Please respond to the daily prompt'
         : codePointLength(answer) > DailyPostLimits.reflectiveAnswerMax
         ? 'Keep your response under ${DailyPostLimits.reflectiveAnswerMax} characters.'
         : null,
@@ -199,6 +206,7 @@ class ComposerController extends ChangeNotifier {
     int? Function()? rating,
     PostAudience? audience,
     String? tomorrowNote,
+    List<DraftAttachment>? attachments,
   }) {
     final current = _draft;
     if (current == null || _phase != ComposerPhase.editing) return;
@@ -208,6 +216,7 @@ class ComposerController extends ChangeNotifier {
       rating: rating,
       audience: audience,
       tomorrowNote: tomorrowNote,
+      attachments: attachments,
       updatedAt: _clock(),
     );
     _message = null;

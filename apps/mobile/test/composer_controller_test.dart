@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
 
+const photo = DraftAttachment(localPath: '/photos/0.jpg', mediaType: 'image');
+
 void main() {
   late MemoryDraftStore drafts;
   late FakePostingDayClient days;
@@ -27,6 +29,7 @@ void main() {
     reflectiveAnswer: '  Coffee by the harbour  ',
     rating: () => 7,
     tomorrowNote: 'Bring the camera.',
+    attachments: const [photo],
   );
 
   setUp(() {
@@ -201,6 +204,16 @@ void main() {
     expect(composer.phase, ComposerPhase.posted);
   });
 
+  test('requires a photo or video, like WDCC', () async {
+    final composer = controller();
+    await composer.load();
+    composer.update(reflectiveAnswer: 'Coffee', rating: () => 7);
+    await composer.submit();
+
+    expect(composer.errors.media, 'Please upload at least one file');
+    expect(submitter.submitted, isEmpty);
+  });
+
   test('counts emoji as single characters', () {
     final base = DailyPostDraft(
       userId: 'u',
@@ -210,6 +223,7 @@ void main() {
       idempotencyKey: 'k',
       updatedAt: DateTime.utc(2026),
       rating: 5,
+      attachments: const [photo],
     );
     expect(
       validateDraft(base.copyWith(reflectiveAnswer: '😀' * 4000)).isEmpty,

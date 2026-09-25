@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
 
 import '../api/posting_day_client.dart';
+import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
+import '../compose/media_picker.dart';
 import '../drafts/draft_store.dart';
 import '../posts/post_submitter.dart';
 
@@ -12,6 +14,8 @@ class AppServices {
     required this.postingDays,
     required this.drafts,
     required this.submitter,
+    this.google,
+    this.mediaPicker = const DeviceMediaPicker(),
     this.clock = DateTime.now,
   });
 
@@ -19,6 +23,10 @@ class AppServices {
   final PostingDayClient postingDays;
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
+
+  /// Null when this build has no Google client ID configured.
+  final GoogleIdTokenProvider? google;
+  final MediaPicker mediaPicker;
   final DateTime Function() clock;
 }
 

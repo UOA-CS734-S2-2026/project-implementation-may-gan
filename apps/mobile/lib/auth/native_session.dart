@@ -47,7 +47,7 @@ class FlutterGoogleIdTokenProvider implements GoogleIdTokenProvider {
     required String webClientId,
     required String iosClientId,
   }) : _initialize = GoogleSignIn.instance.initialize(
-         clientId: iosClientId,
+         clientId: iosClientId.isEmpty ? null : iosClientId,
          serverClientId: webClientId,
        );
 

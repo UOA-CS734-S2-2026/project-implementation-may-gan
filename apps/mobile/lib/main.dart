@@ -51,6 +51,12 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         drafts: drafts,
+        google: config.googleSignInConfigured
+            ? FlutterGoogleIdTokenProvider(
+                webClientId: config.googleWebClientId,
+                iosClientId: config.googleIosClientId,
+              )
+            : null,
         // Replaced by the generated posts client once #16 is merged.
         submitter: const UnavailablePostSubmitter(),
       ),
