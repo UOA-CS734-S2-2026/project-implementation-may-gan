@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
-import '../ui/dayli_button.dart';
 
-/// WDCC's settings page. Usernames and profile visibility arrive with the
-/// profile API (#68). Signing out also removes the unsent draft.
+/// Account settings as grouped rows. Usernames and profile visibility arrive
+/// with the profile API (#68). Signing out also removes the unsent draft.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -14,159 +14,281 @@ class SettingsScreen extends StatelessWidget {
     final session = AppScope.of(context).session;
     final user = session.user;
     final colors = DayliColors.of(context);
-    final border = Border.all(color: colors.foreground.withValues(alpha: 0.1));
+    final name = user?.name ?? '';
+    final initial = name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 64, 16, 64),
-      children: [
-        Text(
-          'Settings',
-          style: DayliText.sans(
-            context,
-            size: DayliTextSize.xxl,
-            weight: FontWeight.w600,
-            tracking: DayliTracking.tight,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Your account details.',
-          style: DayliText.sans(
-            context,
-            size: DayliTextSize.sm,
-            color: colors.foreground.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: border,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Column(
-            children: [
-              const _Row(label: 'Username', value: 'not set yet'),
-              const SizedBox(height: 12),
-              _Row(label: 'Name', value: user?.name ?? ''),
-              const SizedBox(height: 12),
-              _Row(label: 'Email', value: user?.email ?? ''),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            border: border,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Private profile',
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.sm,
-                        weight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      'Anyone can see your profile',
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        color: colors.foreground.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  tooltip: 'Back',
+                  onPressed: () =>
+                      context.canPop() ? context.pop() : context.go('/'),
+                  icon: const Icon(Icons.arrow_back_rounded),
                 ),
-              ),
-              // Shown disabled until the profile API can save it.
-              Opacity(
-                opacity: 0.6,
-                child: Container(
-                  width: 44,
-                  height: 24,
-                  padding: const EdgeInsets.all(2),
-                  alignment: Alignment.centerLeft,
-                  decoration: BoxDecoration(
-                    color: colors.foreground.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Color(0x0D000000), blurRadius: 2),
-                      ],
-                    ),
+                Text(
+                  'settings',
+                  style: DayliText.serif(
+                    context,
+                    size: DayliTextSize.xl,
+                    weight: FontWeight.w600,
+                    tracking: DayliTracking.tight,
                   ),
                 ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: colors.backgroundAccent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          initial,
+                          style: DayliText.serif(
+                            context,
+                            fontSize: 28,
+                            weight: FontWeight.w600,
+                            color: colors.foregroundAccent,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: DayliText.serif(
+                                context,
+                                fontSize: 24,
+                                weight: FontWeight.w600,
+                                tracking: DayliTracking.tight,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user?.email ?? '',
+                              overflow: TextOverflow.ellipsis,
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.sm,
+                                color: colors.foregroundSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  const _GroupLabel('account'),
+                  _Group(
+                    children: [
+                      _Row(label: 'Name', value: name),
+                      _Row(label: 'Email', value: user?.email ?? ''),
+                      const _Row(
+                        label: 'Username',
+                        value: 'not set yet',
+                        muted: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const _GroupLabel('privacy'),
+                  _Group(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Private profile',
+                                    style: DayliText.sans(
+                                      context,
+                                      weight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Available once profiles arrive.',
+                                    style: DayliText.sans(
+                                      context,
+                                      size: DayliTextSize.sm,
+                                      color: colors.foregroundTertiary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Disabled until the profile API can save it.
+                            const Switch(value: false, onChanged: null),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _Group(
+                    children: [
+                      InkWell(
+                        key: const Key('settings.signOut'),
+                        onTap: session.signOut,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.logout_rounded,
+                                size: 20,
+                                color: colors.danger,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Sign out',
+                                style: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w500,
+                                  color: colors.danger,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Signing out removes your unsent draft from this device.',
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      color: colors.foregroundTertiary,
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 4, bottom: 8),
+    child: Text(
+      text,
+      style: DayliText.serif(
+        context,
+        size: DayliTextSize.base,
+        weight: FontWeight.w600,
+        color: DayliColors.of(context).foregroundSecondary,
+      ),
+    ),
+  );
+}
+
+class _Group extends StatelessWidget {
+  const _Group({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: DayliShadows.card,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          children: [
+            for (var index = 0; index < children.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 1,
+                  indent: 16,
+                  color: colors.foreground.withValues(alpha: 0.06),
+                ),
+              children[index],
             ],
-          ),
+          ],
         ),
-        const SizedBox(height: 24),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: DayliButton(
-            key: const Key('settings.signOut'),
-            label: 'Sign out',
-            onPressed: session.signOut,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.label, required this.value});
+  const _Row({required this.label, required this.value, this.muted = false});
 
   final String label;
   final String value;
-
-  /// Tailwind `capitalize`, as WDCC applies to every value.
-  static String _capitalize(String value) => value.replaceAllMapped(
-    RegExp(r'(^|[\s@.\-_])([a-z])'),
-    (match) => '${match[1]}${match[2]!.toUpperCase()}',
-  );
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    return Row(
-      children: [
-        Text(
-          label,
-          style: DayliText.sans(
-            context,
-            size: DayliTextSize.sm,
-            color: colors.foreground.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            _capitalize(value),
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            style: DayliText.sans(
-              context,
-              size: DayliTextSize.sm,
-              weight: FontWeight.w500,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: DayliText.sans(context, color: colors.foregroundSecondary),
             ),
-          ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                overflow: TextOverflow.ellipsis,
+                style: DayliText.sans(
+                  context,
+                  weight: FontWeight.w500,
+                  color: muted ? colors.foregroundTertiary : colors.foreground,
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

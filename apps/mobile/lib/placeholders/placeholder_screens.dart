@@ -1,8 +1,9 @@
 import 'package:flutter/widgets.dart';
 
 import '../ui/coming_soon.dart';
+import '../ui/nav_icons.dart';
 
-// WDCC pages whose REST APIs have not landed yet.
+// Tabs whose REST APIs have not landed yet.
 
 /// Friend lists return with the relationships UI (#46, #47).
 class FriendsScreen extends StatelessWidget {
@@ -11,7 +12,8 @@ class FriendsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const ComingSoonScreen(
     title: 'friends',
-    message: 'Friends are on their way. Check back soon.',
+    icon: NavIcons.friends,
+    message: 'Find friends and see who you share your daylies with.',
   );
 }
 
@@ -22,7 +24,8 @@ class MyDaysScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const ComingSoonScreen(
     title: 'my days',
-    message: 'Your past daylies will live here soon.',
+    icon: NavIcons.myDays,
+    message: 'Every dayli you post will be kept here, one day at a time.',
   );
 }
 
@@ -33,6 +36,7 @@ class MessagesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const ComingSoonScreen(
     title: 'messages',
-    message: 'Messages are on their way. Check back soon.',
+    icon: NavIcons.messages,
+    message: 'Chat with friends about their daylies.',
   );
 }

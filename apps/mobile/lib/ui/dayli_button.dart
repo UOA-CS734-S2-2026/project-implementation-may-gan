@@ -27,6 +27,7 @@ class DayliButton extends StatelessWidget {
     this.arrow = false,
     this.leading,
     this.alignStart = false,
+    this.height,
   });
 
   final String label;
@@ -38,6 +39,9 @@ class DayliButton extends StatelessWidget {
   final bool arrow;
   final Widget? leading;
   final bool alignStart;
+
+  /// A fixed touch height for block buttons on mobile (48–52dp).
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +81,7 @@ class DayliButton extends StatelessWidget {
 
     final content = Row(
       mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisAlignment: alignStart
           ? MainAxisAlignment.start
           : MainAxisAlignment.center,
@@ -113,7 +118,15 @@ class DayliButton extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onPressed,
-          child: Padding(padding: padding, child: content),
+          child: height == null
+              ? Padding(padding: padding, child: content)
+              : SizedBox(
+                  height: height,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: padding.left),
+                    child: content,
+                  ),
+                ),
         ),
       ),
     );

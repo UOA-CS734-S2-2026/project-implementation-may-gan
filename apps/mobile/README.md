@@ -18,20 +18,26 @@ Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` (and, on iOS, `DAYLI
 
 ## Design
 
-The app uses the WDCC Dayli frontend's design at phone width. That frontend was imported under the reuse approval in [product decisions](../../docs/dayli/product-decisions.md#existing-frontend-reuse), from [UOA-CS732-S1-2026/group-project-wdcc](https://github.com/UOA-CS732-S1-2026/group-project-wdcc) at commit `3f961fe`. `assets/wdcc/` holds its logo, dot grid, landing photos, squiggles, and search icon. The logo's CSS-variable fills are replaced by their fallback colour, and the squiggles are exported from their React components with WDCC's stroke colours. `lib/ui/` reimplements its Button, FormInput, card, LiveClock, and Google button, and `lib/shell/` its floating menu and full-screen navigation.
+The app keeps the WDCC Dayli frontend's branding and lays it out for phones. That frontend was imported under the reuse approval in [product decisions](../../docs/dayli/product-decisions.md#existing-frontend-reuse), from [UOA-CS732-S1-2026/group-project-wdcc](https://github.com/UOA-CS732-S1-2026/group-project-wdcc) at commit `3f961fe`. `assets/wdcc/` holds its logo, dot grid, landing photos, post card, squiggles, and search icon. The logo's CSS-variable fills are replaced by their fallback colour, and the squiggles are exported from their React components with WDCC's stroke colours.
 
-Only the data layer differs from WDCC:
+The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue text, the dotted paper, soft card shadows, arrow buttons, and lowercase page names. The layout follows mobile conventions instead of WDCC's desktop sidebar:
+
+- A bottom tab bar (daylies, friends, my days, messages) with a raised "new dayli" button in the middle, and a top bar with the logo and the profile button.
+- Home leads with today's prompt, the time left to post, and a full-width Post button, then yesterday's daylies.
+- The composer and settings open as full-screen pages with close and back buttons. The Post button stays above the keyboard.
+- Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is ten one-tap buttons instead of a number field.
+
+Only the data layer is missing features:
 
 - The feed is empty until the released-feed API (#19, #20).
-- Friends, my days, and messages are placeholders until their APIs land. User search finds no one until the profile API (#68).
-- Accounts have no username until #68. The menu shows the email, username sign-in asks for an email, and the sign-up username is not sent. Settings shows the username as "not set yet" and the privacy switch is disabled.
-- The composer follows WDCC's media-first flow. Chosen photos and videos stay on the device with the draft and are not uploaded until the media API lands. Photos are not cropped; previews are cropped square as WDCC's are. A tap removes media where WDCC drags it to a bin.
-- The profile block in the menu opens settings, so sign-out is reachable.
+- Friends, my days, and messages are placeholders until their APIs land.
+- Accounts have no username until #68. Username sign-in asks for an email, the sign-up username is not sent, and the privacy switch is disabled.
+- Posting needs a photo or video, as in WDCC. Chosen media stays on the device with the draft until the media API lands, and photos are not cropped.
 
 ## Structure
 
 - `lib/app/`: configuration, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
-- `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the WDCC pages and components.
+- `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
 - `lib/compose/`: the daily composer (#18). Edits, including chosen media, are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated.

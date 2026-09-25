@@ -6,13 +6,13 @@ import '../app/theme.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/google_sign_in_button.dart';
-import '../ui/live_clock.dart';
 import '../ui/surfaces.dart';
 import 'native_session.dart';
 
 enum AuthMode { signIn, signUp }
 
-/// WDCC's sign-in and sign-up pages: the logo above a white auth card.
+/// Sign-in and sign-up as full pages: a clear title, full-width inputs, and
+/// one primary action.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.mode});
 
@@ -136,21 +136,11 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  bool _showPassword = false;
+
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final orStyle = _signUp
-        ? DayliText.serif(
-            context,
-            size: DayliTextSize.xs,
-            color: colors.foreground.withValues(alpha: 0.4),
-          )
-        : DayliText.serif(
-            context,
-            size: DayliTextSize.sm,
-            color: colors.foregroundTertiary,
-          );
-
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -158,22 +148,38 @@ class _AuthScreenState extends State<AuthScreen> {
           _signUp ? "Let's get you started" : 'Welcome back',
           style: DayliText.serif(
             context,
-            size: DayliTextSize.xxl,
+            fontSize: 32,
             weight: FontWeight.w600,
-            tracking: DayliTracking.tight,
+            tracking: DayliTracking.tighter,
+          ).copyWith(height: 1.15),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _signUp
+              ? 'One post, every day. It only takes a minute.'
+              : "Sign in to post today's dayli.",
+          style: DayliText.sans(context, color: colors.foregroundSecondary),
+        ),
+        const SizedBox(height: 28),
+        GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
+        const SizedBox(height: 20),
+        DayliDivider(
+          label: 'or',
+          thickness: 1,
+          labelStyle: DayliText.serif(
+            context,
+            size: DayliTextSize.sm,
+            color: colors.foregroundTertiary,
           ),
         ),
-        const SizedBox(height: 32),
-        GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
-        const SizedBox(height: 16),
-        DayliDivider(label: 'or', thickness: 1, labelStyle: orStyle),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         if (_signUp) ...[
           DayliFormInput(
             label: 'Name',
             fieldKey: const Key('auth.name'),
             controller: _name,
             autofillHints: const [AutofillHints.name],
+            textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
             error: _fieldErrors['name'],
           ),
@@ -182,7 +188,9 @@ class _AuthScreenState extends State<AuthScreen> {
             label: 'Username',
             fieldKey: const Key('auth.username'),
             controller: _username,
+            placeholder: '@handle',
             autofillHints: const [AutofillHints.newUsername],
+            textInputAction: TextInputAction.next,
             error: _fieldErrors['username'],
           ),
           const SizedBox(height: 16),
@@ -191,8 +199,9 @@ class _AuthScreenState extends State<AuthScreen> {
           label: _signUp ? 'Email' : 'Email or username',
           fieldKey: const Key('auth.email'),
           controller: _email,
-          placeholder: _signUp ? null : 'you@example.com or @handle',
+          placeholder: _signUp ? 'you@example.com' : 'you@example.com',
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
           autofillHints: [
             _signUp ? AutofillHints.email : AutofillHints.username,
           ],
@@ -203,48 +212,91 @@ class _AuthScreenState extends State<AuthScreen> {
           label: 'Password',
           fieldKey: const Key('auth.password'),
           controller: _password,
-          obscureText: true,
+          obscureText: !_showPassword,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _busy ? null : _submit(),
+          helper: _signUp ? 'At least 8 characters.' : null,
           autofillHints: [
             _signUp ? AutofillHints.newPassword : AutofillHints.password,
           ],
           error: _fieldErrors['password'],
+          suffix: IconButton(
+            tooltip: _showPassword ? 'Hide password' : 'Show password',
+            onPressed: () => setState(() => _showPassword = !_showPassword),
+            icon: Icon(
+              _showPassword
+                  ? Icons.visibility_off_outlined
+                  : Icons.visibility_outlined,
+              color: colors.foregroundTertiary,
+            ),
+          ),
         ),
         if (_error != null) ...[
           const SizedBox(height: 16),
-          Text(
-            _error!,
-            key: const Key('auth.error'),
-            style: DayliText.sans(
-              context,
-              size: DayliTextSize.sm,
-              color: colors.danger,
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colors.danger.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _error!,
+              key: const Key('auth.error'),
+              style: DayliText.sans(
+                context,
+                size: DayliTextSize.sm,
+                color: colors.danger,
+              ),
             ),
           ),
         ],
-        const SizedBox(height: 32),
-        Row(
+        const SizedBox(height: 28),
+        DayliButton(
+          key: const Key('auth.submit'),
+          label: _busy
+              ? (_signUp ? 'Creating…' : 'Signing in…')
+              : (_signUp ? "Let's go" : 'Sign in'),
+          weight: ButtonWeight.primary,
+          size: ButtonSize.lg,
+          fullWidth: true,
+          height: 52,
+          arrow: !_busy,
+          onPressed: _busy ? null : _submit,
+        ),
+        const SizedBox(height: 12),
+        // Wraps under large text sizes instead of overflowing.
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            DayliButton(
-              key: const Key('auth.submit'),
-              label: _busy
-                  ? (_signUp ? 'Creating…' : 'Signing in…')
-                  : (_signUp ? "Let's go" : 'Sign in'),
-              size: ButtonSize.sm,
-              arrow: true,
-              onPressed: _busy ? null : _submit,
+            Text(
+              _signUp ? 'Already on Dayli?' : 'New to Dayli?',
+              style: DayliText.sans(
+                context,
+                size: DayliTextSize.sm,
+                color: colors.foregroundSecondary,
+              ),
             ),
-            const SizedBox(width: 12),
-            DayliButton(
+            TextButton(
               key: const Key('auth.switch'),
-              label: _signUp ? 'I have an account' : 'Sign up',
-              size: ButtonSize.sm,
-              color: ButtonColor.foreground,
-              onPressed: () => context.go(_signUp ? '/sign-in' : '/sign-up'),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.foregroundAccent,
+                minimumSize: const Size(48, 48),
+              ),
+              onPressed: () =>
+                  context.pushReplacement(_signUp ? '/sign-in' : '/sign-up'),
+              child: Text(
+                _signUp ? 'Sign in' : 'Create an account',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.sm,
+                  weight: FontWeight.w600,
+                  color: colors.foregroundAccent,
+                ),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        const Align(alignment: Alignment.centerRight, child: LiveClock()),
       ],
     );
 
@@ -253,29 +305,41 @@ class _AuthScreenState extends State<AuthScreen> {
       body: DayliPage(
         tilted: true,
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-              child: ConstrainedBox(
-                // On phones WDCC's card shrinks to the 250px logo column.
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width < 768 ? 250 : 358,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 56,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: () => context.canPop()
+                          ? context.pop()
+                          : context.go('/welcome'),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const Spacer(),
+                    const DayliLogo(width: 72),
+                    const Spacer(),
+                    const SizedBox(width: 52),
+                  ],
                 ),
-                child: AutofillGroup(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const DayliLogo(width: 250),
-                      DayliCard(
-                        padding: const EdgeInsets.all(28),
-                        radius: 8,
-                        child: form,
-                      ),
-                    ],
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: AutofillGroup(child: form),
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
         ),
       ),

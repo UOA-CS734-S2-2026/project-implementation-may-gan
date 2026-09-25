@@ -12,8 +12,8 @@ import 'splash_screen.dart';
 
 const _publicLocations = {'/welcome', '/sign-in', '/sign-up'};
 
-/// WDCC's routes: a public landing and auth pages, and the signed-in pages
-/// inside the navigation shell.
+/// A public welcome and auth pages; signed-in tabs inside the shell; and the
+/// composer and settings as full-screen pages above it.
 GoRouter buildRouter(SessionController session) => GoRouter(
   initialLocation: '/',
   refreshListenable: session,
@@ -40,16 +40,17 @@ GoRouter buildRouter(SessionController session) => GoRouter(
       path: '/sign-up',
       builder: (_, _) => const AuthScreen(mode: AuthMode.signUp),
     ),
+    // Full-screen pages above the tabs.
+    GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
+    GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     ShellRoute(
       builder: (_, state, child) =>
           AppShell(location: state.matchedLocation, child: child),
       routes: [
         GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
-        GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
         GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
         GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
         GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
-        GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       ],
     ),
   ],

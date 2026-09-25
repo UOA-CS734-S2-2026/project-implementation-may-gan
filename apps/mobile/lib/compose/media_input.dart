@@ -5,9 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 import '../drafts/daily_post_draft.dart';
+import 'composer_controller.dart';
 
-/// WDCC's `MediaInput`: up to three photo slots, or a single video. Slot 1
-/// appears once slot 0 holds a photo, and slot 2 once slot 1 does too.
+/// A row of three square tiles: chosen photos (or one video) and an add tile.
+/// Follows WDCC's rule of up to three photos, or a single video.
 class MediaInput extends StatelessWidget {
   const MediaInput({
     super.key,
@@ -19,128 +20,114 @@ class MediaInput extends StatelessWidget {
 
   final List<DraftAttachment> attachments;
 
-  /// Called with the slot index; slot 0 accepts a photo or a video.
+  /// Called with the slot to fill; the first slot accepts a photo or a video.
   final ValueChanged<int> onPick;
   final ValueChanged<int> onRemove;
   final String? error;
 
-  static bool _isPhoto(DraftAttachment? attachment) =>
-      attachment?.mediaType == 'image';
-
-  int get _visibleSlots {
-    DraftAttachment? at(int index) =>
-        index < attachments.length ? attachments[index] : null;
-    if (!_isPhoto(at(0))) return 1;
-    if (!_isPhoto(at(1))) return 2;
-    return 3;
-  }
+  bool get _canAdd =>
+      attachments.length < DailyPostLimits.photosMax &&
+      !attachments.any((attachment) => attachment.mediaType == 'video');
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final firstIsPhoto = attachments.isNotEmpty && _isPhoto(attachments.first);
-    final photos = attachments.where(_isPhoto).length;
+    final tiles = <Widget>[
+      for (var index = 0; index < attachments.length; index++)
+        _Preview(
+          key: Key('composer.media.$index'),
+          attachment: attachments[index],
+          onRemove: () => onRemove(index),
+        ),
+      if (_canAdd)
+        _AddTile(
+          key: Key('composer.media.${attachments.length}'),
+          first: attachments.isEmpty,
+          invalid: error != null,
+          onTap: () => onPick(attachments.length),
+        ),
+    ];
+    while (tiles.length < DailyPostLimits.photosMax) {
+      tiles.add(const SizedBox.shrink());
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var index = 0; index < _visibleSlots; index++) ...[
-          if (index > 0) const SizedBox(height: 16),
-          index < attachments.length
-              ? _Preview(
-                  key: Key('composer.media.$index'),
-                  attachment: attachments[index],
-                  onTap: () => _confirmRemove(context, index),
-                )
-              : _EmptySlot(
-                  key: Key('composer.media.$index'),
-                  primary: index == 0,
-                  onTap: () => onPick(index),
-                ),
-          if (index == 0 && error != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              error!,
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.sm,
-                color: colors.danger,
-              ),
-            ),
+        Row(
+          children: [
+            for (var index = 0; index < tiles.length; index++) ...[
+              if (index > 0) const SizedBox(width: 10),
+              Expanded(child: AspectRatio(aspectRatio: 1, child: tiles[index])),
+            ],
           ],
-        ],
-        if (firstIsPhoto) ...[
-          const SizedBox(height: 8),
-          Text(
-            '$photos/3 uploaded',
-            style: DayliText.sans(
-              context,
-              size: DayliTextSize.sm,
-              color: colors.foregroundSecondary,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          error ??
+              (attachments.isEmpty
+                  ? 'Add up to 3 photos, or 1 video.'
+                  : '${attachments.length}/3 added'),
+          style: DayliText.sans(
+            context,
+            size: DayliTextSize.sm,
+            color: error != null ? colors.danger : colors.foregroundTertiary,
           ),
-        ],
+        ),
       ],
     );
   }
-
-  /// WDCC removes media by dragging it to a bin; on a phone a tap asks first.
-  Future<void> _confirmRemove(BuildContext context, int index) async {
-    final remove = await showModalBottomSheet<bool>(
-      context: context,
-      backgroundColor: DayliColors.of(context).background,
-      builder: (context) => SafeArea(
-        child: ListTile(
-          key: const Key('composer.media.remove'),
-          leading: const Icon(Icons.delete_outline),
-          title: Text(
-            'Remove',
-            style: DayliText.sans(context, weight: FontWeight.w500),
-          ),
-          onTap: () => Navigator.pop(context, true),
-        ),
-      ),
-    );
-    if (remove ?? false) onRemove(index);
-  }
 }
 
-class _EmptySlot extends StatelessWidget {
-  const _EmptySlot({super.key, required this.primary, required this.onTap});
+class _AddTile extends StatelessWidget {
+  const _AddTile({
+    super.key,
+    required this.first,
+    required this.invalid,
+    required this.onTap,
+  });
 
-  final bool primary;
+  final bool first;
+  final bool invalid;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: CustomPaint(
-        painter: _DashedBorderPainter(color: colors.foregroundTertiary),
-        child: SizedBox(
-          height: 256,
-          width: double.infinity,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.add_photo_alternate_outlined,
-                size: primary ? 70 : 48,
-                color: colors.foregroundTertiary,
-              ),
-              if (primary) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Drag and drop or click to upload',
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    color: colors.foregroundTertiary,
+    final color = invalid ? colors.danger : colors.foregroundTertiary;
+    return Semantics(
+      button: true,
+      label: first ? 'Add a photo or video' : 'Add another photo',
+      excludeSemantics: true,
+      child: Material(
+        color: colors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: CustomPaint(
+            painter: _DashedBorderPainter(color: color),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 30,
+                    color: color,
                   ),
-                ),
-              ],
-            ],
+                  const SizedBox(height: 4),
+                  Text(
+                    first ? 'add' : 'more',
+                    style: DayliText.serif(
+                      context,
+                      size: DayliTextSize.sm,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -149,19 +136,18 @@ class _EmptySlot extends StatelessWidget {
 }
 
 class _Preview extends StatelessWidget {
-  const _Preview({super.key, required this.attachment, required this.onTap});
+  const _Preview({super.key, required this.attachment, required this.onRemove});
 
   final DraftAttachment attachment;
-  final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
     final missing = ColoredBox(
-      color: colors.backgroundSecondary,
+      color: colors.backgroundTertiary,
       child: Icon(
-        Icons.broken_image_outlined,
-        size: 48,
+        Icons.image_not_supported_outlined,
         color: colors.foregroundTertiary,
       ),
     );
@@ -170,8 +156,8 @@ class _Preview extends StatelessWidget {
         ? ColoredBox(
             color: colors.foreground,
             child: const Icon(
-              Icons.play_circle_outline,
-              size: 64,
+              Icons.play_circle_outline_rounded,
+              size: 40,
               color: Colors.white,
             ),
           )
@@ -186,20 +172,48 @@ class _Preview extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => missing,
           );
-    return GestureDetector(
-      onTap: onTap,
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox.expand(child: media),
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(borderRadius: BorderRadius.circular(14), child: media),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Semantics(
+            button: true,
+            label: 'Remove',
+            excludeSemantics: true,
+            child: GestureDetector(
+              key: const Key('composer.media.remove'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onRemove,
+              // A 44dp target around a small visible badge.
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Color(0x99000000),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 }
 
-/// Tailwind's `border-2 border-dashed rounded-xl`.
+/// Tailwind's `border-2 border-dashed`, as WDCC draws empty media slots.
 class _DashedBorderPainter extends CustomPainter {
   const _DashedBorderPainter({required this.color});
 
@@ -207,16 +221,16 @@ class _DashedBorderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const width = 2.0;
-    const dash = 6.0;
-    const gap = 6.0;
+    const width = 1.5;
+    const dash = 5.0;
+    const gap = 5.0;
     final paint = Paint()
       ..color = color
       ..strokeWidth = width
       ..style = PaintingStyle.stroke;
     final rect = RRect.fromRectAndRadius(
       (Offset.zero & size).deflate(width / 2),
-      const Radius.circular(12),
+      const Radius.circular(14),
     );
     for (final metric in (Path()..addRRect(rect)).computeMetrics()) {
       for (

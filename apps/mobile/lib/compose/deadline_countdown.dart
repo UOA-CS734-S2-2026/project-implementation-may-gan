@@ -12,11 +12,15 @@ class DeadlineCountdown extends StatefulWidget {
     required this.deadlineAt,
     required this.serverNow,
     this.clock = DateTime.now,
+    this.compact = false,
   });
 
   final DateTime deadlineAt;
   final DateTime serverNow;
   final DateTime Function() clock;
+
+  /// A single pill (`05:20:31 left`) for headers and cards.
+  final bool compact;
 
   @override
   State<DeadlineCountdown> createState() => _DeadlineCountdownState();
@@ -58,6 +62,41 @@ class _DeadlineCountdownState extends State<DeadlineCountdown> {
       (two(remaining.inSeconds.remainder(60)), 'secs'),
     ];
     final colors = DayliColors.of(context);
+    if (widget.compact) {
+      return Semantics(
+        label:
+            'Time left to post: ${remaining.inHours} hours '
+            '${remaining.inMinutes.remainder(60)} minutes',
+        excludeSemantics: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: colors.backgroundAccent,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.schedule_rounded,
+                size: 16,
+                color: colors.foregroundAccent,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${parts.map((part) => part.$1).join(':')} left',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.sm,
+                  weight: FontWeight.w500,
+                  color: colors.foregroundAccent,
+                ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final digits = DayliText.serif(
       context,
       size: DayliTextSize.lg,

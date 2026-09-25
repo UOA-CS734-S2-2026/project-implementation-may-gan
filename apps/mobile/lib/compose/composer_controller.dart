@@ -220,8 +220,25 @@ class ComposerController extends ChangeNotifier {
       updatedAt: _clock(),
     );
     _message = null;
+    _clearFixedErrors(_draft!);
     _scheduleSave();
     _notify();
+  }
+
+  /// Clears each shown error once its field is valid, without raising new
+  /// errors while the author is still typing.
+  void _clearFixedErrors(DailyPostDraft draft) {
+    if (_errors.isEmpty) return;
+    final next = validateDraft(draft);
+    _errors = ComposerFieldErrors(
+      media: _errors.media == null ? null : next.media,
+      rating: _errors.rating == null ? null : next.rating,
+      reflectiveAnswer: _errors.reflectiveAnswer == null
+          ? null
+          : next.reflectiveAnswer,
+      caption: _errors.caption == null ? null : next.caption,
+      tomorrowNote: _errors.tomorrowNote == null ? null : next.tomorrowNote,
+    );
   }
 
   /// Removes a draft that can no longer be posted and starts today's.

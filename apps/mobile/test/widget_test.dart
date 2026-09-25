@@ -1,4 +1,5 @@
 import 'package:dayli_mobile/app/app.dart';
+import 'package:dayli_mobile/compose/composer_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -63,18 +64,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home.empty')), findsOneWidget);
 
-    await tester.tap(find.byKey(const Key('shell.openMenu')));
-    await tester.pumpAndSettle();
+    expect(find.text('What made you smile today?'), findsOneWidget);
+
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
 
-    // WDCC shows the fields once media is added.
-    expect(find.byKey(const Key('composer.reflectiveAnswer')), findsNothing);
+    // Posting without media is refused, as in WDCC.
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+    expect(find.text('Please upload at least one file'), findsOneWidget);
+    expect(harness.submitter.submitted, isEmpty);
+
     await tester.tap(find.byKey(const Key('composer.media.0')));
     await tester.pumpAndSettle();
-    expect(find.text('1/3 uploaded'), findsOneWidget);
+    expect(find.text('1/3 added'), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('composer.rating')), '8');
+    final list = find
+        .descendant(
+          of: find.byType(ComposerScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.rating.8')),
+      100,
+      scrollable: list,
+    );
+    await tester.ensureVisible(find.byKey(const Key('composer.rating.8')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.rating.8')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.reflectiveAnswer')),
+      100,
+      scrollable: list,
+    );
+    await tester.ensureVisible(
+      find.byKey(const Key('composer.reflectiveAnswer')),
+    );
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('composer.reflectiveAnswer')),
       'Coffee by the harbour',

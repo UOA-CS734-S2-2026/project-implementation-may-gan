@@ -212,6 +212,9 @@ void main() {
 
     expect(composer.errors.media, 'Please upload at least one file');
     expect(submitter.submitted, isEmpty);
+
+    composer.update(attachments: const [photo]);
+    expect(composer.errors.media, isNull);
   });
 
   test('counts emoji as single characters', () {

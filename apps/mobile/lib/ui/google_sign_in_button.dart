@@ -11,7 +11,7 @@ const _googleLogo =
     '<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>'
     '</svg>';
 
-/// WDCC's "Sign in with Google" button.
+/// Dayli's Google sign-in button, styled as a full-width mobile action.
 class GoogleSignInButton extends StatelessWidget {
   const GoogleSignInButton({super.key, required this.onPressed});
 
@@ -21,29 +21,31 @@ class GoogleSignInButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
     return Material(
-      color: colors.backgroundSecondary,
-      borderRadius: BorderRadius.circular(8),
+      color: colors.card,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         key: const Key('auth.google'),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 10, 0, 9),
+        child: Container(
+          height: 52,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: colors.foreground.withValues(alpha: 0.12),
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SvgPicture.string(_googleLogo, width: 16, height: 16),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: Text(
-                  'Sign in with Google',
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    tracking: DayliTracking.tight,
-                    color: colors.foregroundSecondary,
-                  ),
+              SvgPicture.string(_googleLogo, width: 20, height: 20),
+              const SizedBox(width: 12),
+              Text(
+                'Continue with Google',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.base,
+                  weight: FontWeight.w500,
                 ),
               ),
             ],

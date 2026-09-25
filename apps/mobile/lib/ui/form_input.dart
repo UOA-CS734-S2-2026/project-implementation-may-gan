@@ -3,92 +3,58 @@ import 'package:flutter/services.dart';
 
 import '../app/theme.dart';
 
-enum FormInputVariant { auth, posts }
-
-/// WDCC's `FormInput`: a small sans label above a borderless field.
+/// Dayli's text field for phones: a label above a 48dp, 16px field so text
+/// stays readable and iOS never zooms the page.
 class DayliFormInput extends StatelessWidget {
   const DayliFormInput({
     super.key,
     required this.label,
     this.fieldKey,
     this.controller,
-    this.variant = FormInputVariant.auth,
     this.placeholder,
+    this.helper,
     this.error,
     this.obscureText = false,
     this.keyboardType,
+    this.textInputAction,
     this.autofillHints,
     this.inputFormatters,
-    this.rows,
+    this.minLines,
+    this.maxLines = 1,
     this.onChanged,
+    this.onSubmitted,
+    this.suffix,
     this.textCapitalization = TextCapitalization.none,
   });
 
   final String label;
   final Key? fieldKey;
   final TextEditingController? controller;
-  final FormInputVariant variant;
   final String? placeholder;
+  final String? helper;
   final String? error;
   final bool obscureText;
   final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
   final List<TextInputFormatter>? inputFormatters;
-
-  /// Makes a textarea of this many rows.
-  final int? rows;
+  final int? minLines;
+  final int? maxLines;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+  final Widget? suffix;
   final TextCapitalization textCapitalization;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final textStyle = DayliText.sans(context, size: DayliTextSize.sm);
+    final textStyle = DayliText.sans(context, size: DayliTextSize.base);
     final invalid = error != null;
-    final fill = variant == FormInputVariant.auth
-        ? colors.backgroundSecondary
-        : colors.background;
-    OutlineInputBorder ring(Color color) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
-      borderSide: BorderSide(color: color, width: 2),
+    OutlineInputBorder outline(Color color, double width) => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: width),
     );
-    final idle = invalid
-        ? ring(colors.danger.withValues(alpha: 0.5))
-        : OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide.none,
-          );
-
-    final field = TextField(
-      key: fieldKey,
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: rows != null ? TextInputType.multiline : keyboardType,
-      autofillHints: autofillHints,
-      inputFormatters: inputFormatters,
-      minLines: rows,
-      maxLines: rows ?? 1,
-      onChanged: onChanged,
-      textCapitalization: textCapitalization,
-      style: textStyle,
-      cursorColor: colors.foreground,
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: fill,
-        hoverColor: Colors.transparent,
-        hintText: placeholder,
-        hintStyle: textStyle.copyWith(
-          color: colors.foreground.withValues(alpha: 0.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        border: idle,
-        enabledBorder: idle,
-        focusedBorder: invalid
-            ? ring(colors.danger.withValues(alpha: 0.5))
-            : ring(colors.foreground.withValues(alpha: 0.2)),
-      ),
-    );
+    final multiline = (maxLines ?? 2) > 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,24 +68,50 @@ class DayliFormInput extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        if (variant == FormInputVariant.posts)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Transform.translate(
-              offset: const Offset(-3, 0),
-              child: field,
+        TextField(
+          key: fieldKey,
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: multiline ? TextInputType.multiline : keyboardType,
+          textInputAction: textInputAction,
+          autofillHints: autofillHints,
+          inputFormatters: inputFormatters,
+          minLines: minLines,
+          maxLines: maxLines,
+          onChanged: onChanged,
+          onSubmitted: onSubmitted,
+          textCapitalization: textCapitalization,
+          style: textStyle,
+          cursorColor: colors.foregroundAccent,
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: colors.backgroundSecondary,
+            hoverColor: Colors.transparent,
+            hintText: placeholder,
+            hintStyle: textStyle.copyWith(color: colors.foregroundTertiary),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
             ),
-          )
-        else
-          field,
-        if (invalid) ...[
-          const SizedBox(height: 8),
+            suffixIcon: suffix,
+            border: outline(Colors.transparent, 0),
+            enabledBorder: invalid
+                ? outline(colors.danger.withValues(alpha: 0.6), 1.5)
+                : outline(Colors.transparent, 0),
+            focusedBorder: invalid
+                ? outline(colors.danger, 2)
+                : outline(colors.accent, 2),
+          ),
+        ),
+        if (invalid || helper != null) ...[
+          const SizedBox(height: 6),
           Text(
-            error!,
+            error ?? helper!,
             style: DayliText.sans(
               context,
               size: DayliTextSize.sm,
-              color: colors.error,
+              color: invalid ? colors.danger : colors.foregroundTertiary,
             ),
           ),
         ],
