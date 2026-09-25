@@ -27,4 +27,3 @@ flutter:
   # Imported from the WDCC web frontend; see apps/web/ATTRIBUTION.md.
   assets:
     - assets/wdcc/
-    - assets/wdcc/landing/
