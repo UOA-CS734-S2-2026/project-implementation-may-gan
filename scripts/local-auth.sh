@@ -35,18 +35,55 @@ require_exact_line() {
   fi
 }
 
+path_exists() {
+  [[ -e "$1" || -L "$1" ]]
+}
+
+require_regular_readable_file() {
+  local file="$1"
+  local description="$2"
+  if [[ -L "$file" || ! -f "$file" || ! -r "$file" ]]; then
+    echo "$description must be a readable regular file, not a symlink: $file" >&2
+    exit 1
+  fi
+}
+
+prepare_certificate() {
+  local certificate_exists=false
+  local key_exists=false
+  path_exists "$certificate" && certificate_exists=true
+  path_exists "$key" && key_exists=true
+
+  if [[ "$certificate_exists" != "$key_exists" ]]; then
+    echo "Local TLS certificate and key must either both exist or both be absent. Refusing to replace one file." >&2
+    exit 1
+  fi
+
+  if [[ "$certificate_exists" == true ]]; then
+    require_regular_readable_file "$certificate" "Local TLS certificate"
+    require_regular_readable_file "$key" "Local TLS key"
+    chmod 600 "$certificate" "$key"
+    return
+  fi
+
+  echo "Creating a localhost certificate with the existing mkcert development CA."
+  echo "This does not run mkcert -install or change any system trust settings."
+  mkcert -cert-file "$certificate" -key-file "$key" localhost
+  require_regular_readable_file "$certificate" "Local TLS certificate"
+  require_regular_readable_file "$key" "Local TLS key"
+  chmod 600 "$certificate" "$key"
+}
+
 setup() {
   require_command mkcert
   require_command openssl
+  if [[ -L "$cert_dir" || ( -e "$cert_dir" && ! -d "$cert_dir" ) ]]; then
+    echo "Local TLS state directory must be a directory, not a symlink or file: $cert_dir" >&2
+    exit 1
+  fi
   mkdir -p "$cert_dir"
   umask 077
-
-  if [[ ! -f "$certificate" || ! -f "$key" ]]; then
-    echo "Creating a localhost certificate with the existing mkcert development CA."
-    echo "This does not run mkcert -install or change any system trust settings."
-    mkcert -cert-file "$certificate" -key-file "$key" localhost
-  fi
-  chmod 600 "$certificate" "$key"
+  prepare_certificate
 
   if [[ ! -e "$api_vars" ]]; then
     {
@@ -81,28 +118,54 @@ setup() {
 }
 
 require_setup() {
-  if [[ ! -f "$certificate" || ! -f "$key" || ! -f "$api_vars" || ! -f "$api_config" || ! -f "$web_env" ]]; then
+  require_regular_readable_file "$certificate" "Local TLS certificate"
+  require_regular_readable_file "$key" "Local TLS key"
+  if [[ ! -f "$api_vars" || ! -f "$api_config" || ! -f "$web_env" ]]; then
     echo "Local HTTPS setup is incomplete. Run pnpm local:auth:setup first." >&2
     exit 1
   fi
 }
 
+read_app_database_password() {
+  require_regular_readable_file "$credentials_file" "Local development credentials"
+
+  local line
+  local password=""
+  local matches=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      APP_DATABASE_PASSWORD=*)
+        password="${line#APP_DATABASE_PASSWORD=}"
+        matches=$((matches + 1))
+        ;;
+    esac
+  done < "$credentials_file"
+
+  if [[ "$matches" -ne 1 || ! "$password" =~ ^[[:xdigit:]]{48}$ ]]; then
+    echo "Local development credentials must contain one valid APP_DATABASE_PASSWORD." >&2
+    exit 1
+  fi
+
+  printf '%s' "$password"
+}
+
 start_api() {
   require_setup
-  if [[ ! -f "$credentials_file" ]]; then
+  if [[ ! -e "$credentials_file" ]]; then
     echo "Local development database credentials are missing. Run pnpm db:dev:up and pnpm db:dev:migrate first." >&2
     exit 1
   fi
-  set -a
-  # This file is generated locally by scripts/dev-db.sh with mode 0600.
-  # shellcheck disable=SC1090
-  . "$credentials_file"
-  set +a
-  export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app:${APP_DATABASE_PASSWORD}@localhost:5434/dayli_dev"
+  local app_database_password
+  app_database_password="$(read_app_database_password)"
   cd "$repo_root/apps/api"
-  exec pnpm exec wrangler dev --config wrangler.local.jsonc --local \
-    --ip 127.0.0.1 --port 8787 --local-protocol https \
-    --https-key-path "$key" --https-cert-path "$certificate"
+  # Start with a deliberately small environment. The Worker receives only its
+  # restricted app connection URL, never owner or migrator credentials.
+  exec env -i \
+    HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C}" \
+    CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://app:${app_database_password}@localhost:5434/dayli_dev" \
+    pnpm exec wrangler dev --config wrangler.local.jsonc --local \
+      --ip 127.0.0.1 --port 8787 --local-protocol https \
+      --https-key-path "$key" --https-cert-path "$certificate"
 }
 
 start_web() {

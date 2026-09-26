@@ -92,11 +92,14 @@ case "${1:-}" in
     fi
     if [[ -f "$credentials_file" ]]; then
       compose down -v --remove-orphans
+      rm -f "$credentials_file"
+      echo "Local development PostgreSQL data and credentials were deleted."
+    elif docker volume inspect "$volume_name" >/dev/null 2>&1; then
+      docker volume rm "$volume_name"
+      echo "Local development PostgreSQL data were deleted. No credentials file was present."
     else
-      docker volume rm "$volume_name" >/dev/null 2>&1 || true
+      echo "No local development database volume or credentials file was found. Nothing was deleted."
     fi
-    rm -f "$credentials_file"
-    echo "Local development PostgreSQL data and credentials were deleted."
     ;;
   migrate)
     load_credentials
