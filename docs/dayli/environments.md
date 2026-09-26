@@ -8,11 +8,11 @@ This guide separates the environments that exist today from the production envir
 | --- | --- | --- | --- |
 | Local, no database | Browser or emulator -> local Wrangler -> Hono | None | Route, contract, and UI work that does not use PostgreSQL. |
 | Local, database simulation | Browser or emulator -> local Wrangler -> local Hyperdrive-compatible binding -> Docker PostgreSQL | Direct local PostgreSQL connection | Database development. This does not exercise Cloudflare's real Hyperdrive service. |
-| Staging | Staging web/mobile -> public `dayli-api-staging` -> real `HYPERDRIVE` -> isolated staging PostgreSQL | Cloudflare Hyperdrive | Credentialed integration and client testing. |
-| PR check | Private test Worker -> service binding -> private `dayli-api-pr-<number>` -> real staging `HYPERDRIVE` | Cloudflare Hyperdrive | Prove a trusted PR can connect. The preview has no public URL. |
+| Staging | Not validated or deployed | Not connected | Deferred until the separate Neon staging project is provisioned. |
+| PR check | Not run automatically | Not connected | Future manual proof path only. |
 | Production | Not provisioned | Not provisioned | Future release environment. |
 
-The API has ordinary HTTP routes for clients. `HyperdriveIntegrationEntrypoint` is a non-HTTP `WorkerEntrypoint`, callable only by the private Worker service binding used by the integration check.
+The separate Neon staging project is currently empty. It has no roles, migrations, or Hyperdrive attached, and there is no provisioned staging Worker. It is not a validated staging deployment. Production is also unprovisioned. The API has ordinary HTTP routes for clients. `HyperdriveIntegrationEntrypoint` is a non-HTTP `WorkerEntrypoint`, callable only by the private Worker service binding used by the future integration check.
 
 ## Prerequisites
 
@@ -165,11 +165,11 @@ flutter run
 
 ## Staging
 
-Staging has a public Worker named `dayli-api-staging`, a separate Neon staging project containing synthetic data only, and a real Cloudflare Hyperdrive configuration. It does not share a Neon project, branch, data, credentials, or restore point with production. The public Worker exists so staging web and mobile clients can reach the ordinary API. Its normal authentication and authorization still apply. It is not a production endpoint.
+Staging integration is deferred. The separate Neon staging project is currently empty: it has no roles, migrations, or Hyperdrive attached. No `dayli-api-staging` Worker is provisioned, so there is no validated staging deployment. Production is unprovisioned. Do not deploy, migrate, or test against either environment until the staging project has been provisioned and reviewed.
 
-Before creating Hyperdrive, follow the role bootstrap sequence in [Database migrations](database-migrations.md#roles-and-connections): run the owner and migrator SQL files in their separate connections, then require an all-true result from the read-only verification query. Set the first `app` password only with trusted interactive `psql`, connected as the owner, using `\password app`. Neon Console or API password reset cannot set a password for a role that has none. A reset may rotate an existing password later, followed by verification. Do not use Neon Console to create any application role because it grants `neon_superuser`. If an earlier owner run stopped at SQLSTATE `42501`, use the documented recovery sequence rather than adding membership or additional `app` grants.
+When staging is approved for provisioning, use a separate Neon project with synthetic data only. It must not share a Neon project, branch, data, credentials, or restore point with production. Follow the role bootstrap sequence in [Database migrations](database-migrations.md#roles-and-connections), then create a caching-disabled Hyperdrive configuration for the restricted `app` role. Prepare the ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set exact public HTTPS origins and add `BETTER_AUTH_SECRET` only through `wrangler secret put`. Do not put secrets in configuration, shell history, or Git.
 
-Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set `BETTER_AUTH_BASE_URL` and `BETTER_AUTH_TRUSTED_ORIGINS` in the ignored staging configuration to exact public HTTPS origins, then add `BETTER_AUTH_SECRET` with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. The secret must be at least 32 characters and must not appear in configuration, shell history, or Git. Auth stays unmounted if any binding is absent or invalid. Use the protected staging values only on a trusted machine. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout before running the real binding check:
+After provisioning, the manual proof can deploy the current checkout and run the private Hyperdrive check from a trusted machine with approved credentials:
 
 ```bash
 bash <<'BASH'
@@ -189,19 +189,7 @@ printf 'Hyperdrive check commit: %s\n' "$commit_sha"
 BASH
 ```
 
-If a secure credential tool supplies the values instead, replace the `read` commands but keep the required-variable guards. A deploy failure stops the test and prevents the SHA from printing. Use the configured staging Worker URL as the future staging web/mobile base URL. It is intentionally not written here. Do not route a client to a PR preview because previews set `workers_dev: false` and have no public endpoint.
-
-The GitHub `staging` environment contains:
-
-- secret `CLOUDFLARE_API_TOKEN` with Worker deploy, remote service binding, and Hyperdrive read access;
-- secret `CLOUDFLARE_STAGING_HYPERDRIVE_ID`;
-- variable `CLOUDFLARE_ACCOUNT_ID`;
-- variable `STAGING_API_SERVICE_NAME`, exactly `dayli-api-staging`;
-- variable `STAGING_HYPERDRIVE_NAME`, the expected staging Hyperdrive configuration name.
-
-The credentialed deploy/test workflow runs for relevant same-repository PR changes, relevant pushes to `main`, and manual dispatch. It never uses `pull_request_target`. Fork PRs are skipped before they receive the staging environment or its credentials. For an eligible PR, it deploys `dayli-api-pr-<number>` and tests it only through a private service binding. The normal job attempts deletion in an `always()` step. The separate `cleanup-hyperdrive-preview.yml` workflow runs for every trusted PR to `main` close, without checking out PR code, and makes an idempotent deletion attempt. Both workflows use the same per-PR concurrency group, so close cleanup cannot race an in-flight test.
-
-Staging uses the administrator-provisioned Neon PostgreSQL database through Hyperdrive. This is staging-only; production remains unprovisioned and must use separate resources.
+The GitHub `staging` environment retains the protected `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` secrets, plus `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, and `STAGING_HYPERDRIVE_NAME` variables for that future proof. `.github/workflows/staging-hyperdrive.yml` runs only through manual dispatch. It has no pull request or `main` push trigger and does not use `pull_request_target`. Its credential and Hyperdrive validation safeguards remain in place. The separate `cleanup-hyperdrive-preview.yml` workflow remains enabled only to safely remove any previously deployed trusted PR preview after the PR closes.
 
 ## Legacy Supabase migration inventory
 
