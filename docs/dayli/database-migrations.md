@@ -21,9 +21,13 @@ Run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner
 
 Neon rejected `psql`'s `\password` because it sends a password hash while Neon requires plaintext for this operation. Do not use `\password`, put a plaintext password in Neon SQL Editor, paste one into SQL, place it in shell history, pass it as a process argument, commit it, or copy it to chat or logs.
 
-A local PostgreSQL investigation found that `ALTER ROLE ... PASSWORD $1` rejects a bind parameter at parse time, so a normal bind parameter cannot supply the plaintext. A narrowly reviewed interactive client could send a properly quoted statement over TLS without putting the password in a SQL Editor or shell command, but that approach has not been validated against Neon or reviewed for logging. No provisioning helper is included.
+No workaround or provisioning helper is documented or provided.
 
 There is no Neon-validated, safe first-password procedure for SQL-created roles. Until one is reviewed and tested by the user on the empty staging project, live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked. Do not replace this block with a SQL Editor workaround. If a procedure is approved, store the resulting direct `migrator` and Hyperdrive `app` credentials only in their respective protected secret paths, then run the migrator bootstrap and read-only verification.
+
+## Guarded live migration order
+
+For staging, and later for a separate production project, the order is fixed: inventory the empty target; validate the first-password procedure; run `bootstrap-roles.sql` as `neondb_owner`; establish the two restricted credentials through the approved procedure; run `bootstrap-migrator.sql` directly as `migrator`; require `verify-role-bootstrap.sql` to return only `true`; apply and verify reviewed migrations through the protected manual workflow; then attach Hyperdrive as `app` and deploy dependent Worker code. Do not reverse this sequence, use an owner connection at runtime, or use staging as a production branch.
 
 ## Safe staging reset inventory
 

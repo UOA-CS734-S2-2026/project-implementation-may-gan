@@ -16,7 +16,7 @@ Both HTTP servers use the same `localhost` certificate, but ports remain distinc
 
 ### Prerequisites
 
-Install Node.js 24, pnpm 10, Docker with Compose, and [mkcert](https://github.com/FiloSottile/mkcert). Run the following trust command yourself before setup, then approve its operating-system prompt if one is shown:
+Install Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and [mkcert](https://github.com/FiloSottile/mkcert). Android work also needs `adb`; iOS Simulator work needs full Xcode and CocoaPods. Run the following trust command yourself before setup, then approve its operating-system prompt if one is shown:
 
 ```bash
 mkcert -install
@@ -121,4 +121,25 @@ Restart the app or Simulator if it was running when the CA was added. This imple
 
 The scripts and configuration can be checked locally without contacting Neon, Cloudflare, DNS, Google, Resend, staging, or production. Do not add local values to `wrangler.jsonc`, tracked environment files, GitHub workflow configuration, or a deployed Worker. The manual-only `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows remain available for later approved staging work; local setup does not invoke or modify them.
 
-Staging and production remain separately provisioned HTTPS environments. They require their own exact origins, TLS, CORS policy, Better Auth secret, restricted runtime database role, direct migrator URL, and approved deployment process. Local certificates and local PostgreSQL credentials are never valid for those environments.
+## Staging and production
+
+Local HTTPS authentication is implemented. Staging is not: its new Neon project is empty, with no roles, migrations, Hyperdrive attachment, Worker, or validated endpoint. The old staging Worker, Hyperdrive configuration, GitHub `staging` environment credentials, and local staging Wrangler files were removed. The retained `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows are manual only and cannot run until approved staging credentials are re-provisioned. Their existence does not authorize a deployment or proof.
+
+Choose separate exact HTTPS web and API origins under the same registrable domain for each live environment. Set the API origin as `BETTER_AUTH_BASE_URL`, include API and web origins in `BETTER_AUTH_TRUSTED_ORIGINS`, and build web and mobile clients with that API origin. Do not use a path, wildcard, trailing slash, localhost, a `workers.dev` endpoint, or a production origin for staging. Local certificates and local PostgreSQL credentials are never valid for staging or production.
+
+### Staging checklist
+
+Do not begin live provisioning until the user has reviewed and validated the blocked first-password procedure on the empty staging project. Then, in order:
+
+1. Complete the two-role bootstrap and read-only role verification in [Database migrations](database-migrations.md). Use `migrator` only for direct migrations and `app` only behind Hyperdrive.
+2. Configure the protected GitHub `staging` environment with main-only deployment and reviewer approval before adding credentials, including the direct unpooled `migrator` migration secret. Keep the migration, staging proof, and preview-cleanup workflows manual.
+3. Create a new staging Hyperdrive binding for `app` with query caching disabled, then a new staging Worker with its own Better Auth secret and exact public origins. Leave Google and Resend absent until each provider is complete.
+4. Build clients against the staging API and use synthetic accounts to prove sign-up, sign-in, cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin. Local tests are not a deployed Hyperdrive proof.
+
+Google OAuth and Resend requirements are in [Authentication compatibility](authentication-compatibility.md). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
+
+### Production reset and release
+
+No production service is deployed. An old Neon production project may still exist. Before any deletion, its owner must inspect its databases and row counts, branches, restore points, connections, and teammate dependencies. If it is confirmed disposable, that owner, not a repository script or staging cleanup procedure, deletes that exact project in Neon Console. If it has already gone, skip deletion. Never delete or reset the new staging project as a substitute.
+
+Only after staging authentication and provider checks pass, create a separate fresh production Neon project and protected `production` environment. Use distinct role credentials, Hyperdrive, Worker, Better Auth secret, OAuth clients, Resend sender, and origins. Do not copy staging data, restore points, credentials, or tokens. Confirm a restore point, run the protected manual migration workflow for the same reviewed commit that passed staging, review its sanitized evidence, and deploy the production Worker only after migration and authentication checks pass. Production Worker deployment automation is not present: use a reviewed ignored production Wrangler configuration, never the default Worker by accident. Do not invite production users until media submission and real-device checks are ready.

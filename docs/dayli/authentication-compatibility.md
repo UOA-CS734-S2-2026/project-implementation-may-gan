@@ -2,7 +2,7 @@
 
 Status: the compatibility slice has Worker and Flutter unit coverage. PostgreSQL persistence has a separate local integration suite. Neither result is a staging or physical-device result. The checked-in web client has email/password sign-up, sign-in, and password-recovery screens plus a Google button. The Flutter shell has email/password and Google buttons; its Google action reports that setup is unavailable when the build has no Google client configuration.
 
-The rollout order is local auth walkthrough first, then the existing empty Neon staging project with synthetic data, then a fresh production project. Staging currently has zero deployment credentials, no Worker, and no Hyperdrive for this project. No production service is deployed; an old empty production Neon project may still need to be inventoried and replaced. Do not manually dispatch the staging proof, deploy, or run a credentialed check until staging has been re-provisioned and reviewed.
+The rollout order is local auth walkthrough first, then the existing empty Neon staging project with synthetic data, then a fresh production project. Staging has no Worker, Hyperdrive, or deployment credentials for this project: the old Cloudflare staging Worker, Hyperdrive, and GitHub environment credentials were removed. No production service is deployed; an old empty production Neon project may still need inventory and owner-led deletion or replacement. Do not manually dispatch the staging proof, deploy, or run a credentialed check until staging has been re-provisioned and reviewed.
 
 Issue #10 tests Better Auth 1.7.5 in the Workers Vitest runtime. The slice uses email/password sessions, secure browser cookies, and Better Auth's signed bearer-session plugin. It is deliberately limited to authentication compatibility.
 
@@ -59,9 +59,9 @@ flutter test
 flutter analyze
 ```
 
-## Google and Resend setup
+## Google OAuth and Resend
 
-Better Auth remains the only session authority. Google proves identity. Resend sends authentication email. The Worker validates every provider binding before it mounts authentication. Google or Resend may be disabled only by leaving every binding for that provider blank. Google requires all three client IDs and its Worker-only client secret. Resend requires both its API key and sender. A partial provider configuration is invalid and leaves authentication unmounted.
+Google OAuth and Resend are unprovisioned in live environments. Local email/password auth works without either provider. Better Auth remains the only session authority: Google proves identity and Resend sends authentication email. The Worker validates every provider binding before it mounts authentication. Google or Resend may be disabled only by leaving every binding for that provider blank. Google requires all three client IDs and its Worker-only client secret. Resend requires both its API key and sender. A partial provider configuration is invalid and leaves authentication unmounted.
 
 Use distinct, HTTPS API and web origins under the same schemeful site for each environment, such as `https://api.staging.example.test` and `https://web.staging.example.test`. The two origins must have the same registrable domain and HTTPS scheme so the API's `SameSite=Lax` session cookie remains same-site. They remain different origins, so the Worker still uses an exact CORS and trusted-origin allow-list. Do not use paths, trailing slashes, wildcards, localhost, or a production origin in staging.
 

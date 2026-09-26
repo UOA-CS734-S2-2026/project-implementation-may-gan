@@ -8,12 +8,11 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 
 ## Read by topic
 
-- [First run](first-run.md): local HTTPS sign-in, staging setup, Google and Resend, and a separate production reset.
+- [Environments](environments.md): implemented local HTTPS sign-in, unprovisioned staging, and the separate production reset and release boundary.
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
 - [Architecture](architecture.md): components and request flows.
-- [Environments](environments.md): local PostgreSQL, local Workers, staging, and production release boundaries.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
 - [Authentication compatibility](authentication-compatibility.md): Better Auth Worker and Flutter proof, plus deployment prerequisites.
