@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { MAX_ATTACHMENT_BYTES, MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../policy";
-import type { MediaReservationRecord, MediaReservationRepository } from "./repository";
+import { createUnusedR2Reader } from "../../../lib/r2.fake";
+import { createFakeMediaReservationRepository } from "./repository.fake";
+import type { MediaReservationRepository } from "./repository";
 import type { MediaReservationRuntime } from "./runtime";
 
 const origin = "https://worker.test";
@@ -14,35 +16,13 @@ const testR2Configuration = {
   secretAccessKey: "test-secret-access-key",
 };
 
-function createFakeRepository(): MediaReservationRepository & { records: Map<string, MediaReservationRecord> } {
-  const records = new Map<string, MediaReservationRecord>();
-  return {
-    records,
-    // No `await` between the count and the write; whole body runs as one; 
-    // equivalent to the real repository's transaction + advisory lock so 
-    // concurrency tests behave the same way against both
-    async reserveIfUnderQuota(ownerId, maxPending, now, record) {
-      let count = 0;
-      for (const existing of records.values()) {
-        if (existing.ownerId === ownerId && existing.expiresAt.getTime() > now.getTime()) count += 1;
-      }
-      if (count >= maxPending) return "quota_exceeded";
-
-      records.set(record.id, record);
-      return "inserted";
-    },
-    async findById(id) {
-      return records.get(id);
-    },
-  };
-}
-
 function createFakeMediaRuntime(
   auth: BetterAuthCompatibilitySlice,
   repository: MediaReservationRepository,
 ): MediaReservationRuntime {
   return {
     r2: testR2Configuration,
+    r2Reader: createUnusedR2Reader(),
     async withRequestContext(request, operation) {
       const result = await auth.auth.api.getSession({ headers: request.headers });
       const user = result?.user?.id ? { userId: result.user.id } : undefined;
@@ -51,7 +31,7 @@ function createFakeMediaRuntime(
   };
 }
 
-function createTestApp(repository: MediaReservationRepository = createFakeRepository()) {
+function createTestApp(repository: MediaReservationRepository = createFakeMediaReservationRepository()) {
   const auth = createBetterAuthCompatibilitySlice({
     baseURL: origin,
     secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,

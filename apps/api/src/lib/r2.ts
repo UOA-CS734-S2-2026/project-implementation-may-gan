@@ -1,4 +1,4 @@
-import { AwsV4Signer } from "aws4fetch";
+import { AwsClient, AwsV4Signer } from "aws4fetch";
 
 /** Runtime bindings required before presigned R2 uploads can be issued. */
 export interface R2WorkerBindings {
@@ -56,6 +56,19 @@ function encodeObjectKeyPath(objectKey: string): string {
   return objectKey.split("/").map(encodeURIComponent).join("/");
 }
 
+function buildObjectUrl(configuration: R2RuntimeConfiguration, objectKey: string): string {
+  return `https://${configuration.accountId}.r2.cloudflarestorage.com/${configuration.bucketName}/${encodeObjectKeyPath(objectKey)}`;
+}
+
+function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
+  return new AwsClient({
+    accessKeyId: configuration.accessKeyId,
+    secretAccessKey: configuration.secretAccessKey,
+    service: "s3",
+    region: "auto",
+  });
+}
+
 /**
  * Build a short-lived, single-object, single-method presigned PUT URL against R2's
  * S3-compatible API. Signs content-type/content-length so R2 rejects any upload that
@@ -73,9 +86,7 @@ export async function createPresignedUploadUrl(
     "content-length": String(input.byteSize),
   };
 
-  const url = new URL(
-    `https://${configuration.accountId}.r2.cloudflarestorage.com/${configuration.bucketName}/${encodeObjectKeyPath(input.objectKey)}`,
-  );
+  const url = new URL(buildObjectUrl(configuration, input.objectKey));
   url.searchParams.set("X-Amz-Expires", String(input.expiresInSeconds));
 
   const signer = new AwsV4Signer({
@@ -98,4 +109,84 @@ export async function createPresignedUploadUrl(
   const signed = await signer.sign();
 
   return { url: signed.url.toString(), method: "PUT", requiredHeaders };
+}
+
+/**
+ * Thrown only for a genuinely unexpected R2/network problem (bad status, malformed
+ * response) — never for "object not found" or "range not satisfiable", which are
+ * ordinary validation-domain outcomes callers branch on, not errors. Callers should
+ * map this specifically to 503, not broaden the catch to cover everything.
+ */
+export class R2ReadInfrastructureError extends Error {}
+
+export type HeadObjectOutcome =
+  | { outcome: "found"; contentLength: number }
+  | { outcome: "not_found" };
+
+/** A real HEAD against R2 — confirms the object exists and its actual byte count. */
+export async function headR2Object(
+  configuration: R2RuntimeConfiguration,
+  objectKey: string,
+): Promise<HeadObjectOutcome> {
+  const client = createAwsClient(configuration);
+  const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "HEAD" });
+  if (response.status === 404) return { outcome: "not_found" };
+  if (!response.ok) {
+    throw new R2ReadInfrastructureError(`R2 HEAD failed with status ${response.status}`);
+  }
+
+  const contentLength = Number(response.headers.get("content-length"));
+  if (!Number.isFinite(contentLength) || contentLength < 0) {
+    throw new R2ReadInfrastructureError("R2 HEAD response is missing a valid Content-Length");
+  }
+  return { outcome: "found", contentLength };
+}
+
+export type RangedReadResult =
+  | { outcome: "read"; bytes: Uint8Array }
+  | { outcome: "not_found" }
+  | { outcome: "range_not_satisfiable" };
+
+/**
+ * A real, bounded GET against R2 using an HTTP Range request — callers must always
+ * pass a bounded range, never read a whole object, to keep validation work cheap
+ * and predictable (docs/dayli/implementation-reference.md's "safe processing limits").
+ */
+export async function readR2ObjectRange(
+  configuration: R2RuntimeConfiguration,
+  objectKey: string,
+  range: { start: number; end: number },
+): Promise<RangedReadResult> {
+  const client = createAwsClient(configuration);
+  const response = await client.fetch(buildObjectUrl(configuration, objectKey), {
+    method: "GET",
+    headers: { Range: `bytes=${range.start}-${range.end}` },
+  });
+  if (response.status === 404) return { outcome: "not_found" };
+  if (response.status === 416) return { outcome: "range_not_satisfiable" };
+  if (response.status !== 200 && response.status !== 206) {
+    throw new R2ReadInfrastructureError(`R2 GET failed with status ${response.status}`);
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const expectedLength = range.end - range.start + 1;
+  if (bytes.byteLength !== expectedLength) {
+    // R2 returned fewer bytes than requested — the object is shorter than the
+    // earlier HEAD implied, a content-level inconsistency, not a hard error.
+    return { outcome: "range_not_satisfiable" };
+  }
+  return { outcome: "read", bytes };
+}
+
+export interface MediaR2Reader {
+  head(objectKey: string): Promise<HeadObjectOutcome>;
+  readRange(objectKey: string, range: { start: number; end: number }): Promise<RangedReadResult>;
+}
+
+/** Production reader backed by real R2. Tests inject a fake implementing the same interface. */
+export function createR2Reader(configuration: R2RuntimeConfiguration): MediaR2Reader {
+  return {
+    head: (objectKey) => headR2Object(configuration, objectKey),
+    readRange: (objectKey, range) => readR2ObjectRange(configuration, objectKey, range),
+  };
 }

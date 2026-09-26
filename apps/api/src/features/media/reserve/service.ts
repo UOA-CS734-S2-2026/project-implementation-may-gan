@@ -1,10 +1,7 @@
 import { MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../policy";
 import { createPresignedUploadUrl, type R2RuntimeConfiguration } from "../../../lib/r2";
-import type {
-  CreateMediaReservationRequest,
-  CreateMediaReservationResponse,
-  MediaReservationResponse,
-} from "./contract";
+import { toMediaReservationResponse } from "../reservation-status";
+import type { CreateMediaReservationRequest, CreateMediaReservationResponse, MediaReservationResponse } from "./contract";
 import type { MediaReservationRepository } from "./repository";
 
 export interface CreateMediaReservationDependencies {
@@ -50,6 +47,9 @@ export async function createMediaReservation(
     objectKey,
     contentType: request.contentType,
     byteSize: request.byteSize,
+    status: "pending",
+    failureReason: null,
+    validatedAt: null,
     createdAt: now,
     expiresAt,
   });
@@ -91,15 +91,5 @@ export async function getMediaReservation(
     return { outcome: "not_found" };
   }
 
-  return {
-    outcome: "found",
-    reservation: {
-      id: record.id,
-      contentType: record.contentType as MediaReservationResponse["contentType"],
-      byteSize: record.byteSize,
-      status: record.expiresAt.getTime() > now.getTime() ? "pending" : "expired",
-      createdAt: record.createdAt.toISOString(),
-      expiresAt: record.expiresAt.toISOString(),
-    },
-  };
+  return { outcome: "found", reservation: toMediaReservationResponse(record, now) };
 }

@@ -7,8 +7,12 @@ export { apiErrorSchema };
 export const mediaContentTypeSchema = z.enum(allowedContentTypes).openapi("MediaContentType");
 
 export const mediaReservationStatusSchema = z
-  .enum(["pending", "expired"])
+  .enum(["pending", "expired", "validated", "failed"])
   .openapi("MediaReservationStatus");
+
+export const mediaValidationFailureReasonSchema = z
+  .enum(["byte_size_mismatch", "format_mismatch", "duration_exceeded", "malformed_container", "object_not_found"])
+  .openapi("MediaValidationFailureReason");
 
 export const createMediaReservationRequestSchema = z
   .object({
@@ -43,7 +47,9 @@ export const mediaReservationResponseSchema = z
     contentType: mediaContentTypeSchema,
     byteSize: z.number().int().positive(),
     status: mediaReservationStatusSchema,
+    failureReason: mediaValidationFailureReasonSchema.optional(),
     createdAt: utcTimestampSchema,
+    validatedAt: utcTimestampSchema.optional(),
     expiresAt: utcTimestampSchema,
   })
   .openapi("MediaReservation");
