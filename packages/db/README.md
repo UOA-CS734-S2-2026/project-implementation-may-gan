@@ -7,13 +7,13 @@ Runtime Workers use Hyperdrive with the restricted `app` role; migration command
 
 Run from the repository root:
 
-- `pnpm db:generate` — generate a normal Drizzle migration from `packages/db/src/schema`.
-- `pnpm db:check` — validate Drizzle metadata, generated-schema drift, Squawk safety, and reviewed suppressions.
-- `pnpm db:migrate` — apply pending migrations for `MIGRATION_TARGET`.
-- `pnpm db:verify` — strict read-only migration-state verification.
-- `pnpm db:smoke` — connection smoke check.
+- `pnpm db:generate`: generate a normal Drizzle migration from `packages/db/src/schema`.
+- `pnpm db:check`: validate Drizzle metadata, generated-schema drift, Squawk safety, and reviewed suppressions.
+- `pnpm db:migrate`: apply pending migrations for `MIGRATION_TARGET`.
+- `pnpm db:verify`: strict read-only migration-state verification.
+- `pnpm db:smoke`: connection smoke check.
 - `pnpm db:migration:inventory`: aggregate-only, read-only inventory of the legacy Supabase schema for the approved migration boundary.
-- `pnpm db:test:up`, `pnpm db:test`, `pnpm db:test:down` — local PostgreSQL 18 integration workflow.
+- `pnpm db:test:up`, `pnpm db:test`, `pnpm db:test:down`: local PostgreSQL 18 integration workflow.
 
 ## Required environment
 
@@ -37,14 +37,15 @@ Migration history is forward-only and additive by default. Existing migration SQ
 
 Friendship rows are a paired directional projection. Migration `0006_absurd_swordsman` enforces that both directions exist with the same state at transaction commit; callers must change both rows in one transaction. Relationship foreign keys intentionally use `NO ACTION`: account deletion must explicitly resolve relationship history in a later reviewed workflow rather than silently cascading it away.
 
-`packages/db/admin/bootstrap-roles.sql` is run by an administrator on each Neon branch. It provisions `migrator` for schema ownership and `app` for DML-only access to new `public` tables. Do not commit passwords, URLs, branch IDs, screenshots containing private hostnames, or workflow logs containing secrets.
+On a separate synthetic-data Neon staging project, run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`, then run `packages/db/admin/bootstrap-migrator.sql` in a direct `migrator` connection. The split is required because an owner is not automatically a member of `migrator`, so it cannot set that role's default privileges. Complete the read-only `admin/verify-role-bootstrap.sql` check before migrations and after any Console or API password reset. Set an existing SQL-created role password with interactive `psql` or a Console or API reset. Do not create application roles through Neon Console because it grants `neon_superuser`. The importer password can wait until an approved import needs it. Do not commit passwords, URLs, branch IDs, screenshots containing private hostnames, or workflow logs containing secrets.
 
 ## Deletion cleanup
 
 Application deletion first makes the post or account inaccessible. A tracked
 cleanup job then connects as `migrator` and removes dependent rows in child-first
 order. For a post, delete `tomorrow_notes`, `post_revisions`,
-`legacy_cloudinary_media`, and `post_media` before `posts`; for an account,
+`legacy_cloudinary_media`, and `post_media` before `posts`
+(`post_idempotency_keys` rows cascade with their post); for an account,
 remove relationship rows and post children before the `user` row. The immutable
 history triggers permit deletes only for the `migrator` role, and the job must
 record each batch and retry failed batches. Ordinary app connections cannot

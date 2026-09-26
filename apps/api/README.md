@@ -16,11 +16,12 @@ The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntry
 
 ### One-time Cloudflare setup
 
-1. Create a PostgreSQL database used only for staging. Do not reuse production data or credentials. Use a least-privilege database user and require TLS when the provider supports it.
-2. In **Workers & Pages** > **Hyperdrive**, create a configuration for that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.
-3. Copy `wrangler.staging.example.jsonc` to the ignored `wrangler.staging.jsonc`. Keep its name as `dayli-api-staging`, replace the Hyperdrive ID placeholder, and keep the binding name `HYPERDRIVE`. Replace its public placeholder base URL and trusted browser origins with exact HTTPS staging origins.
-4. Set the ignored Worker secret with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. Use a value of at least 32 characters from the approved secret store. Never put it in `vars`, JSON configuration, or Git.
-5. Copy `wrangler.hyperdrive-test.example.jsonc` to the ignored `wrangler.hyperdrive-test.jsonc`. Set its service placeholder to `dayli-api-staging`. It declares the private remote service binding and contains no database connection string.
+1. Create a separate Neon project used only for staging and synthetic data. Do not reuse a production project, branch, data, credentials, or restore point.
+2. Complete the owner and migrator role-bootstrap sequence in [Database migrations](../../docs/dayli/database-migrations.md#roles-and-connections). Do not create application roles through Neon Console. Require the read-only bootstrap verification to report only `true` values before continuing.
+3. In **Workers & Pages** > **Hyperdrive**, create a configuration for the restricted `app` role in that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.
+4. Copy `wrangler.staging.example.jsonc` to the ignored `wrangler.staging.jsonc`. Keep its name as `dayli-api-staging`, replace the Hyperdrive ID placeholder, and keep the binding name `HYPERDRIVE`. Replace its public placeholder base URL and trusted browser origins with exact HTTPS staging origins.
+5. Set the ignored Worker secret with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. Use a value of at least 32 characters from the approved secret store. Never put it in `vars`, JSON configuration, or Git.
+6. Copy `wrangler.hyperdrive-test.example.jsonc` to the ignored `wrangler.hyperdrive-test.jsonc`. Set its service placeholder to `dayli-api-staging`. It declares the private remote service binding and contains no database connection string.
 
 ### Reproduce locally
 
