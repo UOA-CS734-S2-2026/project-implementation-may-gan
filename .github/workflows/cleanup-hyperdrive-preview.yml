@@ -1,41 +1,75 @@
 name: Clean up closed Hyperdrive preview
 
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - closed
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Closed same-repository PR number whose preview Worker should be deleted
+        required: true
+        type: string
 
 permissions:
-  contents: read
+  pull-requests: read
 
-# Use the same lock as the deploy/test workflow. A close event waits for any
-# in-flight check for this PR before it can remove the preview Worker.
+# Serialize cleanup attempts for one requested preview without adding an
+# automatic pull request trigger.
 concurrency:
-  group: staging-hyperdrive-${{ github.event.pull_request.number }}
+  group: cleanup-hyperdrive-preview-${{ inputs.pr_number }}
   cancel-in-progress: false
 
 jobs:
   cleanup:
-    # Do not use pull_request_target. Forks never receive the staging environment
-    # or its credentials. This job does not check out or execute PR code.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.repo.fork == false
+    # Only the workflow file on main may use the protected staging environment.
+    # Do not use pull_request_target or check out or execute PR code.
+    if: github.ref == 'refs/heads/main'
     environment: staging
     runs-on: ubuntu-latest
     steps:
+      - name: Verify the closed PR and cleanup target
+        id: pr
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+        with:
+          script: |
+            const prNumber = process.env.PR_NUMBER;
+            if (!/^[1-9][0-9]*$/.test(prNumber ?? "")) {
+              throw new Error("Refusing an invalid pull request number.");
+            }
+            const pullNumber = Number(prNumber);
+            if (!Number.isSafeInteger(pullNumber)) {
+              throw new Error("Refusing an unsafe pull request number.");
+            }
+
+            const { owner, repo } = context.repo;
+            const repository = `${owner}/${repo}`;
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+            if (
+              pull.state !== "closed" ||
+              pull.base.ref !== "main" ||
+              pull.base.repo?.full_name !== repository ||
+              pull.head.repo?.full_name !== repository ||
+              pull.head.repo?.fork !== false
+            ) {
+              throw new Error("Refusing a PR that is not a closed, main-based, same-repository non-fork PR.");
+            }
+
+            core.setOutput("pr_number", prNumber);
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Delete the closed PR preview Worker
+      - name: Delete the verified PR preview Worker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
         run: |
           node <<'NODE'
+          (async () => {
           const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
           const apiToken = process.env.CLOUDFLARE_API_TOKEN;
           const prNumber = process.env.PR_NUMBER;
@@ -104,4 +138,8 @@ jobs:
             }
             console.log(`Deleted closed-PR preview Worker ${workerName}.`);
           }
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
           NODE

@@ -197,7 +197,7 @@ printf 'Hyperdrive check commit: %s\n' "$commit_sha"
 BASH
 ```
 
-The GitHub `staging` environment retains the protected `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` secrets, plus `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, and `STAGING_HYPERDRIVE_NAME` variables for that future proof. `.github/workflows/staging-hyperdrive.yml` runs only through manual dispatch. It has no pull request or `main` push trigger and does not use `pull_request_target`. Its credential and Hyperdrive validation safeguards remain in place. The separate `cleanup-hyperdrive-preview.yml` workflow remains enabled only to safely remove any previously deployed trusted PR preview after the PR closes.
+The GitHub `staging` environment no longer has its staging secrets or variables, and the old staging Worker and Hyperdrive were deleted. Do not run a staging deployment or proof yet. When staging is explicitly re-provisioned, configure the protected values required for the approved workflow. `.github/workflows/staging-hyperdrive.yml` runs only through manual dispatch. It has no pull request or `main` push trigger and does not use `pull_request_target`. Its credential and Hyperdrive validation safeguards remain in place. The separate `cleanup-hyperdrive-preview.yml` workflow is also manual only: after its Cloudflare account value and API token are explicitly re-provisioned, run it from `main` with a PR number. It verifies that GitHub reports a closed, main-based, same-repository non-fork PR before deleting only `dayli-api-pr-<number>`.
 
 ## Legacy Supabase migration inventory
 

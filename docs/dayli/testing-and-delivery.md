@@ -25,7 +25,7 @@ The command requires Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, 
 
 `pnpm verify:local:full` adds the debug Android APK build. Record `git rev-parse HEAD`, the command mode, and sanitized output in the PR or approved evidence location. Do not commit evidence that could include credentials. This local fixture check does not contact Neon or Cloudflare and is not a staging proof.
 
-The protected `run-database-migrations.yml` and `staging-hyperdrive.yml` workflows remain manual. `cleanup-hyperdrive-preview.yml` remains enabled for closed PRs only so it can clean trusted previews that may already exist for PRs #113 and #114. It does not test or deploy new PR code.
+The protected `run-database-migrations.yml` and `staging-hyperdrive.yml` workflows remain manual. `cleanup-hyperdrive-preview.yml` is manual only, runs from `main` with a required PR number, and verifies a closed, main-based, same-repository non-fork PR before cleaning only its preview Worker. It does not test or deploy new PR code. Its Cloudflare credentials were removed with the old staging Worker and Hyperdrive, so do not run it until cleanup credentials are explicitly re-provisioned. That does not authorize a staging deployment or proof.
 
 ## Credentialed staging checks
 
