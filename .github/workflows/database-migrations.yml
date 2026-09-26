@@ -46,22 +46,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Provision local migration roles
-        run: |
-          psql -h localhost -p 5433 -U postgres -d dayli_test <<'SQL'
-          CREATE ROLE migrator LOGIN PASSWORD 'migrator';
-          CREATE ROLE app LOGIN PASSWORD 'app';
-          GRANT CONNECT ON DATABASE dayli_test TO migrator, app;
-          GRANT CREATE ON DATABASE dayli_test TO migrator;
-          GRANT USAGE, CREATE ON SCHEMA public TO migrator;
-          GRANT USAGE ON SCHEMA public TO app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
-          ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app;
-          REVOKE CREATE ON SCHEMA public FROM app;
-          CREATE SCHEMA drizzle AUTHORIZATION migrator;
-          GRANT USAGE, CREATE ON SCHEMA drizzle TO migrator;
-          REVOKE ALL ON SCHEMA drizzle FROM app;
-          SQL
+      - name: Provision local migration test roles
+        run: psql -h localhost -p 5433 -U postgres -d dayli_test -f packages/db/test/init/001-local-roles.sql
       - name: Provision isolated relationship test database
         run: |
           psql -h localhost -p 5433 -U postgres -d postgres -c "CREATE DATABASE dayli_relationship_test OWNER migrator;"
