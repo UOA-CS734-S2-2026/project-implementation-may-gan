@@ -1,9 +1,9 @@
 name: Database migrations
 
+# Hosted verification is paused to preserve shared Actions minutes. Manual runs
+# remain available for restoration, but they still consume GitHub-hosted minutes.
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: database-migrations-${{ github.ref }}
