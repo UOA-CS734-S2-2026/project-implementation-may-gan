@@ -65,6 +65,38 @@ void main() {
     },
   );
 
+  test('signs up without an unsupported username field', () async {
+    final tokenStore = MemorySessionTokenStore();
+    late Map<String, dynamic> signUpBody;
+    final client = MockClient((request) async {
+      expect(request.url.path, '/api/auth/sign-up/email');
+      signUpBody = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response(
+        '',
+        200,
+        headers: {'set-auth-token': 'worker-token'},
+      );
+    });
+    final session = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokenStore,
+      client: client,
+    );
+
+    await session.signUp(
+      name: 'Mobile User',
+      email: 'mobile@example.test',
+      password: 'not-a-real-password',
+    );
+
+    expect(tokenStore.value, 'worker-token');
+    expect(signUpBody, {
+      'name': 'Mobile User',
+      'email': 'mobile@example.test',
+      'password': 'not-a-real-password',
+    });
+  });
+
   test(
     'exchanges a Google SDK ID token for the existing native session handoff',
     () async {

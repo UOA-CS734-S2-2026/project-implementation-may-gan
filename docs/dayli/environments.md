@@ -146,21 +146,29 @@ Start the web shell with:
 pnpm --dir apps/web dev
 ```
 
-It normally listens on `http://localhost:3000`. The web app reads the API origin from `NEXT_PUBLIC_API_BASE_URL` (see `apps/web/.env.example`) and calls it with the browser's Better Auth session cookie. The API returns credentialed CORS headers for `/api/v1/*` only to origins in `BETTER_AUTH_TRUSTED_ORIGINS`, which must be exact HTTPS origins, so a browser session against a local Worker needs HTTPS origins for both. Use these addresses for the local Worker:
+It normally listens on `http://localhost:3000`. The web app reads `NEXT_PUBLIC_API_BASE_URL` (see `apps/web/.env.example`), and Flutter receives its API origin through `DAYLI_API_BASE_URL`. For browser sessions, the web and API origins must both use HTTPS and be configured in `BETTER_AUTH_TRUSTED_ORIGINS`; CORS permits credentials only from those exact origins. The following local Worker addresses are useful for unauthenticated development and native device configuration:
 
 - Browser on the development machine: `http://127.0.0.1:8787`
 - Android emulator: `http://10.0.2.2:8787`
 - iOS Simulator: `http://127.0.0.1:8787`
-- Physical device: `http://<host-lan-ip>:8787`, with the device on the same trusted network
+- Android physical device over USB: `http://127.0.0.1:8787` after `adb reverse tcp:8787 tcp:8787`
 
-A physical device cannot use `localhost` for a server on the development machine. Start Wrangler with an explicitly chosen LAN bind address, such as `--ip 0.0.0.0`, only on a trusted network. Configure CORS for the client origin before browser clients make cross-origin calls. The current API has no client-facing database route, so an address alone does not prove database integration.
+For an Android device, start Wrangler on its default loopback address, then run:
 
-Run the Flutter shell separately:
+```bash
+adb reverse tcp:8787 tcp:8787
+cd apps/mobile
+flutter run --dart-define=DAYLI_API_BASE_URL=http://127.0.0.1:8787
+```
+
+`adb reverse` forwards the device's loopback port to the development machine. It avoids exposing the debug Worker on the LAN, and Android debug builds allow cleartext only for the emulator and loopback aliases. Remove the mapping with `adb reverse --remove tcp:8787` when finished. Use a deployed HTTPS staging API for authenticated browser and physical-device tests. A local HTTP address alone does not mount Better Auth or prove Hyperdrive integration.
+
+For an Android emulator, run the Flutter shell with its API origin:
 
 ```bash
 cd apps/mobile
 flutter pub get
-flutter run
+flutter run --dart-define=DAYLI_API_BASE_URL=http://10.0.2.2:8787
 ```
 
 ## Staging
