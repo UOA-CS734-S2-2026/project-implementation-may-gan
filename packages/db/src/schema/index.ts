@@ -27,6 +27,26 @@ export { profileVisibility, tier, user } from "./users";
  */
 export const postAudience = pgEnum("post_audience", ["solo", "friends"]);
 
+export const mediaReservationStatus = pgEnum("media_reservation_status", [
+  "pending",
+  "validated",
+  "failed",
+]);
+
+/**
+ * "object_not_found" is written only for a rare TOCTOU case (the object existed at
+ * a HEAD check but vanished before a following read). The common case — the client
+ * simply hasn't finished the PUT yet — is a transient, retryable condition and is
+ * never persisted at all. See apps/api/src/features/media/complete/service.ts.
+ */
+export const mediaValidationFailureReason = pgEnum("media_validation_failure_reason", [
+  "byte_size_mismatch",
+  "format_mismatch",
+  "duration_exceeded",
+  "malformed_container",
+  "object_not_found",
+]);
+
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
@@ -233,16 +253,32 @@ export const postIdempotencyKeys = pgTable("post_idempotency_keys", {
   ),
 ]);
 
-/** An owned, opaque R2 object path reserved before a direct client upload. */
+/**
+ * An owned, opaque R2 object path reserved before a direct client upload.
+ * status/failureReason/validatedAt record the outcome of issue #23's completion
+ * check (verifying the real uploaded object's ownership/bytes/format/duration) —
+ * the check constraint below enforces that exactly one of the three (status,
+ * failureReason, validatedAt) combinations ever exists for a row.
+ */
 export const mediaReservation = pgTable("media_reservation", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   objectKey: text("object_key").notNull().unique(),
   contentType: text("content_type").notNull(),
   byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+  status: mediaReservationStatus("status").default("pending").notNull(),
+  failureReason: mediaValidationFailureReason("failure_reason"),
+  validatedAt: timestamp("validated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-}, (table) => [index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt)]);
+}, (table) => [
+  index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt),
+  check("media_reservation_status_consistency_check", sql`
+    (${table.status} = 'pending' and ${table.failureReason} is null and ${table.validatedAt} is null) or
+    (${table.status} = 'validated' and ${table.failureReason} is null and ${table.validatedAt} is not null) or
+    (${table.status} = 'failed' and ${table.failureReason} is not null and ${table.validatedAt} is not null)
+  `),
+]);
 
 export { dailyPrompts } from "./daily-prompts";
 

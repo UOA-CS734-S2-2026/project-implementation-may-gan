@@ -14,6 +14,9 @@ export const MAX_PENDING_RESERVATIONS_PER_OWNER = 20;
 /** Pinned by docs/dayli/product-decisions.md and docs/dayli/mvp.md. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
+/** Pinned by docs/dayli/product-decisions.md and docs/dayli/mvp.md. Enforced by issue #23's completion check. */
+export const MAX_VIDEO_DURATION_SECONDS = 15;
+
 /**
  * Not pinned anywhere in docs/dayli — covers default iOS/Android camera output.
  * Exported as a plain array so issue #63 (audio attachments) can extend it

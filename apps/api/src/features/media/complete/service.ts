@@ -1,0 +1,126 @@
+import {
+  checkMagicBytes,
+  extractIsoBmffDurationSeconds,
+  readMagicByteWindow,
+  type BoxSource,
+} from "../../../lib/media-format";
+import type { MediaR2Reader } from "../../../lib/r2";
+import { MAX_VIDEO_DURATION_SECONDS, type AllowedContentType } from "../policy";
+import { toMediaReservationResponse } from "../reservation-status";
+import type { MediaReservationResponse } from "../reserve/contract";
+import type {
+  MediaReservationRecord,
+  MediaReservationRepository,
+  MediaValidationFailureReason,
+  ValidationOutcome,
+} from "../reserve/repository";
+
+export interface CompleteMediaReservationDependencies {
+  repository: MediaReservationRepository;
+  r2Reader: MediaR2Reader;
+  clock?: () => Date;
+}
+
+export type CompleteMediaReservationResult =
+  | { outcome: "settled"; reservation: MediaReservationResponse }
+  | { outcome: "not_found" }
+  | { outcome: "expired" };
+
+interface DeterminedValidation {
+  status: "validated" | "failed";
+  failureReason: MediaValidationFailureReason | null;
+}
+
+function isVideo(contentType: string): boolean {
+  return contentType.startsWith("video/");
+}
+
+/**
+ * Runs every R2-backed check for one reservation, entirely outside any database
+ * transaction (docs/dayli/architecture.md: never hold a lock during R2 I/O).
+ * Returns undefined when the object hasn't been uploaded yet — a transient,
+ * retryable condition, not a failure — nothing should be persisted for it.
+ */
+async function determineValidation(
+  reader: MediaR2Reader,
+  record: MediaReservationRecord,
+): Promise<DeterminedValidation | undefined> {
+  const head = await reader.head(record.objectKey);
+  if (head.outcome === "not_found") return undefined;
+
+  if (head.contentLength !== record.byteSize) {
+    return { status: "failed", failureReason: "byte_size_mismatch" };
+  }
+
+  // Shared across the magic-byte check and the duration walk below — both need
+  // bounded ranged reads from the same object. A rare TOCTOU case (the object
+  // existed at HEAD but vanished before a following read) is captured distinctly
+  // from an ordinary malformed/truncated read via the `vanished` flag, since that
+  // one case is terminal (object_not_found) rather than retryable.
+  let vanished = false;
+  const read = async (start: number, end: number): Promise<Uint8Array | undefined> => {
+    const result = await reader.readRange(record.objectKey, { start, end });
+    if (result.outcome === "not_found") {
+      vanished = true;
+      return undefined;
+    }
+    return result.outcome === "read" ? result.bytes : undefined;
+  };
+
+  const window = await readMagicByteWindow(read, head.contentLength);
+  if (vanished) return { status: "failed", failureReason: "object_not_found" };
+  if (!window) return { status: "failed", failureReason: "malformed_container" };
+  if (checkMagicBytes(record.contentType as AllowedContentType, window) === "mismatch") {
+    return { status: "failed", failureReason: "format_mismatch" };
+  }
+
+  if (!isVideo(record.contentType)) {
+    return { status: "validated", failureReason: null };
+  }
+
+  const source: BoxSource = { fileSize: head.contentLength, readRange: read };
+  const duration = await extractIsoBmffDurationSeconds(source);
+  if (vanished) return { status: "failed", failureReason: "object_not_found" };
+  if (duration.outcome === "malformed") return { status: "failed", failureReason: "malformed_container" };
+  if (duration.seconds > MAX_VIDEO_DURATION_SECONDS) {
+    return { status: "failed", failureReason: "duration_exceeded" };
+  }
+  return { status: "validated", failureReason: null };
+}
+
+export async function completeMediaReservation(
+  deps: CompleteMediaReservationDependencies,
+  ownerId: string,
+  id: string,
+): Promise<CompleteMediaReservationResult> {
+  const now = (deps.clock ?? (() => new Date()))();
+  const record = await deps.repository.findById(id);
+  if (!record || record.ownerId !== ownerId) {
+    return { outcome: "not_found" };
+  }
+
+  // Idempotent: a settled reservation's bytes don't change, so a repeat call
+  // returns the stored outcome with zero R2 calls rather than re-checking.
+  if (record.status !== "pending") {
+    return { outcome: "settled", reservation: toMediaReservationResponse(record, now) };
+  }
+
+  // Cheap fast-fail before any R2 call: a reservation that expired without ever
+  // completing is dead — a client that wants to fix it must reserve again.
+  if (record.expiresAt.getTime() <= now.getTime()) {
+    return { outcome: "expired" };
+  }
+
+  const validation = await determineValidation(deps.r2Reader, record);
+  if (!validation) {
+    // Not uploaded yet — nothing persisted, still pending, retryable until expiry.
+    return { outcome: "settled", reservation: toMediaReservationResponse(record, now) };
+  }
+
+  const outcome: ValidationOutcome = { status: validation.status, failureReason: validation.failureReason, validatedAt: now };
+  const claim = await deps.repository.claimValidationOutcome(id, outcome);
+  // claim.record is only absent if the row vanished between findById and here,
+  // which cannot happen for an owned reservation (never physically deleted).
+  if (!claim.record) return { outcome: "not_found" };
+  return { outcome: "settled", reservation: toMediaReservationResponse(claim.record, now) };
+}

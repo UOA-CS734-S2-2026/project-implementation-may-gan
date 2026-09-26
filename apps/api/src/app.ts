@@ -15,6 +15,7 @@ import {
   registerMediaReservationRoutes,
   type MediaReservationRuntime,
 } from "./features/media/reserve/route";
+import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,
   type RelationshipsRouteDependencies,
@@ -94,6 +95,7 @@ export function createApp({
   registerHealthRoute(api);
   registerTestContractsRoute(api);
   registerMediaReservationRoutes(api, media);
+  registerMediaCompleteRoute(api, media);
   registerApiDocsRoute(api);
   registerCurrentPostingDayRoute(api, postingDay ?? { authenticate: async () => null });
   registerCreateDailyPostRoute(api, posts ?? { authenticate: async () => null });
