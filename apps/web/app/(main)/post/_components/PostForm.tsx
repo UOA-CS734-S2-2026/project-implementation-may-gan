@@ -80,6 +80,10 @@ function failureMessage(failure: ApiFailure): string {
         case "POSTING_DAY_NOT_OPEN":
         case "PROMPT_CHANGED":
           return "The day's prompt has changed. We've refreshed it, so check your answer and post again.";
+        case "ALREADY_POSTED":
+          return "A post already exists for today. Your current edits were not saved and remain in this form. Copy them before leaving this page.";
+        case "IDEMPOTENCY_KEY_REUSED":
+          return "An earlier version of this draft was already posted. These edits cannot be posted with this submission key, so copy them before leaving this page.";
         default:
           return failure.message;
       }
@@ -143,14 +147,6 @@ export default function PostForm({
     const { failure } = result;
     if (failure.kind === "unauthenticated") {
       router.replace("/sign-in");
-      return;
-    }
-    if (
-      failure.kind === "conflict" &&
-      (failure.reason === "ALREADY_POSTED" ||
-        failure.reason === "IDEMPOTENCY_KEY_REUSED")
-    ) {
-      router.push("/");
       return;
     }
     if (

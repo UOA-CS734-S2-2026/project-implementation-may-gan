@@ -12,7 +12,6 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 const signUpSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  username: z.string().min(1, "Username is required"),
   email: z.email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
@@ -29,12 +28,10 @@ export default function SignUpPage() {
     formState: { isSubmitting, errors },
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", username: "", email: "", password: "" },
+    defaultValues: { name: "", email: "", password: "" },
   });
 
   const onSubmit = async ({ name, email, password }: SignUpValues) => {
-    // The API has no usernames until the profile API (#68), so the handle is
-    // collected here but not sent yet.
     const { error } = await authClient.signUp.email({ name, email, password });
 
     if (error) {
@@ -69,12 +66,6 @@ export default function SignUpPage() {
           name="name"
           label="Name"
           autoComplete="name"
-        />
-        <FormInput
-          control={control}
-          name="username"
-          label="Username"
-          autoComplete="username"
         />
         <FormInput
           control={control}
