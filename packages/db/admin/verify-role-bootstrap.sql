@@ -20,6 +20,12 @@ SELECT
   NOT has_schema_privilege('users_accounts_importer', 'public', 'CREATE') AS importer_public_create,
   NOT pg_has_role('app', 'migrator', 'member') AS app_not_migrator_member,
   NOT pg_has_role('users_accounts_importer', 'migrator', 'member') AS importer_not_migrator_member,
+  NOT EXISTS (
+    SELECT 1
+    FROM pg_auth_members memberships
+    JOIN pg_roles member ON member.oid = memberships.member
+    WHERE member.rolname IN ('migrator', 'app', 'users_accounts_importer')
+  ) AS roles_have_no_memberships,
   CASE
     WHEN to_regclass('public.user') IS NULL AND to_regclass('public.account') IS NULL THEN true
     WHEN to_regclass('public.user') IS NOT NULL AND to_regclass('public.account') IS NOT NULL THEN

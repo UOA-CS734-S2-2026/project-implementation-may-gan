@@ -5,6 +5,7 @@ import { repoPath } from "./migrations/paths";
 const ownerBootstrapPath = repoPath("packages/db/admin/bootstrap-roles.sql");
 const migratorBootstrapPath = repoPath("packages/db/admin/bootstrap-migrator.sql");
 const verificationPath = repoPath("packages/db/admin/verify-role-bootstrap.sql");
+const databaseMigrationsWorkflowPath = repoPath(".github/workflows/database-migrations.yml");
 
 describe("Neon role bootstrap scripts", () => {
   it("keeps owner-only role setup separate from migrator-owned defaults", async () => {
@@ -30,9 +31,16 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("app_public_create");
     expect(verification).toContain("app_public_table_defaults");
     expect(verification).toContain("importer_target_table_rights");
+    expect(verification).toContain("roles_have_no_memberships");
     const executableSql = verification
       .replace(/--.*$/gm, "")
       .replace(/'(?:''|[^'])*'/g, "");
     expect(executableSql).not.toMatch(/\b(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE)\b/i);
+  });
+
+  it("stops CI when local role fixture SQL fails", async () => {
+    const workflow = await readFile(databaseMigrationsWorkflowPath, "utf8");
+
+    expect(workflow).toContain("psql -v ON_ERROR_STOP=1 -h localhost -p 5433 -U postgres -d dayli_test -f packages/db/test/init/001-local-roles.sql");
   });
 });

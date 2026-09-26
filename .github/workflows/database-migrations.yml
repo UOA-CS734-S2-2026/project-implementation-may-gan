@@ -47,7 +47,7 @@ jobs:
       - name: Install psql
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Provision local migration test roles
-        run: psql -h localhost -p 5433 -U postgres -d dayli_test -f packages/db/test/init/001-local-roles.sql
+        run: psql -v ON_ERROR_STOP=1 -h localhost -p 5433 -U postgres -d dayli_test -f packages/db/test/init/001-local-roles.sql
       - name: Provision isolated relationship test database
         run: |
           psql -h localhost -p 5433 -U postgres -d postgres -c "CREATE DATABASE dayli_relationship_test OWNER migrator;"
