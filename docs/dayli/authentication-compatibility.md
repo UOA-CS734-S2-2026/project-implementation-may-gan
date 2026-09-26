@@ -1,6 +1,8 @@
 # Authentication compatibility slice
 
-Status: the compatibility slice has Worker and Flutter unit coverage. PostgreSQL persistence has a separate local integration suite. Neither result is a staging or physical-device result.
+Status: the compatibility slice has Worker and Flutter unit coverage. PostgreSQL persistence has a separate local integration suite. Neither result is a staging or physical-device result. The checked-in web client has email/password sign-up, sign-in, and password-recovery screens plus a Google button. The Flutter shell has email/password and Google buttons; its Google action reports that setup is unavailable when the build has no Google client configuration.
+
+The rollout order is local auth walkthrough first, then a separate empty Neon staging project with synthetic data, then a fresh production project. Staging currently has zero credentials, no Worker, and no Hyperdrive for this project. Production is unprovisioned. Do not manually dispatch the staging proof, deploy, or run a credentialed check until staging has been re-provisioned and reviewed.
 
 Issue #10 tests Better Auth 1.7.5 in the Workers Vitest runtime. The slice uses email/password sessions, secure browser cookies, and Better Auth's signed bearer-session plugin. It is deliberately limited to authentication compatibility.
 
@@ -59,15 +61,17 @@ flutter analyze
 
 ## Google and Resend setup
 
-Better Auth remains the only session authority. Google proves identity. Resend sends authentication email. The Worker validates every provider binding before it mounts authentication. Google or Resend may be disabled by leaving every binding for that provider blank. A partial provider configuration is invalid and leaves authentication unmounted.
+Better Auth remains the only session authority. Google proves identity. Resend sends authentication email. The Worker validates every provider binding before it mounts authentication. Google or Resend may be disabled only by leaving every binding for that provider blank. Google requires all three client IDs and its Worker-only client secret. Resend requires both its API key and sender. A partial provider configuration is invalid and leaves authentication unmounted.
+
+Use distinct, HTTPS API and web origins under the same schemeful site for each environment, such as `https://api.staging.example.test` and `https://web.staging.example.test`. The two origins must have the same registrable domain and HTTPS scheme so the API's `SameSite=Lax` session cookie remains same-site. They remain different origins, so the Worker still uses an exact CORS and trusted-origin allow-list. Do not use paths, trailing slashes, wildcards, localhost, or a production origin in staging.
 
 The Worker uses Better Auth 1.7.5's Google provider. Its web redirect callback is exactly `https://<api-origin>/api/auth/callback/google`. The configured Google client ID order is web, iOS, Android. Better Auth uses the first value for the web authorization-code flow and accepts only those three values as ID-token audiences. It requests only `openid`, `email`, and `profile`, with online access and no incremental or offline Google API grant.
 
 ### Google Cloud project
 
 1. Use a team-owned Google Cloud project. Do not use a personal project. Complete the Google Auth Platform branding details, support email, privacy-policy URL, terms URL if required, and audience. Keep the app in testing while development continues and add the team device accounts as test users. Complete Google's publishing and verification process before asking users outside that audience to sign in.
-2. Create separate OAuth clients for staging and production. Never reuse a production client ID or client secret in staging.
-3. For each environment, create a Web application client. Add the exact web origin, for example `https://web.staging.example.test`, under Authorized JavaScript origins. Add the exact API callback, for example `https://api.staging.example.test/api/auth/callback/google`, under Authorized redirect URIs. The callback is not the web origin and must not have a trailing slash. The deployed API origin must also appear in `BETTER_AUTH_TRUSTED_ORIGINS`.
+2. Create separate Web, Android, and iOS OAuth clients for staging and production. Never reuse a production client ID or client secret in staging.
+3. For each environment, create a Web application client. Add the exact web origin, for example `https://web.staging.example.test`, under Authorized JavaScript origins. Add the exact API callback, for example `https://api.staging.example.test/api/auth/callback/google`, under Authorized redirect URIs. The callback is not the web origin and must not have a trailing slash. The deployed API origin and web origin must both appear in `BETTER_AUTH_TRUSTED_ORIGINS`.
 4. Create an Android client for package `nz.ac.auckland.dayli.dayli_mobile`. Register every SHA-1 certificate fingerprint that can sign a build users will run: local debug, the team's release signing key, and Google Play App Signing's release certificate if Play signs production packages. Get the current local debug fingerprint with `./gradlew signingReport` from `apps/mobile/android`. Treat fingerprints as environment-specific configuration and review them before release.
 5. Create an iOS client for the app's final bundle ID. The checked-in project still derives its identifier from Xcode build settings, so set and freeze the production bundle ID before creating the production client. Copy `apps/mobile/ios/Flutter/GoogleSignIn.xcconfig.example` to the ignored `GoogleSignIn.xcconfig` file and set `GOOGLE_REVERSED_CLIENT_ID` to that iOS client's `REVERSED_CLIENT_ID`. `Runner/Info.plist` registers that value in `CFBundleURLTypes`, which lets iOS return to the app. Also pass the iOS client ID to Flutter with `DAYLI_GOOGLE_IOS_CLIENT_ID`. Dart defines do not set Xcode build settings. Do not paste an iOS client secret into Flutter because native clients do not use one.
 6. `apps/mobile` uses `google_sign_in` 7.2.0 and requires Flutter 3.44 or later. Initialise `FlutterGoogleIdTokenProvider` with the web client ID as `serverClientId` and the iOS client ID as `clientId`. Android obtains its configuration from its Google client configuration. It submits only the short-lived Google ID token to `POST /api/auth/sign-in/social`, then stores Better Auth's signed `set-auth-token` handoff in protected storage. Do not request Google API scopes or server authorization codes.
@@ -78,9 +82,9 @@ The Worker uses Better Auth 1.7.5's Google provider. Its web redirect callback i
 2. Publish every DNS record Resend gives for the domain, usually SPF and DKIM. Add a DMARC record with a policy appropriate for the team's mail posture. SPF alone is not sufficient. Wait for Resend to report the domain as verified, then send a single non-production test message from the Resend dashboard if the team approves it.
 3. Check the account's current sending limits, daily quota, recipient restrictions, and production-access requirements before inviting external users. This integration sends only on direct password-reset or verification requests. It never sends mail during user import.
 
-### Worker and web configuration
+### Worker, web, and GitHub configuration
 
-Use an ignored environment-specific Worker configuration for public vars. Do not put any secret in `wrangler.jsonc`, GitHub workflow output, shell history, or Git.
+Use an ignored environment-specific Worker configuration for public vars. Do not put any secret in `wrangler.jsonc`, GitHub workflow output, shell history, or Git. Client IDs and `RESEND_FROM` are public bindings, but configure them only when their matching Worker secrets are ready so each provider remains all-or-none.
 
 ```jsonc
 {
@@ -95,13 +99,24 @@ Use an ignored environment-specific Worker configuration for public vars. Do not
 }
 ```
 
-Set sensitive Worker bindings from an approved secret store. Run each command from `apps/api`, use the environment's ignored config, and enter the value only at the prompt.
+Keep credentials only in an approved secret store. Retrieve a value only when needed, run each command from `apps/api` with the environment's ignored config, and enter it interactively at Wrangler's prompt. Do not pipe, export, echo, paste into shell history, or commit a credential. Repeat the same procedure with the production config and its separate values.
 
 ```bash
 wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc
 wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.staging.jsonc
 wrangler secret put RESEND_API_KEY --config wrangler.staging.jsonc
 ```
+
+Create protected GitHub environments named `staging` and `production` before granting either one credentials. Restrict deployments to `main`, require the designated reviewers, dismiss stale approvals, and disable administrator bypass where the team's policy permits. Put deployment credentials only in that environment's approved secrets store, never repository-wide secrets or variables. The existing manual staging workflow needs `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, `STAGING_HYPERDRIVE_NAME`, `STAGING_AUTH_API_ORIGIN`, and `STAGING_AUTH_WEB_ORIGIN` as public `staging` variables. It reads the last two as exact HTTPS origins and generates only these public Worker bindings:
+
+```json
+{
+  "BETTER_AUTH_BASE_URL": "https://api.staging.example.test",
+  "BETTER_AUTH_TRUSTED_ORIGINS": "https://api.staging.example.test,https://web.staging.example.test"
+}
+```
+
+It does not copy a secret into `vars`. Keep the workflow manual. Do not add pull-request, push, or `pull_request_target` events. When staging is re-provisioned, set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` only as protected `staging` environment secrets. Give production a separate protected environment, token, Worker, database, Hyperdrive, Google clients, Resend domain, and Worker secrets.
 
 Copy `NEXT_PUBLIC_API_BASE_URL=https://api.staging.example.test` to the ignored `apps/web/.env.local` before building the web app. This is a public browser setting, not a secret. The web client sends Google users to the Worker, which returns Google's authorization URL. Google returns to the API callback, then Better Auth redirects only to a configured trusted origin. Do not add wildcard origins. Recovery and verification limits use Cloudflare's `CF-Connecting-IP` header. Keep the API directly behind Cloudflare. Do not route it through a proxy that lets clients supply that header.
 
@@ -115,7 +130,7 @@ For password recovery, the web client posts `redirectTo=https://<web-origin>/res
 4. Request recovery for a real address and an unknown address. The browser response must be identical. Confirm only the real address receives one Resend message, the reset link expires after 15 minutes, and replaying it fails. Check Resend delivery status without copying message links into issue trackers or analytics.
 5. Request verification for an unverified test account. Confirm it arrives from the verified sender, marks the account verified, and does not send mail for imported users unless someone explicitly requests verification.
 
-The checked-in web client has Google-start and password-reset completion screens. It does not yet include email/password sign-in or a verification-request screen, so teams need to add those product screens before claiming a complete email/password web flow. The Flutter helper is ready for a native Google button, but the shell does not yet present one. Do not claim physical-device coverage until the team performs it.
+The checked-in web client has email/password sign-up and sign-in, Google-start, password-reset request, and password-reset completion screens. The Flutter shell presents email/password and Google buttons. Google remains unavailable in a local build without its client configuration. There is no verification-request screen yet. Do not claim deployed or physical-device coverage until the team performs it.
 
 Old Google access and refresh tokens are not imported. Users authorize again. Migrated Google rows retain their `provider_id = google`, `account_id = <Google subject>`, and stable user ID. Better Auth resolves that exact pair first. It disables implicit email-based account linking, so a matching email cannot merge a new Google subject into a migrated account.
 
