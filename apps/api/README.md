@@ -4,13 +4,13 @@ For local PostgreSQL, local Worker, staging, and future production setup, see th
 
 ## Staging Hyperdrive check
 
-`test:hyperdrive:staging` is a future manual proof that a deployed API Worker can use its `HYPERDRIVE` binding. The separate Neon staging project is currently empty, with no roles, migrations, or Hyperdrive attached. No staging Worker is provisioned, so this is not a validated staging deployment. Production is unprovisioned. Do not run the credentialed proof until staging provisioning is complete and reviewed. When available, the Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. It proves connectivity, Drizzle commit, explicit rollback, post-error recovery, constraint classes, restricted-role authorization, and fresh-invocation visibility. Clients are created per invocation; Hyperdrive manages edge cleanup and query caching must be disabled.
+`test:hyperdrive:staging` is a future manual proof that a deployed API Worker can use its `HYPERDRIVE` binding. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. Any pre-existing staging Worker remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is unprovisioned. Do not run the credentialed proof until staging provisioning is complete and reviewed. When available, the Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. It proves connectivity, Drizzle commit, explicit rollback, post-error recovery, constraint classes, restricted-role authorization, and fresh-invocation visibility. Clients are created per invocation; Hyperdrive manages edge cleanup and query caching must be disabled.
 
 The entrypoint is not an HTTP route or an OpenAPI operation. Only a Worker with its service binding can call it. Each request closes its postgres.js client in `finally` after the operation completes, so it does not retain a Hyperdrive client in the Worker isolate.
 
 ### Reachability and access
 
-No public staging endpoint currently exists. When provisioned, `dayli-api-staging` may be public for staging web and mobile clients, while its normal authentication and authorization rules continue to apply. Do not use it for production traffic or put database credentials in client applications.
+A pre-existing public staging endpoint, if present, remains connected to its old configuration and is not validated for the new project. Inventory and retire it before use. After provisioning, `dayli-api-staging` may be public for staging web and mobile clients, while its normal authentication and authorization rules continue to apply. Do not use it for production traffic or put database credentials in client applications.
 
 The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntrypoint`, not an HTTP handler. The future Vitest proxy Worker sets `workers_dev: false`, so Cloudflare does not give it a public Workers.dev URL. The test reaches the staging Worker only through its private service binding.
 

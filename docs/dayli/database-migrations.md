@@ -1,6 +1,6 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. The separate Neon staging project is currently empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment. Production remains separate and unprovisioned. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
+Dayli uses Neon PostgreSQL 18. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment. Production remains separate and unprovisioned. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
 
 ## Roles and connections
 

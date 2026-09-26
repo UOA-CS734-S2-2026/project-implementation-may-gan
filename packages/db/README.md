@@ -1,7 +1,7 @@
 # @dayli/db
 
 `packages/db` owns the Dayli Drizzle schema, PostgreSQL migration history, and direct migration tooling. See the [environment guide](../../docs/dayli/environments.md) for local PostgreSQL lifecycle and credential handling.
-After staging is provisioned, runtime Workers will use Hyperdrive with the restricted `app` role; migration commands connect directly to Neon with the `migrator` role and an unpooled URL. The separate Neon staging project is currently empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment, and production is unprovisioned.
+After staging is provisioned, runtime Workers will use Hyperdrive with the restricted `app` role; migration commands connect directly to Neon with the `migrator` role and an unpooled URL. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment, and production is unprovisioned.
 
 ## Commands
 
