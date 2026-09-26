@@ -1,13 +1,20 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. The Neon project has a `production` parent branch and a `staging` child branch. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
+Dayli uses Neon PostgreSQL 18. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment. Production remains separate and unprovisioned. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
 
 ## Roles and connections
 
-Run `packages/db/admin/bootstrap-roles.sql` separately on both Neon branches as an administrator, then set role passwords outside Git.
+Live Neon provisioning is deferred. The current role-bootstrap files are retained for review, not a runnable setup guide: Neon rejected `psql`'s `\password` command because it submits a hashed password while Neon requires plaintext. The first-password procedure for restricted SQL-created roles is not yet verified. Do not run the owner bootstrap, migrations, or Hyperdrive setup on the new staging project until a secure, Neon-compatible procedure has been reviewed and tested without putting a plaintext password in SQL Editor, shell history, Git, or chat. Do not create runtime roles through Neon Console because that path grants `neon_superuser`.
+
+After that procedure is approved, the intended order is: run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`, securely provision the `migrator` credential, run `packages/db/admin/bootstrap-migrator.sql` through a direct unpooled TLS `migrator` connection, then run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner`. Every reported value must be `true` before migrations or Hyperdrive setup. Provision the restricted `app` credential only when Hyperdrive is configured. Leave `users_accounts_importer` without a password until a separately approved import rehearsal. Store connection URLs only in an approved secret store.
+
+`neondb_owner` can create the roles and grant database or schema access, but it is not automatically a member of `migrator`. PostgreSQL therefore rejects `ALTER DEFAULT PRIVILEGES FOR ROLE migrator` from that owner connection with SQLSTATE `42501`. The migrator file changes its own defaults and owns the `drizzle` schema, so it must run in a separate migrator connection. If the owner file previously stopped at that error, do not recreate roles, grant role membership, or widen `app` access. After a secure first-password procedure is approved, rerun the owner file, provision any missing credentials, then run the migrator file and the read-only verification file in the order above.
 
 - `migrator` owns schema objects and Drizzle migration metadata.
 - `app` receives automatic `SELECT`, `INSERT`, `UPDATE`, and `DELETE` grants on new `public` application tables, but cannot change schema or read/write Drizzle metadata.
+- `users_accounts_importer` receives no default application-table grants. After both target tables exist, the migrator file grants it only `SELECT` and `INSERT` on `public.user` and `public.account`.
+
+After `pnpm db:migrate` creates both Better Auth target tables, rerun `bootstrap-migrator.sql` directly as `migrator`, then run the read-only verification file again as `neondb_owner`. This applies the intentionally narrow importer grants. It is also safe to rerun the migrator file after any interrupted bootstrap.
 
 Migrations use an unpooled direct Neon `DATABASE_URL` with `sslmode=require` or stricter. Worker runtime access will later use the restricted `app` role through Hyperdrive; Hyperdrive binding setup is separate from this foundation.
 
@@ -31,10 +38,12 @@ pnpm db:migration:users-and-accounts
 pnpm db:migration:users-and-accounts -- --apply
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:migrate
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:verify
+# The isolated relationship test suite may use this second designated database:
+MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_relationship_test pnpm db:migrate
 pnpm db:test:up && pnpm db:test && pnpm db:test:down
 ```
 
-`pnpm db:verify` is read-only and fails when local migrations are pending, applied hashes changed, or the database contains unknown migration records.
+For `MIGRATION_TARGET=local`, migration commands only accept the explicit local test databases `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. `pnpm db:verify` is read-only and fails when local migrations are pending, applied hashes changed, or the database contains unknown migration records.
 
 ## Safety policy
 
@@ -48,7 +57,9 @@ pnpm db:test:up && pnpm db:test && pnpm db:test:down
 
 ## Release order
 
-1. Merge schema and migration changes to `main` through a PR that passes the **Database migrations** workflow and CODEOWNER review.
+Local verification remains the current database proof. GitHub-hosted PR and push checks are temporarily paused, and the **Database migrations** workflow is manual dispatch only. It still consumes GitHub-hosted minutes when dispatched, so it is not the normal local verification path and there are no automated migration gates. Record the commit SHA and sanitized `pnpm verify:local` output with the PR review. Do not run staging or production migrations while staging has no roles or migrations and production is unprovisioned. After staging provisioning is approved:
+
+1. Merge schema and migration changes to `main` through a reviewed PR with recorded local verification evidence and CODEOWNER review.
 2. Run the protected manual migration workflow for `staging` from `main`.
 3. Verify the sanitized evidence artifact and application compatibility.
 4. For production, confirm a recent Neon restore point/backup, receive protected-environment approval, and run the same `main` commit after staging has succeeded.

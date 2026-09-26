@@ -37,12 +37,27 @@ async function checkGeneratedClients() {
     process.exitCode = 1;
   }
 
-  const [openapi, typescriptModel, dartModel, typescriptApi, typescriptRelationshipsApi, dartClient, dartAuth, dartRelationshipsApi] = await Promise.all([
+  const [
+    openapi,
+    typescriptModel,
+    dartModel,
+    dartCreateDailyPostRequest,
+    dartDailyPost,
+    dartDailyPostTomorrowNote,
+    typescriptApi,
+    typescriptRelationshipsApi,
+    dartClient,
+    dartAuth,
+    dartRelationshipsApi,
+  ] = await Promise.all([
     readFile("packages/contracts/openapi.json", "utf8").then((contents) => JSON.parse(contents) as {
       paths: Record<string, Record<string, { operationId?: string }>>;
     }),
     readFile("packages/api-client-typescript/src/models/CurrentPostingDayResponse.ts", "utf8"),
     readFile("packages/api-client-dart/lib/model/current_posting_day_response.dart", "utf8"),
+    readFile("packages/api-client-dart/lib/model/create_daily_post_request.dart", "utf8"),
+    readFile("packages/api-client-dart/lib/model/daily_post.dart", "utf8"),
+    readFile("packages/api-client-dart/lib/model/daily_post_tomorrow_note.dart", "utf8"),
     readFile("packages/api-client-typescript/src/apis/PostingDaysApi.ts", "utf8"),
     readFile("packages/api-client-typescript/src/apis/RelationshipsApi.ts", "utf8"),
     readFile("packages/api-client-dart/lib/api_client.dart", "utf8"),
@@ -78,6 +93,21 @@ async function checkGeneratedClients() {
       relationshipOperationIds.length > 0 && missingDartMethods.length === 0,
     ],
     ["Dart localDate stays a string during JSON conversion", /localDate: mapValueOfType<String>/.test(dartModel)],
+    [
+      "Dart daily-post request localDate stays a string during JSON conversion",
+      /json\[r'localDate'\] = this\.localDate;/.test(dartCreateDailyPostRequest) &&
+        /localDate: mapValueOfType<String>/.test(dartCreateDailyPostRequest),
+    ],
+    [
+      "Dart daily-post localDate stays a string during JSON conversion",
+      /json\[r'localDate'\] = this\.localDate;/.test(dartDailyPost) &&
+        /localDate: mapValueOfType<String>/.test(dartDailyPost),
+    ],
+    [
+      "Dart daily-post tomorrow-note availableOn stays a string during JSON conversion",
+      /json\[r'availableOn'\] = this\.availableOn;/.test(dartDailyPostTomorrowNote) &&
+        /availableOn: mapValueOfType<String>/.test(dartDailyPostTomorrowNote),
+    ],
   ];
   const failedChecks = checks.filter(([, passed]) => !passed).map(([description]) => description);
   if (missingTypescriptMethods.length > 0) {

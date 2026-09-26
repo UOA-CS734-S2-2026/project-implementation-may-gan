@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
+import { Button } from "@/components/ui/core/Button";
+import { apiBaseUrl } from "@/lib/api/config";
 
 export default function ResetPasswordPage() {
   const [token, setToken] = useState<string>();
@@ -44,27 +44,32 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-panel" aria-labelledby="reset-title">
-        <p className="eyebrow">Dayli</p>
-        <h1 id="reset-title">Choose a new password.</h1>
-        <form onSubmit={resetPassword} className="recovery-form">
-          <label htmlFor="new-password">New password</label>
-          <div className="field-row">
-            <input
-              id="new-password"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              minLength={8}
-              required
-            />
-            <button type="submit">Reset</button>
-          </div>
-        </form>
-        {message && <p className="notice" role="status">{message}</p>}
-      </section>
-    </main>
+    <form className="flex flex-col gap-8" onSubmit={resetPassword}>
+      <p className="font-serif text-2xl font-semibold text-foreground tracking-tight">
+        Choose a new password
+      </p>
+      <div className="flex flex-col gap-2">
+        <label htmlFor="new-password" className="text-sm font-medium font-sans">New password</label>
+        <input
+          id="new-password"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          minLength={8}
+          required
+          className="w-full bg-background-secondary px-3 py-2 text-sm outline-none transition-shadow focus:ring-2 focus:ring-foreground/20 rounded-md"
+        />
+        {message && <p role="status" className="text-sm text-foreground-secondary">{message}</p>}
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="submit" variant={{ weight: "secondary", size: "sm", color: "accent" }} arrow>
+          Reset
+        </Button>
+        <Button href="/sign-in" variant={{ weight: "secondary", size: "sm", color: "foreground" }}>
+          Sign in
+        </Button>
+      </div>
+    </form>
   );
 }

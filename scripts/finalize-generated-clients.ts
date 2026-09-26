@@ -127,8 +127,20 @@ async function finalizeGeneratedClients() {
       ].join("\n"),
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/create_daily_post_request.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/current_posting_day_response.dart",
       "localDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/daily_post.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/daily_post_tomorrow_note.dart",
+      "availableOn",
     ),
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/test_response.dart",

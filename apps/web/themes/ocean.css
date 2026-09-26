@@ -1,0 +1,24 @@
+[data-theme="ocean"] {
+  --color-background: var(--color-slate-950);
+  --color-foreground: var(--color-sky-100);
+  --color-surface: var(--color-slate-900);
+  --color-card: var(--color-slate-800);
+
+  --color-primary: var(--color-cyan-500);
+  --color-primary-foreground: var(--color-cyan-950);
+  --color-secondary: var(--color-blue-500);
+  --color-secondary-foreground: var(--color-sky-50);
+  --color-accent: var(--color-teal-300);
+  --color-accent-foreground: var(--color-slate-900);
+
+  --color-muted: var(--color-slate-700);
+  --color-muted-foreground: var(--color-slate-400);
+  --color-border: var(--color-slate-800);
+  --color-input: var(--color-slate-800);
+  --color-ring: var(--color-cyan-500);
+
+  --color-info: var(--color-sky-400);
+  --color-success: var(--color-emerald-400);
+  --color-warning: var(--color-amber-400);
+  --color-danger: var(--color-rose-400);
+}

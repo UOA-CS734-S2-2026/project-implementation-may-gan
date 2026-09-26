@@ -1,0 +1,6 @@
+reason: The foreign keys and checks are added to a new empty table in the same atomic migration, so validation scans no rows.
+affected_data_and_clients: post_idempotency_keys only; user and posts are referenced but not scanned for validation.
+rollout_sequence: Apply atomically, then run the post-creation integration tests before promotion.
+forward_fix_plan: Use NOT VALID plus a separate VALIDATE CONSTRAINT migration for any constraint later added to this populated table.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.

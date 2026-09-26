@@ -13,9 +13,23 @@
 
 Emulators do not prove hardware key protection or every sensor feature. Android screenshot detection excludes ADB captures. Test deployed bindings in isolated staging too.
 
+## Local verification while hosted checks are paused
+
+GitHub-hosted PR and push checks are temporarily paused to preserve shared Actions minutes. `.github/workflows/ci.yml` and `.github/workflows/database-migrations.yml` accept manual dispatch only, so there are no automated hosted gates for a PR or push. A manual GitHub run still consumes GitHub-hosted minutes. The intended verification path is local:
+
+```bash
+pnpm verify:local
+```
+
+The command requires Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and Dart. It installs locked workspace dependencies; runs lint, type checking, tests, builds, generated TypeScript and Dart client checks, Flutter formatting, analysis and tests; then starts a fresh PostgreSQL 18 fixture for migration checks, migration application, verification, idempotency, restricted-role integration tests, and credential-error safety checks. The fixture has a unique Compose project and is removed with its volumes on success, failure, or interruption. Port 5433 must be available.
+
+`pnpm verify:local:full` adds the debug Android APK build. Record `git rev-parse HEAD`, the command mode, and sanitized output in the PR or approved evidence location. Do not commit evidence that could include credentials. This local fixture check does not contact Neon or Cloudflare and is not a staging proof.
+
+The protected `run-database-migrations.yml` and `staging-hyperdrive.yml` workflows remain manual. `cleanup-hyperdrive-preview.yml` remains enabled for closed PRs only so it can clean trusted previews that may already exist for PRs #113 and #114. It does not test or deploy new PR code.
+
 ## Credentialed staging checks
 
-The API Hyperdrive check retains `select 1 as ok` and proves Drizzle commit, explicit rollback, constraints, recovery, authorization, cleanup, and fresh-invocation visibility inside a deployed Worker. It reaches a non-HTTP Worker service entrypoint, not a public health route. `staging-hyperdrive.yml` runs before merge for relevant same-repository PR changes, after relevant changes reach `main`, and on manual dispatch. PR runs deploy a private `dayli-api-pr-<number>` Worker and attempt cleanup after the test and again when the PR closes. Fork PRs are skipped before they can receive staging credentials. Push and manual runs deploy only the public `dayli-api-staging` Worker for staging web and mobile clients. Setup, access expectations, required environment values, and the local command are in [`apps/api/README.md`](../../apps/api/README.md). The [environment guide](environments.md) covers local PostgreSQL, local Hyperdrive simulation, and production boundaries.
+The API Hyperdrive check is deferred until staging is provisioned. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. Any pre-existing staging Worker remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is unprovisioned. When available, the manual check will retain `select 1 as ok` and prove Drizzle commit, explicit rollback, constraints, recovery, authorization, cleanup, and fresh-invocation visibility through a non-HTTP Worker service entrypoint. `staging-hyperdrive.yml` runs only on manual dispatch, never before merge or after a push to `main`. Local verification remains the active proof. Setup, access expectations, required environment values, and the future command are in [`apps/api/README.md`](../../apps/api/README.md). The [environment guide](environments.md) covers local PostgreSQL, local Hyperdrive simulation, and production boundaries.
 
 Use the [implementation reference](implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
 
@@ -41,7 +55,7 @@ Performance workloads and targets live in [Scalability](scalability.md).
 4. Add release/audience fields, private uploads, public share tokens, idempotency, socket tickets, and jobs. Replace process-local SSE with Durable Objects.
 5. Complete [MVP phases](mvp.md), remove obsolete routes, run failure/load tests, and rehearse restore/deploy.
 
-CI checks formatting, types, contracts, relevant backend/runtime and frontend tests. The separate **Database migrations** workflow checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
+While hosted checks are paused, `pnpm verify:local` is the required developer verification evidence rather than an automated gate. It checks formatting, types, contracts, relevant backend/runtime and frontend tests. Its PostgreSQL fixture also checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
 
 Prefer additive changes for older mobile clients. Deleted data becomes inaccessible immediately and expires from encrypted backups within 30 days. Start with a 24-hour RPO and 8-hour RTO, then verify both through restoration tests. No runtime tests were run for the original documentation-only proposal.
 

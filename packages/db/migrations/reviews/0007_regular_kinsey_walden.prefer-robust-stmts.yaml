@@ -1,0 +1,6 @@
+reason: The migration runner applies this single-table addition atomically; IF NOT EXISTS would hide an incompatible partial schema.
+affected_data_and_clients: One new empty post_idempotency_keys table with its constraints and index; no existing rows are moved or rewritten.
+rollout_sequence: Apply through the protected migration workflow before deploying the Worker that serves POST /api/v1/posts.
+forward_fix_plan: Add a new reviewed migration for any correction; never edit this migration after release.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.

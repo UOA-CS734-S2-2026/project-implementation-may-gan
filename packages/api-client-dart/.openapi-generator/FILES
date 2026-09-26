@@ -7,6 +7,7 @@ git_push.sh
 lib/api.dart
 lib/api/media_api.dart
 lib/api/posting_days_api.dart
+lib/api/posts_api.dart
 lib/api/relationships_api.dart
 lib/api/system_api.dart
 lib/api_client.dart
@@ -20,9 +21,13 @@ lib/auth/oauth.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
+lib/model/create_daily_post_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
 lib/model/current_posting_day_response.dart
+lib/model/daily_post.dart
+lib/model/daily_post_prompt.dart
+lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
 lib/model/health_response.dart
 lib/model/media_content_type.dart
@@ -31,6 +36,7 @@ lib/model/media_reservation_status.dart
 lib/model/media_reservation_upload.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
+lib/model/post_audience.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
 lib/model/send_relationship_request.dart

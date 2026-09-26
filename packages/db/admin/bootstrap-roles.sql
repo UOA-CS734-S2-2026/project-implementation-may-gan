@@ -1,6 +1,7 @@
--- Administrator-run role bootstrap for each Neon branch.
--- Run separately on production and staging as a Neon project owner/admin.
--- Set passwords outside this file; never commit role passwords or connection strings.
+-- Run in Neon SQL Editor as neondb_owner.
+-- This file creates roles and grants only. It must not configure migrator defaults.
+-- Leave roles without passwords. Live provisioning is deferred until a secure,
+-- Neon-compatible first-password method is reviewed; psql \password is rejected.
 
 DO $$
 BEGIN
@@ -21,41 +22,8 @@ BEGIN
 END
 $$;
 
+-- Do not rely on the implicit PUBLIC grant when restricting application DDL.
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO migrator;
 GRANT USAGE ON SCHEMA public TO app, users_accounts_importer;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
-ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public
-  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app;
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app;
-
--- Prompt versions are deployment data, not app-authored content.
-DO $$
-BEGIN
-  IF to_regclass('public.daily_prompts') IS NOT NULL THEN
-    REVOKE INSERT ON TABLE public.daily_prompts FROM app;
-  END IF;
-END
-$$;
-
--- This protected import role is intentionally not included in app default grants.
--- It receives only the user and account transfer rights after the target tables exist.
-DO $$
-BEGIN
-  IF to_regclass('public.user') IS NOT NULL AND to_regclass('public.account') IS NOT NULL THEN
-    GRANT SELECT, INSERT ON TABLE public."user", public.account TO users_accounts_importer;
-  END IF;
-END
-$$;
-
-CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator;
-ALTER SCHEMA drizzle OWNER TO migrator;
-GRANT USAGE, CREATE ON SCHEMA drizzle TO migrator;
-REVOKE ALL ON SCHEMA drizzle FROM app;
-REVOKE ALL ON ALL TABLES IN SCHEMA drizzle FROM app;
-ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA drizzle REVOKE ALL ON TABLES FROM app;
-
-REVOKE CREATE ON SCHEMA public FROM app;
+REVOKE CREATE ON SCHEMA public FROM app, users_accounts_importer;

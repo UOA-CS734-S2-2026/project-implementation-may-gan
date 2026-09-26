@@ -8,10 +8,25 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
-  it("rejects local non-test databases", () => {
+  it("accepts the isolated local relationship test database", () => {
+    expect(() =>
+      validateMigrationConnectionString(
+        "postgresql://migrator:migrator@localhost:5433/dayli_relationship_test",
+        "local",
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects local databases that are not explicitly designated test databases", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_relationship_test_copy", "local"),
+    ).toThrow("Local migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+  });
+
+  it("rejects local databases on another port", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
-    ).toThrow("Local migrations must target localhost:5433/dayli_test.");
+    ).toThrow("Local migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
   });
 
   it("accepts direct Neon migrator URLs with required TLS", () => {

@@ -74,6 +74,9 @@ String parameterToString(dynamic value) {
   if (value is MediaReservationStatus) {
     return MediaReservationStatusTypeTransformer().encode(value).toString();
   }
+  if (value is PostAudience) {
+    return PostAudienceTypeTransformer().encode(value).toString();
+  }
   if (value is RelationshipState) {
     return RelationshipStateTypeTransformer().encode(value).toString();
   }

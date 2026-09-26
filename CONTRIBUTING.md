@@ -12,7 +12,7 @@ chores, refactors, and tests.
 
 Use the pull request template when opening any PR. Fill in all relevant sections before requesting
 review. `main` is branch-protected: every change lands via a PR with **at least one approving
-review** and passing CI.
+review**. GitHub-hosted PR and push verification is temporarily paused, so there are no automatic hosted test gates.
 
 ## Branches
 
@@ -34,33 +34,21 @@ merge conflicts that make rebasing impractical.
 
 ## Before Opening a PR
 
-Run the formatter and linter for **whichever package you touched**, and fix any errors, before
-opening a PR:
-
-**TypeScript workspace (web, API, and shared packages)**
-
-Run these commands from the repository root:
+Run the local verification suite and fix any errors before opening a PR. It requires Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and Dart:
 
 ```bash
-pnpm lint             # ESLint checks
-pnpm typecheck        # TypeScript checks across all workspaces
-pnpm test             # API and shared tests
-pnpm build            # production web build
+pnpm verify:local
 ```
 
-**Flutter client**
-
-Run these commands from `apps/mobile`:
+Use the full mode when a debug Android APK is required:
 
 ```bash
-dart format .
-flutter analyze
-flutter test
-flutter build apk --debug
+pnpm verify:local:full
 ```
 
-If CI fails on your PR due to formatting or lint, fix it locally and fold the fix into your last
-commit:
+Record the verified commit SHA and sanitized command output in the PR or approved evidence location. This local check uses only an isolated Docker PostgreSQL fixture. It is not a staging, Neon, or Cloudflare proof.
+
+If local verification finds formatting or lint failures, fix them and fold the fix into your last commit:
 
 ```bash
 # (formatter) …
