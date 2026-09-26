@@ -20,7 +20,7 @@ Closes #<!-- issue number -->
 
 ## How to test
 
-<!-- Steps a reviewer can follow to verify this works. Include relevant env vars, seed commands, test accounts, or the target platform (iOS / Android) if needed. Same-repository PRs run the credentialed Hyperdrive check before merge; forks do not receive staging credentials. -->
+<!-- Steps a reviewer can follow to verify this works. Include relevant env vars, seed commands, test accounts, or the target platform (iOS / Android) if needed. The credentialed Hyperdrive proof is manual until staging is provisioned. -->
 
 1.
 2.

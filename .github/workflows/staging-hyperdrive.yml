@@ -1,11 +1,10 @@
 name: Staging Hyperdrive integration
 
+# This credentialed proof is deliberately manual until the separate Neon staging
+# project is provisioned. Do not add automatic PR or push triggers without that
+# provisioning and an explicit review of the deployment boundary.
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
-  push:
-    branches: [main]
 
 permissions:
   contents: read

@@ -1,6 +1,6 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. Staging is a separate Neon project that contains synthetic data only. Production remains a separate, unprovisioned project. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
+Dayli uses Neon PostgreSQL 18. The separate Neon staging project is currently empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment. Production remains separate and unprovisioned. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
 
 ## Roles and connections
 
@@ -61,6 +61,8 @@ For `MIGRATION_TARGET=local`, migration commands only accept the explicit local 
 - Migrations are forward-only. Do not write automatic down migrations.
 
 ## Release order
+
+Local CI remains the current database proof. Do not run staging or production migrations while staging has no roles or migrations and production is unprovisioned. After staging provisioning is approved:
 
 1. Merge schema and migration changes to `main` through a PR that passes the **Database migrations** workflow and CODEOWNER review.
 2. Run the protected manual migration workflow for `staging` from `main`.
