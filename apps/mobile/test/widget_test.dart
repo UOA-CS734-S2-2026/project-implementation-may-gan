@@ -19,9 +19,7 @@ void main() {
     expect(find.text('Welcome back'), findsOneWidget);
   });
 
-  testWidgets('asks for an email when signing in with a username', (
-    tester,
-  ) async {
+  testWidgets('requires an email when signing in', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(
       DayliApp(services: harness.services, useGoogleFonts: false),
@@ -38,7 +36,24 @@ void main() {
     await tester.tap(find.byKey(const Key('auth.submit')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in with your email for now.'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Invalid email address'), findsOneWidget);
+  });
+
+  testWidgets('defers username collection during sign-up', (tester) async {
+    final harness = TestHarness();
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('auth.switch')));
+    await tester.tap(find.byKey(const Key('auth.switch')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('auth.username')), findsNothing);
+    expect(find.text('Username'), findsNothing);
   });
 
   testWidgets('signs in, adds a photo, and posts today\'s dayli', (

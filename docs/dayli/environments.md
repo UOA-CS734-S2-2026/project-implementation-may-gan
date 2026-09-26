@@ -146,14 +146,22 @@ Start the web shell with:
 pnpm --dir apps/web dev
 ```
 
-It normally listens on `http://localhost:3000`. The web and Flutter apps do not yet have an API base-URL setting or a client call to configure. When that work is added, use these addresses for the local Worker:
+It normally listens on `http://localhost:3000`. Flutter receives its API origin through `DAYLI_API_BASE_URL`. Use these addresses for the local Worker:
 
 - Browser on the development machine: `http://127.0.0.1:8787`
 - Android emulator: `http://10.0.2.2:8787`
 - iOS Simulator: `http://127.0.0.1:8787`
-- Physical device: `http://<host-lan-ip>:8787`, with the device on the same trusted network
+- Android physical device over USB: `http://127.0.0.1:8787` after `adb reverse tcp:8787 tcp:8787`
 
-A physical device cannot use `localhost` for a server on the development machine. Start Wrangler with an explicitly chosen LAN bind address, such as `--ip 0.0.0.0`, only on a trusted network. Configure CORS for the client origin before browser clients make cross-origin calls. The current API has no client-facing database route, so an address alone does not prove database integration.
+For an Android device, start Wrangler on its default loopback address, then run:
+
+```bash
+adb reverse tcp:8787 tcp:8787
+cd apps/mobile
+flutter run --dart-define=DAYLI_API_BASE_URL=http://127.0.0.1:8787
+```
+
+`adb reverse` forwards the device's loopback port to the development machine. It avoids exposing the debug Worker on the LAN, and Android debug builds allow cleartext only for the emulator and loopback aliases. Remove the mapping with `adb reverse --remove tcp:8787` when finished. Use a deployed HTTPS staging API for iOS physical devices. Configure CORS for browser clients before cross-origin calls. The current API has no client-facing database route, so an address alone does not prove database integration.
 
 Run the Flutter shell separately:
 

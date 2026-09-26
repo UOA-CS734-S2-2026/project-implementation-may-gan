@@ -1,0 +1,3 @@
+// Copy this file to GoogleSignIn.xcconfig. That local file is ignored by Git.
+// Use the REVERSED_CLIENT_ID value from the iOS GoogleService-Info.plist.
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.replace-with-ios-client-id

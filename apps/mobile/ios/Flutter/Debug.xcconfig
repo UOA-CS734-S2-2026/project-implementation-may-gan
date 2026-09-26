@@ -1,1 +1,5 @@
 #include "Generated.xcconfig"
+
+// GoogleSignIn.xcconfig is local. Dart defines do not become Xcode settings.
+GOOGLE_REVERSED_CLIENT_ID =
+#include? "GoogleSignIn.xcconfig"

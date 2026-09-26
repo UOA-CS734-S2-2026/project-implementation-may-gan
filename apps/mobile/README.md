@@ -14,7 +14,24 @@ Pass the API origin at build time. Use the addresses in [environments](../../doc
 flutter run --dart-define=DAYLI_API_BASE_URL=https://api.example.test
 ```
 
-Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` (and, on iOS, `DAYLI_GOOGLE_IOS_CLIENT_ID`) is also passed with `--dart-define`. Without them the button explains that Google sign-in isn't set up for the build.
+Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` is passed with `--dart-define`. On iOS, also pass `DAYLI_GOOGLE_IOS_CLIENT_ID` and configure the callback scheme before running:
+
+```bash
+cp ios/Flutter/GoogleSignIn.xcconfig.example ios/Flutter/GoogleSignIn.xcconfig
+```
+
+Set `GOOGLE_REVERSED_CLIENT_ID` in the copied file to the `REVERSED_CLIENT_ID` from the iOS client's `GoogleService-Info.plist`. The local file is ignored by Git. Do not put a real value in the example or a tracked Xcode configuration. The reversed client ID is a public identifier, not an OAuth client secret.
+
+`--dart-define` configures Dart only. Flutter writes those defines to `Generated.xcconfig` as encoded `DART_DEFINES`, so an Info.plist substitution cannot read them. `Runner/Info.plist` reads `GOOGLE_REVERSED_CLIENT_ID` from the local Xcode configuration and registers it in `CFBundleURLTypes`. Use both settings for an iOS Google build:
+
+```bash
+flutter run \
+  --dart-define=DAYLI_API_BASE_URL=https://api.example.test \
+  --dart-define=DAYLI_GOOGLE_WEB_CLIENT_ID=replace-with-web-client-id \
+  --dart-define=DAYLI_GOOGLE_IOS_CLIENT_ID=replace-with-ios-client-id
+```
+
+Without the Dart IDs the button explains that Google sign-in isn't set up for the build. Without the Xcode setting, iOS cannot return from Google sign-in.
 
 ## Design
 
@@ -31,7 +48,7 @@ Only the data layer is missing features:
 
 - The feed is empty until the released-feed API (#19, #20).
 - Friends, my days, and messages are placeholders until their APIs land.
-- Accounts have no username until #68. Username sign-in asks for an email, the sign-up username is not sent, and the privacy switch is disabled.
+- Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
 - Posting needs a photo or video, as in WDCC. Chosen media stays on the device with the draft until the media API lands, and photos are not cropped.
 
 ## Structure

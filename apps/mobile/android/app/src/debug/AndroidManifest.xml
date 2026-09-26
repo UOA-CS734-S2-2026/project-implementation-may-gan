@@ -4,7 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Debug builds may call a local Worker over plain HTTP (see
-         docs/dayli/environments.md). Release builds keep cleartext disabled. -->
+    <!-- Debug builds may call a local Worker over plain HTTP through an
+         emulator alias or adb reverse. Release builds keep cleartext disabled. -->
     <application android:networkSecurityConfig="@xml/debug_network_security_config"/>
 </manifest>

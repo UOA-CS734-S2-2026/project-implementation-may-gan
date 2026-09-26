@@ -50,7 +50,8 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 | --- | --- |
 | Local browser or iOS Simulator | `http://localhost:8787` |
 | Android Emulator | `http://10.0.2.2:8787` |
-| Physical device | Development machine address reachable from the device |
+| Android physical device over USB | `http://127.0.0.1:8787` after `adb reverse tcp:8787 tcp:8787` |
+| iOS physical device | HTTPS staging URL |
 | Staging or production | URL supplied by application configuration |
 
 The exact environment-file and secret-loading setup belongs to issue #6. This package only requires callers to provide the resulting URL.

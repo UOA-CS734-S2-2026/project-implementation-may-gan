@@ -24,7 +24,6 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _name = TextEditingController();
-  final _username = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
   bool _busy = false;
@@ -36,7 +35,6 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void dispose() {
     _name.dispose();
-    _username.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
@@ -47,9 +45,6 @@ class _AuthScreenState extends State<AuthScreen> {
     final errors = <String, String>{};
     if (_signUp) {
       if (_name.text.trim().isEmpty) errors['name'] = 'Name is required';
-      if (_username.text.trim().isEmpty) {
-        errors['username'] = 'Username is required';
-      }
       if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim())) {
         errors['email'] = 'Invalid email address';
       }
@@ -57,8 +52,8 @@ class _AuthScreenState extends State<AuthScreen> {
         errors['password'] = 'Password must be at least 8 characters';
       }
     } else {
-      if (_email.text.trim().isEmpty) {
-        errors['email'] = 'Email or username is required';
+      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim())) {
+        errors['email'] = 'Invalid email address';
       }
       if (_password.text.isEmpty) errors['password'] = 'Password is required';
     }
@@ -73,25 +68,18 @@ class _AuthScreenState extends State<AuthScreen> {
     });
     if (errors.isNotEmpty) return;
 
-    final identifier = _email.text.trim();
-    // Username sign-in arrives with usernames on the profile API (#68).
-    if (!_signUp && !identifier.contains('@')) {
-      setState(() => _error = 'Sign in with your email for now.');
-      return;
-    }
+    final email = _email.text.trim();
 
     FocusScope.of(context).unfocus();
     final session = AppScope.of(context).session;
     await _run(
       () => _signUp
-          // The API has no usernames until #68, so the handle is collected
-          // here but not sent yet.
           ? session.signUp(
               name: _name.text.trim(),
-              email: identifier,
+              email: email,
               password: _password.text,
             )
-          : session.signIn(email: identifier, password: _password.text),
+          : session.signIn(email: email, password: _password.text),
       rejected: _signUp
           ? "That account couldn't be created. Check your details."
           : 'Invalid credentials.',
@@ -184,27 +172,15 @@ class _AuthScreenState extends State<AuthScreen> {
             error: _fieldErrors['name'],
           ),
           const SizedBox(height: 16),
-          DayliFormInput(
-            label: 'Username',
-            fieldKey: const Key('auth.username'),
-            controller: _username,
-            placeholder: '@handle',
-            autofillHints: const [AutofillHints.newUsername],
-            textInputAction: TextInputAction.next,
-            error: _fieldErrors['username'],
-          ),
-          const SizedBox(height: 16),
         ],
         DayliFormInput(
-          label: _signUp ? 'Email' : 'Email or username',
+          label: 'Email',
           fieldKey: const Key('auth.email'),
           controller: _email,
-          placeholder: _signUp ? 'you@example.com' : 'you@example.com',
+          placeholder: 'you@example.com',
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          autofillHints: [
-            _signUp ? AutofillHints.email : AutofillHints.username,
-          ],
+          autofillHints: const [AutofillHints.email],
           error: _fieldErrors['email'],
         ),
         const SizedBox(height: 16),
