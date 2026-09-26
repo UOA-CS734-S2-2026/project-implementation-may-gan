@@ -31,10 +31,12 @@ pnpm db:migration:users-and-accounts
 pnpm db:migration:users-and-accounts -- --apply
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:migrate
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:verify
+# The isolated relationship test suite may use this second designated database:
+MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_relationship_test pnpm db:migrate
 pnpm db:test:up && pnpm db:test && pnpm db:test:down
 ```
 
-`pnpm db:verify` is read-only and fails when local migrations are pending, applied hashes changed, or the database contains unknown migration records.
+For `MIGRATION_TARGET=local`, migration commands only accept the explicit local test databases `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. `pnpm db:verify` is read-only and fails when local migrations are pending, applied hashes changed, or the database contains unknown migration records.
 
 ## Safety policy
 
