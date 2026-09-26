@@ -1,66 +1,68 @@
 # Architecture
 
-## Components
+This document describes code that exists in this repository. The supported runtime is local development. Staging and production are not deployed.
 
-This is the target architecture. The current Worker implements Better Auth, posting-day reads, daily-post creation, relationships, and media-reservation routes. The web app calls the posting API. The Flutter composer retains drafts and reads posting days, but its `UnavailablePostSubmitter` does not send `POST /api/v1/posts`. Neither client uploads reserved media yet. Staging and production are not deployed.
+## Local runtime
+
+`pnpm local:auth:setup` prepares ignored local settings and a localhost certificate. `pnpm db:dev:up` starts the persistent PostgreSQL development database. `pnpm dev:api:https` starts Wrangler locally on `https://localhost:8787`, and `pnpm dev:web:https` starts Next.js on `https://localhost:3000`.
+
+The Worker receives only the restricted `app` database connection through its local Hyperdrive override. `pnpm db:dev:migrate` and `pnpm db:dev:verify` connect directly as `migrator`; they do not pass through the Worker. This is the local migration boundary.
 
 ```mermaid
-flowchart TD
-    M[Flutter] -->|REST| A[Hono Worker / Better Auth]
-    W[Next.js] -->|REST| A
-    A --> H[Hyperdrive]
-    H --> P[(PostgreSQL)]
-    A -->|Authorise media| R[(Private R2)]
-    M -->|Signed media requests| R
-    W -->|Signed media requests| R
-    A -->|Internal updates| D[Per-user Durable Objects]
-    D <-->|WebSocket| M
-    D <-->|WebSocket| W
-    C[Scheduled handler] --> H
-    C -->|Retry events| D
-    C --> F[FCM/APNs]
-    F --> M
+flowchart LR
+    Browser[Browser] -->|HTTPS UI| Web[Next.js web app<br/>https://localhost:3000]
+    Browser -->|HTTPS cookie auth and REST| Api[Wrangler local<br/>Hono Worker and Better Auth<br/>https://localhost:8787]
+    Mobile[Flutter app<br/>emulator or device] -->|HTTPS REST and bearer auth| Api
+
+    Api -->|restricted app role<br/>local Hyperdrive override| Db[(Docker Compose PostgreSQL<br/>dayli_dev on localhost:5434)]
+    Migration[pnpm db:dev:migrate<br/>or pnpm db:dev:verify] -->|direct migrator connection| Db
 ```
 
-## Monorepo
+The API entry point builds a Hono application. With valid local Better Auth and Hyperdrive settings, it mounts Better Auth on `/api/auth` and database-backed routes on `/api/v1`. PostgreSQL holds Better Auth records, daily prompts, posts, post idempotency keys, relationship records, and media reservations.
+
+The API currently registers routes for health and API documentation, Better Auth, the current posting day, post creation, relationships, and media reservations. A route returns an unavailable response when its required runtime configuration is absent.
+
+## Email and password authentication
+
+Email and password authentication is enabled in the Better Auth configuration. The web app uses Better Auth's React client with credentialed requests, so the browser keeps the secure session cookie for the API origin. The Flutter app has its own native path in `lib/auth/native_session.dart`: it exchanges email and password with the same Better Auth routes, saves the returned `set-auth-token` in platform protected storage, then sends it as a bearer token.
+
+The Flutter email and password path is implemented in source and covered by Flutter tests, but it has not been manually exercised on a device. The environment guide also records that the iOS Simulator authentication flow has not been executed.
+
+```mermaid
+flowchart TB
+    subgraph Web[Web email and password]
+        WebForm[Next.js sign-in or sign-up form] -->|POST /api/auth/sign-in/email<br/>or /api/auth/sign-up/email| Auth
+        Auth -->|secure session cookie| BrowserSession[Browser cookie jar]
+        BrowserSession -->|cookie on protected REST calls| ApiCalls[Hono API routes]
+    end
+
+    subgraph Flutter[Flutter email and password]
+        NativeForm[Flutter sign-in or sign-up form] -->|POST /api/auth/sign-in/email<br/>or /api/auth/sign-up/email| Auth
+        Auth -->|set-auth-token response header| TokenStore[Keychain or Android protected storage]
+        TokenStore -->|Authorization Bearer token| NativeCalls[Hono API routes]
+    end
+
+    Auth[Hono Worker<br/>Better Auth] -->|Hyperdrive| Db[(PostgreSQL)]
+    ApiCalls -->|session lookup| Auth
+    NativeCalls -->|session lookup| Auth
+```
+
+## Posts, drafts, and media
+
+`GET /api/v1/posting-days/current` returns the server-owned Auckland posting day, deadline, prompt, and whether the authenticated author has posted. Both web and Flutter use this route.
+
+The web post form calls `POST /api/v1/posts` with an idempotency key. It submits the prompt response, rating, optional caption, and the fixed `friends` audience. The form requires a selected photo or video before it enables the rest of the form, but it does not send that file or a media reference. The selected files stay in the browser. The API accepts one post per author and Auckland day and stores idempotency data for accepted requests.
+
+Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day through the generated Dart client, but `main.dart` supplies `UnavailablePostSubmitter`. Flutter therefore does not send `POST /api/v1/posts`; a submission reports unavailable and retains the draft.
+
+The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
+
+## Repository components
 
 ```text
-apps/web/              Next.js
-apps/mobile/           Flutter
-apps/api/              Hono, scheduled handler, Durable Objects
-packages/domain/       Reusable backend services
-packages/db/           Drizzle schema and migrations
-packages/contracts/    Zod/OpenAPI and generated TS models
-docs/dayli/            These guides
+apps/api/       Hono Worker, Better Auth, API routes, and local Wrangler configuration
+apps/web/       Next.js web client
+apps/mobile/    Flutter client, protected drafts, and native bearer sessions
+packages/db/    Drizzle schema, migrations, migration checks, and local database Compose files
+scripts/        Local HTTPS authentication and development database helpers
 ```
-
-Use pnpm for TypeScript and Dart tooling for Flutter. Generate the Dart client from OpenAPI. Web and API deploy independently.
-
-Routes authenticate and validate; services enforce rules; repositories execute SQL. The shared `/api/v1` contract is the intended boundary for posts, relationships, messages, history, sharing, and notifications. Use stable errors, UTC timestamps, Auckland dates, revisions, and bounded cursor pagination.
-
-## Posting
-
-1. Fetch the server's day/deadline. Capture media and save a locally protected draft.
-2. Reserve owned R2 objects, upload directly, and validate actual type, size, and completion before readiness.
-3. Submit with an idempotency key. Transactionally check the deadline, audience, media, and unique author/day constraint.
-4. Retry lost responses with the same key. If acceptance misses midnight, retain the draft rather than backdating it.
-
-Store a timezone-correct `release_at`. Owners can read early. Friends need release, an active friendship, and no block; friendship grants access to earlier released friends posts. Public-link readers need release and an active opaque share token from a public account. Apply this to media and every alternate route. No midnight bulk update is needed.
-
-## Messaging and sockets
-
-One logical Durable Object connects each user's active devices. It is not their message database.
-
-Send messages through REST. Check participants, blocks, and request state; lock pending-request checks against concurrent sends. Save the message and outbox events in one PostgreSQL transaction. After commit, notify both users' objects through internal bindings.
-
-Objects send small record-ID events. Clients fetch authorised content and deduplicate IDs. Failed publication retries from the outbox; reconnect always fetches missed history. Read receipts are monotonic and authorised.
-
-Authenticate upgrades with short-lived, single-use tickets bound to verified sessions. Validate browser origins. Clients cannot select another user's object or publish application events. Enforce expiry/revocation after hibernation too. Use attachments for connection metadata, not history; ordinary memory does not survive hibernation.
-
-## Supporting records and jobs
-
-Keep existing content tables. Add audiences/releases, immutable revisions, private upload reservations, revocable public share tokens, message idempotency, socket tickets, future notes, and outbox/jobs.
-
-A Cron Trigger invokes the Worker's scheduled handler directly. Claim bounded leased jobs, retry safely, and discard expired reminders. Push handles suspended apps. SQL calculates owner-scoped mood history and recaps. Public share links are unlisted bearer links, remain valid until invalidated, and can be forwarded.
-
-[Security rules](security.md) · [Scaling and failure handling](scalability.md) · [Implementation details](implementation-reference.md)
