@@ -6,6 +6,7 @@ const ownerBootstrapPath = repoPath("packages/db/admin/bootstrap-roles.sql");
 const migratorBootstrapPath = repoPath("packages/db/admin/bootstrap-migrator.sql");
 const verificationPath = repoPath("packages/db/admin/verify-role-bootstrap.sql");
 const databaseMigrationsWorkflowPath = repoPath(".github/workflows/database-migrations.yml");
+const databaseMigrationsGuidePath = repoPath("docs/dayli/database-migrations.md");
 
 describe("Neon role bootstrap scripts", () => {
   it("keeps owner-only role setup separate from migrator-owned defaults", async () => {
@@ -36,6 +37,16 @@ describe("Neon role bootstrap scripts", () => {
       .replace(/--.*$/gm, "")
       .replace(/'(?:''|[^'])*'/g, "");
     expect(executableSql).not.toMatch(/\b(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE)\b/i);
+  });
+
+  it("requires psql for a SQL-created role's first password", async () => {
+    const guide = await readFile(databaseMigrationsGuidePath, "utf8");
+
+    expect(guide).toContain("first password for the SQL-created `migrator` role from interactive `psql`");
+    expect(guide).toContain("`\\password migrator`");
+    expect(guide).toContain("cannot set a password for a role that has none");
+    expect(guide).toContain("`\\password app`");
+    expect(guide).toContain("`\\password users_accounts_importer`");
   });
 
   it("stops CI when local role fixture SQL fails", async () => {
