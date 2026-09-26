@@ -8,11 +8,11 @@ This guide separates the environments that exist today from the production envir
 | --- | --- | --- | --- |
 | Local, no database | Browser or emulator -> local Wrangler -> Hono | None | Route, contract, and UI work that does not use PostgreSQL. |
 | Local, database simulation | Browser or emulator -> local Wrangler -> local Hyperdrive-compatible binding -> Docker PostgreSQL | Direct local PostgreSQL connection | Database development. This does not exercise Cloudflare's real Hyperdrive service. |
-| Staging | Not validated or deployed | Not connected | Deferred until the separate Neon staging project is provisioned. |
+| Staging | Not validated for the new project | Not connected to the new project | Deferred until the separate Neon staging project is provisioned. |
 | PR check | Not run automatically | Not connected | Future manual proof path only. |
 | Production | Not provisioned | Not provisioned | Future release environment. |
 
-The separate Neon staging project is currently empty. It has no roles, migrations, or Hyperdrive attached, and there is no provisioned staging Worker. It is not a validated staging deployment. Production is also unprovisioned. The API has ordinary HTTP routes for clients. `HyperdriveIntegrationEntrypoint` is a non-HTTP `WorkerEntrypoint`, callable only by the private Worker service binding used by the future integration check.
+At the time of this review, the separate Neon staging project is empty. It has no roles, migrations, or Hyperdrive attached. A pre-existing staging Worker, if one exists, remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is also unprovisioned. The API has ordinary HTTP routes for clients. `HyperdriveIntegrationEntrypoint` is a non-HTTP `WorkerEntrypoint`, callable only by the private Worker service binding used by the future integration check.
 
 ## Prerequisites
 
@@ -165,7 +165,7 @@ flutter run
 
 ## Staging
 
-Staging integration is deferred. The separate Neon staging project is currently empty: it has no roles, migrations, or Hyperdrive attached. No `dayli-api-staging` Worker is provisioned, so there is no validated staging deployment. Production is unprovisioned. Do not deploy, migrate, or test against either environment until the staging project has been provisioned and reviewed.
+Staging integration is deferred. At the time of this review, the separate Neon staging project is empty: it has no roles, migrations, or Hyperdrive attached. Any pre-existing `dayli-api-staging` Worker remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is unprovisioned. Do not deploy, migrate, or test against either environment until the staging project has been provisioned and reviewed.
 
 When staging is approved for provisioning, use a separate Neon project with synthetic data only. It must not share a Neon project, branch, data, credentials, or restore point with production. Follow the role bootstrap sequence in [Database migrations](database-migrations.md#roles-and-connections), then create a caching-disabled Hyperdrive configuration for the restricted `app` role. Prepare the ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set exact public HTTPS origins and add `BETTER_AUTH_SECRET` only through `wrangler secret put`. Do not put secrets in configuration, shell history, or Git.
 
