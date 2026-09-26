@@ -28,6 +28,7 @@
     "db:dev:reset": "bash scripts/dev-db.sh reset",
     "db:dev:migrate": "bash scripts/dev-db.sh migrate",
     "db:dev:verify": "bash scripts/dev-db.sh verify",
+    "db:dev:studio": "bash scripts/dev-db.sh studio",
     "local:auth:setup": "bash scripts/local-auth.sh setup",
     "dev:api:https": "bash scripts/local-auth.sh api",
     "dev:web:https": "bash scripts/local-auth.sh web",

@@ -109,8 +109,17 @@ case "${1:-}" in
     load_credentials
     MIGRATION_TARGET=development DATABASE_URL="$(migrator_url)" pnpm --filter @dayli/db db:verify
     ;;
+  studio)
+    require_docker
+    if [[ ! -f "$credentials_file" ]]; then
+      echo "Local development credentials are missing. Run pnpm db:dev:up first." >&2
+      exit 1
+    fi
+    cd "$repo_root/packages/db"
+    exec pnpm exec drizzle-kit studio --config drizzle.studio.config.ts --host=127.0.0.1
+    ;;
   *)
-    echo "Usage: $0 {up|down|reset|migrate|verify}" >&2
+    echo "Usage: $0 {up|down|reset|migrate|verify|studio}" >&2
     exit 1
     ;;
 esac

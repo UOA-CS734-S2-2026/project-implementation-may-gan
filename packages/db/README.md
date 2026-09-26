@@ -14,6 +14,7 @@ Run from the repository root:
 - `pnpm db:verify`: strict read-only migration-state verification.
 - `pnpm db:smoke`: connection smoke check.
 - `pnpm db:test:up`, `pnpm db:test`, `pnpm db:test:down`: local PostgreSQL 18 restricted-role integration workflow.
+- `pnpm db:dev:studio`: optional local Drizzle Studio view of `dayli_dev` using only the generated `app` credential, bound to `127.0.0.1`. It can edit rows; use synthetic data only and stop it with Ctrl-C.
 
 ## Required environment and guards
 

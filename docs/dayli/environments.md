@@ -67,7 +67,10 @@ pnpm db:dev:down       # stop and preserve data
 pnpm db:dev:up         # restart or create the development database
 pnpm db:dev:migrate    # only migrator@localhost:5434/dayli_dev is accepted
 pnpm db:dev:verify     # read-only migration state check on that same target
+pnpm db:dev:studio     # optional local Drizzle Studio browser, press Ctrl-C to stop
 ```
+
+Studio reads only the generated local `app` credential and binds its proxy to `127.0.0.1`. Open the URL printed by the command in a browser. Studio can edit rows, so use it only with synthetic development accounts and do not treat it as a read-only inspection tool. It uses a browser UI served from `local.drizzle.studio`, not the deployed Worker or Hyperdrive. Never point it at staging or production.
 
 Deletion is intentionally explicit and is the only command that removes development data and its generated credentials:
 
