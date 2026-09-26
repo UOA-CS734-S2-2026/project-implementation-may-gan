@@ -134,9 +134,9 @@ Choose separate exact HTTPS web and API origins under the same registrable domai
 
 ### Staging checklist
 
-Do not begin live provisioning until the user has reviewed and validated the blocked first-password procedure on the empty staging project. Then, in order:
+Before provisioning, verify the staging branch has no application data. If the earlier passwordless `dayli_password_probe` test role remains, inspect it for dependencies and remove it before final role verification. Neon's documented SQL Editor procedure creates restricted roles with passwords, but its query text may be retained. In order:
 
-1. Complete the two-role bootstrap and read-only role verification in [Database migrations](database-migrations.md). Use `migrator` only for direct migrations and `app` only behind Hyperdrive.
+1. Create the two restricted SQL roles with separate passwords, complete the bootstrap, and run read-only role verification in [Database migrations](database-migrations.md). Use `migrator` only for direct migrations and `app` only behind Hyperdrive.
 2. Configure the protected GitHub `staging` environment with main-only deployment and reviewer approval before adding credentials, including the direct unpooled `migrator` migration secret. Keep the migration, staging proof, and preview-cleanup workflows manual.
 3. Create a new staging Hyperdrive binding for `app` with query caching disabled, then a new staging Worker with its own Better Auth secret and exact public origins. Leave Google and Resend absent until each provider is complete.
 4. Build clients against the staging API and use synthetic accounts to prove sign-up, sign-in, cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin. Local tests are not a deployed Hyperdrive proof.

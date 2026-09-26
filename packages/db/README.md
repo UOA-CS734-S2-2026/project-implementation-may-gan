@@ -27,9 +27,9 @@ Disposable local test migrations accept only `localhost:5433/dayli_test` and `lo
 
 ## Neon role bootstrap
 
-After the password block is cleared, run `admin/bootstrap-roles.sql` as `neondb_owner`; it creates only the restricted `migrator` and `app` roles with no passwords. Then run `admin/bootstrap-migrator.sql` through a direct `migrator` connection so that role can set its own public-schema defaults and own the `drizzle` schema. Run read-only `admin/verify-role-bootstrap.sql` as `neondb_owner`; every value must be true before migrations or Hyperdrive setup.
+Create restricted `migrator` and `app` logins with distinct passwords using Neon's documented SQL Editor procedure in [Database migrations](../../docs/dayli/database-migrations.md#create-restricted-role-credentials). SQL Editor or database query history may retain the password statements; keep Console access restricted and review that risk before provisioning. Then run `admin/bootstrap-roles.sql` as `neondb_owner` for minimal database and schema grants. Run `admin/bootstrap-migrator.sql` through a direct `migrator` connection so it can set its own public-schema defaults and own the `drizzle` schema. Run read-only `admin/verify-role-bootstrap.sql` as `neondb_owner`; every value must be true before migrations or Hyperdrive setup.
 
-Neon rejected `psql`'s `\password` because it submits a password hash, while Neon requires plaintext. Do not use it or enter role passwords in SQL Editor, shell history, process arguments, Git, chat, screenshots, or workflow logs. No safe Neon-compatible first-password procedure is validated or documented. The user must review and test one on the empty staging project before live bootstrap proceeds. Until then, stop rather than use a plaintext SQL workaround.
+Do not use Console Create role, which grants `neon_superuser`, or `psql`'s `\password`, which Neon rejected because it submits a hash. Keep actual passwords out of Git, chat, terminal history, process arguments, screenshots, and workflow logs. The earlier passwordless test probe must be inspected and removed by its owner before finishing the two-role setup.
 
 ## Workers Hyperdrive check
 

@@ -13,21 +13,37 @@ Only two SQL-created restricted login roles are intended:
 
 `neondb_owner` creates roles and grants but is never a Worker runtime credential, Hyperdrive credential, or application `DATABASE_URL`. Do not create runtime roles in Neon Console because that path grants `neon_superuser`.
 
-After the password block is cleared, run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`. It creates only `migrator` and `app`, grants their minimal database and `public` schema access, and leaves both passwords unset. Run `packages/db/admin/bootstrap-migrator.sql` through a direct TLS `migrator` connection. PostgreSQL permits default-privilege changes only by the current role or a member role, so the owner must not attempt `ALTER DEFAULT PRIVILEGES FOR ROLE migrator`. The migrator script creates and owns `drizzle`, gives `app` DML defaults for `public`, and excludes `app` from Drizzle metadata. It is safe to rerun after interruption.
+Create the two restricted login roles with passwords in the empty target, then run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`. The script grants database and `public` schema access, and creates a missing role without a password if a previous setup stopped early. Do not connect a passwordless role. Run `packages/db/admin/bootstrap-migrator.sql` through a direct TLS `migrator` connection. PostgreSQL permits default-privilege changes only by the current role or a member role, so the owner must not attempt `ALTER DEFAULT PRIVILEGES FOR ROLE migrator`. The migrator script creates and owns `drizzle`, gives `app` DML defaults for `public`, and excludes `app` from Drizzle metadata. It is safe to rerun after interruption.
 
 Run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner` after bootstrap and after password rotation. Every reported value must be `true` before migration or Hyperdrive setup.
 
-## Initial role passwords: blocked pending staging validation
+## Create restricted role credentials
 
-Neon rejected `psql`'s `\password` because it sends a password hash while Neon requires plaintext for this operation. Do not use `\password`, put a plaintext password in Neon SQL Editor, paste one into SQL, place it in shell history, pass it as a process argument, commit it, or copy it to chat or logs.
+In Neon SQL Editor, select the intended empty project, branch, and database. Run as `neondb_owner`. Use a password manager to generate two distinct passwords with at least 60 bits of entropy; long random alphanumeric values avoid SQL-quoting problems. Replace the placeholders below **only in the SQL Editor**. Do not paste the resulting statement into Git, chat, PRs, terminal commands, or screenshots.
 
-No workaround or provisioning helper is documented or provided.
+```sql
+CREATE ROLE migrator WITH LOGIN PASSWORD '<unique migrator password>';
+CREATE ROLE app WITH LOGIN PASSWORD '<different app password>';
+```
 
-There is no Neon-validated, safe first-password procedure for SQL-created roles. Until one is reviewed and tested by the user on the empty staging project, live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked. Do not replace this block with a SQL Editor workaround. If a procedure is approved, store the resulting direct `migrator` and Hyperdrive `app` credentials only in their respective protected secret paths, then run the migrator bootstrap and read-only verification.
+Neon requires the plaintext value for this SQL operation. SQL Editor or database query history may retain the statement. Restrict Console access and handle that history according to the team's retention policy. Keep the generated credentials in the approved password manager and protected secret stores. Never use the Console's Create role action for `app` or `migrator`, since Neon gives Console-created roles `neon_superuser` membership.
+
+Before connecting as either new role, run this read-only check as the owner. Expect exactly two rows. `rolcanlogin` and `no_memberships` must be `true`; all other flags must be `false`. Stop if anything differs.
+
+```sql
+SELECT r.rolname, r.rolcanlogin, r.rolsuper, r.rolcreatedb,
+       r.rolcreaterole, r.rolreplication, r.rolbypassrls,
+       NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid)
+         AS no_memberships
+FROM pg_roles r
+WHERE r.rolname IN ('migrator', 'app');
+```
+
+If either role already exists from an interrupted passwordless bootstrap, inspect its membership before doing anything else. Use `ALTER ROLE ... WITH PASSWORD` in the same SQL Editor instead of attempting a duplicate `CREATE ROLE`. Neon rejected `psql`'s `\password` for a SQL-created role because it sent a hash, and Console Reset password refused a passwordless SQL-created probe role. Do not retry either method.
 
 ## Guarded live migration order
 
-For staging, and later for a separate production project, the order is fixed: inventory the empty target; validate the first-password procedure; run `bootstrap-roles.sql` as `neondb_owner`; establish the two restricted credentials through the approved procedure; run `bootstrap-migrator.sql` directly as `migrator`; require `verify-role-bootstrap.sql` to return only `true`; apply and verify reviewed migrations through the protected manual workflow; then attach Hyperdrive as `app` and deploy dependent Worker code. Do not reverse this sequence, use an owner connection at runtime, or use staging as a production branch.
+For staging, and later for a separate production project, the order is fixed: inventory the empty target; create the restricted SQL roles with distinct passwords; run `bootstrap-roles.sql` as `neondb_owner`; run `bootstrap-migrator.sql` directly as `migrator`; require `verify-role-bootstrap.sql` to return only `true`; apply and verify reviewed migrations through the protected manual workflow; then attach Hyperdrive as `app` and deploy dependent Worker code. Do not reverse this sequence, use an owner connection at runtime, or use staging as a production branch.
 
 ## Safe staging reset inventory
 
@@ -72,7 +88,7 @@ Migration commands enforce all of these guards:
 
 Local restricted-role integration coverage is the current proof. GitHub-hosted PR and push checks are paused. The **Database migrations** workflow remains `workflow_dispatch` only and is not an automatic migration gate. The protected **Run database migrations** workflow also remains manual dispatch and is the only normal staging or production migration path.
 
-After an approved Neon-compatible password procedure is user-validated:
+After the two restricted SQL roles have passwords, their grants and migrator defaults are in place, and `verify-role-bootstrap.sql` reports only `true`:
 
 1. Merge the reviewed schema change to `main` with recorded local verification and CODEOWNER review.
 2. Dispatch the protected staging workflow from `main` with the restricted `migrator` secret.

@@ -16,7 +16,7 @@ The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntry
 
 ### Future provisioning
 
-Keep the already-created, empty staging Neon project. Do not perform these steps until the safe first-password procedure in [Database migrations](../../docs/dayli/database-migrations.md#initial-role-passwords-blocked-pending-staging-validation) has been reviewed and tested there. Do not reuse a production project, branch, data, credentials, or restore point.
+Use the separate staging Neon project after creating and verifying the restricted roles through [Database migrations](../../docs/dayli/database-migrations.md#create-restricted-role-credentials). Remove the passwordless test probe after confirming it has no dependencies. Do not reuse a production project, branch, data, credentials, or restore point.
 
 1. Complete the owner and migrator role-bootstrap sequence in [Database migrations](../../docs/dayli/database-migrations.md#roles-and-connection-boundaries). Do not create application roles through Neon Console. Require the read-only bootstrap verification to report only `true` values before continuing.
 3. In **Workers & Pages** > **Hyperdrive**, create a configuration for the restricted `app` role in that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.

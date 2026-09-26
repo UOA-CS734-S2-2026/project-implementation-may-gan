@@ -42,12 +42,13 @@ describe("Neon role bootstrap scripts", () => {
     expect(executableSql).not.toMatch(/\b(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE)\b/i);
   });
 
-  it("defers live Neon provisioning until first-password handling is verified", async () => {
+  it("documents SQL-created restricted roles without publishing credentials", async () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
+    expect(guide).toContain("CREATE ROLE migrator WITH LOGIN PASSWORD '<unique migrator password>'");
+    expect(guide).toContain("CREATE ROLE app WITH LOGIN PASSWORD '<different app password>'");
+    expect(guide).toContain("Never use the Console's Create role action");
     expect(guide).toContain("Neon rejected `psql`'s `\\password`");
-    expect(guide).toContain("No workaround or provisioning helper is documented or provided.");
-    expect(guide).toContain("live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked");
     expect(guide).not.toContain("Run `\\password migrator`");
   });
 

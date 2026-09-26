@@ -1,7 +1,8 @@
 -- Run in Neon SQL Editor as neondb_owner.
 -- This file creates roles and grants only. It must not configure migrator defaults.
--- Leave roles without passwords. Live provisioning is deferred until a secure,
--- Neon-compatible first-password method is reviewed; psql \password is rejected.
+-- Create the two SQL roles with separate passwords in Neon SQL Editor first.
+-- This file grants their privileges and creates either role only if absent.
+-- Never use a passwordless role for a live connection.
 
 DO $$
 BEGIN
