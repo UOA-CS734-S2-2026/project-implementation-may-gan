@@ -50,6 +50,7 @@ part 'model/media_content_type.dart';
 part 'model/media_reservation.dart';
 part 'model/media_reservation_status.dart';
 part 'model/media_reservation_upload.dart';
+part 'model/media_validation_failure_reason.dart';
 part 'model/pending_relationship_request.dart';
 part 'model/pending_request_page.dart';
 part 'model/post_audience.dart';

@@ -15,6 +15,71 @@ class MediaApi {
 
   final ApiClient apiClient;
 
+  /// Verify a caller's uploaded object and record a validated/failed outcome
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<Response> mediaReservationsCompleteWithHttpInfo(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/media-reservations/{id}/complete'.replaceAll('{id}', id);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Verify a caller's uploaded object and record a validated/failed outcome
+  ///
+  /// Parameters:
+  ///
+  /// * [String] id (required):
+  Future<MediaReservation?> mediaReservationsComplete(
+    String id, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await mediaReservationsCompleteWithHttpInfo(
+      id,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MediaReservation',
+      ) as MediaReservation;
+    }
+    return null;
+  }
+
   /// Reserve an opaque, owned R2 object path for a direct upload
   ///
   /// Note: This method returns the HTTP [Response].

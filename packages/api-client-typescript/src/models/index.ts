@@ -16,6 +16,7 @@ export * from './MediaContentType';
 export * from './MediaReservation';
 export * from './MediaReservationStatus';
 export * from './MediaReservationUpload';
+export * from './MediaValidationFailureReason';
 export * from './PendingRelationshipRequest';
 export * from './PendingRequestPage';
 export * from './PostAudience';

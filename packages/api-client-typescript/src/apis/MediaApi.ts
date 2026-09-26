@@ -34,6 +34,13 @@ import {
     MediaReservationToJSON,
 } from '../models/MediaReservation';
 
+export interface MediaReservationsCompleteRequest {
+    /**
+     *
+     */
+    id: string;
+}
+
 export interface MediaReservationsCreateRequest {
     /**
      *
@@ -52,6 +59,51 @@ export interface MediaReservationsGetRequest {
  *
  */
 export class MediaApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for mediaReservationsComplete without sending the request
+     */
+    async mediaReservationsCompleteRequestOpts(requestParameters: MediaReservationsCompleteRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['id'] == null) {
+            throw new runtime.RequiredError(
+                'id',
+                'Required parameter "id" was null or undefined when calling mediaReservationsComplete().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/media-reservations/{id}/complete`;
+        urlPath = urlPath.replace('{id}', encodeURIComponent(String(requestParameters['id'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Verify a caller\'s uploaded object and record a validated/failed outcome
+     */
+    async mediaReservationsCompleteRaw(requestParameters: MediaReservationsCompleteRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MediaReservation>> {
+        const requestOptions = await this.mediaReservationsCompleteRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MediaReservationFromJSON(jsonValue));
+    }
+
+    /**
+     * Verify a caller\'s uploaded object and record a validated/failed outcome
+     */
+    async mediaReservationsComplete(requestParameters: MediaReservationsCompleteRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MediaReservation> {
+        const response = await this.mediaReservationsCompleteRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for mediaReservationsCreate without sending the request

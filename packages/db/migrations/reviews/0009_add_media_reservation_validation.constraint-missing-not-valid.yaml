@@ -1,0 +1,17 @@
+reason: >
+  Unlike issue #21's original media_reservation migration, this table is no
+  longer guaranteed empty — real reservations can exist by the time this ships.
+  The check constraint's own default branch is unconditionally satisfied by every
+  pre-existing row: the new status column defaults to 'pending' for all existing
+  rows, and the new failure_reason/validated_at columns default to null, which is
+  exactly the constraint's first accepted combination. Validation therefore cannot
+  fail against existing data. The project is still at course-project scale with no
+  production traffic, so the table-scan cost of validating inline is expected to
+  be small. This suppression should be revisited (splitting into a NOT VALID add
+  followed by a separate VALIDATE CONSTRAINT migration) before real user volume
+  makes an inline scan a concern.
+affected_data_and_clients: Any existing media_reservation rows from issue #21 (owner-only pending upload reservations). No other table or client is affected; the constraint only reads columns on this same table.
+rollout_sequence: Apply through the protected staging workflow, verify the completion routes and that no existing reservation violates the constraint, then promote after approval.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+forward_fix_plan: If validation cost becomes a concern, add a new migration that adds the constraint NOT VALID and a following migration that runs VALIDATE CONSTRAINT separately.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.

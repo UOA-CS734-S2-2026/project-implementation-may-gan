@@ -13,6 +13,8 @@ part of openapi.api;
 enum MediaReservationStatus {
   pending._(r'pending'),
   expired._(r'expired'),
+  validated._(r'validated'),
+  failed._(r'failed'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -81,6 +83,10 @@ class MediaReservationStatusTypeTransformer {
           return MediaReservationStatus.pending;
         case r'expired':
           return MediaReservationStatus.expired;
+        case r'validated':
+          return MediaReservationStatus.validated;
+        case r'failed':
+          return MediaReservationStatus.failed;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

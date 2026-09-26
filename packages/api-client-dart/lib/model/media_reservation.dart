@@ -17,7 +17,9 @@ class MediaReservation {
     required this.contentType,
     required this.byteSize,
     required this.status,
+    this.failureReason,
     required this.createdAt,
+    this.validatedAt,
     required this.expiresAt,
   });
 
@@ -30,7 +32,23 @@ class MediaReservation {
 
   final MediaReservationStatus status;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final MediaValidationFailureReason? failureReason;
+
   final DateTime createdAt;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final DateTime? validatedAt;
 
   final DateTime expiresAt;
 
@@ -42,7 +60,9 @@ class MediaReservation {
           other.contentType == contentType &&
           other.byteSize == byteSize &&
           other.status == status &&
+          other.failureReason == failureReason &&
           other.createdAt == createdAt &&
+          other.validatedAt == validatedAt &&
           other.expiresAt == expiresAt;
 
   @override
@@ -52,12 +72,14 @@ class MediaReservation {
       (contentType.hashCode) +
       (byteSize.hashCode) +
       (status.hashCode) +
+      (failureReason == null ? 0 : failureReason!.hashCode) +
       (createdAt.hashCode) +
+      (validatedAt == null ? 0 : validatedAt!.hashCode) +
       (expiresAt.hashCode);
 
   @override
   String toString() =>
-      'MediaReservation[id=$id, contentType=$contentType, byteSize=$byteSize, status=$status, createdAt=$createdAt, expiresAt=$expiresAt]';
+      'MediaReservation[id=$id, contentType=$contentType, byteSize=$byteSize, status=$status, failureReason=$failureReason, createdAt=$createdAt, validatedAt=$validatedAt, expiresAt=$expiresAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -65,7 +87,17 @@ class MediaReservation {
     json[r'contentType'] = this.contentType;
     json[r'byteSize'] = this.byteSize;
     json[r'status'] = this.status;
+    if (this.failureReason != null) {
+      json[r'failureReason'] = this.failureReason;
+    } else {
+      json[r'failureReason'] = null;
+    }
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
+    if (this.validatedAt != null) {
+      json[r'validatedAt'] = this.validatedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'validatedAt'] = null;
+    }
     json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
     return json;
   }
@@ -77,7 +109,9 @@ class MediaReservation {
     MediaContentType? contentType,
     int? byteSize,
     MediaReservationStatus? status,
+    MediaValidationFailureReason? failureReason,
     DateTime? createdAt,
+    DateTime? validatedAt,
     DateTime? expiresAt,
   }) =>
       MediaReservation(
@@ -85,7 +119,9 @@ class MediaReservation {
         contentType: contentType ?? this.contentType,
         byteSize: byteSize ?? this.byteSize,
         status: status ?? this.status,
+        failureReason: failureReason ?? this.failureReason,
         createdAt: createdAt ?? this.createdAt,
+        validatedAt: validatedAt ?? this.validatedAt,
         expiresAt: expiresAt ?? this.expiresAt,
       );
 
@@ -132,7 +168,10 @@ class MediaReservation {
         contentType: MediaContentType.fromJson(json[r'contentType'])!,
         byteSize: mapValueOfType<int>(json, r'byteSize')!,
         status: MediaReservationStatus.fromJson(json[r'status'])!,
+        failureReason:
+            MediaValidationFailureReason.fromJson(json[r'failureReason']),
         createdAt: mapDateTime(json, r'createdAt', r'')!,
+        validatedAt: mapDateTime(json, r'validatedAt', r''),
         expiresAt: mapDateTime(json, r'expiresAt', r'')!,
       );
     }
