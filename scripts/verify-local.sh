@@ -63,6 +63,7 @@ pnpm install --frozen-lockfile
 
 echo 'Running TypeScript verification'
 pnpm lint
+pnpm --filter @dayli/web exec next typegen
 pnpm typecheck
 pnpm test
 pnpm build
