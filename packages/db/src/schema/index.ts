@@ -8,6 +8,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -193,6 +194,32 @@ export const tomorrowNotes = pgTable("tomorrow_notes", {
   ),
 ]);
 
+/**
+ * The accepted outcome of a retriable daily-post submission. The fingerprint is
+ * a SHA-256 of the normalized request, so an identical retry replays the
+ * stored post while reusing the key with different content conflicts. Only
+ * accepted submissions are recorded; a rejected attempt can be retried with
+ * the same key. Rows follow their post and author through deletion cleanup.
+ */
+export const postIdempotencyKeys = pgTable("post_idempotency_keys", {
+  authorId: text("author_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  idempotencyKey: text("idempotency_key").notNull(),
+  requestFingerprint: text("request_fingerprint").notNull(),
+  postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ name: "post_idempotency_keys_pk", columns: [table.authorId, table.idempotencyKey] }),
+  index("post_idempotency_keys_post_id_idx").on(table.postId),
+  check(
+    "post_idempotency_keys_key_check",
+    sql`char_length(${table.idempotencyKey}) between 1 and 255`,
+  ),
+  check(
+    "post_idempotency_keys_fingerprint_check",
+    sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+  ),
+]);
+
 /** An owned, opaque R2 object path reserved before a direct client upload. */
 export const mediaReservation = pgTable("media_reservation", {
   id: text("id").primaryKey(),
@@ -221,6 +248,7 @@ export const schema = {
   friendRequests,
   friendships,
   legacyCloudinaryMedia,
+  postIdempotencyKeys,
   postMedia,
   postRevisions,
   posts,

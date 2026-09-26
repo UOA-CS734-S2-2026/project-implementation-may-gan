@@ -1,0 +1,24 @@
+[data-theme="default"] {
+  --color-accent: var(--color-violet-400);
+
+  --color-background: var(--color-taupe-50);
+  --color-background-secondary: var(--color-taupe-100);
+  --color-background-tertiary: var(--color-taupe-200);
+  --color-background-accent: var(--color-purple-100);
+
+  --color-foreground: var(--color-taupe-800);
+  --color-foreground-secondary: var(--color-neutral-600);
+  --color-foreground-tertiary: var(--color-neutral-400);
+  --color-foreground-accent: var(--color-purple-800);
+
+  --color-muted: var(--color-taupe-700);
+  --color-muted-foreground: var(--color-taupe-400);
+  --color-border: var(--color-taupe-800);
+  --color-input: var(--color-taupe-800);
+  --color-ring: var(--color-taupe-500);
+
+  --color-info: var(--color-sky-500);
+  --color-success: var(--color-emerald-500);
+  --color-warning: var(--color-amber-500);
+  --color-danger: var(--color-rose-500);
+}

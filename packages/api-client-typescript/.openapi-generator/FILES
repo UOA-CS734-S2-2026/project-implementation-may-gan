@@ -5,6 +5,7 @@ README.md
 package.json
 src/apis/MediaApi.ts
 src/apis/PostingDaysApi.ts
+src/apis/PostsApi.ts
 src/apis/RelationshipsApi.ts
 src/apis/SystemApi.ts
 src/apis/index.ts
@@ -12,9 +13,13 @@ src/index.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts
+src/models/CreateDailyPostRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
 src/models/CurrentPostingDayResponse.ts
+src/models/DailyPost.ts
+src/models/DailyPostPrompt.ts
+src/models/DailyPostTomorrowNote.ts
 src/models/DailyPromptResponse.ts
 src/models/HealthResponse.ts
 src/models/MediaContentType.ts
@@ -23,6 +28,7 @@ src/models/MediaReservationStatus.ts
 src/models/MediaReservationUpload.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
+src/models/PostAudience.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts
 src/models/SendRelationshipRequest.ts

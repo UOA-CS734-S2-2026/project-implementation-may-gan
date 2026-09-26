@@ -315,6 +315,147 @@
           "text"
         ]
       },
+      "DailyPost": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "authorId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/DailyPostPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/PostAudience"
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "releasedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "tomorrowNote": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "availableOn": {
+                "$ref": "#/components/schemas/AucklandDate"
+              }
+            },
+            "required": [
+              "availableOn"
+            ],
+            "description": "Present when a tomorrow note was submitted; its text is readable from availableOn."
+          }
+        },
+        "required": [
+          "id",
+          "authorId",
+          "localDate",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience",
+          "acceptedAt",
+          "releasedAt",
+          "tomorrowNote"
+        ]
+      },
+      "DailyPostPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string",
+            "example": "What made you smile today?"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
+      "PostAudience": {
+        "type": "string",
+        "enum": [
+          "solo",
+          "friends"
+        ]
+      },
+      "CreateDailyPostRequest": {
+        "type": "object",
+        "properties": {
+          "localDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the draft was written for. It must still be the server's current day when the post is accepted."
+              }
+            ]
+          },
+          "promptId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              {
+                "example": "prompt-09-25",
+                "description": "The prompt ID returned by GET /api/v1/posting-days/current for localDate."
+              }
+            ]
+          },
+          "reflectiveAnswer": {
+            "type": "string",
+            "example": "Walked to the harbour after class."
+          },
+          "caption": {
+            "type": "string",
+            "example": "Sunset at the wharf"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "example": 7
+          },
+          "audience": {
+            "$ref": "#/components/schemas/PostAudience"
+          },
+          "tomorrowNote": {
+            "type": "string",
+            "description": "An author-only note that becomes readable on the following Auckland day. It is never echoed back.",
+            "example": "Remember to bring the camera."
+          }
+        },
+        "required": [
+          "localDate",
+          "promptId",
+          "reflectiveAnswer",
+          "rating",
+          "audience"
+        ],
+        "additionalProperties": false
+      },
       "PendingRequestPage": {
         "type": "object",
         "properties": {
@@ -670,6 +811,113 @@
           },
           "503": {
             "description": "The prompt or posting-state dependency is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.create",
+        "summary": "Submit today's daily post",
+        "description": "Creates the authenticated user's one post for the current Auckland day. Retry a lost response with the same `Idempotency-Key`: an identical retry returns the original post with `Idempotent-Replayed: true`, even after the deadline, while a changed request conflicts.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "A client-generated key reused for every retry of this submission, such as a UUID stored with the draft.",
+              "example": "0f8fad5b-d9cb-469f-a165-70867728950e"
+            },
+            "required": true,
+            "description": "A client-generated key reused for every retry of this submission, such as a UUID stored with the draft.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDailyPostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The accepted post, or the original post for an identical retry.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Present and `true` when this response replays an earlier accepted request.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyPost"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, or the idempotency key was used for a different request. `details.reason` identifies which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

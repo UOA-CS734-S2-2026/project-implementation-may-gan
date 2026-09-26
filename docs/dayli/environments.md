@@ -146,7 +146,7 @@ Start the web shell with:
 pnpm --dir apps/web dev
 ```
 
-It normally listens on `http://localhost:3000`. Flutter receives its API origin through `DAYLI_API_BASE_URL`. Use these addresses for the local Worker:
+It normally listens on `http://localhost:3000`. The web app reads `NEXT_PUBLIC_API_BASE_URL` (see `apps/web/.env.example`), and Flutter receives its API origin through `DAYLI_API_BASE_URL`. For browser sessions, the web and API origins must both use HTTPS and be configured in `BETTER_AUTH_TRUSTED_ORIGINS`; CORS permits credentials only from those exact origins. The following local Worker addresses are useful for unauthenticated development and native device configuration:
 
 - Browser on the development machine: `http://127.0.0.1:8787`
 - Android emulator: `http://10.0.2.2:8787`
@@ -161,14 +161,14 @@ cd apps/mobile
 flutter run --dart-define=DAYLI_API_BASE_URL=http://127.0.0.1:8787
 ```
 
-`adb reverse` forwards the device's loopback port to the development machine. It avoids exposing the debug Worker on the LAN, and Android debug builds allow cleartext only for the emulator and loopback aliases. Remove the mapping with `adb reverse --remove tcp:8787` when finished. Use a deployed HTTPS staging API for iOS physical devices. Configure CORS for browser clients before cross-origin calls. The current API has no client-facing database route, so an address alone does not prove database integration.
+`adb reverse` forwards the device's loopback port to the development machine. It avoids exposing the debug Worker on the LAN, and Android debug builds allow cleartext only for the emulator and loopback aliases. Remove the mapping with `adb reverse --remove tcp:8787` when finished. Use a deployed HTTPS staging API for authenticated browser and physical-device tests. A local HTTP address alone does not mount Better Auth or prove Hyperdrive integration.
 
-Run the Flutter shell separately:
+For an Android emulator, run the Flutter shell with its API origin:
 
 ```bash
 cd apps/mobile
 flutter pub get
-flutter run
+flutter run --dart-define=DAYLI_API_BASE_URL=http://10.0.2.2:8787
 ```
 
 ## Staging

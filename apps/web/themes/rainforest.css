@@ -1,0 +1,24 @@
+[data-theme="rainforest"] {
+  --color-background: var(--color-green-950);
+  --color-foreground: var(--color-lime-100);
+  --color-surface: var(--color-green-900);
+  --color-card: var(--color-green-800);
+
+  --color-primary: var(--color-emerald-500);
+  --color-primary-foreground: var(--color-emerald-950);
+  --color-secondary: var(--color-lime-500);
+  --color-secondary-foreground: var(--color-green-950);
+  --color-accent: var(--color-green-300);
+  --color-accent-foreground: var(--color-green-900);
+
+  --color-muted: var(--color-green-800);
+  --color-muted-foreground: var(--color-stone-400);
+  --color-border: var(--color-green-800);
+  --color-input: var(--color-green-800);
+  --color-ring: var(--color-emerald-500);
+
+  --color-info: var(--color-teal-400);
+  --color-success: var(--color-emerald-400);
+  --color-warning: var(--color-amber-400);
+  --color-danger: var(--color-rose-400);
+}

@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@import "../themes/default.css";
+@import "../themes/ocean.css";
+@import "../themes/rainforest.css";
+
+@theme {
+  /* Semantic tokens — resolved from the active [data-theme] */
+  --color-accent: var(--color-violet-400);
+
+  --color-background: var(--color-neutral-50);
+  --color-background-secondary: var(--color-taupe-100);
+  --color-background-tertiary: var(--color-taupe-200);
+  --color-background-accent: var(--color-purple-100);
+
+  --color-foreground: var(--color-taupe-800);
+  --color-foreground-secondary: var(--color-neutral-600);
+  --color-foreground-tertiary: var(--color-neutral-400);
+  --color-foreground-accent: var(--color-purple-800);
+
+  /*--color-surface: var(--color-taupe-900);*/
+  /*--color-card: var(--color-taupe-800);*/
+
+  /*--color-muted: var(--color-taupe-700);*/
+  /*--color-muted-foreground: var(--color-taupe-400);*/
+  /*--color-border: var(--color-taupe-800);*/
+  /*--color-input: var(--color-taupe-800);*/
+  /*--color-ring: var(--color-taupe-500);*/
+
+  /*--color-info: var(--color-sky-500);*/
+  /*--color-success: var(--color-emerald-500);*/
+  /*--color-warning: var(--color-amber-500);*/
+  /*--color-danger: var(--color-rose-500);*/
+
+  --font-sans: var(--font-epilogue);
+  --font-serif: var(--font-spectral);
+
+  --breakpoint-desktop: 900px;
+}
+
+@utility shadow-card {
+  box-shadow:
+    15px 15px 20px 0px rgba(0, 0, 0, 0.03),
+    7px 7px 10px 0px rgba(0, 0, 0, 0.05);
+}
+
+@utility shadow-nav {
+  box-shadow:
+    2px 0 8px rgba(0, 0, 0, 0.01),
+    8px 0 16px rgba(0, 0, 0, 0.02),
+    16px 0 32px rgba(0, 0, 0, 0.03);
+}
+
+@utility shadow-card {
+  box-shadow:
+    2px 2px 8px rgba(0, 0, 0, 0.01),
+    8px 8px 16px rgba(0, 0, 0, 0.02),
+    16px 16px 32px rgba(0, 0, 0, 0.03);
+}
+
+@keyframes arrow-anim {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(2px);
+  }
+  75% {
+    transform: translateX(-2px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    transition-property:
+      color, background-color, border-color, fill, stroke, box-shadow;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+}
