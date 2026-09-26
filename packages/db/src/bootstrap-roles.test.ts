@@ -4,6 +4,7 @@ import { repoPath } from "./migrations/paths";
 
 const ownerBootstrapPath = repoPath("packages/db/admin/bootstrap-roles.sql");
 const migratorBootstrapPath = repoPath("packages/db/admin/bootstrap-migrator.sql");
+const developmentBootstrapPath = repoPath("packages/db/dev/init/001-development-roles.sh");
 const verificationPath = repoPath("packages/db/admin/verify-role-bootstrap.sql");
 const databaseMigrationsWorkflowPath = repoPath(".github/workflows/database-migrations.yml");
 const databaseMigrationsGuidePath = repoPath("docs/dayli/database-migrations.md");
@@ -15,6 +16,9 @@ describe("Neon role bootstrap scripts", () => {
 
     expect(ownerBootstrap).toContain("CREATE ROLE migrator LOGIN");
     expect(ownerBootstrap).toContain("CREATE ROLE app LOGIN");
+    expect(ownerBootstrap).not.toContain("users_accounts_importer");
+    const developmentBootstrap = await readFile(developmentBootstrapPath, "utf8");
+    expect(developmentBootstrap).not.toContain("users_accounts_importer");
     expect(ownerBootstrap).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
     expect(ownerBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES/i);
     expect(ownerBootstrap).not.toMatch(/CREATE SCHEMA IF NOT EXISTS drizzle/i);
@@ -42,7 +46,7 @@ describe("Neon role bootstrap scripts", () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
     expect(guide).toContain("Neon rejected `psql`'s `\\password`");
-    expect(guide).toContain("A helper therefore cannot safely keep the plaintext out of SQL");
+    expect(guide).toContain("a normal bind parameter cannot supply the plaintext");
     expect(guide).toContain("live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked");
     expect(guide).not.toContain("Run `\\password migrator`");
   });

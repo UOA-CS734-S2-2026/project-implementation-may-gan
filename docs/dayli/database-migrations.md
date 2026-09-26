@@ -1,6 +1,6 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. Staging is the first deployment target and is currently an empty, unvalidated Neon project. It has no roles, migrations, Hyperdrive attachment, or application data. Production is not provisioned. Create production later as a **separate Neon project**, after staging has completed this runbook and application validation. Do not use a staging branch as production.
+Dayli uses Neon PostgreSQL 18. Staging is the first deployment target and is currently an empty, unvalidated Neon project. It has no roles, migrations, Hyperdrive attachment, or application data. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
 
 `packages/db` owns the Drizzle schema, migration SQL, review records, and migration commands. PostgreSQL `public` is the application schema. Migrations `0000` through `0007`, their snapshots, and the shared journal are immutable.
 
@@ -21,7 +21,7 @@ Run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner
 
 Neon rejected `psql`'s `\password` because it sends a password hash while Neon requires plaintext for this operation. Do not use `\password`, put a plaintext password in Neon SQL Editor, paste one into SQL, place it in shell history, pass it as a process argument, commit it, or copy it to chat or logs.
 
-A local PostgreSQL investigation also found that `ALTER ROLE ... PASSWORD $1` rejects a bind parameter at parse time. A helper therefore cannot safely keep the plaintext out of SQL by parameterizing this command. No provisioning helper is included.
+A local PostgreSQL investigation found that `ALTER ROLE ... PASSWORD $1` rejects a bind parameter at parse time, so a normal bind parameter cannot supply the plaintext. A narrowly reviewed interactive client could send a properly quoted statement over TLS without putting the password in a SQL Editor or shell command, but that approach has not been validated against Neon or reviewed for logging. No provisioning helper is included.
 
 There is no Neon-validated, safe first-password procedure for SQL-created roles. Until one is reviewed and tested by the user on the empty staging project, live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked. Do not replace this block with a SQL Editor workaround. If a procedure is approved, store the resulting direct `migrator` and Hyperdrive `app` credentials only in their respective protected secret paths, then run the migrator bootstrap and read-only verification.
 
@@ -47,9 +47,9 @@ pnpm db:test:up && pnpm db:test && pnpm db:test:down
 
 Migration commands enforce all of these guards:
 
-- `MIGRATION_TARGET` is exactly `local`, `staging`, or `production`.
+- `MIGRATION_TARGET` is exactly `local`, `development`, `staging`, or `production`.
 - `DATABASE_URL` must name the `migrator` role.
-- Local migration URLs are limited to `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`.
+- Disposable local test migrations use only `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. Persistent local development uses only `migrator` at `localhost:5434/dayli_dev` through `pnpm db:dev:migrate` and `pnpm db:dev:verify`.
 - Staging and production URLs require a direct `*.neon.tech` host, reject `-pooler`, and require `sslmode=require`, `verify-ca`, or `verify-full`.
 - Production migration application additionally requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`.
 - `pnpm db:verify` is read-only and fails if migrations are pending, hashes differ, or the database has unknown migration records.
@@ -82,4 +82,4 @@ Prefer application rollback for a faulty release. For database defects, write a 
 
 Normal staging and production migrations run only through the manual GitHub Actions workflow. Break glass is allowed only when GitHub Actions is unavailable and delay would worsen an incident. Use the protected direct `migrator` URL, set `MIGRATION_TARGET`, run `pnpm db:check`, `pnpm db:migrate`, and `pnpm db:verify`, save sanitized output, and open a retrospective PR or issue.
 
-Before release, administrators must verify protected `staging` and `production` environments, `@AntGa` as required reviewer, main-only deployment restrictions, the **Database migrations** status check, CODEOWNER review, stale-approval dismissal, and administrator-bypass settings. Capture screenshots or exports without secrets or private Neon hostnames.
+Before release, administrators must configure protected `staging` and `production` environments with designated reviewers and main-only deployment restrictions. The `production` environment does not yet exist. Hosted CI is paused, so do not mark the **Database migrations** status check required until automatic checks are restored. Review CODEOWNER, stale-approval, and administrator-bypass settings. Capture screenshots or exports without secrets or private Neon hostnames.

@@ -2,7 +2,7 @@
 
 Status: the compatibility slice has Worker and Flutter unit coverage. PostgreSQL persistence has a separate local integration suite. Neither result is a staging or physical-device result. The checked-in web client has email/password sign-up, sign-in, and password-recovery screens plus a Google button. The Flutter shell has email/password and Google buttons; its Google action reports that setup is unavailable when the build has no Google client configuration.
 
-The rollout order is local auth walkthrough first, then a separate empty Neon staging project with synthetic data, then a fresh production project. Staging currently has zero credentials, no Worker, and no Hyperdrive for this project. Production is unprovisioned. Do not manually dispatch the staging proof, deploy, or run a credentialed check until staging has been re-provisioned and reviewed.
+The rollout order is local auth walkthrough first, then the existing empty Neon staging project with synthetic data, then a fresh production project. Staging currently has zero deployment credentials, no Worker, and no Hyperdrive for this project. No production service is deployed; an old empty production Neon project may still need to be inventoried and replaced. Do not manually dispatch the staging proof, deploy, or run a credentialed check until staging has been re-provisioned and reviewed.
 
 Issue #10 tests Better Auth 1.7.5 in the Workers Vitest runtime. The slice uses email/password sessions, secure browser cookies, and Better Auth's signed bearer-session plugin. It is deliberately limited to authentication compatibility.
 

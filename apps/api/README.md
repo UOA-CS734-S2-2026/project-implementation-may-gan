@@ -1,25 +1,24 @@
 # Dayli API
 
-For local PostgreSQL, local Worker, staging, and future production setup, see the [environment guide](../../docs/dayli/environments.md).
+For local HTTPS sign-in, see [Environments](../../docs/dayli/environments.md). For staged deployment, provider setup, and production reset, see the [first-run checklist](../../docs/dayli/first-run.md).
 
 ## Staging Hyperdrive check
 
-`test:hyperdrive:staging` is a future manual proof that a deployed API Worker can use its `HYPERDRIVE` binding. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. Any pre-existing staging Worker remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is unprovisioned. Do not run the credentialed proof until staging provisioning is complete and reviewed. When available, the Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. It proves connectivity, Drizzle commit, explicit rollback, post-error recovery, constraint classes, restricted-role authorization, and fresh-invocation visibility. Clients are created per invocation; Hyperdrive manages edge cleanup and query caching must be disabled.
+`test:hyperdrive:staging` is a future manual proof that a deployed API Worker can use its `HYPERDRIVE` binding. The new Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. The old staging Worker and Hyperdrive were deleted, and no production service is deployed. Neither environment has a validated endpoint. Do not run the credentialed proof until staging provisioning is complete and reviewed. When available, the Workers Vitest runtime calls `HyperdriveIntegrationEntrypoint` through a remote Worker service binding. It proves connectivity, Drizzle commit, explicit rollback, post-error recovery, constraint classes, restricted-role authorization, and fresh-invocation visibility. Clients are created per invocation; Hyperdrive manages edge cleanup and query caching must be disabled.
 
 The entrypoint is not an HTTP route or an OpenAPI operation. Only a Worker with its service binding can call it. Each request closes its postgres.js client in `finally` after the operation completes, so it does not retain a Hyperdrive client in the Worker isolate.
 
 ### Reachability and access
 
-A pre-existing public staging endpoint, if present, remains connected to its old configuration and is not validated for the new project. Inventory and retire it before use. After provisioning, `dayli-api-staging` may be public for staging web and mobile clients, while its normal authentication and authorization rules continue to apply. Do not use it for production traffic or put database credentials in client applications.
+The old staging Worker was deleted. After reviewed provisioning, a new `dayli-api-staging` Worker may be public for staging web and mobile clients, while its normal authentication and authorization rules continue to apply. Do not use it for production traffic or put database credentials in client applications.
 
 The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntrypoint`, not an HTTP handler. The future Vitest proxy Worker sets `workers_dev: false`, so Cloudflare does not give it a public Workers.dev URL. The test reaches the staging Worker only through its private service binding.
 
 ### Future provisioning
 
-Do not perform these steps until the separate staging project is approved for provisioning.
+Keep the already-created, empty staging Neon project. Do not perform these steps until the safe first-password procedure in [Database migrations](../../docs/dayli/database-migrations.md#initial-role-passwords-blocked-pending-staging-validation) has been reviewed and tested there. Do not reuse a production project, branch, data, credentials, or restore point.
 
-1. Create a separate Neon project used only for staging and synthetic data. Do not reuse a production project, branch, data, credentials, or restore point.
-2. Complete the owner and migrator role-bootstrap sequence in [Database migrations](../../docs/dayli/database-migrations.md#roles-and-connections). Do not create application roles through Neon Console. Require the read-only bootstrap verification to report only `true` values before continuing.
+1. Complete the owner and migrator role-bootstrap sequence in [Database migrations](../../docs/dayli/database-migrations.md#roles-and-connection-boundaries). Do not create application roles through Neon Console. Require the read-only bootstrap verification to report only `true` values before continuing.
 3. In **Workers & Pages** > **Hyperdrive**, create a configuration for the restricted `app` role in that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.
 4. Copy `wrangler.staging.example.jsonc` to the ignored `wrangler.staging.jsonc`. Keep its name as `dayli-api-staging`, replace the Hyperdrive ID placeholder, and keep the binding name `HYPERDRIVE`. Replace its public placeholder base URL and trusted browser origins with exact HTTPS staging origins.
 5. Set the ignored Worker secret with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. Use a value of at least 32 characters from the approved secret store. Never put it in `vars`, JSON configuration, or Git.
@@ -53,6 +52,6 @@ If a secure credential tool supplies the values instead, replace the `read` comm
 
 `.github/workflows/staging-hyperdrive.yml` runs only on manual dispatch. It has no pull request or `main` push trigger. This preserves a credentialed proof path for after staging is provisioned without making it an automatic PR gate or staging deployment.
 
-After provisioning, the GitHub `staging` environment must contain `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` secrets, plus `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, and `STAGING_HYPERDRIVE_NAME` variables. The workflow validates the service name and Hyperdrive configuration before deploying, rejects enabled query caching, and never targets the default `dayli-api` Worker. It does not use `pull_request_target`.
+After provisioning, the GitHub `staging` environment must contain `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` secrets, plus `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, `STAGING_HYPERDRIVE_NAME`, `STAGING_AUTH_API_ORIGIN`, and `STAGING_AUTH_WEB_ORIGIN` variables. The last two are exact public HTTPS origins; the workflow writes them as `BETTER_AUTH_BASE_URL` and `BETTER_AUTH_TRUSTED_ORIGINS`. The workflow validates the service name and Hyperdrive configuration before deploying, rejects enabled query caching, and never targets the default `dayli-api` Worker. It does not use `pull_request_target`.
 
 `.github/workflows/cleanup-hyperdrive-preview.yml` is manual only and requires a PR number. It runs only from `main`, validates that GitHub reports the PR as closed, main-based, same-repository, and non-fork, then makes an idempotent, credential-guarded deletion attempt for exactly `dayli-api-pr-<number>`. It does not check out or execute PR code. The staging environment credentials and values were removed, so this cleanup cannot run until they are explicitly re-provisioned. The old staging Worker and Hyperdrive were deleted; do not treat cleanup re-provisioning as approval to run a staging deployment or proof.

@@ -2,7 +2,7 @@
 
 `packages/db` owns the Dayli Drizzle schema, immutable PostgreSQL migration history, direct migration tooling, and local restricted-role integration coverage. Migrations `0000` through `0007`, their snapshots, and `_journal.json` are immutable. See [Database migrations](../../docs/dayli/database-migrations.md) for the staging-first runbook.
 
-Staging is the first and currently empty Neon project. It is not a validated deployment. Production is unprovisioned and must later be a separate Neon project, not a staging branch. `migrator` is the direct, unpooled migration role. `app` is Worker runtime access through Hyperdrive. `neondb_owner` is bootstrap-only and must never be a Worker or Hyperdrive credential.
+Staging is the first and currently empty Neon project. It is not a validated deployment. No production service is deployed; any old empty production Neon project must be inventoried before replacement. Its eventual database must be a separate Neon project, not a staging branch. `migrator` is the direct, unpooled migration role. `app` is Worker runtime access through Hyperdrive. `neondb_owner` is bootstrap-only and must never be a Worker or Hyperdrive credential.
 
 ## Commands
 
@@ -17,18 +17,18 @@ Run from the repository root:
 
 ## Required environment and guards
 
-- `MIGRATION_TARGET`: exactly `local`, `staging`, or `production`.
+- `MIGRATION_TARGET`: exactly `local`, `development`, `staging`, or `production`.
 - `DATABASE_URL`: direct `migrator` migration connection.
 - `TEST_DATABASE_URL`: local `migrator` test connection.
 - `TEST_APP_DATABASE_URL`: local restricted `app` test connection.
 
-Local migrations accept only `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. Staging and production must use a direct `*.neon.tech` host, not `-pooler`, with `sslmode=require` or stricter. Production migration application also requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`. `db:verify` is read-only and rejects pending migrations, changed applied hashes, and unknown migration records.
+Disposable local test migrations accept only `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. Persistent local development accepts only `migrator` at `localhost:5434/dayli_dev` through `pnpm db:dev:migrate`. Staging and production must use a direct `*.neon.tech` host, not `-pooler`, with `sslmode=require` or stricter. Production migration application also requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`. `db:verify` is read-only and rejects pending migrations, changed applied hashes, and unknown migration records.
 
 ## Neon role bootstrap
 
 After the password block is cleared, run `admin/bootstrap-roles.sql` as `neondb_owner`; it creates only the restricted `migrator` and `app` roles with no passwords. Then run `admin/bootstrap-migrator.sql` through a direct `migrator` connection so that role can set its own public-schema defaults and own the `drizzle` schema. Run read-only `admin/verify-role-bootstrap.sql` as `neondb_owner`; every value must be true before migrations or Hyperdrive setup.
 
-Neon rejected `psql`'s `\password` because it submits a password hash, while Neon requires plaintext. Local PostgreSQL also rejects a bind parameter in `ALTER ROLE ... PASSWORD $1`, so a helper cannot safely parameterize this operation. Do not use either approach or enter role passwords in SQL Editor, shell history, process arguments, Git, chat, screenshots, or workflow logs. No safe Neon-compatible first-password procedure is validated. The user must review and test one on the empty staging project before live bootstrap proceeds. Until then, stop rather than use a plaintext SQL workaround.
+Neon rejected `psql`'s `\password` because it submits a password hash, while Neon requires plaintext. Local PostgreSQL rejects a bind parameter in `ALTER ROLE ... PASSWORD $1`; an interactive helper would need a separately reviewed and Neon-tested plaintext-over-TLS path. Do not use either approach or enter role passwords in SQL Editor, shell history, process arguments, Git, chat, screenshots, or workflow logs. No safe Neon-compatible first-password procedure is validated. The user must review and test one on the empty staging project before live bootstrap proceeds. Until then, stop rather than use a plaintext SQL workaround.
 
 ## Workers Hyperdrive check
 

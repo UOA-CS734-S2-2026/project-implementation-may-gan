@@ -8,7 +8,6 @@ psql --set ON_ERROR_STOP=1 \
   --set app_password="$APP_DATABASE_PASSWORD" <<'SQL'
 CREATE ROLE migrator LOGIN PASSWORD :'migrator_password';
 CREATE ROLE app LOGIN PASSWORD :'app_password';
-CREATE ROLE users_accounts_importer NOLOGIN;
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT CONNECT ON DATABASE dayli_dev TO migrator, app;

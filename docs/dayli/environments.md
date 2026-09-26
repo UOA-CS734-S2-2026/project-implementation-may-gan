@@ -58,7 +58,7 @@ The API launch helper sets Wrangler's local Hyperdrive override to the generated
 
 `packages/db/docker-compose.dev.yml` is a persistent local development database, independent of `packages/db/docker-compose.yml`, which is the disposable test fixture used by `pnpm verify:local`. Development uses Compose project `dayli-development`, Docker volume `dayli-development-postgres-data`, port 5434, and database `dayli_dev`. The test fixture uses port 5433 and `dayli_test`.
 
-Credentials are generated once at `$XDG_STATE_HOME/dayli/development-postgres.env` or `~/.local/state/dayli/development-postgres.env`, with owner-only file permissions. If its Docker volume exists but that credential file is missing, `pnpm db:dev:up` stops rather than generating credentials that cannot unlock the existing data.
+Credentials are generated once at `$XDG_STATE_HOME/dayli/development-postgres.env` or `~/.local/state/dayli/development-postgres.env`, with owner-only file permissions. If its Docker volume exists but that credential file is missing, `pnpm db:dev:up` stops rather than generating credentials that cannot unlock the existing data. Init scripts run only when the volume is first created. An older local volume may still contain the retired importer role; review any data you need before choosing the explicit reset command below.
 
 ```bash
 pnpm db:dev:down       # stop and preserve data

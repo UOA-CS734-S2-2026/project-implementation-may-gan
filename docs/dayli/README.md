@@ -1,6 +1,6 @@
-# Dayli proposal
+# Dayli developer guide
 
-Status: design only, not implemented.
+Status: web, mobile, API, and local database foundations are implemented. Staging and production auth are not deployed.
 
 Dayli lets students share one daily reflection with friends. Capture on Flutter; reflect through Next.js calendars, mood history, and recaps. Web also supports posting and messaging.
 
@@ -8,6 +8,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 
 ## Read by topic
 
+- [First run](first-run.md): local HTTPS sign-in, staging setup, Google and Resend, and a separate production reset.
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
