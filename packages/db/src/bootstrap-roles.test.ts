@@ -39,14 +39,13 @@ describe("Neon role bootstrap scripts", () => {
     expect(executableSql).not.toMatch(/\b(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE)\b/i);
   });
 
-  it("requires psql for a SQL-created role's first password", async () => {
+  it("defers live Neon provisioning until first-password handling is verified", async () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
-    expect(guide).toContain("first password for the SQL-created `migrator` role from interactive `psql`");
-    expect(guide).toContain("`\\password migrator`");
-    expect(guide).toContain("cannot set a password for a role that has none");
-    expect(guide).toContain("`\\password app`");
-    expect(guide).toContain("`\\password users_accounts_importer`");
+    expect(guide).toContain("Neon rejected `psql`'s `\\password`");
+    expect(guide).toContain("Do not run the owner bootstrap, migrations, or Hyperdrive setup");
+    expect(guide).toContain("secure, Neon-compatible procedure has been reviewed and tested");
+    expect(guide).not.toContain("Run `\\password migrator`");
   });
 
   it("stops CI when local role fixture SQL fails", async () => {
