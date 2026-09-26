@@ -236,6 +236,8 @@ class ApiClient {
           return MediaReservationStatusTypeTransformer().decode(value);
         case 'MediaReservationUpload':
           return MediaReservationUpload.fromJson(value);
+        case 'MediaValidationFailureReason':
+          return MediaValidationFailureReasonTypeTransformer().decode(value);
         case 'PendingRelationshipRequest':
           return PendingRelationshipRequest.fromJson(value);
         case 'PendingRequestPage':

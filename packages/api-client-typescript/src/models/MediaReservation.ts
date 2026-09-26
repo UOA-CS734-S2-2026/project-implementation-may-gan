@@ -20,6 +20,13 @@ import {
     MediaContentTypeToJSON,
     MediaContentTypeToJSONTyped,
 } from './MediaContentType';
+import type { MediaValidationFailureReason } from './MediaValidationFailureReason';
+import {
+    MediaValidationFailureReasonFromJSON,
+    MediaValidationFailureReasonFromJSONTyped,
+    MediaValidationFailureReasonToJSON,
+    MediaValidationFailureReasonToJSONTyped,
+} from './MediaValidationFailureReason';
 import type { MediaReservationStatus } from './MediaReservationStatus';
 import {
     MediaReservationStatusFromJSON,
@@ -53,7 +60,15 @@ export interface MediaReservation {
     /**
      *
      */
+    failureReason?: MediaValidationFailureReason;
+    /**
+     *
+     */
     createdAt: Date;
+    /**
+     *
+     */
+    validatedAt?: Date;
     /**
      *
      */
@@ -89,7 +104,9 @@ export function MediaReservationFromJSONTyped(json: any, ignoreDiscriminator: bo
         'contentType': MediaContentTypeFromJSON(json['contentType']),
         'byteSize': json['byteSize'],
         'status': MediaReservationStatusFromJSON(json['status']),
+        'failureReason': json['failureReason'] == null ? undefined : MediaValidationFailureReasonFromJSON(json['failureReason']),
         'createdAt': (json['createdAt'] == null ? json['createdAt'] : parseDateTime(json['createdAt'])),
+        'validatedAt': json['validatedAt'] == null ? undefined : (parseDateTime(json['validatedAt'])),
         'expiresAt': (json['expiresAt'] == null ? json['expiresAt'] : parseDateTime(json['expiresAt'])),
     };
 }
@@ -109,7 +126,9 @@ export function MediaReservationToJSONTyped(value?: MediaReservation | null, ign
         'contentType': MediaContentTypeToJSON(value['contentType']),
         'byteSize': value['byteSize'],
         'status': MediaReservationStatusToJSON(value['status']),
+        'failureReason': MediaValidationFailureReasonToJSON(value['failureReason']),
         'createdAt': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
+        'validatedAt': value['validatedAt'] == null ? value['validatedAt'] : serializeDateTime(value['validatedAt']),
         'expiresAt': value['expiresAt'] == null ? value['expiresAt'] : serializeDateTime(value['expiresAt']),
     };
 }

@@ -184,7 +184,9 @@
         "type": "string",
         "enum": [
           "pending",
-          "expired"
+          "expired",
+          "validated",
+          "failed"
         ]
       },
       "MediaReservationUpload": {
@@ -248,7 +250,13 @@
           "status": {
             "$ref": "#/components/schemas/MediaReservationStatus"
           },
+          "failureReason": {
+            "$ref": "#/components/schemas/MediaValidationFailureReason"
+          },
           "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "validatedAt": {
             "$ref": "#/components/schemas/UtcTimestamp"
           },
           "expiresAt": {
@@ -262,6 +270,16 @@
           "status",
           "createdAt",
           "expiresAt"
+        ]
+      },
+      "MediaValidationFailureReason": {
+        "type": "string",
+        "enum": [
+          "byte_size_mismatch",
+          "format_mismatch",
+          "duration_exceeded",
+          "malformed_container",
+          "object_not_found"
         ]
       },
       "CurrentPostingDayResponse": {
@@ -762,6 +780,77 @@
           },
           "503": {
             "description": "Media reservations are not currently configured.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/media-reservations/{id}/complete": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "operationId": "media.reservations.complete",
+        "summary": "Verify a caller's uploaded object and record a validated/failed outcome",
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The reservation's settled state — validated, failed with a reason, or still pending (not yet uploaded, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaReservation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No reservation with that id owned by the caller.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The reservation's TTL expired before it was ever completed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media reservations are not currently configured, or R2 is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

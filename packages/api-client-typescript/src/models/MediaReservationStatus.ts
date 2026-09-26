@@ -20,6 +20,8 @@
 export const MediaReservationStatus = {
     Pending: 'pending',
     Expired: 'expired',
+    Validated: 'validated',
+    Failed: 'failed',
 } as const;
 export type MediaReservationStatus = typeof MediaReservationStatus[keyof typeof MediaReservationStatus];
 
