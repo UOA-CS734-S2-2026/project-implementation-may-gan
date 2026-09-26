@@ -53,6 +53,6 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 | iOS physical device | A reachable HTTPS API whose certificate the device trusts. No staging endpoint is deployed. |
 | Staging or production | URL supplied by application configuration after that environment is provisioned. Production is not deployed. |
 
-The local HTTPS setup is in [First run](first-run.md). Staging credentials and origins are not configured, so do not substitute placeholder staging URLs for a working endpoint. This package only requires callers to provide the resulting URL.
+The local HTTPS setup is in [Environments](environments.md). Staging credentials and origins are not configured, so do not substitute placeholder staging URLs for a working endpoint. This package only requires callers to provide the resulting URL.
 
 The clients handle HTTP paths, parameters, JSON conversion, and response types. Authentication token storage, retries, offline state, and user-facing errors remain application code.

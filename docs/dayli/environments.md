@@ -32,6 +32,8 @@ pnpm install --frozen-lockfile
 
 ### First run
 
+The local scripts are optional setup helpers, not part of Better Auth or a deployed Worker. Without them, you would create a separate PostgreSQL database with `migrator` and `app`, run migrations directly as `migrator`, configure the local HTTPS certificate and ignored auth settings, then launch Wrangler with an `app`-only local Hyperdrive override and Next.js with HTTPS. The helpers repeat and check those steps so the Worker never receives the owner or migrator connection.
+
 `local:auth:setup` generates a `localhost` certificate and key under `$XDG_STATE_HOME/dayli/mkcert` or `~/.local/state/dayli/mkcert`. It keeps the stable Better Auth secret in ignored `apps/api/.dev.vars`, writes the ignored local Wrangler configuration, and writes ignored `apps/web/.env.local` with the local API origin. It refuses to silently replace an existing local origin or secret configuration.
 
 ```bash
