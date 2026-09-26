@@ -1,6 +1,6 @@
 # Media reservations
 
-`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2. The Worker never proxies the bytes. `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. The checked-in work covers reservation creation and read. Neither client calls these routes yet, staging has no R2 credentials, and no deployed upload has been tested. Actual upload validation of byte count and real format, download authorisation, and cleanup of abandoned reservations remain separate work.
+`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. Download authorisation is issue #24; cleanup of abandoned reservations is issue #25.
 
 ## How it works
 
@@ -14,6 +14,14 @@ The Worker never touches upload bytes and never hands the client a reusable R2 c
 Content-type and content-length are both signed headers on the presigned URL, so R2 rejects any PUT that doesn't send exactly what was declared at reservation time — this is what makes the per-attachment size/type limit enforceable at the storage layer, not just advisory. The 3-attachments/25MB-per-post aggregate limits from [product decisions](product-decisions.md) are not enforced here: there's no post/attachment-linkage entity yet, so only per-attachment size and content type are checkable at reservation time.
 
 Without complete `R2_*` bindings the routes still mount, so they stay in the generated OpenAPI document and clients, but return `503 SERVICE_UNAVAILABLE`. Auth and media reservations fail closed independently, so a missing R2 credential never surfaces as a `500`.
+
+## Completion (issue #23)
+
+Once a client finishes its PUT, it calls `POST /api/v1/media-reservations/{id}/complete`. This performs the checks a signed PUT alone can't (implementation-reference.md §6: "a signed PUT is not content validation"), entirely outside any database transaction — a real `HEAD` confirms the object exists and its actual byte count, a bounded ranged `GET` checks the leading bytes match the declared content type, and (for video) a small, tightly-bounded ISO-BMFF box-walk (`apps/api/src/lib/media-format.ts`) reads only box headers to extract the real duration and reject anything over `MAX_VIDEO_DURATION_SECONDS` (15s). Only after all of that does one short atomic `UPDATE ... WHERE status='pending'` record the outcome — never while holding a lock during the R2 reads.
+
+A settled outcome (`validated` or `failed`) is terminal and idempotent: repeat calls return the stored result with zero R2 calls, since the bytes at an object key don't change. A client that wants to fix a bad upload reserves again rather than retrying `/complete`. The one non-terminal case is calling `/complete` before the object has actually landed in R2 (`HEAD` 404s) — nothing is persisted, the reservation stays `pending`, and the client can retry until the reservation's TTL expires (`409 CONFLICT` after that).
+
+A failed validation returns `200` with `{status: "failed", failureReason}` rather than a 4xx — the HTTP request to complete succeeded; the uploaded *content* failing is a normal outcome, not a malformed request. `failureReason` is one of `byte_size_mismatch`, `format_mismatch`, `duration_exceeded`, `malformed_container`, or `object_not_found` (only written for the rare case where an object existed at `HEAD` time but vanished before a following read — a genuine race, not the ordinary not-yet-uploaded case).
 
 ## One-time Cloudflare setup
 
@@ -30,9 +38,12 @@ Without complete `R2_*` bindings the routes still mount, so they stay in the gen
 
 ## Local development without real R2 credentials
 
-`pnpm --filter @dayli/api test` covers the reservation routes with fake R2 credentials: session handling, quota, expiry, ownership, and the presigned-URL shape. Presigning is a local computation and makes no network call. Running `wrangler dev` locally without real `R2_*` vars also shows that the routes return `503` rather than `500` when the binding is absent or malformed.
+`pnpm --filter @dayli/api test` covers the reservation and completion routes fully — session handling, quota, expiry, ownership, the presigned-URL shape, magic-byte/format checks for all six allowed content types, the ISO-BMFF duration walker (valid/oversized/malformed containers), and idempotent/retryable completion semantics — all with a fake in-memory R2 reader, since none of that logic needs a real network call. Running `wrangler dev` locally without real `R2_*` vars set is also useful: it proves the routes 503 cleanly rather than 500 when the binding is absent or malformed.
 
-What local testing cannot prove is whether Cloudflare's real R2 S3-compatible endpoint actually accepts the SigV4 construction, and whether it actually rejects a PUT whose `content-length`/`content-type` don't match what was signed. Once staging R2 secrets exist, do a one-time manual `curl -X PUT` against a real presigned URL to confirm both, the same way [authentication compatibility](authentication-compatibility.md) treats a deployed staging check as separate from unit coverage.
+What local testing cannot prove is whether Cloudflare's real R2 S3-compatible endpoint actually accepts the SigV4 construction and enforces it as expected, and whether a genuinely truncated or wrong-type real upload gets rejected by `/complete` end-to-end. Once staging R2 secrets exist, do two one-time manual checks, the same way [authentication compatibility](authentication-compatibility.md) treats a deployed staging check as separate from unit coverage:
+
+1. `curl -X PUT` against a real presigned URL, confirming R2 accepts the SigV4 construction and rejects a mismatched `content-length`/`content-type`.
+2. Upload a genuinely truncated or wrong-type file through a real reservation, then call `/complete` and confirm it's rejected with the expected `failureReason`.
 
 ## Quota and expiry (proposed defaults)
 
@@ -43,5 +54,6 @@ No numeric policy exists elsewhere in these docs for reservation TTL or a per-ow
 | `RESERVATION_TTL_SECONDS` | 15 minutes | Matches Better Auth's own reset/verification token TTL precedent in this codebase. |
 | `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Row deletion remains separate work. |
 | `MAX_ATTACHMENT_BYTES` | 10 MB | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). |
+| `MAX_VIDEO_DURATION_SECONDS` | 15 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by issue #23's completion check. |
 
 Revisit these through a reviewed documentation update if the team wants different values, per the change process in [product decisions](product-decisions.md).
