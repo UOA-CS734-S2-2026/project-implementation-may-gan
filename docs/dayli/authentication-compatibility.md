@@ -25,7 +25,7 @@ The compatibility instance uses Better Auth's memory adapter with fresh in-memor
 
 The production path creates a fresh Drizzle client from `env.HYPERDRIVE` for each `/api/auth/*` request, then constructs Better Auth with its PostgreSQL Drizzle adapter. The handler closes the postgres.js client in `finally` after Better Auth resolves, which bounds client lifetime to the request without retaining connections in a Worker isolate. Runtime queries therefore use the restricted `app` role behind Hyperdrive. Migration commands alone use a direct `migrator` connection.
 
-The additive `0001_better_auth_postgres` migration creates Better Auth 1.7.5 `user`, `account`, `session`, and `verification` tables. The additive `0002_add_better_auth_rate_limit` migration creates Better Auth's persistent `rateLimit` table for distributed Worker recovery limits. IDs are `text`, so a later approved import can retain legacy user IDs. The target user table also keeps the legacy profile fields: username, display username, bio, MBTI, what-I-do, listening-to, visibility, tier, role, and ban metadata. `username` is nullable for a new email/password registration, while imported rows retain their value. The account shape remains compatible with legacy provider and credential columns, but no legacy account, session, or verification rows are copied by this migration or the Worker.
+The additive `0001_better_auth_postgres` migration creates Better Auth 1.7.5 `user`, `account`, `session`, and `verification` tables. The additive `0002_add_better_auth_rate_limit` migration creates Better Auth's persistent `rateLimit` table for distributed Worker recovery limits. IDs are `text` stable application identifiers. The user table retains profile fields: username, display username, bio, MBTI, what-I-do, listening-to, visibility, tier, role, and ban metadata. `username` is nullable for new email/password registration. The account shape remains compatible with the configured provider and credential adapter. Schema migrations and the Worker do not copy external user, account, session, or verification records.
 
 Auth routes mount only when `HYPERDRIVE`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_BASE_URL`, and `BETTER_AUTH_TRUSTED_ORIGINS` validate. The secret must be at least 32 characters. The base URL and every comma-separated trusted origin must be exact HTTPS origins, and the base URL must be in the trusted-origin list. Auth routes fail closed for an untrusted `Origin`. Allowed origins receive credentialed CORS with only `GET`, `POST`, and `OPTIONS`, only `content-type` and `authorization` request headers, and the exposed `set-auth-token` header. There is no wildcard origin. Better Auth retains secure HttpOnly `SameSite=Lax` cookies and the signed bearer header used by Flutter.
 
@@ -35,7 +35,7 @@ Run local persistence coverage with the isolated PostgreSQL fixture:
 pnpm db:test:up && pnpm db:test && pnpm db:test:down
 ```
 
-It verifies registration, sign-in, persistence across independently built apps, expiry, logout, session revocation, invalid bearer authorization, stable legacy text IDs, profile fields, and account-row compatibility. It never contacts Supabase or a production database.
+It verifies registration, sign-in, persistence across independently built apps, expiry, logout, session revocation, invalid bearer authorization, stable text IDs, profile fields, and account-row compatibility. It never contacts an external or production database.
 
 ## Flutter handoff
 
@@ -80,7 +80,7 @@ The Worker uses Better Auth 1.7.5's Google provider. Its web redirect callback i
 
 1. Use a team-owned Resend account and create separate staging and production sending domains or subdomains. Verify each domain in Resend before enabling the Worker binding.
 2. Publish every DNS record Resend gives for the domain, usually SPF and DKIM. Add a DMARC record with a policy appropriate for the team's mail posture. SPF alone is not sufficient. Wait for Resend to report the domain as verified, then send a single non-production test message from the Resend dashboard if the team approves it.
-3. Check the account's current sending limits, daily quota, recipient restrictions, and production-access requirements before inviting external users. This integration sends only on direct password-reset or verification requests. It never sends mail during user import.
+3. Check the account's current sending limits, daily quota, recipient restrictions, and production-access requirements before inviting external users. This integration sends only on direct password-reset or verification requests. It does not send mail as a result of a schema migration.
 
 ### Worker, web, and GitHub configuration
 
@@ -120,7 +120,7 @@ It does not copy a secret into `vars`. Keep the workflow manual. Do not add pull
 
 Copy `NEXT_PUBLIC_API_BASE_URL=https://api.staging.example.test` to the ignored `apps/web/.env.local` before building the web app. This is a public browser setting, not a secret. The web client sends Google users to the Worker, which returns Google's authorization URL. Google returns to the API callback, then Better Auth redirects only to a configured trusted origin. Do not add wildcard origins. Recovery and verification limits use Cloudflare's `CF-Connecting-IP` header. Keep the API directly behind Cloudflare. Do not route it through a proxy that lets clients supply that header.
 
-For password recovery, the web client posts `redirectTo=https://<web-origin>/reset-password`. Better Auth sends the API reset callback in the email, validates that destination against `BETTER_AUTH_TRUSTED_ORIGINS`, then forwards the short-lived token to `/reset-password`. The reset page removes the token from the browser address bar before showing the form and sends it once to Better Auth. A successful reset revokes every existing session. The reset token expires after 15 minutes and Better Auth consumes it once. Better Auth 1.7.5 verification links also expire after 15 minutes, but its signed verification JWT is not consumed on use. A product requirement for single-use verification links needs a custom verification flow before release. Verification remains optional, so imported users retain their `email_verified` state and are not locked out.
+For password recovery, the web client posts `redirectTo=https://<web-origin>/reset-password`. Better Auth sends the API reset callback in the email, validates that destination against `BETTER_AUTH_TRUSTED_ORIGINS`, then forwards the short-lived token to `/reset-password`. The reset page removes the token from the browser address bar before showing the form and sends it once to Better Auth. A successful reset revokes every existing session. The reset token expires after 15 minutes and Better Auth consumes it once. Better Auth 1.7.5 verification links also expire after 15 minutes, but its signed verification JWT is not consumed on use. A product requirement for single-use verification links needs a custom verification flow before release. Verification remains optional.
 
 ### Manual validation
 
@@ -128,11 +128,11 @@ For password recovery, the web client posts `redirectTo=https://<web-origin>/res
 2. In a browser at the exact configured web origin, start Google sign-in. Confirm Google returns to `/api/auth/callback/google`, the API sets a secure HttpOnly cookie, and the browser returns to the exact web origin. Try an unlisted origin and confirm the Worker rejects it.
 3. On an Android debug device, an Android release build, and iOS device, use the matching Google client. Confirm the emitted ID token audience is one of the configured web, iOS, or Android client IDs. Native SDK configuration can use the web client ID as `serverClientId`, so the audience is not necessarily the platform's client ID. Confirm the Worker issues `set-auth-token`, and logout, expiry, and password reset revoke the old bearer session. Test a token for a different client ID and a malformed token. Both must fail.
 4. Request recovery for a real address and an unknown address. The browser response must be identical. Confirm only the real address receives one Resend message, the reset link expires after 15 minutes, and replaying it fails. Check Resend delivery status without copying message links into issue trackers or analytics.
-5. Request verification for an unverified test account. Confirm it arrives from the verified sender, marks the account verified, and does not send mail for imported users unless someone explicitly requests verification.
+5. Request verification for an unverified test account. Confirm it arrives from the verified sender and marks the account verified.
 
 The checked-in web client has email/password sign-up and sign-in, Google-start, password-reset request, and password-reset completion screens. The Flutter shell presents email/password and Google buttons. Google remains unavailable in a local build without its client configuration. There is no verification-request screen yet. Do not claim deployed or physical-device coverage until the team performs it.
 
-Old Google access and refresh tokens are not imported. Users authorize again. Migrated Google rows retain their `provider_id = google`, `account_id = <Google subject>`, and stable user ID. Better Auth resolves that exact pair first. It disables implicit email-based account linking, so a matching email cannot merge a new Google subject into a migrated account.
+Google access and refresh tokens are acquired only through a new authorization. Better Auth identifies a Google account by `provider_id = google` and `account_id = <Google subject>`. It disables implicit email-based account linking, so a matching email cannot merge a new Google subject into an existing account.
 
 ## Before deployment
 

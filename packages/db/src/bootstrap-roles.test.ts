@@ -14,6 +14,7 @@ describe("Neon role bootstrap scripts", () => {
     const migratorBootstrap = await readFile(migratorBootstrapPath, "utf8");
 
     expect(ownerBootstrap).toContain("CREATE ROLE migrator LOGIN");
+    expect(ownerBootstrap).toContain("CREATE ROLE app LOGIN");
     expect(ownerBootstrap).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
     expect(ownerBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES/i);
     expect(ownerBootstrap).not.toMatch(/CREATE SCHEMA IF NOT EXISTS drizzle/i);
@@ -21,7 +22,6 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public");
     expect(migratorBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES FOR ROLE migrator/i);
     expect(migratorBootstrap).toContain("CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator");
-    expect(migratorBootstrap).toContain("GRANT SELECT, INSERT ON TABLE public.\"user\", public.account TO users_accounts_importer");
     expect(migratorBootstrap).toContain("REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, app");
   });
 
@@ -31,7 +31,6 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("roles_are_restricted");
     expect(verification).toContain("app_public_create");
     expect(verification).toContain("app_public_table_defaults");
-    expect(verification).toContain("importer_target_table_rights");
     expect(verification).toContain("roles_have_no_memberships");
     const executableSql = verification
       .replace(/--.*$/gm, "")
@@ -43,8 +42,8 @@ describe("Neon role bootstrap scripts", () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
     expect(guide).toContain("Neon rejected `psql`'s `\\password`");
-    expect(guide).toContain("Do not run the owner bootstrap, migrations, or Hyperdrive setup");
-    expect(guide).toContain("secure, Neon-compatible procedure has been reviewed and tested");
+    expect(guide).toContain("A helper therefore cannot safely keep the plaintext out of SQL");
+    expect(guide).toContain("live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked");
     expect(guide).not.toContain("Run `\\password migrator`");
   });
 
