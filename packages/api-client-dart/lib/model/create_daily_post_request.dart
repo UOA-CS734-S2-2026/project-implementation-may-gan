@@ -82,7 +82,7 @@ class CreateDailyPostRequest {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'promptId'] = this.promptId;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
     if (this.caption != null) {
@@ -156,7 +156,7 @@ class CreateDailyPostRequest {
       }());
 
       return CreateDailyPostRequest(
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         promptId: mapValueOfType<String>(json, r'promptId')!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
         caption: mapValueOfType<String>(json, r'caption'),

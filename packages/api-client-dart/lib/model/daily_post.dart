@@ -87,7 +87,7 @@ class DailyPost {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
     json[r'authorId'] = this.authorId;
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
     json[r'caption'] = this.caption;
@@ -189,7 +189,7 @@ class DailyPost {
       return DailyPost(
         id: mapValueOfType<String>(json, r'id')!,
         authorId: mapValueOfType<String>(json, r'authorId')!,
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: DailyPostPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
         caption: mapValueOfType<String>(json, r'caption')!,

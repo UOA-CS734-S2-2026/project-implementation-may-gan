@@ -33,7 +33,7 @@ class DailyPostTomorrowNote {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'availableOn'] = _dateFormatter.format(this.availableOn);
+    json[r'availableOn'] = this.availableOn;
     return json;
   }
 
@@ -65,7 +65,7 @@ class DailyPostTomorrowNote {
       }());
 
       return DailyPostTomorrowNote(
-        availableOn: mapDateTime(json, r'availableOn', r'')!,
+        availableOn: mapValueOfType<String>(json, r'availableOn')!,
       );
     }
     return null;

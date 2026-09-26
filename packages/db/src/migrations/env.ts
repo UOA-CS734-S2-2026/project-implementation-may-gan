@@ -3,6 +3,7 @@ import { URL } from "node:url";
 export type MigrationTarget = "local" | "staging" | "production";
 
 const targets = new Set<MigrationTarget>(["local", "staging", "production"]);
+const localTestDatabases = new Set(["/dayli_test", "/dayli_relationship_test"]);
 
 export function requireMigrationTarget(): MigrationTarget {
   const value = process.env.MIGRATION_TARGET;
@@ -42,8 +43,8 @@ export function validateMigrationConnectionString(connectionString: string, targ
   }
 
   if (target === "local") {
-    if (parsed.hostname !== "localhost" || parsed.port !== "5433" || parsed.pathname !== "/dayli_test") {
-      throw new Error("Local migrations must target localhost:5433/dayli_test.");
+    if (parsed.hostname !== "localhost" || parsed.port !== "5433" || !localTestDatabases.has(parsed.pathname)) {
+      throw new Error("Local migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
     }
 
     return;
