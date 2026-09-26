@@ -46,7 +46,7 @@ describe("Neon role bootstrap scripts", () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
     expect(guide).toContain("Neon rejected `psql`'s `\\password`");
-    expect(guide).toContain("a normal bind parameter cannot supply the plaintext");
+    expect(guide).toContain("No workaround or provisioning helper is documented or provided.");
     expect(guide).toContain("live role bootstrap, migrations, Hyperdrive setup, and Worker deployment are blocked");
     expect(guide).not.toContain("Run `\\password migrator`");
   });
