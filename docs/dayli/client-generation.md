@@ -38,9 +38,9 @@ pnpm build
 
 Commit the OpenAPI document, both generated clients, and the lockfile changes together. Generated files contain a notice that warns against manual edits.
 
-## CI checks
+## Verification checks
 
-CI regenerates both clients and checks scoped `git status --porcelain --untracked-files=all` output. This catches changed, deleted, and newly generated files. CI also builds the TypeScript workspace, analyzes the Dart package, and runs its smoke test.
+GitHub-hosted PR and push verification is temporarily paused. `pnpm verify:local` regenerates both clients and checks scoped `git status --porcelain --untracked-files=all` output. This catches changed, deleted, and newly generated files. It also builds the TypeScript workspace, analyzes the Dart package, and runs its smoke test. A manual GitHub workflow dispatch remains available for later restoration, but it consumes GitHub-hosted minutes.
 
 ## Base URLs
 

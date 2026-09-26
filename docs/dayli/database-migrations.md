@@ -57,9 +57,9 @@ For `MIGRATION_TARGET=local`, migration commands only accept the explicit local 
 
 ## Release order
 
-Local CI remains the current database proof. Do not run staging or production migrations while staging has no roles or migrations and production is unprovisioned. After staging provisioning is approved:
+Local verification remains the current database proof. GitHub-hosted PR and push checks are temporarily paused, and the **Database migrations** workflow is manual dispatch only. It still consumes GitHub-hosted minutes when dispatched, so it is not the normal local verification path and there are no automated migration gates. Record the commit SHA and sanitized `pnpm verify:local` output with the PR review. Do not run staging or production migrations while staging has no roles or migrations and production is unprovisioned. After staging provisioning is approved:
 
-1. Merge schema and migration changes to `main` through a PR that passes the **Database migrations** workflow and CODEOWNER review.
+1. Merge schema and migration changes to `main` through a reviewed PR with recorded local verification evidence and CODEOWNER review.
 2. Run the protected manual migration workflow for `staging` from `main`.
 3. Verify the sanitized evidence artifact and application compatibility.
 4. For production, confirm a recent Neon restore point/backup, receive protected-environment approval, and run the same `main` commit after staging has succeeded.

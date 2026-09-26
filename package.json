@@ -27,7 +27,9 @@
     "db:test:down": "docker compose -f packages/db/docker-compose.yml down -v",
     "lint": "eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "verify:local": "bash scripts/verify-local.sh",
+    "verify:local:full": "VERIFY_LOCAL_FULL=1 bash scripts/verify-local.sh"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",

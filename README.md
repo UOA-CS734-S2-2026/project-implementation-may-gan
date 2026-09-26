@@ -29,12 +29,20 @@ Please use good version control practices, such as feature branching, both to ma
 
 ## Local setup
 
-Install Node.js 24, pnpm 10, and the stable Flutter SDK. Then run:
+Install Node.js 24, pnpm 10, JDK 17, Docker with Compose, and the stable Flutter SDK. Then run:
 
 ```bash
 pnpm install
 pnpm dev
 ```
+
+GitHub-hosted PR and push verification is paused to preserve shared Actions minutes. Run the local verification suite before requesting review:
+
+```bash
+pnpm verify:local
+```
+
+Use `pnpm verify:local:full` when the debug Android APK build is required. See [Testing and delivery](docs/dayli/testing-and-delivery.md) for evidence recording and the temporary hosted-workflow policy.
 
 Run the mobile client separately:
 
