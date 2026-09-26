@@ -48,12 +48,11 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 
 | Environment | Typical URL |
 | --- | --- |
-| Local browser or iOS Simulator | `http://localhost:8787` |
-| Android Emulator | `http://10.0.2.2:8787` |
-| Android physical device over USB | `http://127.0.0.1:8787` after `adb reverse tcp:8787 tcp:8787` |
-| iOS physical device | HTTPS staging URL |
-| Staging or production | URL supplied by application configuration |
+| Local browser or iOS Simulator | `https://localhost:8787` after `pnpm local:auth:setup` and `pnpm dev:api:https` |
+| Android Emulator or physical device | A reachable HTTPS API whose certificate the device trusts. The local helper creates a `localhost` certificate, so it is not a device-ready endpoint. |
+| iOS physical device | A reachable HTTPS API whose certificate the device trusts. No staging endpoint is deployed. |
+| Staging or production | URL supplied by application configuration after that environment is provisioned. Production is not deployed. |
 
-The exact environment-file and secret-loading setup belongs to issue #6. This package only requires callers to provide the resulting URL.
+The local HTTPS setup is in [First run](first-run.md). Staging credentials and origins are not configured, so do not substitute placeholder staging URLs for a working endpoint. This package only requires callers to provide the resulting URL.
 
 The clients handle HTTP paths, parameters, JSON conversion, and response types. Authentication token storage, retries, offline state, and user-facing errors remain application code.

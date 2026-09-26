@@ -57,7 +57,7 @@ Performance workloads and targets live in [Scalability](scalability.md).
 
 While hosted checks are paused, `pnpm verify:local` is the required developer verification evidence rather than an automated gate. It checks formatting, types, contracts, relevant backend/runtime and frontend tests. Its PostgreSQL fixture also checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
 
-Prefer additive changes for older mobile clients. Deleted data becomes inaccessible immediately and expires from encrypted backups within 30 days. Start with a 24-hour RPO and 8-hour RTO, then verify both through restoration tests. No runtime tests were run for the original documentation-only proposal.
+Prefer additive changes for older mobile clients. Deleted data becomes inaccessible immediately and expires from encrypted backups within 30 days. Start with a 24-hour RPO and 8-hour RTO, then verify both through restoration tests. The checked-in local suite covers Worker routes, PostgreSQL integration, generated clients, and Flutter tests. It is not a deployed staging or physical-device result.
 
 ## Team evidence
 

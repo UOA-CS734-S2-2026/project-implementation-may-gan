@@ -2,6 +2,8 @@
 
 ## Components
 
+This is the target architecture. The current Worker implements Better Auth, posting-day reads, daily-post creation, relationships, and media-reservation routes. The web app calls the posting API. The Flutter composer retains drafts and reads posting days, but its `UnavailablePostSubmitter` does not send `POST /api/v1/posts`. Neither client uploads reserved media yet. Staging and production are not deployed.
+
 ```mermaid
 flowchart TD
     M[Flutter] -->|REST| A[Hono Worker / Better Auth]
@@ -34,7 +36,7 @@ docs/dayli/            These guides
 
 Use pnpm for TypeScript and Dart tooling for Flutter. Generate the Dart client from OpenAPI. Web and API deploy independently.
 
-Routes authenticate and validate; services enforce rules; repositories execute SQL. Both clients use `/api/v1` for posts, relationships, messages, history, sharing, and notifications. Use stable errors, UTC timestamps, Auckland dates, revisions, and bounded cursor pagination.
+Routes authenticate and validate; services enforce rules; repositories execute SQL. The shared `/api/v1` contract is the intended boundary for posts, relationships, messages, history, sharing, and notifications. Use stable errors, UTC timestamps, Auckland dates, revisions, and bounded cursor pagination.
 
 ## Posting
 
