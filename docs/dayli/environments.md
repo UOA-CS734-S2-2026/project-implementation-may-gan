@@ -165,7 +165,9 @@ flutter run
 
 ## Staging
 
-Staging has a public Worker named `dayli-api-staging`, an isolated staging PostgreSQL database, and a real Cloudflare Hyperdrive configuration. The public Worker exists so staging web and mobile clients can reach the ordinary API. Its normal authentication and authorization still apply. It is not a production endpoint.
+Staging has a public Worker named `dayli-api-staging`, a separate Neon staging project containing synthetic data only, and a real Cloudflare Hyperdrive configuration. It does not share a Neon project, branch, data, credentials, or restore point with production. The public Worker exists so staging web and mobile clients can reach the ordinary API. Its normal authentication and authorization still apply. It is not a production endpoint.
+
+Before creating Hyperdrive, follow the role bootstrap sequence in [Database migrations](database-migrations.md#roles-and-connections): run the owner and migrator SQL files in their separate connections, set passwords with interactive `psql`, and require an all-true result from the read-only verification query. Do not use Neon Console to create any application role because it grants `neon_superuser`. If an earlier owner run stopped at SQLSTATE `42501`, use the documented recovery sequence rather than adding membership or additional `app` grants.
 
 Prepare ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set `BETTER_AUTH_BASE_URL` and `BETTER_AUTH_TRUSTED_ORIGINS` in the ignored staging configuration to exact public HTTPS origins, then add `BETTER_AUTH_SECRET` with `wrangler secret put BETTER_AUTH_SECRET --config wrangler.staging.jsonc`. The secret must be at least 32 characters and must not appear in configuration, shell history, or Git. Auth stays unmounted if any binding is absent or invalid. Use the protected staging values only on a trusted machine. Load them from an approved secret store. The temporary Bash process below accepts the token without echoing it and discards both values when it exits. Deploy the current checkout before running the real binding check:
 

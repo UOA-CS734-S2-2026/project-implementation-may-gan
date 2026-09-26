@@ -1,13 +1,23 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. The Neon project has a `production` parent branch and a `staging` child branch. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
+Dayli uses Neon PostgreSQL 18. Staging is a separate Neon project that contains synthetic data only. Production remains a separate, unprovisioned project. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
 
 ## Roles and connections
 
-Run `packages/db/admin/bootstrap-roles.sql` separately on both Neon branches as an administrator, then set role passwords outside Git.
+Bootstrap a new Neon project in this order:
+
+1. In Neon SQL Editor, connected as `neondb_owner`, run `packages/db/admin/bootstrap-roles.sql`. Do not create application roles through Neon Console because that path grants `neon_superuser`.
+2. From a trusted machine, connect directly as the owner with TLS and run `\password migrator`, `\password app`, and `\password users_accounts_importer` in interactive `psql`. Generate each password in the approved secret store, enter it only at the prompt, and store the resulting direct TLS URLs in that store. Do not put a password in SQL Editor, shell history, Git, or a connection URL committed to the repository.
+3. Connect directly as `migrator` with its unpooled TLS URL and run `packages/db/admin/bootstrap-migrator.sql`. This works on an empty database and safely completes a run interrupted after the owner file.
+4. Reconnect as `neondb_owner` and run `packages/db/admin/verify-role-bootstrap.sql`. It is read-only. Every reported value must be `true`; otherwise stop before migrations or Hyperdrive setup.
+
+`neondb_owner` can create the roles and grant database or schema access, but it is not automatically a member of `migrator`. PostgreSQL therefore rejects `ALTER DEFAULT PRIVILEGES FOR ROLE migrator` from that owner connection with SQLSTATE `42501`. The migrator file changes its own defaults and owns the `drizzle` schema, so it must run in a separate migrator connection. If the owner file previously stopped at that error, do not recreate roles, grant role membership, or widen `app` access. Rerun the owner file, set any missing passwords securely, then run the migrator file and the read-only verification file in the order above.
 
 - `migrator` owns schema objects and Drizzle migration metadata.
 - `app` receives automatic `SELECT`, `INSERT`, `UPDATE`, and `DELETE` grants on new `public` application tables, but cannot change schema or read/write Drizzle metadata.
+- `users_accounts_importer` receives no default application-table grants. After both target tables exist, the migrator file grants it only `SELECT` and `INSERT` on `public.user` and `public.account`.
+
+After `pnpm db:migrate` creates both Better Auth target tables, rerun `bootstrap-migrator.sql` directly as `migrator`, then run the read-only verification file again as `neondb_owner`. This applies the intentionally narrow importer grants. It is also safe to rerun the migrator file after any interrupted bootstrap.
 
 Migrations use an unpooled direct Neon `DATABASE_URL` with `sslmode=require` or stricter. Worker runtime access will later use the restricted `app` role through Hyperdrive; Hyperdrive binding setup is separate from this foundation.
 
