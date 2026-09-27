@@ -139,6 +139,35 @@ class BetterAuthNativeSession {
     await _storeNativeToken(response, 'google-sign-in');
   }
 
+  /// Explicitly links a Google identity to the signed-in password account.
+  /// The Worker verifies [password] against the bearer session's user before
+  /// it accepts the short-lived Google ID token. This never creates a session.
+  Future<void> linkGoogle({
+    required GoogleIdTokenProvider provider,
+    required String password,
+  }) async {
+    final bearerToken = await _tokenStore.read();
+    if (bearerToken == null) {
+      throw const AuthenticationFailure('google-link', 401);
+    }
+    final idToken = await provider.authenticate();
+    final response = await _client.post(
+      _uri('/api/auth/link-social'),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $bearerToken',
+      },
+      body: jsonEncode({
+        'provider': 'google',
+        'password': password,
+        'idToken': {'token': idToken},
+      }),
+    );
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('google-link', response.statusCode);
+    }
+  }
+
   Future<http.Response> getSession() async {
     final token = await _tokenStore.read();
     if (token == null) {

@@ -87,7 +87,13 @@ function createBetterAuth(options: BetterAuthOptions) {
     account: {
       // A Google subject may reuse its imported account mapping. Matching an
       // email alone never links a new Google identity to an existing account.
-      accountLinking: { enabled: false, disableImplicitLinking: true },
+      // The route wrapper requires the current password for /link-social.
+      accountLinking: {
+        enabled: true,
+        disableImplicitLinking: true,
+        // Do not trust a provider name in place of its verified email claim.
+        trustedProviders: [],
+      },
     },
     rateLimit: {
       enabled: options.rateLimitEnabled ?? true,

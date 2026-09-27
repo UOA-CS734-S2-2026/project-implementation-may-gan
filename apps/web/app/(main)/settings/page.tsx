@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session/hooks";
 import { SignOutButton } from "./_components/SignOutButton";
 import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
+import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -37,6 +38,12 @@ export default function SettingsPage() {
         </div>
 
         <ProfileVisibilityToggle initialVisibility={visibility} />
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium">Sign-in methods</h2>
+          <p className="text-xs text-foreground/60">Google is connected only when you choose it here. Matching emails are never connected automatically.</p>
+          <LinkGoogleAccount />
+        </section>
 
         {/* Paid features — hidden until billing is wired up */}
         {/* <ProfileGateDemo /> */}

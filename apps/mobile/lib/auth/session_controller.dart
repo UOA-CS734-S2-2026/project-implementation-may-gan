@@ -125,6 +125,11 @@ class SessionController extends ChangeNotifier {
     await _afterAuthentication();
   }
 
+  Future<void> linkGoogle({
+    required GoogleIdTokenProvider provider,
+    required String password,
+  }) => _session.linkGoogle(provider: provider, password: password);
+
   /// Signs out and removes this user's protected draft from the device.
   Future<void> signOut() async {
     final userId = _user?.id;
