@@ -35,7 +35,7 @@ Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not 
 
 Declare bindings, compatibility settings, scheduled triggers, and Durable Object migrations in `wrangler.jsonc`. Keep secrets and `.dev.vars` out of Git. PostgreSQL migrations are a separate controlled release step owned by `packages/db`; see [Database migrations](database-migrations.md).
 
-Better Auth has local Worker and PostgreSQL coverage. Prove Drizzle/Hyperdrive transactions, FCM, sockets, real R2 transfers, and deployed authentication in provisioned staging before release. Next.js on Workers also needs a compatible deployment adapter; retain its existing host as fallback. Heavy media processing may need another service.
+Better Auth has local Worker and PostgreSQL coverage. Staging has no deployed API or web host yet. The Next.js app has dynamic routes and is not a static Cloudflare Pages export. Hosting it on a Cloudflare Worker would require an adapter and compatibility testing; none has been added. Drizzle/Hyperdrive transactions and deployed authentication remain untested. FCM, sockets, and real R2 transfers are not implemented end to end.
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. Neon staging and production ownership/secrets remain administrator-managed. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 
