@@ -95,7 +95,6 @@ function authenticationEmail(
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:358px;">
         <tr><td align="center" style="padding:0 0 32px;">
           <img src="cid:dayli-logo" alt="Dayli" width="200" height="102" style="display:block;width:200px;height:auto;border:0;color:#6E11B0;font-family:Spectral,Georgia,serif;font-size:28px;" />
-          <p style="margin:16px 0 0;color:#2B2422;font-family:Spectral,Georgia,serif;font-size:18px;font-weight:500;line-height:1.3;">one post, every day.</p>
         </td></tr>
         <tr><td style="background-color:#FFFFFF;border-radius:8px;padding:28px;box-shadow:2px 2px 8px rgba(0,0,0,0.01),8px 8px 16px rgba(0,0,0,0.02),16px 16px 32px rgba(0,0,0,0.03);">
           <h1 style="margin:0 0 24px;color:#2B2422;font-family:Spectral,Georgia,serif;font-size:24px;font-weight:600;letter-spacing:-0.6px;line-height:1.3;">${safeHeading}</h1>
@@ -116,9 +115,9 @@ function authenticationEmail(
 }
 
 export function verificationEmail(to: string, url: string): ResendAuthEmail {
-  return authenticationEmail(to, "Verify your Dayli email", "One more step.", "Verify your email address to continue.", "Verify email", url);
+  return authenticationEmail(to, "Verify your Dayli email", "Verify your email", "Verify your email address to continue.", "Verify email", url);
 }
 
 export function passwordResetEmail(to: string, url: string): ResendAuthEmail {
-  return authenticationEmail(to, "Reset your Dayli password", "A fresh start.", "Reset your password using this link.", "Reset password", url);
+  return authenticationEmail(to, "Reset your Dayli password", "Reset your password", "Reset your password using this link.", "Reset password", url);
 }
