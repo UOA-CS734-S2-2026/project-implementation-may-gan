@@ -213,10 +213,50 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
       - name: Run the Workers Hyperdrive check
+        id: proof
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: pnpm --filter @dayli/api test:hyperdrive:staging
+      - name: Write sanitized Hyperdrive evidence
+        env:
+          PROOF_STEP_OUTCOME: ${{ steps.proof.outcome }}
+        run: |
+          node <<'NODE'
+          const { readFileSync, writeFileSync } = require('node:fs');
+          if (process.env.PROOF_STEP_OUTCOME !== 'success') {
+            throw new Error('Refusing evidence without a successful private Worker proof.');
+          }
+          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '')) {
+            throw new Error('Refusing evidence without a valid commit SHA.');
+          }
+          const api = JSON.parse(readFileSync('apps/api/package.json', 'utf8'));
+          const db = JSON.parse(readFileSync('packages/db/package.json', 'utf8'));
+          const root = JSON.parse(readFileSync('package.json', 'utf8'));
+          const evidence = {
+            commitSha: process.env.GITHUB_SHA,
+            target: 'staging',
+            timestamp: new Date().toISOString(),
+            pass: true,
+            checks: [
+              'select_1_through_hyperdrive',
+              'transaction_commit_and_rollback',
+              'constraint_classes_and_role_permissions',
+              'fresh_invocation_visibility_and_cleanup',
+            ],
+            versions: {
+              node: process.version,
+              pnpm: root.packageManager,
+              drizzle: api.dependencies['drizzle-orm'],
+              postgres: db.dependencies.postgres,
+              wrangler: api.devDependencies.wrangler,
+              workersVitestPlugin: api.devDependencies['@cloudflare/vitest-plugin'],
+              vitest: api.devDependencies.vitest,
+              compatibilityDate: '2026-03-10',
+            },
+          };
+          writeFileSync('apps/api/hyperdrive-proof-evidence.json', JSON.stringify(evidence, null, 2));
+          NODE
       - name: Upload sanitized Hyperdrive evidence
         if: ${{ always() && needs.changes.outputs.relevant == 'true' }}
         uses: actions/upload-artifact@v4

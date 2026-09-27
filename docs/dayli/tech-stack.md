@@ -31,7 +31,7 @@ pnpm db:dev:migrate
 pnpm dev:api:https
 ```
 
-Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not a normal local-development command. Do not deploy until staging has restricted database roles, Hyperdrive, exact HTTPS origins, and reviewed credentials. Staging has user-verified restricted roles and migrations, a cache-disabled Hyperdrive, and a deployed API Worker. Its full private proof timed out, so authentication is not validated. Production is not deployed.
+Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not a normal local-development command. Do not deploy until staging has restricted database roles, Hyperdrive, exact HTTPS origins, and reviewed credentials. Staging has user-verified restricted roles and migrations, a cache-disabled Hyperdrive, and a deployed API Worker. Its last private proof run failed while writing evidence, so authentication is not validated. Production is not deployed.
 
 Declare bindings, compatibility settings, scheduled triggers, and Durable Object migrations in `wrangler.jsonc`. Keep secrets and `.dev.vars` out of Git. PostgreSQL migrations are a separate controlled release step owned by `packages/db`; see [Database migrations](database-migrations.md).
 

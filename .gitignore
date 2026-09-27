@@ -28,3 +28,4 @@ apps/api/wrangler.staging.jsonc
 apps/api/wrangler.local.jsonc
 apps/api/wrangler.preview.jsonc
 apps/api/wrangler.hyperdrive-test.jsonc
+apps/api/hyperdrive-proof-evidence.json
