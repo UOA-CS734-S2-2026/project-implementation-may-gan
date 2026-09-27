@@ -50,7 +50,7 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 | --- | --- |
 | Local browser or iOS Simulator | `https://localhost:8787` after `pnpm local:auth:setup` and `pnpm dev:api:https` |
 | Android Emulator or USB-connected development device | `https://localhost:8787` works with `adb reverse tcp:8787 tcp:8787` after manually trusting the mkcert CA on the debug device. It is not a LAN-accessible endpoint. |
-| iOS physical device | A reachable HTTPS API whose certificate the device trusts. No staging endpoint is deployed. |
+| iOS physical device | A reachable HTTPS API whose certificate the device trusts. The staging API is deployed but not yet validated. |
 | Staging or production | URL supplied by application configuration after that environment is provisioned. Production is not deployed. |
 
 The local HTTPS setup is in [Environments](environments.md). A staging API Worker is deployed, but its full private proof and deployed authentication have not passed. No staging web endpoint exists. Do not treat the API URL as a validated client endpoint yet. This package only requires callers to provide the resulting URL.

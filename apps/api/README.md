@@ -14,7 +14,7 @@ The entrypoint is not an HTTP route or an OpenAPI operation. Only a Worker with 
 
 The old staging Worker was deleted. The replacement `dayli-api-staging` Worker is deployed on its HTTPS custom domain, but staging authentication remains unverified. Its `workers.dev` endpoint stays disabled. Normal authentication and authorization rules still apply. Do not use it for production traffic or put database credentials in client applications.
 
-The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntrypoint`, not an HTTP handler. The future Vitest proxy Worker sets `workers_dev: false`, so Cloudflare does not give it a public Workers.dev URL. The test reaches the staging Worker only through its private service binding.
+The `HyperdriveIntegrationEntrypoint` stays private because it is a `WorkerEntrypoint`, not an HTTP handler. The Vitest test proxy sets `workers_dev: false`, so it has no public Workers.dev URL. The test reaches the staging Worker only through its private service binding.
 
 ### Provisioning reference
 
