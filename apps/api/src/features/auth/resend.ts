@@ -1,8 +1,11 @@
+import { dayliLogoPngBase64 } from "./dayli-logo";
+
 export interface ResendAuthEmail {
   to: string;
   subject: string;
   text: string;
   html: string;
+  attachments: { filename: string; content: string; content_id: string }[];
 }
 
 export interface ResendConfiguration {
@@ -41,6 +44,7 @@ export async function sendResendAuthEmail(
         subject: email.subject,
         text: email.text,
         html: email.html,
+        attachments: email.attachments,
       }),
       signal: controller.signal,
     });
@@ -80,30 +84,29 @@ function authenticationEmail(
     to,
     subject,
     text: `${intro}\n\n${url}\n\n${note}`,
+    attachments: [{ filename: "dayli-logo.png", content: dayliLogoPngBase64, content_id: "dayli-logo" }],
     html: `<!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="margin:0;padding:0;background-color:#FBFAF9;color:#2B2422;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;padding:0;background-color:#FBFAF9;color:#2B2422;font-family:Epilogue,Arial,Helvetica,sans-serif;">
   <div style="display:none;font-size:1px;line-height:1px;color:#FBFAF9;max-height:0;max-width:0;opacity:0;overflow:hidden;">${safeIntro}</div>
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#FBFAF9;">
-    <tr><td align="center" style="padding:48px 20px 56px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:560px;">
-        <tr><td style="padding:0 0 28px;">
-          <span style="font-family:Georgia,Times New Roman,serif;font-size:38px;font-style:italic;font-weight:bold;letter-spacing:-3px;color:#A684FF;">dayli.</span>
+    <tr><td align="center" style="padding:56px 20px 64px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:358px;">
+        <tr><td align="center" style="padding:0 0 32px;">
+          <img src="cid:dayli-logo" alt="Dayli" width="200" height="102" style="display:block;width:200px;height:auto;border:0;color:#6E11B0;font-family:Spectral,Georgia,serif;font-size:28px;" />
+          <p style="margin:16px 0 0;color:#2B2422;font-family:Spectral,Georgia,serif;font-size:18px;font-weight:500;line-height:1.3;">one post, every day.</p>
         </td></tr>
-        <tr><td style="background-color:#FFFFFF;border:1px solid #E8E4E3;border-radius:16px;padding:40px 36px 36px;">
-          <p style="margin:0 0 20px;color:#6E11B0;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;">YOUR DAYLI ACCOUNT</p>
-          <h1 style="margin:0 0 18px;color:#2B2422;font-family:Georgia,Times New Roman,serif;font-size:32px;font-weight:normal;line-height:1.2;">${safeHeading}</h1>
-          <p style="margin:0 0 30px;color:#525252;font-size:16px;line-height:1.6;">${safeIntro}</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background-color:#6E11B0;border-radius:8px;">
-            <a href="${safeUrl}" style="display:inline-block;padding:14px 24px;color:#FFFFFF;font-size:15px;font-weight:bold;line-height:1.4;text-decoration:none;">${safeAction} &rarr;</a>
+        <tr><td style="background-color:#FFFFFF;border-radius:8px;padding:28px;box-shadow:2px 2px 8px rgba(0,0,0,0.01),8px 8px 16px rgba(0,0,0,0.02),16px 16px 32px rgba(0,0,0,0.03);">
+          <h1 style="margin:0 0 24px;color:#2B2422;font-family:Spectral,Georgia,serif;font-size:24px;font-weight:600;letter-spacing:-0.6px;line-height:1.3;">${safeHeading}</h1>
+          <p style="margin:0 0 24px;color:#2B2422;font-size:14px;line-height:1.6;">${safeIntro}</p>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background-color:#F3E8FF;border-radius:12px;">
+            <a href="${safeUrl}" style="display:inline-block;padding:8px 16px;color:#6E11B0;font-family:Spectral,Georgia,serif;font-size:16px;font-weight:600;line-height:1.4;text-decoration:none;">${safeAction} &rarr;</a>
           </td></tr></table>
-          <p style="margin:32px 0 8px;color:#525252;font-size:13px;line-height:1.6;">Button not working? Copy this link into your browser:</p>
-          <p style="margin:0;overflow-wrap:anywhere;word-break:break-all;font-size:13px;line-height:1.6;"><a href="${safeUrl}" style="color:#6E11B0;text-decoration:underline;">${safeUrl}</a></p>
+          <p style="margin:32px 0 8px;color:#525252;font-size:12px;line-height:1.6;">Button not working? Copy this link into your browser:</p>
+          <p style="margin:0;overflow-wrap:anywhere;word-break:break-all;font-size:12px;line-height:1.6;"><a href="${safeUrl}" style="color:#6E11B0;text-decoration:underline;">${safeUrl}</a></p>
         </td></tr>
-        <tr><td style="padding:28px 4px 0;color:#525252;font-size:13px;line-height:1.6;">
-          ${note}<br><span style="color:#6E11B0;">one post, every day.</span>
-        </td></tr>
+        <tr><td align="center" style="padding:24px 8px 0;color:#525252;font-size:12px;line-height:1.6;">${note}</td></tr>
       </table>
     </td></tr>
   </table>
