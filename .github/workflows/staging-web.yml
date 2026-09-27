@@ -1,0 +1,96 @@
+name: Deploy staging web
+
+# Manual only. The reviewed staging environment is restricted to main.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-web
+  cancel-in-progress: false
+
+jobs:
+  require-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-main dispatch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "$REF" != refs/heads/main ]]; then
+            echo 'Staging web deployment requires a manual dispatch from main.' >&2
+            exit 1
+          fi
+
+  deploy:
+    needs: require-main
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate staging web target and origins
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+          STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+        run: |
+          node <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { validateStagingOrigins } from './scripts/staging-origins.mjs';
+
+          const required = (name) => {
+            const value = process.env[name];
+            if (!value) throw new Error(`The staging environment must provide ${name}.`);
+            return value;
+          };
+          if (!/^[a-f0-9]{32}$/.test(required('CLOUDFLARE_ACCOUNT_ID'))) {
+            throw new Error('Refusing an invalid Cloudflare account ID.');
+          }
+          validateStagingOrigins({
+            siteHost: required('STAGING_AUTH_SITE_HOST'),
+            apiOrigin: required('STAGING_AUTH_API_ORIGIN'),
+            webOrigin: required('STAGING_AUTH_WEB_ORIGIN'),
+          });
+          const config = JSON.parse(readFileSync('apps/web/wrangler.jsonc', 'utf8'));
+          if (config.name !== 'dayli-web-staging' || config.workers_dev !== false
+            || config.main !== 'vinext/server/fetch-handler'
+            || config.routes || config.route || config.account_id || config.hyperdrive
+            || config.assets?.binding !== 'ASSETS') {
+            throw new Error('Refusing unexpected staging web Worker configuration.');
+          }
+          NODE
+      - name: Build vinext with the staging API origin
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+        run: pnpm --filter @dayli/web build:vinext
+      - name: Validate generated deployment target
+        run: |
+          node <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const config = JSON.parse(readFileSync('apps/web/dist/server/wrangler.json', 'utf8'));
+          if (config.name !== 'dayli-web-staging' || config.workers_dev !== false
+            || config.routes?.length || config.route || config.hyperdrive?.length
+            || config.assets?.binding !== 'ASSETS') {
+            throw new Error('Refusing an unexpected generated web Worker target or binding.');
+          }
+          NODE
+      - name: Deploy staging web Worker without a public workers.dev route
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [[ -z "$CLOUDFLARE_API_TOKEN" ]]; then
+            echo 'The staging environment must provide CLOUDFLARE_API_TOKEN.' >&2
+            exit 1
+          fi
+          pnpm --dir apps/web exec wrangler deploy --config dist/server/wrangler.json
