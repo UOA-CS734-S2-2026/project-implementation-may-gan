@@ -15,7 +15,13 @@ export function createFakeMediaReservationRepository(): MediaReservationReposito
     async reserveIfUnderQuota(ownerId, maxPending, now, record) {
       let count = 0;
       for (const existing of records.values()) {
-        if (existing.ownerId === ownerId && existing.expiresAt.getTime() > now.getTime()) count += 1;
+        if (
+          existing.ownerId === ownerId &&
+          existing.status === "pending" &&
+          existing.expiresAt.getTime() > now.getTime()
+        ) {
+          count += 1;
+        }
       }
       if (count >= maxPending) return "quota_exceeded";
 

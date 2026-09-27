@@ -75,7 +75,13 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
         const [row] = await tx
           .select({ value: sql<number>`count(*)::int` })
           .from(schema.mediaReservation)
-          .where(and(eq(schema.mediaReservation.ownerId, ownerId), gt(schema.mediaReservation.expiresAt, now)));
+          .where(
+            and(
+              eq(schema.mediaReservation.ownerId, ownerId),
+              eq(schema.mediaReservation.status, "pending"),
+              gt(schema.mediaReservation.expiresAt, now),
+            ),
+          );
         const activeCount = row?.value ?? 0;
         if (activeCount >= maxPending) return "quota_exceeded";
 
