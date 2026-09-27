@@ -164,8 +164,8 @@ jobs:
           const apiConfig = {
             ...shared,
             name: previewWorkerName ?? expectedStagingWorkerName,
-            // dayli-api-staging is public for staging web and mobile clients.
-            workers_dev: !isPullRequest,
+            // Staging API traffic uses only its reviewed custom domain.
+            workers_dev: false,
             observability: { enabled: true },
             // Public origin bindings are validated above. Secrets stay in the Worker secret store.
             vars: {
