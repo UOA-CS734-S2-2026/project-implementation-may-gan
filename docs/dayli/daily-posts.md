@@ -1,6 +1,6 @@
 # Daily post creation
 
-`POST /api/v1/posts` accepts the authenticated user's one post for the current Auckland day (issue #16). Clients read the day, deadline, and prompt from `GET /api/v1/posting-days/current`, keep the draft locally, and submit it with an `Idempotency-Key` header.
+`POST /api/v1/posts` accepts the authenticated user's one post for the current Auckland day. The Worker route and web client are implemented. The Flutter composer reads `GET /api/v1/posting-days/current` and keeps protected drafts, but currently uses `UnavailablePostSubmitter`, so it does not call this endpoint. Clients that submit use an `Idempotency-Key` header.
 
 ## Request
 
@@ -14,7 +14,7 @@
 | `audience` | `solo` or `friends`. |
 | `tomorrowNote` | Optional, trimmed, 1–1000 characters. It is stored outside the post and never returned; the response only reports `tomorrowNote.availableOn`. |
 
-The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Attaching reserved media waits for upload validation in issue #23.
+The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media reservations exist separately, but post attachment linking, upload completion checks, and client upload integration are not implemented. The web composer currently keeps selected files on the device and submits text fields only.
 
 ## Acceptance
 

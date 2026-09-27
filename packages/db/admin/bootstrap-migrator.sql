@@ -20,15 +20,6 @@ BEGIN
 END
 $$;
 
--- This protected import role receives only the user and account transfer rights.
-DO $$
-BEGIN
-  IF to_regclass('public.user') IS NOT NULL AND to_regclass('public.account') IS NOT NULL THEN
-    GRANT SELECT, INSERT ON TABLE public."user", public.account TO users_accounts_importer;
-  END IF;
-END
-$$;
-
 CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator;
 ALTER SCHEMA drizzle OWNER TO migrator;
 GRANT USAGE, CREATE ON SCHEMA drizzle TO migrator;

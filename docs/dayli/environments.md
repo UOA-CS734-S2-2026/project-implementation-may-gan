@@ -1,218 +1,150 @@
 # Environments
 
-This guide separates the environments that exist today from the production environment that does not. Use placeholder values in commands. Never add real account IDs, hosts, database URLs, tokens, or customer data to Git, issues, PRs, or command output.
+Use this guide for the local HTTPS authentication stack. Keep passwords, certificates, development CAs, API secrets, and connection strings out of Git and out of command output. The checked-in test fixture and `pnpm verify:local` remain separate from this persistent development database.
 
-## Request flow
+## Local HTTPS email and password authentication
 
-| Environment | Client path | Database path | Purpose |
-| --- | --- | --- | --- |
-| Local, no database | Browser or emulator -> local Wrangler -> Hono | None | Route, contract, and UI work that does not use PostgreSQL. |
-| Local, database simulation | Browser or emulator -> local Wrangler -> local Hyperdrive-compatible binding -> Docker PostgreSQL | Direct local PostgreSQL connection | Database development. This does not exercise Cloudflare's real Hyperdrive service. |
-| Staging | Not validated for the new project | Not connected to the new project | Deferred until the separate Neon staging project is provisioned. |
-| PR check | Not run automatically | Not connected | Future manual proof path only. |
-| Production | Not provisioned | Not provisioned | Future release environment. |
+The local stack uses these exact origins:
 
-At the time of this review, the separate Neon staging project is empty. It has no roles, migrations, or Hyperdrive attached. A pre-existing staging Worker, if one exists, remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is also unprovisioned. The API has ordinary HTTP routes for clients. `HyperdriveIntegrationEntrypoint` is a non-HTTP `WorkerEntrypoint`, callable only by the private Worker service binding used by the future integration check.
+| Service | Origin | Purpose |
+| --- | --- | --- |
+| Web | `https://localhost:3000` | Next.js browser UI |
+| API | `https://localhost:8787` | Wrangler, Better Auth, and Hono API |
+| PostgreSQL | `localhost:5434/dayli_dev` | Docker-only development database |
 
-## Prerequisites
+Both HTTP servers use the same `localhost` certificate, but ports remain distinct origins. Better Auth explicitly trusts both origins and CORS allows credentialed browser requests from only those origins. The session cookie remains `Secure`, `HttpOnly`, and `SameSite=Lax`. Do not replace either URL with `http`, `127.0.0.1`, a LAN address, or an ad hoc hostname when testing browser authentication.
 
-Install Node.js 24 or later, pnpm 10, Docker with Compose not required, and the stable Flutter SDK when working on mobile. Install workspace dependencies from the repository root:
+### Prerequisites
+
+Install Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and [mkcert](https://github.com/FiloSottile/mkcert). Android work also needs `adb`; iOS Simulator work needs full Xcode and CocoaPods. Run the following trust command yourself before setup, then approve its operating-system prompt if one is shown:
+
+```bash
+mkcert -install
+```
+
+This installs mkcert's local development CA into the current machine's trust store. It is a deliberate user action. Repository scripts never run `mkcert -install`, install a CA, touch production certificates, or create a public tunnel.
+
+Install workspace dependencies from the repository root:
 
 ```bash
 pnpm install --frozen-lockfile
 ```
 
-Keep credentials in your shell, a password manager, GitHub environment secrets, or ignored local files. `.env*` and `.dev.vars*` are ignored. Do not put credentials in `wrangler.jsonc`, source files, test fixtures, or generated clients.
+### First run
 
-## Local PostgreSQL 18
+The local scripts are optional setup helpers, not part of Better Auth or a deployed Worker. Without them, you would create a separate PostgreSQL database with `migrator` and `app`, run migrations directly as `migrator`, configure the local HTTPS certificate and ignored auth settings, then launch Wrangler with an `app`-only local Hyperdrive override and Next.js with HTTPS. The helpers repeat and check those steps so the Worker never receives the owner or migrator connection.
 
-The repository includes a PostgreSQL 18 Docker test fixture for development and integration tests. It is separate from product data and uses an isolated database. They use a Docker volume, so stopping or removing the container does not remove the data. The block generates a password only for a new volume and refuses to replace a missing credential for existing data.
-
-```bash
-state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/dayli"
-password_file="$state_dir/postgres.env"
-mkdir -p "$state_dir"
-umask 077
-
-if docker container inspect dayli-postgres >/dev/null 2>&1; then
-  if [ ! -f "$password_file" ]; then
-    echo "Existing dayli-postgres has no saved local password. Recover it or reset the database." >&2
-    exit 1
-  fi
-  docker start dayli-postgres
-else
-  if [ ! -f "$password_file" ]; then
-    if docker volume inspect dayli-postgres-data >/dev/null 2>&1; then
-      echo "Existing PostgreSQL volume has no saved local password. Recover it or reset the database." >&2
-      exit 1
-    fi
-    openssl rand -hex 24 | awk '{ print "POSTGRES_PASSWORD=" $0 }' > "$password_file"
-  fi
-  docker volume create dayli-postgres-data
-  docker run --detach --name dayli-postgres --restart unless-stopped \
-    --env-file "$password_file" \
-    -e POSTGRES_USER=dayli \
-    -e POSTGRES_DB=dayli \
-    -p 127.0.0.1:5432:5432 \
-    -v dayli-postgres-data:/var/lib/postgresql/data \
-    postgres:16
-fi
-
-set -a
-. "$password_file"
-set +a
-docker exec dayli-postgres pg_isready -U dayli -d dayli
-```
-
-The generated password is local-only and the state file has owner-only permissions. Keep it outside the repository. Rerunning the block starts an existing container and preserves its password. If the container was removed but the volume and password file remain, it recreates the container with the existing password. If the password file is missing for existing data, the block stops rather than creating an unusable replacement credential. Recover the original password or reset the local database.
-
-Stop the database without removing its data:
+`local:auth:setup` generates a `localhost` certificate and key under `$XDG_STATE_HOME/dayli/mkcert` or `~/.local/state/dayli/mkcert`. It keeps the stable Better Auth secret in ignored `apps/api/.dev.vars`, writes the ignored local Wrangler configuration, and writes ignored `apps/web/.env.local` with the local API origin. It refuses to silently replace an existing local origin or secret configuration.
 
 ```bash
-docker stop dayli-postgres
+pnpm local:auth:setup
+pnpm db:dev:up
+pnpm db:dev:migrate
+pnpm db:dev:verify
 ```
 
-Reset removes all local data. Stop any process that uses the database first:
+Start the API and web server in separate terminals:
 
 ```bash
-docker rm -f dayli-postgres
-docker volume rm dayli-postgres-data
-rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/dayli/postgres.env"
+pnpm dev:api:https
+pnpm dev:web:https
 ```
 
-Run the creation commands again after a reset. This database is intentionally bound only to `127.0.0.1`. Do not publish it to a LAN interface.
+Open `https://localhost:3000/sign-up`, create a local email and password account, then sign out and sign in. Email delivery is intentionally not configured for this local flow. The current Better Auth configuration permits email and password sign-in without email verification.
 
-### Direct database smoke test
+`NEXT_PUBLIC_API_BASE_URL` is required while Next.js is in development mode. If it is absent, the web app fails with an instruction to run `pnpm local:auth:setup` or set `apps/web/.env.local`; it never silently falls back to an HTTP API origin.
 
-Load the local password and run the package check. The password produced above is URL-safe.
+The API launch helper sets Wrangler's local Hyperdrive override to the generated restricted `app` role. The Worker has no owner or `migrator` connection string at runtime. `migrator` is used only by the explicit direct migration and verification commands above. The local Wrangler configuration contains only the `local-hyperdrive` label, not a Cloudflare resource ID, and `wrangler dev --local` does not contact Cloudflare Hyperdrive.
+
+### Development database lifecycle
+
+`packages/db/docker-compose.dev.yml` is a persistent local development database, independent of `packages/db/docker-compose.yml`, which is the disposable test fixture used by `pnpm verify:local`. Development uses Compose project `dayli-development`, Docker volume `dayli-development-postgres-data`, port 5434, and database `dayli_dev`. The test fixture uses port 5433 and `dayli_test`.
+
+Credentials are generated once at `$XDG_STATE_HOME/dayli/development-postgres.env` or `~/.local/state/dayli/development-postgres.env`, with owner-only file permissions. If its Docker volume exists but that credential file is missing, `pnpm db:dev:up` stops rather than generating credentials that cannot unlock the existing data. Init scripts run only when the volume is first created. An older local volume may still contain the retired importer role; review any data you need before choosing the explicit reset command below.
 
 ```bash
-set -a
-. "${XDG_STATE_HOME:-$HOME/.local/state}/dayli/postgres.env"
-set +a
-DATABASE_URL="postgres://dayli:${POSTGRES_PASSWORD}@127.0.0.1:5432/dayli" \
-  pnpm --filter @dayli/db db:check
+pnpm db:dev:down       # stop and preserve data
+pnpm db:dev:up         # restart or create the development database
+pnpm db:dev:migrate    # only migrator@localhost:5434/dayli_dev is accepted
+pnpm db:dev:verify     # read-only migration state check on that same target
+pnpm db:dev:studio     # optional local Drizzle Studio browser, press Ctrl-C to stop
 ```
 
-The local transaction proof applies the staging-only probe fixture as `migrator`, then uses the restricted `app` role to prove Drizzle commit, explicit rollback, constraint recovery, cleanup, and authorization. The fixture is never a product migration. Do not treat `wrangler deploy` as a database migration.
+Studio reads only the generated local `app` credential and binds its proxy to `127.0.0.1`. Open the URL printed by the command in a browser. Studio can edit rows, so use it only with synthetic development accounts and do not treat it as a read-only inspection tool. It uses a browser UI served from `local.drizzle.studio`, not the deployed Worker or Hyperdrive. Never point it at staging or production.
 
-## Local API and clients
-
-### API without a database
-
-The checked-in `apps/api/wrangler.jsonc` has no Hyperdrive binding. Use it for the API's current HTTP routes:
+Deletion is intentionally explicit and is the only command that removes development data and its generated credentials:
 
 ```bash
-pnpm --dir apps/api dev
+DAYLI_DEV_DB_RESET='DELETE development database' pnpm db:dev:reset
 ```
 
-Wrangler normally listens on `http://127.0.0.1:8787`. This mode cannot exercise code that requires `env.HYPERDRIVE`.
+Do not point `MIGRATION_TARGET=development` at another host, port, database, or role. The migration tools reject every value except `migrator@localhost:5434/dayli_dev`. Do not use `pnpm verify:local` as a local-auth database reset: it creates and destroys an isolated fixture instead.
 
-### API with local Hyperdrive simulation
+## Android debug builds
 
-Create an ignored local config that adds the binding. The ID is a local label only. It is not a Cloudflare resource ID.
+Android local authentication remains HTTPS-only. The debug manifest trusts a user-installed CA through `debug-overrides`; release and profile manifests do not trust user CAs and no manifest enables cleartext traffic.
 
-```bash
-cat > apps/api/wrangler.local.jsonc <<'EOF'
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dayli-api-local",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-03-10",
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
-  "hyperdrive": [
-    { "binding": "HYPERDRIVE", "id": "local-hyperdrive" }
-  ]
-}
-EOF
-
-set -a
-. "${XDG_STATE_HOME:-$HOME/.local/state}/dayli/postgres.env"
-set +a
-CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgres://dayli:${POSTGRES_PASSWORD}@127.0.0.1:5432/dayli" \
-  pnpm --dir apps/api exec wrangler dev --config wrangler.local.jsonc
-```
-
-`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` tells Wrangler to supply a connection string to local PostgreSQL for the `HYPERDRIVE` binding. It does not create, contact, or simulate Cloudflare's real Hyperdrive configuration, connection pooling, network path, caching, or credentials. Run the staging integration check before relying on a Hyperdrive change.
-
-`wrangler.local.jsonc` contains no secret, but it is local setup and should remain untracked. Remove it when it is no longer needed.
-
-### Web and mobile API addresses
-
-Start the web shell with:
-
-```bash
-pnpm --dir apps/web dev
-```
-
-It normally listens on `http://localhost:3000`. The web app reads `NEXT_PUBLIC_API_BASE_URL` (see `apps/web/.env.example`), and Flutter receives its API origin through `DAYLI_API_BASE_URL`. For browser sessions, the web and API origins must both use HTTPS and be configured in `BETTER_AUTH_TRUSTED_ORIGINS`; CORS permits credentials only from those exact origins. The following local Worker addresses are useful for unauthenticated development and native device configuration:
-
-- Browser on the development machine: `http://127.0.0.1:8787`
-- Android emulator: `http://10.0.2.2:8787`
-- iOS Simulator: `http://127.0.0.1:8787`
-- Android physical device over USB: `http://127.0.0.1:8787` after `adb reverse tcp:8787 tcp:8787`
-
-For an Android device, start Wrangler on its default loopback address, then run:
+1. Ensure the emulator or USB device is running and manually install `$(mkcert -CAROOT)/rootCA.pem` as a **CA certificate** in its security settings. Use only a development device or emulator. This is separate from `mkcert -install` on the development machine.
+2. Start `pnpm dev:api:https` on the development machine.
+3. For a USB device or Android emulator, map device loopback to the API without exposing it on the LAN:
 
 ```bash
 adb reverse tcp:8787 tcp:8787
 cd apps/mobile
-flutter run --dart-define=DAYLI_API_BASE_URL=http://127.0.0.1:8787
+flutter run --debug --dart-define=DAYLI_API_BASE_URL=https://localhost:8787
 ```
 
-`adb reverse` forwards the device's loopback port to the development machine. It avoids exposing the debug Worker on the LAN, and Android debug builds allow cleartext only for the emulator and loopback aliases. Remove the mapping with `adb reverse --remove tcp:8787` when finished. Use a deployed HTTPS staging API for authenticated browser and physical-device tests. A local HTTP address alone does not mount Better Auth or prove Hyperdrive integration.
+4. Remove the mapping when finished:
 
-For an Android emulator, run the Flutter shell with its API origin:
+```bash
+adb reverse --remove tcp:8787
+```
+
+The debug-only trust override permits the mkcert user CA, not arbitrary cleartext. Do not add `usesCleartextTraffic`, a cleartext domain configuration, or user CA trust to a release source set.
+
+## iOS Simulator
+
+Keep App Transport Security unchanged. The API URL is HTTPS and this change does not add an ATS exception.
+
+Prerequisites are Xcode with an installed iOS Simulator, a booted Simulator, mkcert already trusted on the host through the manual prerequisite above, and the local API running. Add the mkcert root to the currently booted Simulator with this explicit user command:
+
+```bash
+xcrun simctl bootstatus booted -b
+xcrun simctl keychain booted add-root-cert "$(mkcert -CAROOT)/rootCA.pem"
+```
+
+If the Simulator asks for certificate trust, enable full trust in its certificate trust settings. Then run the app against the loopback API:
 
 ```bash
 cd apps/mobile
-flutter pub get
-flutter run --dart-define=DAYLI_API_BASE_URL=http://10.0.2.2:8787
+flutter run --dart-define=DAYLI_API_BASE_URL=https://localhost:8787
 ```
 
-## Staging
+Restart the app or Simulator if it was running when the CA was added. This implementation does not claim that an iOS Simulator runtime authentication flow was executed. Run the commands above and record the Simulator, iOS, Flutter, and Xcode versions before treating it as validated.
 
-Staging integration is deferred. At the time of this review, the separate Neon staging project is empty: it has no roles, migrations, or Hyperdrive attached. Any pre-existing `dayli-api-staging` Worker remains connected to its old configuration and must be inventoried and retired before use. It is not a validated endpoint for the new project. Production is unprovisioned. Do not deploy, migrate, or test against either environment until the staging project has been provisioned and reviewed.
+## Validation boundaries
 
-When staging is approved for provisioning and a secure Neon-compatible first-password procedure has been verified, use a separate Neon project with synthetic data only. It must not share a Neon project, branch, data, credentials, or restore point with production. Follow the role bootstrap sequence in [Database migrations](database-migrations.md#roles-and-connections), then create a caching-disabled Hyperdrive configuration for the restricted `app` role. Prepare the ignored `apps/api/wrangler.staging.jsonc` and `apps/api/wrangler.hyperdrive-test.jsonc` from their examples. Set exact public HTTPS origins and add `BETTER_AUTH_SECRET` only through `wrangler secret put`. Do not put secrets in configuration, shell history, or Git.
+The scripts and configuration can be checked locally without contacting Neon, Cloudflare, DNS, Google, Resend, staging, or production. Do not add local values to `wrangler.jsonc`, tracked environment files, GitHub workflow configuration, or a deployed Worker. The manual-only `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows remain available for later approved staging work; local setup does not invoke or modify them.
 
-After provisioning, the manual proof can deploy the current checkout and run the private Hyperdrive check from a trusted machine with approved credentials:
+## Staging and production
 
-```bash
-bash <<'BASH'
-set -euo pipefail
-read -r -p "Cloudflare account ID: " CLOUDFLARE_ACCOUNT_ID </dev/tty
-read -r -s -p "Cloudflare API token: " CLOUDFLARE_API_TOKEN </dev/tty
-printf "\n"
-export CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN
-trap 'unset CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN' EXIT
-: "${CLOUDFLARE_ACCOUNT_ID:?Cloudflare account ID is required}"
-: "${CLOUDFLARE_API_TOKEN:?Cloudflare API token is required}"
+Local HTTPS authentication is implemented. Staging is not deployed: its owner reports that restricted roles and grants passed bootstrap verification, but application migrations, Hyperdrive, a Worker, and a validated endpoint are still absent. The old staging Worker, Hyperdrive configuration, GitHub `staging` environment credentials, and local staging Wrangler files were removed. The retained `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows are manual only and cannot run until approved staging credentials are re-provisioned. Their existence does not authorize a deployment or proof.
 
-commit_sha="$(git rev-parse HEAD)"
-pnpm --dir apps/api exec wrangler deploy --config wrangler.staging.jsonc
-pnpm --filter @dayli/api test:hyperdrive:staging
-printf 'Hyperdrive check commit: %s\n' "$commit_sha"
-BASH
-```
+Choose separate exact HTTPS web and API origins under the same registrable domain for each live environment. The manual staging workflow also requires `STAGING_AUTH_SITE_HOST`, a reviewed shared parent hostname of at least three labels containing both staging hosts. Set the API origin as `BETTER_AUTH_BASE_URL`, include API and web origins in `BETTER_AUTH_TRUSTED_ORIGINS`, and build web and mobile clients with that API origin. Do not use a path, wildcard, trailing slash, localhost, a `workers.dev` endpoint, or a production origin for staging. Local certificates and local PostgreSQL credentials are never valid for staging or production.
 
-The GitHub `staging` environment retains the protected `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_STAGING_HYPERDRIVE_ID` secrets, plus `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, and `STAGING_HYPERDRIVE_NAME` variables for that future proof. `.github/workflows/staging-hyperdrive.yml` runs only through manual dispatch. It has no pull request or `main` push trigger and does not use `pull_request_target`. Its credential and Hyperdrive validation safeguards remain in place. The separate `cleanup-hyperdrive-preview.yml` workflow remains enabled only to safely remove any previously deployed trusted PR preview after the PR closes.
+### Staging checklist
 
-## Legacy Supabase migration inventory
+Before provisioning, verify the staging branch has no application data. If the earlier passwordless `dayli_password_probe` test role remains, inspect it for dependencies and remove it before final role verification. Neon's documented SQL Editor procedure creates restricted roles with passwords, but its query text may be retained. In order:
 
-Do not reuse a Neon, application, owner, or service-role credential to inspect the legacy Supabase database. Before an approved rehearsal, a legacy administrator must provision a separate `LEGACY_SUPABASE_READONLY_DATABASE_URL` role with `CONNECT` and `SELECT` only on the approved legacy tables. `pnpm db:migration:inventory` requires TLS, opens `BEGIN READ ONLY`, and emits aggregate counts only. Do not run it during this planning phase or against production without explicit authorisation. Keep its output in an approved protected evidence location rather than Git. See [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md) for its fixed table boundary and rehearsal gates.
+1. Create the two restricted SQL roles with separate passwords, complete the bootstrap, and run read-only role verification in [Database migrations](database-migrations.md). Use `migrator` only for direct migrations and `app` only behind Hyperdrive.
+2. Configure the protected GitHub `staging` environment with main-only deployment and reviewer approval before adding credentials, including the direct unpooled `migrator` migration secret. Keep the migration, staging proof, and preview-cleanup workflows manual.
+3. Create a new staging Hyperdrive binding for `app` with query caching disabled, then a new staging Worker with its own Better Auth secret and exact public origins. Leave Google and Resend absent until each provider is complete.
+4. Build clients against the staging API and use synthetic accounts to prove sign-up, sign-in, cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin. Local tests are not a deployed Hyperdrive proof.
 
-## Future production
+Google OAuth and Resend requirements are in [Authentication compatibility](authentication-compatibility.md). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
 
-Production is not provisioned. Do not deploy the default `dayli-api` Worker as a shortcut for staging or testing. Before the first production deploy, provision and document separately:
+### Production reset and release
 
-1. A production Worker, separate deployment configuration, public URL or custom domain, and client base URL.
-2. A production-only PostgreSQL database and Hyperdrive configuration.
-3. A least-privilege production token and separate secret store entries. Never reuse the staging token, database, Hyperdrive ID, or Worker name.
-4. Reviewed additive database migrations, backups, restore testing, a rollback or forward-fix plan, and compatibility checks for existing mobile clients.
-5. A Better Auth secret stored as a Worker secret, a public HTTPS base URL, exact trusted browser origins, CORS/origin policy, observability, alerts, and an approved release owner.
+No production service is deployed. An old Neon production project may still exist. Before any deletion, its owner must inspect its databases and row counts, branches, restore points, connections, and teammate dependencies. If it is confirmed disposable, that owner, not a repository script or staging cleanup procedure, deletes that exact project in Neon Console. If it has already gone, skip deletion. Never delete or reset the new staging project as a substitute.
 
-Deploy migrations through a controlled database connection before code that requires them. Keep destructive changes behind a compatible release and verify rollback against a restored copy. Production should gain its own protected GitHub environment and approvals before it receives credentials.
-
-For the staging-specific configuration and test details, see [`apps/api/README.md`](../../apps/api/README.md). For the database smoke check, see [`packages/db/README.md`](../../packages/db/README.md).
+Only after staging authentication and provider checks pass, create a separate fresh production Neon project and protected `production` environment. Use distinct role credentials, Hyperdrive, Worker, Better Auth secret, OAuth clients, Resend sender, and origins. Do not copy staging data, restore points, credentials, or tokens. Confirm a restore point, run the protected manual migration workflow for the same reviewed commit that passed staging, review its sanitized evidence, and deploy the production Worker only after migration and authentication checks pass. Production Worker deployment automation is not present: use a reviewed ignored production Wrangler configuration, never the default Worker by accident. Do not invite production users until media submission and real-device checks are ready.

@@ -1,6 +1,6 @@
-# Dayli proposal
+# Dayli developer guide
 
-Status: design only, not implemented.
+Status: web, mobile, API, and local database foundations are implemented. Staging and production auth are not deployed.
 
 Dayli lets students share one daily reflection with friends. Capture on Flutter; reflect through Next.js calendars, mood history, and recaps. Web also supports posting and messaging.
 
@@ -8,17 +8,16 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 
 ## Read by topic
 
+- [Environments](environments.md): implemented local HTTPS sign-in, unprovisioned staging, and the separate production reset and release boundary.
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
 - [Architecture](architecture.md): components and request flows.
-- [Environments](environments.md): local PostgreSQL, local Workers, staging, and production release boundaries.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
 - [Authentication compatibility](authentication-compatibility.md): Better Auth Worker and Flutter proof, plus deployment prerequisites.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Database migrations](database-migrations.md): Neon PostgreSQL roles, additive migration commands, and release runbook.
-- [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md): legacy inventory, preservation and exclusion policy, rehearsal gates, and Cloudinary checkpoint.
 - [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.

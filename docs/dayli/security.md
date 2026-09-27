@@ -6,12 +6,12 @@ Content is server-readable. HTTPS, encryption at rest, and permissions protect i
 
 | Resource | Access |
 | --- | --- |
-| Solo post | Owner unless explicitly shared. |
+| Solo post | Owner only. Solo posts cannot have public links. |
 | Friends post | Owner before release; active friends afterward, including friends who joined after release, subject to blocks. |
 | Public shared post | Anyone with its active opaque link after release; it remains unlisted. Private-account links grant no access. |
 | Messages | Authorised participants, subject to request/block policy. |
 | Mood history, recap, future note | Owner. |
-| Media | Same permission/release checks as its post; pending uploads owner-only. |
+| Media | Pending reservations are owner-only. Future media reads must apply the same permission and release checks as their post. |
 | Socket | Verified user's own Durable Object. |
 
 Enforce checks on every list/detail/export/preview route. A public profile does not expose a journal through profile or discovery views; only an active opaque link exposes its linked released post. Restrict database exposure; privileged Drizzle connections can bypass RLS, so services must authorise independently. Keep private responses out of shared caches.
@@ -28,7 +28,7 @@ Password recovery uses expiring one-time tokens, throttling, safe email delivery
 
 ## Data and device protection
 
-Keep R2 private; validate actual types and enforce three attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. Issue short-lived private downloads and redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
+Keep R2 private. The current reservation route limits the declared type and size, but actual type validation, attachment linking, and private downloads are not implemented. The completed flow must enforce three attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. It must issue short-lived private downloads and redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
 
 Protect local drafts/credentials and hide app-switcher previews. `local_auth` alone does not prove protected key storage. Test passcode fallback, lockout, enrolment changes, and reinstall. Minimise browser persistence and temporary files.
 

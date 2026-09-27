@@ -22,17 +22,20 @@ REST/OpenAPI replaces tRPC because Dart cannot consume TypeScript inference. Pos
 
 ## Deployment
 
-After scaffolding `apps/api` and installing dependencies:
+`apps/api` is scaffolded. For the local HTTPS auth walkthrough, run:
 
 ```bash
-cd apps/api
-pnpm exec wrangler dev
-pnpm exec wrangler deploy
+pnpm local:auth:setup
+pnpm db:dev:up
+pnpm db:dev:migrate
+pnpm dev:api:https
 ```
+
+Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not a normal local-development command. Do not deploy until staging has restricted database roles, Hyperdrive, exact HTTPS origins, and reviewed credentials. Staging now has user-verified restricted database roles, but no Hyperdrive binding or deployed API. Production is not deployed.
 
 Declare bindings, compatibility settings, scheduled triggers, and Durable Object migrations in `wrangler.jsonc`. Keep secrets and `.dev.vars` out of Git. PostgreSQL migrations are a separate controlled release step owned by `packages/db`; see [Database migrations](database-migrations.md).
 
-Test Better Auth, Drizzle/Hyperdrive transactions, FCM, and sockets in the Workers runtime first. Next.js on Workers also needs a compatible deployment adapter; retain its existing host as fallback. Heavy media processing may need another service.
+Better Auth has local Worker and PostgreSQL coverage. Staging has no deployed API or web host yet. The Next.js app has dynamic routes and is not a static Cloudflare Pages export. Hosting it on a Cloudflare Worker would require an adapter and compatibility testing; none has been added. Drizzle/Hyperdrive transactions and deployed authentication remain untested. FCM, sockets, and real R2 transfers are not implemented end to end.
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. Neon staging and production ownership/secrets remain administrator-managed. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 

@@ -34,11 +34,11 @@ The initial release supports iOS 16 and newer and Android 10, API 29, and newer.
 
 ## Database provider and migrations
 
-Neon PostgreSQL 18 is the database provider. Staging uses a separate Neon project containing synthetic data only. Production is a separate project and remains unprovisioned. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected workflow documented in [Database migrations](database-migrations.md).
+Neon PostgreSQL 18 is the database provider. Staging will use a separate Neon project containing synthetic data only. The staging project owner reports restricted roles and grants verified. No application migrations, Hyperdrive attachment, Worker, or application data have been reported. Production will use a separate project and is not deployed. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected manual workflow documented in [Database migrations](database-migrations.md).
 
 ## Deletion, backups, and recovery
 
-Deleted posts and accounts become inaccessible through the application immediately. A tracked cleanup job running as the `migrator` role removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Immutable-history triggers allow this bypass only for that cleanup role; every batch is recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
+Deleted posts and accounts must become inaccessible through the application immediately. The planned cleanup job runs as the `migrator` role and removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Immutable-history triggers must allow this bypass only for that cleanup role; every batch must be recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
 
 For course and pilot stages, the recovery point objective is 24 hours and the recovery time objective is 8 hours. These are targets until a recorded restoration exercise verifies them.
 

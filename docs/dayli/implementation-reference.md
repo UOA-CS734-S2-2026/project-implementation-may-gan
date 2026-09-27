@@ -1,6 +1,6 @@
 # Implementation reference
 
-Use this while building. The other guides explain the design; this document records mechanisms, failure cases, and checks that should not disappear during implementation. All items are proposed work, not verified behaviour.
+Use this while building. The other guides explain the design; this document records mechanisms, failure cases, and checks that should not disappear during implementation. It mixes implemented local slices with future work. Treat a statement as current only where it names checked-in code or local coverage. No staging or production deployment has been verified.
 
 ## 1. Decisions and service boundaries
 
@@ -12,7 +12,7 @@ Use this while building. The other guides explain the design; this document reco
 
 ## 2. Runtime and deployment gates
 
-Before porting every endpoint, prove these in the actual Worker runtime:
+Better Auth has Worker and local PostgreSQL coverage. The web and Flutter auth screens are checked in. Local HTTPS development is available through `pnpm local:auth:setup`, `pnpm dev:api:https`, and `pnpm dev:web:https`. The Flutter Google button reports unavailable when no client configuration is supplied. Staging has no Worker, Hyperdrive, or deployment credentials, and production is not deployed. Before porting every remaining endpoint, prove these in the actual Worker runtime:
 
 | Integration | Required checks |
 | --- | --- |
@@ -88,18 +88,19 @@ See [Security](security.md), [Testing](testing-and-delivery.md), and [Scalabilit
 
 ## 8. Readiness checklist
 
-The architecture is sufficient to start a compatibility experiment. These items are still open, not completed implementation:
+The compatibility slice is no longer just a proposal. The monorepo, Hono Worker, Flutter shell, OpenAPI document and generated clients, Drizzle migrations, local PostgreSQL checks, auth screens, posting-day route, daily-post route, relationship routes, and media-reservation routes are checked in. The web composer calls the daily-post route. The Flutter composer does not yet have a real `DailyPostSubmitter`, and neither client completes a reserved-media upload.
 
-- Scaffold the monorepo, import attributed WDCC code, pin versions, and establish local/test CI. No Hono or Flutter app has been created by this proposal.
-- Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores.
-- Pass one vertical slice: native/web login, a Hono database transaction, private media access, and a WebSocket update with reconnect. Select the Next.js deployment adapter only after its compatibility check.
-- Write the first OpenAPI schemas, error contracts, database migration, and shared fixtures. Generated clients and record shapes are not yet specified by the overview tables.
+These items remain open:
+
+- Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores. Staging has user-verified restricted database roles but no deployed service or applied application migrations. Production is undeployed.
+- Run the local auth walkthrough, then prove the Worker integrations against provisioned staging. This includes native and web login, a Hyperdrive transaction as `app`, real R2 signing and upload rejection, and a WebSocket update with reconnect. Select the Next.js deployment adapter only after its compatibility check.
+- Wire the Flutter daily-post client and media reservation/upload flow. Link completed media to posts only after byte-size and actual-format validation.
 - Implement the agreed rules in [Product decisions](product-decisions.md): friends see earlier released friends posts, released edits retain visible revision history, and blocks stop interaction while preserving message history.
 - Enforce three mixed attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. Test iOS 16+ and Android 10/API 29+ plus documented fallbacks.
 - Apply immediate application deletion, 30-day backup expiry, and the initial 24-hour RPO and 8-hour RTO. Verify the recovery targets through a recorded restoration exercise.
 - Assign the first issues and reviewers in the course board. Keep frontend reuse approval, test evidence, and service-account ownership in team records. Do not create a separate project-management system.
 
-Begin with the compatibility slice, not a complete backend rewrite or all native additions at once. Resolve product-policy questions before their dependent features, rather than blocking unrelated setup.
+Continue in vertical slices, not a complete backend rewrite or all native additions at once. Resolve product-policy questions before their dependent features, rather than blocking unrelated setup.
 
 ## Primary references
 

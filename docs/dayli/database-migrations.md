@@ -1,49 +1,80 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. At the time of this review, the separate Neon staging project is empty, with no roles, migrations, or Hyperdrive attached. It is not a validated staging deployment. Production remains separate and unprovisioned. PostgreSQL `public` remains the application schema. `packages/db` owns Drizzle schema files, migration SQL, migration review records, and migration commands.
+Dayli uses Neon PostgreSQL 18. Staging is the first deployment target. Its owner reports two restricted SQL roles with passwords, owner grants, migrator defaults, and a successful read-only bootstrap check. Application migrations, Hyperdrive, and a deployed Worker remain unverified and application data has not been reported. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
 
-## Roles and connections
+`packages/db` owns the Drizzle schema, migration SQL, review records, and migration commands. PostgreSQL `public` is the application schema. Migrations `0000` through `0007`, their snapshots, and the shared journal are immutable.
 
-Live Neon provisioning is deferred. The current role-bootstrap files are retained for review, not a runnable setup guide: Neon rejected `psql`'s `\password` command because it submits a hashed password while Neon requires plaintext. The first-password procedure for restricted SQL-created roles is not yet verified. Do not run the owner bootstrap, migrations, or Hyperdrive setup on the new staging project until a secure, Neon-compatible procedure has been reviewed and tested without putting a plaintext password in SQL Editor, shell history, Git, or chat. Do not create runtime roles through Neon Console because that path grants `neon_superuser`.
+## Roles and connection boundaries
 
-After that procedure is approved, the intended order is: run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`, securely provision the `migrator` credential, run `packages/db/admin/bootstrap-migrator.sql` through a direct unpooled TLS `migrator` connection, then run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner`. Every reported value must be `true` before migrations or Hyperdrive setup. Provision the restricted `app` credential only when Hyperdrive is configured. Leave `users_accounts_importer` without a password until a separately approved import rehearsal. Store connection URLs only in an approved secret store.
+Only two SQL-created restricted login roles are intended:
 
-`neondb_owner` can create the roles and grant database or schema access, but it is not automatically a member of `migrator`. PostgreSQL therefore rejects `ALTER DEFAULT PRIVILEGES FOR ROLE migrator` from that owner connection with SQLSTATE `42501`. The migrator file changes its own defaults and owns the `drizzle` schema, so it must run in a separate migrator connection. If the owner file previously stopped at that error, do not recreate roles, grant role membership, or widen `app` access. After a secure first-password procedure is approved, rerun the owner file, provision any missing credentials, then run the migrator file and the read-only verification file in the order above.
+- `migrator` owns application schema objects and the Drizzle metadata schema. It is used only by direct, unpooled migration tooling.
+- `app` receives application-table DML defaults and is used by Workers only through Hyperdrive.
 
-- `migrator` owns schema objects and Drizzle migration metadata.
-- `app` receives automatic `SELECT`, `INSERT`, `UPDATE`, and `DELETE` grants on new `public` application tables, but cannot change schema or read/write Drizzle metadata.
-- `users_accounts_importer` receives no default application-table grants. After both target tables exist, the migrator file grants it only `SELECT` and `INSERT` on `public.user` and `public.account`.
+`neondb_owner` creates roles and grants but is never a Worker runtime credential, Hyperdrive credential, or application `DATABASE_URL`. Do not create runtime roles in Neon Console because that path grants `neon_superuser`.
 
-After `pnpm db:migrate` creates both Better Auth target tables, rerun `bootstrap-migrator.sql` directly as `migrator`, then run the read-only verification file again as `neondb_owner`. This applies the intentionally narrow importer grants. It is also safe to rerun the migrator file after any interrupted bootstrap.
+Create the two restricted login roles with passwords in the empty target, then run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`. The script grants database and `public` schema access, and creates a missing role without a password if a previous setup stopped early. Do not connect a passwordless role. Run `packages/db/admin/bootstrap-migrator.sql` through a direct TLS `migrator` connection. PostgreSQL permits default-privilege changes only by the current role or a member role, so the owner must not attempt `ALTER DEFAULT PRIVILEGES FOR ROLE migrator`. The migrator script creates and owns `drizzle`, gives `app` DML defaults for `public`, and excludes `app` from Drizzle metadata. It is safe to rerun after interruption.
 
-Migrations use an unpooled direct Neon `DATABASE_URL` with `sslmode=require` or stricter. Worker runtime access will later use the restricted `app` role through Hyperdrive; Hyperdrive binding setup is separate from this foundation.
+Run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner` after bootstrap and after password rotation. Every reported value must be `true` before migration or Hyperdrive setup.
 
-## Better Auth target schema
+## Create restricted role credentials
 
-`0001_better_auth_postgres` is the additive Better Auth 1.7.5 target schema. It creates `user`, `account`, `session`, and `verification` with text primary and foreign keys. The `user` table retains legacy profile metadata and the `account` table retains its legacy-compatible provider and credential columns. This migration creates an empty Neon target only. It does not connect to Supabase and does not import `account`, `session`, or `verification` records. A later separately approved import may preserve user IDs and profile values, while users establish new target sessions.
+In Neon SQL Editor, select the intended empty project, branch, and database. Run as `neondb_owner`. Use a password manager to generate two distinct passwords with at least 60 bits of entropy; long random alphanumeric values avoid SQL-quoting problems. Replace the placeholders below **only in the SQL Editor**. Do not paste the resulting statement into Git, chat, PRs, terminal commands, or screenshots.
 
-## Legacy Supabase boundary
+```sql
+CREATE ROLE migrator WITH LOGIN PASSWORD '<unique migrator password>';
+CREATE ROLE app WITH LOGIN PASSWORD '<different app password>';
+```
 
-The legacy Supabase database is not a Neon migration target and must never use the `migrator` connection. `pnpm db:migration:inventory` uses a separately provisioned `LEGACY_SUPABASE_READONLY_DATABASE_URL`, starts a read-only transaction, and returns aggregate counts only. It does not copy data.
+Neon requires the plaintext value for this SQL operation. SQL Editor or database query history may retain the statement. Restrict Console access and handle that history according to the team's retention policy. Keep the generated credentials in the approved password manager and protected secret stores. Never use the Console's Create role action for `app` or `migrator`, since Neon gives Console-created roles `neon_superuser` membership.
 
-`pnpm db:migration:users-and-accounts` is a separately controlled direct users-and-login-accounts transfer. It requires a Supabase `LEGACY_SUPABASE_USERS_ACCOUNTS_READONLY_DATABASE_URL` credential with `CONNECT` and `SELECT` on `public.user` and `public.account` only, plus a direct TLS `NEON_USERS_ACCOUNTS_IMPORT_DATABASE_URL` for the protected `users_accounts_importer` role. The role has only `SELECT` and `INSERT` on those two Neon tables, not application-wide DML or migration privileges. The command is dry-run by default. Applying also requires `--apply` and `APPLY_USERS_ACCOUNTS_IMPORT="IMPORT users and accounts"`. It copies compatible Better Auth credential hashes and the provider identity mapping, but never reads or copies OAuth tokens, token expiry fields, scope, sessions, verification records, posts, or other dependent content. See [Supabase to Neon migration boundary](supabase-neon-migration-boundary.md) for compatibility limits, fixture rules, rehearsal gates, and required OAuth deployment work.
+Before connecting as either new role, run this read-only check as the owner. Expect exactly two rows. `rolcanlogin` and `no_memberships` must be `true`; all other flags must be `false`. Stop if anything differs.
 
-## Commands
+```sql
+SELECT r.rolname, r.rolcanlogin, r.rolsuper, r.rolcreatedb,
+       r.rolcreaterole, r.rolreplication, r.rolbypassrls,
+       NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid)
+         AS no_memberships
+FROM pg_roles r
+WHERE r.rolname IN ('migrator', 'app');
+```
+
+If either role already exists from an interrupted passwordless bootstrap, inspect its membership before doing anything else. Use `ALTER ROLE ... WITH PASSWORD` in the same SQL Editor instead of attempting a duplicate `CREATE ROLE`. Neon rejected `psql`'s `\password` for a SQL-created role because it sent a hash, and Console Reset password refused a passwordless SQL-created probe role. Do not retry either method.
+
+## Guarded live migration order
+
+For staging, and later for a separate production project, the order is fixed: inventory the empty target; create the restricted SQL roles with distinct passwords; run `bootstrap-roles.sql` as `neondb_owner`; run `bootstrap-migrator.sql` directly as `migrator`; require `verify-role-bootstrap.sql` to return only `true`; apply and verify reviewed migrations through the protected manual workflow; then attach Hyperdrive as `app` and deploy dependent Worker code. Do not reverse this sequence, use an owner connection at runtime, or use staging as a production branch.
+
+## Safe staging reset inventory
+
+A reset is permitted only while the staging project is known empty and before Hyperdrive, Worker deployment, or application data. Before any destructive staging action, record a sanitized inventory: Neon project and branch identity, intended target, restricted role names, schema and Drizzle migration-record counts, Hyperdrive attachment status, and available restore points. Do not record URLs, passwords, row contents, or customer data.
+
+If any application object, migration record, role beyond the planned bootstrap, Hyperdrive attachment, or data is present unexpectedly, stop. Do not drop objects selectively or treat the project as empty. Create a fresh staging project or obtain a reviewed restoration plan. Never reset production under this procedure. Production starts later as a separate empty project and follows the same staging-proven bootstrap and migration sequence.
+
+## Better Auth schema compatibility
+
+`0001_better_auth_postgres` creates the Better Auth 1.7.5 `user`, `account`, `session`, and `verification` tables with text primary and foreign keys. The user profile fields and account provider and credential columns remain compatible with the application authentication adapter. The migration creates an empty target schema only and performs no user, account, session, or verification import.
+
+## Commands and exact guards
 
 ```bash
-pnpm db:generate
 pnpm db:check
-pnpm db:migration:users-and-accounts
-# Apply only after approval, with protected environment variables set:
-pnpm db:migration:users-and-accounts -- --apply
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:migrate
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_test pnpm db:verify
-# The isolated relationship test suite may use this second designated database:
 MIGRATION_TARGET=local DATABASE_URL=postgresql://migrator:migrator@localhost:5433/dayli_relationship_test pnpm db:migrate
 pnpm db:test:up && pnpm db:test && pnpm db:test:down
 ```
 
-For `MIGRATION_TARGET=local`, migration commands only accept the explicit local test databases `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. `pnpm db:verify` is read-only and fails when local migrations are pending, applied hashes changed, or the database contains unknown migration records.
+Migration commands enforce all of these guards:
+
+- `MIGRATION_TARGET` is exactly `local`, `development`, `staging`, or `production`.
+- `DATABASE_URL` must name the `migrator` role.
+- Disposable local test migrations use only `localhost:5433/dayli_test` and `localhost:5433/dayli_relationship_test`. Persistent local development uses only `migrator` at `localhost:5434/dayli_dev` through `pnpm db:dev:migrate` and `pnpm db:dev:verify`.
+- Staging and production URLs require a direct `*.neon.tech` host, reject `-pooler`, and require `sslmode=require`, `verify-ca`, or `verify-full`.
+- Production migration application additionally requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`.
+- `pnpm db:verify` is read-only and fails if migrations are pending, hashes differ, or the database has unknown migration records.
+
+`pnpm db:migrate` takes a PostgreSQL advisory lock, waits up to 30 seconds for it, uses a 5-second object-lock timeout, and uses a 5-minute statement timeout. It is forward-only. Do not write automatic down migrations.
 
 ## Safety policy
 
@@ -51,28 +82,24 @@ For `MIGRATION_TARGET=local`, migration commands only accept the explicit local 
 - Keep existing SQL and snapshots immutable and the shared journal append-only.
 - Prefer additive, independently deployable changes while older mobile clients remain installed.
 - Use Squawk for PostgreSQL safety checks.
-- Any Squawk suppression must target the exact rule and have a matching review YAML under `packages/db/migrations/reviews/` documenting reason, affected data and clients, rollout sequence, backup checkpoint, forward-fix plan, and reviewer.
-- Pending migrations run with a PostgreSQL advisory lock, a 30-second lock-acquire limit, a 5-second object-lock timeout, and a 5-minute statement timeout.
-- Migrations are forward-only. Do not write automatic down migrations.
+- A Squawk suppression must target one rule and have a matching review YAML under `packages/db/migrations/reviews/` documenting reason, affected data and clients, rollout sequence, backup checkpoint, forward-fix plan, and reviewer.
 
-## Release order
+## Staging-first release order
 
-Local verification remains the current database proof. GitHub-hosted PR and push checks are temporarily paused, and the **Database migrations** workflow is manual dispatch only. It still consumes GitHub-hosted minutes when dispatched, so it is not the normal local verification path and there are no automated migration gates. Record the commit SHA and sanitized `pnpm verify:local` output with the PR review. Do not run staging or production migrations while staging has no roles or migrations and production is unprovisioned. After staging provisioning is approved:
+Local restricted-role integration coverage is the current proof. GitHub-hosted PR and push checks are paused. The **Database migrations** workflow remains `workflow_dispatch` only and is not an automatic migration gate. The protected **Run database migrations** workflow also remains manual dispatch and is the only normal staging or production migration path.
 
-1. Merge schema and migration changes to `main` through a reviewed PR with recorded local verification evidence and CODEOWNER review.
-2. Run the protected manual migration workflow for `staging` from `main`.
-3. Verify the sanitized evidence artifact and application compatibility.
-4. For production, confirm a recent Neon restore point/backup, receive protected-environment approval, and run the same `main` commit after staging has succeeded.
+After the two restricted SQL roles have passwords, their grants and migrator defaults are in place, and `verify-role-bootstrap.sql` reports only `true`:
+
+1. Merge the reviewed schema change to `main` with recorded local verification and CODEOWNER review.
+2. Dispatch the protected staging workflow from `main` with the restricted `migrator` secret.
+3. Review the sanitized evidence artifact and verify application compatibility through Hyperdrive as `app`, never as owner.
+4. Provision a separate production Neon project only after staging succeeds. Confirm a recent production restore point, obtain protected-environment approval, and dispatch the same `main` commit with the production confirmations.
 5. Deploy dependent Worker code after the additive database change is present.
 
-## Rollback and restoration
+## Rollback, break glass, and repository settings
 
-Prefer application rollback when a code release is faulty. For database mistakes, write a forward-fix migration. If data or schema damage requires restoration, use Neon branch restore/restore point procedures, record the chosen checkpoint, expected data loss window, and verification performed, then redeploy from `main`. A live restoration exercise is not required for this foundation ticket.
+Prefer application rollback for a faulty release. For database defects, write a forward-fix migration. If restoration is necessary, use Neon restore-point procedures, record the chosen checkpoint, expected data-loss window, and verification, then redeploy from `main`.
 
-## Break glass
+Normal staging and production migrations run only through the manual GitHub Actions workflow. Break glass is allowed only when GitHub Actions is unavailable and delay would worsen an incident. Use the protected direct `migrator` URL, set `MIGRATION_TARGET`, run `pnpm db:check`, `pnpm db:migrate`, and `pnpm db:verify`, save sanitized output, and open a retrospective PR or issue.
 
-Normal staging and production migrations run only through GitHub Actions. A reviewed break-glass migration may be run locally only when GitHub Actions is unavailable and delaying would worsen an incident. Use the direct `migrator` URL from the protected secret store, set `MIGRATION_TARGET`, run `pnpm db:check`, `pnpm db:migrate`, and `pnpm db:verify`, save sanitized command output, and open a retrospective PR/issue with the evidence.
-
-## Repository settings evidence
-
-Before closing the issue, repository administrators still need to verify protected `staging` and `production` environments, `@AntGa` as required environment reviewer, main-only deployment restrictions, required **Database migrations** status check, CODEOWNER review, stale approval dismissal, and administrator bypass. Capture screenshots or settings exports without secrets or private Neon hostnames.
+Before release, administrators must configure protected `staging` and `production` environments with designated reviewers and main-only deployment restrictions. The `production` environment does not yet exist. Hosted CI is paused, so do not mark the **Database migrations** status check required until automatic checks are restored. Review CODEOWNER, stale-approval, and administrator-bypass settings. Capture screenshots or exports without secrets or private Neon hostnames.

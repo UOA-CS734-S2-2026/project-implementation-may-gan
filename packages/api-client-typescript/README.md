@@ -10,7 +10,7 @@ Pass the API URL explicitly when the application starts:
 import { Configuration, SystemApi } from "@dayli/api-client";
 
 const configuration = new Configuration({
-  basePath: process.env.NEXT_PUBLIC_API_URL,
+  basePath: process.env.NEXT_PUBLIC_API_BASE_URL,
   credentials: "include",
 });
 const systemApi = new SystemApi(configuration);

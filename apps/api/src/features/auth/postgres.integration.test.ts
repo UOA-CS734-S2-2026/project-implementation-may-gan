@@ -69,7 +69,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await migrator.close();
   });
 
-  it("creates empty session and verification target tables without a legacy import", async () => {
+  it("creates empty session and verification target tables", async () => {
     const [row] = await migrator.client`
       select
         (select count(*)::int from public.session) as sessions,
@@ -78,27 +78,27 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(row).toMatchObject({ sessions: 0, verifications: 0 });
   });
 
-  it("preserves stable text IDs, legacy profile fields, and account record shape", async () => {
+  it("preserves stable text IDs, profile fields, and account record shape", async () => {
     await migrator.client`
       insert into public."user" (id, name, username, display_username, bio, mbti, what_i_do, listening_to, profile_visibility, email, tier, role, banned)
-      values ('legacy-user-id', 'Legacy User', 'legacy_user', 'Legacy', 'Bio', 'INTJ', 'Student', 'Music', 'private', 'legacy@example.test', 'pro', 'user', false)
+      values ('schema-user-id', 'Schema User', 'schema_user', 'Schema', 'Bio', 'INTJ', 'Student', 'Music', 'private', 'schema@example.test', 'pro', 'user', false)
     `;
     await migrator.client`
       insert into public.account (id, account_id, provider_id, user_id, password)
-      values ('legacy-account-id', 'legacy-account', 'credential', 'legacy-user-id', 'not-imported-by-this-test')
+      values ('schema-account-id', 'schema-account', 'credential', 'schema-user-id', 'test-password')
     `;
 
     const [row] = await migrator.client`
       select u.id, u.username, u.profile_visibility, u.tier, a.user_id, a.provider_id
       from public."user" u join public.account a on a.user_id = u.id
-      where u.id = 'legacy-user-id'
+      where u.id = 'schema-user-id'
     `;
     expect(row).toMatchObject({
-      id: "legacy-user-id",
-      username: "legacy_user",
+      id: "schema-user-id",
+      username: "schema_user",
       profile_visibility: "private",
       tier: "pro",
-      user_id: "legacy-user-id",
+      user_id: "schema-user-id",
       provider_id: "credential",
     });
   });

@@ -20,13 +20,22 @@ describe("validateMigrationConnectionString", () => {
   it("rejects local databases that are not explicitly designated test databases", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_relationship_test_copy", "local"),
-    ).toThrow("Local migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
   });
 
   it("rejects local databases on another port", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
-    ).toThrow("Local migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+  });
+
+  it("accepts only the dedicated development database", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:secret@localhost:5434/dayli_dev", "development"),
+    ).not.toThrow();
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:secret@localhost:5433/dayli_test", "development"),
+    ).toThrow("Development migrations must target localhost:5434/dayli_dev.");
   });
 
   it("accepts direct Neon migrator URLs with required TLS", () => {

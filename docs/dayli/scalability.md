@@ -1,6 +1,6 @@
 # Scalability
 
-Design for midnight bursts, database pressure, and retained media. Registered-user counts alone do not establish load. These are test assumptions, not proven capacity:
+Design for midnight bursts, database pressure, and retained media. Registered-user counts alone do not establish load. No staging deployment or capacity run exists, so these are test assumptions, not proven capacity:
 
 | Stage | Daily users | Midnight viewers | Photo growth/month |
 | --- | --- | --- | --- |

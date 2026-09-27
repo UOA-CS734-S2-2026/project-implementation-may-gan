@@ -4,6 +4,7 @@ import { repoPath } from "./migrations/paths";
 
 const ownerBootstrapPath = repoPath("packages/db/admin/bootstrap-roles.sql");
 const migratorBootstrapPath = repoPath("packages/db/admin/bootstrap-migrator.sql");
+const developmentBootstrapPath = repoPath("packages/db/dev/init/001-development-roles.sh");
 const verificationPath = repoPath("packages/db/admin/verify-role-bootstrap.sql");
 const databaseMigrationsWorkflowPath = repoPath(".github/workflows/database-migrations.yml");
 const databaseMigrationsGuidePath = repoPath("docs/dayli/database-migrations.md");
@@ -14,6 +15,10 @@ describe("Neon role bootstrap scripts", () => {
     const migratorBootstrap = await readFile(migratorBootstrapPath, "utf8");
 
     expect(ownerBootstrap).toContain("CREATE ROLE migrator LOGIN");
+    expect(ownerBootstrap).toContain("CREATE ROLE app LOGIN");
+    expect(ownerBootstrap).not.toContain("users_accounts_importer");
+    const developmentBootstrap = await readFile(developmentBootstrapPath, "utf8");
+    expect(developmentBootstrap).not.toContain("users_accounts_importer");
     expect(ownerBootstrap).toContain("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
     expect(ownerBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES/i);
     expect(ownerBootstrap).not.toMatch(/CREATE SCHEMA IF NOT EXISTS drizzle/i);
@@ -21,7 +26,6 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public");
     expect(migratorBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES FOR ROLE migrator/i);
     expect(migratorBootstrap).toContain("CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator");
-    expect(migratorBootstrap).toContain("GRANT SELECT, INSERT ON TABLE public.\"user\", public.account TO users_accounts_importer");
     expect(migratorBootstrap).toContain("REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, app");
   });
 
@@ -31,7 +35,6 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("roles_are_restricted");
     expect(verification).toContain("app_public_create");
     expect(verification).toContain("app_public_table_defaults");
-    expect(verification).toContain("importer_target_table_rights");
     expect(verification).toContain("roles_have_no_memberships");
     const executableSql = verification
       .replace(/--.*$/gm, "")
@@ -39,12 +42,13 @@ describe("Neon role bootstrap scripts", () => {
     expect(executableSql).not.toMatch(/\b(?:CREATE|ALTER|DROP|GRANT|REVOKE|INSERT|UPDATE|DELETE)\b/i);
   });
 
-  it("defers live Neon provisioning until first-password handling is verified", async () => {
+  it("documents SQL-created restricted roles without publishing credentials", async () => {
     const guide = await readFile(databaseMigrationsGuidePath, "utf8");
 
+    expect(guide).toContain("CREATE ROLE migrator WITH LOGIN PASSWORD '<unique migrator password>'");
+    expect(guide).toContain("CREATE ROLE app WITH LOGIN PASSWORD '<different app password>'");
+    expect(guide).toContain("Never use the Console's Create role action");
     expect(guide).toContain("Neon rejected `psql`'s `\\password`");
-    expect(guide).toContain("Do not run the owner bootstrap, migrations, or Hyperdrive setup");
-    expect(guide).toContain("secure, Neon-compatible procedure has been reviewed and tested");
     expect(guide).not.toContain("Run `\\password migrator`");
   });
 
