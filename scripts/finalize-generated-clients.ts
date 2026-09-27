@@ -15,7 +15,7 @@ Pass the API URL explicitly when the application starts:
 import { Configuration, SystemApi } from "@dayli/api-client";
 
 const configuration = new Configuration({
-  basePath: process.env.NEXT_PUBLIC_API_URL,
+  basePath: process.env.NEXT_PUBLIC_API_BASE_URL,
   credentials: "include",
 });
 const systemApi = new SystemApi(configuration);
@@ -43,7 +43,7 @@ final systemApi = SystemApi(client);
 final health = await systemApi.systemHealth();
 \`\`\`
 
-Typical local URLs are \`http://localhost:8787\` for iOS Simulator and \`http://10.0.2.2:8787\` for Android Emulator. Physical devices need the development machine's reachable network address. Staging and production URLs must come from application configuration.
+For local HTTPS auth, use \`https://localhost:8787\` in iOS Simulator. Android emulators and USB-connected debug devices use that same URL with \`adb reverse tcp:8787 tcp:8787\` after the mkcert CA is installed on the device. It is not a LAN-accessible endpoint. See [Environments](../../docs/dayli/environments.md) for the trust and launch steps. Staging and production URLs must come from application configuration.
 
 Regenerate this package from the repository root with \`pnpm generate:clients\`.
 `;
@@ -53,7 +53,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('constructs the public client with an explicit base URL', () {
-    const baseUrl = 'http://10.0.2.2:8787';
+    const baseUrl = 'https://localhost:8787';
     final client = ApiClient(basePath: baseUrl);
     final api = SystemApi(client);
 

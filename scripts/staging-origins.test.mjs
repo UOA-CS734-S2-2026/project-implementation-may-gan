@@ -22,6 +22,8 @@ test("rejects cross-site, same-host, and suffix lookalike origins", () => {
     { webOrigin: valid.apiOrigin },
     { siteHost: "com" },
     { siteHost: "co.uk" },
+    { siteHost: "s3.amazonaws.com", apiOrigin: "https://api.s3.amazonaws.com", webOrigin: "https://web.s3.amazonaws.com" },
+    { siteHost: "github.io", apiOrigin: "https://api.github.io", webOrigin: "https://web.github.io" },
   ]) {
     assert.throws(() => validateStagingOrigins({ ...valid, ...changes }));
   }
