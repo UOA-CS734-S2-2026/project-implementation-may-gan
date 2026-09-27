@@ -39,7 +39,7 @@ Better Auth has local Worker and PostgreSQL coverage. Staging has a deployed API
 
 ### Web vinext Worker trial
 
-`apps/web` has a local no-deploy vinext beta trial. It adds a Vite configuration and a separate `wrangler.jsonc` with no bindings, account data, route, zone, domain, or resource ID. The API Worker remains independently configured in `apps/api`. No application source imports Cloudflare APIs.
+`apps/web` has a reversible vinext beta trial and a manual-only staging deployment workflow. Its separate `wrangler.jsonc` targets only `dayli-web-staging`, disables `workers.dev`, and has no database binding, account data, route, zone, domain, or resource ID. The API Worker remains independently configured in `apps/api`. No application source imports Cloudflare APIs.
 
 The existing `next dev`, `next build`, and `next start` scripts remain unchanged. The trial uses Node 24 and pnpm 10 with pinned dependencies:
 
@@ -50,13 +50,13 @@ NEXT_PUBLIC_API_BASE_URL=https://api.staging.example.test pnpm --filter @dayli/w
 pnpm --filter @dayli/web start:vinext
 ```
 
-`dev:vinext` uses port 3001. `start:vinext` previews the built Worker locally on port 8790. Neither command deploys, and the trial has no `deploy:vinext` script. `NEXT_PUBLIC_API_BASE_URL` is compiled into browser code. Every Worker build needs an exact HTTPS staging API origin with no path, query, fragment, or trailing slash. The command uses a non-routable example. Keep any real staging origin in ignored build configuration.
+`dev:vinext` uses port 3001. `start:vinext` previews the built Worker locally on port 8790. Neither command deploys, and the trial has no local `deploy:vinext` script. After review and merge, the `staging-web.yml` workflow can be dispatched manually from `main`. It checks the exact staging API and web origins, builds vinext with the API origin, verifies the generated Worker target and disabled `workers.dev` route, then deploys the web Worker. The workflow does not attach the web custom domain; an owner must separately attach the reviewed staging web hostname and verify its certificate before browser testing. `NEXT_PUBLIC_API_BASE_URL` is compiled into browser code. Every Worker build needs an exact HTTPS staging API origin with no path, query, fragment, or trailing slash. The command uses a non-routable example. Keep any real staging origin in ignored build configuration.
 
 Cloudflare's [Next.js on Workers guide](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/) recommends vinext for Next.js 16, but vinext remains beta. The verified compatibility check reported 92% compatibility with 11 supported items, two partial items, and no setup issues. `next/font/google` loads from a CDN rather than self-hosting at build time. `next/image` has partial optimization support, and this trial does not configure Cloudflare Images or an image binding. The vinext build reports some dynamic routes as unknown. It does not prove deployed authentication, image optimization, bindings, or sign-in against a staging API.
 
 `build:vinext` always runs `next typegen` after Vite, including when Vite fails. This restores the generated Next route declarations so the tracked `next-env.d.ts` stays unchanged and a standalone type check can run immediately afterward.
 
-To switch off, use the unchanged Next scripts. To remove the trial, remove the vinext scripts and dependencies, `vite.config.ts`, `wrangler.jsonc`, the build wrapper, and their lockfile entries. Remove only the trial entries from `apps/web/.gitignore`. Do not delete that file if it already has other ignore rules. Restore React and React DOM to the previous pinned version if wanted, then run `pnpm install --frozen-lockfile`.
+To switch off, use the unchanged Next scripts. To remove the trial, remove the manual staging web workflow, the vinext scripts and dependencies, `vite.config.ts`, `wrangler.jsonc`, the build wrapper, and their lockfile entries. Remove only the trial entries from `apps/web/.gitignore`. Do not delete that file if it already has other ignore rules. Restore React and React DOM to the previous pinned version if wanted, then run `pnpm install --frozen-lockfile`.
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. Neon staging and production ownership/secrets remain administrator-managed. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 

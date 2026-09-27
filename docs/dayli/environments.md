@@ -124,11 +124,11 @@ Restart the app or Simulator if it was running when the CA was added. This imple
 
 ## Validation boundaries
 
-The scripts and configuration can be checked locally without contacting Neon, Cloudflare, DNS, Google, Resend, staging, or production. Do not add local values to `wrangler.jsonc`, tracked environment files, GitHub workflow configuration, or a deployed Worker. The manual-only `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows remain available for later approved staging work; local setup does not invoke or modify them.
+The scripts and configuration can be checked locally without contacting Neon, Cloudflare, DNS, Google, Resend, staging, or production. Do not add local values to `wrangler.jsonc`, tracked environment files, GitHub workflow configuration, or a deployed Worker. The manual-only `staging-hyperdrive.yml`, `staging-web.yml`, and `cleanup-hyperdrive-preview.yml` workflows require separate staging decisions; local setup does not invoke them.
 
 ## Staging and production
 
-Local HTTPS authentication works. The staging owner reports restricted roles and grants verified, migrations `0000` through `0007` applied and verified, an `app` Hyperdrive with caching disabled, and a deployed API Worker on a custom HTTPS domain. The private connection and transaction tests reached their assertions, but the workflow failed while writing evidence, so the API and authentication are not validated. No staging web Worker or production service is deployed. The GitHub `staging` environment has main-only branch restrictions and credentials, but no required reviewer rule. The credentialed staging and cleanup workflows remain manual; each run needs a separate decision.
+Local HTTPS authentication works. The staging owner reports restricted roles and grants verified, migrations `0000` through `0007` applied and verified, an `app` Hyperdrive with caching disabled, and a deployed API Worker on a custom HTTPS domain. The private Hyperdrive proof passed at `1fb6388` with sanitized evidence. Deployed authentication has not been tested. No staging web Worker or production service is deployed. The GitHub `staging` environment has main-only branch restrictions and credentials, but no required reviewer rule. The credentialed API, web, and cleanup workflows remain manual; each run needs a separate decision.
 
 Choose separate exact HTTPS web and API origins under the same registrable domain for each live environment. The manual staging workflow also requires `STAGING_AUTH_SITE_HOST`, a reviewed shared parent hostname of at least three labels containing both staging hosts. Set the API origin as `BETTER_AUTH_BASE_URL`, include API and web origins in `BETTER_AUTH_TRUSTED_ORIGINS`, and build web and mobile clients with that API origin. Do not use a path, wildcard, trailing slash, localhost, a `workers.dev` endpoint, or a production origin for staging. Local certificates and local PostgreSQL credentials are never valid for staging or production.
 
@@ -137,8 +137,8 @@ Choose separate exact HTTPS web and API origins under the same registrable domai
 The staging owner removed the temporary passwordless probe role. The `migrator` migration secret and Cloudflare proof credentials are stored in the main-only GitHub environment; the API Worker has its own Better Auth secret. Google and Resend are not enabled. Before inviting testers:
 
 1. Add a required reviewer to the GitHub `staging` environment. Previous manual runs had explicit owner approval but no environment review gate.
-2. Require the full private Hyperdrive transaction proof to pass. Do not treat a successful Worker deploy or `select 1` alone as the proof.
-3. With synthetic accounts, test sign-up, sign-in, secure-cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin on the exact HTTPS staging API and web hosts. The vinext web trial is still an open PR, not a deployed site.
+2. Review and merge the vinext web PR. After separate approval, dispatch the manual `staging-web.yml` workflow from `main`. It compiles the exact staging API origin into the web build and deploys `dayli-web-staging` without a `workers.dev` route. An owner must then attach the reviewed staging web custom domain and confirm its active certificate. The PR is still open; neither the Worker nor domain is deployed.
+3. With synthetic accounts, test sign-up, sign-in, secure-cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin on the exact HTTPS staging hosts.
 
 Google OAuth and Resend requirements are in [Authentication compatibility](authentication-compatibility.md). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
 

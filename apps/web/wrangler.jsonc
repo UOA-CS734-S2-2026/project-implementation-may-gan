@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dayli-web-vinext-trial",
+  "name": "dayli-web-staging",
+  "workers_dev": false,
   "compatibility_date": "2026-09-27",
   "compatibility_flags": [
     "nodejs_compat"
