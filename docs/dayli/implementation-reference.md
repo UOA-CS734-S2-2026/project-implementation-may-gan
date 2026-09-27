@@ -12,7 +12,7 @@ Use this while building. The other guides explain the design; this document reco
 
 ## 2. Runtime and deployment gates
 
-Better Auth has Worker and local PostgreSQL coverage. The web and Flutter auth screens are checked in. Local HTTPS development is available through `pnpm local:auth:setup`, `pnpm dev:api:https`, and `pnpm dev:web:https`. The Flutter Google button reports unavailable when no client configuration is supplied. Staging has a deployed API Worker and restricted Hyperdrive, but the full private transaction proof timed out and deployed authentication is unverified. The web app is not deployed, and production is not deployed. Before porting every remaining endpoint, prove these in the actual Worker runtime:
+Better Auth has Worker and local PostgreSQL coverage. The web and Flutter auth screens are checked in. Local HTTPS development is available through `pnpm local:auth:setup`, `pnpm dev:api:https`, and `pnpm dev:web:https`. The Flutter Google button reports unavailable when no client configuration is supplied. Staging has a deployed API Worker and restricted Hyperdrive, but the last private proof run failed while writing evidence and deployed authentication is unverified. The web app is not deployed, and production is not deployed. Before porting every remaining endpoint, prove these in the actual Worker runtime:
 
 | Integration | Required checks |
 | --- | --- |
