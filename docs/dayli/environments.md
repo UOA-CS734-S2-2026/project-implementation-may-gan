@@ -128,18 +128,17 @@ The scripts and configuration can be checked locally without contacting Neon, Cl
 
 ## Staging and production
 
-Local HTTPS authentication is implemented. Staging is not deployed: its owner reports that restricted roles and grants passed bootstrap verification, but application migrations, Hyperdrive, a Worker, and a validated endpoint are still absent. The old staging Worker, Hyperdrive configuration, GitHub `staging` environment credentials, and local staging Wrangler files were removed. The retained `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows are manual only and cannot run until approved staging credentials are re-provisioned. Their existence does not authorize a deployment or proof.
+Local HTTPS authentication works. The staging owner reports restricted roles and grants verified, migrations `0000` through `0007` applied and verified, an `app` Hyperdrive with caching disabled, and a deployed API Worker on a custom HTTPS domain. The private connection proof passed, but the transaction proof timed out, so the API and authentication are not validated. No staging web Worker or production service is deployed. The GitHub `staging` environment has main-only branch restrictions and credentials, but no required reviewer rule. The credentialed staging and cleanup workflows remain manual; each run needs a separate decision.
 
 Choose separate exact HTTPS web and API origins under the same registrable domain for each live environment. The manual staging workflow also requires `STAGING_AUTH_SITE_HOST`, a reviewed shared parent hostname of at least three labels containing both staging hosts. Set the API origin as `BETTER_AUTH_BASE_URL`, include API and web origins in `BETTER_AUTH_TRUSTED_ORIGINS`, and build web and mobile clients with that API origin. Do not use a path, wildcard, trailing slash, localhost, a `workers.dev` endpoint, or a production origin for staging. Local certificates and local PostgreSQL credentials are never valid for staging or production.
 
-### Staging checklist
+### Remaining staging checks
 
-Before provisioning, verify the staging branch has no application data. If the earlier passwordless `dayli_password_probe` test role remains, inspect it for dependencies and remove it before final role verification. Neon's documented SQL Editor procedure creates restricted roles with passwords, but its query text may be retained. In order:
+The staging owner removed the temporary passwordless probe role. The `migrator` migration secret and Cloudflare proof credentials are stored in the main-only GitHub environment; the API Worker has its own Better Auth secret. Google and Resend are not enabled. Before inviting testers:
 
-1. Create the two restricted SQL roles with separate passwords, complete the bootstrap, and run read-only role verification in [Database migrations](database-migrations.md). Use `migrator` only for direct migrations and `app` only behind Hyperdrive.
-2. Configure the protected GitHub `staging` environment with main-only deployment and reviewer approval before adding credentials, including the direct unpooled `migrator` migration secret. Keep the migration, staging proof, and preview-cleanup workflows manual.
-3. Create a new staging Hyperdrive binding for `app` with query caching disabled, then a new staging Worker with its own Better Auth secret and exact public origins. Leave Google and Resend absent until each provider is complete.
-4. Build clients against the staging API and use synthetic accounts to prove sign-up, sign-in, cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin. Local tests are not a deployed Hyperdrive proof.
+1. Add a required reviewer to the GitHub `staging` environment. Previous manual runs had explicit owner approval but no environment review gate.
+2. Require the full private Hyperdrive transaction proof to pass. Do not treat a successful Worker deploy or `select 1` alone as the proof.
+3. With synthetic accounts, test sign-up, sign-in, secure-cookie and bearer-session restoration, sign-out, protected calls, and rejection of an unlisted origin on the exact HTTPS staging API and web hosts. The vinext web trial is still an open PR, not a deployed site.
 
 Google OAuth and Resend requirements are in [Authentication compatibility](authentication-compatibility.md). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
 

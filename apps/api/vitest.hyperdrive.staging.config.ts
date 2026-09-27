@@ -6,5 +6,8 @@ export default defineConfig({
     remoteBindings: true,
     wrangler: { configPath: "./wrangler.hyperdrive-test.jsonc" },
   })],
-  test: { include: ["test/**/*.staging.test.ts"] },
+  test: {
+    include: ["test/**/*.staging.test.ts"],
+    testTimeout: 60_000,
+  },
 });
