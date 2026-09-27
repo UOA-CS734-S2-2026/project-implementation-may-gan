@@ -9,6 +9,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 ## Read by topic
 
 - [Environments](environments.md): implemented local HTTPS sign-in, unprovisioned staging, and the separate production reset and release boundary.
+- [Web vinext Worker trial](vinext-trial.md): local no-deploy Cloudflare Worker compatibility trial and removal steps.
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
