@@ -88,6 +88,12 @@ function nativeHeaders(token: string): HeadersInit {
   return { "content-type": "application/json", authorization: `Bearer ${token}` };
 }
 
+function sessionCookie(response: Response) {
+  const cookie = response.headers.get("set-cookie");
+  expect(cookie).toBeTruthy();
+  return cookie!.split(";", 1)[0]!;
+}
+
 function googleLinkBody(token: string, currentPassword = password) {
   return {
     provider: "google",
@@ -210,6 +216,60 @@ describe("Google Better Auth provider", () => {
     expect(missingPassword.status).toBe(400);
     expect(wrongPassword.status).toBe(400);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a browser link callback after password reset without contacting Google", async () => {
+    const deliveredBodies: string[] = [];
+    const fetchMock = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      deliveredBodies.push(String(init?.body));
+      return new Response("{}", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const database: CompatibilityDatabase = { user: [], account: [], session: [], verification: [] };
+    const app = createApp({ auth: createBetterAuthCompatibilitySlice({
+      baseURL: origin,
+      secret,
+      google: { clientIds, clientSecret: "worker-only-google-secret" },
+      resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
+      database,
+    }) });
+    const signUp = await app.fetch(request("/api/auth/sign-up/email", {
+      name: "Password User",
+      email: "browser-reset@example.test",
+      password,
+    }));
+    const cookie = sessionCookie(signUp);
+    const initiated = await app.fetch(request("/api/auth/link-social", {
+      provider: "google",
+      password,
+      callbackURL: `${origin}/settings`,
+      disableRedirect: true,
+    }, { origin, "content-type": "application/json", cookie }));
+    expect(initiated.status).toBe(200);
+    const authorization = await initiated.json() as { url: string };
+    const state = new URL(authorization.url).searchParams.get("state");
+    expect(state).toBeTruthy();
+
+    await app.fetch(request("/api/auth/request-password-reset", {
+      email: "browser-reset@example.test",
+      redirectTo: `${origin}/reset-password`,
+    }));
+    const resetToken = deliveredBodies[0]?.match(/\/reset-password\/([^?\\"]+)/)?.[1];
+    expect(resetToken).toBeTruthy();
+    const reset = await app.fetch(request("/api/auth/reset-password", {
+      token: resetToken,
+      newPassword: "updated-not-a-real-password",
+    }));
+    expect(reset.status).toBe(200);
+    const fetchesBeforeCallback = fetchMock.mock.calls.length;
+
+    const callback = await app.fetch(new Request(
+      `${origin}/api/auth/callback/google?state=${encodeURIComponent(state!)}&code=not-a-real-code`,
+      { headers: { cookie } },
+    ));
+    expect(callback.status).toBe(401);
+    expect(fetchMock).toHaveBeenCalledTimes(fetchesBeforeCallback);
+    expect(database.account.filter((account) => account.providerId === "google")).toHaveLength(0);
   });
 
   it("rejects different emails and Google identities already linked to another user", async () => {

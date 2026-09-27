@@ -1,0 +1,6 @@
+reason: The index is on a newly created empty table and runs inside the migration transaction, where CREATE INDEX CONCURRENTLY is unavailable.
+affected_data_and_clients: No existing confirmation rows exist when the index is built. Account rows are unaffected by this index.
+rollout_sequence: Apply only through the separately approved protected staging workflow before the Worker uses confirmation records.
+backup_checkpoint: Confirm the required Neon restore point before the protected workflow is dispatched.
+forward_fix_plan: Add a new reviewed migration if the index needs correction; do not alter this migration after release.
+reviewer: Required database CODEOWNER review and separately approved staging migration workflow.

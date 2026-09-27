@@ -1,0 +1,6 @@
+reason: The foreign key is created with its new empty confirmation table, so no existing application rows require scanning or repair.
+affected_data_and_clients: Only a new short-lived confirmation table references existing users. It does not rewrite user or account rows.
+rollout_sequence: Apply through the separately approved protected staging workflow before dependent Worker deployment.
+backup_checkpoint: Confirm the required Neon restore point before the protected workflow is dispatched.
+forward_fix_plan: Use a new reviewed forward migration for any foreign key correction and never edit released history.
+reviewer: Required database CODEOWNER review and separately approved staging migration workflow.

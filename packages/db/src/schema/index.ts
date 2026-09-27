@@ -52,7 +52,20 @@ export const account = pgTable("account", {
   password: text("password"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
-}, (table) => [index("account_user_id_idx").on(table.userId)]);
+}, (table) => [
+  index("account_user_id_idx").on(table.userId),
+  unique("account_provider_id_account_id_unique").on(table.providerId, table.accountId),
+]);
+
+/** A short-lived, single-use password confirmation for browser OAuth linking. */
+export const socialLinkConfirmation = pgTable("social_link_confirmation", {
+  stateDigest: text("state_digest").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("social_link_confirmation_user_expires_at_idx").on(table.userId, table.expiresAt)]);
 
 export const verification = pgTable("verification", {
   id: text("id").primaryKey(),
@@ -255,6 +268,7 @@ export const schema = {
   rateLimit,
   relationshipBlocks,
   session,
+  socialLinkConfirmation,
   tomorrowNotes,
   user,
   verification,

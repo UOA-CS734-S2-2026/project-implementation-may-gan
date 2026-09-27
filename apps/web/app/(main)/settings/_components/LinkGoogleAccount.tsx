@@ -25,12 +25,13 @@ export function LinkGoogleAccount() {
           provider: "google",
           password,
           callbackURL: `${window.location.origin}/settings`,
+          disableRedirect: true,
         }),
       });
       if (!response.ok) throw new Error("link-rejected");
       const result = await response.json() as { url?: unknown };
       if (typeof result.url !== "string" || result.url.length === 0) throw new Error("link-rejected");
-      // Better Auth's callback binds the provider identity to this session.
+      // The API binds this redirect to the password-confirming live session.
       window.location.assign(result.url);
     } catch {
       setError("We could not link Google. Check your current password and use the Google account with this email.");

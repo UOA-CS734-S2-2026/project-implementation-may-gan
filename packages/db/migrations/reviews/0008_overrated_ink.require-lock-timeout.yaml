@@ -1,0 +1,6 @@
+reason: The migration runner sets a five-second lock timeout before applying this transaction.
+affected_data_and_clients: Adds an empty confirmation table and an account mapping uniqueness constraint without altering existing account data.
+rollout_sequence: Complete the documented duplicate preflight and apply only through the approved staging workflow before Worker deployment.
+backup_checkpoint: Confirm the required Neon restore point before the protected workflow is dispatched.
+forward_fix_plan: If lock acquisition fails, investigate contention and use a newly reviewed forward migration if the schema changes.
+reviewer: Required database CODEOWNER review and separately approved staging migration workflow.

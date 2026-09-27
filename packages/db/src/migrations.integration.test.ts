@@ -51,6 +51,53 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     await app.end({ timeout: 5 });
   });
 
+  it("atomically rejects concurrent ownership of one provider account subject", async () => {
+    const firstUser = `provider-race-first-${crypto.randomUUID()}`;
+    const secondUser = `provider-race-second-${crypto.randomUUID()}`;
+    const subject = `provider-race-subject-${crypto.randomUUID()}`;
+    const first = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const second = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    let releaseFirstInsert: (() => void) | undefined;
+    let markFirstInserted: (() => void) | undefined;
+    const firstInserted = new Promise<void>((resolve) => { markFirstInserted = resolve; });
+    const release = new Promise<void>((resolve) => { releaseFirstInsert = resolve; });
+
+    await migrator`
+      insert into public."user" (id, name, email)
+      values (${firstUser}, 'First Provider Race', ${`${firstUser}@example.test`}),
+             (${secondUser}, 'Second Provider Race', ${`${secondUser}@example.test`})
+    `;
+
+    try {
+      const firstInsert = first.begin(async (tx) => {
+        await tx`
+          insert into public.account (id, account_id, provider_id, user_id)
+          values (${`provider-race-account-first-${crypto.randomUUID()}`}, ${subject}, 'google', ${firstUser})
+        `;
+        markFirstInserted?.();
+        await release;
+      });
+      await firstInserted;
+      const secondInsert = second`
+        insert into public.account (id, account_id, provider_id, user_id)
+        values (${`provider-race-account-second-${crypto.randomUUID()}`}, ${subject}, 'google', ${secondUser})
+      `;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      releaseFirstInsert?.();
+
+      const results = await Promise.allSettled([firstInsert, secondInsert]);
+      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejected = results.find((result) => result.status === "rejected");
+      expect(rejected?.status === "rejected" ? rejected.reason : undefined).toMatchObject({ code: "23505" });
+    } finally {
+      releaseFirstInsert?.();
+      await first.end({ timeout: 5 });
+      await second.end({ timeout: 5 });
+      await migrator`delete from public.account where account_id = ${subject}`;
+      await migrator`delete from public."user" where id in (${firstUser}, ${secondUser})`;
+    }
+  });
+
   it("applies the test-only fixture table and grants app DML", async () => {
     const fixtureSql = await readFile(repoPath("packages/db/test/fixtures/migrations/0001_create_fixture_table.sql"), "utf8");
     await migrator.unsafe(fixtureSql);
