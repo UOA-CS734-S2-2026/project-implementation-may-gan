@@ -34,9 +34,9 @@ describe("Resend authentication delivery", () => {
   });
 
   it.each([
-    [verificationEmail, "Verify email", "Verify your email address to continue."],
-    [passwordResetEmail, "Reset password", "Reset your password using this link."],
-  ])("renders a branded, escaped email with a plain-text fallback", (createEmail, action, intro) => {
+    [verificationEmail, "Verify email", "Verify your email", "Verify your email address to continue."],
+    [passwordResetEmail, "Reset password", "Reset your password", "Reset your password using this link."],
+  ])("renders a branded, escaped email with a plain-text fallback", (createEmail, action, heading, intro) => {
     const url = 'https://example.test/auth?token=a&next="<unsafe>"';
     const email = createEmail("user@example.test", url);
 
@@ -44,7 +44,10 @@ describe("Resend authentication delivery", () => {
     expect(email.text).toContain("If you did not request this");
     expect(email.html).toContain("#FBFAF9");
     expect(email.html).toContain("#F3E8FF");
-    expect(email.html).toContain("one post, every day.");
+    expect(email.html).toMatch(new RegExp(`<h1[^>]*>${heading}</h1>`));
+    expect(email.html).not.toContain("One more step.");
+    expect(email.html).not.toContain("A fresh start.");
+    expect(email.html).not.toContain("one post, every day.");
     expect(email.html).toContain("font-family:Spectral,Georgia,serif");
     expect(email.html).toContain('src="cid:dayli-logo"');
     expect(email.html).toContain(`${action} &rarr;`);
