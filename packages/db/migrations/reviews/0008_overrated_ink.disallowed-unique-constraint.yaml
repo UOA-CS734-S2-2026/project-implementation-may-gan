@@ -1,0 +1,6 @@
+reason: The database must reject concurrent ownership of the same provider subject. The migration first fails closed when any duplicate provider/account mapping exists.
+affected_data_and_clients: Existing account rows are read only. No automatic deduplication, reassignment, deletion, or token mutation occurs.
+rollout_sequence: Run the documented manual duplicate preflight, stop on any result, obtain a separately approved remediation plan, then run the approved staging workflow.
+backup_checkpoint: Confirm the required Neon restore point before the protected workflow is dispatched.
+forward_fix_plan: Resolve any duplicate only under an approved data plan and add a new reviewed forward migration for schema corrections.
+reviewer: Required database CODEOWNER review and separately approved staging migration workflow.

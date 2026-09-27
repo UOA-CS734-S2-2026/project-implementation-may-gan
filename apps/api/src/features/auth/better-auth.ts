@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { betterAuth } from "better-auth/minimal";
 import { bearer } from "better-auth/plugins/bearer";
+import { createMemorySocialLinkConfirmationStore } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../lib/hyperdrive";
 import {
   passwordResetEmail,
@@ -151,6 +152,7 @@ export function createBetterAuthCompatibilitySlice({
       trustedOrigins,
     }),
     trustedOrigins,
+    socialLinkConfirmations: createMemorySocialLinkConfirmationStore(),
   };
 }
 

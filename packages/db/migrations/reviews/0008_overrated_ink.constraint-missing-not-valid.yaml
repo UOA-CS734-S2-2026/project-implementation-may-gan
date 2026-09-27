@@ -1,0 +1,6 @@
+reason: The new foreign key applies to an empty table and the unique constraint must be immediately valid to prevent concurrent duplicate OAuth mappings.
+affected_data_and_clients: The confirmation table begins empty. Existing account rows are read for duplicates and are never modified or deleted.
+rollout_sequence: Require a clean manual duplicate preflight and separately approved staging migration before deploying dependent code.
+backup_checkpoint: Confirm the required Neon restore point before the protected workflow is dispatched.
+forward_fix_plan: Stop on a duplicate or validation failure, remediate only through an approved plan, then use a new reviewed migration.
+reviewer: Required database CODEOWNER review and separately approved staging migration workflow.
