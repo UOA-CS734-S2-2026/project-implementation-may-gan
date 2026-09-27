@@ -137,6 +137,26 @@ describe("POST /api/v1/media-reservations", () => {
     await expect(overQuota.json()).resolves.toMatchObject({ error: { code: "RATE_LIMITED" } });
   });
 
+  it("does not count validated or failed reservations toward the pending quota", async () => {
+    const repository = createFakeMediaReservationRepository();
+    const { app } = createTestApp(repository);
+    const token = await signUpAndGetToken(app);
+
+    for (let index = 0; index < MAX_PENDING_RESERVATIONS_PER_OWNER; index += 1) {
+      const response = await createReservation(app, token);
+      expect(response.status).toBe(201);
+    }
+    expect((await createReservation(app, token)).status).toBe(429);
+
+    // Settle two of the still-unexpired reservations, as /complete would.
+    const [first, second] = [...repository.records.values()];
+    repository.records.set(first!.id, { ...first!, status: "validated", validatedAt: new Date() });
+    repository.records.set(second!.id, { ...second!, status: "failed", failureReason: "byte_size_mismatch", validatedAt: new Date() });
+
+    const afterSettling = await createReservation(app, token);
+    expect(afterSettling.status).toBe(201);
+  });
+
   it("returns 503 when media reservations are not configured", async () => {
     const auth = createBetterAuthCompatibilitySlice({
       baseURL: origin,

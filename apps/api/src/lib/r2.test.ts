@@ -42,6 +42,7 @@ describe("createPresignedUploadUrl", () => {
     expect(upload.requiredHeaders).toEqual({
       "content-type": "image/jpeg",
       "content-length": "1024",
+      "if-none-match": "*",
     });
 
     const url = new URL(upload.url);
@@ -52,6 +53,7 @@ describe("createPresignedUploadUrl", () => {
     expect(url.searchParams.get("X-Amz-Credential")).toContain(configuration.accessKeyId);
     expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("content-length");
     expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("content-type");
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).toContain("if-none-match");
     expect(url.searchParams.get("X-Amz-Signature")).toBeTruthy();
 
     expect(upload.url).not.toContain(configuration.secretAccessKey);

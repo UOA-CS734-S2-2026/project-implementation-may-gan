@@ -90,13 +90,15 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
 
   beforeAll(async () => {
     await migrator.client.unsafe('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
-    await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier cascade');
+    await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade');
     const authMigration = await readFile(new URL("../../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
     const rateLimitMigration = await readFile(new URL("../../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
     const mediaReservationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0003_add_media_reservation.sql", import.meta.url), "utf8");
+    const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0008_add_media_reservation_validation.sql", import.meta.url), "utf8");
     await migrator.client.unsafe(authMigration);
     await migrator.client.unsafe(rateLimitMigration);
     await migrator.client.unsafe(mediaReservationMigration);
+    await migrator.client.unsafe(mediaValidationMigration);
   });
 
   beforeEach(async () => {
@@ -132,6 +134,28 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
 
     const [row] = await migrator.client`select count(*)::int as count from public.media_reservation`;
     expect(row?.count).toBe(MAX_PENDING_RESERVATIONS_PER_OWNER);
+  });
+
+  it("does not count a validated reservation's real row toward the pending quota", async () => {
+    const app = createProductionApp();
+    const token = await signUp(app, "settled-quota-owner@example.test");
+
+    let lastCreated: ReservationJson | undefined;
+    for (let index = 0; index < MAX_PENDING_RESERVATIONS_PER_OWNER; index += 1) {
+      const response = await reserve(app, token);
+      expect(response.status).toBe(201);
+      lastCreated = (await response.json()) as ReservationJson;
+    }
+    expect((await reserve(app, token)).status).toBe(429);
+
+    await migrator.client`
+      update public.media_reservation
+      set status = 'validated', validated_at = now()
+      where id = ${lastCreated!.id}
+    `;
+
+    const afterSettling = await reserve(app, token);
+    expect(afterSettling.status).toBe(201);
   });
 
   it("serialises concurrent reservation attempts so the quota is never exceeded", async () => {

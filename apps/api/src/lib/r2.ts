@@ -76,6 +76,12 @@ function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
  * implementation-reference.md §6: "a signed PUT is not content validation" on its own,
  * this is what makes the declared quota actually enforceable at the storage layer).
  * Never exposes the underlying R2 credentials to the caller.
+ *
+ * Also signs `if-none-match: *`, R2's conditional-write header, so the object can
+ * only ever be created once: the first PUT to succeed wins and every later PUT to
+ * the same key — including one sent after /complete already validated the first
+ * upload — is rejected by R2 with a 412 rather than silently replacing bytes a
+ * client already had checked and trusted.
  */
 export async function createPresignedUploadUrl(
   configuration: R2RuntimeConfiguration,
@@ -84,6 +90,7 @@ export async function createPresignedUploadUrl(
   const requiredHeaders: Record<string, string> = {
     "content-type": input.contentType,
     "content-length": String(input.byteSize),
+    "if-none-match": "*",
   };
 
   const url = new URL(buildObjectUrl(configuration, input.objectKey));
