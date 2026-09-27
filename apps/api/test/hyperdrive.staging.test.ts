@@ -1,5 +1,4 @@
-import { writeFileSync } from "node:fs";
-import { env } from "cloudflare:test";
+import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 interface HyperdriveIntegrationService {
@@ -23,9 +22,13 @@ interface HyperdriveIntegrationService {
   }>;
 }
 
-declare module "cloudflare:test" {
-  interface ProvidedEnv {
-    STAGING_API: HyperdriveIntegrationService;
+declare global {
+  // Cloudflare.Env is a global interface, so its test binding needs an ambient namespace merge.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Cloudflare {
+    interface Env {
+      STAGING_API: HyperdriveIntegrationService;
+    }
   }
 }
 
@@ -48,21 +51,7 @@ describe("staging Hyperdrive", () => {
     });
     const visibility = await env.STAGING_API.verifyTransactions(group, proof.committedRow, proof.rolledBackRow);
     expect(visibility).toEqual({ committedVisible: true, rolledBackAbsent: true, cleanup: true });
-    writeFileSync("hyperdrive-proof-evidence.json", JSON.stringify({
-      commitSha: process.env.GITHUB_SHA ?? "local",
-      timestamp: new Date().toISOString(),
-      pass: true,
-      committed: proof.committed,
-      rolledBack: proof.rolledBack,
-      cleanup: visibility.cleanup,
-      constraints: proof.constraints,
-      appRole: proof.appRole,
-      updateDenied: proof.updateDenied,
-      ddlDenied: proof.ddlDenied,
-      cacheDisabled: true,
-      isolationLevel: proof.isolationLevel,
-      serverVersion: proof.serverVersion,
-      versions: { node: process.version, pnpm: "10.32.1", drizzle: "0.45.2", postgres: "3.4.9", wrangler: "4.129.1", workersVitestPool: "0.12.21", vitest: "3.2.7", compatibilityDate: "2026-03-10" },
-    }, null, 2));
+    expect(proof.isolationLevel).not.toBe("");
+    expect(proof.serverVersion).not.toBe("");
   });
 });
