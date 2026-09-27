@@ -1,13 +1,10 @@
-import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
+import { defineConfig } from "vitest/config";
 
-export default defineWorkersConfig({
-  test: {
-    include: ["test/**/*.staging.test.ts"],
-    poolOptions: {
-      workers: {
-        remoteBindings: true,
-        wrangler: { configPath: "./wrangler.hyperdrive-test.jsonc" },
-      },
-    },
-  },
+export default defineConfig({
+  plugins: [cloudflareTest({
+    remoteBindings: true,
+    wrangler: { configPath: "./wrangler.hyperdrive-test.jsonc" },
+  })],
+  test: { include: ["test/**/*.staging.test.ts"] },
 });
