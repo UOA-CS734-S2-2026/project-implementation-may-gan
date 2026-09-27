@@ -104,7 +104,7 @@ The debug-only trust override permits the mkcert user CA, not arbitrary cleartex
 
 ### Staging Android emulator
 
-For staging, use the API Worker's public HTTPS custom domain as `DAYLI_API_BASE_URL` with the `flutter run` command in the [mobile guide](../../apps/mobile/README.md#running-the-app). The app calls that API directly; it does not use the staging web Worker. No local PostgreSQL, mkcert CA, or `adb reverse` is needed. Use a synthetic staging account and keep its password out of logs. A debug APK built and opened on an API 35 Google Play ARM64 emulator; native sign-in, session restoration, and Google sign-in still need manual checks. Post submission remains unavailable until its client is connected. Do not use a production origin or real account while testing staging.
+For staging, use the API Worker's public HTTPS custom domain as `DAYLI_API_BASE_URL` with the `flutter run` command in the [mobile guide](../../apps/mobile/README.md#running-the-app). The app calls that API directly; it does not use the staging web Worker. No local PostgreSQL, mkcert CA, or `adb reverse` is needed. Use a synthetic staging account and keep its password out of logs. A debug APK built and opened on an API 35 Google Play ARM64 emulator before the staging debug application ID was added. The debug app now installs as `nz.ac.auckland.dayli.dayli_mobile.staging`, separate from the old local APK. Native sign-in, session restoration, and Google sign-in still need manual checks. Post submission remains unavailable until its client is connected. Do not use a production origin or real account while testing staging.
 
 ## iOS Simulator
 
