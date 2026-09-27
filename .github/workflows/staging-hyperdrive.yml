@@ -85,12 +85,21 @@ jobs:
           STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
           STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
           STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_GOOGLE_WEB_CLIENT_ID: ${{ vars.STAGING_GOOGLE_WEB_CLIENT_ID }}
+          STAGING_GOOGLE_IOS_CLIENT_ID: ${{ vars.STAGING_GOOGLE_IOS_CLIENT_ID }}
+          STAGING_GOOGLE_ANDROID_CLIENT_ID: ${{ vars.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
+          STAGING_RESEND_FROM: ${{ vars.STAGING_RESEND_FROM }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node <<'NODE'
           import { writeFileSync } from "node:fs";
           import { validateStagingOrigins } from "./scripts/staging-origins.mjs";
+          import {
+            assertRequiredWorkerSecrets,
+            readCloudflareSecretNames,
+            readStagingAuthBindings,
+          } from "./scripts/staging-auth-bindings.mjs";
 
           const expectedStagingWorkerName = "dayli-api-staging";
           const workerNamePattern = /^[a-z][a-z0-9-]{0,62}$/;
@@ -119,6 +128,9 @@ jobs:
             apiOrigin: required("STAGING_AUTH_API_ORIGIN"),
             webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
           });
+          // Provider IDs and the sender are public Worker vars. The helper rejects
+          // partial tuples without logging any supplied values.
+          const authBindings = readStagingAuthBindings(process.env);
 
           if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) {
             throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");
@@ -155,6 +167,20 @@ jobs:
             throw new Error("The staging Hyperdrive must have caching disabled.");
           }
 
+          // Cloudflare exposes only secret binding names from this read-only endpoint.
+          // Gate before deploy so public provider vars cannot create a partial auth version.
+          if (!isPullRequest) {
+            const secretResponse = await fetch(
+              `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${expectedStagingWorkerName}/secrets`,
+              { headers: { Authorization: `Bearer ${apiToken}` } },
+            );
+            if (!secretResponse.ok) {
+              throw new Error(`Could not read the staging Worker secret binding names (HTTP ${secretResponse.status}).`);
+            }
+            const secretNames = readCloudflareSecretNames(await secretResponse.json());
+            assertRequiredWorkerSecrets(secretNames, authBindings.requiredSecrets);
+          }
+
           const shared = {
             $schema: "node_modules/wrangler/config-schema.json",
             main: "src/index.ts",
@@ -171,6 +197,7 @@ jobs:
             vars: {
               BETTER_AUTH_BASE_URL: authApiOrigin,
               BETTER_AUTH_TRUSTED_ORIGINS: `${authApiOrigin},${authWebOrigin}`,
+              ...authBindings.vars,
             },
             hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId }],
           };

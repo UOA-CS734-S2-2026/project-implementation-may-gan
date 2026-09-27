@@ -95,12 +95,60 @@ describe("Better Auth compatibility route", () => {
       RESEND_FROM: "Dayli <auth@example.test>",
     });
     expect(configured).toEqual({ state: "configured", google: "configured", resend: "configured" });
-    expect(readAuthIntegrationConfiguration({ GOOGLE_WEB_CLIENT_ID: "web-client-id" })).toEqual({
-      state: "invalid", google: "invalid", resend: "disabled",
-    });
-    expect(readAuthIntegrationConfiguration({ RESEND_API_KEY: "worker-only-resend-key" })).toEqual({
-      state: "invalid", google: "disabled", resend: "invalid",
-    });
+    for (const missingGoogleBinding of [
+      "GOOGLE_WEB_CLIENT_ID",
+      "GOOGLE_IOS_CLIENT_ID",
+      "GOOGLE_ANDROID_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+    ]) {
+      const partialGoogle = {
+        GOOGLE_WEB_CLIENT_ID: "web-client-id",
+        GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+        GOOGLE_ANDROID_CLIENT_ID: "android-client-id",
+        GOOGLE_CLIENT_SECRET: "worker-only-google-secret",
+      };
+      delete partialGoogle[missingGoogleBinding as keyof typeof partialGoogle];
+      expect(readAuthIntegrationConfiguration(partialGoogle)).toEqual({
+        state: "invalid", google: "invalid", resend: "disabled",
+      });
+    }
+    for (const partialResend of [
+      { RESEND_API_KEY: "worker-only-resend-key" },
+      { RESEND_FROM: "Dayli <auth@example.test>" },
+    ]) {
+      expect(readAuthIntegrationConfiguration(partialResend)).toEqual({
+        state: "invalid", google: "disabled", resend: "invalid",
+      });
+    }
+  });
+
+  it("does not mount auth when any production provider binding is partial", () => {
+    const bindings = {
+      HYPERDRIVE: { connectionString: "postgresql://app:app@localhost:5433/dayli_test" },
+      BETTER_AUTH_SECRET: "test-only-better-auth-secret-that-is-at-least-32-characters",
+      BETTER_AUTH_BASE_URL: origin,
+      BETTER_AUTH_TRUSTED_ORIGINS: `${origin},https://web.example.test`,
+      GOOGLE_WEB_CLIENT_ID: "web-client-id",
+      GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+      GOOGLE_ANDROID_CLIENT_ID: "android-client-id",
+      GOOGLE_CLIENT_SECRET: "worker-only-google-secret",
+      RESEND_API_KEY: "worker-only-resend-key",
+      RESEND_FROM: "Dayli <auth@example.test>",
+    };
+
+    expect(readBetterAuthRuntimeConfiguration(bindings)).toBeDefined();
+    for (const missingBinding of [
+      "GOOGLE_WEB_CLIENT_ID",
+      "GOOGLE_IOS_CLIENT_ID",
+      "GOOGLE_ANDROID_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "RESEND_API_KEY",
+      "RESEND_FROM",
+    ]) {
+      const partial = { ...bindings };
+      delete partial[missingBinding as keyof typeof partial];
+      expect(readBetterAuthRuntimeConfiguration(partial)).toBeUndefined();
+    }
   });
 
   it("answers allowed credentialed preflight requests and rejects disallowed origins", async () => {
@@ -275,6 +323,45 @@ describe("Better Auth compatibility route", () => {
       expect(firstReset.status).toBe(200);
       expect(replay.status).toBe(400);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("expires password-reset tokens after 15 minutes", async () => {
+    vi.useFakeTimers();
+    const deliveredBodies: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input, init) => {
+      deliveredBodies.push(String(init?.body));
+      return new Response("{}", { status: 200 });
+    }));
+    try {
+      const app = createApp({ auth: createBetterAuthCompatibilitySlice({
+        baseURL: origin,
+        secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+        database: { account: [], session: [], user: [], verification: [] },
+        resend: { apiKey: "test-resend-key", from: "Dayli <auth@example.test>" },
+      }) });
+      await signUp(app);
+      await app.fetch(request("/api/auth/request-password-reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "compatibility@example.test",
+          redirectTo: `${origin}/reset-password`,
+        }),
+      }));
+      const token = deliveredBodies[0]?.match(/\/reset-password\/([^?\\"]+)/)?.[1];
+      expect(token).toBeTruthy();
+
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1);
+      const expired = await app.fetch(request("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, newPassword: "updated-not-a-real-password" }),
+      }));
+      expect(expired.status).toBe(400);
+    } finally {
+      vi.useRealTimers();
       vi.unstubAllGlobals();
     }
   });
