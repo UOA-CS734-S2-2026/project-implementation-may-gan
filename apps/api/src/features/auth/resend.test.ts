@@ -25,6 +25,23 @@ describe("Resend authentication delivery", () => {
     )).resolves.toBeUndefined();
   });
 
+  it.each([
+    [verificationEmail, "Verify email", "Verify your email address to continue."],
+    [passwordResetEmail, "Reset password", "Reset your password using this link."],
+  ])("renders a branded, escaped email with a plain-text fallback", (createEmail, action, intro) => {
+    const url = 'https://example.test/auth?token=a&next="<unsafe>"';
+    const email = createEmail("user@example.test", url);
+
+    expect(email.text).toContain(`${intro}\n\n${url}`);
+    expect(email.text).toContain("If you did not request this");
+    expect(email.html).toContain("#FBFAF9");
+    expect(email.html).toContain("#A684FF");
+    expect(email.html).toContain("one post, every day.");
+    expect(email.html).toContain(`${action} &rarr;`);
+    expect(email.html).toContain('href="https://example.test/auth?token=a&amp;next=&quot;&lt;unsafe&gt;&quot;"');
+    expect(email.html).not.toContain(url);
+  });
+
   it("does not leak provider response data when delivery fails", async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => new Response("provider details", { status: 500 }));
 
