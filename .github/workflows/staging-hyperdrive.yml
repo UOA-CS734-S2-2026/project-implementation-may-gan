@@ -16,7 +16,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  require-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject non-main dispatch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [[ "$REF" != refs/heads/main ]]; then
+            echo 'Staging deployment requires a manual dispatch from main.' >&2
+            exit 1
+          fi
   changes:
+    needs: require-main
     runs-on: ubuntu-latest
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
@@ -46,6 +58,7 @@ jobs:
   check:
     needs: changes
     if: >-
+      github.ref == 'refs/heads/main' &&
       needs.changes.outputs.relevant == 'true' &&
       (github.event_name != 'pull_request' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
@@ -71,11 +84,13 @@ jobs:
           STAGING_HYPERDRIVE_NAME: ${{ vars.STAGING_HYPERDRIVE_NAME }}
           STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
           STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+          STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           node <<'NODE'
           import { writeFileSync } from "node:fs";
+          import { validateStagingOrigins } from "./scripts/staging-origins.mjs";
 
           const expectedStagingWorkerName = "dayli-api-staging";
           const workerNamePattern = /^[a-z][a-z0-9-]{0,62}$/;
@@ -94,30 +109,16 @@ jobs:
             }
           }
 
-          function exactHttpsOrigin(name) {
-            const value = required(name);
-            let url;
-            try {
-              url = new URL(value);
-            } catch {
-              throw new Error(`${name} must be an exact HTTPS origin.`);
-            }
-            if (
-              url.protocol !== "https:" || url.pathname !== "/" || url.search !== ""
-              || url.hash !== "" || url.origin !== value
-            ) {
-              throw new Error(`${name} must be an exact HTTPS origin.`);
-            }
-            return url.origin;
-          }
-
           const accountId = required("CLOUDFLARE_ACCOUNT_ID");
           const apiToken = required("CLOUDFLARE_API_TOKEN");
           const hyperdriveId = required("CLOUDFLARE_STAGING_HYPERDRIVE_ID");
           const configuredStagingWorkerName = required("STAGING_API_SERVICE_NAME");
           const expectedHyperdriveName = required("STAGING_HYPERDRIVE_NAME");
-          const authApiOrigin = exactHttpsOrigin("STAGING_AUTH_API_ORIGIN");
-          const authWebOrigin = exactHttpsOrigin("STAGING_AUTH_WEB_ORIGIN");
+          const { apiOrigin: authApiOrigin, webOrigin: authWebOrigin } = validateStagingOrigins({
+            siteHost: required("STAGING_AUTH_SITE_HOST"),
+            apiOrigin: required("STAGING_AUTH_API_ORIGIN"),
+            webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
+          });
 
           if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) {
             throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");

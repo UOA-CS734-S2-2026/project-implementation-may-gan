@@ -65,6 +65,7 @@ echo 'Running TypeScript verification'
 pnpm lint
 pnpm --filter @dayli/web exec next typegen
 pnpm typecheck
+node --test scripts/staging-origins.test.mjs
 pnpm test
 pnpm build
 

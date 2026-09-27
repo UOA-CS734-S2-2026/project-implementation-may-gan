@@ -108,7 +108,7 @@ wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.staging.jsonc
 wrangler secret put RESEND_API_KEY --config wrangler.staging.jsonc
 ```
 
-Create protected GitHub environments named `staging` and `production` before granting either one credentials. Restrict deployments to `main`, require the designated reviewers, dismiss stale approvals, and disable administrator bypass where the team's policy permits. Put deployment credentials only in that environment's approved secrets store, never repository-wide secrets or variables. The existing manual staging workflow needs `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, `STAGING_HYPERDRIVE_NAME`, `STAGING_AUTH_API_ORIGIN`, and `STAGING_AUTH_WEB_ORIGIN` as public `staging` variables. It reads the last two as exact HTTPS origins and generates only these public Worker bindings:
+Create protected GitHub environments named `staging` and `production` before granting either one credentials. Restrict deployments to `main`, require the designated reviewers, dismiss stale approvals, and disable administrator bypass where the team's policy permits. Put deployment credentials only in that environment's approved secrets store, never repository-wide secrets or variables. The existing manual staging workflow needs `CLOUDFLARE_ACCOUNT_ID`, `STAGING_API_SERVICE_NAME`, `STAGING_HYPERDRIVE_NAME`, `STAGING_AUTH_SITE_HOST`, `STAGING_AUTH_API_ORIGIN`, and `STAGING_AUTH_WEB_ORIGIN` as public `staging` variables. The site host is the reviewed shared parent of both custom staging hostnames. The workflow requires `main`, validates both exact HTTPS origins under that parent, and generates only these public Worker bindings:
 
 ```json
 {
