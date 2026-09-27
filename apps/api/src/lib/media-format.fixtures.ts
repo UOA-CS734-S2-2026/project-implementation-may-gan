@@ -67,12 +67,22 @@ export function buildMoovBox(children: Uint8Array[]): Uint8Array {
   return moov;
 }
 
-/** ftyp + moov(mvhd) — a minimal but structurally valid MP4 for a given duration. */
+/**
+ * ftyp + moov(mvhd, trak) + mdat — a minimal but structurally *complete* MP4 for a
+ * given duration: a real capture always has a track and a non-empty media-data
+ * box, which is exactly what keeps a fabricated ftyp+moov+mvhd (no real content)
+ * from validating.
+ */
 export function buildMinimalMp4(durationSeconds: number, timescale = 1000): Uint8Array {
   const ftyp = buildFtypBox("isom", ["isom"]);
   const mvhd = buildMvhdBoxV0({ timescale, duration: Math.round(durationSeconds * timescale) });
-  const moov = buildMoovBox([mvhd]);
-  return concatBoxes(ftyp, moov);
+  const trak = wrapBox("trak", new Uint8Array(4));
+  const moov = buildMoovBox([mvhd, trak]);
+  const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+  return concatBoxes(ftyp, moov, mdat);
 }
 
-export const validJpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+/** SOI...EOI — a real JPEG has both; a payload that only starts with the marker doesn't. */
+export const validJpegBytes = new Uint8Array([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9,
+]);
