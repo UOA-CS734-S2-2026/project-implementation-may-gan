@@ -119,6 +119,9 @@ export async function completeMediaReservation(
 
   const outcome: ValidationOutcome = { status: validation.status, failureReason: validation.failureReason, validatedAt: now };
   const claim = await deps.repository.claimValidationOutcome(id, outcome);
+  // The reservation's TTL lapsed between the cheap check above and this claim —
+  // e.g. while the R2 reads above were in flight — so it must not be settled.
+  if (claim.outcome === "expired") return { outcome: "expired" };
   // claim.record is only absent if the row vanished between findById and here,
   // which cannot happen for an owned reservation (never physically deleted).
   if (!claim.record) return { outcome: "not_found" };

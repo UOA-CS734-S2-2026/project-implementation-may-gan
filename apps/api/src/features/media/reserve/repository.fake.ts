@@ -36,6 +36,11 @@ export function createFakeMediaReservationRepository(): MediaReservationReposito
       if (!current || current.status !== "pending") {
         return { outcome: "already_settled", record: current };
       }
+      // Real wall-clock time, mirroring the real repository's use of the database's
+      // own `now()` rather than whatever the caller checked before its R2 reads.
+      if (current.expiresAt.getTime() <= Date.now()) {
+        return { outcome: "expired" };
+      }
 
       const claimed: MediaReservationRecord = {
         ...current,
