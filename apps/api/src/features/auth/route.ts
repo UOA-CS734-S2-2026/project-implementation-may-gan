@@ -45,6 +45,53 @@ function isAllowedPreflight(request: Request, trustedOrigins: readonly string[])
   return requestedHeaders.every((header) => corsHeaders.includes(header)) ? origin : undefined;
 }
 
+function linkFailure(status: number) {
+  // Do not reflect a password or provider token in an account-linking error.
+  return new Response(null, { status });
+}
+
+/**
+ * Better Auth's /link-social endpoint deliberately accepts any authenticated
+ * session. Dayli upgrades that requirement: a password-account holder must
+ * prove possession of their current password in the same request. The password
+ * is verified by Better Auth against the session's authoritative user, then is
+ * removed before the link request reaches Better Auth.
+ */
+async function handleProtectedSocialLink(
+  request: Request,
+  handler: (request: Request) => Promise<Response> | Response,
+): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    const parsed: unknown = await request.json();
+    if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return linkFailure(400);
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return linkFailure(400);
+  }
+
+  const password = body.password;
+  if (typeof password !== "string" || password.length === 0) return linkFailure(400);
+
+  const headers = new Headers(request.headers);
+  headers.set("content-type", "application/json");
+  headers.delete("content-length");
+  const verification = await handler(new Request(new URL(`${authBasePath}/verify-password`, request.url), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ password }),
+  }));
+  if (!verification.ok) return linkFailure(verification.status);
+
+  const linkBody = { ...body };
+  delete linkBody.password;
+  return handler(new Request(request.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(linkBody),
+  }));
+}
+
 function registerStrictAuthRoutes(
   app: OpenAPIHono,
   trustedOrigins: readonly string[],
@@ -59,7 +106,10 @@ function registerStrictAuthRoutes(
     const origin = context.req.header("origin");
     if (origin && !trustedOrigins.includes(origin)) return new Response(null, { status: 403 });
 
-    const response = await handler(context.req.raw);
+    const request = context.req.raw;
+    const response = request.method === "POST" && new URL(request.url).pathname === `${authBasePath}/link-social`
+      ? await handleProtectedSocialLink(request, handler)
+      : await handler(request);
     return origin ? corsResponse(response, origin) : response;
   });
 }

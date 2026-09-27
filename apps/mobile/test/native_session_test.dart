@@ -128,6 +128,39 @@ void main() {
     },
   );
 
+  test(
+    'links Google with the current password over the existing bearer session',
+    () async {
+      final tokenStore = MemorySessionTokenStore()..value = 'worker-token';
+      late Map<String, dynamic> linkBody;
+      late http.Request linkRequest;
+      final client = MockClient((request) async {
+        linkRequest = request;
+        linkBody = jsonDecode(request.body) as Map<String, dynamic>;
+        return http.Response('', 200);
+      });
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: client,
+      );
+
+      await session.linkGoogle(
+        provider: FakeGoogleIdTokenProvider('google-id-token'),
+        password: 'current-password',
+      );
+
+      expect(linkRequest.url.path, '/api/auth/link-social');
+      expect(linkRequest.headers['authorization'], 'Bearer worker-token');
+      expect(linkBody, {
+        'provider': 'google',
+        'password': 'current-password',
+        'idToken': {'token': 'google-id-token'},
+      });
+      expect(tokenStore.value, 'worker-token');
+    },
+  );
+
   test('does not persist a token when Google sign-in is rejected', () async {
     final tokenStore = MemorySessionTokenStore();
     final client = MockClient((request) async => http.Response('', 401));

@@ -6,6 +6,8 @@ The Flutter client calls the Hono Worker. Construct generated API clients with a
 
 Android disables automatic backup for protected storage. The application supports Android API 29 and newer. Debug builds use application ID `nz.ac.auckland.dayli.dayli_mobile.staging` so their staging Google OAuth registration does not collide with release builds. Release builds keep `nz.ac.auckland.dayli.dayli_mobile`; neither an Android release Google client nor release signing has been validated. The iOS keychain entry uses `unlocked_this_device` accessibility.
 
+Current staging observation: Android Google sign-in completed with a distinct Google account. It did not complete for a Google account whose email already belonged to a password account, which is expected until that password holder explicitly connects Google in Settings. Android persistence and logout after Google sign-in have not been checked, and iOS has not been tested.
+
 ## Running the app
 
 Pass the API origin at build time. Use the addresses in [environments](../../docs/dayli/environments.md) for emulators and devices:
@@ -32,6 +34,12 @@ flutter run \
 ```
 
 Without the Dart IDs the button explains that Google sign-in isn't set up for the build. Without the Xcode setting, iOS cannot return from Google sign-in.
+
+## Connecting Google to a password account
+
+Dayli never connects identities merely because their emails match. After signing in with email and password, open **Settings**, choose **Connect Google**, enter the current Dayli password, and choose the Google account with the same verified email. The Worker verifies the password against the authenticated bearer session in the link request, then verifies the Google token. The app does not accept a client-only confirmation and does not replace the stored bearer token during linking.
+
+If the link is rejected, check that the Google email exactly matches the Dayli email and that it is not already connected to another Dayli account. If the password is unavailable, complete password recovery first, then sign in and try again. Do not create a duplicate account to bypass the mismatch. This flow has local unit coverage but still needs the explicit Android persistence/logout and iOS staging checks above.
 
 ## Design
 

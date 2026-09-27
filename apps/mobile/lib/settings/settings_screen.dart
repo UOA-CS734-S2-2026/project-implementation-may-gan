@@ -6,8 +6,82 @@ import '../app/theme.dart';
 
 /// Account settings as grouped rows. Usernames and profile visibility arrive
 /// with the profile API (#68). Signing out also removes the unsent draft.
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _linkGoogle() async {
+    final services = AppScope.of(context);
+    final google = services.google;
+    if (google == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Google sign-in isn't set up for this build yet."),
+        ),
+      );
+      return;
+    }
+
+    final password = await _requestCurrentPassword();
+    if (!mounted || password == null) return;
+    try {
+      await services.session.linkGoogle(provider: google, password: password);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google is now connected to this account.'),
+        ),
+      );
+    } on Exception {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not connect Google. Check your password and use the Google account with this email.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<String?> _requestCurrentPassword() async {
+    final controller = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Connect Google'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          obscureText: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          keyboardType: TextInputType.visiblePassword,
+          autofillHints: const [AutofillHints.password],
+          decoration: const InputDecoration(
+            labelText: 'Current password',
+            helperText: 'Your Google email must match your Dayli email.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return password;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +180,43 @@ class SettingsScreen extends StatelessWidget {
                         label: 'Username',
                         value: 'not set yet',
                         muted: true,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const _GroupLabel('sign-in methods'),
+                  _Group(
+                    children: [
+                      InkWell(
+                        key: const Key('settings.linkGoogle'),
+                        onTap: _linkGoogle,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Connect Google',
+                                style: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Choose this yourself. Matching emails are never connected automatically.',
+                                style: DayliText.sans(
+                                  context,
+                                  size: DayliTextSize.sm,
+                                  color: colors.foregroundTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
