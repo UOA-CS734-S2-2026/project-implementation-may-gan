@@ -34,7 +34,7 @@ The initial release supports iOS 16 and newer and Android 10, API 29, and newer.
 
 ## Database provider and migrations
 
-Neon PostgreSQL 18 is the database provider. Staging will use a separate Neon project containing synthetic data only. The current staging project is empty and has no roles, migrations, Hyperdrive attachment, Worker, or application data. Production will use a separate project and is not deployed. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected manual workflow documented in [Database migrations](database-migrations.md).
+Neon PostgreSQL 18 is the database provider. Staging will use a separate Neon project containing synthetic data only. The staging project owner reports restricted roles and grants verified. No application migrations, Hyperdrive attachment, Worker, or application data have been reported. Production will use a separate project and is not deployed. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected manual workflow documented in [Database migrations](database-migrations.md).
 
 ## Deletion, backups, and recovery
 

@@ -92,7 +92,7 @@ The compatibility slice is no longer just a proposal. The monorepo, Hono Worker,
 
 These items remain open:
 
-- Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores. Staging is empty and undeployed. Production is undeployed.
+- Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores. Staging has user-verified restricted database roles but no deployed service or applied application migrations. Production is undeployed.
 - Run the local auth walkthrough, then prove the Worker integrations against provisioned staging. This includes native and web login, a Hyperdrive transaction as `app`, real R2 signing and upload rejection, and a WebSocket update with reconnect. Select the Next.js deployment adapter only after its compatibility check.
 - Wire the Flutter daily-post client and media reservation/upload flow. Link completed media to posts only after byte-size and actual-format validation.
 - Implement the agreed rules in [Product decisions](product-decisions.md): friends see earlier released friends posts, released edits retain visible revision history, and blocks stop interaction while preserving message history.

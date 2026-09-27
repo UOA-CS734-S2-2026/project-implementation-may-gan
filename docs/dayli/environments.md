@@ -128,7 +128,7 @@ The scripts and configuration can be checked locally without contacting Neon, Cl
 
 ## Staging and production
 
-Local HTTPS authentication is implemented. Staging is not: its new Neon project is empty, with no roles, migrations, Hyperdrive attachment, Worker, or validated endpoint. The old staging Worker, Hyperdrive configuration, GitHub `staging` environment credentials, and local staging Wrangler files were removed. The retained `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows are manual only and cannot run until approved staging credentials are re-provisioned. Their existence does not authorize a deployment or proof.
+Local HTTPS authentication is implemented. Staging is not deployed: its owner reports that restricted roles and grants passed bootstrap verification, but application migrations, Hyperdrive, a Worker, and a validated endpoint are still absent. The old staging Worker, Hyperdrive configuration, GitHub `staging` environment credentials, and local staging Wrangler files were removed. The retained `staging-hyperdrive.yml` and `cleanup-hyperdrive-preview.yml` workflows are manual only and cannot run until approved staging credentials are re-provisioned. Their existence does not authorize a deployment or proof.
 
 Choose separate exact HTTPS web and API origins under the same registrable domain for each live environment. Set the API origin as `BETTER_AUTH_BASE_URL`, include API and web origins in `BETTER_AUTH_TRUSTED_ORIGINS`, and build web and mobile clients with that API origin. Do not use a path, wildcard, trailing slash, localhost, a `workers.dev` endpoint, or a production origin for staging. Local certificates and local PostgreSQL credentials are never valid for staging or production.
 

@@ -1,6 +1,6 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. Staging is the first deployment target and is currently an empty, unvalidated Neon project. It has no roles, migrations, Hyperdrive attachment, or application data. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
+Dayli uses Neon PostgreSQL 18. Staging is the first deployment target. Its owner reports two restricted SQL roles with passwords, owner grants, migrator defaults, and a successful read-only bootstrap check. Application migrations, Hyperdrive, and a deployed Worker remain unverified and application data has not been reported. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
 
 `packages/db` owns the Drizzle schema, migration SQL, review records, and migration commands. PostgreSQL `public` is the application schema. Migrations `0000` through `0007`, their snapshots, and the shared journal are immutable.
 
