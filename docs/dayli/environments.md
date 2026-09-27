@@ -102,6 +102,10 @@ adb reverse --remove tcp:8787
 
 The debug-only trust override permits the mkcert user CA, not arbitrary cleartext. Do not add `usesCleartextTraffic`, a cleartext domain configuration, or user CA trust to a release source set.
 
+### Staging Android emulator
+
+For staging, use the API Worker's public HTTPS custom domain as `DAYLI_API_BASE_URL` with the `flutter run` command in the [mobile guide](../../apps/mobile/README.md#running-the-app). The app calls that API directly; it does not use the staging web Worker. No local PostgreSQL, mkcert CA, or `adb reverse` is needed. Use a synthetic staging account and keep its password out of logs. A debug APK built and opened on an API 35 Google Play ARM64 emulator; native sign-in, session restoration, and Google sign-in still need manual checks. Post submission remains unavailable until its client is connected. Do not use a production origin or real account while testing staging.
+
 ## iOS Simulator
 
 Keep App Transport Security unchanged. The API URL is HTTPS and this change does not add an ATS exception.
