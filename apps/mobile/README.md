@@ -4,7 +4,7 @@ The Flutter client calls the Hono Worker. Construct generated API clients with a
 
 `lib/auth/native_session.dart` owns native Better Auth bearer sessions. It stores the signed `set-auth-token` response header in Keychain or Android KeyStore through `flutter_secure_storage`. It sends the value only in the `Authorization: Bearer` header and clears it after a confirmed logout or when Better Auth reports no current session. Do not put session tokens in URLs, application logs, shared preferences, or source files.
 
-Android disables automatic backup for protected storage. The application supports Android API 29 and newer. The iOS keychain entry uses `unlocked_this_device` accessibility.
+Android disables automatic backup for protected storage. The application supports Android API 29 and newer. Debug builds use application ID `nz.ac.auckland.dayli.dayli_mobile.staging` so their staging Google OAuth registration does not collide with release builds. Release builds keep `nz.ac.auckland.dayli.dayli_mobile`; neither an Android release Google client nor release signing has been validated. The iOS keychain entry uses `unlocked_this_device` accessibility.
 
 ## Running the app
 
@@ -14,7 +14,7 @@ Pass the API origin at build time. Use the addresses in [environments](../../doc
 flutter run --dart-define=DAYLI_API_BASE_URL=https://api.example.test
 ```
 
-Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` is passed with `--dart-define`. On iOS, also pass `DAYLI_GOOGLE_IOS_CLIENT_ID` and configure the callback scheme before running:
+Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` is passed with `--dart-define`. Register the debug build's `.staging` application ID and its current debug SHA-1 in the staging Google project. Get the fingerprint with `./gradlew signingReport` from `apps/mobile/android`; keep it out of chat and Git. On iOS, also pass `DAYLI_GOOGLE_IOS_CLIENT_ID` and configure the callback scheme before running:
 
 ```bash
 cp ios/Flutter/GoogleSignIn.xcconfig.example ios/Flutter/GoogleSignIn.xcconfig

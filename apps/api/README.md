@@ -4,7 +4,7 @@ For local HTTPS sign-in, staging and production boundaries, see [Environments](.
 
 ## Staging Hyperdrive check
 
-The staging owner reports verified restricted roles and grants, migrations `0000` through `0007`, an `app` Hyperdrive with query caching disabled, and the staging probe fixture. The API Worker is deployed on its HTTPS custom domain with `workers.dev` disabled. The manual staging Hyperdrive workflow passed at `1fb6388` and uploaded sanitized evidence for connection, transactions, constraint classes, restricted-role permissions, and fresh-invocation visibility. Deployed authentication remains untested. Production is not deployed.
+The staging owner reports verified restricted roles and grants, migrations `0000` through `0007`, an `app` Hyperdrive with query caching disabled, and the staging probe fixture. The API Worker is deployed on its HTTPS custom domain with `workers.dev` disabled. The manual staging Hyperdrive workflow passed at `1fb6388` and uploaded sanitized evidence for connection, transactions, constraint classes, restricted-role permissions, and fresh-invocation visibility. The staging browser email/password flow and sign-out redirect worked manually. Google, Resend, and native auth are not validated. Production is not deployed.
 
 `test:hyperdrive:staging` calls `HyperdriveIntegrationEntrypoint` through a private Worker service binding. A complete proof checks connectivity, Drizzle commit, explicit rollback, post-error recovery, constraint classes, restricted-role authorization, and fresh-invocation visibility. Clients are created per invocation, and query caching stays disabled.
 
