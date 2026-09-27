@@ -15,6 +15,14 @@ describe("Resend authentication delivery", () => {
       expect(init?.method).toBe("POST");
       expect(init?.headers).toMatchObject({ authorization: "Bearer test-resend-key" });
       expect(init?.body).toContain("Verify your Dayli email");
+      const body = JSON.parse(String(init?.body));
+      expect(body.attachments).toEqual([{
+        filename: "dayli-logo.png",
+        content: expect.any(String),
+        content_id: "dayli-logo",
+      }]);
+      expect(body.attachments[0].content.length).toBeGreaterThan(1000);
+      expect(body.html).toContain('src="cid:dayli-logo"');
       return new Response("{}", { status: 200 });
     });
 
@@ -35,8 +43,10 @@ describe("Resend authentication delivery", () => {
     expect(email.text).toContain(`${intro}\n\n${url}`);
     expect(email.text).toContain("If you did not request this");
     expect(email.html).toContain("#FBFAF9");
-    expect(email.html).toContain("#A684FF");
+    expect(email.html).toContain("#F3E8FF");
     expect(email.html).toContain("one post, every day.");
+    expect(email.html).toContain("font-family:Spectral,Georgia,serif");
+    expect(email.html).toContain('src="cid:dayli-logo"');
     expect(email.html).toContain(`${action} &rarr;`);
     expect(email.html).toContain('href="https://example.test/auth?token=a&amp;next=&quot;&lt;unsafe&gt;&quot;"');
     expect(email.html).not.toContain(url);
