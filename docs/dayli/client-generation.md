@@ -53,6 +53,6 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 | iOS physical device | A reachable HTTPS API whose certificate the device trusts. The staging API is deployed but not yet validated. |
 | Staging or production | URL supplied by application configuration after that environment is provisioned. Production is not deployed. |
 
-The local HTTPS setup is in [Environments](environments.md). The staging API Worker passed its private Hyperdrive proof, but deployed authentication has not been tested. No staging web endpoint exists. Do not treat the API URL as a validated sign-in endpoint yet. This package only requires callers to provide the resulting URL.
+The local HTTPS setup is in [Environments](environments.md). The staging API Worker passed its private Hyperdrive proof, and the staging web host passed a manual browser email/password and sign-out check. Google, Resend, and native sign-in remain untested. Each client still needs the exact staging API origin. This package only requires callers to provide the resulting URL.
 
 The clients handle HTTP paths, parameters, JSON conversion, and response types. Authentication token storage, retries, offline state, and user-facing errors remain application code.

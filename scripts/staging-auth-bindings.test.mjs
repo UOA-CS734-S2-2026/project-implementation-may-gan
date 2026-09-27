@@ -62,5 +62,13 @@ test("reads only Cloudflare secret binding names and gates a deploy without secr
     () => assertRequiredWorkerSecrets(secretNames, ["BETTER_AUTH_SECRET", "RESEND_API_KEY"]),
     /RESEND_API_KEY/,
   );
+  assert.throws(
+    () => assertRequiredWorkerSecrets(secretNames, ["BETTER_AUTH_SECRET"]),
+    /GOOGLE_CLIENT_SECRET without its complete public provider bindings/,
+  );
+  assert.throws(
+    () => assertRequiredWorkerSecrets(new Set(["BETTER_AUTH_SECRET", "RESEND_API_KEY"]), ["BETTER_AUTH_SECRET"]),
+    /RESEND_API_KEY without its complete public provider bindings/,
+  );
   assert.throws(() => readCloudflareSecretNames({ result: [{ type: "secret_text" }] }));
 });

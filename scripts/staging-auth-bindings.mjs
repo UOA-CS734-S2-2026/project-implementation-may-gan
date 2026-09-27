@@ -70,11 +70,16 @@ export function readCloudflareSecretNames(payload) {
   return new Set(payload.result.map((secret) => secret.name));
 }
 
-/** Ensure a deploy never introduces public provider bindings without their secret binding names. */
+/** Refuse public bindings without secrets or provider secrets without public bindings. */
 export function assertRequiredWorkerSecrets(secretNames, requiredSecrets) {
   for (const name of requiredSecrets) {
     if (!secretNames.has(name)) {
       throw new Error(`The staging Worker is missing required secret binding ${name}.`);
+    }
+  }
+  for (const name of [requiredWorkerSecretNames.google, requiredWorkerSecretNames.resend]) {
+    if (secretNames.has(name) && !requiredSecrets.includes(name)) {
+      throw new Error(`The staging Worker has ${name} without its complete public provider bindings.`);
     }
   }
 }

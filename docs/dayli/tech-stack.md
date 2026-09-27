@@ -31,11 +31,11 @@ pnpm db:dev:migrate
 pnpm dev:api:https
 ```
 
-Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not a normal local-development command. Do not deploy until staging has restricted database roles, Hyperdrive, exact HTTPS origins, and reviewed credentials. Staging has verified restricted roles and migrations, a cache-disabled Hyperdrive, and a deployed API Worker. Its private database proof passed, but browser authentication is untested. Production is not deployed.
+Start `pnpm dev:web:https` separately for the web app. `wrangler deploy` is not a normal local-development command. Do not deploy until staging has restricted database roles, Hyperdrive, exact HTTPS origins, and reviewed credentials. Staging has verified restricted roles and migrations, a cache-disabled Hyperdrive, and a deployed API Worker. Its private database proof passed, and a staging browser email/password flow worked manually. Google, Resend, and native auth remain untested. Production is not deployed.
 
 Declare bindings, compatibility settings, scheduled triggers, and Durable Object migrations in `wrangler.jsonc`. Keep secrets and `.dev.vars` out of Git. PostgreSQL migrations are a separate controlled release step owned by `packages/db`; see [Database migrations](database-migrations.md).
 
-Better Auth has local Worker and PostgreSQL coverage. Staging has a deployed API Worker but no web host. The Next.js app has dynamic routes and is not a static Cloudflare Pages export. The private Hyperdrive transaction proof passed; deployed authentication remains untested. FCM, sockets, and real R2 transfers are not implemented end to end.
+Better Auth has local Worker and PostgreSQL coverage. Staging has separate API and web Workers on Active HTTPS custom domains. The Next.js app has dynamic routes and is not a static Cloudflare Pages export. The private Hyperdrive transaction proof and a manual browser email/password flow passed; provider and native auth remain untested. FCM, sockets, and real R2 transfers are not implemented end to end.
 
 ### Web vinext Worker trial
 
