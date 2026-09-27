@@ -10,12 +10,17 @@ import {
   wrapBox,
 } from "./media-format.fixtures";
 import {
+  checkEssentialStructure,
   checkMagicBytes,
   extractIsoBmffDurationSeconds,
   readMagicByteWindow,
   type BoxSource,
   type RangeReader,
 } from "./media-format";
+
+function asciiBytes(text: string): number[] {
+  return Array.from(text, (char) => char.charCodeAt(0));
+}
 
 function boxSourceFor(buffer: Uint8Array): BoxSource {
   return {
@@ -114,6 +119,66 @@ describe("readMagicByteWindow", () => {
   });
 });
 
+describe("checkEssentialStructure", () => {
+  it("requires a real JPEG EOI marker — a payload that only starts with the SOI marker doesn't have one", async () => {
+    expect(await checkEssentialStructure("image/jpeg", validJpegBytes, boxSourceFor(validJpegBytes))).toBe("match");
+
+    const noEoi = validJpegBytes.slice(0, validJpegBytes.byteLength - 2);
+    expect(await checkEssentialStructure("image/jpeg", noEoi, boxSourceFor(noEoi))).toBe("mismatch");
+  });
+
+  it("requires a real PNG's first chunk to be IHDR and its last to be IEND", async () => {
+    function pngLikeBytes(firstChunkType: string, lastChunkType: string): Uint8Array {
+      const bytes = new Uint8Array(32);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0); // signature
+      bytes.set(asciiBytes(firstChunkType), 12); // first chunk's type field
+      bytes.set(asciiBytes(lastChunkType), bytes.byteLength - 8); // trailing chunk's type field
+      return bytes;
+    }
+
+    const valid = pngLikeBytes("IHDR", "IEND");
+    expect(await checkEssentialStructure("image/png", valid, boxSourceFor(valid))).toBe("match");
+
+    const wrongFirstChunk = pngLikeBytes("junk", "IEND");
+    expect(await checkEssentialStructure("image/png", wrongFirstChunk, boxSourceFor(wrongFirstChunk))).toBe(
+      "mismatch",
+    );
+
+    const missingIend = pngLikeBytes("IHDR", "junk");
+    expect(await checkEssentialStructure("image/png", missingIend, boxSourceFor(missingIend))).toBe("mismatch");
+  });
+
+  it("requires a recognised WEBP chunk id (VP8 /VP8L/VP8X) right after the RIFF/WEBP header", async () => {
+    function webpLikeBytes(chunkId: string): Uint8Array {
+      const bytes = new Uint8Array(16);
+      bytes.set(asciiBytes("RIFF"), 0);
+      bytes.set(asciiBytes("WEBP"), 8);
+      bytes.set(asciiBytes(chunkId), 12);
+      return bytes;
+    }
+
+    const valid = webpLikeBytes("VP8L");
+    expect(await checkEssentialStructure("image/webp", valid, boxSourceFor(valid))).toBe("match");
+
+    const invalid = webpLikeBytes("junk");
+    expect(await checkEssentialStructure("image/webp", invalid, boxSourceFor(invalid))).toBe("mismatch");
+  });
+
+  it("requires a real HEIC to have a meta box — a matching ftyp brand alone isn't enough", async () => {
+    const ftyp = buildFtypBox("heic", ["mif1"]);
+    const meta = wrapBox("meta", new Uint8Array(4));
+    const withMeta = concatBoxes(ftyp, meta);
+    expect(await checkEssentialStructure("image/heic", ftyp, boxSourceFor(withMeta))).toBe("match");
+    expect(await checkEssentialStructure("image/heic", ftyp, boxSourceFor(ftyp))).toBe("mismatch");
+  });
+
+  it("defers video/mp4 and video/quicktime to extractIsoBmffDurationSeconds's own trak/mdat check", async () => {
+    const anything = new Uint8Array([1, 2, 3]);
+    expect(await checkEssentialStructure("video/mp4", anything, boxSourceFor(anything))).toBe("match");
+    expect(await checkEssentialStructure("video/quicktime", anything, boxSourceFor(anything))).toBe("match");
+  });
+});
+
 describe("extractIsoBmffDurationSeconds", () => {
   it("extracts a correct duration from a v0 mvhd box", async () => {
     const file = buildMinimalMp4(5, 1000);
@@ -124,7 +189,9 @@ describe("extractIsoBmffDurationSeconds", () => {
   it("extracts a correct duration from a v1 (64-bit) mvhd box", async () => {
     const ftyp = buildFtypBox("isom", ["isom"]);
     const mvhd = buildMvhdBoxV1({ timescale: 1000, duration: 10_500 });
-    const file = concatBoxes(ftyp, buildMoovBox([mvhd]));
+    const trak = wrapBox("trak", new Uint8Array(4));
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
 
     const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
     expect(result).toEqual({ outcome: "duration", seconds: 10.5 });
@@ -135,10 +202,35 @@ describe("extractIsoBmffDurationSeconds", () => {
     const free = wrapBox("free", new Uint8Array(12));
     const wide = wrapBox("wide", new Uint8Array(4));
     const mvhd = buildMvhdBoxV0({ timescale: 600, duration: 1200 });
-    const file = concatBoxes(ftyp, free, wide, buildMoovBox([mvhd]));
+    const trak = wrapBox("trak", new Uint8Array(4));
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, free, wide, buildMoovBox([mvhd, trak]), mdat);
 
     const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
     expect(result).toEqual({ outcome: "duration", seconds: 2 });
+  });
+
+  it("is malformed when moov has an mvhd but no trak — no real track at all", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 1000 });
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd]), mdat); // no trak
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "malformed" });
+  });
+
+  it("is malformed when mdat is missing or empty — no real media payload", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 1000 });
+    const trak = wrapBox("trak", new Uint8Array(4));
+
+    const withoutMdat = concatBoxes(ftyp, buildMoovBox([mvhd, trak]));
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(withoutMdat))).toEqual({ outcome: "malformed" });
+
+    const emptyMdat = wrapBox("mdat", new Uint8Array(0));
+    const withEmptyMdat = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), emptyMdat);
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(withEmptyMdat))).toEqual({ outcome: "malformed" });
   });
 
   it("is malformed when moov is never found", async () => {
@@ -168,7 +260,9 @@ describe("extractIsoBmffDurationSeconds", () => {
   it("is malformed when mvhd has a zero timescale", async () => {
     const ftyp = buildFtypBox("isom", ["isom"]);
     const mvhd = buildMvhdBoxV0({ timescale: 0, duration: 100 });
-    const file = concatBoxes(ftyp, buildMoovBox([mvhd]));
+    const trak = wrapBox("trak", new Uint8Array(4));
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
 
     const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
     expect(result).toEqual({ outcome: "malformed" });

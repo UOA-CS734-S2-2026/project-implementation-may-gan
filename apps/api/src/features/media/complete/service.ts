@@ -1,4 +1,5 @@
 import {
+  checkEssentialStructure,
   checkMagicBytes,
   extractIsoBmffDurationSeconds,
   readMagicByteWindow,
@@ -74,11 +75,21 @@ async function determineValidation(
     return { status: "failed", failureReason: "format_mismatch" };
   }
 
+  const source: BoxSource = { fileSize: head.contentLength, readRange: read };
+
+  // A correct leading marker alone isn't proof of a real file of that type — e.g.
+  // arbitrary bytes starting with the JPEG SOI marker, or an ISO-BMFF file with no
+  // actual track/media data. This checks each format's other load-bearing
+  // structure before trusting the leading-bytes match above.
+  if ((await checkEssentialStructure(record.contentType as AllowedContentType, window, source)) === "mismatch") {
+    if (vanished) return { status: "failed", failureReason: "object_not_found" };
+    return { status: "failed", failureReason: "malformed_container" };
+  }
+
   if (!isVideo(record.contentType)) {
     return { status: "validated", failureReason: null };
   }
 
-  const source: BoxSource = { fileSize: head.contentLength, readRange: read };
   const duration = await extractIsoBmffDurationSeconds(source);
   if (vanished) return { status: "failed", failureReason: "object_not_found" };
   if (duration.outcome === "malformed") return { status: "failed", failureReason: "malformed_container" };

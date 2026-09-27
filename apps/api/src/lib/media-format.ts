@@ -4,6 +4,7 @@ export type MagicByteCheckResult = "match" | "mismatch";
 
 const HEIC_BRANDS = new Set(["heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1"]);
 const QUICKTIME_BRAND = "qt  ";
+const WEBP_CHUNK_IDS = new Set(["VP8 ", "VP8L", "VP8X"]);
 /** Pre-ftyp legacy QuickTime files identify only by their first top-level box type. */
 const LEGACY_QUICKTIME_TOP_LEVEL_BOXES = new Set(["moov", "free", "wide", "skip", "pnot", "mdat", "junk"]);
 
@@ -249,6 +250,64 @@ async function findBoxInRange(
   return undefined;
 }
 
+async function readTrailingBytes(source: BoxSource, length: number): Promise<Uint8Array | undefined> {
+  if (source.fileSize < length) return undefined;
+  return source.readRange(source.fileSize - length, source.fileSize - 1);
+}
+
+/**
+ * Beyond checkMagicBytes' leading-signature check: confirms each format's other
+ * load-bearing structural markers are actually present, so a payload that merely
+ * *starts* with the declared type's magic bytes — and nothing else real — can't
+ * pass. Still bounded: at most one small extra read (the file's last few bytes)
+ * for jpeg/png, none for webp (already inside the leading window read earlier),
+ * and one box-header-only walk, budgeted the same as the duration walker, for
+ * heic. video/mp4 and video/quicktime are checked in extractIsoBmffDurationSeconds
+ * instead (it already walks the same box tree for the duration; a `trak`/`mdat`
+ * requirement there covers this without walking twice).
+ */
+export async function checkEssentialStructure(
+  declaredContentType: AllowedContentType,
+  window: Uint8Array,
+  source: BoxSource,
+): Promise<MagicByteCheckResult> {
+  switch (declaredContentType) {
+    case "image/jpeg": {
+      const tail = await readTrailingBytes(source, 2);
+      return tail && matchesBytes(tail, 0, [0xff, 0xd9]) ? "match" : "mismatch";
+    }
+
+    case "image/png": {
+      // A PNG's first chunk is always IHDR and its last is always IEND.
+      if (readAscii(window, 12, 4) !== "IHDR") return "mismatch";
+      const tail = await readTrailingBytes(source, 8);
+      return tail && readAscii(tail, 0, 4) === "IEND" ? "match" : "mismatch";
+    }
+
+    case "image/webp": {
+      const chunkId = readAscii(window, 12, 4);
+      return chunkId && WEBP_CHUNK_IDS.has(chunkId) ? "match" : "mismatch";
+    }
+
+    case "image/heic": {
+      try {
+        const tracker = new BudgetTracker(DEFAULT_DURATION_BUDGET);
+        const meta = await findBoxInRange(source, 0, source.fileSize, "meta", tracker);
+        return meta ? "match" : "mismatch";
+      } catch {
+        return "mismatch";
+      }
+    }
+
+    case "video/mp4":
+    case "video/quicktime":
+      return "match";
+
+    default:
+      return "mismatch";
+  }
+}
+
 /** Reads mvhd's duration/timescale fields, handling both the v0 (32-bit) and v1 (64-bit) layouts. */
 async function parseMvhdDurationSeconds(
   source: BoxSource,
@@ -298,6 +357,17 @@ export async function extractIsoBmffDurationSeconds(
 
     const mvhd = await findBoxInRange(source, moov.bodyStart, moov.boxEnd, "mvhd", tracker);
     if (!mvhd) return { outcome: "malformed" };
+
+    // A real capture always has at least one track — this alone is what keeps a
+    // fabricated ftyp+moov+mvhd (no actual video content at all) from validating.
+    const trak = await findBoxInRange(source, moov.bodyStart, moov.boxEnd, "trak", tracker);
+    if (!trak) return { outcome: "malformed" };
+
+    // ...and its media payload actually exists somewhere: a non-empty top-level
+    // `mdat`. Box-header-only, so this costs nothing beyond the handful of tiny
+    // reads already budgeted for this walk.
+    const mdat = await findBoxInRange(source, 0, source.fileSize, "mdat", tracker);
+    if (!mdat || mdat.boxEnd <= mdat.bodyStart) return { outcome: "malformed" };
 
     const seconds = await parseMvhdDurationSeconds(source, mvhd, tracker);
     if (seconds === undefined || !Number.isFinite(seconds)) return { outcome: "malformed" };

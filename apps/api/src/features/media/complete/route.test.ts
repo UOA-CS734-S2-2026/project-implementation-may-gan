@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { createFakeR2Reader } from "../../../lib/r2.fake";
-import { buildFtypBox, buildMinimalMp4, validJpegBytes } from "../../../lib/media-format.fixtures";
+import {
+  buildFtypBox,
+  buildMinimalMp4,
+  buildMoovBox,
+  buildMvhdBoxV0,
+  concatBoxes,
+  validJpegBytes,
+} from "../../../lib/media-format.fixtures";
 import { MAX_VIDEO_DURATION_SECONDS, RESERVATION_TTL_SECONDS } from "../policy";
 import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
 import type { MediaReservationRepository } from "../reserve/repository";
@@ -195,6 +202,40 @@ describe("POST /api/v1/media-reservations/{id}/complete", () => {
       token,
       { contentType: "video/mp4", byteSize: brokenMp4.byteLength },
       brokenMp4,
+    );
+
+    const response = await completeReservation(env.app, token, created.id);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: "failed", failureReason: "malformed_container" });
+  });
+
+  it("fails a JPEG that only starts with the SOI marker and has no real EOI", async () => {
+    const env = createTestApp();
+    const token = await signUpAndGetToken(env.app);
+    const soiOnly = validJpegBytes.slice(0, validJpegBytes.byteLength - 2); // strip the real EOI
+    const created = await reserveAndUpload(
+      env,
+      token,
+      { contentType: "image/jpeg", byteSize: soiOnly.byteLength },
+      soiOnly,
+    );
+
+    const response = await completeReservation(env.app, token, created.id);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: "failed", failureReason: "malformed_container" });
+  });
+
+  it("fails an MP4 with a real ftyp/moov/mvhd but no actual track or media data", async () => {
+    const env = createTestApp();
+    const token = await signUpAndGetToken(env.app);
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 1000 });
+    const fabricated = concatBoxes(ftyp, buildMoovBox([mvhd])); // no trak, no mdat
+    const created = await reserveAndUpload(
+      env,
+      token,
+      { contentType: "video/mp4", byteSize: fabricated.byteLength },
+      fabricated,
     );
 
     const response = await completeReservation(env.app, token, created.id);
