@@ -32,7 +32,8 @@ export interface ValidationOutcome {
 
 export type ClaimValidationOutcomeResult =
   | { outcome: "claimed"; record: MediaReservationRecord }
-  | { outcome: "already_settled"; record: MediaReservationRecord | undefined };
+  | { outcome: "already_settled"; record: MediaReservationRecord | undefined }
+  | { outcome: "expired" };
 
 export interface MediaReservationRepository {
   /**
@@ -53,9 +54,14 @@ export interface MediaReservationRepository {
    * Atomically claims the pending -> validated|failed transition. A single-row
    * conditional UPDATE is sufficient here (unlike reserveIfUnderQuota's cross-row
    * aggregate check) — ordinary Postgres row-level locking makes the WHERE
-   * status='pending' claim atomic on its own, no advisory lock needed. Zero rows
-   * affected means a concurrent call already settled it; the caller should read
-   * and return that instead of re-running checks.
+   * status='pending' claim atomic on its own, no advisory lock needed. The WHERE
+   * also re-checks expiry against current time, evaluated fresh at claim time (not
+   * whatever the caller checked before doing the slow R2 reads that precede this
+   * call) — a reservation that lapses mid-completion must still be rejected as
+   * expired, not silently validated/failed after its TTL is already gone.
+   * Zero rows affected means either a concurrent call already settled it, or the
+   * reservation expired since it was fetched; the caller should read the row to
+   * tell which and return that instead of re-running checks.
    */
   claimValidationOutcome(id: string, outcome: ValidationOutcome): Promise<ClaimValidationOutcomeResult>;
 }
@@ -101,7 +107,15 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
       const [claimed] = await db
         .update(schema.mediaReservation)
         .set({ status: outcome.status, failureReason: outcome.failureReason, validatedAt: outcome.validatedAt })
-        .where(and(eq(schema.mediaReservation.id, id), eq(schema.mediaReservation.status, "pending")))
+        .where(
+          and(
+            eq(schema.mediaReservation.id, id),
+            eq(schema.mediaReservation.status, "pending"),
+            // Database time, not a value threaded in from the caller — the point is to
+            // catch a reservation that lapses during the R2 reads this call follows.
+            gt(schema.mediaReservation.expiresAt, sql`now()`),
+          ),
+        )
         .returning();
       if (claimed) return { outcome: "claimed", record: claimed };
 
@@ -110,6 +124,9 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
         .from(schema.mediaReservation)
         .where(eq(schema.mediaReservation.id, id))
         .limit(1);
+      // Still pending means the WHERE above failed only on the expiry check —
+      // anyone who actually settled it would have moved it off "pending".
+      if (current?.status === "pending") return { outcome: "expired" };
       return { outcome: "already_settled", record: current };
     },
   };
