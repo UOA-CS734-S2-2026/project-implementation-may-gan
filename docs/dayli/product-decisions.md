@@ -16,7 +16,7 @@ The submitted tomorrow note is an immutable author-only note stored outside ordi
 
 ## Blocking and messages
 
-Blocking immediately prevents new messages, read receipts, typing or presence events, profile access, and journal access. Existing direct-message history remains readable by both users. Neither user can resume the conversation until the block is removed.
+Blocking immediately prevents new messages, edits, reactions, unsending, shared read receipts, typing or presence events, profile access, and journal access. Existing direct-message history remains readable by both users. Neither user can resume peer-visible conversation activity until the block is removed. A private read cursor may still clear the actor's own badge without publishing a receipt.
 
 ### Messaging scope clarification
 
@@ -24,7 +24,7 @@ The messaging planning conversation selected text direct messaging on web and Fl
 
 Foreground updates use hibernating WebSockets with small change notifications and authorized REST fetches, not periodic polling. Mobile push through FCM/APNs is in scope, with configuration and physical-device verification as release gates. Image/video attachments remain blocked on the separate R2 upload owner. Group chats are deferred until group membership and blocking rules are agreed.
 
-The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including edit/unsend behavior during a block, request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented or override the existing block rule without review.
+The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented.
 
 ## Shared links
 
