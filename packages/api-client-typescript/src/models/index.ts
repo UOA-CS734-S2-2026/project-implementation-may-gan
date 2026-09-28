@@ -22,5 +22,7 @@ export * from './PendingRequestPage';
 export * from './PostAudience';
 export * from './RelationshipState';
 export * from './RelationshipStatus';
+export * from './RelationshipUserCard';
+export * from './RelationshipUserPage';
 export * from './SendRelationshipRequest';
 export * from './TestResponse';

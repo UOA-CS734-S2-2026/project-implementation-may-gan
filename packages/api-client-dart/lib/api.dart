@@ -56,6 +56,8 @@ part 'model/pending_request_page.dart';
 part 'model/post_audience.dart';
 part 'model/relationship_state.dart';
 part 'model/relationship_status.dart';
+part 'model/relationship_user_card.dart';
+part 'model/relationship_user_page.dart';
 part 'model/send_relationship_request.dart';
 part 'model/test_response.dart';
 

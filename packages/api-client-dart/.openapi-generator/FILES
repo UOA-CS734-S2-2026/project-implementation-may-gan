@@ -40,6 +40,8 @@ lib/model/pending_request_page.dart
 lib/model/post_audience.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
+lib/model/relationship_user_card.dart
+lib/model/relationship_user_page.dart
 lib/model/send_relationship_request.dart
 lib/model/test_response.dart
 pubspec.yaml

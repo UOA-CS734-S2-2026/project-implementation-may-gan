@@ -29,6 +29,11 @@ import {
     RelationshipStatusToJSON,
 } from '../models/RelationshipStatus';
 import {
+    type RelationshipUserPage,
+    RelationshipUserPageFromJSON,
+    RelationshipUserPageToJSON,
+} from '../models/RelationshipUserPage';
+import {
     type SendRelationshipRequest,
     SendRelationshipRequestFromJSON,
     SendRelationshipRequestToJSON,
@@ -69,6 +74,17 @@ export interface RelationshipsGetStatusRequest {
     userId: string;
 }
 
+export interface RelationshipsListFriendsRequest {
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
 export interface RelationshipsListPendingRequestsRequest {
     /**
      * Opaque continuation cursor
@@ -89,6 +105,21 @@ export interface RelationshipsRemoveFriendshipRequest {
      *
      */
     userId: string;
+}
+
+export interface RelationshipsSearchUsersRequest {
+    /**
+     * Case-insensitive username prefix. Username setup is required for discovery.
+     */
+    q: string;
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
 }
 
 export interface RelationshipsSendRequestRequest {
@@ -376,6 +407,59 @@ export class RelationshipsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for relationshipsListFriends without sending the request
+     */
+    async relationshipsListFriendsRequestOpts(requestParameters: RelationshipsListFriendsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/relationships/friends`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List active friends
+     */
+    async relationshipsListFriendsRaw(requestParameters: RelationshipsListFriendsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RelationshipUserPage>> {
+        const requestOptions = await this.relationshipsListFriendsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RelationshipUserPageFromJSON(jsonValue));
+    }
+
+    /**
+     * List active friends
+     */
+    async relationshipsListFriends(requestParameters: RelationshipsListFriendsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelationshipUserPage> {
+        const response = await this.relationshipsListFriendsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for relationshipsListPendingRequests without sending the request
      */
     async relationshipsListPendingRequestsRequestOpts(requestParameters: RelationshipsListPendingRequestsRequest): Promise<runtime.RequestOpts> {
@@ -482,6 +566,72 @@ export class RelationshipsApi extends runtime.BaseAPI {
      */
     async relationshipsRemoveFriendship(requestParameters: RelationshipsRemoveFriendshipRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelationshipStatus> {
         const response = await this.relationshipsRemoveFriendshipRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for relationshipsSearchUsers without sending the request
+     */
+    async relationshipsSearchUsersRequestOpts(requestParameters: RelationshipsSearchUsersRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['q'] == null) {
+            throw new runtime.RequiredError(
+                'q',
+                'Required parameter "q" was null or undefined when calling relationshipsSearchUsers().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        if (requestParameters['q'] != null) {
+            queryParameters['q'] = requestParameters['q'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/relationships/search`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Private accounts are discoverable here only as a minimal username/display-name card. This does not grant profile access.
+     * Search username prefixes
+     */
+    async relationshipsSearchUsersRaw(requestParameters: RelationshipsSearchUsersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RelationshipUserPage>> {
+        const requestOptions = await this.relationshipsSearchUsersRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RelationshipUserPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Private accounts are discoverable here only as a minimal username/display-name card. This does not grant profile access.
+     * Search username prefixes
+     */
+    async relationshipsSearchUsers(requestParameters: RelationshipsSearchUsersRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelationshipUserPage> {
+        const response = await this.relationshipsSearchUsersRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

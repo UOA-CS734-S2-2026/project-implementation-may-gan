@@ -4,6 +4,8 @@ import { cancelFriendRequest } from "./cancel-friend-request/cancel-friend-reque
 import { declineFriendRequest } from "./decline-friend-request/decline-friend-request.service";
 import { getRelationship } from "./get-relationship/get-relationship.service";
 import { listFriendRequests } from "./list-friend-requests/list-friend-requests.service";
+import { listFriends } from "./list-friends/list-friends.service";
+import { searchUsers } from "./search-users/search-users.service";
 import { removeFriendship } from "./remove-friendship/remove-friendship.service";
 import { sendFriendRequest } from "./send-friend-request/send-friend-request.service";
 import { unblockUser } from "./unblock-user/unblock-user.service";
@@ -11,6 +13,7 @@ import type {
   PendingRequestDirection,
   PendingRequestPage,
   RelationshipStore,
+  RelationshipUserPage,
   RelationshipStatus,
 } from "./shared/relationship-service";
 
@@ -20,6 +23,7 @@ export {
   type PendingRequestDirection,
   type PendingRequestPage,
   type RelationshipStore,
+  type RelationshipUserPage,
   type RelationshipTransaction,
   type StoredRelationshipSnapshot,
 } from "./shared/relationship-service";
@@ -28,6 +32,8 @@ export {
 export interface RelationshipsService {
   getStatus(actorId: string, subjectId: string): Promise<RelationshipStatus>;
   listPendingRequests(actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage>;
+  listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  searchUsers(actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
   sendRequest(actorId: string, recipientId: string): Promise<RelationshipStatus>;
   acceptRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
   declineRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
@@ -42,6 +48,8 @@ export function createRelationshipsService(store: RelationshipStore, options: { 
   return {
     getStatus: (actorId, subjectId) => getRelationship(dependencies, actorId, subjectId),
     listPendingRequests: (actorId, direction, limit, cursor) => listFriendRequests(dependencies, actorId, direction, limit, cursor),
+    listFriends: (actorId, limit, cursor) => listFriends(dependencies, actorId, limit, cursor),
+    searchUsers: (actorId, query, limit, cursor) => searchUsers(dependencies, actorId, query, limit, cursor),
     sendRequest: (actorId, recipientId) => sendFriendRequest(dependencies, actorId, recipientId),
     acceptRequest: (actorId, requestId) => acceptFriendRequest(dependencies, actorId, requestId),
     declineRequest: (actorId, requestId) => declineFriendRequest(dependencies, actorId, requestId),

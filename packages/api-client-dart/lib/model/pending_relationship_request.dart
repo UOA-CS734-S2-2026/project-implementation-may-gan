@@ -17,6 +17,7 @@ class PendingRelationshipRequest {
     required this.senderId,
     required this.recipientId,
     required this.createdAt,
+    this.user,
   });
 
   final String id;
@@ -27,6 +28,14 @@ class PendingRelationshipRequest {
 
   final DateTime createdAt;
 
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final RelationshipUserCard? user;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -34,7 +43,8 @@ class PendingRelationshipRequest {
           other.id == id &&
           other.senderId == senderId &&
           other.recipientId == recipientId &&
-          other.createdAt == createdAt;
+          other.createdAt == createdAt &&
+          other.user == user;
 
   @override
   int get hashCode =>
@@ -42,11 +52,12 @@ class PendingRelationshipRequest {
       (id.hashCode) +
       (senderId.hashCode) +
       (recipientId.hashCode) +
-      (createdAt.hashCode);
+      (createdAt.hashCode) +
+      (user == null ? 0 : user!.hashCode);
 
   @override
   String toString() =>
-      'PendingRelationshipRequest[id=$id, senderId=$senderId, recipientId=$recipientId, createdAt=$createdAt]';
+      'PendingRelationshipRequest[id=$id, senderId=$senderId, recipientId=$recipientId, createdAt=$createdAt, user=$user]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -54,6 +65,11 @@ class PendingRelationshipRequest {
     json[r'senderId'] = this.senderId;
     json[r'recipientId'] = this.recipientId;
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
+    if (this.user != null) {
+      json[r'user'] = this.user;
+    } else {
+      json[r'user'] = null;
+    }
     return json;
   }
 
@@ -64,12 +80,14 @@ class PendingRelationshipRequest {
     String? senderId,
     String? recipientId,
     DateTime? createdAt,
+    RelationshipUserCard? user,
   }) =>
       PendingRelationshipRequest(
         id: id ?? this.id,
         senderId: senderId ?? this.senderId,
         recipientId: recipientId ?? this.recipientId,
         createdAt: createdAt ?? this.createdAt,
+        user: user ?? this.user,
       );
 
   /// Returns a new [PendingRelationshipRequest] instance and imports its values from
@@ -107,6 +125,7 @@ class PendingRelationshipRequest {
         senderId: mapValueOfType<String>(json, r'senderId')!,
         recipientId: mapValueOfType<String>(json, r'recipientId')!,
         createdAt: mapDateTime(json, r'createdAt', r'')!,
+        user: RelationshipUserCard.fromJson(json[r'user']),
       );
     }
     return null;

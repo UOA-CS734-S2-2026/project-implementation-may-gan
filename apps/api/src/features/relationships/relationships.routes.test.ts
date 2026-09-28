@@ -20,6 +20,8 @@ function createTestApp(options: {
   const service: RelationshipsService = {
     getStatus: vi.fn(async () => status),
     listPendingRequests: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
+    listFriends: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
+    searchUsers: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
     sendRequest: vi.fn(async () => status),
     acceptRequest: vi.fn(async () => status),
     declineRequest: vi.fn(async () => status),
@@ -176,6 +178,8 @@ describe("relationships routes", () => {
     const { app } = createTestApp();
     const requests = await Promise.all([
       app.request("/api/v1/relationships/requests"),
+      app.request("/api/v1/relationships/friends"),
+      app.request("/api/v1/relationships/search?q=bo"),
       app.request("/api/v1/relationships/requests/request-1/accept", { method: "POST" }),
       app.request("/api/v1/relationships/requests/request-1/decline", { method: "POST" }),
       app.request("/api/v1/relationships/requests/request-1/cancel", { method: "POST" }),
@@ -184,7 +188,7 @@ describe("relationships routes", () => {
       app.request("/api/v1/relationships/user_bob/block", { method: "DELETE" }),
     ]);
 
-    expect(requests.map((response) => response.status)).toEqual([200, 200, 200, 200, 200, 200, 200]);
+    expect(requests.map((response) => response.status)).toEqual([200, 200, 200, 200, 200, 200, 200, 200, 200]);
     requests.forEach(expectNoStore);
   });
 

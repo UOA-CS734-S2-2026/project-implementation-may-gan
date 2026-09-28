@@ -20,8 +20,19 @@ function nextCursor(createdAt: string, id: string): string {
   return btoa(JSON.stringify({ createdAt, id })).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function requestFromRow(row: RelationshipRow): StoredPendingRequest {
-  return { id: String(row.id), senderId: String(row.sender_id), recipientId: String(row.recipient_id), createdAt: new Date(String(row.created_at)).toISOString() };
+function requestFromRow(row: RelationshipRow, actorId: string): StoredPendingRequest {
+  return {
+    id: String(row.id),
+    senderId: String(row.sender_id),
+    recipientId: String(row.recipient_id),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    user: {
+      id: String(row.user_id),
+      username: String(row.username),
+      displayName: String(row.display_name),
+      relationship: row.sender_id === actorId ? "outgoing_pending" : "incoming_pending",
+    },
+  };
 }
 
 export async function listPendingRequestRows(queryable: RelationshipQueryable, actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage> {
@@ -29,12 +40,21 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
   const directionSql = direction === "incoming" ? sql`and recipient_id = ${actorId}` : direction === "outgoing" ? sql`and sender_id = ${actorId}` : sql`and (sender_id = ${actorId} or recipient_id = ${actorId})`;
   const cursorSql = after ? sql`and (created_at, id) > (${after.createdAt}::timestamptz, ${after.id})` : sql``;
   const result = relationshipRows<RelationshipRow>(await queryable.execute(sql`
-    select id, sender_id, recipient_id, created_at from public.friend_requests
-    where status = 'pending' ${directionSql} ${cursorSql}
-    order by created_at asc, id asc limit ${limit + 1}
+    select request.id, request.sender_id, request.recipient_id, request.created_at,
+      other.id as user_id, other.username, coalesce(other.display_username, other.name) as display_name
+    from public.friend_requests request
+    join public."user" other on other.id = case when request.sender_id = ${actorId} then request.recipient_id else request.sender_id end
+    where request.status = 'pending' ${directionSql} ${cursorSql}
+      and other.username is not null
+      and (coalesce(other.banned, false) = false or (other.ban_expires is not null and other.ban_expires <= now()))
+      and not exists (
+        select 1 from public.relationship_blocks block where block.unblocked_at is null
+          and ((block.blocker_id = ${actorId} and block.blocked_id = other.id) or (block.blocker_id = other.id and block.blocked_id = ${actorId}))
+      )
+    order by request.created_at asc, request.id asc limit ${limit + 1}
   `));
   const hasMore = result.length > limit;
-  const items = result.slice(0, limit).map(requestFromRow);
+  const items = result.slice(0, limit).map((row) => requestFromRow(row, actorId));
   const last = items.at(-1);
   return { items, hasMore, nextCursor: hasMore && last ? nextCursor(last.createdAt, last.id) : null };
 }

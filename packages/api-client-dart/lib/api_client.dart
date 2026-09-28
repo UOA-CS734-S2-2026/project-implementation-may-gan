@@ -248,6 +248,10 @@ class ApiClient {
           return RelationshipStateTypeTransformer().decode(value);
         case 'RelationshipStatus':
           return RelationshipStatus.fromJson(value);
+        case 'RelationshipUserCard':
+          return RelationshipUserCard.fromJson(value);
+        case 'RelationshipUserPage':
+          return RelationshipUserPage.fromJson(value);
         case 'SendRelationshipRequest':
           return SendRelationshipRequest.fromJson(value);
         case 'TestResponse':
