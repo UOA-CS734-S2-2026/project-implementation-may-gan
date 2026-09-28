@@ -41,6 +41,7 @@ import { registerTestContractsRoute } from "./features/system/test-contracts/rou
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
+import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -48,6 +49,7 @@ export interface AppDependencies {
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
+  messaging?: MessagingRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -58,6 +60,7 @@ export function createApp({
   postingDay,
   posts,
   relationships = unavailableRelationships,
+  messaging = unavailableMessaging,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -101,6 +104,7 @@ export function createApp({
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
   registerRelationshipsRoutes(api, relationships);
+  registerMessagingRoutes(api, messaging);
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -153,8 +157,9 @@ export function createAppForEnv(env: ApiEnv) {
   return api;
 }
 
-const unavailableRelationships: RelationshipsRouteDependencies = {
-  service: {
+const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
+
+const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
     listPendingRequests: async () => { throw new Error("Relationship storage is unavailable."); },
     listFriends: async () => { throw new Error("Relationship storage is unavailable."); },
