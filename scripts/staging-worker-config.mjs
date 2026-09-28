@@ -24,7 +24,6 @@ export function createStagingWorkerConfigs({
   authApiOrigin,
   authWebOrigin,
   authVars = {},
-  pushKeyVersion,
 }) {
   if (typeof workerName !== "string" || !/^dayli-api-staging$/.test(workerName)) {
     throw new Error("Refusing an unexpected staging Worker name.");
@@ -35,15 +34,10 @@ export function createStagingWorkerConfigs({
   if (typeof authApiOrigin !== "string" || typeof authWebOrigin !== "string") {
     throw new Error("Staging origins are required.");
   }
-  if (pushKeyVersion !== undefined && !/^[A-Za-z0-9._-]{1,64}$/.test(pushKeyVersion)) {
-    throw new Error("STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION is invalid.");
-  }
-
   const vars = {
     BETTER_AUTH_BASE_URL: authApiOrigin,
     BETTER_AUTH_TRUSTED_ORIGINS: `${authApiOrigin},${authWebOrigin}`,
     ...authVars,
-    ...(pushKeyVersion ? { PUSH_TOKEN_ENCRYPTION_KEY_VERSION: pushKeyVersion } : {}),
   };
   const api = {
     ...sharedWorkerConfig,

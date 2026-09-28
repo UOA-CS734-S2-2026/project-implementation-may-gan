@@ -6,8 +6,14 @@ export const stagingWorkerSecretNames = Object.freeze({
   pushKey: "PUSH_TOKEN_ENCRYPTION_KEY",
 });
 
-const allowedSecretNames = new Set(Object.values(stagingWorkerSecretNames));
-const keyVersionBinding = "PUSH_TOKEN_ENCRYPTION_KEY_VERSION";
+// PUSH_TOKEN_ENCRYPTION_KEY is intentionally absent. It is provisioned and
+// rotated directly in Cloudflare because replacing it breaks existing ciphertext.
+const syncedSecretNames = new Set([
+  stagingWorkerSecretNames.betterAuth,
+  stagingWorkerSecretNames.google,
+  stagingWorkerSecretNames.resend,
+  stagingWorkerSecretNames.fcm,
+]);
 
 function requiredSecret(environment, name) {
   const value = environment[name];
@@ -24,59 +30,43 @@ function optionalSecret(environment, name) {
   return value;
 }
 
-/**
- * Read only this reviewed allowlist from the GitHub staging environment. The
- * returned values are for an API request and must never be logged or written.
- */
+/** Read only the reviewed GitHub Environment secret allowlist. */
 export function readStagingWorkerSecretSource(environment, requiredAuthSecretNames) {
-  if (!Array.isArray(requiredAuthSecretNames) || !requiredAuthSecretNames.every((name) => allowedSecretNames.has(name))) {
+  if (!Array.isArray(requiredAuthSecretNames) || !requiredAuthSecretNames.every((name) => syncedSecretNames.has(name))) {
     throw new Error("Refusing an unreviewed Worker secret name.");
   }
   const values = {};
   for (const name of requiredAuthSecretNames) values[name] = requiredSecret(environment, name);
-
   const fcm = optionalSecret(environment, stagingWorkerSecretNames.fcm);
-  const pushKey = optionalSecret(environment, stagingWorkerSecretNames.pushKey);
-  if ((fcm === undefined) !== (pushKey === undefined)) {
-    throw new Error("FCM_SERVICE_ACCOUNT_JSON and PUSH_TOKEN_ENCRYPTION_KEY must be set together or both omitted.");
-  }
-  const pushKeyVersion = optionalSecret(environment, "STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION");
-  if (fcm !== undefined) {
-    if (pushKeyVersion === undefined || !/^[A-Za-z0-9._-]{1,64}$/.test(pushKeyVersion)) {
-      throw new Error("A valid STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION is required with push secrets.");
-    }
-    values[stagingWorkerSecretNames.fcm] = fcm;
-    values[stagingWorkerSecretNames.pushKey] = pushKey;
-  } else if (pushKeyVersion !== undefined) {
-    throw new Error("STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION requires both push secrets.");
-  }
-  return { values, pushKeyVersion };
-}
-
-export function readWorkerPushKeyVersion(settingsPayload) {
-  const bindings = settingsPayload?.result?.bindings;
-  if (!Array.isArray(bindings)) throw new Error("Cloudflare returned invalid Worker settings.");
-  const versions = bindings.filter((binding) => binding?.name === keyVersionBinding);
-  if (versions.length === 0) return undefined;
-  if (versions.length !== 1 || versions[0]?.type !== "plain_text" || typeof versions[0]?.text !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(versions[0].text)) {
-    throw new Error("Cloudflare returned invalid push key version metadata.");
-  }
-  return versions[0].text;
+  if (fcm !== undefined) values[stagingWorkerSecretNames.fcm] = fcm;
+  return { values };
 }
 
 /**
- * Do not replace an encryption key merely because a GitHub secret changed.
- * Existing key material without an authoritative version needs an owner
- * bootstrap attestation before this workflow may establish the metadata.
+ * Validate the resulting Worker secret-name set without reading secret values.
+ * A key by itself is allowed for one-time owner provisioning. FCM is never
+ * allowed without that existing key. Provider secrets must match public vars.
  */
-export function assertPushKeyVersionGuard({ source, deployedSecretNames, deployedPushKeyVersion, allowOwnerBootstrap = false }) {
-  const hasDeployedPushKey = deployedSecretNames.has(stagingWorkerSecretNames.pushKey);
-  if (source.pushKeyVersion === undefined) return;
-  if (deployedPushKeyVersion === undefined && hasDeployedPushKey && !allowOwnerBootstrap) {
-    throw new Error("The existing push encryption key has no version metadata. An owner bootstrap is required before deployment.");
+export function assertProjectedWorkerSecretPairing({ existingSecretNames, source, requiredAuthSecretNames }) {
+  if (!(existingSecretNames instanceof Set)) throw new Error("Cloudflare returned invalid Worker secret names.");
+  if (!Array.isArray(requiredAuthSecretNames) || !requiredAuthSecretNames.every((name) => syncedSecretNames.has(name))) {
+    throw new Error("Refusing an unreviewed Worker secret name.");
   }
-  if (deployedPushKeyVersion !== undefined && deployedPushKeyVersion !== source.pushKeyVersion) {
-    throw new Error("The proposed push encryption key version differs from deployed metadata. Complete the controlled rotation first.");
+  const projected = new Set([...existingSecretNames, ...Object.keys(source.values)]);
+  for (const name of [stagingWorkerSecretNames.google, stagingWorkerSecretNames.resend]) {
+    const required = requiredAuthSecretNames.includes(name);
+    if (projected.has(name) !== required) {
+      throw new Error(`${name} must match its complete public staging configuration.`);
+    }
+  }
+  if (!projected.has(stagingWorkerSecretNames.betterAuth)) {
+    throw new Error("The staging Worker requires BETTER_AUTH_SECRET.");
+  }
+  if (projected.has(stagingWorkerSecretNames.fcm) && !existingSecretNames.has(stagingWorkerSecretNames.pushKey)) {
+    throw new Error("FCM_SERVICE_ACCOUNT_JSON requires an existing Cloudflare PUSH_TOKEN_ENCRYPTION_KEY.");
+  }
+  if (Object.hasOwn(source.values, stagingWorkerSecretNames.fcm) && !existingSecretNames.has(stagingWorkerSecretNames.pushKey)) {
+    throw new Error("FCM_SERVICE_ACCOUNT_JSON cannot be synchronized until an owner provisions PUSH_TOKEN_ENCRYPTION_KEY in Cloudflare.");
   }
 }
 
@@ -84,22 +74,23 @@ function apiUrl(accountId, workerName) {
   if (!/^[a-f0-9]{32}$/.test(accountId) || workerName !== "dayli-api-staging") {
     throw new Error("Refusing an unexpected Cloudflare secret target.");
   }
-  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}/secrets`;
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${workerName}/secrets-bulk`;
 }
 
-/** Bulk upsert the reviewed values. No absent optional secret is deleted. */
+/** Bulk-upsert reviewed secret values. Omitted secrets, including the push key, are untouched. */
 export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken, source, fetchImpl = fetch }) {
   if (typeof apiToken !== "string" || apiToken.length === 0) throw new Error("CLOUDFLARE_API_TOKEN is required.");
   const entries = Object.entries(source.values);
-  if (!entries.length || !entries.every(([name, value]) => allowedSecretNames.has(name) && typeof value === "string" && value.length > 0)) {
+  if (!entries.length || !entries.every(([name, value]) => syncedSecretNames.has(name) && typeof value === "string" && value.length > 0)) {
     throw new Error("Refusing an invalid staging secret sync request.");
   }
+  const secrets = Object.fromEntries(entries.map(([name, text]) => [name, { name, text, type: "secret_text" }]));
   let response;
   try {
     response = await fetchImpl(apiUrl(accountId, workerName), {
-      method: "PUT",
+      method: "PATCH",
       headers: { Authorization: `Bearer ${apiToken}`, "content-type": "application/json" },
-      body: JSON.stringify(entries.map(([name, text]) => ({ name, text, type: "secret_text" }))),
+      body: JSON.stringify({ secrets }),
     });
   } catch {
     throw new Error("Cloudflare secret sync could not reach the control plane. No deployment was attempted.");
@@ -110,7 +101,16 @@ export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken
   } catch {
     throw new Error(`Cloudflare secret sync returned invalid JSON (HTTP ${response.status}). No deployment was attempted.`);
   }
-  if (!response.ok || payload?.success !== true) {
+  const errors = payload?.errors;
+  const result = payload?.result;
+  const complete = response.ok
+    && payload?.success === true
+    && Array.isArray(errors)
+    && errors.length === 0
+    && result !== null
+    && typeof result === "object"
+    && entries.every(([name]) => result[name]?.name === name && result[name]?.type === "secret_text");
+  if (!complete) {
     throw new Error(`Cloudflare secret sync failed (HTTP ${response.status}). No deployment was attempted; inspect the Worker secret store before retrying.`);
   }
 }

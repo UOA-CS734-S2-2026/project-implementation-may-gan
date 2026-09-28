@@ -4,12 +4,6 @@ name: Deploy staging API and Hyperdrive proof
 # Do not add push, pull_request, or pull_request_target triggers.
 on:
   workflow_dispatch:
-    inputs:
-      push_key_owner_bootstrap:
-        description: Confirm an owner has verified that an existing unversioned push key matches the staging Environment secret
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -44,7 +38,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Validate staging resource, generate configuration, and synchronize Worker secrets
+      - name: Validate staging resource and generate configuration
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -62,9 +56,6 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
-          PUSH_TOKEN_ENCRYPTION_KEY: ${{ secrets.PUSH_TOKEN_ENCRYPTION_KEY }}
-          STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION: ${{ vars.STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION }}
-          STAGING_PUSH_KEY_OWNER_BOOTSTRAP: ${{ inputs.push_key_owner_bootstrap }}
         run: node scripts/run-staging-api-deploy.mjs
       - name: Dry-run generated Worker configurations
         env:
@@ -73,6 +64,26 @@ jobs:
         run: |
           pnpm --dir apps/api exec wrangler deploy --dry-run --config wrangler.staging.jsonc
           pnpm --dir apps/api exec wrangler deploy --dry-run --config wrangler.hyperdrive-test.jsonc
+      - name: Synchronize reviewed Worker secrets after configuration dry-runs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          STAGING_API_SERVICE_NAME: ${{ vars.STAGING_API_SERVICE_NAME }}
+          STAGING_HYPERDRIVE_NAME: ${{ vars.STAGING_HYPERDRIVE_NAME }}
+          STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+          STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+          STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_GOOGLE_WEB_CLIENT_ID: ${{ vars.STAGING_GOOGLE_WEB_CLIENT_ID }}
+          STAGING_GOOGLE_IOS_CLIENT_ID: ${{ vars.STAGING_GOOGLE_IOS_CLIENT_ID }}
+          STAGING_GOOGLE_ANDROID_CLIENT_ID: ${{ vars.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
+          STAGING_RESEND_FROM: ${{ vars.STAGING_RESEND_FROM }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
+          STAGING_SECRET_SYNC: "true"
+        run: node scripts/run-staging-api-deploy.mjs
       - name: Deploy the reviewed staging API Worker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
