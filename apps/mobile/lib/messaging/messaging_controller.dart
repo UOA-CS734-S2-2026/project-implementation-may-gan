@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api/api_failure.dart';
 import 'messaging_client.dart';
+import 'realtime_client.dart';
+import 'realtime_event.dart';
 
 /// Session-scoped foreground state. It only fetches from explicit lifecycle
 /// actions, never from a periodic timer or background polling fallback.
@@ -14,12 +18,66 @@ class MessagingController extends ChangeNotifier {
   ApiFailure? _failure;
   bool _loading = false;
   int _generation = 0;
+  RealtimeConnection? _realtime;
+  final Set<String> _eventIds = <String>{};
+  final Map<String, String> _lastChangeSequence = <String, String>{};
 
   List<MessagingConversation> get inbox => List.unmodifiable(_inbox);
   ApiFailure? get failure => _failure;
   bool get loading => _loading;
   List<MessagingMessage> thread(String conversationId) =>
       List.unmodifiable(_threads[conversationId] ?? const []);
+
+  void enableRealtime() {
+    _realtime ??= MessagingRealtimeClient(
+      _client,
+      onReady: _realtimeReady,
+      onChange: _realtimeChange,
+    );
+  }
+
+  Future<void> startRealtime() async {
+    enableRealtime();
+    await _realtime!.start();
+  }
+
+  Future<void> resumeRealtime() async => _realtime?.resume();
+
+  Future<void> stopRealtime() async => _realtime?.stop();
+
+  Future<void> _realtimeReady() async {
+    final generation = _generation;
+    await refreshInbox();
+    for (final conversationId in _threads.keys.toList()) {
+      if (generation != _generation) return;
+      await loadConversation(conversationId);
+    }
+  }
+
+  /// Called by the session-scoped socket after ready and on durable replay.
+  Future<void> reconcileRealtimeEvent(ConversationChanged event) => _realtimeChange(event);
+
+  Future<void> _realtimeChange(ConversationChanged event) async {
+    if (_eventIds.contains(event.eventId)) return;
+    final previous = _lastChangeSequence[event.conversationId];
+    if (previous != null && BigInt.parse(event.changeSequence) <= BigInt.parse(previous)) return;
+    _eventIds.add(event.eventId);
+    if (_eventIds.length > 512) _eventIds.remove(_eventIds.first);
+    var cursor = previous ?? '0';
+    while (true) {
+      final page = await _client.changes(event.conversationId, afterChangeSequence: cursor);
+      if (page case ApiSuccess<MessagingChangePage>(:final value)) {
+        cursor = value.nextChangeSequence ?? value.highWatermark;
+        _lastChangeSequence[event.conversationId] = value.highWatermark;
+        if (!value.hasMore) break;
+      } else {
+        // A later event or reconnect will retry durable reconciliation.
+        return;
+      }
+    }
+    await refreshInbox();
+    await loadConversation(event.conversationId);
+  }
 
   Future<void> refreshInbox() async {
     final generation = _generation;
@@ -87,6 +145,9 @@ class MessagingController extends ChangeNotifier {
     _generation++;
     _inbox = const [];
     _threads.clear();
+    _eventIds.clear();
+    _lastChangeSequence.clear();
+    unawaited(_realtime?.stop());
     _failure = null;
     _loading = false;
     notifyListeners();

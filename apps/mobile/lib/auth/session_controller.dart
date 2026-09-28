@@ -60,6 +60,7 @@ class SessionController extends ChangeNotifier {
     required this._userCache,
     required this._drafts,
     this.onPrivateDataClear,
+    this.onBeforeSessionReplacement,
     this.onSignedIn,
   });
 
@@ -70,6 +71,11 @@ class SessionController extends ChangeNotifier {
 
   /// Closes sockets and clears messaging caches before account state changes.
   final FutureOr<void> Function()? onPrivateDataClear;
+
+  /// Runs under the old bearer before sign-in can replace it. A failure aborts
+  /// account switching, preventing the old account's push registration from
+  /// remaining on a shared device.
+  final FutureOr<void> Function()? onBeforeSessionReplacement;
 
   /// Starts session-bound integrations such as push after verified sign-in.
   final FutureOr<void> Function()? onSignedIn;
@@ -116,6 +122,7 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> signIn({required String email, required String password}) async {
+    await _beforeCredentialReplacement();
     await _session.signIn(email: email, password: password);
     await _afterAuthentication();
   }
@@ -125,11 +132,13 @@ class SessionController extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
+    await _beforeCredentialReplacement();
     await _session.signUp(name: name, email: email, password: password);
     await _afterAuthentication();
   }
 
   Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+    await _beforeCredentialReplacement();
     await _session.signInWithGoogle(provider);
     await _afterAuthentication();
   }
@@ -143,17 +152,22 @@ class SessionController extends ChangeNotifier {
   Future<void> signOut() async {
     final userId = _user?.id;
     try {
+      await onPrivateDataClear?.call();
       await _session.signOut();
     } catch (_) {
       // Revocation failed (for example offline); the local token is still
       // removed below so this device no longer holds the session.
     }
     if (userId != null) await _drafts.clear(userId);
-    await _signedOutLocally();
+    await _signedOutLocally(clearPrivateData: false);
   }
 
   /// Called when the API rejects the stored session.
   Future<void> sessionExpired() => _signedOutLocally();
+
+  Future<void> _beforeCredentialReplacement() async {
+    if (_user != null) await onBeforeSessionReplacement?.call();
+  }
 
   Future<void> _afterAuthentication() async {
     final user = await _session.currentUser();
@@ -164,7 +178,8 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> _signedIn(SessionUser user) async {
-    if (_user != null && _user!.id != user.id) await onPrivateDataClear?.call();
+    // Interactive account replacement already completed its private cleanup
+    // under the old bearer in _beforeCredentialReplacement.
     await _userCache.write(user);
     _set(SessionStatus.signedIn, user);
     try {
@@ -174,8 +189,8 @@ class SessionController extends ChangeNotifier {
     }
   }
 
-  Future<void> _signedOutLocally() async {
-    await onPrivateDataClear?.call();
+  Future<void> _signedOutLocally({bool clearPrivateData = true}) async {
+    if (clearPrivateData) await onPrivateDataClear?.call();
     await _tokenStore.clear();
     await _userCache.clear();
     _set(SessionStatus.signedOut, null);

@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { messagingApi, type MessagingConversation } from "@/lib/api/messaging";
+import { useMessagingLiveRevision } from "./MessagingProvider";
 
 export function Inbox() {
+  const revision = useMessagingLiveRevision();
   const [conversations, setConversations] = useState<MessagingConversation[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "paused">("loading");
   const [message, setMessage] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function Inbox() {
     }
   }, []);
 
-  useEffect(() => { void Promise.resolve().then(refresh); }, [refresh]);
+  useEffect(() => { void Promise.resolve().then(refresh); }, [refresh, revision]);
 
   return (
     <section className="mx-auto max-w-3xl px-6 py-16 md:px-12">

@@ -1,7 +1,11 @@
 import 'package:dayli_mobile/app/fresh_install.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
+import 'dart:convert';
+
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,6 +60,46 @@ void main() {
 
     expect(harness.session.status, SessionStatus.signedOut);
     expect(harness.tokens.value, isNull);
+  });
+
+  test('fails closed before an account switch can replace Alice push credentials', () async {
+    final tokens = MemoryTokenStore()..value = 'alice-token';
+    final users = MemoryUserCache();
+    final drafts = MemoryDraftStore();
+    var signInCalls = 0;
+    final native = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokens,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/get-session')) {
+          return http.Response(jsonEncode({'user': {'id': 'alice', 'name': 'Alice', 'email': 'alice@example.test'}}), 200);
+        }
+        if (request.url.path.endsWith('/sign-in/email')) {
+          signInCalls++;
+          return http.Response('{}', 200, headers: {'set-auth-token': 'bob-token'});
+        }
+        return http.Response('{}', 404);
+      }),
+    );
+    String? cleanupToken;
+    final controller = SessionController(
+      session: native,
+      tokenStore: tokens,
+      userCache: users,
+      drafts: drafts,
+      onBeforeSessionReplacement: () async {
+        cleanupToken = await tokens.read();
+        throw StateError('push cleanup is offline');
+      },
+    );
+    await controller.restore();
+    await expectLater(
+      controller.signIn(email: 'bob@example.test', password: 'correct-password'),
+      throwsA(isA<StateError>()),
+    );
+    expect(cleanupToken, 'alice-token');
+    expect(signInCalls, 0);
+    expect(tokens.value, 'alice-token');
   });
 
   test('wipes protected storage once after a fresh install', () async {

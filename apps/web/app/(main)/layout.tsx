@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/ui/layout/Navbar";
 import { MobileNavCloseListener } from "@/components/ui/layout/MobileNavCloseListener";
 import { Suspense } from "react";
+import { MessagingProvider } from "@/components/messages/MessagingProvider";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,7 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Right: main content */}
       <div className="relative md:pl-[300px] w-full flex-1">
-        <div className="relative z-[1]">{children}</div>
+        <MessagingProvider><div className="relative z-[1]">{children}</div></MessagingProvider>
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute inset-[-50%] bg-[url('/dotgridbg.jpg')] bg-[50%] opacity-50"></div>
         </div>

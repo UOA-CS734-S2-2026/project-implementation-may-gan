@@ -28,6 +28,9 @@ class FirebasePushTokenSource implements PushTokenSource {
 
   @override
   Stream<String> get tokenRefreshes => _messaging.onTokenRefresh;
+
+  @override
+  Future<void> invalidateLocalToken() => _messaging.deleteToken();
 }
 
 /// Registers Firebase handlers without showing a foreground OS banner. The

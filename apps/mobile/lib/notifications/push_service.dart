@@ -7,6 +7,8 @@ abstract interface class PushTokenSource {
   Future<PushPermission> requestPermission();
   Future<String?> currentToken();
   Stream<String> get tokenRefreshes;
+  /// Removes the provider token from this installation after server cleanup.
+  Future<void> invalidateLocalToken();
 }
 
 enum PushPermission { granted, denied, provisional }
@@ -66,6 +68,9 @@ class PushService {
   Future<void> stop() async {
     await _subscription?.cancel();
     _subscription = null;
+    // This call uses the currently installed bearer credential. Callers that
+    // are about to replace accounts must await it before replacing that token.
     await client.unregister(installationId);
+    await source.invalidateLocalToken();
   }
 }

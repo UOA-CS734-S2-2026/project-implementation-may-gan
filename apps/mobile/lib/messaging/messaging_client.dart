@@ -41,6 +41,23 @@ class MessagingMessage {
       );
 }
 
+class RealtimeTicket {
+  const RealtimeTicket({required this.ticket, required this.webSocketUrl});
+  final String ticket;
+  final String webSocketUrl;
+}
+
+class MessagingChangePage {
+  const MessagingChangePage({
+    required this.highWatermark,
+    required this.hasMore,
+    required this.nextChangeSequence,
+  });
+  final String highWatermark;
+  final bool hasMore;
+  final String? nextChangeSequence;
+}
+
 class MessagingConversation {
   const MessagingConversation({
     required this.id,
@@ -71,6 +88,11 @@ class MessagingConversation {
 abstract interface class MessagingClient {
   Future<ApiResult<List<MessagingConversation>>> inbox();
   Future<ApiResult<List<MessagingMessage>>> messages(String conversationId);
+  Future<ApiResult<RealtimeTicket>> issueRealtimeTicket();
+  Future<ApiResult<MessagingChangePage>> changes(
+    String conversationId, {
+    required String afterChangeSequence,
+  });
   Future<ApiResult<MessagingMessage>> send({
     required String conversationId,
     required String clientMessageId,
@@ -88,6 +110,14 @@ class UnavailableMessagingClient implements MessagingClient {
   Future<ApiResult<List<MessagingMessage>>> messages(
     String conversationId,
   ) async => const ApiError(ServiceUnavailable());
+  @override
+  Future<ApiResult<RealtimeTicket>> issueRealtimeTicket() async =>
+      const ApiError(ServiceUnavailable());
+  @override
+  Future<ApiResult<MessagingChangePage>> changes(
+    String conversationId, {
+    required String afterChangeSequence,
+  }) async => const ApiError(ServiceUnavailable());
   @override
   Future<ApiResult<MessagingMessage>> send({
     required String conversationId,
@@ -143,6 +173,81 @@ class HttpMessagingClient implements MessagingClient {
     } on IOException {
       return const ApiError(NetworkUnavailable());
     }
+  }
+
+  @override
+  Future<ApiResult<RealtimeTicket>> issueRealtimeTicket() async {
+    final token = await bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+    return _rawJson<RealtimeTicket>(
+      '/api/v1/realtime/tickets',
+      method: 'POST',
+      token: token,
+      body: const {},
+      decode: (json) => RealtimeTicket(
+        ticket: json['ticket'] as String,
+        webSocketUrl: json['webSocketUrl'] as String,
+      ),
+    );
+  }
+
+  @override
+  Future<ApiResult<MessagingChangePage>> changes(
+    String conversationId, {
+    required String afterChangeSequence,
+  }) async {
+    final token = await bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+    return _rawJson<MessagingChangePage>(
+      '/api/v1/conversations/$conversationId/changes?afterChangeSequence=${Uri.encodeQueryComponent(afterChangeSequence)}',
+      token: token,
+      decode: (json) => MessagingChangePage(
+        highWatermark: json['highWatermark'] as String,
+        hasMore: json['hasMore'] as bool? ?? false,
+        nextChangeSequence: json['nextChangeSequence'] as String?,
+      ),
+    );
+  }
+
+  Future<ApiResult<T>> _rawJson<T>(
+    String path, {
+    required String token,
+    String method = 'GET',
+    Object? body,
+    required T Function(Map<String, dynamic>) decode,
+  }) async {
+    final client = HttpClient();
+    try {
+      final request = await client.openUrl(method, Uri.parse('$_baseUrl$path'));
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (body != null) {
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(body));
+      }
+      final response = await request.close();
+      final text = await utf8.decodeStream(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return ApiError(_rawFailure(response.statusCode));
+      }
+      final value = jsonDecode(text);
+      if (value is! Map<String, dynamic>) return const ApiError(ServiceUnavailable());
+      return ApiSuccess(decode(value));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static ApiFailure _rawFailure(int status) {
+    if (status == 401) return const Unauthenticated();
+    if (status == 400 || status == 409 || status == 422) {
+      return const InvalidRequest('Messaging state changed. Refresh and try again.');
+    }
+    return const ServiceUnavailable();
   }
 
   @override
