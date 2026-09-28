@@ -1,6 +1,6 @@
 # Dayli messaging implementation handoff
 
-Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. This integration regenerates REST clients from the merged Hono app. Rich web and mobile messaging client branches remain outside this stack while their independent reviews finish.
+Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. The approved web and Flutter messaging flows are integrated, including mobile old-session revocation and quarantine before credential replacement. REST clients are regenerated from the merged Hono app. TanStack Query web adoption remains separate pending its approved integration.
 
 Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The three stack layers share reviewed interfaces: refactor first, friends second, messaging third. Friends owns `0009_relationship_search`; messaging follows with undeployed `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. Do not modify deployed migration history. Freeze auth, registration, locking, and test interfaces before adding work from independently reviewed client branches.
 
@@ -17,7 +17,7 @@ Confirmed requirements:
 - WebSockets carry small change notifications. Clients fetch authorized state through REST. Do not put message bodies on sockets in this release.
 - Persist an outbox in the message transaction. Attempt dispatch immediately after commit; scheduled processing only repairs failures and handles retries.
 - No periodic client polling, including a fallback polling loop. Initial load, user refresh, foreground resume, reconnect, and socket events can trigger REST fetches.
-- Mobile push is in scope. FCM/APNs configuration and physical-device proof are release gates for background notifications, not for developing text chat.
+- Mobile push is in scope. Registration and dispatch recheck current sessions and account status, but FCM/APNs configuration and physical-device proof remain release gates for background notifications. No provider or device-delivery evidence is represented by local tests.
 - Image and video attachments are blocked on the other owner's R2 upload integration. Do not implement a parallel uploader or accept arbitrary media URLs.
 - Group chats are deferred pending an explicit group blocking/membership policy. Do not silently include them in the direct-chat implementation.
 
