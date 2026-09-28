@@ -6,26 +6,31 @@ import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
 import '../compose/media_picker.dart';
 import '../drafts/draft_store.dart';
+import '../messaging/messaging_client.dart';
+import '../messaging/messaging_controller.dart';
 import '../posts/post_submitter.dart';
 
 /// Application-wide services, provided once above the router.
 class AppServices {
-  const AppServices({
+  AppServices({
     required this.session,
     required this.postingDays,
     required this.friends,
     required this.drafts,
     required this.submitter,
+    MessagingController? messaging,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
     this.clock = DateTime.now,
-  });
+  }) : messaging =
+           messaging ?? MessagingController(const UnavailableMessagingClient());
 
   final SessionController session;
   final PostingDayClient postingDays;
   final FriendsClient friends;
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
+  final MessagingController messaging;
 
   /// Null when this build has no Google client ID configured.
   final GoogleIdTokenProvider? google;

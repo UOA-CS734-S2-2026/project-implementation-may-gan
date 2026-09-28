@@ -11,6 +11,8 @@ import 'app/fresh_install.dart';
 import 'auth/native_session.dart';
 import 'auth/session_controller.dart';
 import 'drafts/draft_store.dart';
+import 'messaging/messaging_client.dart';
+import 'messaging/messaging_controller.dart';
 import 'posts/post_submitter.dart';
 
 Future<void> main() async {
@@ -36,11 +38,18 @@ Future<void> main() async {
     baseUrl: config.apiBaseUrl,
     tokenStore: tokenStore,
   );
+  final messaging = MessagingController(
+    HttpMessagingClient(
+      baseUrl: config.apiBaseUrl,
+      bearerToken: nativeSession.bearerToken,
+    ),
+  );
   final session = SessionController(
     session: nativeSession,
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
+    onPrivateDataClear: messaging.clear,
   );
 
   runApp(
@@ -56,6 +65,7 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         drafts: drafts,
+        messaging: messaging,
         google: config.googleSignInConfigured
             ? FlutterGoogleIdTokenProvider(
                 webClientId: config.googleWebClientId,

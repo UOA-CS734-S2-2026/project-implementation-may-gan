@@ -119,7 +119,9 @@ class _BottomBar extends StatelessWidget {
       child: _Tab(
         icon: entry.$2,
         label: entry.$3,
-        active: location == entry.$1,
+        active:
+            location == entry.$1 ||
+            (entry.$1 == '/messages' && location.startsWith('/messages/')),
         onTap: () => onTab(entry.$1),
       ),
     );
