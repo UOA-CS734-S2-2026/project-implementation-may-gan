@@ -43,12 +43,11 @@ Future<void> main() async {
     baseUrl: config.apiBaseUrl,
     tokenStore: tokenStore,
   );
-  final messaging = MessagingController(
-    HttpMessagingClient(
-      baseUrl: config.apiBaseUrl,
-      bearerToken: nativeSession.bearerToken,
-    ),
+  final messagingClient = HttpMessagingClient(
+    baseUrl: config.apiBaseUrl,
+    bearerToken: nativeSession.bearerToken,
   );
+  final messaging = MessagingController(messagingClient);
   PushService? push;
   FirebasePushLifecycle? notifications;
   if (config.firebaseConfigured) {
@@ -73,9 +72,19 @@ Future<void> main() async {
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
-    onSignedIn: push?.start,
+    onSignedIn: () async {
+      await messaging.startRealtime();
+      await push?.start();
+    },
+    onBeforeSessionReplacement: () async {
+      // Must run before Better Auth stores the new bearer token.
+      await push?.stop();
+      await messaging.stopRealtime();
+      messaging.clear();
+    },
     onPrivateDataClear: () async {
       await push?.stop();
+      await messaging.stopRealtime();
       messaging.clear();
     },
   );

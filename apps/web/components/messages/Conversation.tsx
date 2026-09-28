@@ -5,11 +5,13 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { messagingApi, type MessagingMessage } from "@/lib/api/messaging";
 import { useSession } from "@/lib/session/hooks";
 import { mergeMessages } from "@/lib/messaging/reconcile";
+import { useMessagingLiveRevision } from "./MessagingProvider";
 
 const messageTextIsValid = (value: string) => value.trim().length > 0 && Array.from(value).length <= 4_000;
 
 export function Conversation({ conversationId }: { conversationId: string }) {
   const { user } = useSession();
+  const revision = useMessagingLiveRevision();
   const [messages, setMessages] = useState<MessagingMessage[]>([]);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function Conversation({ conversationId }: { conversationId: string }) {
     if (result.ok) { setMessages((current) => mergeMessages(current, result.value.items)); setNotice(null); }
     else setNotice(result.message);
   }, [conversationId]);
-  useEffect(() => { void Promise.resolve().then(refresh); }, [refresh]);
+  useEffect(() => { void Promise.resolve().then(refresh); }, [refresh, revision]);
 
   async function send(event: FormEvent) {
     event.preventDefault();

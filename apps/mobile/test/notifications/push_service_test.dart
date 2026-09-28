@@ -8,6 +8,7 @@ class _Source implements PushTokenSource {
   final PushPermission permission;
   final String? token;
   final StreamController<String> controller = StreamController<String>();
+  var invalidated = false;
 
   @override
   Future<String?> currentToken() async => token;
@@ -17,6 +18,9 @@ class _Source implements PushTokenSource {
 
   @override
   Stream<String> get tokenRefreshes => controller.stream;
+
+  @override
+  Future<void> invalidateLocalToken() async => invalidated = true;
 }
 
 class _Client implements PushRegistrationClient {
@@ -57,6 +61,7 @@ void main() {
         'install:rotated-token:ios:true',
       ]);
       expect(client.unregistrations, ['install']);
+      expect(source.invalidated, isTrue);
     },
   );
 
