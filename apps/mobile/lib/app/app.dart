@@ -46,7 +46,7 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(widget.services.messaging.resumeRealtime());
+      unawaited(widget.services.messaging.foreground());
     }
   }
 

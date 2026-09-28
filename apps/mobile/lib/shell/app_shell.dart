@@ -40,10 +40,14 @@ class AppShell extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: _BottomBar(
-        location: location,
-        onTab: (path) => context.go(path),
-        onNewDayli: () => context.push('/post'),
+      bottomNavigationBar: AnimatedBuilder(
+        animation: AppScope.of(context).messaging,
+        builder: (context, _) => _BottomBar(
+          location: location,
+          unreadMessages: AppScope.of(context).messaging.unreadTotal,
+          onTab: (path) => context.go(path),
+          onNewDayli: () => context.push('/post'),
+        ),
       ),
     );
   }
@@ -104,11 +108,13 @@ class _TopBar extends StatelessWidget {
 class _BottomBar extends StatelessWidget {
   const _BottomBar({
     required this.location,
+    required this.unreadMessages,
     required this.onTab,
     required this.onNewDayli,
   });
 
   final String location;
+  final int unreadMessages;
   final ValueChanged<String> onTab;
   final VoidCallback onNewDayli;
 
@@ -123,6 +129,7 @@ class _BottomBar extends StatelessWidget {
             location == entry.$1 ||
             (entry.$1 == '/messages' && location.startsWith('/messages/')),
         onTap: () => onTab(entry.$1),
+        badge: entry.$1 == '/messages' ? unreadMessages : 0,
       ),
     );
 
@@ -165,12 +172,14 @@ class _Tab extends StatelessWidget {
     required this.label,
     required this.active,
     required this.onTap,
+    required this.badge,
   });
 
   final String icon;
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +206,22 @@ class _Tab extends StatelessWidget {
                 color: active ? colors.backgroundAccent : Colors.transparent,
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: SvgPicture.string(
-                navIconSvg(icon),
-                width: 22,
-                height: 22,
-                colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-              ),
+              child: badge == 0
+                  ? SvgPicture.string(
+                      navIconSvg(icon),
+                      width: 22,
+                      height: 22,
+                      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                    )
+                  : Badge(
+                      label: Text('$badge'),
+                      child: SvgPicture.string(
+                        navIconSvg(icon),
+                        width: 22,
+                        height: 22,
+                        colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                      ),
+                    ),
             ),
             const SizedBox(height: 4),
             Text(
