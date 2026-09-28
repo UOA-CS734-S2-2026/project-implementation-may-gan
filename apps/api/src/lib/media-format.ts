@@ -168,8 +168,9 @@ export interface DurationBudget {
 export type ExtractDurationResult = { outcome: "duration"; seconds: number } | { outcome: "malformed" };
 
 /**
- * Real phone-captured files need ~4-9 header reads (ftyp, maybe free/wide, moov,
- * mvhd as moov's first/second child) — 64 gives 7-10x headroom while still
+ * Real phone-captured files need ~20-30 small reads (top-level boxes, moov's
+ * children, then per track: tkhd/edts/mdia headers, mdhd, hdlr) — 64 gives ~2-3x
+ * headroom for a typical audio+video capture while still
  * bounding a pathological fake-box-tree file to a small, fixed number of tiny
  * reads. 256 KiB is a pure circuit-breaker (realistic worst case is ~1 KB) so a
  * future bug that reads box *bodies* instead of headers aborts loudly instead of
@@ -254,6 +255,36 @@ async function findBoxInRange(
     offset = header.boxEnd;
   }
   return undefined;
+}
+
+/** Every box of `targetType` directly inside the range; stops at the first unreadable header. */
+async function findAllBoxesInRange(
+  source: BoxSource,
+  rangeStart: number,
+  rangeEnd: number,
+  targetType: string,
+  tracker: BudgetTracker,
+): Promise<BoxHeader[]> {
+  const found: BoxHeader[] = [];
+  let offset = rangeStart;
+  while (offset < rangeEnd) {
+    const header = await readBoxHeader(source, offset, rangeEnd, tracker);
+    if (!header) break;
+    if (header.type === targetType) found.push(header);
+    offset = header.boxEnd;
+  }
+  return found;
+}
+
+/** hdlr body: version/flags(4) + pre_defined(4) + handler_type(4) — e.g. "vide", "soun". */
+async function readHandlerType(
+  source: BoxSource,
+  hdlr: BoxHeader,
+  tracker: BudgetTracker,
+): Promise<string | undefined> {
+  if (hdlr.bodyStart + 12 > hdlr.boxEnd) return undefined;
+  const body = await tracker.read(source, hdlr.bodyStart, hdlr.bodyStart + 11);
+  return body ? readAscii(body, 8, 4) : undefined;
 }
 
 async function readTrailingBytes(source: BoxSource, length: number): Promise<Uint8Array | undefined> {
@@ -395,8 +426,8 @@ export async function extractIsoBmffDurationSeconds(
 
     // A real capture always has at least one track — this alone is what keeps a
     // fabricated ftyp+moov+mvhd (no actual video content at all) from validating.
-    const trak = await findBoxInRange(source, moov.bodyStart, moov.boxEnd, "trak", tracker);
-    if (!trak) return { outcome: "malformed" };
+    const traks = await findAllBoxesInRange(source, moov.bodyStart, moov.boxEnd, "trak", tracker);
+    if (traks.length === 0) return { outcome: "malformed" };
 
     // ...and its media payload actually exists somewhere: a non-empty top-level
     // `mdat`. Box-header-only, so this costs nothing beyond the handful of tiny
@@ -404,30 +435,36 @@ export async function extractIsoBmffDurationSeconds(
     const mdat = await findBoxInRange(source, 0, source.fileSize, "mdat", tracker);
     if (!mdat || mdat.boxEnd <= mdat.bodyStart) return { outcome: "malformed" };
 
-    // mvhd's duration alone is just a declared header field with no structural
-    // tie to the track's actual media — a fabricated `trak` with junk bytes could
-    // carry any mvhd duration. mdia/mdhd is the track's OWN media header (same
-    // v0/v1 layout as mvhd, in the track's own timescale); requiring it present,
-    // and cross-checking it against mvhd, means both would have to be faked
-    // together, and rules out a `trak` that's just an empty placeholder box.
-    const mdia = await findBoxInRange(source, trak.bodyStart, trak.boxEnd, "mdia", tracker);
-    if (!mdia) return { outcome: "malformed" };
-    const mdhd = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "mdhd", tracker);
-    if (!mdhd) return { outcome: "malformed" };
-
     const movieSeconds = await parseDurationBoxSeconds(source, mvhd, tracker);
-    const trackSeconds = await parseDurationBoxSeconds(source, mdhd, tracker);
     if (movieSeconds === undefined || !Number.isFinite(movieSeconds)) return { outcome: "malformed" };
-    if (trackSeconds === undefined || !Number.isFinite(trackSeconds)) return { outcome: "malformed" };
 
-    const larger = Math.max(movieSeconds, trackSeconds);
-    const smaller = Math.min(movieSeconds, trackSeconds);
-    const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
-    if (larger - smaller > tolerance) return { outcome: "malformed" };
+    // mvhd's duration alone is just a declared header field with no structural
+    // tie to the actual media — cross-check it against a video track's OWN media
+    // header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so both
+    // would have to be faked together. Only `vide` tracks count: an audio or
+    // other track's duration can legitimately diverge from mvhd, and the first
+    // trak isn't necessarily the video one. Empty/junk traks are skipped too.
+    let videoSeconds: number | undefined;
+    for (const trak of traks) {
+      const mdia = await findBoxInRange(source, trak.bodyStart, trak.boxEnd, "mdia", tracker);
+      if (!mdia) continue;
+      const hdlr = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "hdlr", tracker);
+      if (!hdlr || (await readHandlerType(source, hdlr, tracker)) !== "vide") continue;
+      const mdhd = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "mdhd", tracker);
+      if (!mdhd) continue;
+      const trackSeconds = await parseDurationBoxSeconds(source, mdhd, tracker);
+      if (trackSeconds === undefined || !Number.isFinite(trackSeconds)) continue;
 
-    // The larger of the two: never let one falsified field alone understate the
-    // real duration relative to MAX_VIDEO_DURATION_SECONDS.
-    return { outcome: "duration", seconds: larger };
+      const larger = Math.max(movieSeconds, trackSeconds);
+      const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
+      if (larger - Math.min(movieSeconds, trackSeconds) > tolerance) continue;
+      videoSeconds = Math.max(videoSeconds ?? 0, trackSeconds);
+    }
+    if (videoSeconds === undefined) return { outcome: "malformed" };
+
+    // The larger of mvhd and the agreeing video track(s): never let one falsified
+    // field alone understate the real duration relative to MAX_VIDEO_DURATION_SECONDS.
+    return { outcome: "duration", seconds: Math.max(movieSeconds, videoSeconds) };
   } catch (error) {
     if (error instanceof BudgetExceededError) return { outcome: "malformed" };
     throw error;

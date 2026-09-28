@@ -155,11 +155,13 @@ export async function headR2Object(
       throw new R2ReadInfrastructureError(`R2 HEAD failed with status ${response.status}`);
     }
 
-    const contentLength = Number(response.headers.get("content-length"));
-    if (!Number.isFinite(contentLength) || contentLength < 0) {
+    // Number(null) and Number("") are both 0, so a missing header would otherwise
+    // pass as a real zero-byte object and get recorded as byte_size_mismatch.
+    const header = response.headers.get("content-length");
+    if (header === null || !/^\d+$/.test(header.trim())) {
       throw new R2ReadInfrastructureError("R2 HEAD response is missing a valid Content-Length");
     }
-    return { outcome: "found", contentLength };
+    return { outcome: "found", contentLength: Number(header.trim()) };
   } catch (error) {
     throw wrapAsInfrastructureError(error, "R2 HEAD request failed");
   }
