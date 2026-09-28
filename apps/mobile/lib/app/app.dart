@@ -22,7 +22,7 @@ class DayliApp extends StatefulWidget {
   State<DayliApp> createState() => _DayliAppState();
 }
 
-class _DayliAppState extends State<DayliApp> {
+class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
   late final GoRouter _router = buildRouter(widget.services.session);
   late final NotificationRouter _notificationRouter = NotificationRouter(
     session: widget.services.session,
@@ -32,6 +32,7 @@ class _DayliAppState extends State<DayliApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final notifications = widget.services.notifications;
     if (notifications != null) {
       notifications.setNotificationTapHandler(
@@ -43,7 +44,16 @@ class _DayliAppState extends State<DayliApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.services.messaging.resumeRealtime());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(widget.services.messaging.stopRealtime());
     _notificationRouter.dispose();
     final notifications = widget.services.notifications;
     if (notifications != null) unawaited(notifications.stop());
