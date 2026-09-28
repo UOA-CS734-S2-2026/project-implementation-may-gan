@@ -23,6 +23,18 @@ class _Source implements PushTokenSource {
   Future<void> invalidateLocalToken() async => invalidated = true;
 }
 
+class _FailingSource extends _Source {
+  _FailingSource(super.permission, super.token);
+
+  var invalidationAttempts = 0;
+
+  @override
+  Future<void> invalidateLocalToken() async {
+    invalidationAttempts++;
+    throw StateError('provider deletion failed');
+  }
+}
+
 class _DeferredSource implements PushTokenSource {
   _DeferredSource(this.permissions, this.tokens);
 
@@ -71,6 +83,16 @@ class _DeferredWriteClient implements PushRegistrationClient {
   Future<void> unregister(String installationId) async {
     observed.add('unregister');
     serverBinding = null;
+  }
+}
+
+class _FailingUnregisterClient extends _Client {
+  var unregisterAttempts = 0;
+
+  @override
+  Future<void> unregister(String installationId) async {
+    unregisterAttempts++;
+    throw StateError('delete failed');
   }
 }
 
@@ -204,6 +226,21 @@ void main() {
       expect(client.serverBinding, isNull);
     },
   );
+
+  test('attempts local token invalidation when unregister fails', () async {
+    final source = _FailingSource(PushPermission.granted, 'token');
+    final client = _FailingUnregisterClient();
+    final service = PushService(
+      source: source,
+      client: client,
+      installationId: 'install',
+      platform: 'ios',
+    );
+    await service.start();
+    await expectLater(service.stop(), throwsA(isA<StateError>()));
+    expect(client.unregisterAttempts, 1);
+    expect(source.invalidationAttempts, 1);
+  });
 
   test('does not request a registration when permission is denied', () async {
     final source = _Source(PushPermission.denied, null);

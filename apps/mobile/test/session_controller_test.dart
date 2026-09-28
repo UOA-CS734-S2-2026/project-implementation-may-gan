@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/messaging/messaging_controller.dart';
+import 'package:dayli_mobile/notifications/push_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -15,6 +16,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'messaging_controller_test.dart' show FakeMessagingClient;
 import 'support/fakes.dart';
+
+class _StaticPushSource implements PushTokenSource {
+  _StaticPushSource(this.token);
+
+  final String token;
+  final StreamController<String> refreshes = StreamController<String>();
+
+  @override
+  Future<String?> currentToken() async => token;
+
+  @override
+  Future<void> invalidateLocalToken() async {}
+
+  @override
+  Future<PushPermission> requestPermission() async => PushPermission.granted;
+
+  @override
+  Stream<String> get tokenRefreshes => refreshes.stream;
+}
+
+class _DeferredRegistrationClient implements PushRegistrationClient {
+  final registration = Completer<void>();
+  final operations = <String>[];
+
+  @override
+  Future<void> register({
+    required String installationId,
+    required String token,
+    required String platform,
+    required bool optedIn,
+  }) async {
+    operations.add('register-start');
+    await registration.future;
+    operations.add('register-commit');
+  }
+
+  @override
+  Future<void> unregister(String installationId) async {
+    operations.add('unregister');
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -73,6 +115,7 @@ void main() {
       final users = MemoryUserCache();
       final drafts = MemoryDraftStore();
       var signInCalls = 0;
+      var signOutCalls = 0;
       final native = BetterAuthNativeSession(
         baseUrl: 'https://api.example.test',
         tokenStore: tokens,
@@ -88,6 +131,10 @@ void main() {
               }),
               200,
             );
+          }
+          if (request.url.path.endsWith('/sign-out')) {
+            signOutCalls++;
+            return http.Response('{}', 200);
           }
           if (request.url.path.endsWith('/sign-in/email')) {
             signInCalls++;
@@ -120,8 +167,167 @@ void main() {
         throwsA(isA<StateError>()),
       );
       expect(cleanupToken, 'alice-token');
+      expect(signOutCalls, 1);
       expect(signInCalls, 0);
-      expect(tokens.value, 'alice-token');
+      expect(tokens.value, isNull);
+      expect(controller.status, SessionStatus.signedOut);
+    },
+  );
+
+  test('failed old-session revoke blocks a replacement sign-in', () async {
+    final tokens = MemoryTokenStore()..value = 'alice-token';
+    final users = MemoryUserCache();
+    var signInCalls = 0;
+    var revokeFails = true;
+    var bob = false;
+    final controller = SessionController(
+      session: BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokens,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/get-session')) {
+            return http.Response(
+              jsonEncode({
+                'user': {'id': bob ? 'bob' : 'alice'},
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/sign-out')) {
+            return http.Response('{}', revokeFails ? 503 : 200);
+          }
+          if (request.url.path.endsWith('/sign-in/email')) {
+            signInCalls++;
+            bob = true;
+            return http.Response('{}', 200, headers: {'set-auth-token': 'bob'});
+          }
+          return http.Response('{}', 404);
+        }),
+      ),
+      tokenStore: tokens,
+      userCache: users,
+      drafts: MemoryDraftStore(),
+      onBeforeSessionReplacement: () async {},
+    );
+    await controller.restore();
+    await expectLater(
+      controller.signIn(email: 'bob@example.test', password: 'password'),
+      throwsA(isA<AuthenticationFailure>()),
+    );
+    expect(signInCalls, 0);
+    expect(tokens.value, 'alice-token');
+    expect(controller.status, SessionStatus.signedOut);
+    revokeFails = false;
+    await controller.signIn(email: 'bob@example.test', password: 'password');
+    expect(signInCalls, 1);
+    expect(controller.user?.id, 'bob');
+  });
+
+  test('sign-out revokes even when local integration cleanup fails', () async {
+    final tokens = MemoryTokenStore()..value = 'token';
+    final users = MemoryUserCache();
+    var signOutCalls = 0;
+    final controller = SessionController(
+      session: BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokens,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/get-session')) {
+            return http.Response(
+              jsonEncode({
+                'user': {'id': 'alice'},
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/sign-out')) {
+            signOutCalls++;
+            return http.Response('{}', 200);
+          }
+          return http.Response('{}', 404);
+        }),
+      ),
+      tokenStore: tokens,
+      userCache: users,
+      drafts: MemoryDraftStore(),
+      onPrivateDataClear: () async => throw StateError('push failed'),
+    );
+    await controller.restore();
+    await controller.signOut();
+    expect(signOutCalls, 1);
+    expect(tokens.value, isNull);
+    expect(controller.status, SessionStatus.signedOut);
+  });
+
+  test(
+    'replaces only after old push registration drains and session revokes',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'alice-token';
+      final users = MemoryUserCache();
+      final pushClient = _DeferredRegistrationClient();
+      final push = PushService(
+        source: _StaticPushSource('alice-push-token'),
+        client: pushClient,
+        installationId: 'install',
+        platform: 'ios',
+      );
+      final pushStart = push.start();
+      await Future<void>.delayed(Duration.zero);
+      final serverOperations = <String>[];
+      var bob = false;
+      final controller = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) {
+              return http.Response(
+                jsonEncode({
+                  'user': {'id': bob ? 'bob' : 'alice'},
+                }),
+                200,
+              );
+            }
+            if (request.url.path.endsWith('/sign-out')) {
+              serverOperations.add('revoke-alice');
+              return http.Response('{}', 200);
+            }
+            if (request.url.path.endsWith('/sign-in/email')) {
+              bob = true;
+              serverOperations.add('sign-in-bob');
+              return http.Response(
+                '{}',
+                200,
+                headers: {'set-auth-token': 'bob-token'},
+              );
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+        onBeforeSessionReplacement: push.stop,
+      );
+      await controller.restore();
+      final replacement = controller.signIn(
+        email: 'bob@example.test',
+        password: 'password',
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(pushClient.operations, ['register-start']);
+      expect(serverOperations, isEmpty);
+
+      pushClient.registration.complete();
+      await pushStart;
+      await replacement;
+      expect(pushClient.operations, [
+        'register-start',
+        'register-commit',
+        'unregister',
+      ]);
+      expect(serverOperations, ['revoke-alice', 'sign-in-bob']);
+      expect(controller.user?.id, 'bob');
     },
   );
 
@@ -233,6 +439,9 @@ void main() {
               }),
               200,
             );
+          }
+          if (request.url.path.endsWith('/sign-out')) {
+            return http.Response('{}', 200);
           }
           if (request.url.path.endsWith('/sign-in/email')) {
             offline = false;
