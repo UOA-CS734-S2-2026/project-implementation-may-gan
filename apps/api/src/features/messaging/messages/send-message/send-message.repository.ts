@@ -37,10 +37,20 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
   }
   async updateMessage(input: Parameters<MessageWriteTransaction["updateMessage"]>[0]): Promise<StoredMessage> {
     const [row] = rows<Row>(await this.queryable.execute(sql`update public.messages set body = ${input.body === undefined ? sql`body` : input.body}, edited_at = ${input.editedAt === undefined ? sql`edited_at` : input.editedAt}::timestamptz, unsent_at = ${input.unsentAt === undefined ? sql`unsent_at` : input.unsentAt}::timestamptz, version = version + 1 where id = ${input.messageId} ${input.expectedVersion === undefined ? sql`` : sql`and version = ${input.expectedVersion}`} returning *`));
-    if (!row) throw new Error("Message write conflict."); return message(row);
+    if (!row) throw new Error("Message write conflict.");
+    if (input.unsentAt !== undefined) await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${input.messageId}`);
+    return message(row);
   }
-  async setReaction(): Promise<StoredMessage> { throw new Error("Reaction repository integration pending."); }
-  async removeReaction(): Promise<StoredMessage> { throw new Error("Reaction repository integration pending."); }
+  async setReaction(messageId: string, actorId: string, reaction: StoredMessage["reactions"][number]["reaction"]): Promise<StoredMessage> {
+    await this.queryable.execute(sql`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${messageId}, ${actorId}, ${reaction}, now()) on conflict (message_id, user_id) do update set reaction = excluded.reaction, created_at = excluded.created_at`);
+    const current = await this.findMessage(this.conversationId, messageId); if (!current) throw new Error("Message disappeared during reaction.");
+    const result = rows<{ reaction: string; count: number | string; reacted: boolean }>(await this.queryable.execute(sql`select reaction, count(*)::int as count, bool_or(user_id = ${actorId}) as reacted from public.message_reactions where message_id = ${messageId} group by reaction`));
+    current.reactions = result.map((row) => ({ reaction: row.reaction as StoredMessage["reactions"][number]["reaction"], count: Number(row.count), reactedByActor: row.reacted })); return current;
+  }
+  async removeReaction(messageId: string, actorId: string): Promise<StoredMessage> {
+    await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and user_id = ${actorId}`);
+    const current = await this.findMessage(this.conversationId, messageId); if (!current) throw new Error("Message disappeared during reaction."); return current;
+  }
   async appendPeerChange(input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
     const [change] = rows<{ sequence: unknown; user_low_id: string; user_high_id: string }>(await this.queryable.execute(sql`update public.conversations set last_change_sequence = last_change_sequence + 1, updated_at = now() where id = ${input.conversationId} returning last_change_sequence as sequence, user_low_id, user_high_id`));
     if (!change) throw new Error("Conversation disappeared during change append.");
