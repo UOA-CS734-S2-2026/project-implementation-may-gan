@@ -14,6 +14,7 @@ import {
   type PostingDay,
 } from "@/lib/api/daily-posts";
 import AudienceInput from "./AudienceInput";
+import RatingInput from "./RatingInput";
 
 const postSchema = z.object({
   promptResponse: z
@@ -24,8 +25,9 @@ const postSchema = z.object({
       (value) => Array.from(value).length <= 4000,
       "Your response must be at most 4000 characters"
     ),
-  dayRating: z.coerce
-    .number<number>()
+  // Set by the slider, which starts unset.
+  dayRating: z
+    .number({ error: "Rating must be between 1 and 10" })
     .int()
     .min(1, "Rating must be between 1 and 10")
     .max(10, "Rating must be between 1 and 10"),
@@ -180,13 +182,7 @@ export default function PostForm({
           <h2 className="pt-5 font-semibold tracking-tighter font-serif text-xl pb-2">
             A bit about your day...
           </h2>
-          <FormInput
-            control={control}
-            name="dayRating"
-            label="Day rating"
-            type="number"
-            variant="posts"
-          />
+          <RatingInput control={control} name="dayRating" />
           <FormInput
             control={control}
             name="promptResponse"
