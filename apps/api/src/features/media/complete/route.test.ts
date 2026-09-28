@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { createFakeR2Reader } from "../../../lib/r2.fake";
+import { R2ReadInfrastructureError, type MediaR2Reader } from "../../../lib/r2";
 import {
   buildFtypBox,
   buildMinimalMp4,
@@ -324,6 +325,44 @@ describe("POST /api/v1/media-reservations/{id}/complete", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("returns 503, and leaves the reservation pending, when R2 fails mid-completion instead of recording a permanent failure", async () => {
+    const auth = createBetterAuthCompatibilitySlice({
+      baseURL: origin,
+      secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+      database: { account: [], session: [], user: [], verification: [] },
+    });
+    const repository = createFakeMediaReservationRepository();
+    const objects = new Map<string, Uint8Array>();
+    // head() succeeds (the object exists), but the ranged GET that reads its
+    // bytes fails — simulates an R2 outage partway through completion.
+    const outageReader: MediaR2Reader = {
+      head: (objectKey) => createFakeR2Reader(objects).head(objectKey),
+      async readRange() {
+        throw new R2ReadInfrastructureError("simulated R2 outage");
+      },
+    };
+    const media: MediaReservationRuntime = {
+      r2: testR2Configuration,
+      r2Reader: outageReader,
+      async withRequestContext(req, operation) {
+        const result = await auth.auth.api.getSession({ headers: req.headers });
+        const user = result?.user?.id ? { userId: result.user.id } : undefined;
+        return operation({ user, repository });
+      },
+    };
+    const app = createApp({ auth, media });
+    const token = await signUpAndGetToken(app);
+
+    const created = await jsonBody(
+      await createReservation(app, token, { contentType: "image/jpeg", byteSize: validJpegBytes.byteLength }),
+    );
+    objects.set(repository.records.get(created.id)!.objectKey, validJpegBytes);
+
+    const response = await completeReservation(app, token, created.id);
+    expect(response.status).toBe(503);
+    expect(repository.records.get(created.id)!.status).toBe("pending");
   });
 
   it("returns 503 when media reservations are not configured", async () => {

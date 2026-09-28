@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { createPresignedUploadUrl, readR2RuntimeConfiguration } from "./r2";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createPresignedUploadUrl,
+  headR2Object,
+  R2ReadInfrastructureError,
+  readR2ObjectRange,
+  readR2RuntimeConfiguration,
+} from "./r2";
 
 const configuration = {
   accountId: "test-account",
@@ -69,5 +75,28 @@ describe("createPresignedUploadUrl", () => {
     const smallSignature = new URL(small.url).searchParams.get("X-Amz-Signature");
     const largeSignature = new URL(large.url).searchParams.get("X-Amz-Signature");
     expect(smallSignature).not.toEqual(largeSignature);
+  });
+});
+
+describe("headR2Object / readR2ObjectRange — infrastructure error wrapping", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("wraps a raw network error from fetch() in R2ReadInfrastructureError, rather than letting it escape unwrapped", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network error")));
+
+    await expect(headR2Object(configuration, "media/owner/id")).rejects.toBeInstanceOf(R2ReadInfrastructureError);
+    await expect(
+      readR2ObjectRange(configuration, "media/owner/id", { start: 0, end: 9 }),
+    ).rejects.toBeInstanceOf(R2ReadInfrastructureError);
+  });
+
+  it("does not double-wrap the R2ReadInfrastructureError already thrown for an unexpected status", async () => {
+    // 403, not 5xx/429 — aws4fetch retries those with real backoff delays, which
+    // would make this test slow/flaky for no reason relevant to what it checks.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+
+    await expect(headR2Object(configuration, "media/owner/id")).rejects.toThrow(/R2 HEAD failed with status 403/);
   });
 });

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFtypBox,
+  buildMdhdBoxV0,
   buildMinimalMp4,
   buildMoovBox,
   buildMvhdBoxV0,
   buildMvhdBoxV1,
+  buildTrakBox,
   concatBoxes,
   validJpegBytes,
   wrapBox,
@@ -20,6 +22,30 @@ import {
 
 function asciiBytes(text: string): number[] {
   return Array.from(text, (char) => char.charCodeAt(0));
+}
+
+function writeUint32LE(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = value & 0xff;
+  bytes[offset + 1] = (value >>> 8) & 0xff;
+  bytes[offset + 2] = (value >>> 16) & 0xff;
+  bytes[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function webpLikeBytes(options: {
+  chunkId: string;
+  payload?: number[];
+  riffSizeOverride?: number;
+  chunkSizeOverride?: number;
+}): Uint8Array {
+  const payload = options.payload ?? [];
+  const bytes = new Uint8Array(20 + payload.length);
+  bytes.set(asciiBytes("RIFF"), 0);
+  writeUint32LE(bytes, 4, options.riffSizeOverride ?? bytes.byteLength - 8);
+  bytes.set(asciiBytes("WEBP"), 8);
+  bytes.set(asciiBytes(options.chunkId), 12);
+  writeUint32LE(bytes, 16, options.chunkSizeOverride ?? payload.length);
+  bytes.set(payload, 20);
+  return bytes;
 }
 
 function boxSourceFor(buffer: Uint8Array): BoxSource {
@@ -148,20 +174,67 @@ describe("checkEssentialStructure", () => {
     expect(await checkEssentialStructure("image/png", missingIend, boxSourceFor(missingIend))).toBe("mismatch");
   });
 
-  it("requires a recognised WEBP chunk id (VP8 /VP8L/VP8X) right after the RIFF/WEBP header", async () => {
-    function webpLikeBytes(chunkId: string): Uint8Array {
-      const bytes = new Uint8Array(16);
-      bytes.set(asciiBytes("RIFF"), 0);
-      bytes.set(asciiBytes("WEBP"), 8);
-      bytes.set(asciiBytes(chunkId), 12);
-      return bytes;
-    }
-
-    const valid = webpLikeBytes("VP8L");
+  it("requires a real VP8L bitstream signature, not just the chunk id, after the RIFF/WEBP header", async () => {
+    const valid = webpLikeBytes({ chunkId: "VP8L", payload: [0x2f, 0x00, 0x00, 0x00] });
     expect(await checkEssentialStructure("image/webp", valid, boxSourceFor(valid))).toBe("match");
 
-    const invalid = webpLikeBytes("junk");
-    expect(await checkEssentialStructure("image/webp", invalid, boxSourceFor(invalid))).toBe("mismatch");
+    // Exactly the case that used to slip through: RIFF, WEBP, and VP8L all sit in
+    // the expected positions, but the file is 16 bytes — too short to even reach
+    // where a real signature byte or chunk size would be — so there's no image
+    // data behind the chunk id at all.
+    const noRealPayload = new Uint8Array(16);
+    noRealPayload.set(asciiBytes("RIFF"), 0);
+    noRealPayload.set(asciiBytes("WEBP"), 8);
+    noRealPayload.set(asciiBytes("VP8L"), 12);
+    expect(await checkEssentialStructure("image/webp", noRealPayload, boxSourceFor(noRealPayload))).toBe(
+      "mismatch",
+    );
+
+    const wrongSignatureByte = webpLikeBytes({ chunkId: "VP8L", payload: [0x00, 0x00, 0x00, 0x00] });
+    expect(
+      await checkEssentialStructure("image/webp", wrongSignatureByte, boxSourceFor(wrongSignatureByte)),
+    ).toBe("mismatch");
+  });
+
+  it("requires a real VP8 (lossy) key-frame start code after its 3-byte frame tag", async () => {
+    const valid = webpLikeBytes({ chunkId: "VP8 ", payload: [0x00, 0x00, 0x00, 0x9d, 0x01, 0x2a] });
+    expect(await checkEssentialStructure("image/webp", valid, boxSourceFor(valid))).toBe("match");
+
+    const wrongStartCode = webpLikeBytes({ chunkId: "VP8 ", payload: [0x00, 0x00, 0x00, 0x00, 0x00, 0x00] });
+    expect(await checkEssentialStructure("image/webp", wrongStartCode, boxSourceFor(wrongStartCode))).toBe(
+      "mismatch",
+    );
+  });
+
+  it("requires VP8X's declared chunk size to match its fixed 10-byte body", async () => {
+    const valid = webpLikeBytes({ chunkId: "VP8X", payload: new Array(10).fill(0) });
+    expect(await checkEssentialStructure("image/webp", valid, boxSourceFor(valid))).toBe("match");
+
+    const wrongSize = webpLikeBytes({ chunkId: "VP8X", payload: new Array(10).fill(0), chunkSizeOverride: 4 });
+    expect(await checkEssentialStructure("image/webp", wrongSize, boxSourceFor(wrongSize))).toBe("mismatch");
+  });
+
+  it("requires RIFF's declared container size to match the real file size", async () => {
+    const mismatched = webpLikeBytes({
+      chunkId: "VP8L",
+      payload: [0x2f, 0x00, 0x00, 0x00],
+      riffSizeOverride: 4,
+    });
+    expect(await checkEssentialStructure("image/webp", mismatched, boxSourceFor(mismatched))).toBe("mismatch");
+  });
+
+  it("requires a chunk's declared size to fit within the real file, and to be non-zero", async () => {
+    const overrunsFile = webpLikeBytes({
+      chunkId: "VP8L",
+      payload: [0x2f, 0x00, 0x00, 0x00],
+      chunkSizeOverride: 4096,
+    });
+    expect(await checkEssentialStructure("image/webp", overrunsFile, boxSourceFor(overrunsFile))).toBe(
+      "mismatch",
+    );
+
+    const zeroSize = webpLikeBytes({ chunkId: "VP8L", payload: [0x2f, 0x00, 0x00, 0x00], chunkSizeOverride: 0 });
+    expect(await checkEssentialStructure("image/webp", zeroSize, boxSourceFor(zeroSize))).toBe("mismatch");
   });
 
   it("requires a real HEIC to have a meta box — a matching ftyp brand alone isn't enough", async () => {
@@ -170,6 +243,17 @@ describe("checkEssentialStructure", () => {
     const withMeta = concatBoxes(ftyp, meta);
     expect(await checkEssentialStructure("image/heic", ftyp, boxSourceFor(withMeta))).toBe("match");
     expect(await checkEssentialStructure("image/heic", ftyp, boxSourceFor(ftyp))).toBe("mismatch");
+  });
+
+  it("propagates a non-budget error from the HEIC meta-box walk (e.g. an R2 outage) instead of treating it as a mismatch", async () => {
+    const boom = new Error("simulated R2 outage");
+    const throwingSource: BoxSource = {
+      fileSize: 100,
+      async readRange() {
+        throw boom;
+      },
+    };
+    await expect(checkEssentialStructure("image/heic", new Uint8Array(20), throwingSource)).rejects.toBe(boom);
   });
 
   it("defers video/mp4 and video/quicktime to extractIsoBmffDurationSeconds's own trak/mdat check", async () => {
@@ -189,7 +273,7 @@ describe("extractIsoBmffDurationSeconds", () => {
   it("extracts a correct duration from a v1 (64-bit) mvhd box", async () => {
     const ftyp = buildFtypBox("isom", ["isom"]);
     const mvhd = buildMvhdBoxV1({ timescale: 1000, duration: 10_500 });
-    const trak = wrapBox("trak", new Uint8Array(4));
+    const trak = buildTrakBox({ timescale: 1000, duration: 10_500 });
     const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
     const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
 
@@ -202,12 +286,50 @@ describe("extractIsoBmffDurationSeconds", () => {
     const free = wrapBox("free", new Uint8Array(12));
     const wide = wrapBox("wide", new Uint8Array(4));
     const mvhd = buildMvhdBoxV0({ timescale: 600, duration: 1200 });
-    const trak = wrapBox("trak", new Uint8Array(4));
+    const trak = buildTrakBox({ timescale: 600, duration: 1200 });
     const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
     const file = concatBoxes(ftyp, free, wide, buildMoovBox([mvhd, trak]), mdat);
 
     const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
     expect(result).toEqual({ outcome: "duration", seconds: 2 });
+  });
+
+  it("is malformed when trak has no mdia/mdhd — an empty placeholder track, not a real one", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 5000 });
+    const emptyTrak = wrapBox("trak", new Uint8Array(4)); // reviewer's exact example: empty trak
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3])); // and 4 arbitrary bytes in mdat
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, emptyTrak]), mdat);
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "malformed" });
+  });
+
+  it("is malformed when the track's own mdhd duration disagrees with mvhd's beyond tolerance", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    // mvhd declares 5s, but the track's own media header declares 900s — mvhd's
+    // duration alone (what the old check trusted) would have passed the 15s cap.
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 5000 });
+    const mdhd = buildMdhdBoxV0({ timescale: 1000, duration: 900_000 });
+    const trak = wrapBox("trak", wrapBox("mdia", mdhd));
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "malformed" });
+  });
+
+  it("uses the larger of mvhd's and mdhd's durations when they agree within tolerance", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    // 1% apart (well within the 5%-or-1s tolerance) — real rounding across two
+    // independent timescales, not a fabrication.
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 10_000 });
+    const trak = buildTrakBox({ timescale: 1000, duration: 10_050 });
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "duration", seconds: 10.05 });
   });
 
   it("is malformed when moov has an mvhd but no trak — no real track at all", async () => {
@@ -260,7 +382,7 @@ describe("extractIsoBmffDurationSeconds", () => {
   it("is malformed when mvhd has a zero timescale", async () => {
     const ftyp = buildFtypBox("isom", ["isom"]);
     const mvhd = buildMvhdBoxV0({ timescale: 0, duration: 100 });
-    const trak = wrapBox("trak", new Uint8Array(4));
+    const trak = buildTrakBox({ timescale: 1000, duration: 100 });
     const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
     const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
 
@@ -279,6 +401,17 @@ describe("extractIsoBmffDurationSeconds", () => {
       maxTotalBytesRead: 256 * 1024,
     });
     expect(result).toEqual({ outcome: "malformed" });
+  });
+
+  it("propagates a non-budget error (e.g. an R2 outage) instead of treating it as malformed", async () => {
+    const boom = new Error("simulated R2 outage");
+    const throwingSource: BoxSource = {
+      fileSize: 100,
+      async readRange() {
+        throw boom;
+      },
+    };
+    await expect(extractIsoBmffDurationSeconds(throwingSource)).rejects.toBe(boom);
   });
 
   it("is malformed when a read fails partway through", async () => {
