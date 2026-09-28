@@ -1,4 +1,4 @@
-import type { AllowedContentType } from "../features/media/shared/media-reservation-policy";
+import type { AllowedContentType } from "../../features/media/shared/media-reservation-policy";
 
 export type MagicByteCheckResult = "match" | "mismatch";
 

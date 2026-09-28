@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
+import { createBetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
 import { R2ReadInfrastructureError, type MediaR2Reader } from "../../../infrastructure/media/r2";
 import {
@@ -349,16 +349,23 @@ describe("POST /api/v1/media-reservations/{id}/complete", () => {
         throw new R2ReadInfrastructureError("simulated R2 outage");
       },
     };
-    const media: MediaReservationRuntime = {
+    const runtime: MediaReservationRuntime = {
       r2: testR2Configuration,
       r2Reader: outageReader,
-      async withRequestContext(req, operation) {
-        const result = await auth.auth.api.getSession({ headers: req.headers });
-        const user = result?.user?.id ? { userId: result.user.id } : undefined;
-        return operation({ user, repository });
+      async withRepository(operation) {
+        return operation(repository);
       },
     };
-    const app = createApp({ auth, media });
+    const app = createApp({
+      auth,
+      media: {
+        runtime,
+        resolveSession: async (request) => {
+          const result = await auth.auth.api.getSession({ headers: request.headers });
+          return result?.user?.id ? { userId: result.user.id } : null;
+        },
+      },
+    });
     const token = await signUpAndGetToken(app);
 
     const created = await jsonBody(
