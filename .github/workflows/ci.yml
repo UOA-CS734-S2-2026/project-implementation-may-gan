@@ -1,12 +1,26 @@
 name: CI
 
-# Hosted verification is paused to preserve shared Actions minutes. Manual runs
-# remain available for restoration, but they still consume GitHub-hosted minutes.
 on:
+  pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+# Pull request code is intentionally limited to read-only repository access. This
+# workflow does not receive deployment credentials, environment secrets, or write
+# permissions, and it must never be changed to pull_request_target.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typescript:
+    name: TypeScript
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -15,15 +29,30 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm build
-  flutter:
+      - name: Lint
+        run: pnpm lint
+      - name: Generate Next.js route types
+        run: pnpm --filter @dayli/web exec next typegen
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test all workspace packages
+        run: pnpm test
+      - name: Test realtime API when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node -e 'const scripts = require("./apps/api/package.json").scripts ?? {}; process.exit(scripts["test:realtime"] ? 0 : 1)'; then
+            pnpm --filter @dayli/api test:realtime
+          else
+            echo 'No @dayli/api test:realtime script is defined. Skipping.'
+          fi
+      - name: Build
+        run: pnpm build
+
+  contracts-and-flutter:
+    name: Contracts and Flutter
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/mobile
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -35,22 +64,41 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # apps/mobile/pubspec.lock requires Flutter 3.47 or later. Pin the local
+      # verified 3.47.2 toolchain rather than following the stable channel.
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.2
           cache: true
       - run: pnpm install --frozen-lockfile
-        working-directory: .
-      - run: pnpm generate:clients:check
-        working-directory: .
-      - run: dart pub get
+      - name: Verify generated API contracts and clients
+        run: pnpm generate:clients:check
+      - name: Check generated Dart client
         working-directory: packages/api-client-dart
-      - run: dart analyze
-        working-directory: packages/api-client-dart
-      - run: dart test
-        working-directory: packages/api-client-dart
-      - run: flutter pub get --enforce-lockfile
-      - run: dart format --output=none --set-exit-if-changed .
-      - run: flutter analyze
-      - run: flutter test
-      - run: flutter build apk --debug
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Check Flutter application
+        working-directory: apps/mobile
+        run: |
+          flutter pub get --enforce-lockfile
+          dart format --output=none --set-exit-if-changed .
+          flutter analyze
+          flutter test
+          flutter build apk --debug
+
+  postgres-integration:
+    name: PostgreSQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run isolated PostgreSQL migration and integration checks
+        run: bash scripts/verify-postgres.sh
