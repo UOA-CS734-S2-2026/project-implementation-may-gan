@@ -42,6 +42,8 @@ import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
+import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
+import { createHyperdriveMessageWriteStore } from "./features/messaging/messages/send-message/send-message.repository";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -130,6 +132,10 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
+  const messaging = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    service: createSendMessageService({ store: createHyperdriveMessageWriteStore(configuration.hyperdrive) }),
+  } satisfies MessagingRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
@@ -150,6 +156,7 @@ export function createAppForEnv(env: ApiEnv) {
     posts,
     media,
     relationships,
+    messaging,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
