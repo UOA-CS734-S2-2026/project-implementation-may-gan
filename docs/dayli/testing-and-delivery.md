@@ -13,15 +13,17 @@
 
 Emulators do not prove hardware key protection or every sensor feature. Android screenshot detection excludes ADB captures. Test deployed bindings in isolated staging too.
 
-## Local verification while hosted checks are paused
+## Automatic and local verification
 
-GitHub-hosted PR and push checks are temporarily paused to preserve shared Actions minutes. `.github/workflows/ci.yml` and `.github/workflows/database-migrations.yml` accept manual dispatch only, so there are no automated hosted gates for a PR or push. A manual GitHub run still consumes GitHub-hosted minutes. The intended verification path is local:
+GitHub Actions automatically runs the required pull request checks and verifies pushes to `main`. See [Continuous integration](continuous-integration.md) for the exact check names, job gates, branch-protection setup, read-only pull request boundary, and manual deployment boundary. A GitHub-hosted result is evidence only after Actions has run it for the relevant commit.
+
+Run the matching broad suite locally when needed:
 
 ```bash
 pnpm verify:local
 ```
 
-The command requires Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and Dart. It installs locked workspace dependencies; runs lint, type checking, tests, builds, generated TypeScript and Dart client checks, Flutter formatting, analysis and tests; then starts a fresh PostgreSQL 18 fixture for migration checks, migration application, verification, idempotency, restricted-role integration tests, and credential-error safety checks. The fixture has a unique Compose project and is removed with its volumes on success, failure, or interruption. Port 5433 must be available.
+The command requires Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter 3.47.2, and Dart. It installs locked workspace dependencies; runs lint, type checking, tests, builds, generated TypeScript and Dart client checks, Flutter formatting, analysis and tests; then starts a fresh PostgreSQL 18 fixture for migration checks, migration application, verification, idempotency, restricted-role integration tests, and credential-error safety checks. The fixture has a unique Compose project and is removed with its volumes on success, failure, or interruption. Port 5433 must be available.
 
 `pnpm verify:local:full` adds the debug Android APK build. Record `git rev-parse HEAD`, the command mode, and sanitized output in the PR or approved evidence location. Do not commit evidence that could include credentials. This local fixture check does not contact Neon or Cloudflare and is not a staging proof.
 
@@ -55,7 +57,7 @@ Performance workloads and targets live in [Scalability](scalability.md).
 4. Add release/audience fields, private uploads, public share tokens, idempotency, socket tickets, and jobs. Replace process-local SSE with Durable Objects.
 5. Complete [MVP phases](mvp.md), remove obsolete routes, run failure/load tests, and rehearse restore/deploy.
 
-While hosted checks are paused, `pnpm verify:local` is the required developer verification evidence rather than an automated gate. It checks formatting, types, contracts, relevant backend/runtime and frontend tests. Its PostgreSQL fixture also checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
+Automatic CI is the required pull request gate, and `pnpm verify:local` remains the matching developer verification evidence. It checks formatting, types, contracts, relevant backend/runtime and frontend tests. Its PostgreSQL fixture also checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.
 
 Prefer additive changes for older mobile clients. Deleted data becomes inaccessible immediately and expires from encrypted backups within 30 days. Start with a 24-hour RPO and 8-hour RTO, then verify both through restoration tests. The checked-in local suite covers Worker routes, PostgreSQL integration, generated clients, and Flutter tests. It is not a deployed staging or physical-device result.
 

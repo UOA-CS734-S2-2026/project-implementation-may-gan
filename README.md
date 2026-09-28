@@ -42,12 +42,12 @@ pnpm db:dev:verify
 
 Start `pnpm dev:api:https` and `pnpm dev:web:https` in separate terminals. Sign up at `https://localhost:3000/sign-up`. See [Environments](docs/dayli/environments.md) before installing a development CA on a device.
 
-GitHub-hosted PR and push verification is paused to preserve shared Actions minutes. Run the local verification suite before requesting review:
+GitHub Actions verifies every pull request and every push to `main`. Run the local verification suite before requesting review when you need the same broad checks on your machine:
 
 ```bash
 pnpm verify:local
 ```
 
-Use `pnpm verify:local:full` when the debug Android APK build is required. See [Testing and delivery](docs/dayli/testing-and-delivery.md) for evidence recording and the temporary hosted-workflow policy.
+Use `pnpm verify:local:full` when the debug Android APK build is required. See [Continuous integration](docs/dayli/continuous-integration.md) for required checks, the read-only pull request boundary, and the manual deployment boundary. See [Testing and delivery](docs/dayli/testing-and-delivery.md) for evidence recording.
 
 For Android emulator or USB development, install the local CA on the device, then run `adb reverse tcp:8787 tcp:8787` before Flutter. For iOS Simulator, use a Mac with full Xcode and follow the certificate instructions in [Environments](docs/dayli/environments.md). In either case pass `--dart-define=DAYLI_API_BASE_URL=https://localhost:8787` to `flutter run`. [Environments](docs/dayli/environments.md) also covers the separate staging and production boundaries.
