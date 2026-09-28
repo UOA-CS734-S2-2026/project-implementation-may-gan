@@ -23,57 +23,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> _startConversation() async {
-    final recipient = TextEditingController();
-    final text = TextEditingController();
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('New message'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              key: const Key('messages.recipientId'),
-              controller: recipient,
-              decoration: const InputDecoration(
-                labelText: 'Profile or user ID',
-              ),
-            ),
-            TextField(
-              key: const Key('messages.firstText'),
-              controller: text,
-              maxLength: 4000,
-              minLines: 1,
-              maxLines: 4,
-              decoration: const InputDecoration(labelText: 'Message'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('messages.createDirect'),
-            onPressed: () async {
-              final id = await AppScope.of(context).messaging.createDirect(
-                recipient.text.trim(),
-                text.text,
-                clientMessageId: DateTime.now().microsecondsSinceEpoch
-                    .toString(),
-              );
-              if (dialogContext.mounted && id != null) {
-                Navigator.pop(dialogContext, id);
-              }
-            },
-            child: const Text('Send'),
-          ),
-        ],
-      ),
+      builder: (_) => const _NewConversationDialog(),
     );
-    recipient.dispose();
-    text.dispose();
     if (mounted && result != null) context.go('/messages/$result');
   }
 
@@ -197,6 +150,98 @@ class _MessagesScreenState extends State<MessagesScreen> {
       },
     );
   }
+}
+
+class _NewConversationDialog extends StatefulWidget {
+  const _NewConversationDialog();
+
+  @override
+  State<_NewConversationDialog> createState() => _NewConversationDialogState();
+}
+
+class _NewConversationDialogState extends State<_NewConversationDialog> {
+  final _recipient = TextEditingController();
+  final _text = TextEditingController();
+  String? _intent;
+  String? _clientMessageId;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _recipient.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  void _changed() {
+    final intent = '${_recipient.text.trim()}\u0000${_text.text}';
+    if (intent != _intent) {
+      _intent = intent;
+      _clientMessageId = null;
+    }
+  }
+
+  Future<void> _send() async {
+    _changed();
+    final recipientId = _recipient.text.trim();
+    final text = _text.text;
+    if (_sending || recipientId.isEmpty || text.trim().isEmpty) return;
+    final intent = _intent!;
+    final clientMessageId = _clientMessageId ??= DateTime.now()
+        .microsecondsSinceEpoch
+        .toString();
+    setState(() => _sending = true);
+    final conversationId = await AppScope.of(context).messaging.createDirect(
+      recipientId,
+      text,
+      clientMessageId: clientMessageId,
+    );
+    if (!mounted) return;
+    setState(() => _sending = false);
+    // Inputs are locked while the request is in flight. This check also keeps
+    // a future implementation that permits editing from routing stale intent.
+    if (conversationId != null && _intent == intent) {
+      Navigator.pop(context, conversationId);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('New message'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          key: const Key('messages.recipientId'),
+          controller: _recipient,
+          enabled: !_sending,
+          onChanged: (_) => _changed(),
+          decoration: const InputDecoration(labelText: 'Profile or user ID'),
+        ),
+        TextField(
+          key: const Key('messages.firstText'),
+          controller: _text,
+          enabled: !_sending,
+          onChanged: (_) => _changed(),
+          maxLength: 4000,
+          minLines: 1,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Message'),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: _sending ? null : () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        key: const Key('messages.createDirect'),
+        onPressed: _sending ? null : _send,
+        child: Text(_sending ? 'Sending...' : 'Send'),
+      ),
+    ],
+  );
 }
 
 class _PausedNotice extends StatelessWidget {
