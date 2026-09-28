@@ -4,6 +4,8 @@ import { createCreateDirectConversationService } from "./create-direct-conversat
 import { createPostgresConversationReader, createPostgresDirectConversationStore } from "./conversation.repository";
 import { createPostgresMessageWriteStore } from "../messages/send-message/send-message.repository";
 import { createSendMessageService } from "../messages/send-message/send-message.service";
+import { createSetReactionService } from "../messages/set-reaction/set-reaction.service";
+import { createRemoveReactionService } from "../messages/remove-reaction/remove-reaction.service";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
@@ -15,7 +17,7 @@ const suite = enabled ? describe : describe.skip;
 
 suite("messaging direct conversation Postgres persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 4 }, (_, index) => `messaging-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 8 }, (_, index) => `messaging-${crypto.randomUUID()}-${index}`);
   const direct = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db) });
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDirect = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(concurrentDatabase.db) });
@@ -46,6 +48,23 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(requests.items).toHaveLength(1);
     const [count] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${results[0]!.conversation.id}`;
     expect(count?.count).toBe(2);
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+    const activated = await direct.create(users[0]!, { recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "friendship activated" });
+    expect(activated.conversation.requestState).toBe("active");
+  });
+
+  it("uses an exact database timestamp cursor so same-second inbox entries are not omitted", async () => {
+    const now = new Date("2026-09-28T06:00:00.123Z");
+    const service = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db), now: () => now });
+    for (const peer of users.slice(5, 8)) {
+      await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[4]!}, ${peer}, 'active', now()), (${peer}, ${users[4]!}, 'active', now())`;
+      await service.create(users[4]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
+    }
+    const first = await reader.list(users[4]!, "inbox", undefined, 1);
+    const second = await reader.list(users[4]!, "inbox", first.nextCursor ?? undefined, 1);
+    const third = await reader.list(users[4]!, "inbox", second.nextCursor ?? undefined, 1);
+    const ids = [...first.items, ...second.items, ...third.items].map((item) => (item as { id: string }).id);
+    expect(new Set(ids)).toHaveLength(3);
   });
 
   it("accepts the pending request, writes active history and advances only the recipient read cursor", async () => {
@@ -64,6 +83,17 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(read.unreadCount).toBe(0);
     const changes = await reader.changes(users[2]!, created.conversation.id, undefined, 50) as { items: Array<{ kind: string }> };
     expect(changes.items.map((item) => item.kind)).toContain("read.updated");
+    const set = createSetReactionService({ store: createPostgresMessageWriteStore(database.db) });
+    const remove = createRemoveReactionService({ store: createPostgresMessageWriteStore(database.db) });
+    const beforeOutbox = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
+    await expect(set.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
+    await expect(set.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });
+    const afterRepeatedSet = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
+    expect(afterRepeatedSet).toBe(beforeOutbox + 2);
+    await expect(remove.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: true });
+    await expect(remove.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: false });
+    const afterRepeatedRemove = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
+    expect(afterRepeatedRemove).toBe(afterRepeatedSet + 2);
   });
 
   it("declines a request and treats the recipient's same decision retry as idempotent", async () => {

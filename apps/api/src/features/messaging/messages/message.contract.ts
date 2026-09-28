@@ -2,16 +2,17 @@ import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contr
 import { z } from "@hono/zod-openapi";
 
 const sequenceSchema = z.string().regex(/^\d+$/).openapi({ example: "42" });
+const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
 
 export const reactionKeySchema = z.enum(["like", "love", "laugh", "surprised", "sad", "thanks"]);
 export const messageParamsSchema = z.object({ conversationId: opaqueIdSchema, messageId: opaqueIdSchema });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
 export const sendMessageBodySchema = z.object({
   clientMessageId: opaqueIdSchema,
-  text: z.string().min(1).max(16_000), // Server service counts Unicode code points.
+  text: messageTextSchema,
   replyToMessageId: opaqueIdSchema.optional(),
 }).strict();
-export const editMessageBodySchema = z.object({ text: z.string().min(1).max(16_000), expectedVersion: z.number().int().min(1) }).strict();
+export const editMessageBodySchema = z.object({ text: messageTextSchema, expectedVersion: z.number().int().min(1) }).strict();
 export const setReactionBodySchema = z.object({ reaction: reactionKeySchema }).strict();
 
 export const messageSchema = z.object({

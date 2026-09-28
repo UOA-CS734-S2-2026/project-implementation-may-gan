@@ -1,4 +1,4 @@
-import { assertPeerActivityAllowed } from "../../shared/conversation-access";
+import { assertUnsendAllowed } from "../../shared/conversation-access";
 import { MessagingError } from "../../shared/messaging-error";
 import { toMessageDto } from "../../shared/message-projection";
 import type { MessageWriteStore } from "../../shared/message-store";
@@ -14,9 +14,7 @@ export function createUnsendMessageService(dependencies: { store: MessageWriteSt
     async unsend(actorId, conversationId, messageId) {
       return dependencies.store.withConversationTransaction(actorId, conversationId, async (transaction) => {
         const access = await transaction.getAccess(actorId, conversationId);
-        // This currently implements the conservative proposed block policy.
-        // Product/security approval is required before the production store is wired.
-        assertPeerActivityAllowed(access);
+        assertUnsendAllowed(access);
         const message = await transaction.findMessage(conversationId, messageId);
         if (!message) throw new MessagingError("NOT_FOUND");
         if (message.senderId !== actorId) throw new MessagingError("FORBIDDEN");

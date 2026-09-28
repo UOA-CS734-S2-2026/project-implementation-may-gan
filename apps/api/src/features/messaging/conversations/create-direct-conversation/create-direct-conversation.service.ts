@@ -25,6 +25,8 @@ export interface DirectConversationTransaction {
     conversationId: string; initiatorId: string; recipientId: string; requestState: "pending" | "active";
     messageId: string; clientMessageId: string; requestFingerprint: string; text: string; createdAt: Date;
   }): Promise<{ conversation: DirectConversation; message: StoredMessage }>;
+  /** Activates an existing request after a current friendship is observed under the pair lock. */
+  activateConversation(conversation: DirectConversation, now: Date): Promise<DirectConversation>;
   /** Existing active threads accept a distinct message through this same pair-locked transaction. */
   appendExistingMessage(input: {
     conversation: DirectConversation; senderId: string; clientMessageId: string; requestFingerprint: string; text: string; createdAt: Date; messageId: string;
@@ -61,14 +63,16 @@ export function createCreateDirectConversationService(dependencies: {
           if (replay.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
           return { conversation: replay.conversation, message: toMessageDto(replay.message), replayed: true };
         }
+        const friendshipActive = await transaction.hasActiveFriendship(actorId, input.recipientId);
         if (existing) {
-          if (existing.requestState === "pending") throw new MessagingError("PENDING");
-          if (existing.requestState === "declined") throw new MessagingError("DECLINED");
-          const message = await transaction.appendExistingMessage({ conversation: existing, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now(), messageId: generateId() });
-          return { conversation: existing, message: toMessageDto(message), replayed: false };
+          if (!friendshipActive && existing.requestState === "pending") throw new MessagingError("PENDING");
+          if (!friendshipActive && existing.requestState === "declined") throw new MessagingError("DECLINED");
+          const conversation = existing.requestState === "active" ? existing : await transaction.activateConversation(existing, now());
+          const message = await transaction.appendExistingMessage({ conversation, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now(), messageId: generateId() });
+          return { conversation, message: toMessageDto(message), replayed: false };
         }
         if (!await transaction.recipientExists(input.recipientId)) throw new MessagingError("NOT_FOUND");
-        const requestState = await transaction.hasActiveFriendship(actorId, input.recipientId) ? "active" as const : "pending" as const;
+        const requestState = friendshipActive ? "active" as const : "pending" as const;
         const result = await transaction.createConversationWithMessage({ conversationId: generateId(), initiatorId: actorId, recipientId: input.recipientId, requestState, messageId: generateId(), clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now() });
         return { conversation: result.conversation, message: toMessageDto(result.message), replayed: false };
       });
