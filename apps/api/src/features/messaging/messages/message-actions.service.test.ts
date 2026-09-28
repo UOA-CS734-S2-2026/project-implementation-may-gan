@@ -94,6 +94,11 @@ describe("message action services", () => {
     await expect(createUnsendMessageService({ store: state.store, now: () => now }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ replayed: false, message: { text: null } });
   });
 
+  it("allows the author to unsend a declined initial request but never a blocked pair", async () => {
+    const state = memory(); state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "declined", isMember: true, peerActivityBlocked: false });
+    await expect(createUnsendMessageService({ store: state.store, now: () => now }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ message: { text: null } });
+  });
+
   it("does not allow peer-visible mutations while the pair is blocked", async () => {
     const state = memory(); state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: true });
     await expect(createUnsendMessageService({ store: state.store }).unsend("alice", "conversation-1", "message-1")).rejects.toMatchObject({ code: "BLOCKED" });
