@@ -12,7 +12,7 @@ import {
   type RelationshipTransaction,
   type StoredPendingRequest,
   type StoredRelationshipSnapshot,
-} from "./service";
+} from "./relationships.service";
 
 type Queryable = Pick<DayliDatabase, "execute">;
 type Row = Record<string, unknown>;

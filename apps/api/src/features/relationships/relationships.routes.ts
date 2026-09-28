@@ -10,8 +10,8 @@ import {
   relationshipStatusSchema,
   relationshipUserParamsSchema,
   sendRelationshipRequestBodySchema,
-} from "./contract";
-import { RelationshipServiceError, type RelationshipsService } from "./service";
+} from "./relationships.contract";
+import { RelationshipServiceError, type RelationshipsService } from "./relationships.service";
 import { createRequireSession, type ResolveSession } from "../../http/require-session";
 
 export interface RelationshipsRouteDependencies {

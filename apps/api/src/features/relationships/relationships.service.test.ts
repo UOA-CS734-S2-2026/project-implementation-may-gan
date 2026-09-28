@@ -8,7 +8,7 @@ import {
   type RelationshipStore,
   type RelationshipTransaction,
   type StoredRelationshipSnapshot,
-} from "./service";
+} from "./relationships.service";
 
 const fixedNow = new Date("2026-09-22T00:00:00.000Z");
 
