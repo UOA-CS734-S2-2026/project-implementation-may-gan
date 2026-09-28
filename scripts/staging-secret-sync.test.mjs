@@ -1,69 +1,87 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  assertPushKeyVersionGuard,
+  assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
-  readWorkerPushKeyVersion,
   syncStagingWorkerSecrets,
 } from "./staging-secret-sync.mjs";
 
 const sourceEnvironment = {
   BETTER_AUTH_SECRET: "better-auth-secret-value",
   FCM_SERVICE_ACCOUNT_JSON: '{"private_key":"test"}',
+  // This extra environment value must not be read or transmitted by routine sync.
   PUSH_TOKEN_ENCRYPTION_KEY: "push-key-value",
-  STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION: "v1",
 };
 
-test("accepts only required secrets and complete optional push integration", () => {
+function successResult(names) {
+  return { success: true, errors: [], result: Object.fromEntries(names.map((name) => [name, { name, type: "secret_text" }])) };
+}
+
+test("sync source excludes the push encryption key even when it is present", () => {
   assert.deepEqual(readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]), {
     values: {
       BETTER_AUTH_SECRET: "better-auth-secret-value",
       FCM_SERVICE_ACCOUNT_JSON: '{"private_key":"test"}',
-      PUSH_TOKEN_ENCRYPTION_KEY: "push-key-value",
     },
-    pushKeyVersion: "v1",
   });
-  assert.throws(() => readStagingWorkerSecretSource({ BETTER_AUTH_SECRET: "x", FCM_SERVICE_ACCOUNT_JSON: "x" }, ["BETTER_AUTH_SECRET"]), /set together/);
   assert.throws(() => readStagingWorkerSecretSource({}, ["BETTER_AUTH_SECRET"]), /BETTER_AUTH_SECRET/);
   assert.throws(() => readStagingWorkerSecretSource(sourceEnvironment, ["ARBITRARY_SECRET"]), /unreviewed/);
 });
 
-test("requires deployed key-version metadata before replacing an existing key", () => {
+test("requires public provider pairing and a Cloudflare-provisioned key for FCM", () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
-  assert.throws(() => assertPushKeyVersionGuard({ source, deployedSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), deployedPushKeyVersion: undefined }), /owner bootstrap/);
-  assert.doesNotThrow(() => assertPushKeyVersionGuard({ source, deployedSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), deployedPushKeyVersion: undefined, allowOwnerBootstrap: true }));
-  assert.throws(() => assertPushKeyVersionGuard({ source, deployedSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), deployedPushKeyVersion: "v0" }), /controlled rotation/);
-  assert.equal(readWorkerPushKeyVersion({ result: { bindings: [{ name: "PUSH_TOKEN_ENCRYPTION_KEY_VERSION", type: "plain_text", text: "v1" }] } }), "v1");
+  assert.throws(
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    /PUSH_TOKEN_ENCRYPTION_KEY/,
+  );
+  assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
+    existingSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"],
+  }));
+  assert.throws(
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["GOOGLE_CLIENT_SECRET"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    /GOOGLE_CLIENT_SECRET.*public staging/,
+  );
+  assert.throws(
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["RESEND_API_KEY"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    /RESEND_API_KEY.*public staging/,
+  );
+  assert.throws(
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["FCM_SERVICE_ACCOUNT_JSON"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    /FCM_SERVICE_ACCOUNT_JSON requires/,
+  );
 });
 
-test("bulk sync uses reviewed names and does not leak a provider error body", async () => {
+test("uses Cloudflare's documented bulk patch endpoint and validates every returned name", async () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   let request;
   await syncStagingWorkerSecrets({
     accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
     fetchImpl: async (url, options) => {
       request = { url, options };
-      return new Response(JSON.stringify({ errors: [{ message: "push-key-value should never appear" }] }), { status: 403 });
+      return new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"])), { status: 200 });
     },
-  }).then(() => assert.fail("expected sync to fail"), (error) => {
-    assert.match(error.message, /HTTP 403/);
-    assert.doesNotMatch(error.message, /push-key-value|runner-token/);
   });
-  assert.match(request.url, /dayli-api-staging\/secrets$/);
-  assert.equal(request.options.method, "PUT");
-  assert.deepEqual(JSON.parse(request.options.body).map(({ name }) => name).sort(), ["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON", "PUSH_TOKEN_ENCRYPTION_KEY"]);
-  assert.doesNotMatch(request.options.body, /runner-token/);
+  assert.match(request.url, /dayli-api-staging\/secrets-bulk$/);
+  assert.equal(request.options.method, "PATCH");
+  const body = JSON.parse(request.options.body);
+  assert.deepEqual(Object.keys(body.secrets).sort(), ["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]);
+  assert.equal(body.secrets.PUSH_TOKEN_ENCRYPTION_KEY, undefined);
+  assert.doesNotMatch(request.options.body, /push-key-value|runner-token/);
 });
 
-test("stops on a successful HTTP response that reports a partial bulk failure", async () => {
+test("rejects malformed, partial, or provider-error bulk responses without leaking values", async () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
-  await assert.rejects(
-    syncStagingWorkerSecrets({
-      accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
-      fetchImpl: async () => new Response(JSON.stringify({ success: false, errors: [{ message: "push-key-value" }] }), { status: 200 }),
-    }),
-    (error) => /HTTP 200/.test(error.message) && !error.message.includes("push-key-value"),
-  );
+  for (const response of [
+    new Response("not json", { status: 200 }),
+    new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET"])), { status: 200 }),
+    new Response(JSON.stringify({ ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]), errors: [{ message: "push-key-value" }] }), { status: 200 }),
+    new Response(JSON.stringify({ success: false, errors: [{ message: "push-key-value" }] }), { status: 403 }),
+  ]) {
+    await assert.rejects(
+      syncStagingWorkerSecrets({ accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source, fetchImpl: async () => response }),
+      (error) => !error.message.includes("push-key-value") && !error.message.includes("runner-token"),
+    );
+  }
 });
 
 test("network failure reports recovery without any secret value", async () => {

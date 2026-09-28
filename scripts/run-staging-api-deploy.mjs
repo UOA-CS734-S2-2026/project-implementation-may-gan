@@ -3,9 +3,8 @@ import { validateStagingOrigins } from "./staging-origins.mjs";
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
 import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-worker-config.mjs";
 import {
-  assertPushKeyVersionGuard,
+  assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
-  readWorkerPushKeyVersion,
   syncStagingWorkerSecrets,
 } from "./staging-secret-sync.mjs";
 
@@ -62,12 +61,10 @@ if (!Array.isArray(scripts?.result) || !scripts.result.some((script) => script?.
   throw new Error("The exact staging Worker must exist before secret sync or deployment.");
 }
 const secretNames = readCloudflareSecretNames(await request(`/workers/scripts/${expectedWorkerName}/secrets`, apiToken));
-const deployedPushKeyVersion = readWorkerPushKeyVersion(await request(`/workers/scripts/${expectedWorkerName}/settings`, apiToken));
-assertPushKeyVersionGuard({
+assertProjectedWorkerSecretPairing({
+  existingSecretNames: secretNames,
   source: secretSource,
-  deployedSecretNames: secretNames,
-  deployedPushKeyVersion,
-  allowOwnerBootstrap: process.env.STAGING_PUSH_KEY_OWNER_BOOTSTRAP === "true",
+  requiredAuthSecretNames: authBindings.requiredSecrets,
 });
 
 const { api, probe } = createStagingWorkerConfigs({
@@ -76,10 +73,12 @@ const { api, probe } = createStagingWorkerConfigs({
   authApiOrigin: apiOrigin,
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,
-  // Preserve authoritative metadata when optional push secrets are intentionally not supplied.
-  pushKeyVersion: secretSource.pushKeyVersion ?? deployedPushKeyVersion,
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));
-await syncStagingWorkerSecrets({ accountId, workerName: expectedWorkerName, apiToken, source: secretSource });
-console.log("Staging target validated and reviewed Worker secrets synchronized.");
+if (process.env.STAGING_SECRET_SYNC === "true") {
+  await syncStagingWorkerSecrets({ accountId, workerName: expectedWorkerName, apiToken, source: secretSource });
+  console.log("Staging target validated and reviewed Worker secrets synchronized.");
+} else {
+  console.log("Staging target and configuration validated. Worker secrets have not been changed.");
+}

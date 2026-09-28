@@ -8,7 +8,6 @@ const input = {
   authApiOrigin: "https://api.staging.example.test",
   authWebOrigin: "https://staging.example.test",
   authVars: { GOOGLE_WEB_CLIENT_ID: "public-client-id" },
-  pushKeyVersion: "2026-09-28.1",
 };
 
 test("generates the staging Worker Durable Object migration and repair cron", () => {
@@ -17,7 +16,7 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.migrations, [{ tag: "v1", new_sqlite_classes: ["UserRealtime"] }]);
   assert.deepEqual(api.triggers, { crons: ["*/1 * * * *"] });
   assert.deepEqual(api.hyperdrive, [{ binding: "HYPERDRIVE", id: "a".repeat(32) }]);
-  assert.equal(api.vars.PUSH_TOKEN_ENCRYPTION_KEY_VERSION, "2026-09-28.1");
+  assert.equal(api.vars.PUSH_TOKEN_ENCRYPTION_KEY_VERSION, undefined);
   assert.equal(JSON.parse(serializeWranglerConfig(api)).name, "dayli-api-staging");
 });
 
@@ -35,8 +34,7 @@ test("keeps the remote service probe free of cron and shared Durable Object bind
   }]);
 });
 
-test("rejects a worker target or push metadata outside the reviewed shape", () => {
+test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
   assert.throws(() => createStagingWorkerConfigs({ ...input, workerName: "production-api" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, hyperdriveId: "not-an-id" }));
-  assert.throws(() => createStagingWorkerConfigs({ ...input, pushKeyVersion: "not valid" }));
 });
