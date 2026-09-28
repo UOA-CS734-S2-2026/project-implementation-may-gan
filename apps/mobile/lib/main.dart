@@ -72,8 +72,11 @@ Future<void> main() async {
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
-    onSignedIn: () async {
+    onSignedIn: (startup) async {
       await messaging.startRealtime();
+      // The socket has its own stop/start epoch. Check before beginning push,
+      // because an old startup may have awaited its ticket through a switch.
+      if (!startup.isCurrent) return;
       await push?.start();
     },
     onBeforeSessionReplacement: () async {

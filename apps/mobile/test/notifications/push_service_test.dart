@@ -23,6 +23,26 @@ class _Source implements PushTokenSource {
   Future<void> invalidateLocalToken() async => invalidated = true;
 }
 
+class _DeferredSource implements PushTokenSource {
+  _DeferredSource(this.permissions, this.tokens);
+
+  final List<Completer<PushPermission>> permissions;
+  final List<Completer<String?>> tokens;
+  final StreamController<String> controller = StreamController<String>();
+
+  @override
+  Future<PushPermission> requestPermission() => permissions.removeAt(0).future;
+
+  @override
+  Future<String?> currentToken() => tokens.removeAt(0).future;
+
+  @override
+  Stream<String> get tokenRefreshes => controller.stream;
+
+  @override
+  Future<void> invalidateLocalToken() async {}
+}
+
 class _Client implements PushRegistrationClient {
   final registrations = <String>[];
   final unregistrations = <String>[];
@@ -62,6 +82,39 @@ void main() {
       ]);
       expect(client.unregistrations, ['install']);
       expect(source.invalidated, isTrue);
+    },
+  );
+
+  test(
+    'does not register a late old-account token after stop and restart',
+    () async {
+      final alicePermission = Completer<PushPermission>();
+      final bobPermission = Completer<PushPermission>();
+      final bobToken = Completer<String?>();
+      final source = _DeferredSource(
+        [alicePermission, bobPermission],
+        [bobToken],
+      );
+      final client = _Client();
+      final service = PushService(
+        source: source,
+        client: client,
+        installationId: 'install',
+        platform: 'ios',
+      );
+
+      final aliceStart = service.start();
+      await Future<void>.delayed(Duration.zero);
+      await service.stop();
+      final bobStart = service.start();
+      alicePermission.complete(PushPermission.granted);
+      await Future<void>.delayed(Duration.zero);
+      expect(client.registrations, isEmpty);
+      bobPermission.complete(PushPermission.granted);
+      bobToken.complete('bob-token');
+      await bobStart;
+      await aliceStart;
+      expect(client.registrations, ['install:bob-token:ios:true']);
     },
   );
 

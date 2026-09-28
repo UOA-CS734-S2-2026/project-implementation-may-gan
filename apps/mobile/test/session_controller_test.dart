@@ -148,7 +148,7 @@ void main() {
         tokenStore: tokens,
         userCache: users,
         drafts: MemoryDraftStore(),
-        onSignedIn: messaging.startRealtime,
+        onSignedIn: (_) => messaging.startRealtime(),
         onPrivateDataClear: messaging.stopRealtime,
       );
 
@@ -175,6 +175,7 @@ void main() {
           email: 'a@test',
         );
       final startup = Completer<void>();
+      final lateStartupEffects = <String>[];
       final session = SessionController(
         session: BetterAuthNativeSession(
           baseUrl: 'https://api.example.test',
@@ -186,7 +187,12 @@ void main() {
         tokenStore: tokens,
         userCache: users,
         drafts: MemoryDraftStore(),
-        onSignedIn: () => startup.future,
+        onSignedIn: (sessionStartup) async {
+          await startup.future;
+          if (sessionStartup.isCurrent) {
+            lateStartupEffects.add(sessionStartup.user.id);
+          }
+        },
       );
       final restoring = session.restore();
       await Future<void>.delayed(Duration.zero);
@@ -195,8 +201,72 @@ void main() {
       await restoring;
       expect(session.status, SessionStatus.signedOut);
       expect(session.user, isNull);
+      expect(lateStartupEffects, isEmpty);
     },
   );
+
+  test('late Alice startup is fenced before Bob session startup', () async {
+    final tokens = MemoryTokenStore()..value = 'alice-token';
+    final users = MemoryUserCache()
+      ..value = const SessionUser(
+        id: 'alice',
+        name: 'Alice',
+        email: 'alice@example.test',
+      );
+    var offline = true;
+    final aliceStartup = Completer<void>();
+    final activeStarts = <String>[];
+    final session = SessionController(
+      session: BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokens,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/get-session')) {
+            if (offline) throw http.ClientException('offline');
+            return http.Response(
+              jsonEncode({
+                'user': {
+                  'id': 'bob',
+                  'name': 'Bob',
+                  'email': 'bob@example.test',
+                },
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/sign-in/email')) {
+            offline = false;
+            return http.Response(
+              '{}',
+              200,
+              headers: {'set-auth-token': 'bob-token'},
+            );
+          }
+          return http.Response('{}', 404);
+        }),
+      ),
+      tokenStore: tokens,
+      userCache: users,
+      drafts: MemoryDraftStore(),
+      onBeforeSessionReplacement: () async {},
+      onSignedIn: (startup) async {
+        if (startup.user.id == 'alice') await aliceStartup.future;
+        if (startup.isCurrent) activeStarts.add(startup.user.id);
+      },
+    );
+
+    final restoringAlice = session.restore();
+    await Future<void>.delayed(Duration.zero);
+    await session.signIn(
+      email: 'bob@example.test',
+      password: 'correct-password',
+    );
+    expect(activeStarts, ['bob']);
+    aliceStartup.complete();
+    await restoringAlice;
+    expect(activeStarts, ['bob']);
+    expect(session.user?.id, 'bob');
+  });
 
   test('wipes protected storage once after a fresh install', () async {
     SharedPreferences.setMockInitialValues({});

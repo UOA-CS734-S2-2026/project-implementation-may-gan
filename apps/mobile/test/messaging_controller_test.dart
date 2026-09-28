@@ -70,6 +70,7 @@ class FakeMessagingClient implements MessagingClient {
   final calls = <String>[];
   int ticketCalls = 0;
   Completer<ApiResult<MessagingPage>>? deferredMessages;
+  Completer<ApiResult<RealtimeTicket>>? deferredTicket;
   Completer<ApiResult<DirectConversationResult>>? deferredDirect;
 
   @override
@@ -183,6 +184,7 @@ class FakeMessagingClient implements MessagingClient {
   @override
   Future<ApiResult<RealtimeTicket>> issueRealtimeTicket() async {
     ticketCalls++;
+    if (deferredTicket != null) return deferredTicket!.future;
     return const ApiError(ServiceUnavailable());
   }
 
@@ -456,6 +458,40 @@ void main() {
       );
       expect(controller.thread('c-1').single.text, isNull);
       expect(client.calls.where((call) => call == 'changes:0'), hasLength(2));
+    },
+  );
+
+  test(
+    'does not open a late ticket after stop and a newer session start',
+    () async {
+      final aliceTicket = Completer<ApiResult<RealtimeTicket>>();
+      final client = FakeMessagingClient()..deferredTicket = aliceTicket;
+      var openedChannels = 0;
+      final realtime = MessagingRealtimeClient(
+        client,
+        onReady: () async {},
+        onChange: (_) async {},
+        socketFactory: (_) {
+          openedChannels++;
+          throw StateError('A stale ticket must not open a channel.');
+        },
+      );
+      final aliceStart = realtime.start();
+      await Future<void>.delayed(Duration.zero);
+      await realtime.stop();
+      client.deferredTicket = null;
+      await realtime.start();
+      aliceTicket.complete(
+        const ApiSuccess(
+          RealtimeTicket(
+            ticket: 'alice-ticket',
+            webSocketUrl: 'ws://example.test',
+          ),
+        ),
+      );
+      await aliceStart;
+      expect(openedChannels, 0);
+      await realtime.stop();
     },
   );
 
