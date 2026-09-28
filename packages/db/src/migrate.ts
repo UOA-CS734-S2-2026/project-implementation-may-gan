@@ -2,7 +2,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { requireDatabaseUrl, requireMigrationTarget, requireProductionConfirmations, sanitizeDatabaseError, validateMigrationConnectionString } from "./migrations/env";
-import { migrationsFolder, readLocalMigrations } from "./migrations/state";
+import { assertAppliedMigrationPrefix } from "./migrations/assert-applied-prefix";
+import { migrationTableExists, migrationsFolder, readAppliedMigrations, readLocalMigrations } from "./migrations/state";
 
 const migrationLockId = 7_340_008;
 
@@ -28,6 +29,10 @@ async function main(): Promise<void> {
     await client`set statement_timeout = '5min'`;
 
     try {
+      // The advisory lock also covers the prefix check, so a second migrator
+      // cannot change history between verification and the first DDL statement.
+      const applied = await migrationTableExists(client) ? await readAppliedMigrations(client) : [];
+      assertAppliedMigrationPrefix(migrations, applied);
       await migrate(drizzle(client), {
         migrationsFolder,
         migrationsSchema: "drizzle",
