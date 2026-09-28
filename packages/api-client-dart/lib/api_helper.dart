@@ -79,6 +79,9 @@ String parameterToString(dynamic value) {
         .encode(value)
         .toString();
   }
+  if (value is PostAudience) {
+    return PostAudienceTypeTransformer().encode(value).toString();
+  }
   if (value is RelationshipState) {
     return RelationshipStateTypeTransformer().encode(value).toString();
   }

@@ -118,7 +118,7 @@ describe("POST /api/v1/media-reservations", () => {
   });
 
   it("returns a private 503 when shared session resolution is unavailable", async () => {
-    const repository = createFakeRepository();
+    const repository = createFakeMediaReservationRepository();
     const app = createApp({
       media: {
         runtime: createFakeMediaRuntime(repository),

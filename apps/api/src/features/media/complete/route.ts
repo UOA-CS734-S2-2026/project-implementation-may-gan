@@ -56,7 +56,7 @@ export function registerMediaCompleteRoute(
 
     const { id } = context.req.valid("param");
     try {
-      return runtime.withRepository(async (repository) => {
+      return await runtime.withRepository(async (repository) => {
         const result = await completeMediaReservation(
           { repository, r2Reader: runtime.r2Reader },
           context.get("actor").userId,
