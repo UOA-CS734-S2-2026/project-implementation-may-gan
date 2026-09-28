@@ -378,6 +378,24 @@ describe("POST /api/v1/media-reservations/{id}/complete", () => {
     expect(repository.records.get(created.id)!.status).toBe("pending");
   });
 
+  it("returns a private 503 when media runtime exists without a session resolver", async () => {
+    const auth = createBetterAuthCompatibilitySlice({
+      baseURL: origin,
+      secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
+      database: { account: [], session: [], user: [], verification: [] },
+    });
+    const repository = createFakeMediaReservationRepository();
+    const app = createApp({
+      auth,
+      media: { runtime: createFakeMediaRuntime(repository, new Map()) },
+    });
+    const response = await completeReservation(app, "unused-token", "media_anything");
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
+    expect(repository.records.size).toBe(0);
+  });
+
   it("returns 503 when media reservations are not configured", async () => {
     const auth = createBetterAuthCompatibilitySlice({
       baseURL: origin,
