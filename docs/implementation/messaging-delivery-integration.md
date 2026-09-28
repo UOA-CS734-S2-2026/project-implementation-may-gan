@@ -29,6 +29,10 @@ The current REST writer atomically writes two realtime records for actor and pee
 
 The scheduled handler is already exported from `index.ts`. No body or ticket query value may enter logs, traces, error details, or realtime events.
 
+## Required schema correction before production push
+
+The current `push_devices.token` foundation column stores the provider token as plaintext. This delivery branch reads it only inside the restricted Worker-to-Postgres path and never returns or logs it, but that does not meet the approved encrypted-or-restricted storage requirement by itself. Before production push enablement, land a separately reviewed migration that replaces it with envelope ciphertext and key metadata, migrates existing registrations, and gives the app role only the minimum access needed for dispatch. The key reference must be a Worker secret or approved key-management binding, never a migration value or Wrangler variable.
+
 ## External release gates
 
 FCM HTTP v1 is implemented and mock-tested only. Firebase project secrets, APNs/Firebase iOS configuration, Android identifiers, owner-provided Flutter Firebase initialization, and iOS/Android physical-device notification and tap tests remain required before claiming background push delivery.
