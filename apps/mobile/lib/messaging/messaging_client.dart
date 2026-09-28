@@ -231,7 +231,8 @@ class HttpMessagingClient implements MessagingClient {
         return ApiError(_rawFailure(response.statusCode));
       }
       final value = jsonDecode(text);
-      if (value is! Map<String, dynamic>) return const ApiError(ServiceUnavailable());
+      if (value is! Map<String, dynamic>)
+        return const ApiError(ServiceUnavailable());
       return ApiSuccess(decode(value));
     } on IOException {
       return const ApiError(NetworkUnavailable());
@@ -245,7 +246,9 @@ class HttpMessagingClient implements MessagingClient {
   static ApiFailure _rawFailure(int status) {
     if (status == 401) return const Unauthenticated();
     if (status == 400 || status == 409 || status == 422) {
-      return const InvalidRequest('Messaging state changed. Refresh and try again.');
+      return const InvalidRequest(
+        'Messaging state changed. Refresh and try again.',
+      );
     }
     return const ServiceUnavailable();
   }

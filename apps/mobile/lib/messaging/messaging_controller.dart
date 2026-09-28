@@ -55,17 +55,23 @@ class MessagingController extends ChangeNotifier {
   }
 
   /// Called by the session-scoped socket after ready and on durable replay.
-  Future<void> reconcileRealtimeEvent(ConversationChanged event) => _realtimeChange(event);
+  Future<void> reconcileRealtimeEvent(ConversationChanged event) =>
+      _realtimeChange(event);
 
   Future<void> _realtimeChange(ConversationChanged event) async {
     if (_eventIds.contains(event.eventId)) return;
     final previous = _lastChangeSequence[event.conversationId];
-    if (previous != null && BigInt.parse(event.changeSequence) <= BigInt.parse(previous)) return;
+    if (previous != null &&
+        BigInt.parse(event.changeSequence) <= BigInt.parse(previous))
+      return;
     _eventIds.add(event.eventId);
     if (_eventIds.length > 512) _eventIds.remove(_eventIds.first);
     var cursor = previous ?? '0';
     while (true) {
-      final page = await _client.changes(event.conversationId, afterChangeSequence: cursor);
+      final page = await _client.changes(
+        event.conversationId,
+        afterChangeSequence: cursor,
+      );
       if (page case ApiSuccess<MessagingChangePage>(:final value)) {
         cursor = value.nextChangeSequence ?? value.highWatermark;
         _lastChangeSequence[event.conversationId] = value.highWatermark;

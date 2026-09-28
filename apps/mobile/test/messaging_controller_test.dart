@@ -59,7 +59,9 @@ class LiveMessagingClient implements MessagingClient {
   }
 
   @override
-  Future<ApiResult<List<MessagingMessage>>> messages(String conversationId) async {
+  Future<ApiResult<List<MessagingMessage>>> messages(
+    String conversationId,
+  ) async {
     messageCalls++;
     return ApiSuccess([_message()]);
   }
@@ -109,22 +111,25 @@ void main() {
     },
   );
 
-  test('reconciles one live event through durable changes and REST refetch', () async {
-    final client = LiveMessagingClient();
-    final controller = MessagingController(client);
-    await controller.loadConversation('c-alice');
-    await controller.reconcileRealtimeEvent(
-      const ConversationChanged('event-1', 'c-alice', '3'),
-    );
-    await controller.reconcileRealtimeEvent(
-      const ConversationChanged('event-1', 'c-alice', '3'),
-    );
+  test(
+    'reconciles one live event through durable changes and REST refetch',
+    () async {
+      final client = LiveMessagingClient();
+      final controller = MessagingController(client);
+      await controller.loadConversation('c-alice');
+      await controller.reconcileRealtimeEvent(
+        const ConversationChanged('event-1', 'c-alice', '3'),
+      );
+      await controller.reconcileRealtimeEvent(
+        const ConversationChanged('event-1', 'c-alice', '3'),
+      );
 
-    expect(client.changeCalls, 1);
-    expect(client.inboxCalls, 1);
-    expect(client.messageCalls, 2);
-    expect(controller.thread('c-alice'), hasLength(1));
-  });
+      expect(client.changeCalls, 1);
+      expect(client.inboxCalls, 1);
+      expect(client.messageCalls, 2);
+      expect(controller.thread('c-alice'), hasLength(1));
+    },
+  );
 
   test('requests a fresh ticket after a jittered reconnect delay', () async {
     final client = LiveMessagingClient();
