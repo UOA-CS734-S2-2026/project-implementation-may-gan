@@ -66,6 +66,15 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(changes.items.map((item) => item.kind)).toContain("read.updated");
   });
 
+  it("declines a request and treats the recipient's same decision retry as idempotent", async () => {
+    const created = await direct.create(users[1]!, { recipientId: users[2]!, clientMessageId: crypto.randomUUID(), text: "decline me" });
+    const first = await reader.resolve(users[2]!, created.conversation.id, "decline") as { requestState: string };
+    const replay = await reader.resolve(users[2]!, created.conversation.id, "decline") as { requestState: string };
+    expect(first.requestState).toBe("declined");
+    expect(replay.requestState).toBe("declined");
+    await expect(send.send(users[1]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "not allowed" })).rejects.toMatchObject({ code: "DECLINED" });
+  });
+
   it("rejects creation and peer-visible reads after either-direction blocks", async () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[1]!}, ${users[0]!}, now())`;
     await expect(direct.create(users[0]!, { recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "blocked" })).rejects.toMatchObject({ code: "BLOCKED" });
