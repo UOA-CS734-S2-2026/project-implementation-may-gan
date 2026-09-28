@@ -19,17 +19,12 @@ import { dailyPrompts } from "./daily-prompts";
 import { friendRequests, friendships, relationshipBlocks, relationshipSearchQuota } from "./relationships";
 import {
   conversationChanges,
-  conversationKind,
   conversationMembers,
   conversations,
   messageReactions,
-  messageRequestState,
   messages,
   messagingOutbox,
-  messagingOutboxChannel,
-  messagingOutboxStatus,
   pushDevices,
-  pushPlatform,
   socketTickets,
 } from "./messaging";
 import { user } from "./users";
