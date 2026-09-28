@@ -630,6 +630,147 @@
           "recipientId"
         ],
         "additionalProperties": false
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "conversationId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "sequence": {
+            "type": "string",
+            "pattern": "^\\d+$",
+            "example": "42"
+          },
+          "senderId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "clientMessageId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true
+          },
+          "replyToMessageId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "replyPreview": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              "senderId": {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              "text": {
+                "type": "string",
+                "nullable": true
+              },
+              "unsentAt": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/UtcTimestamp"
+                  },
+                  {
+                    "nullable": true
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "senderId",
+              "text",
+              "unsentAt"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "editedAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "unsentAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reaction": {
+                  "type": "string",
+                  "enum": [
+                    "like",
+                    "love",
+                    "laugh",
+                    "surprised",
+                    "sad",
+                    "thanks"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "reactedByActor": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "reaction",
+                "count",
+                "reactedByActor"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "sequence",
+          "senderId",
+          "clientMessageId",
+          "text",
+          "replyToMessageId",
+          "replyPreview",
+          "version",
+          "createdAt",
+          "editedAt",
+          "unsentAt",
+          "reactions"
+        ]
       }
     },
     "parameters": {}
@@ -2437,6 +2578,142 @@
           },
           "default": {
             "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/messages": {
+      "post": {
+        "tags": [
+          "Messaging"
+        ],
+        "operationId": "sendMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "conversationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clientMessageId": {
+                    "$ref": "#/components/schemas/OpaqueId"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  },
+                  "replyToMessageId": {
+                    "$ref": "#/components/schemas/OpaqueId"
+                  }
+                },
+                "required": [
+                  "clientMessageId",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identical idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Saved message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The messaging action is not permitted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The conversation or message was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The messaging action conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Messaging is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
