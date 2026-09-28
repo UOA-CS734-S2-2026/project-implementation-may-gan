@@ -76,7 +76,8 @@ const { api, probe } = createStagingWorkerConfigs({
   authApiOrigin: apiOrigin,
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,
-  pushKeyVersion: secretSource.pushKeyVersion,
+  // Preserve authoritative metadata when optional push secrets are intentionally not supplied.
+  pushKeyVersion: secretSource.pushKeyVersion ?? deployedPushKeyVersion,
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));

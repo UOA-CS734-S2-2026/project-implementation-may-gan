@@ -48,6 +48,14 @@ This is not end-to-end encrypted messaging. TLS and provider encryption at rest 
 
 Messaging tables, REST endpoints, outbox dispatch, ticketed socket invalidations, protected push registration, and web and mobile flows are integrated. Historical SSE/tRPC messaging was not imported. Local verification does not replace Firebase/APNs configuration, physical-device delivery evidence, or staging validation.
 
+## Merge readiness and deployment handoff
+
+The Worker fetch entrypoint now forwards the Cloudflare execution context into Hono, so successful message writes retain their bounded `waitUntil` dispatch. The staging generator includes the `USER_REALTIME` binding, SQLite migration, and retry cron. The probe Worker has no scheduler or shared Durable Object binding. Staging secret synchronization is part of the approved manual deployment, not a separate workflow.
+
+Local evidence on this branch includes the API Worker test suite and typecheck, Node tests for staging origins, auth bindings, generated configuration, and mocked secret synchronization, plus Wrangler dry runs for synthetic staging API and probe configurations. No hosted workflow, remote deployment, Cloudflare write, or real credential use occurred. `actionlint` was unavailable locally.
+
+The remaining external gate is an owner-configured and approved GitHub `staging` Environment, an existing exact staging Worker and Hyperdrive resource, reviewed staging source secrets, PostgreSQL migration readiness, and physical-device Firebase/APNs proof. See [staging deployment](staging-deployment.md) for the owner procedure and encryption-key recovery rules.
+
 ## Architecture in plain terms
 
 ```text

@@ -22,6 +22,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     files: ["apps/api/src/features/**/service.ts"],
     rules: {
       "no-restricted-imports": [
