@@ -65,8 +65,12 @@ class FakeMessagingClient implements MessagingClient {
   };
   final canonical = <String, MessagingMessage>{'m-1': testMessage()};
   final changesByConversation = <String, List<MessagingChangePage>>{};
+  final projectionResults = <String, List<ApiResult<MessagingMessage>>>{};
+  final directResults = <ApiResult<DirectConversationResult>>[];
   final calls = <String>[];
+  int ticketCalls = 0;
   Completer<ApiResult<MessagingPage>>? deferredMessages;
+  Completer<ApiResult<DirectConversationResult>>? deferredDirect;
 
   @override
   Future<ApiResult<List<MessagingConversation>>> inbox({
@@ -110,7 +114,11 @@ class FakeMessagingClient implements MessagingClient {
   Future<ApiResult<MessagingMessage>> message(
     String conversationId,
     String messageId,
-  ) async => ApiSuccess(canonical[messageId]!);
+  ) async {
+    final values = projectionResults[messageId];
+    if (values != null && values.isNotEmpty) return values.removeAt(0);
+    return ApiSuccess(canonical[messageId]!);
+  }
 
   @override
   Future<ApiResult<DirectConversationResult>> createDirect({
@@ -119,6 +127,8 @@ class FakeMessagingClient implements MessagingClient {
     required String text,
   }) async {
     calls.add('direct:$recipientId:$clientMessageId:$text');
+    if (deferredDirect != null) return deferredDirect!.future;
+    if (directResults.isNotEmpty) return directResults.removeAt(0);
     final result = testMessage(
       id: 'm-direct',
       conversationId: 'c-direct',
@@ -171,8 +181,10 @@ class FakeMessagingClient implements MessagingClient {
   }
 
   @override
-  Future<ApiResult<RealtimeTicket>> issueRealtimeTicket() async =>
-      const ApiError(ServiceUnavailable());
+  Future<ApiResult<RealtimeTicket>> issueRealtimeTicket() async {
+    ticketCalls++;
+    return const ApiError(ServiceUnavailable());
+  }
 
   @override
   Future<ApiResult<MessagingChangePage>> changes(
@@ -396,6 +408,54 @@ void main() {
       expect(messages.first.text, isNull);
       expect(messages.last.replyPreview?.text, isNull);
       expect(messages.last.replyPreview?.unsentAt, isNotNull);
+    },
+  );
+
+  test(
+    'retries a failed tombstone projection without advancing its cursor',
+    () async {
+      final client = FakeMessagingClient()
+        ..canonical['m-1'] = testMessage(
+          text: null,
+          version: 2,
+          unsentAt: DateTime.utc(2026, 9, 28, 2),
+        )
+        ..projectionResults['m-1'] = [
+          const ApiError(NetworkUnavailable()),
+          ApiSuccess(
+            testMessage(
+              text: null,
+              version: 2,
+              unsentAt: DateTime.utc(2026, 9, 28, 2),
+            ),
+          ),
+        ]
+        ..changesByConversation['c-1'] = [
+          const MessagingChangePage(
+            items: [MessagingChange(changeSequence: '4', messageId: 'm-1')],
+            highWatermark: '4',
+            hasMore: false,
+            nextChangeSequence: null,
+          ),
+          const MessagingChangePage(
+            items: [MessagingChange(changeSequence: '4', messageId: 'm-1')],
+            highWatermark: '4',
+            hasMore: false,
+            nextChangeSequence: null,
+          ),
+        ];
+      final controller = MessagingController(client);
+      await controller.loadConversation('c-1');
+      await controller.reconcileRealtimeEvent(
+        const ConversationChanged('projection-failed', 'c-1', '4'),
+      );
+      expect(controller.thread('c-1').single.text, 'hello');
+
+      await controller.reconcileRealtimeEvent(
+        const ConversationChanged('projection-retry', 'c-1', '5'),
+      );
+      expect(controller.thread('c-1').single.text, isNull);
+      expect(client.calls.where((call) => call == 'changes:0'), hasLength(2));
     },
   );
 

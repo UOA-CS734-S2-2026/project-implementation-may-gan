@@ -126,9 +126,16 @@ class MessagingController extends ChangeNotifier {
         if (generation != _generation) return;
         if (message case ApiSuccess<MessagingMessage>(:final value)) {
           _applyMessages(event.conversationId, [value]);
+        } else {
+          // Do not advance beyond a missing edit, reaction, or tombstone.
+          // A later socket event or reconnect retries this same durable range.
+          _eventIds.remove(event.eventId);
+          _failure = (message as ApiError<MessagingMessage>).failure;
+          notifyListeners();
+          return;
         }
       }
-      // Cursors only move after this page's projections are applied.
+      // Cursors only move after every page projection is applied.
       cursor = value.nextChangeSequence ?? value.highWatermark;
       _lastChangeSequence[event.conversationId] = cursor;
       if (!value.hasMore) break;
