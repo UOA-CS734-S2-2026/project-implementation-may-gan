@@ -104,16 +104,22 @@ export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken
   const errors = payload?.errors;
   const result = payload?.result;
   const requestedNames = entries.map(([name]) => name).sort();
-  const resultNames = result !== null && typeof result === "object" && !Array.isArray(result)
-    ? Object.keys(result).sort()
+  // Cloudflare may omit result. When supplied, binding names come from the
+  // metadata values, not the response map's keys.
+  const metadata = result !== null && typeof result === "object" && !Array.isArray(result)
+    ? Object.values(result)
     : [];
+  const resultNames = metadata.map((binding) => binding?.name).sort();
+  const validMetadata = result === undefined || (
+    resultNames.length === requestedNames.length
+    && resultNames.every((name, index) => name === requestedNames[index])
+    && metadata.every((binding) => binding?.type === "secret_text")
+  );
   const complete = response.ok
     && payload?.success === true
     && Array.isArray(errors)
     && errors.length === 0
-    && resultNames.length === requestedNames.length
-    && resultNames.every((name, index) => name === requestedNames[index])
-    && resultNames.every((name) => result[name]?.name === name && result[name]?.type === "secret_text");
+    && validMetadata;
   if (!complete) {
     throw new Error(`Cloudflare secret sync failed (HTTP ${response.status}). No deployment was attempted; inspect the Worker secret store before retrying.`);
   }
