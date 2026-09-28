@@ -174,6 +174,45 @@ void main() {
     },
   );
 
+  test(
+    'restart quarantines an old bearer from normal restore and startup',
+    () async {
+      final tokens = MemoryTokenStore()
+        ..value = 'stale-active-copy'
+        ..pendingRevocation = 'alice-revoke-token';
+      final users = MemoryUserCache()
+        ..value = const SessionUser(
+          id: 'alice',
+          name: 'Alice',
+          email: 'a@test',
+        );
+      var getSessionCalls = 0;
+      var startupCalls = 0;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) getSessionCalls++;
+            return http.Response('{}', 500);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+        onSignedIn: (_) async => startupCalls++,
+      );
+
+      await session.restore();
+      expect(session.status, SessionStatus.signedOut);
+      expect(session.user, isNull);
+      expect(users.value, isNull);
+      expect(getSessionCalls, 0);
+      expect(startupCalls, 0);
+      expect(await session.bearerToken(), isNull);
+    },
+  );
+
   test('failed old-session revoke blocks a replacement sign-in', () async {
     final tokens = MemoryTokenStore()..value = 'alice-token';
     final users = MemoryUserCache();
@@ -215,11 +254,13 @@ void main() {
       throwsA(isA<AuthenticationFailure>()),
     );
     expect(signInCalls, 0);
-    expect(tokens.value, 'alice-token');
+    expect(tokens.value, isNull);
+    expect(tokens.pendingRevocation, 'alice-token');
     expect(controller.status, SessionStatus.signedOut);
     revokeFails = false;
     await controller.signIn(email: 'bob@example.test', password: 'password');
     expect(signInCalls, 1);
+    expect(tokens.pendingRevocation, isNull);
     expect(controller.user?.id, 'bob');
   });
 
@@ -258,6 +299,57 @@ void main() {
     expect(tokens.value, isNull);
     expect(controller.status, SessionStatus.signedOut);
   });
+
+  test(
+    'offline sign-out quarantines its bearer before a later sign-in',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'alice-token';
+      final users = MemoryUserCache();
+      var revokeFails = true;
+      var bob = false;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) {
+              return http.Response(
+                jsonEncode({
+                  'user': {'id': bob ? 'bob' : 'alice'},
+                }),
+                200,
+              );
+            }
+            if (request.url.path.endsWith('/sign-out')) {
+              return http.Response('{}', revokeFails ? 503 : 200);
+            }
+            if (request.url.path.endsWith('/sign-in/email')) {
+              bob = true;
+              return http.Response(
+                '{}',
+                200,
+                headers: {'set-auth-token': 'bob-token'},
+              );
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+      );
+      await session.restore();
+      await session.signOut();
+      expect(session.status, SessionStatus.signedOut);
+      expect(tokens.value, isNull);
+      expect(tokens.pendingRevocation, 'alice-token');
+
+      revokeFails = false;
+      await session.signIn(email: 'bob@example.test', password: 'password');
+      expect(tokens.pendingRevocation, isNull);
+      expect(session.user?.id, 'bob');
+    },
+  );
 
   test(
     'replaces only after old push registration drains and session revokes',

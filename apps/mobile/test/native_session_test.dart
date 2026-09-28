@@ -16,6 +16,7 @@ class FakeGoogleIdTokenProvider implements GoogleIdTokenProvider {
 
 class MemorySessionTokenStore implements SessionTokenStore {
   String? value;
+  String? pendingRevocation;
 
   @override
   Future<void> clear() async {
@@ -28,6 +29,20 @@ class MemorySessionTokenStore implements SessionTokenStore {
   @override
   Future<void> write(String token) async {
     value = token;
+  }
+
+  @override
+  Future<String?> readPendingRevocation() async => pendingRevocation;
+
+  @override
+  Future<void> clearPendingRevocation() async => pendingRevocation = null;
+
+  @override
+  Future<void> quarantineActiveToken() async {
+    final token = value;
+    if (token == null) return;
+    pendingRevocation = token;
+    value = null;
   }
 }
 
@@ -64,6 +79,29 @@ void main() {
       expect(sessionRequest.headers['authorization'], 'Bearer worker-token');
     },
   );
+
+  test('does not expose a quarantined bearer to normal API calls', () async {
+    final tokenStore = MemorySessionTokenStore()
+      ..value = 'stale-active-copy'
+      ..pendingRevocation = 'alice-revoke-token';
+    var requests = 0;
+    final session = BetterAuthNativeSession(
+      baseUrl: 'https://api.example.test',
+      tokenStore: tokenStore,
+      client: MockClient((_) async {
+        requests++;
+        return http.Response('{}', 200);
+      }),
+    );
+
+    expect(await session.bearerToken(), isNull);
+    expect(await session.currentUser(), isNull);
+    await expectLater(
+      session.signIn(email: 'bob@example.test', password: 'password'),
+      throwsA(isA<AuthenticationFailure>()),
+    );
+    expect(requests, 0);
+  });
 
   test('signs up without an unsupported username field', () async {
     final tokenStore = MemorySessionTokenStore();
