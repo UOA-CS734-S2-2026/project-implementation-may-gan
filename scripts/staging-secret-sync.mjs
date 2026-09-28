@@ -1,3 +1,5 @@
+import { readCloudflareSecretNames } from "./staging-auth-bindings.mjs";
+
 export const stagingWorkerSecretNames = Object.freeze({
   betterAuth: "BETTER_AUTH_SECRET",
   google: "GOOGLE_CLIENT_SECRET",
@@ -101,26 +103,31 @@ export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken
   } catch {
     throw new Error(`Cloudflare secret sync returned invalid JSON (HTTP ${response.status}). No deployment was attempted.`);
   }
-  const errors = payload?.errors;
-  const result = payload?.result;
-  const requestedNames = entries.map(([name]) => name).sort();
-  // Cloudflare may omit result. When supplied, binding names come from the
-  // metadata values, not the response map's keys.
-  const metadata = result !== null && typeof result === "object" && !Array.isArray(result)
-    ? Object.values(result)
-    : [];
-  const resultNames = metadata.map((binding) => binding?.name).sort();
-  const validMetadata = result === undefined || (
-    resultNames.length === requestedNames.length
-    && resultNames.every((name, index) => name === requestedNames[index])
-    && metadata.every((binding) => binding?.type === "secret_text")
-  );
-  const complete = response.ok
-    && payload?.success === true
-    && Array.isArray(errors)
-    && errors.length === 0
-    && validMetadata;
-  if (!complete) {
+  // The result map is optional and may include bindings beyond this request.
+  // Cloudflare's success flag and errors are authoritative for the bulk patch.
+  if (!response.ok || payload?.success !== true || !Array.isArray(payload.errors) || payload.errors.length !== 0) {
     throw new Error(`Cloudflare secret sync failed (HTTP ${response.status}). No deployment was attempted; inspect the Worker secret store before retrying.`);
+  }
+
+  // Read back names without reading values. This also catches a successful
+  // response whose requested bindings are not visible before code deployment.
+  let readback;
+  try {
+    readback = await fetchImpl(apiUrl(accountId, workerName).replace(/\/secrets-bulk$/, "/secrets"), {
+      headers: { Authorization: `Bearer ${apiToken}` },
+    });
+  } catch {
+    throw new Error("Cloudflare secret verification could not reach the control plane. No deployment was attempted; inspect the Worker secret store before retrying.");
+  }
+  let listed;
+  try {
+    listed = await readback.json();
+    if (!readback.ok || listed?.success !== true || !Array.isArray(listed?.errors) || listed.errors.length !== 0) {
+      throw new Error("Invalid secret list response.");
+    }
+    const names = readCloudflareSecretNames(listed);
+    if (entries.some(([name]) => !names.has(name))) throw new Error("Missing synced secret binding.");
+  } catch {
+    throw new Error("Cloudflare secret verification failed. No deployment was attempted; inspect the Worker secret store before retrying.");
   }
 }

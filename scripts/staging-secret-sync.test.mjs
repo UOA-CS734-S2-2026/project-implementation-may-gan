@@ -17,6 +17,14 @@ function successResult(names) {
   return { success: true, errors: [], result: Object.fromEntries(names.map((name) => [name, { name, type: "secret_text" }])) };
 }
 
+function secretList(names = ["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON", "OTHER_EXISTING_SECRET"]) {
+  return { success: true, errors: [], result: names.map((name) => ({ name })) };
+}
+
+function mockBulkAndReadback(payload, names) {
+  return async (url, options) => new Response(JSON.stringify(options?.method === "PATCH" ? payload : secretList(names)), { status: 200 });
+}
+
 test("sync source excludes the push encryption key even when it is present", () => {
   assert.deepEqual(readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]), {
     values: {
@@ -59,22 +67,27 @@ test("requires public provider pairing and a Cloudflare-provisioned key for FCM"
   );
 });
 
-test("uses Cloudflare's documented bulk patch endpoint and validates every returned name", async () => {
+test("uses the bulk endpoint then verifies secret names without exposing values", async () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
-  let request;
+  const requests = [];
   await syncStagingWorkerSecrets({
     accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
     fetchImpl: async (url, options) => {
-      request = { url, options };
-      return new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"])), { status: 200 });
+      requests.push({ url, options });
+      return new Response(JSON.stringify(options?.method === "PATCH"
+        ? successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON", "OTHER_EXISTING_SECRET"])
+        : secretList()), { status: 200 });
     },
   });
-  assert.match(request.url, /dayli-api-staging\/secrets-bulk$/);
-  assert.equal(request.options.method, "PATCH");
-  const body = JSON.parse(request.options.body);
+  assert.equal(requests.length, 2);
+  assert.match(requests[0].url, /dayli-api-staging\/secrets-bulk$/);
+  assert.equal(requests[0].options.method, "PATCH");
+  assert.match(requests[1].url, /dayli-api-staging\/secrets$/);
+  assert.equal(requests[1].options.method, undefined);
+  const body = JSON.parse(requests[0].options.body);
   assert.deepEqual(Object.keys(body.secrets).sort(), ["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]);
   assert.equal(body.secrets.PUSH_TOKEN_ENCRYPTION_KEY, undefined);
-  assert.doesNotMatch(request.options.body, /push-key-value|runner-token/);
+  assert.doesNotMatch(requests[0].options.body, /push-key-value|runner-token/);
 });
 
 test("accepts documented success without metadata or with unrelated map keys", async () => {
@@ -88,7 +101,7 @@ test("accepts documented success without metadata or with unrelated map keys", a
   ]) {
     await syncStagingWorkerSecrets({
       accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
-      fetchImpl: async () => new Response(JSON.stringify(payload), { status: 200 }),
+      fetchImpl: mockBulkAndReadback(payload),
     });
   }
 });
@@ -97,17 +110,7 @@ test("rejects malformed, partial, or provider-error bulk responses without leaki
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   for (const response of [
     new Response("not json", { status: 200 }),
-    new Response(JSON.stringify({ success: true, errors: [], result: null }), { status: 200 }),
-    new Response(JSON.stringify({ success: true, errors: [], result: [] }), { status: 200 }),
-    new Response(JSON.stringify({ success: true, errors: [], result: {
-      foo: { name: "BETTER_AUTH_SECRET", type: "secret_text" },
-      bar: { name: "BETTER_AUTH_SECRET", type: "secret_text" },
-    } }), { status: 200 }),
-    new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET"])), { status: 200 }),
-    new Response(JSON.stringify({
-      ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]),
-      result: { ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]).result, UNEXPECTED: { name: "UNEXPECTED", type: "plain_text" } },
-    }), { status: 200 }),
+
     new Response(JSON.stringify({ ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]), errors: [{ message: "push-key-value" }] }), { status: 200 }),
     new Response(JSON.stringify({ success: false, errors: [{ message: "push-key-value" }] }), { status: 403 }),
   ]) {
@@ -115,6 +118,19 @@ test("rejects malformed, partial, or provider-error bulk responses without leaki
       syncStagingWorkerSecrets({ accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source, fetchImpl: async () => response }),
       (error) => !error.message.includes("push-key-value") && !error.message.includes("runner-token"),
     );
+  }
+});
+
+test("stops deployment when secret-name readback is missing or unavailable", async () => {
+  const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
+  const params = { accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source };
+  for (const fetchImpl of [
+    mockBulkAndReadback({ success: true, errors: [] }, ["BETTER_AUTH_SECRET"]),
+    async (_url, options) => options?.method === "PATCH"
+      ? new Response(JSON.stringify({ success: true, errors: [] }), { status: 200 })
+      : new Response("unavailable", { status: 503 }),
+  ]) {
+    await assert.rejects(syncStagingWorkerSecrets({ ...params, fetchImpl }), /verification failed/);
   }
 });
 
