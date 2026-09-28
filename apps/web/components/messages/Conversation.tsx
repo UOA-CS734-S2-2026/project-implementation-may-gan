@@ -25,7 +25,7 @@ export function Conversation({ conversationId }: { conversationId: string }) {
     if (value.trim().length === 0 || sending) return;
     setSending(true); setText(""); setNotice(null);
     const clientMessageId = crypto.randomUUID();
-    const pending: MessagingMessage = { id: `pending:${clientMessageId}`, conversationId, sequence: "999999999999999999", senderId: "me", clientMessageId, text: value, version: 0, createdAt: new Date().toISOString(), editedAt: null, unsentAt: null, replyToMessageId: null, reactions: [] };
+    const pending: MessagingMessage = { id: `pending:${clientMessageId}`, conversationId, sequence: "999999999999999999", senderId: user?.id ?? "", clientMessageId, text: value, version: 0, createdAt: new Date().toISOString(), editedAt: null, unsentAt: null, replyToMessageId: null, reactions: [] };
     setMessages((current) => [...current, pending]);
     const result = await messagingApi.send(conversationId, clientMessageId, value);
     if (result.ok) setMessages((current) => mergeMessages(current.filter((item) => item.id !== pending.id), [result.value]));

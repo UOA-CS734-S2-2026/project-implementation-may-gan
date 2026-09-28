@@ -115,6 +115,8 @@ export const messagingOutbox = pgTable("messaging_outbox", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 }, (table) => [
+  // PostgreSQL 18 NULLS NOT DISTINCT index is declared in migration 0009.
+  // Drizzle's index builder cannot model this option yet.
   uniqueIndex("messaging_outbox_destination_unique").on(table.eventId, table.recipientId, table.channel, table.deviceRegistrationId),
   index("messaging_outbox_due_idx").on(table.status, table.availableAt),
   index("messaging_outbox_lease_idx").on(table.status, table.leaseExpiresAt),
