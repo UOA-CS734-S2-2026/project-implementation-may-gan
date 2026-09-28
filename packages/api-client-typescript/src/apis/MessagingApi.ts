@@ -19,6 +19,11 @@ import {
     ApiErrorToJSON,
 } from '../models/ApiError';
 import {
+    type EditMessageRequest,
+    EditMessageRequestFromJSON,
+    EditMessageRequestToJSON,
+} from '../models/EditMessageRequest';
+import {
     type Message,
     MessageFromJSON,
     MessageToJSON,
@@ -28,6 +33,37 @@ import {
     SendMessageRequestFromJSON,
     SendMessageRequestToJSON,
 } from '../models/SendMessageRequest';
+import {
+    type SetMessageReactionRequest,
+    SetMessageReactionRequestFromJSON,
+    SetMessageReactionRequestToJSON,
+} from '../models/SetMessageReactionRequest';
+
+export interface EditMessageOperationRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    messageId: string;
+    /**
+     *
+     */
+    editMessageRequest: EditMessageRequest;
+}
+
+export interface RemoveMessageReactionRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    messageId: string;
+}
 
 export interface SendMessageOperationRequest {
     /**
@@ -40,10 +76,164 @@ export interface SendMessageOperationRequest {
     sendMessageRequest: SendMessageRequest;
 }
 
+export interface SetMessageReactionOperationRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    messageId: string;
+    /**
+     *
+     */
+    setMessageReactionRequest: SetMessageReactionRequest;
+}
+
+export interface UnsendMessageRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    messageId: string;
+}
+
 /**
  *
  */
 export class MessagingApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for editMessage without sending the request
+     */
+    async editMessageRequestOpts(requestParameters: EditMessageOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling editMessage().'
+            );
+        }
+
+        if (requestParameters['messageId'] == null) {
+            throw new runtime.RequiredError(
+                'messageId',
+                'Required parameter "messageId" was null or undefined when calling editMessage().'
+            );
+        }
+
+        if (requestParameters['editMessageRequest'] == null) {
+            throw new runtime.RequiredError(
+                'editMessageRequest',
+                'Required parameter "editMessageRequest" was null or undefined when calling editMessage().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages/{messageId}`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+        urlPath = urlPath.replace('{messageId}', encodeURIComponent(String(requestParameters['messageId'])));
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: EditMessageRequestToJSON(requestParameters['editMessageRequest']),
+        };
+    }
+
+    /**
+     */
+    async editMessageRaw(requestParameters: EditMessageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Message>> {
+        const requestOptions = await this.editMessageRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MessageFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async editMessage(requestParameters: EditMessageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
+        const response = await this.editMessageRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for removeMessageReaction without sending the request
+     */
+    async removeMessageReactionRequestOpts(requestParameters: RemoveMessageReactionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling removeMessageReaction().'
+            );
+        }
+
+        if (requestParameters['messageId'] == null) {
+            throw new runtime.RequiredError(
+                'messageId',
+                'Required parameter "messageId" was null or undefined when calling removeMessageReaction().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages/{messageId}/reaction`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+        urlPath = urlPath.replace('{messageId}', encodeURIComponent(String(requestParameters['messageId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async removeMessageReactionRaw(requestParameters: RemoveMessageReactionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Message>> {
+        const requestOptions = await this.removeMessageReactionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MessageFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async removeMessageReaction(requestParameters: RemoveMessageReactionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
+        const response = await this.removeMessageReactionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for sendMessage without sending the request
@@ -103,6 +293,134 @@ export class MessagingApi extends runtime.BaseAPI {
      */
     async sendMessage(requestParameters: SendMessageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
         const response = await this.sendMessageRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for setMessageReaction without sending the request
+     */
+    async setMessageReactionRequestOpts(requestParameters: SetMessageReactionOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling setMessageReaction().'
+            );
+        }
+
+        if (requestParameters['messageId'] == null) {
+            throw new runtime.RequiredError(
+                'messageId',
+                'Required parameter "messageId" was null or undefined when calling setMessageReaction().'
+            );
+        }
+
+        if (requestParameters['setMessageReactionRequest'] == null) {
+            throw new runtime.RequiredError(
+                'setMessageReactionRequest',
+                'Required parameter "setMessageReactionRequest" was null or undefined when calling setMessageReaction().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages/{messageId}/reaction`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+        urlPath = urlPath.replace('{messageId}', encodeURIComponent(String(requestParameters['messageId'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SetMessageReactionRequestToJSON(requestParameters['setMessageReactionRequest']),
+        };
+    }
+
+    /**
+     */
+    async setMessageReactionRaw(requestParameters: SetMessageReactionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Message>> {
+        const requestOptions = await this.setMessageReactionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MessageFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async setMessageReaction(requestParameters: SetMessageReactionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
+        const response = await this.setMessageReactionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for unsendMessage without sending the request
+     */
+    async unsendMessageRequestOpts(requestParameters: UnsendMessageRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling unsendMessage().'
+            );
+        }
+
+        if (requestParameters['messageId'] == null) {
+            throw new runtime.RequiredError(
+                'messageId',
+                'Required parameter "messageId" was null or undefined when calling unsendMessage().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages/{messageId}`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+        urlPath = urlPath.replace('{messageId}', encodeURIComponent(String(requestParameters['messageId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async unsendMessageRaw(requestParameters: UnsendMessageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Message>> {
+        const requestOptions = await this.unsendMessageRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MessageFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async unsendMessage(requestParameters: UnsendMessageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
+        const response = await this.unsendMessageRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

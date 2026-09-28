@@ -45,6 +45,7 @@ part 'model/daily_post.dart';
 part 'model/daily_post_prompt.dart';
 part 'model/daily_post_tomorrow_note.dart';
 part 'model/daily_prompt_response.dart';
+part 'model/edit_message_request.dart';
 part 'model/health_response.dart';
 part 'model/media_content_type.dart';
 part 'model/media_reservation.dart';
@@ -59,6 +60,7 @@ part 'model/relationship_status.dart';
 part 'model/relationship_user_card.dart';
 part 'model/relationship_user_page.dart';
 part 'model/send_relationship_request.dart';
+part 'model/set_message_reaction_request.dart';
 part 'model/test_response.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from
