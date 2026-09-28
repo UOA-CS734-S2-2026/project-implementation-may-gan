@@ -6,7 +6,7 @@ import { useSession } from "@/lib/session/hooks";
 import { NavSearch } from "./NavSearch";
 import { Button } from "@/components/ui/core/Button";
 import { NavLink } from "./NavLink";
-import { useMessagingLive } from "@/components/messages/MessagingProvider";
+import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvider";
 
 export function Navbar() {
   const { user } = useSession();

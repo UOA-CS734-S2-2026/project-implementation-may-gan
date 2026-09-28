@@ -1,5 +1,5 @@
 import { Configuration, MessagingApi, ResponseError } from "@dayli/api-client";
-import { apiBaseUrl } from "./config";
+import { apiBaseUrl } from "@/lib/api/config";
 
 export type Reaction = "like" | "love" | "laugh" | "surprised" | "sad" | "thanks";
 

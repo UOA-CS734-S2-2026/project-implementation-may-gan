@@ -1,8 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Conversation } from "@/components/messages/Conversation";
-import { messagingApi } from "@/lib/api/messaging";
+import { Conversation } from "@/features/messaging/conversation/Conversation";
+import { messagingApi } from "@/features/messaging/shared/messaging.api";
 
 let userId = "me";
 const push = vi.fn();
@@ -10,13 +11,14 @@ let changes: Array<{ changeSequence: string; kind: string; messageId: string; me
 const live = { revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => changes, refreshUnread: vi.fn() }; 
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
-vi.mock("@/components/messages/MessagingProvider", () => ({ useMessagingLive: () => live }));
+vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => live }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
-vi.mock("@/lib/api/messaging", () => ({ messagingApi: {
+vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: {
   conversation: vi.fn(), messages: vi.fn(), message: vi.fn(), send: vi.fn(), edit: vi.fn(), unsend: vi.fn(), react: vi.fn(), removeReaction: vi.fn(), markRead: vi.fn(), resolveRequest: vi.fn(), unread: vi.fn(), inbox: vi.fn(), direct: vi.fn(),
 } }));
 
 const api = messagingApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+function render(ui: Parameters<typeof rtlRender>[0]) { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>); return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) }; }
 const message = (overrides = {}) => ({ id: "m1", conversationId: "c1", sequence: "3", senderId: "me", clientMessageId: "original-id", text: "hello", replyToMessageId: null, replyPreview: null, version: 1, createdAt: new Date().toISOString(), editedAt: null, unsentAt: null, reactions: [], ...overrides });
 const conversation = (overrides = {}) => ({ id: "c1", peer: { id: "them", name: "Ada" }, requestState: "active", latestMessage: message(), unreadCount: 1, lastMessageSequence: "3", lastChangeSequence: "3", lastReadSequence: "0", receiptSequence: "0", capabilities: { canSend: true, canResolveRequest: false }, updatedAt: new Date().toISOString(), ...overrides });
 
@@ -84,6 +86,7 @@ describe("messaging screens", () => {
 
     api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "declined", capabilities: { canSend: false, canResolveRequest: false } }) });
     view.rerender(<Conversation conversationId="declined" />); await waitFor(() => expect(screen.queryByText("Message request. Actions stay private until it is accepted.")).toBeNull());
+    await screen.findByTestId("message-m1");
     expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
 
     api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "active", capabilities: { canSend: false, canResolveRequest: false } }) });

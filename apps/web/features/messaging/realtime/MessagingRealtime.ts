@@ -1,4 +1,4 @@
-import type { RealtimeTicket } from "@/lib/api/messaging";
+import type { RealtimeTicket } from "@/features/messaging/shared/messaging.api";
 
 export interface ConversationChangedEvent {
   version: 1;

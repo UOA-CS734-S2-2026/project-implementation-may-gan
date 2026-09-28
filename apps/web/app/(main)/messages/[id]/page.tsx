@@ -1,4 +1,4 @@
-import { Conversation } from "@/components/messages/Conversation";
+import { Conversation } from "@/features/messaging/conversation/Conversation";
 
 export default async function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
