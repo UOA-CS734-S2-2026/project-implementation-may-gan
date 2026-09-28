@@ -92,7 +92,10 @@ function InboxBody() {
       </form>
 
       <div className="mb-5 flex gap-2 border-b border-foreground/10" role="tablist" aria-label="Message folders">
-        {(["inbox", "requests"] as const).map((entry) => <button key={entry} type="button" role="tab" aria-selected={folder === entry} onClick={() => chooseFolder(entry)} className={`border-b-2 px-3 py-2 font-sans text-sm capitalize ${folder === entry ? "border-foreground-accent text-foreground-accent" : "border-transparent text-foreground-secondary"}`}>{entry}{(entry === "inbox" ? unread.inboxCount : unread.requestCount) > 0 && <span className="ml-2 rounded-full bg-foreground-accent px-1.5 py-0.5 text-xs text-white">{entry === "inbox" ? unread.inboxCount : unread.requestCount}</span>}</button>)}
+        {(["inbox", "requests"] as const).map((entry) => {
+          const count = entry === "inbox" ? unread.inboxCount : unread.requestCount;
+          return <button key={entry} type="button" role="tab" aria-label={`${entry} ${count}`} aria-selected={folder === entry} onClick={() => chooseFolder(entry)} className={`border-b-2 px-3 py-2 font-sans text-sm capitalize ${folder === entry ? "border-foreground-accent text-foreground-accent" : "border-transparent text-foreground-secondary"}`}>{entry}{count > 0 && <span className="ml-2 rounded-full bg-foreground-accent px-1.5 py-0.5 text-xs text-white">{count}</span>}</button>;
+        })}
       </div>
       {status === "paused" && <p role="status" className="mb-5 rounded-2xl bg-background-accent px-4 py-3 font-sans text-sm text-foreground-secondary">{notice} Manual refresh is available when updates resume.</p>}
       {status === "ready" && items.length === 0 && <div className="border-y border-foreground/10 py-16 text-center"><p className="font-serif text-2xl">No {folder === "requests" ? "requests" : "conversations"} yet.</p></div>}
