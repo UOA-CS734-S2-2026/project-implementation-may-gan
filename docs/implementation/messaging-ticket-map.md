@@ -23,16 +23,16 @@ Issue #33 no longer requires a polling fallback and covers both clients. Issue #
 | Issue | Piece | Depends on or gate |
 | --- | --- | --- |
 | [#127](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/127) | Freeze contracts and proposed product defaults | First. Resolve defaults before dependent schema/behavior. |
-| [#128](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/128) | Replies, reactions, editing, unsending and both client controls | #127, #27, #28, #32, #47. API and each client's controls can be separate commits/review checkpoints within messaging PR 2. |
+| [#128](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/128) | Replies, reactions, editing, unsending and both client controls | #127, #27, #28, #32, #47. API and each client's controls can be separate commits/review checkpoints within the messaging stack PR. |
 | [#129](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/129) | Device registration and Worker FCM HTTP v1 delivery | #127, #26, #27, #31. Provider credentials gate real delivery, not local mocked development. |
 | [#130](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/130) | Flutter FCM/APNs lifecycle and notification navigation | #129, #32. Firebase/APNs ownership, signing, physical-device evidence gate release. |
 | [#131](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/131) | Cross-layer release verification, measured latency, rollout and operations | #128, #130, #29, #30, #31, #33, #47 |
 | [#132](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/132) | Deferred group messaging policy | Blocked on membership/history/blocking decisions; not a direct-text release dependency. |
 | [#133](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/133) | Deferred message attachments | Blocked on R2 upload owner and attachment-specific policy; not a text release dependency. |
 
-## Two-PR execution
+## Three-PR stack
 
-Use the [parallel-agent delivery plan](backend-refactor.md#two-pr-delivery-and-parallel-agent-plan). PR 1 contains the existing-backend refactor, test expansion/mobile test infrastructure, then approved Actions restoration. PR 2 contains messaging and all messaging-specific tests. The tickets above are work breakdowns inside PR 2, not a requirement for one PR per ticket. Development can proceed concurrently in isolated worktrees with agreed interfaces and file ownership; rebase messaging onto the reviewed foundation to form the stack and merge PR 1 first. No implementation orchestration starts before the user's explicit approval.
+The approved merge order is: (1) backend refactor at `cd00116`, (2) friends UI at `79bcceb`, then (3) messaging. Messaging is rebased on `feature/friends-ui`, not directly on refactor. Friends owns `0009_relationship_search`; messaging owns `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. These migrations are undeployed feature work, so no deployed migration history was edited. Generated REST clients are regenerated from the merged Hono app. The rich web and mobile messaging client branches remain independently reviewed work and are not part of this stack integration.
 
 ## Backend convention and documentation follow-up
 

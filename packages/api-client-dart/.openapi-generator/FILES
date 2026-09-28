@@ -6,6 +6,7 @@ analysis_options.yaml
 git_push.sh
 lib/api.dart
 lib/api/media_api.dart
+lib/api/messaging_api.dart
 lib/api/posting_days_api.dart
 lib/api/posts_api.dart
 lib/api/relationships_api.dart
@@ -21,7 +22,13 @@ lib/auth/oauth.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
+lib/model/conversation.dart
+lib/model/conversation_capabilities.dart
 lib/model/create_daily_post_request.dart
+lib/model/create_direct_conversation200_response.dart
+lib/model/create_direct_conversation200_response_conversation.dart
+lib/model/create_direct_conversation200_response_conversation_peer.dart
+lib/model/create_direct_conversation_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
 lib/model/create_realtime_ticket201_response.dart
@@ -31,7 +38,14 @@ lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
 lib/model/edit_message_request.dart
+lib/model/get_messaging_unread200_response.dart
 lib/model/health_response.dart
+lib/model/list_conversation_changes200_response.dart
+lib/model/list_conversation_changes200_response_items_inner.dart
+lib/model/list_conversations200_response.dart
+lib/model/list_messages200_response.dart
+lib/model/mark_conversation_read200_response.dart
+lib/model/mark_conversation_read_request.dart
 lib/model/media_content_type.dart
 lib/model/media_reservation.dart
 lib/model/media_reservation_status.dart
@@ -45,6 +59,8 @@ lib/model/relationship_state.dart
 lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart
 lib/model/relationship_user_page.dart
+lib/model/resolve_message_request_request.dart
+lib/model/send_message_request.dart
 lib/model/send_relationship_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart

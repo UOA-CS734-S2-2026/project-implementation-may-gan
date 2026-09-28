@@ -4,6 +4,7 @@
 README.md
 package.json
 src/apis/MediaApi.ts
+src/apis/MessagingApi.ts
 src/apis/PostingDaysApi.ts
 src/apis/PostsApi.ts
 src/apis/RelationshipsApi.ts
@@ -13,7 +14,13 @@ src/index.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts
+src/models/Conversation.ts
+src/models/ConversationCapabilities.ts
 src/models/CreateDailyPostRequest.ts
+src/models/CreateDirectConversation200Response.ts
+src/models/CreateDirectConversation200ResponseConversation.ts
+src/models/CreateDirectConversation200ResponseConversationPeer.ts
+src/models/CreateDirectConversationRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
 src/models/CreateRealtimeTicket201Response.ts
@@ -23,7 +30,14 @@ src/models/DailyPostPrompt.ts
 src/models/DailyPostTomorrowNote.ts
 src/models/DailyPromptResponse.ts
 src/models/EditMessageRequest.ts
+src/models/GetMessagingUnread200Response.ts
 src/models/HealthResponse.ts
+src/models/ListConversationChanges200Response.ts
+src/models/ListConversationChanges200ResponseItemsInner.ts
+src/models/ListConversations200Response.ts
+src/models/ListMessages200Response.ts
+src/models/MarkConversationRead200Response.ts
+src/models/MarkConversationReadRequest.ts
 src/models/MediaContentType.ts
 src/models/MediaReservation.ts
 src/models/MediaReservationStatus.ts
@@ -37,6 +51,8 @@ src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts
 src/models/RelationshipUserPage.ts
+src/models/ResolveMessageRequestRequest.ts
+src/models/SendMessageRequest.ts
 src/models/SendRelationshipRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts

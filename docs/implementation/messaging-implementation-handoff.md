@@ -1,8 +1,8 @@
 # Dayli messaging implementation handoff
 
-Status: approved direction, implementation not started. This document was prepared from the checked-in source and GitHub messaging issues. No runtime or deployment verification was performed during planning.
+Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. This integration regenerates REST clients from the merged Hono app. Rich web and mobile messaging client branches remain outside this stack while their independent reviews finish.
 
-Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The [backend refactor](backend-refactor.md) defines the two-PR parallel delivery plan and shared-file ownership. PR 1 contains refactor, test expansion, and approved CI restoration. PR 2 contains messaging and its tests. Develop in separate worktrees from a recorded shared base, then rebase messaging onto the reviewed refactor branch to form the stack. PR 1 merges first. Freeze auth/registration/locking/test interfaces before parallel implementation; coordinate shared integration files rather than introducing competing helpers. The user must explicitly approve orchestration before either implementation agent starts.
+Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The three stack layers share reviewed interfaces: refactor first, friends second, messaging third. Friends owns `0009_relationship_search`; messaging follows with undeployed `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. Do not modify deployed migration history. Freeze auth, registration, locking, and test interfaces before adding work from independently reviewed client branches.
 
 ## Goal and scope
 
@@ -36,7 +36,7 @@ This is not end-to-end encrypted messaging. TLS and provider encryption at rest 
 | `apps/api/src/features/auth/better-auth.ts`, `apps/api/src/lib/session.ts` | Better Auth identity, secure browser cookies, native bearer sessions. Socket auth additionally needs session ID and expiry, not only user ID. |
 | `apps/api/src/lib/hyperdrive.ts`, `packages/db/src/index.ts` | Invocation-scoped postgres.js/Drizzle clients, disposal, transactions. Hyperdrive cache must remain disabled. |
 | `packages/db/src/schema/{index,relationships,users}.ts` | Existing schema exports. No messaging schema. |
-| `packages/db/migrations/` | Additive controlled migrations; journal reached `0008_overrated_ink` at investigation. Generate the next migration, never assume its number stays available. |
+| `packages/db/migrations/` | Additive controlled migrations. This stack orders friends `0009_relationship_search`, messaging `0010_messaging_foundation`, then encrypted push tokens in `0011_encrypt_push_device_tokens`. |
 | `packages/contracts/src/common/` | Shared IDs, timestamps, errors, pagination. Feature contracts currently live beside Hono routes, not in a central feature-contract directory. |
 | `scripts/generate-openapi.ts` | Uses registered Hono routes to produce `packages/contracts/openapi.json`. |
 | `packages/api-client-typescript/`, `packages/api-client-dart/` | Generated REST clients. Never hand-edit generated models. Dart currently uses the generated HTTP client, not Dio. |
