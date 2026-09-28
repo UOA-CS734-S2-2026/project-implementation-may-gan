@@ -22,7 +22,7 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
   const now = input.now ?? (() => new Date());
   let accessToken: { value: string; expiresAt: number } | undefined;
 
-  async function oauthToken(): Promise<string> {
+  async function oauthToken(signal?: AbortSignal): Promise<string> {
     if (accessToken && accessToken.expiresAt > now().getTime() + 30_000) return accessToken.value;
     const key = await importPKCS8(input.serviceAccount.privateKey, "RS256");
     const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/firebase.messaging" })
@@ -35,7 +35,7 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
       .sign(key);
     const response = await fetcher("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }), signal,
     });
     if (!response.ok) throw new Error("FCM OAuth token request failed.");
     const body = await response.json() as { access_token?: unknown; expires_in?: unknown };
@@ -45,12 +45,13 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
   }
 
   return {
-    async send(notification: FcmNotificationInput): Promise<FcmResult> {
+    async send(notification: FcmNotificationInput, options?: { signal: AbortSignal }): Promise<FcmResult> {
       try {
+        if (options?.signal.aborted) return { ok: false, retryable: true, category: "transient" };
         const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
           method: "POST",
-          headers: { authorization: `Bearer ${await oauthToken()}`, "content-type": "application/json" },
-          body: JSON.stringify(buildFcmPayload(notification)),
+          headers: { authorization: `Bearer ${await oauthToken(options?.signal)}`, "content-type": "application/json" },
+          body: JSON.stringify(buildFcmPayload(notification)), signal: options?.signal,
         });
         if (response.ok) return { ok: true };
         if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };

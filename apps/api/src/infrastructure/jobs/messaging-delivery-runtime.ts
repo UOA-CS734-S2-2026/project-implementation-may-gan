@@ -19,15 +19,20 @@ export interface MessagingDeliveryBindings {
 /** Builds independent realtime and push handlers. Missing FCM config never blocks realtime jobs. */
 export function createMessagingDeliveryDispatcher(env: MessagingDeliveryBindings) {
   const realtime = createDurableObjectRealtimePublisher(env.USER_REALTIME, env.HYPERDRIVE);
-  const push = async (job: import("./outbox-store").OutboxJob) => {
-    const protector = await createWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY);
-    if (!protector || !env.FCM_SERVICE_ACCOUNT_JSON) return { ok: true as const };
-    return configuredPushHandler(env, protector)(job);
-  };
+  // One dispatcher owns one FCM sender, preserving its short-lived OAuth cache
+  // across the bounded batch rather than minting a JWT for every device.
+  const pushHandler = configuredPushHandlerOnce(env);
+  const push = async (job: import("./outbox-store").OutboxJob, options: { signal: AbortSignal }) => (await pushHandler)(job, options);
   return createOutboxDispatcher({
     store: createHyperdriveOutboxStore(env.HYPERDRIVE),
     handlers: { realtime: realtime.deliver, push },
   });
+}
+
+async function configuredPushHandlerOnce(env: MessagingDeliveryBindings) {
+  const protector = await createWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY);
+  if (!protector || !env.FCM_SERVICE_ACCOUNT_JSON) return async () => ({ ok: true as const });
+  return configuredPushHandler(env, protector);
 }
 
 function configuredPushHandler(env: MessagingDeliveryBindings, protector: NonNullable<Awaited<ReturnType<typeof createWorkerPushTokenProtector>>>) {
