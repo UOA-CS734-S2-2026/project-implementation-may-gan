@@ -1,0 +1,30 @@
+import type { DeliveryResult } from "../jobs/dispatch-outbox";
+import type { OutboxJob } from "../jobs/outbox-store";
+
+export interface PushDestination {
+  token: string;
+  /** Current registration policy has already checked owner, active session, opt-in and block state. */
+  valid: boolean;
+}
+
+export interface PushDestinationResolver {
+  resolve(job: OutboxJob): Promise<PushDestination | null>;
+  invalidate(registrationId: string): Promise<void>;
+}
+
+export interface GenericPushSender {
+  send(input: { token: string; eventId: string; conversationId: string }): Promise<DeliveryResult>;
+}
+
+/** Resolves a current device at dispatch time, so stale registrations cannot leak alerts. */
+export function createPushOutboxHandler(input: { destinations: PushDestinationResolver; sender: GenericPushSender }) {
+  return async (job: OutboxJob): Promise<DeliveryResult> => {
+    if (job.channel !== "push" || !job.deviceRegistrationId) return { ok: false, retryable: false, category: "provider_rejected" };
+    const destination = await input.destinations.resolve(job);
+    // Suppression is a successful no-op, not a retry that keeps obsolete alerts alive.
+    if (!destination || !destination.valid) return { ok: true };
+    const result = await input.sender.send({ token: destination.token, eventId: job.eventId, conversationId: job.conversationId });
+    if (!result.ok && !result.retryable && result.category === "provider_rejected") await input.destinations.invalidate(job.deviceRegistrationId);
+    return result;
+  };
+}
