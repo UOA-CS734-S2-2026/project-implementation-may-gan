@@ -33,7 +33,7 @@ The protected `run-database-migrations.yml` and `staging-hyperdrive.yml` workflo
 
 The staging owner reports verified restricted roles, migrations `0000` through `0007`, a cache-disabled `app` Hyperdrive, and a deployed API Worker. The manual private Hyperdrive proof passed at `1fb6388` and uploaded sanitized evidence for `select 1 as ok`, transactions, constraint classes, restricted-role authorization, cleanup, and fresh-invocation visibility. The staging web Worker has an Active HTTPS domain, and a manual browser email/password and sign-out flow worked. Google, Resend, and native auth remain untested; no production service is deployed. `staging-hyperdrive.yml` runs only on manual dispatch, never before merge or after a push to `main`. Local verification remains the default code check, with the manual staging Hyperdrive proof available for reviewed runs. Setup, access expectations, required environment values, and the future command are in [`apps/api/README.md`](../../apps/api/README.md). [Environments](environments.md) covers local HTTPS auth plus staging and production boundaries.
 
-Use the [implementation reference](implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
+Use the [implementation reference](../implementation/implementation-reference.md) to turn mechanisms and remaining setup decisions into testable issues.
 
 ## Release gates
 

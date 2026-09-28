@@ -2,16 +2,16 @@
 
 | Layer | Choice |
 | --- | --- |
-| Mobile | Flutter, Riverpod, GoRouter, Dio. |
-| Web | Next.js, React, Tailwind, TanStack Query. |
+| Mobile | Flutter, GoRouter, controller-based state, generated HTTP client. Messaging follows these existing patterns. |
+| Web | Next.js, React, Tailwind. TanStack Query is planned for messaging, not currently installed. |
 | API | Hono on Cloudflare Workers, Zod, REST/OpenAPI. |
-| Contracts | Generated Dart/Dio client and TypeScript models. |
+| Contracts | Hono OpenAPI, generated Dart HTTP and TypeScript fetch clients; a small handwritten socket decoder on Flutter. |
 | Auth | Better Auth, browser cookies, native bearer sessions. |
 | Database | Neon PostgreSQL 18, Drizzle, Hyperdrive connection pooling for runtime reads/writes. |
-| Realtime | Per-user Durable Objects with hibernating WebSockets. |
+| Realtime | Planned per-user Durable Objects with hibernating WebSockets in `apps/api`; small change events followed by REST fetches, no periodic polling. |
 | Media | Private Cloudflare R2. |
-| Jobs | PostgreSQL outbox and Worker scheduled handler. |
-| Push | FCM/APNs. |
+| Jobs | Planned PostgreSQL outbox, immediate post-commit dispatch, and Worker scheduled retry handler. |
+| Push | Planned FCM HTTP v1 for Android and iOS through APNs; credentials and device evidence gate release. |
 | Local data | Protected Drift/SQLite drafts; Keychain/Keystore credentials. |
 | Abuse controls | Workers rate limiting plus transactional database quotas. |
 | Tooling | Wrangler, pnpm workspaces, Dart tooling, GitHub Actions. |
@@ -60,6 +60,6 @@ To switch off, use the unchanged Next scripts. To remove the trial, remove the m
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. Neon staging and production ownership/secrets remain administrator-managed. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 
-Use the [implementation reference](implementation-reference.md) for runtime checks and deployment pitfalls.
+Use the [implementation reference](../implementation/implementation-reference.md) for runtime checks and deployment pitfalls. The [messaging handoff](../implementation/messaging-implementation-handoff.md) describes package placement: existing Cloudflare runtime tooling stays in `apps/api`, no new Cloudflare workspace package is needed, and messaging state remains in PostgreSQL.
 
 [Hono deployment](https://hono.dev/docs/getting-started/cloudflare-workers) · [Wrangler](https://developers.cloudflare.com/workers/wrangler/) · [Next.js hosting](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/) · [Scaling and costs](scalability.md)

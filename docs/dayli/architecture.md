@@ -1,6 +1,8 @@
 # Architecture
 
-This document describes code that exists in this repository. The supported runtime is local development. Staging and production are not deployed.
+The current-runtime sections describe checked-in code. Local development is supported; separate environment records document the limited staging proofs. Production is not deployed. The proposed messaging section is a plan, not implemented infrastructure.
+
+The proposed organization and engineering conventions are documented separately in [Backend architecture](../backend-architecture.md). The [refactor plan](../implementation/backend-refactor.md) changes structure without changing existing behavior.
 
 ## Local runtime
 
@@ -56,6 +58,30 @@ The web post form calls `POST /api/v1/posts` with an idempotency key. It submits
 Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day through the generated Dart client, but `main.dart` supplies `UnavailablePostSubmitter`. Flutter therefore does not send `POST /api/v1/posts`; a submission reports unavailable and retains the draft.
 
 The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
+
+## Proposed messaging architecture
+
+Messaging is not implemented yet. Both clients currently show placeholders. The [implementation handoff](../implementation/messaging-implementation-handoff.md) specifies the file tree, Hono API, database constraints, tests, and ticket-sized work.
+
+```text
+Web / Flutter -> Hono REST -> PostgreSQL message + change + outbox transaction
+                                  |
+                             after commit
+                                  |
+                         immediate outbox dispatch
+                           /                  \
+             per-user Durable Object        FCM -> Android / APNs -> iOS
+                       |
+             hibernating WebSocket
+                       |
+             client fetches authorized REST state
+```
+
+Use the existing `apps/api` Worker for Hono routes, the exported Durable Object class, and scheduled outbox repair. No separate Cloudflare workspace package or realtime deployment is planned. Add bindings and Durable Object migrations to API Wrangler configuration; add PostgreSQL migrations under `packages/db/migrations`.
+
+WebSockets deliver small notifications, not message bodies. REST handles commands, history, and recovery. Immediate dispatch supplies healthy live updates; scheduled retries recover failures. Clients reconcile after initial load, socket events, reconnect, foreground resume, or manual refresh. Do not add periodic polling. Mobile push requires separately configured FCM/APNs; browser push is deferred.
+
+Text messaging does not depend on R2. Attachments remain blocked on its owner, and groups remain blocked on policy. Details and unconfirmed defaults are explicit in the handoff.
 
 ## Repository components
 

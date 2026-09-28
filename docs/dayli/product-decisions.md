@@ -18,6 +18,14 @@ The submitted tomorrow note is an immutable author-only note stored outside ordi
 
 Blocking immediately prevents new messages, read receipts, typing or presence events, profile access, and journal access. Existing direct-message history remains readable by both users. Neither user can resume the conversation until the block is removed.
 
+### Messaging scope clarification
+
+The messaging planning conversation selected text direct messaging on web and Flutter, with inboxes, unread badges, read receipts, replies, reactions, editing, and unsending. Friends may start conversations immediately; non-friends may send one initial message until the recipient accepts. Authors may edit their messages within 15 minutes and unsend them later. Unsent messages retain a tombstone without the body; previously seen text and delivered alerts cannot be recalled.
+
+Foreground updates use hibernating WebSockets with small change notifications and authorized REST fetches, not periodic polling. Mobile push through FCM/APNs is in scope, with configuration and physical-device verification as release gates. Image/video attachments remain blocked on the separate R2 upload owner. Group chats are deferred until group membership and blocking rules are agreed.
+
+The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including edit/unsend behavior during a block, request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented or override the existing block rule without review.
+
 ## Shared links
 
 Shared links do not create account grants.
