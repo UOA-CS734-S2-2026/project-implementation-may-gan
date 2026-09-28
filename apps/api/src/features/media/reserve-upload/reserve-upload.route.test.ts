@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
+import { createBetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { MAX_ATTACHMENT_BYTES, MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createUnusedR2Reader } from "../../../infrastructure/media/r2.fake";
 import { createFakeMediaReservationRepository } from "../shared/media-reservation.repository.fake";
@@ -113,7 +113,31 @@ describe("POST /api/v1/media-reservations", () => {
     const { app } = createTestApp();
     const response = await createReservation(app, "not-a-real-token");
     expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHENTICATED" } });
+  });
+
+  it("returns a private 503 when shared session resolution is unavailable", async () => {
+    const repository = createFakeRepository();
+    const app = createApp({
+      media: {
+        runtime: createFakeMediaRuntime(repository),
+        resolveSession: async () => { throw new Error("Better Auth storage unavailable"); },
+      },
+    });
+
+    const response = await app.request("/api/v1/media-reservations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contentType: "image/jpeg", byteSize: 1024 }),
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(body).toContain("SERVICE_UNAVAILABLE");
+    expect(body).not.toContain("storage unavailable");
+    expect(repository.records).toHaveLength(0);
   });
 
   it("rejects an oversized declared byte size and a disallowed content type", async () => {
