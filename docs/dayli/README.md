@@ -12,13 +12,17 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
-- [Architecture](architecture.md): components and request flows.
+- [Architecture](architecture.md): current components and request flows.
+- [Backend architecture](../backend-architecture.md): agreed action slices, file naming, layers, authentication middleware, and testing boundaries.
+- [Backend refactor implementation](../implementation/backend-refactor.md): behavior-preserving migration sequence and acceptance checks.
+- [Messaging implementation handoff](../implementation/messaging-implementation-handoff.md): proposed Hono APIs, database design, WebSockets, mobile push, file responsibilities, and validation. Not implemented yet.
+- [Messaging ticket map](../implementation/messaging-ticket-map.md): existing issue updates, new pieces, dependencies, and blocked group/media follow-ups.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
 - [Authentication compatibility](authentication-compatibility.md): Better Auth Worker and Flutter proof, plus deployment prerequisites.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Database migrations](database-migrations.md): Neon PostgreSQL roles, additive migration commands, and release runbook.
-- [Implementation reference](implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
+- [Implementation reference](../implementation/implementation-reference.md): detailed mechanisms, pitfalls, and readiness checklist.
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.
 - [API client generation](client-generation.md): regenerate and verify the TypeScript and Dart clients.
