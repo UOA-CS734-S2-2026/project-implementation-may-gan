@@ -60,6 +60,7 @@ class FakeFriendsClient implements FriendsClient {
 
 class MemoryTokenStore implements SessionTokenStore {
   String? value;
+  String? pendingRevocation;
 
   @override
   Future<void> clear() async => value = null;
@@ -69,6 +70,20 @@ class MemoryTokenStore implements SessionTokenStore {
 
   @override
   Future<void> write(String token) async => value = token;
+
+  @override
+  Future<String?> readPendingRevocation() async => pendingRevocation;
+
+  @override
+  Future<void> clearPendingRevocation() async => pendingRevocation = null;
+
+  @override
+  Future<void> quarantineActiveToken() async {
+    final token = value;
+    if (token == null) return;
+    pendingRevocation = token;
+    value = null;
+  }
 }
 
 class MemoryUserCache implements SessionUserCache {

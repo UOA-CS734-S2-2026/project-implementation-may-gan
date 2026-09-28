@@ -5,11 +5,18 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 const _sessionTokenKey = 'dayli.auth.session-token';
+const _pendingRevocationTokenKey = 'dayli.auth.pending-revocation-token';
 
 abstract interface class SessionTokenStore {
   Future<void> clear();
   Future<String?> read();
   Future<void> write(String token);
+
+  /// A protected old bearer that may only be used for explicit revocation.
+  /// Normal API authentication must treat its presence as signed out.
+  Future<String?> readPendingRevocation();
+  Future<void> clearPendingRevocation();
+  Future<void> quarantineActiveToken();
 }
 
 class ProtectedSessionTokenStore implements SessionTokenStore {
@@ -34,6 +41,24 @@ class ProtectedSessionTokenStore implements SessionTokenStore {
   @override
   Future<void> write(String token) =>
       _storage.write(key: _sessionTokenKey, value: token);
+
+  @override
+  Future<String?> readPendingRevocation() =>
+      _storage.read(key: _pendingRevocationTokenKey);
+
+  @override
+  Future<void> clearPendingRevocation() =>
+      _storage.delete(key: _pendingRevocationTokenKey);
+
+  @override
+  Future<void> quarantineActiveToken() async {
+    final token = await read();
+    if (token == null) return;
+    // Persist first. If the process dies before deleting the active key, all
+    // normal auth readers still gate on this marker and expose no bearer.
+    await _storage.write(key: _pendingRevocationTokenKey, value: token);
+    await clear();
+  }
 }
 
 abstract interface class GoogleIdTokenProvider {
@@ -105,6 +130,7 @@ class BetterAuthNativeSession {
   late final SessionTokenStore _tokenStore;
 
   Future<void> signIn({required String email, required String password}) async {
+    await _ensureNoPendingRevocation();
     final response = await _client.post(
       _uri('/api/auth/sign-in/email'),
       headers: const {'content-type': 'application/json'},
@@ -118,6 +144,7 @@ class BetterAuthNativeSession {
     required String email,
     required String password,
   }) async {
+    await _ensureNoPendingRevocation();
     final response = await _client.post(
       _uri('/api/auth/sign-up/email'),
       headers: const {'content-type': 'application/json'},
@@ -127,6 +154,7 @@ class BetterAuthNativeSession {
   }
 
   Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+    await _ensureNoPendingRevocation();
     final idToken = await provider.authenticate();
     final response = await _client.post(
       _uri('/api/auth/sign-in/social'),
@@ -146,8 +174,8 @@ class BetterAuthNativeSession {
     required GoogleIdTokenProvider provider,
     required String password,
   }) async {
-    final bearerToken = await _tokenStore.read();
-    if (bearerToken == null) {
+    final token = await bearerToken();
+    if (token == null) {
       throw const AuthenticationFailure('google-link', 401);
     }
     final idToken = await provider.authenticate();
@@ -155,7 +183,7 @@ class BetterAuthNativeSession {
       _uri('/api/auth/link-social'),
       headers: {
         'content-type': 'application/json',
-        'authorization': 'Bearer $bearerToken',
+        'authorization': 'Bearer $token',
       },
       body: jsonEncode({
         'provider': 'google',
@@ -169,7 +197,7 @@ class BetterAuthNativeSession {
   }
 
   Future<http.Response> getSession() async {
-    final token = await _tokenStore.read();
+    final token = await bearerToken();
     if (token == null) {
       throw const AuthenticationFailure('get-session', 401);
     }
@@ -187,7 +215,7 @@ class BetterAuthNativeSession {
   /// The signed-in user, or null when there is no valid session. A missing,
   /// expired, or revoked session clears the stored token.
   Future<SessionUser?> currentUser() async {
-    if (await _tokenStore.read() == null) return null;
+    if (await bearerToken() == null) return null;
     final response = await getSession();
     if (response.statusCode == 401) return null;
     if (response.statusCode >= 400) {
@@ -206,11 +234,29 @@ class BetterAuthNativeSession {
     );
   }
 
-  /// The stored bearer token for application API calls, if any.
-  Future<String?> bearerToken() => _tokenStore.read();
+  /// The active bearer for application API calls, if any. A quarantined old
+  /// token is deliberately never exposed through this method.
+  Future<String?> bearerToken() async {
+    if (await _tokenStore.readPendingRevocation() != null) return null;
+    return _tokenStore.read();
+  }
+
+  /// Revokes a quarantined old session without exposing it to normal clients.
+  Future<void> revokePendingSession() async {
+    final token = await _tokenStore.readPendingRevocation();
+    if (token == null) return;
+    final response = await _client.post(
+      _uri('/api/auth/sign-out'),
+      headers: {'authorization': 'Bearer $token'},
+    );
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('sign-out', response.statusCode);
+    }
+    await _tokenStore.clearPendingRevocation();
+  }
 
   Future<void> signOut() async {
-    final token = await _tokenStore.read();
+    final token = await bearerToken();
     if (token == null) {
       return;
     }
@@ -227,10 +273,19 @@ class BetterAuthNativeSession {
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
+  Future<void> _ensureNoPendingRevocation() async {
+    if (await _tokenStore.readPendingRevocation() != null) {
+      throw const AuthenticationFailure('pending-revocation', 409);
+    }
+  }
+
   Future<void> _storeNativeToken(
     http.Response response,
     String operation,
   ) async {
+    if (await _tokenStore.readPendingRevocation() != null) {
+      throw const AuthenticationFailure('pending-revocation', 409);
+    }
     if (response.statusCode >= 400) {
       throw AuthenticationFailure(operation, response.statusCode);
     }

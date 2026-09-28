@@ -106,6 +106,13 @@ class SessionController extends ChangeNotifier {
   /// Restores the stored session. When the network is unreachable the cached
   /// identity is used so the author can keep drafting offline.
   Future<void> restore() async {
+    // A crash-safe revocation quarantine must never be used for ordinary
+    // get-session, REST, socket, or push startup on a fresh process.
+    if (await _tokenStore.readPendingRevocation() != null) {
+      _invalidateSessionStartup();
+      await _clearLocalSessionState(clearToken: false);
+      return;
+    }
     final SessionUser? user;
     try {
       user = await _session.currentUser();
@@ -176,14 +183,17 @@ class SessionController extends ChangeNotifier {
     try {
       await onPrivateDataClear?.call();
     } catch (_) {}
+    var revokeFailed = false;
     try {
       await _session.signOut();
     } catch (_) {
-      // Local credentials are removed below even when offline revocation does
-      // not receive an acknowledgement.
+      revokeFailed = true;
+      // Preserve this bearer only in quarantine so a later credential change
+      // must retry its revoke before it can authenticate anyone else.
+      await _tokenStore.quarantineActiveToken();
     }
     if (userId != null) await _drafts.clear(userId);
-    await _signedOutLocally(clearPrivateData: false);
+    await _signedOutLocally(clearPrivateData: false, clearToken: !revokeFailed);
   }
 
   /// Called when the API rejects the stored session.
@@ -193,36 +203,51 @@ class SessionController extends ChangeNotifier {
     // Fence existing startup before old-bearer cleanup. The hook can await
     // ticket, Firebase, or provider work and must not resume for the new user.
     _invalidateSessionStartup();
+    final pendingRevocation = await _tokenStore.readPendingRevocation();
     final hasOldToken = await _tokenStore.read() != null;
     Object? failure;
-    Object? revokeFailure;
     StackTrace? stackTrace;
-    if (hasOldToken || _user != null) {
+
+    if (pendingRevocation != null || hasOldToken || _user != null) {
       try {
         await onBeforeSessionReplacement?.call();
       } catch (error, trace) {
         failure = error;
         stackTrace = trace;
       }
-      if (hasOldToken) {
-        // Revoke under the old bearer before any sign-in endpoint can store a
-        // replacement token. A tardy old push registration is then rejected by
-        // the backend's live-session dispatch check.
-        try {
-          await _session.signOut();
-        } catch (error, trace) {
-          revokeFailure = error;
-          failure ??= error;
-          stackTrace ??= trace;
-        }
+    }
+    if (pendingRevocation != null) {
+      // This is the sole code path that may use a quarantined bearer.
+      try {
+        await _session.revokePendingSession();
+        // Remove a stale active copy left by a crash between quarantining and
+        // deleting the normal token key.
+        await _tokenStore.clear();
+      } catch (error, trace) {
+        failure ??= error;
+        stackTrace ??= trace;
+      }
+    } else if (hasOldToken) {
+      // Revoke under the old bearer before any sign-in endpoint can store a
+      // replacement token. A tardy old push registration is then rejected by
+      // the backend's live-session dispatch check.
+      try {
+        await _session.signOut();
+      } catch (error, trace) {
+        failure ??= error;
+        stackTrace ??= trace;
+        // Persist the quarantine before removing active credentials. Normal
+        // auth readers gate on its presence even if a crash interrupts clear.
+        await _tokenStore.quarantineActiveToken();
       }
     }
     if (failure != null) {
-      // Do not layer another account over a session whose revoke was not
-      // acknowledged. Retain only that old bearer in protected storage so a
-      // later replacement can retry revocation. The app itself is signed out
-      // and its user/cache state is cleared in the meantime.
-      await _clearLocalSessionState(clearToken: revokeFailure == null);
+      // The app remains locally signed out until explicit revocation succeeds.
+      // The protected quarantine is not an application bearer and will be
+      // retried before any later credential replacement.
+      await _clearLocalSessionState(
+        clearToken: pendingRevocation == null && !hasOldToken,
+      );
       Error.throwWithStackTrace(failure, stackTrace ?? StackTrace.current);
     }
   }
@@ -258,7 +283,10 @@ class SessionController extends ChangeNotifier {
     if (generation != _sessionGeneration) return;
   }
 
-  Future<void> _signedOutLocally({bool clearPrivateData = true}) async {
+  Future<void> _signedOutLocally({
+    bool clearPrivateData = true,
+    bool clearToken = true,
+  }) async {
     _invalidateSessionStartup();
     if (clearPrivateData) {
       try {
@@ -267,7 +295,7 @@ class SessionController extends ChangeNotifier {
         // Protected state still has to be removed after cleanup failures.
       }
     }
-    await _clearLocalSessionState();
+    await _clearLocalSessionState(clearToken: clearToken);
   }
 
   Future<void> _clearLocalSessionState({bool clearToken = true}) async {
