@@ -1,0 +1,6 @@
+reason: This prefix-search index is applied with the small additive migration before the new endpoint is deployed. Concurrent creation cannot run inside the migration transaction.
+affected_data_and_clients: Adds an empty actor-owned discovery quota table and a username index. Existing accounts and relationship rows are not rewritten.
+rollout_sequence: Apply through the protected migration process before deploying the friends discovery routes.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+forward_fix_plan: Add a new reviewed forward migration for corrections and never edit this migration after release.
+reviewer: Required database CODEOWNER review before migration execution.

@@ -4,6 +4,7 @@
 -- squawk-ignore-file constraint-missing-not-valid
 -- squawk-ignore-file adding-foreign-key-constraint
 -- squawk-ignore-file require-concurrent-index-creation
+-- squawk-ignore-file prefer-bigint-over-int
 
 CREATE TABLE "relationship_search_quota" (
   "actor_id" text PRIMARY KEY NOT NULL REFERENCES "public"."user"("id") ON DELETE cascade,
