@@ -4,10 +4,11 @@ import type { MessagingMessage, Reaction } from "@/lib/api/messaging";
 
 const reactionLabels: Record<Reaction, string> = { like: "Like", love: "Love", laugh: "Laugh", surprised: "Surprised", sad: "Sad", thanks: "Thanks" };
 
-export function MessageBubble({ message, own, canInteract, canEdit, receiptSequence, onReply, onEdit, onUnsend, onReaction }: {
+export function MessageBubble({ message, own, canInteract, canUnsend, canEdit, receiptSequence, onReply, onEdit, onUnsend, onReaction }: {
   message: MessagingMessage;
   own: boolean;
   canInteract: boolean;
+  canUnsend: boolean;
   canEdit: boolean;
   receiptSequence: string;
   onReply(message: MessagingMessage): void;
@@ -29,7 +30,7 @@ export function MessageBubble({ message, own, canInteract, canEdit, receiptSeque
       <div className="mt-3 flex gap-3 text-xs opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         {!unsent && canInteract && <button type="button" onClick={() => onReply(message)} className="underline underline-offset-2">reply</button>}
         {editOpen && canInteract && <button type="button" onClick={() => onEdit(message)} className="underline underline-offset-2">edit</button>}
-        {own && !unsent && canInteract && <button type="button" onClick={() => onUnsend(message)} className="underline underline-offset-2">unsend</button>}
+        {own && !unsent && canUnsend && <button type="button" onClick={() => onUnsend(message)} className="underline underline-offset-2">unsend</button>}
       </div>
     </article>
   );

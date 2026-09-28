@@ -6,7 +6,8 @@ import { messagingApi } from "@/lib/api/messaging";
 
 let userId = "me";
 const push = vi.fn();
-const live = { revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread: vi.fn() };
+let changes: Array<{ changeSequence: string; kind: string; messageId: string; memberId: string | null }> = [];
+const live = { revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => changes, refreshUnread: vi.fn() }; 
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
 vi.mock("@/components/messages/MessagingProvider", () => ({ useMessagingLive: () => live }));
@@ -20,7 +21,7 @@ const message = (overrides = {}) => ({ id: "m1", conversationId: "c1", sequence:
 const conversation = (overrides = {}) => ({ id: "c1", peer: { id: "them", name: "Ada" }, requestState: "active", latestMessage: message(), unreadCount: 1, lastMessageSequence: "3", lastChangeSequence: "3", lastReadSequence: "0", receiptSequence: "0", capabilities: { canSend: true, canResolveRequest: false }, updatedAt: new Date().toISOString(), ...overrides });
 
 beforeEach(() => {
-  vi.clearAllMocks(); userId = "me";
+  vi.clearAllMocks(); userId = "me"; changes = []; live.revision = 0;
   api.conversation.mockResolvedValue({ ok: true, value: conversation() });
   api.messages.mockResolvedValue({ ok: true, value: { items: [message(), message({ id: "m0", sequence: "2", senderId: "them", text: "parent" })], nextCursor: "1", hasMore: true } });
   api.message.mockResolvedValue({ ok: true, value: message() });
@@ -73,6 +74,73 @@ describe("messaging screens", () => {
     expect(api.resolveRequest).toHaveBeenCalledWith("c1", "accept");
   });
 
+  it("keeps sender unsend available for pending and declined initial requests, but not blocked active threads", async () => {
+    const view = render(<Conversation conversationId="c1" />); await screen.findByText("hello");
+    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+
+    api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "pending", capabilities: { canSend: false, canResolveRequest: false } }) });
+    view.rerender(<Conversation conversationId="pending" />); await screen.findByText("Message request. Actions stay private until it is accepted.");
+    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+
+    api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "declined", capabilities: { canSend: false, canResolveRequest: false } }) });
+    view.rerender(<Conversation conversationId="declined" />); await waitFor(() => expect(screen.queryByText("Message request. Actions stay private until it is accepted.")).toBeNull());
+    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+
+    api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "active", capabilities: { canSend: false, canResolveRequest: false } }) });
+    view.rerender(<Conversation conversationId="blocked" />); await screen.findByText("New actions are unavailable in this conversation.");
+    expect(within(screen.getByTestId("message-m1")).queryByRole("button", { name: "unsend" })).toBeNull();
+  });
+
+  it("reconciles parent edits and tombstones into older loaded reply previews", async () => {
+    const parent = message({ id: "parent", sequence: "1", senderId: "them", text: "private parent" });
+    const child = message({ id: "child", sequence: "2", senderId: "me", text: "reply", replyToMessageId: "parent", replyPreview: { id: "parent", senderId: "them", text: "private parent", unsentAt: null } });
+    api.messages.mockResolvedValue({ ok: true, value: { items: [parent, child], nextCursor: "0", hasMore: false } });
+    const view = render(<Conversation conversationId="c1" />); await screen.findByText("private parent");
+
+    changes = [{ changeSequence: "4", kind: "message.updated", messageId: "parent", memberId: null }]; live.revision = 1;
+    api.message.mockResolvedValueOnce({ ok: true, value: { ...parent, text: "edited parent", editedAt: new Date().toISOString(), version: 2 } });
+    view.rerender(<Conversation conversationId="c1" />);
+    expect(await screen.findByText("Replying to: edited parent")).toBeTruthy();
+    expect(screen.queryByText("private parent")).toBeNull();
+
+    changes = [...changes, { changeSequence: "5", kind: "message.unsent", messageId: "parent", memberId: null }]; live.revision = 2;
+    api.message.mockResolvedValueOnce({ ok: true, value: { ...parent, text: null, unsentAt: new Date().toISOString(), version: 3 } });
+    view.rerender(<Conversation conversationId="c1" />);
+    await waitFor(() => expect(screen.getAllByText("This message was unsent.").length).toBeGreaterThanOrEqual(1));
+    expect(screen.queryByText("private parent")).toBeNull();
+    expect(screen.queryByText("edited parent")).toBeNull();
+  });
+
+  it("preserves the oldest loaded cursor while live reconciliation refreshes the latest page", async () => {
+    api.messages.mockImplementation(async (_conversationId: string, beforeSequence?: string) => {
+      if (beforeSequence === "3") return { ok: true, value: { items: [message({ id: "m3", sequence: "3" })], nextCursor: "2", hasMore: true } };
+      if (beforeSequence === "2") return { ok: true, value: { items: [message({ id: "m2", sequence: "2" })], nextCursor: "1", hasMore: true } };
+      return { ok: true, value: { items: [message({ id: "m4", sequence: "4" })], nextCursor: "3", hasMore: true } };
+    });
+    const view = render(<Conversation conversationId="c1" />); await screen.findByTestId("message-m4");
+    await userEvent.setup().click(screen.getByRole("button", { name: "load older messages" }));
+    await waitFor(() => expect(api.messages).toHaveBeenLastCalledWith("c1", "3"));
+    changes = [{ changeSequence: "4", kind: "message.updated", messageId: "m4", memberId: null }]; live.revision = 1;
+    api.message.mockResolvedValueOnce({ ok: true, value: message({ id: "m4", sequence: "4", version: 2, text: "newest edit" }) });
+    view.rerender(<Conversation conversationId="c1" />); await waitFor(() => expect(api.message).toHaveBeenCalledWith("c1", "m4"));
+    await userEvent.setup().click(screen.getByRole("button", { name: "load older messages" }));
+    await waitFor(() => expect(api.messages).toHaveBeenLastCalledWith("c1", "2"));
+  });
+
+  it("does not display a late initial response after thread navigation or account switch", async () => {
+    let resolveOldConversation: ((value: unknown) => void) | undefined;
+    let resolveOldPage: ((value: unknown) => void) | undefined;
+    api.conversation.mockImplementation((id: string) => id === "first" ? new Promise((resolve) => { resolveOldConversation = resolve; }) : Promise.resolve({ ok: true, value: conversation({ id, peer: { id: "new-peer", name: userId === "other" ? "Bob" : "Ada" } }) }));
+    api.messages.mockImplementation((id: string) => id === "first" ? new Promise((resolve) => { resolveOldPage = resolve; }) : Promise.resolve({ ok: true, value: { items: [message({ id: `new-${userId}`, conversationId: id, text: userId === "other" ? "Bob thread" : "Ada thread" })], nextCursor: null, hasMore: false } }));
+    const view = render(<Conversation conversationId="first" />);
+    await Promise.resolve();
+    view.rerender(<Conversation conversationId="second" />); await screen.findByText("Ada thread");
+    userId = "other"; view.rerender(<Conversation conversationId="second" />); await screen.findByText("Bob thread");
+    resolveOldConversation?.({ ok: true, value: conversation({ id: "first", peer: { id: "old", name: "Old" } }) });
+    resolveOldPage?.({ ok: true, value: { items: [message({ id: "old-message", conversationId: "first", text: "Old private thread" })], nextCursor: null, hasMore: false } });
+    await Promise.resolve(); await Promise.resolve();
+    expect(screen.queryByText("Old private thread")).toBeNull();
+  });
 
   it("marks visible incoming messages read without a polling loop", async () => {
     class Observer { observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} constructor(private callback: (items: Array<{ isIntersecting: boolean }>) => void) {} }
