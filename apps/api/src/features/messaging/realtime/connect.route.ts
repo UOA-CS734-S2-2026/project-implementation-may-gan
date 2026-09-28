@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { connectRealtime, type RealtimeConnectDependencies } from "./connect";
 
-export interface RealtimeConnectRouteDependencies extends Partial<RealtimeConnectDependencies> {}
+export type RealtimeConnectRouteDependencies = Partial<RealtimeConnectDependencies>;
 
 /** This protocol upgrade intentionally stays outside OpenAPI's JSON operations. */
 export function registerRealtimeConnectRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: RealtimeConnectRouteDependencies) {

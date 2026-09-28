@@ -7,6 +7,7 @@ abstract interface class PushTokenSource {
   Future<PushPermission> requestPermission();
   Future<String?> currentToken();
   Stream<String> get tokenRefreshes;
+
   /// Removes the provider token from this installation after server cleanup.
   Future<void> invalidateLocalToken();
 }

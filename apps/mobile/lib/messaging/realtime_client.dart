@@ -16,7 +16,8 @@ abstract interface class RealtimeConnection {
 /// One foreground socket per authenticated app instance. REST remains the
 /// authority, this socket only causes bounded durable reconciliation.
 class MessagingRealtimeClient implements RealtimeConnection {
-  MessagingRealtimeClient(this._client, {
+  MessagingRealtimeClient(
+    this._client, {
     required this.onReady,
     required this.onChange,
     this.socketFactory,
@@ -69,9 +70,9 @@ class MessagingRealtimeClient implements RealtimeConnection {
     if (_stopped) return;
     switch (ticket) {
       case ApiSuccess<RealtimeTicket>(:final value):
-        final uri = Uri.parse(value.webSocketUrl).replace(
-          queryParameters: {'ticket': value.ticket},
-        );
+        final uri = Uri.parse(
+          value.webSocketUrl,
+        ).replace(queryParameters: {'ticket': value.ticket});
         _ready = false;
         _channel = (socketFactory ?? WebSocketChannel.connect)(uri);
         _subscription = _channel!.stream.listen(
@@ -131,7 +132,9 @@ class MessagingRealtimeClient implements RealtimeConnection {
   void _scheduleReconnect() {
     if (_stopped || _reconnect != null) return;
     final seconds = min(30, 1 << min(_attempt++, 5));
-    final delay = Duration(milliseconds: (seconds * 1000 * (0.75 + random() * .5)).round());
+    final delay = Duration(
+      milliseconds: (seconds * 1000 * (0.75 + random() * .5)).round(),
+    );
     _reconnect = schedule(delay, () {
       _reconnect = null;
       unawaited(_connect());
