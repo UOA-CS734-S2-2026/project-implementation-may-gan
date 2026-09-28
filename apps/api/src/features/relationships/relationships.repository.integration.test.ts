@@ -109,6 +109,8 @@ suite("Postgres relationship persistence", () => {
 
     expect(page.items).toEqual([{ id: privateUser, username: 'bobby_private', displayName: 'Bobby', relationship: 'none' }]);
     expect(Object.keys(page.items[0]!)).toEqual(['id', 'username', 'displayName', 'relationship']);
+    for (let attempt = 0; attempt < 29; attempt += 1) await service.searchUsers(actor, 'bob', 20);
+    await expect(service.searchUsers(actor, 'bob', 20)).rejects.toMatchObject({ code: 'RATE_LIMITED' });
   });
 
   it("enforces five sends in a rolling 24-hour window", async () => {
