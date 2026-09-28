@@ -10,6 +10,11 @@ export interface DirectConversation {
 }
 
 export interface DirectConversationTransaction {
+  /**
+   * Acquires the shared relationship-pair lock, then reads both directional
+   * block rows in the same transaction. It must not be served from a cache.
+   */
+  isPairBlocked(actorId: string, recipientId: string): Promise<boolean>;
   /** Acquires the relationship-pair lock before resolving either participant. */
   findDirectConversation(actorId: string, recipientId: string): Promise<DirectConversation | null>;
   recipientExists(recipientId: string): Promise<boolean>;
@@ -44,6 +49,9 @@ export function createCreateDirectConversationService(dependencies: {
       if (actorId === input.recipientId) throw new MessagingError("FORBIDDEN");
       assertMessageText(input.text);
       return dependencies.store.withDirectTransaction(actorId, input.recipientId, async (transaction) => {
+        // Check before replay so a stale retry cannot emit a peer-visible
+        // result after either participant has blocked the pair.
+        if (await transaction.isPairBlocked(actorId, input.recipientId)) throw new MessagingError("BLOCKED");
         const existing = await transaction.findDirectConversation(actorId, input.recipientId);
         // The direct-create request is addressed to a pair, not a prior thread ID.
         // This stable target keeps a lost first response replayable after creation.

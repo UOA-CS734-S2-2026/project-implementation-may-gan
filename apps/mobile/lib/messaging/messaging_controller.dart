@@ -13,6 +13,7 @@ class MessagingController extends ChangeNotifier {
   final Map<String, List<MessagingMessage>> _threads = {};
   ApiFailure? _failure;
   bool _loading = false;
+  int _generation = 0;
 
   List<MessagingConversation> get inbox => List.unmodifiable(_inbox);
   ApiFailure? get failure => _failure;
@@ -21,9 +22,11 @@ class MessagingController extends ChangeNotifier {
       List.unmodifiable(_threads[conversationId] ?? const []);
 
   Future<void> refreshInbox() async {
+    final generation = _generation;
     _loading = true;
     notifyListeners();
     final result = await _client.inbox();
+    if (generation != _generation) return;
     _loading = false;
     switch (result) {
       case ApiSuccess<List<MessagingConversation>>(:final value):
@@ -36,7 +39,9 @@ class MessagingController extends ChangeNotifier {
   }
 
   Future<void> loadConversation(String conversationId) async {
+    final generation = _generation;
     final result = await _client.messages(conversationId);
+    if (generation != _generation) return;
     switch (result) {
       case ApiSuccess<List<MessagingMessage>>(:final value):
         _threads[conversationId] = _merge(
@@ -50,14 +55,19 @@ class MessagingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> send(String conversationId, String text) async {
-    if (text.trim().isEmpty) return;
-    final clientMessageId = DateTime.now().microsecondsSinceEpoch.toString();
+  Future<bool> send(
+    String conversationId,
+    String text, {
+    required String clientMessageId,
+  }) async {
+    if (text.trim().isEmpty) return false;
+    final generation = _generation;
     final result = await _client.send(
       conversationId: conversationId,
       clientMessageId: clientMessageId,
       text: text,
     );
+    if (generation != _generation) return false;
     switch (result) {
       case ApiSuccess<MessagingMessage>(:final value):
         _threads[conversationId] = _merge(
@@ -69,10 +79,12 @@ class MessagingController extends ChangeNotifier {
         _failure = failure;
     }
     notifyListeners();
+    return result is ApiSuccess<MessagingMessage>;
   }
 
   /// Called by session teardown before another user can see cached data.
   void clear() {
+    _generation++;
     _inbox = const [];
     _threads.clear();
     _failure = null;

@@ -13,6 +13,8 @@ class ConversationScreen extends StatefulWidget {
 
 class _ConversationScreenState extends State<ConversationScreen> {
   final _composer = TextEditingController();
+  String? _retryClientMessageId;
+  bool _sending = false;
 
   @override
   void initState() {
@@ -98,11 +100,28 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     IconButton(
                       key: const Key('messages.send'),
                       icon: const Icon(Icons.send),
-                      onPressed: () async {
-                        final text = _composer.text;
-                        _composer.clear();
-                        await messaging.send(widget.conversationId, text);
-                      },
+                      onPressed: _sending
+                          ? null
+                          : () async {
+                              final text = _composer.text;
+                              if (text.trim().isEmpty) return;
+                              setState(() => _sending = true);
+                              // Retain this ID and draft until a canonical response arrives.
+                              final clientMessageId = _retryClientMessageId ??=
+                                  DateTime.now().microsecondsSinceEpoch
+                                      .toString();
+                              final sent = await messaging.send(
+                                widget.conversationId,
+                                text,
+                                clientMessageId: clientMessageId,
+                              );
+                              if (!mounted) return;
+                              setState(() => _sending = false);
+                              if (sent) {
+                                _composer.clear();
+                                _retryClientMessageId = null;
+                              }
+                            },
                     ),
                   ],
                 ),
