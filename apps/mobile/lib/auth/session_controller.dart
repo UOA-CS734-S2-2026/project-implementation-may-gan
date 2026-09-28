@@ -60,6 +60,7 @@ class SessionController extends ChangeNotifier {
     required this._userCache,
     required this._drafts,
     this.onPrivateDataClear,
+    this.onSignedIn,
   });
 
   final BetterAuthNativeSession _session;
@@ -69,6 +70,9 @@ class SessionController extends ChangeNotifier {
 
   /// Closes sockets and clears messaging caches before account state changes.
   final FutureOr<void> Function()? onPrivateDataClear;
+
+  /// Starts session-bound integrations such as push after verified sign-in.
+  final FutureOr<void> Function()? onSignedIn;
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
@@ -163,6 +167,11 @@ class SessionController extends ChangeNotifier {
     if (_user != null && _user!.id != user.id) await onPrivateDataClear?.call();
     await _userCache.write(user);
     _set(SessionStatus.signedIn, user);
+    try {
+      await onSignedIn?.call();
+    } catch (_) {
+      // Notification setup must not turn a valid authentication into failure.
+    }
   }
 
   Future<void> _signedOutLocally() async {

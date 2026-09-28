@@ -8,6 +8,7 @@ import '../compose/media_picker.dart';
 import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
+import '../notifications/firebase_push_source.dart';
 import '../posts/post_submitter.dart';
 
 /// Application-wide services, provided once above the router.
@@ -19,6 +20,7 @@ class AppServices {
     required this.drafts,
     required this.submitter,
     MessagingController? messaging,
+    this.notifications,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
     this.clock = DateTime.now,
@@ -31,6 +33,7 @@ class AppServices {
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
   final MessagingController messaging;
+  final FirebasePushLifecycle? notifications;
 
   /// Null when this build has no Google client ID configured.
   final GoogleIdTokenProvider? google;

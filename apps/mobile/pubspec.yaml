@@ -8,6 +8,8 @@ environment:
 dependencies:
   dayli_api_client:
     path: ../../packages/api-client-dart
+  firebase_core: ^4.15.0
+  firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
   flutter_secure_storage: ^11.2.0
