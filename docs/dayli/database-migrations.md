@@ -60,13 +60,16 @@ If any application object, migration record, role beyond the planned bootstrap, 
 Migration `0008_overrated_ink` adds the database-enforced unique mapping for `(provider_id, account_id)` and the short-lived browser OAuth link confirmation table. Before the migration is approved for staging, an authorized operator must run this read-only preflight through the approved direct `migrator` connection and retain only sanitized counts in the change record:
 
 ```sql
-SELECT provider_id, account_id, count(*) AS mappings
-FROM public.account
-GROUP BY provider_id, account_id
-HAVING count(*) > 1;
+SELECT count(*) AS duplicate_provider_subject_keys
+FROM (
+  SELECT 1
+  FROM public.account
+  GROUP BY provider_id, account_id
+  HAVING count(*) > 1
+) AS duplicates;
 ```
 
-The expected result is zero rows. Any row is a hard stop. Do not delete, merge, reassign, or otherwise deduplicate account mappings automatically or during the migration. Obtain a separately reviewed data-remediation plan, backup checkpoint, and staging approval before retrying. The migration repeats a fail-closed duplicate guard before creating the constraint.
+The expected result is a count of zero. Any nonzero count is a hard stop. Do not delete, merge, reassign, or otherwise deduplicate account mappings automatically or during the migration. Obtain a separately reviewed data-remediation plan, backup checkpoint, and staging approval before retrying. The migration repeats a fail-closed duplicate guard before creating the constraint.
 
 `0008` requires a separately approved staging migration workflow after this preflight. Apply it before deploying the Worker code that issues or consumes browser Google-link confirmations. Do not use local validation as approval to run a hosted migration or deploy.
 
