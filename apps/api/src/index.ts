@@ -7,8 +7,8 @@ export { HyperdriveIntegrationEntrypoint } from "./features/system/hyperdrive/in
 export { UserRealtime } from "./infrastructure/realtime/user-realtime";
 
 export default {
-  fetch(request: Request, env: ApiEnv): Response | Promise<Response> {
-    return createAppForEnv(env).fetch(request);
+  fetch(request: Request, env: ApiEnv, context: ExecutionContext): Response | Promise<Response> {
+    return createAppForEnv(env).fetch(request, env, context);
   },
   scheduled(_event: ScheduledEvent, env: ApiEnv, context: ExecutionContext): void {
     // Scheduled repair owns a fresh database client. It never reuses request-scoped state.
