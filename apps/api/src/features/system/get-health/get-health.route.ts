@@ -1,5 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
-import { healthResponseSchema } from "./contract";
+import { healthResponseSchema } from "./get-health.contract";
 
 const healthRoute = createRoute({
   method: "get",

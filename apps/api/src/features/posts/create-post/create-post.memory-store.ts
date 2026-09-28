@@ -4,7 +4,7 @@ import {
   type DailyPostStore,
   type NewDailyPost,
   type StoredDailyPost,
-} from "./service";
+} from "./create-post.service";
 
 /** An in-memory store that serialises each author's transactions like the advisory lock. */
 export function createMemoryDailyPostStore(prompts: Record<string, string> = {}) {

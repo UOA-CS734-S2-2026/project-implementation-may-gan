@@ -7,14 +7,14 @@ import {
   type DayliDatabase,
   type HyperdriveBinding,
 } from "@dayli/db";
-import { createDailyPromptRepository } from "../../posting-days/current/repository";
+import { createDailyPromptRepository } from "../../posting-days/get-current-posting-day/get-current-posting-day.repository";
 import {
   CreateDailyPostError,
   type DailyPostAudience,
   type DailyPostStore,
   type DailyPostTransaction,
   type StoredDailyPost,
-} from "./service";
+} from "./create-post.service";
 
 type Queryable = Pick<DayliDatabase, "select" | "insert" | "execute">;
 

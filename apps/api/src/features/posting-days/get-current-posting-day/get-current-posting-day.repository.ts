@@ -1,7 +1,7 @@
 import { and, desc, eq, lte } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
-import type { DailyPromptRepository } from "./service";
+import type { DailyPromptRepository } from "./get-current-posting-day.service";
 
 /** DB adapter kept outside the service so the service remains repository-driven. */
 export function createDailyPromptRepository(database: DayliDatabase): DailyPromptRepository {

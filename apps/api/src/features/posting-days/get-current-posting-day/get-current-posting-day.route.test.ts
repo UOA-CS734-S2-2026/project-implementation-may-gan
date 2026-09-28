@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createAucklandDayService } from "@dayli/domain";
 import { createBetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { createApp } from "../../../app";
-import { createCurrentPostingDayService, type DailyPromptRepository } from "./service";
-import type { CurrentPostingDayRouteDependencies } from "./route";
+import { createCurrentPostingDayService, type DailyPromptRepository } from "./get-current-posting-day.service";
+import type { CurrentPostingDayRouteDependencies } from "./get-current-posting-day.route";
 
 const fixedNow = new Date("2028-02-29T10:00:00.000Z");
 

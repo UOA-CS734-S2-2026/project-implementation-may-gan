@@ -25,18 +25,18 @@ import { createRelationshipsService } from "./features/relationships/service";
 import {
   registerCurrentPostingDayRoute,
   type CurrentPostingDayRouteDependencies,
-} from "./features/posting-days/current/route";
-import { createCurrentPostingDayService } from "./features/posting-days/current/service";
-import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/current/repository";
+} from "./features/posting-days/get-current-posting-day/get-current-posting-day.route";
+import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
+import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/get-current-posting-day/get-current-posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
 import {
   registerCreateDailyPostRoute,
   type CreateDailyPostRouteDependencies,
-} from "./features/posts/create/route";
-import { createDailyPostService } from "./features/posts/create/service";
-import { createHyperdriveDailyPostStore } from "./features/posts/create/repository";
-import { registerApiDocsRoute } from "./features/system/api-docs/route";
-import { registerHealthRoute } from "./features/system/health/route";
+} from "./features/posts/create-post/create-post.route";
+import { createDailyPostService } from "./features/posts/create-post/create-post.service";
+import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
+import { registerApiDocsRoute } from "./features/system/get-api-docs/get-api-docs.route";
+import { registerHealthRoute } from "./features/system/get-health/get-health.route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import { readR2RuntimeConfiguration } from "./lib/r2";
 import { registerApplicationCors } from "./lib/cors";

@@ -5,7 +5,7 @@ import {
   type DailyPromptRecord,
   type DailyPromptRepository,
   MissingDailyPromptError,
-} from "./service";
+} from "./get-current-posting-day.service";
 
 function scheduledRepository(rows: DailyPromptRecord[]): DailyPromptRepository {
   return {

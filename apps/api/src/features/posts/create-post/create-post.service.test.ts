@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createAucklandDayService } from "@dayli/domain";
-import { createMemoryDailyPostStore } from "./memory-store";
+import { createMemoryDailyPostStore } from "./create-post.memory-store";
 import {
   CreateDailyPostError,
   createDailyPostService,
   fingerprintDailyPostRequest,
   type CreateDailyPostInput,
-} from "./service";
+} from "./create-post.service";
 
 const input: CreateDailyPostInput = {
   localDate: "2026-09-25",
