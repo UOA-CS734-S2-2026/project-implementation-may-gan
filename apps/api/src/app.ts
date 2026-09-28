@@ -48,6 +48,8 @@ import { createEditMessageService } from "./features/messaging/messages/edit-mes
 import { createUnsendMessageService } from "./features/messaging/messages/unsend-message/unsend-message.service";
 import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
+import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
+import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/conversations/conversation.repository";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -234,6 +236,8 @@ function createMessagingDependencies(configuration: RuntimeConfiguration): Messa
     unsend: createUnsendMessageService({ store }),
     setReaction: createSetReactionService({ store }),
     removeReaction: createRemoveReactionService({ store }),
+    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
+    reader: createHyperdriveConversationReader(configuration.hyperdrive),
   };
 }
 

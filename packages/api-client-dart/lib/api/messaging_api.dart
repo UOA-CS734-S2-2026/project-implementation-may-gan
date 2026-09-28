@@ -16,6 +16,65 @@ class MessagingApi {
 
   final ApiClient apiClient;
 
+  /// Performs an HTTP 'POST /api/v1/conversations/direct' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [CreateDirectConversationRequest] createDirectConversationRequest (required):
+  Future<Response> createDirectConversationWithHttpInfo(
+    CreateDirectConversationRequest createDirectConversationRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/direct';
+
+    // ignore: prefer_final_locals
+    Object? postBody = createDirectConversationRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [CreateDirectConversationRequest] createDirectConversationRequest (required):
+  Future<CreateDirectConversation200Response?> createDirectConversation(
+    CreateDirectConversationRequest createDirectConversationRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await createDirectConversationWithHttpInfo(
+      createDirectConversationRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'CreateDirectConversation200Response',
+      ) as CreateDirectConversation200Response;
+    }
+    return null;
+  }
+
   /// Performs an HTTP 'PATCH /api/v1/conversations/{conversationId}/messages/{messageId}' operation and returns the [Response].
   /// Parameters:
   ///
@@ -91,6 +150,507 @@ class MessagingApi {
     return null;
   }
 
+  /// Performs an HTTP 'GET /api/v1/conversations/{conversationId}' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  Future<Response> getConversationWithHttpInfo(
+    String conversationId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}'
+        .replaceAll('{conversationId}', conversationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  Future<Conversation?> getConversation(
+    String conversationId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await getConversationWithHttpInfo(
+      conversationId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Conversation',
+      ) as Conversation;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/conversations/{conversationId}/messages/{messageId}' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] messageId (required):
+  Future<Response> getMessageWithHttpInfo(
+    String conversationId,
+    String messageId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}/messages/{messageId}'
+        .replaceAll('{conversationId}', conversationId)
+        .replaceAll('{messageId}', messageId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] messageId (required):
+  Future<Message?> getMessage(
+    String conversationId,
+    String messageId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await getMessageWithHttpInfo(
+      conversationId,
+      messageId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Message',
+      ) as Message;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/messaging/unread' operation and returns the [Response].
+  Future<Response> getMessagingUnreadWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/messaging/unread';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  Future<GetMessagingUnread200Response?> getMessagingUnread({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await getMessagingUnreadWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'GetMessagingUnread200Response',
+      ) as GetMessagingUnread200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/conversations/{conversationId}/changes' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] afterChangeSequence:
+  ///
+  /// * [int] limit:
+  Future<Response> listConversationChangesWithHttpInfo(
+    String conversationId, {
+    String? afterChangeSequence,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}/changes'
+        .replaceAll('{conversationId}', conversationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (afterChangeSequence != null) {
+      queryParams
+          .addAll(_queryParams('', 'afterChangeSequence', afterChangeSequence));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] afterChangeSequence:
+  ///
+  /// * [int] limit:
+  Future<ListConversationChanges200Response?> listConversationChanges(
+    String conversationId, {
+    String? afterChangeSequence,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await listConversationChangesWithHttpInfo(
+      conversationId,
+      afterChangeSequence: afterChangeSequence,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ListConversationChanges200Response',
+      ) as ListConversationChanges200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/conversations' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] folder:
+  ///
+  /// * [String] cursor:
+  ///
+  /// * [int] limit:
+  Future<Response> listConversationsWithHttpInfo({
+    String? folder,
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (folder != null) {
+      queryParams.addAll(_queryParams('', 'folder', folder));
+    }
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] folder:
+  ///
+  /// * [String] cursor:
+  ///
+  /// * [int] limit:
+  Future<ListConversations200Response?> listConversations({
+    String? folder,
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await listConversationsWithHttpInfo(
+      folder: folder,
+      cursor: cursor,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ListConversations200Response',
+      ) as ListConversations200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/conversations/{conversationId}/messages' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] beforeSequence:
+  ///
+  /// * [String] afterSequence:
+  ///
+  /// * [int] limit:
+  Future<Response> listMessagesWithHttpInfo(
+    String conversationId, {
+    String? beforeSequence,
+    String? afterSequence,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}/messages'
+        .replaceAll('{conversationId}', conversationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (beforeSequence != null) {
+      queryParams.addAll(_queryParams('', 'beforeSequence', beforeSequence));
+    }
+    if (afterSequence != null) {
+      queryParams.addAll(_queryParams('', 'afterSequence', afterSequence));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [String] beforeSequence:
+  ///
+  /// * [String] afterSequence:
+  ///
+  /// * [int] limit:
+  Future<ListMessages200Response?> listMessages(
+    String conversationId, {
+    String? beforeSequence,
+    String? afterSequence,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await listMessagesWithHttpInfo(
+      conversationId,
+      beforeSequence: beforeSequence,
+      afterSequence: afterSequence,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ListMessages200Response',
+      ) as ListMessages200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'PUT /api/v1/conversations/{conversationId}/read' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [MarkConversationReadRequest] markConversationReadRequest (required):
+  Future<Response> markConversationReadWithHttpInfo(
+    String conversationId,
+    MarkConversationReadRequest markConversationReadRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}/read'
+        .replaceAll('{conversationId}', conversationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = markConversationReadRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [MarkConversationReadRequest] markConversationReadRequest (required):
+  Future<MarkConversationRead200Response?> markConversationRead(
+    String conversationId,
+    MarkConversationReadRequest markConversationReadRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await markConversationReadWithHttpInfo(
+      conversationId,
+      markConversationReadRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MarkConversationRead200Response',
+      ) as MarkConversationRead200Response;
+    }
+    return null;
+  }
+
   /// Performs an HTTP 'DELETE /api/v1/conversations/{conversationId}/messages/{messageId}/reaction' operation and returns the [Response].
   /// Parameters:
   ///
@@ -156,6 +716,73 @@ class MessagingApi {
         await _decodeBodyBytes(response),
         'Message',
       ) as Message;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'PUT /api/v1/conversations/{conversationId}/request' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [ResolveMessageRequestRequest] resolveMessageRequestRequest (required):
+  Future<Response> resolveMessageRequestWithHttpInfo(
+    String conversationId,
+    ResolveMessageRequestRequest resolveMessageRequestRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/conversations/{conversationId}/request'
+        .replaceAll('{conversationId}', conversationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = resolveMessageRequestRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] conversationId (required):
+  ///
+  /// * [ResolveMessageRequestRequest] resolveMessageRequestRequest (required):
+  Future<Conversation?> resolveMessageRequest(
+    String conversationId,
+    ResolveMessageRequestRequest resolveMessageRequestRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await resolveMessageRequestWithHttpInfo(
+      conversationId,
+      resolveMessageRequestRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'Conversation',
+      ) as Conversation;
     }
     return null;
   }
