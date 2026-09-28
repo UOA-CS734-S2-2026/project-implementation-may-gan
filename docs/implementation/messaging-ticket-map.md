@@ -32,7 +32,7 @@ Issue #33 no longer requires a polling fallback and covers both clients. Issue #
 
 ## Three-PR stack
 
-The approved merge order is: (1) backend refactor at `cd00116`, (2) friends UI at `79bcceb`, then (3) messaging. Messaging is rebased on `feature/friends-ui`, not directly on refactor. Friends owns `0009_relationship_search`; messaging owns `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. These migrations are undeployed feature work, so no deployed migration history was edited. Generated REST clients are regenerated from the merged Hono app. The rich web and mobile messaging client branches remain independently reviewed work and are not part of this stack integration.
+The approved merge order is: (1) backend refactor at `cd00116`, (2) friends UI at `79bcceb`, then (3) messaging. Messaging is rebased on `feature/friends-ui`, not directly on refactor. Friends owns `0009_relationship_search`; messaging owns `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. These migrations are undeployed feature work, so no deployed migration history was edited. Generated REST clients are regenerated from the merged Hono app. Approved rich web and mobile messaging flows are integrated. TanStack Query web adoption remains a separate reviewed branch. Local tests prove registration and dispatch authorization, not Firebase/APNs provider or physical-device delivery.
 
 ## Backend convention and documentation follow-up
 

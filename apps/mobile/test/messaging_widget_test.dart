@@ -21,6 +21,7 @@ void main() {
       services: AppServices(
         session: harness.session,
         postingDays: harness.postingDays,
+        friends: harness.friends,
         drafts: harness.drafts,
         submitter: harness.submitter,
         messaging: controller,
@@ -44,6 +45,7 @@ void main() {
       services: AppServices(
         session: harness.session,
         postingDays: harness.postingDays,
+        friends: harness.friends,
         drafts: harness.drafts,
         submitter: harness.submitter,
         messaging: controller,
