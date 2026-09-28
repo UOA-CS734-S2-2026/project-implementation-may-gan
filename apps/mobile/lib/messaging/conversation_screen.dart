@@ -14,6 +14,7 @@ class ConversationScreen extends StatefulWidget {
 class _ConversationScreenState extends State<ConversationScreen> {
   final _composer = TextEditingController();
   String? _retryClientMessageId;
+  String? _retryText;
   bool _sending = false;
 
   @override
@@ -89,6 +90,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     Expanded(
                       child: TextField(
                         controller: _composer,
+                        onChanged: (value) {
+                          // A changed body is a new intent. Reusing an old key
+                          // would correctly conflict with its request fingerprint.
+                          if (_retryClientMessageId != null &&
+                              value != _retryText) {
+                            _retryClientMessageId = null;
+                            _retryText = null;
+                          }
+                        },
                         minLines: 1,
                         maxLines: 4,
                         maxLength: 4000,
@@ -110,6 +120,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                               final clientMessageId = _retryClientMessageId ??=
                                   DateTime.now().microsecondsSinceEpoch
                                       .toString();
+                              _retryText = text;
                               final sent = await messaging.send(
                                 widget.conversationId,
                                 text,
@@ -120,6 +131,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                               if (sent) {
                                 _composer.clear();
                                 _retryClientMessageId = null;
+                                _retryText = null;
                               }
                             },
                     ),

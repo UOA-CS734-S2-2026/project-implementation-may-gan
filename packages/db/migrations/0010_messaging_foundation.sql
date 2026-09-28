@@ -142,7 +142,7 @@ CREATE INDEX "conversation_changes_conversation_sequence_idx" ON "conversation_c
 CREATE INDEX "conversation_members_user_conversation_idx" ON "conversation_members" USING btree ("user_id","conversation_id");--> statement-breakpoint
 CREATE INDEX "conversations_activity_idx" ON "conversations" USING btree ("last_activity_at","id");--> statement-breakpoint
 CREATE INDEX "messages_conversation_sequence_idx" ON "messages" USING btree ("conversation_id","sequence");--> statement-breakpoint
-CREATE UNIQUE INDEX "messaging_outbox_destination_unique" ON "messaging_outbox" USING btree ("event_id","recipient_id","channel","device_registration_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "messaging_outbox_destination_unique" ON "messaging_outbox" USING btree ("event_id","recipient_id","channel","device_registration_id") NULLS NOT DISTINCT;--> statement-breakpoint
 CREATE INDEX "messaging_outbox_due_idx" ON "messaging_outbox" USING btree ("status","available_at");--> statement-breakpoint
 CREATE INDEX "messaging_outbox_lease_idx" ON "messaging_outbox" USING btree ("status","lease_expires_at");--> statement-breakpoint
 CREATE INDEX "push_devices_user_enabled_idx" ON "push_devices" USING btree ("user_id","opted_in");--> statement-breakpoint
