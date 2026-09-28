@@ -55,6 +55,17 @@ test("bulk sync uses reviewed names and does not leak a provider error body", as
   assert.doesNotMatch(request.options.body, /runner-token/);
 });
 
+test("stops on a successful HTTP response that reports a partial bulk failure", async () => {
+  const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
+  await assert.rejects(
+    syncStagingWorkerSecrets({
+      accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
+      fetchImpl: async () => new Response(JSON.stringify({ success: false, errors: [{ message: "push-key-value" }] }), { status: 200 }),
+    }),
+    (error) => /HTTP 200/.test(error.message) && !error.message.includes("push-key-value"),
+  );
+});
+
 test("network failure reports recovery without any secret value", async () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   await assert.rejects(

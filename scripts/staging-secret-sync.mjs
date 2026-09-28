@@ -104,7 +104,13 @@ export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken
   } catch {
     throw new Error("Cloudflare secret sync could not reach the control plane. No deployment was attempted.");
   }
-  if (!response.ok) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error(`Cloudflare secret sync returned invalid JSON (HTTP ${response.status}). No deployment was attempted.`);
+  }
+  if (!response.ok || payload?.success !== true) {
     throw new Error(`Cloudflare secret sync failed (HTTP ${response.status}). No deployment was attempted; inspect the Worker secret store before retrying.`);
   }
 }
