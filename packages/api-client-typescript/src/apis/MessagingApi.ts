@@ -19,15 +19,65 @@ import {
     ApiErrorToJSON,
 } from '../models/ApiError';
 import {
+    type Conversation,
+    ConversationFromJSON,
+    ConversationToJSON,
+} from '../models/Conversation';
+import {
+    type CreateDirectConversation200Response,
+    CreateDirectConversation200ResponseFromJSON,
+    CreateDirectConversation200ResponseToJSON,
+} from '../models/CreateDirectConversation200Response';
+import {
+    type CreateDirectConversationRequest,
+    CreateDirectConversationRequestFromJSON,
+    CreateDirectConversationRequestToJSON,
+} from '../models/CreateDirectConversationRequest';
+import {
     type EditMessageRequest,
     EditMessageRequestFromJSON,
     EditMessageRequestToJSON,
 } from '../models/EditMessageRequest';
 import {
+    type GetMessagingUnread200Response,
+    GetMessagingUnread200ResponseFromJSON,
+    GetMessagingUnread200ResponseToJSON,
+} from '../models/GetMessagingUnread200Response';
+import {
+    type ListConversationChanges200Response,
+    ListConversationChanges200ResponseFromJSON,
+    ListConversationChanges200ResponseToJSON,
+} from '../models/ListConversationChanges200Response';
+import {
+    type ListConversations200Response,
+    ListConversations200ResponseFromJSON,
+    ListConversations200ResponseToJSON,
+} from '../models/ListConversations200Response';
+import {
+    type ListMessages200Response,
+    ListMessages200ResponseFromJSON,
+    ListMessages200ResponseToJSON,
+} from '../models/ListMessages200Response';
+import {
+    type MarkConversationRead200Response,
+    MarkConversationRead200ResponseFromJSON,
+    MarkConversationRead200ResponseToJSON,
+} from '../models/MarkConversationRead200Response';
+import {
+    type MarkConversationReadRequest,
+    MarkConversationReadRequestFromJSON,
+    MarkConversationReadRequestToJSON,
+} from '../models/MarkConversationReadRequest';
+import {
     type Message,
     MessageFromJSON,
     MessageToJSON,
 } from '../models/Message';
+import {
+    type ResolveMessageRequestRequest,
+    ResolveMessageRequestRequestFromJSON,
+    ResolveMessageRequestRequestToJSON,
+} from '../models/ResolveMessageRequestRequest';
 import {
     type SendMessageRequest,
     SendMessageRequestFromJSON,
@@ -38,6 +88,13 @@ import {
     SetMessageReactionRequestFromJSON,
     SetMessageReactionRequestToJSON,
 } from '../models/SetMessageReactionRequest';
+
+export interface CreateDirectConversationOperationRequest {
+    /**
+     *
+     */
+    createDirectConversationRequest: CreateDirectConversationRequest;
+}
 
 export interface EditMessageOperationRequest {
     /**
@@ -54,6 +111,84 @@ export interface EditMessageOperationRequest {
     editMessageRequest: EditMessageRequest;
 }
 
+export interface GetConversationRequest {
+    /**
+     *
+     */
+    conversationId: string;
+}
+
+export interface GetMessageRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    messageId: string;
+}
+
+export interface ListConversationChangesRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    afterChangeSequence?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
+export interface ListConversationsRequest {
+    /**
+     *
+     */
+    folder?: ListConversationsFolderEnum;
+    /**
+     *
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
+export interface ListMessagesRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    beforeSequence?: string;
+    /**
+     *
+     */
+    afterSequence?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
+export interface MarkConversationReadOperationRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    markConversationReadRequest: MarkConversationReadRequest;
+}
+
 export interface RemoveMessageReactionRequest {
     /**
      *
@@ -63,6 +198,17 @@ export interface RemoveMessageReactionRequest {
      *
      */
     messageId: string;
+}
+
+export interface ResolveMessageRequestOperationRequest {
+    /**
+     *
+     */
+    conversationId: string;
+    /**
+     *
+     */
+    resolveMessageRequestRequest: ResolveMessageRequestRequest;
 }
 
 export interface SendMessageOperationRequest {
@@ -106,6 +252,59 @@ export interface UnsendMessageRequest {
  *
  */
 export class MessagingApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for createDirectConversation without sending the request
+     */
+    async createDirectConversationRequestOpts(requestParameters: CreateDirectConversationOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['createDirectConversationRequest'] == null) {
+            throw new runtime.RequiredError(
+                'createDirectConversationRequest',
+                'Required parameter "createDirectConversationRequest" was null or undefined when calling createDirectConversation().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/direct`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: CreateDirectConversationRequestToJSON(requestParameters['createDirectConversationRequest']),
+        };
+    }
+
+    /**
+     */
+    async createDirectConversationRaw(requestParameters: CreateDirectConversationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CreateDirectConversation200Response>> {
+        const requestOptions = await this.createDirectConversationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CreateDirectConversation200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async createDirectConversation(requestParameters: CreateDirectConversationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CreateDirectConversation200Response> {
+        const response = await this.createDirectConversationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for editMessage without sending the request
@@ -177,6 +376,397 @@ export class MessagingApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for getConversation without sending the request
+     */
+    async getConversationRequestOpts(requestParameters: GetConversationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling getConversation().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async getConversationRaw(requestParameters: GetConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Conversation>> {
+        const requestOptions = await this.getConversationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ConversationFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getConversation(requestParameters: GetConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Conversation> {
+        const response = await this.getConversationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getMessage without sending the request
+     */
+    async getMessageRequestOpts(requestParameters: GetMessageRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling getMessage().'
+            );
+        }
+
+        if (requestParameters['messageId'] == null) {
+            throw new runtime.RequiredError(
+                'messageId',
+                'Required parameter "messageId" was null or undefined when calling getMessage().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages/{messageId}`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+        urlPath = urlPath.replace('{messageId}', encodeURIComponent(String(requestParameters['messageId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async getMessageRaw(requestParameters: GetMessageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Message>> {
+        const requestOptions = await this.getMessageRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MessageFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getMessage(requestParameters: GetMessageRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
+        const response = await this.getMessageRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for getMessagingUnread without sending the request
+     */
+    async getMessagingUnreadRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/messaging/unread`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async getMessagingUnreadRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GetMessagingUnread200Response>> {
+        const requestOptions = await this.getMessagingUnreadRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => GetMessagingUnread200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async getMessagingUnread(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GetMessagingUnread200Response> {
+        const response = await this.getMessagingUnreadRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listConversationChanges without sending the request
+     */
+    async listConversationChangesRequestOpts(requestParameters: ListConversationChangesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling listConversationChanges().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['afterChangeSequence'] != null) {
+            queryParameters['afterChangeSequence'] = requestParameters['afterChangeSequence'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/changes`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async listConversationChangesRaw(requestParameters: ListConversationChangesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListConversationChanges200Response>> {
+        const requestOptions = await this.listConversationChangesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ListConversationChanges200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async listConversationChanges(requestParameters: ListConversationChangesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListConversationChanges200Response> {
+        const response = await this.listConversationChangesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listConversations without sending the request
+     */
+    async listConversationsRequestOpts(requestParameters: ListConversationsRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['folder'] != null) {
+            queryParameters['folder'] = requestParameters['folder'];
+        }
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async listConversationsRaw(requestParameters: ListConversationsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListConversations200Response>> {
+        const requestOptions = await this.listConversationsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ListConversations200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async listConversations(requestParameters: ListConversationsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListConversations200Response> {
+        const response = await this.listConversationsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for listMessages without sending the request
+     */
+    async listMessagesRequestOpts(requestParameters: ListMessagesRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling listMessages().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['beforeSequence'] != null) {
+            queryParameters['beforeSequence'] = requestParameters['beforeSequence'];
+        }
+
+        if (requestParameters['afterSequence'] != null) {
+            queryParameters['afterSequence'] = requestParameters['afterSequence'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/messages`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async listMessagesRaw(requestParameters: ListMessagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ListMessages200Response>> {
+        const requestOptions = await this.listMessagesRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ListMessages200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async listMessages(requestParameters: ListMessagesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ListMessages200Response> {
+        const response = await this.listMessagesRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for markConversationRead without sending the request
+     */
+    async markConversationReadRequestOpts(requestParameters: MarkConversationReadOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling markConversationRead().'
+            );
+        }
+
+        if (requestParameters['markConversationReadRequest'] == null) {
+            throw new runtime.RequiredError(
+                'markConversationReadRequest',
+                'Required parameter "markConversationReadRequest" was null or undefined when calling markConversationRead().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/read`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: MarkConversationReadRequestToJSON(requestParameters['markConversationReadRequest']),
+        };
+    }
+
+    /**
+     */
+    async markConversationReadRaw(requestParameters: MarkConversationReadOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MarkConversationRead200Response>> {
+        const requestOptions = await this.markConversationReadRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MarkConversationRead200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async markConversationRead(requestParameters: MarkConversationReadOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MarkConversationRead200Response> {
+        const response = await this.markConversationReadRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for removeMessageReaction without sending the request
      */
     async removeMessageReactionRequestOpts(requestParameters: RemoveMessageReactionRequest): Promise<runtime.RequestOpts> {
@@ -232,6 +822,67 @@ export class MessagingApi extends runtime.BaseAPI {
      */
     async removeMessageReaction(requestParameters: RemoveMessageReactionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
         const response = await this.removeMessageReactionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for resolveMessageRequest without sending the request
+     */
+    async resolveMessageRequestRequestOpts(requestParameters: ResolveMessageRequestOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['conversationId'] == null) {
+            throw new runtime.RequiredError(
+                'conversationId',
+                'Required parameter "conversationId" was null or undefined when calling resolveMessageRequest().'
+            );
+        }
+
+        if (requestParameters['resolveMessageRequestRequest'] == null) {
+            throw new runtime.RequiredError(
+                'resolveMessageRequestRequest',
+                'Required parameter "resolveMessageRequestRequest" was null or undefined when calling resolveMessageRequest().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/{conversationId}/request`;
+        urlPath = urlPath.replace('{conversationId}', encodeURIComponent(String(requestParameters['conversationId'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ResolveMessageRequestRequestToJSON(requestParameters['resolveMessageRequestRequest']),
+        };
+    }
+
+    /**
+     */
+    async resolveMessageRequestRaw(requestParameters: ResolveMessageRequestOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Conversation>> {
+        const requestOptions = await this.resolveMessageRequestRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ConversationFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async resolveMessageRequest(requestParameters: ResolveMessageRequestOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Conversation> {
+        const response = await this.resolveMessageRequestRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -425,3 +1076,12 @@ export class MessagingApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const ListConversationsFolderEnum = {
+    Inbox: 'inbox',
+    Requests: 'requests',
+} as const;
+export type ListConversationsFolderEnum = typeof ListConversationsFolderEnum[keyof typeof ListConversationsFolderEnum];

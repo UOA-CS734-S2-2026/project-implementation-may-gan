@@ -30,9 +30,9 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
   }
   async findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null> { const [row] = rows<Row>(await this.queryable.execute(sql`select * from public.messages where conversation_id = ${conversationId} and id = ${messageId}`)); return row ? message(row) : null; }
   async insertMessage(input: Parameters<MessageWriteTransaction["insertMessage"]>[0]): Promise<StoredMessage> {
-    const [allocated] = rows<{ sequence: unknown }>(await this.queryable.execute(sql`update public.conversations set last_message_sequence = last_message_sequence + 1, last_activity_at = ${input.createdAt}::timestamptz, updated_at = ${input.createdAt}::timestamptz where id = ${input.conversationId} returning last_message_sequence as sequence`));
+    const [allocated] = rows<{ sequence: unknown }>(await this.queryable.execute(sql`update public.conversations set last_message_sequence = last_message_sequence + 1, last_activity_at = ${input.createdAt.toISOString()}::timestamptz, updated_at = ${input.createdAt.toISOString()}::timestamptz where id = ${input.conversationId} returning last_message_sequence as sequence`));
     if (!allocated) throw new Error("Conversation disappeared during message insert.");
-    const result = await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, reply_to_message_id, version, created_at) values (${input.id}, ${input.conversationId}, ${allocated.sequence}::bigint, ${input.senderId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, ${input.replyToMessageId}, 1, ${input.createdAt}::timestamptz) returning *`);
+    const result = await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, reply_to_message_id, version, created_at) values (${input.id}, ${input.conversationId}, ${allocated.sequence}::bigint, ${input.senderId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, ${input.replyToMessageId}, 1, ${input.createdAt.toISOString()}::timestamptz) returning *`);
     return message(rows<Row>(result)[0]!);
   }
   async updateMessage(input: Parameters<MessageWriteTransaction["updateMessage"]>[0]): Promise<StoredMessage> {
