@@ -1,5 +1,10 @@
 export type PushPlatform = "ios" | "android";
 
+/** The request was authenticated before encryption, but its session changed before the DB write. */
+export class PushSessionInactiveError extends Error {
+  constructor() { super("Push registration session is no longer active."); }
+}
+
 export interface VerifiedPushSession {
   userId: string;
   sessionId: string;
