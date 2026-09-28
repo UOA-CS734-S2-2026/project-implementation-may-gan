@@ -1,4 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import type { ApiError } from "@dayli/contracts";
 import type { Context } from "hono";
 import {
@@ -11,21 +12,11 @@ import {
   sendRelationshipRequestBodySchema,
 } from "./contract";
 import { RelationshipServiceError, type RelationshipsService } from "./service";
-
-export interface RelationshipSession {
-  userId: string;
-}
-
-/**
- * The application composition root supplies this adapter from Better Auth's
- * cookie/bearer session lookup. Routes never accept an actor ID from JSON,
- * query parameters, or path parameters.
- */
-export type ResolveRelationshipSession = (request: Request) => Promise<RelationshipSession | null>;
+import { createRequireSession, type ResolveSession } from "../../http/require-session";
 
 export interface RelationshipsRouteDependencies {
   service: RelationshipsService;
-  resolveSession: ResolveRelationshipSession;
+  resolveSession: ResolveSession;
 }
 
 // The Better Auth composition root resolves either its secure browser cookie
@@ -191,17 +182,6 @@ function errorBody(
   };
 }
 
-function unauthenticated(context: Context) {
-  return context.json(errorBody("UNAUTHENTICATED", "Authentication is required."), 401);
-}
-
-function sessionUnavailable(context: Context) {
-  return context.json(
-    errorBody("SERVICE_UNAVAILABLE", "Authentication is temporarily unavailable."),
-    503,
-  );
-}
-
 function serviceError(context: Context, error: unknown) {
   if (!(error instanceof RelationshipServiceError)) {
     // Repository and adapter failures must not cross the API boundary. Keep a
@@ -228,18 +208,7 @@ function serviceError(context: Context, error: unknown) {
   }
 }
 
-const SESSION_UNAVAILABLE = Symbol("session-unavailable");
-
-async function getSession(context: Context, resolveSession: ResolveRelationshipSession) {
-  try {
-    const session = await resolveSession(context.req.raw);
-    return session && session.userId.length > 0 ? session : null;
-  } catch {
-    return SESSION_UNAVAILABLE;
-  }
-}
-
-export function registerRelationshipsRoutes(app: OpenAPIHono, dependencies: RelationshipsRouteDependencies) {
+export function registerRelationshipsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: RelationshipsRouteDependencies) {
   app.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
     type: "http",
     scheme: "bearer",
@@ -259,119 +228,84 @@ export function registerRelationshipsRoutes(app: OpenAPIHono, dependencies: Rela
       context.header("Cache-Control", "no-store");
     }
   });
+  app.use("/api/v1/relationships/*", createRequireSession(dependencies.resolveSession));
 
   app.openapi(pendingRequestsRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { direction, limit, cursor } = context.req.valid("query");
     try {
-      return context.json(await dependencies.service.listPendingRequests(session.userId, direction, limit, cursor), 200);
+      return context.json(await dependencies.service.listPendingRequests(context.get("actor").userId, direction, limit, cursor), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(statusRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { userId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.getStatus(session.userId, userId), 200);
+      return context.json(await dependencies.service.getStatus(context.get("actor").userId, userId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(sendRequestRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { recipientId } = context.req.valid("json");
     try {
-      return context.json(await dependencies.service.sendRequest(session.userId, recipientId), 201);
+      return context.json(await dependencies.service.sendRequest(context.get("actor").userId, recipientId), 201);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(acceptRequestRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { requestId: relationshipRequestId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.acceptRequest(session.userId, relationshipRequestId), 200);
+      return context.json(await dependencies.service.acceptRequest(context.get("actor").userId, relationshipRequestId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(declineRequestRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { requestId: relationshipRequestId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.declineRequest(session.userId, relationshipRequestId), 200);
+      return context.json(await dependencies.service.declineRequest(context.get("actor").userId, relationshipRequestId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(cancelRequestRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { requestId: relationshipRequestId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.cancelRequest(session.userId, relationshipRequestId), 200);
+      return context.json(await dependencies.service.cancelRequest(context.get("actor").userId, relationshipRequestId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(removeFriendshipRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { userId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.removeFriendship(session.userId, userId), 200);
+      return context.json(await dependencies.service.removeFriendship(context.get("actor").userId, userId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(blockRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { userId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.block(session.userId, userId), 200);
+      return context.json(await dependencies.service.block(context.get("actor").userId, userId), 200);
     } catch (error) {
       return serviceError(context, error);
     }
   });
 
   app.openapi(unblockRoute, async (context) => {
-    const session = await getSession(context, dependencies.resolveSession);
-    if (session === SESSION_UNAVAILABLE) return sessionUnavailable(context);
-    if (!session) return unauthenticated(context);
-
     const { userId } = context.req.valid("param");
     try {
-      return context.json(await dependencies.service.unblock(session.userId, userId), 200);
+      return context.json(await dependencies.service.unblock(context.get("actor").userId, userId), 200);
     } catch (error) {
       return serviceError(context, error);
     }

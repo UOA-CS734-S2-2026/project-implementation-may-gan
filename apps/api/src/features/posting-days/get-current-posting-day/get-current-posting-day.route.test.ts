@@ -20,7 +20,7 @@ function createDependencies(
 ) {
   const clock = { now: () => fixedNow };
   return {
-    authenticate: async (request: Request) => request.headers.get("authorization") === "Bearer test-token" ? "user-1" : null,
+    resolveSession: async (request: Request) => request.headers.get("authorization") === "Bearer test-token" ? { userId: "user-1" } : null,
     service: createCurrentPostingDayService({
       clock,
       dayService: createAucklandDayService(clock),
@@ -75,9 +75,9 @@ describe("GET /api/v1/posting-days/current", () => {
       database: { account: [], session: [], user: [], verification: [] },
     });
     const authApp = createApp({ auth, postingDay: {
-      authenticate: async (request) => {
+      resolveSession: async (request) => {
         const session = await auth.auth.api.getSession({ headers: request.headers });
-        return session?.user.id ?? null;
+        return session?.user.id ? { userId: session.user.id } : null;
       },
       service: createDependencies().service,
     } });
@@ -106,9 +106,9 @@ describe("GET /api/v1/posting-days/current", () => {
       database: { account: [], session: [], user: [], verification: [] },
     });
     const authApp = createApp({ auth, postingDay: {
-      authenticate: async (request) => {
+      resolveSession: async (request) => {
         const session = await auth.auth.api.getSession({ headers: request.headers });
-        return session?.user.id ?? null;
+        return session?.user.id ? { userId: session.user.id } : null;
       },
       service: createDependencies().service,
     } });

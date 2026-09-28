@@ -1,4 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import type { Env } from "hono";
 import { healthResponseSchema } from "./get-health.contract";
 
 const healthRoute = createRoute({
@@ -15,7 +16,7 @@ const healthRoute = createRoute({
   },
 });
 
-export function registerHealthRoute(app: OpenAPIHono) {
+export function registerHealthRoute<E extends Env>(app: OpenAPIHono<E>) {
   app.openapi(healthRoute, (context) =>
     context.json({ status: "ok" as const, service: "dayli-api" as const }, 200),
   );

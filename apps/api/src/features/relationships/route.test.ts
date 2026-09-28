@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { createApp } from "../../app";
 import { registerRelationshipsRoutes } from "./route";
 import { RelationshipServiceError, type RelationshipsService } from "./service";
@@ -28,7 +29,7 @@ function createTestApp(options: {
     unblock: vi.fn(async () => status),
     ...options.service,
   };
-  const app = new OpenAPIHono({
+  const app = new OpenAPIHono<AuthenticatedApiEnv>({
     defaultHook: (result, context) => {
       if (!result.success) {
         return context.json({

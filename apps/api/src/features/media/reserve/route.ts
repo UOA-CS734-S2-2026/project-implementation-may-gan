@@ -1,4 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import type { Env } from "hono";
 import { apiErrorResponse } from "../../../lib/api-error";
 import {
   apiErrorSchema,
@@ -75,7 +76,7 @@ const getReservationRoute = createRoute({
   },
 });
 
-export function registerMediaReservationRoutes(app: OpenAPIHono, media?: MediaReservationRuntime) {
+export function registerMediaReservationRoutes<E extends Env>(app: OpenAPIHono<E>, media?: MediaReservationRuntime) {
   app.openapi(createReservationRoute, async (context) => {
     if (!media) {
       return apiErrorResponse(

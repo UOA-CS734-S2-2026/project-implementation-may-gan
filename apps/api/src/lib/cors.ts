@@ -1,4 +1,5 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import type { Env } from "hono";
 
 const allowedMethods = ["GET", "POST", "PATCH", "DELETE"];
 const allowedHeaders = ["authorization", "content-type", "idempotency-key"];
@@ -16,7 +17,7 @@ function appendVary(headers: Headers, value: string) {
  * Requests from any other origin receive no CORS headers, so browsers withhold
  * the response; non-browser clients send no Origin and are unaffected.
  */
-export function registerApplicationCors(app: OpenAPIHono, trustedOrigins: readonly string[]) {
+export function registerApplicationCors<E extends Env>(app: OpenAPIHono<E>, trustedOrigins: readonly string[]) {
   app.use(applicationPath, async (context, next) => {
     const origin = context.req.header("origin");
     const trusted = origin !== undefined && trustedOrigins.includes(origin);

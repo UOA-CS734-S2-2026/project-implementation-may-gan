@@ -14,9 +14,10 @@ function dependencies(overrides: Partial<CreateDailyPostRouteDependencies> = {})
   return {
     memory,
     deps: {
-      authenticate: async (request: Request) => {
+      resolveSession: async (request: Request) => {
         const header = request.headers.get("authorization");
-        return header?.startsWith("Bearer user-") ? header.slice("Bearer ".length) : null;
+        const userId = header?.startsWith("Bearer user-") ? header.slice("Bearer ".length) : null;
+        return userId ? { userId } : null;
       },
       service: createDailyPostService({
         store: memory.store,
@@ -159,7 +160,7 @@ describe("POST /api/v1/posts", () => {
   });
 
   it("returns 503 when storage is not configured", async () => {
-    const response = await post(createApp({ posts: { authenticate: async () => "user-1" } }), { user: "user-1" });
+    const response = await post(createApp({ posts: { resolveSession: async () => ({ userId: "user-1" }) } }), { user: "user-1" });
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
