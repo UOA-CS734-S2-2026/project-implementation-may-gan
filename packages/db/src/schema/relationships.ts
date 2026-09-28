@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   index,
+  integer,
   pgEnum,
   pgTable,
   text,
@@ -62,6 +63,13 @@ export const relationshipBlocks = pgTable("relationship_blocks", {
   index("relationship_blocks_blocked_id_idx").on(table.blockedId),
   check("relationship_blocks_distinct_users_check", sql`${table.blockerId} <> ${table.blockedId}`),
 ]);
+
+/** A persistent, actor-scoped quota for username discovery. */
+export const relationshipSearchQuota = pgTable("relationship_search_quota", {
+  actorId: text("actor_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
+  requestCount: integer("request_count").notNull(),
+});
 
 export type Friendship = typeof friendships.$inferSelect;
 export type FriendRequest = typeof friendRequests.$inferSelect;

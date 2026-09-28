@@ -1,10 +1,20 @@
 export type RelationshipState = "none" | "outgoing_pending" | "incoming_pending" | "friends" | "blocked";
 
+export interface RelationshipUserCard {
+  id: string;
+  username: string;
+  displayName: string;
+  /** Relationship state is actor-specific, never profile data. */
+  relationship: RelationshipState;
+}
+
 export interface PendingRelationshipRequest {
   id: string;
   senderId: string;
   recipientId: string;
   createdAt: string;
+  /** Present on list projections. Direct status reads may omit it for accounts without usernames. */
+  user?: RelationshipUserCard;
 }
 
 export interface RelationshipStatus {
@@ -16,6 +26,12 @@ export interface RelationshipStatus {
 
 export interface PendingRequestPage {
   items: PendingRelationshipRequest[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface RelationshipUserPage {
+  items: RelationshipUserCard[];
   nextCursor: string | null;
   hasMore: boolean;
 }
@@ -34,6 +50,7 @@ export interface StoredPendingRequest {
   senderId: string;
   recipientId: string;
   createdAt: string;
+  user?: RelationshipUserCard;
 }
 
 /**
@@ -69,6 +86,8 @@ export interface RelationshipTransaction {
     limit: number,
     cursor?: string,
   ): Promise<PendingRequestPage>;
+  listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  searchUsers(actorId: string, query: string, limit: number, searchedAt: string, cursor?: string): Promise<RelationshipUserPage>;
 
   /**
    * Must lock the canonical unordered participant pair, reject blocks and

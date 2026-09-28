@@ -157,6 +157,8 @@ const unavailableRelationships: RelationshipsRouteDependencies = {
   service: {
     getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
     listPendingRequests: async () => { throw new Error("Relationship storage is unavailable."); },
+    listFriends: async () => { throw new Error("Relationship storage is unavailable."); },
+    searchUsers: async () => { throw new Error("Relationship storage is unavailable."); },
     sendRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     acceptRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     declineRequest: async () => { throw new Error("Relationship storage is unavailable."); },

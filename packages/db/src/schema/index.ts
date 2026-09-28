@@ -16,7 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
-import { friendRequests, friendships, relationshipBlocks } from "./relationships";
+import { friendRequests, friendships, relationshipBlocks, relationshipSearchQuota } from "./relationships";
 import { user } from "./users";
 
 export { profileVisibility, tier, user } from "./users";
@@ -288,6 +288,7 @@ export {
   friendships,
   friendshipState,
   relationshipBlocks,
+  relationshipSearchQuota,
 } from "./relationships";
 
 export const schema = {
@@ -303,6 +304,7 @@ export const schema = {
   posts,
   rateLimit,
   relationshipBlocks,
+  relationshipSearchQuota,
   session,
   socialLinkConfirmation,
   tomorrowNotes,

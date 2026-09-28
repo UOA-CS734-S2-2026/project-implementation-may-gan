@@ -13,6 +13,14 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
+import type { RelationshipUserCard } from './RelationshipUserCard';
+import {
+    RelationshipUserCardFromJSON,
+    RelationshipUserCardFromJSONTyped,
+    RelationshipUserCardToJSON,
+    RelationshipUserCardToJSONTyped,
+} from './RelationshipUserCard';
+
 /**
  *
  * @export
@@ -35,6 +43,10 @@ export interface PendingRelationshipRequest {
      *
      */
     createdAt: Date;
+    /**
+     *
+     */
+    user?: RelationshipUserCard;
 }
 
 /**
@@ -62,6 +74,7 @@ export function PendingRelationshipRequestFromJSONTyped(json: any, ignoreDiscrim
         'senderId': json['senderId'],
         'recipientId': json['recipientId'],
         'createdAt': (json['createdAt'] == null ? json['createdAt'] : parseDateTime(json['createdAt'])),
+        'user': json['user'] == null ? undefined : RelationshipUserCardFromJSON(json['user']),
     };
 }
 
@@ -80,5 +93,6 @@ export function PendingRelationshipRequestToJSONTyped(value?: PendingRelationshi
         'senderId': value['senderId'],
         'recipientId': value['recipientId'],
         'createdAt': value['createdAt'] == null ? value['createdAt'] : serializeDateTime(value['createdAt']),
+        'user': RelationshipUserCardToJSON(value['user']),
     };
 }

@@ -10,6 +10,8 @@ import { blockRelationshipPair } from "./block-user/block-user.repository";
 import { cancelFriendRequestRow } from "./cancel-friend-request/cancel-friend-request.repository";
 import { declineFriendRequestRow } from "./decline-friend-request/decline-friend-request.repository";
 import { listPendingRequestRows } from "./list-friend-requests/list-friend-requests.repository";
+import { listFriendRows } from "./list-friends/list-friends.repository";
+import { consumeUsernameSearchQuota, searchUsernameRows } from "./search-users/search-users.repository";
 import { endFriendshipRows } from "./remove-friendship/remove-friendship.repository";
 import { insertFriendRequest } from "./send-friend-request/send-friend-request.repository";
 import {
@@ -101,6 +103,11 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     return {
       getSnapshot: snapshot,
       listPendingRequests: (actorId, direction, limit, cursor): Promise<PendingRequestPage> => listPendingRequestRows(queryable, actorId, direction, limit, cursor),
+      listFriends: (actorId, limit, cursor) => listFriendRows(queryable, actorId, limit, cursor),
+      searchUsers: async (actorId, query, limit, searchedAt, cursor) => {
+        await consumeUsernameSearchQuota(queryable, actorId, new Date(searchedAt));
+        return searchUsernameRows(queryable, actorId, query, limit, cursor);
+      },
       sendRequest: (input) => insertFriendRequest(context, input),
       acceptRequest: (input) => acceptFriendRequestRow(context, input),
       declineRequest: (input) => declineFriendRequestRow(context, input),

@@ -7,6 +7,8 @@ import { registerCancelFriendRequestRoute } from "./cancel-friend-request/cancel
 import { registerDeclineFriendRequestRoute } from "./decline-friend-request/decline-friend-request.route";
 import { registerGetRelationshipRoute } from "./get-relationship/get-relationship.route";
 import { registerListFriendRequestsRoute } from "./list-friend-requests/list-friend-requests.route";
+import { registerListFriendsRoute } from "./list-friends/list-friends.route";
+import { registerSearchUsersRoute } from "./search-users/search-users.route";
 import { registerRemoveFriendshipRoute } from "./remove-friendship/remove-friendship.route";
 import { registerSendFriendRequestRoute } from "./send-friend-request/send-friend-request.route";
 import { registerUnblockUserRoute } from "./unblock-user/unblock-user.route";
@@ -40,6 +42,8 @@ export function registerRelationshipsRoutes(
   app.use("/api/v1/relationships/*", createRequireSession(dependencies.resolveSession));
 
   registerListFriendRequestsRoute(app, dependencies);
+  registerListFriendsRoute(app, dependencies);
+  registerSearchUsersRoute(app, dependencies);
   registerGetRelationshipRoute(app, dependencies);
   registerSendFriendRequestRoute(app, dependencies);
   registerAcceptFriendRequestRoute(app, dependencies);

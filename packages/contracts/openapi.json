@@ -511,6 +511,9 @@
           },
           "createdAt": {
             "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "user": {
+            "$ref": "#/components/schemas/RelationshipUserCard"
           }
         },
         "required": [
@@ -518,6 +521,65 @@
           "senderId",
           "recipientId",
           "createdAt"
+        ]
+      },
+      "RelationshipUserCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/RelationshipState"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "relationship"
+        ],
+        "description": "Minimal discovery card. It grants no profile access and never contains email, bio, image, or visibility."
+      },
+      "RelationshipState": {
+        "type": "string",
+        "enum": [
+          "none",
+          "outgoing_pending",
+          "incoming_pending",
+          "friends",
+          "blocked"
+        ]
+      },
+      "RelationshipUserPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationshipUserCard"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
         ]
       },
       "RelationshipStatus": {
@@ -555,16 +617,6 @@
           "status",
           "incomingRequest",
           "outgoingRequest"
-        ]
-      },
-      "RelationshipState": {
-        "type": "string",
-        "enum": [
-          "none",
-          "outgoing_pending",
-          "incoming_pending",
-          "friends",
-          "blocked"
         ]
       },
       "SendRelationshipRequest": {
@@ -1195,6 +1247,289 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RelationshipStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The relationship operation is not permitted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The relationship or request was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The relationship is in a conflicting state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The request-send limit has been exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication or relationship storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships/friends": {
+      "get": {
+        "tags": [
+          "Relationships"
+        ],
+        "operationId": "relationships.listFriends",
+        "summary": "List active friends",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Minimal cards for active friends visible to the authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipUserPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The relationship operation is not permitted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The relationship or request was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The relationship is in a conflicting state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The request-send limit has been exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication or relationship storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships/search": {
+      "get": {
+        "tags": [
+          "Relationships"
+        ],
+        "operationId": "relationships.searchUsers",
+        "summary": "Search username prefixes",
+        "description": "Private accounts are discoverable here only as a minimal username/display-name card. This does not grant profile access.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$",
+              "description": "Case-insensitive username prefix. Username setup is required for discovery.",
+              "example": "day"
+            },
+            "required": true,
+            "description": "Case-insensitive username prefix. Username setup is required for discovery.",
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Minimal cards for matching discoverable accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipUserPage"
                 }
               }
             }

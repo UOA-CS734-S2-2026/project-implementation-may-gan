@@ -11,12 +11,24 @@ export const relationshipStateSchema = z
   .enum(["none", "outgoing_pending", "incoming_pending", "friends", "blocked"])
   .openapi("RelationshipState");
 
+export const relationshipUserCardSchema = z
+  .object({
+    id: opaqueIdSchema,
+    username: z.string().min(1),
+    displayName: z.string().min(1),
+    relationship: relationshipStateSchema,
+  })
+  .openapi("RelationshipUserCard", {
+    description: "Minimal discovery card. It grants no profile access and never contains email, bio, image, or visibility.",
+  });
+
 export const pendingRequestSchema = z
   .object({
     id: opaqueIdSchema,
     senderId: opaqueIdSchema,
     recipientId: opaqueIdSchema,
     createdAt: utcTimestampSchema,
+    user: relationshipUserCardSchema.optional(),
   })
   .openapi("PendingRelationshipRequest");
 
@@ -30,6 +42,7 @@ export const relationshipStatusSchema = z
   .openapi("RelationshipStatus");
 
 export const pendingRequestPageSchema = paginatedResponseSchema(pendingRequestSchema).openapi("PendingRequestPage");
+export const relationshipUserPageSchema = paginatedResponseSchema(relationshipUserCardSchema).openapi("RelationshipUserPage");
 
 export const relationshipUserParamsSchema = z.object({
   userId: opaqueIdSchema,
@@ -51,6 +64,19 @@ export const pendingRequestQuerySchema = cursorPaginationQuerySchema
     direction: z.enum(["incoming", "outgoing", "all"]).default("all"),
   })
   .openapi("PendingRequestQuery");
+
+const relationshipUserPageQuerySchema = z.object({
+  cursor: z.string().min(1).optional().openapi({ description: "Opaque continuation cursor" }),
+  limit: z.coerce.number().int().min(1).max(20).default(20).openapi({ example: 20 }),
+});
+
+export const friendsQuerySchema = relationshipUserPageQuerySchema.openapi("FriendsQuery");
+export const usernameSearchQuerySchema = relationshipUserPageQuerySchema.extend({
+  q: z.string().trim().min(2).max(32).regex(/^[a-zA-Z0-9_]+$/).openapi({
+    description: "Case-insensitive username prefix. Username setup is required for discovery.",
+    example: "day",
+  }),
+}).openapi("UsernameSearchQuery");
 
 export const relationshipErrorResponses = {
   401: {
@@ -91,4 +117,5 @@ export type RelationshipState = z.infer<typeof relationshipStateSchema>;
 export type PendingRelationshipRequest = z.infer<typeof pendingRequestSchema>;
 export type RelationshipStatus = z.infer<typeof relationshipStatusSchema>;
 export type PendingRequestPage = z.infer<typeof pendingRequestPageSchema>;
+export type RelationshipUserPage = z.infer<typeof relationshipUserPageSchema>;
 export type PendingRequestQuery = z.infer<typeof pendingRequestQuerySchema>;

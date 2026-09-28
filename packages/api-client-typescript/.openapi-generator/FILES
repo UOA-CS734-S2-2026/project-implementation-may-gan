@@ -32,6 +32,8 @@ src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts
+src/models/RelationshipUserCard.ts
+src/models/RelationshipUserPage.ts
 src/models/SendRelationshipRequest.ts
 src/models/TestResponse.ts
 src/models/index.ts
