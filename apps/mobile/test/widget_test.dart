@@ -1,11 +1,101 @@
+import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/app/app.dart';
+import 'package:dayli_mobile/app/app_scope.dart';
+import 'package:dayli_mobile/app/theme.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
+import 'package:dayli_mobile/friends/friends_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
 
+class RetryFriendsClient implements FriendsClient {
+  var attempts = 0;
+  @override
+  Future<ApiResult<FriendsSnapshot>> load() async {
+    attempts++;
+    if (attempts == 1) return const ApiError(ServiceUnavailable());
+    return const ApiSuccess(
+      FriendsSnapshot(
+        friends: FriendPage(
+          items: [
+            FriendCard(
+              id: 'friend',
+              username: 'friend',
+              displayName: 'Friend',
+              relationship: 'friends',
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+        incoming: FriendRequestPage(
+          items: [],
+          nextCursor: null,
+          hasMore: false,
+        ),
+        outgoing: FriendRequestPage(
+          items: [],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
+      const ApiSuccess(FriendPage(items: [], nextCursor: null, hasMore: false));
+  @override
+  Future<ApiResult<FriendRequestPage>> loadRequests(
+    String direction, {
+    String? cursor,
+  }) async => const ApiSuccess(
+    FriendRequestPage(items: [], nextCursor: null, hasMore: false),
+  );
+  @override
+  Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
+      const ApiSuccess(FriendPage(items: [], nextCursor: null, hasMore: false));
+  @override
+  Future<ApiResult<void>> accept(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> cancel(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> decline(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> remove(String userId) async => const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> send(String userId) async => const ApiSuccess(null);
+}
+
 void main() {
+  testWidgets(
+    'shows a recoverable friends load failure without dereferencing an absent snapshot',
+    (tester) async {
+      final client = RetryFriendsClient();
+      final harness = TestHarness(friends: client);
+      await tester.pumpWidget(
+        AppScope(
+          services: harness.services,
+          child: MaterialApp(
+            theme: buildDayliTheme(useGoogleFonts: false),
+            home: const Scaffold(body: FriendsScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Friends could not load right now.'), findsOneWidget);
+      await tester.tap(find.text('try again'));
+      await tester.pumpAndSettle();
+      expect(find.text('Friend'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('shows the WDCC landing page when signed out', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(

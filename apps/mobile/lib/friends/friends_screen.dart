@@ -204,7 +204,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         ),
                       ),
                     ),
-                  if (snapshot!.friends.hasMore)
+                  if (snapshot?.friends.hasMore ?? false)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: DayliButton(

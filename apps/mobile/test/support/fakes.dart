@@ -158,12 +158,16 @@ PostingDay postingDay({
 /// A signed-out-by-default app wired to in-memory fakes. A Better Auth mock
 /// accepts `jos@example.test` / `correct-password`.
 class TestHarness {
-  TestHarness({ApiResult<PostingDay>? day, SubmissionResult? submission})
-    : postingDays = FakePostingDayClient(day ?? ApiSuccess(postingDay())),
-      submitter = FakeSubmitter(
-        submission ??
-            const SubmissionAccepted(postId: 'post-1', replayed: false),
-      ) {
+  TestHarness({
+    ApiResult<PostingDay>? day,
+    SubmissionResult? submission,
+    FriendsClient? friends,
+  }) : friends = friends ?? FakeFriendsClient(),
+       postingDays = FakePostingDayClient(day ?? ApiSuccess(postingDay())),
+       submitter = FakeSubmitter(
+         submission ??
+             const SubmissionAccepted(postId: 'post-1', replayed: false),
+       ) {
     final client = MockClient((request) async {
       final path = request.url.path;
       if (path.endsWith('/sign-in/email')) {
@@ -206,6 +210,7 @@ class TestHarness {
   final users = MemoryUserCache();
   final drafts = MemoryDraftStore();
   final FakePostingDayClient postingDays;
+  final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
   late final SessionController session;
@@ -213,7 +218,7 @@ class TestHarness {
   AppServices get services => AppServices(
     session: session,
     postingDays: postingDays,
-    friends: FakeFriendsClient(),
+    friends: friends,
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
