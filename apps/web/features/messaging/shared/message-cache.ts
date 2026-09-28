@@ -1,7 +1,7 @@
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
 import type { MessagingMessage, MessagingPage } from "./messaging.api";
 import { messagingKeys } from "./messaging.keys";
-import { mergeMessages, reconcileReplyPreviews } from "@/lib/messaging/reconcile";
+import { mergeMessages, reconcileReplyPreviews } from "./reconcile";
 
 export type LocalMessagingMessage = MessagingMessage & {
   delivery?: "pending" | "failed";
