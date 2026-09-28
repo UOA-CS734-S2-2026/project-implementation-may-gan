@@ -57,7 +57,7 @@ Only the data layer is missing features:
 - The feed is empty until the released-feed API (#19, #20).
 - Friends, my days, and messages are placeholders until their APIs land.
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
-- Posting needs a photo or video, as in WDCC. Chosen media stays on the device with the draft until the media API lands, and photos are not cropped.
+- Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media stays on the device with the draft until uploads land (#22), and photos are not cropped.
 
 ## Structure
 
@@ -65,8 +65,8 @@ Only the data layer is missing features:
 - `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
-- `lib/compose/`: the daily composer (#18). Edits, including chosen media, are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated.
-- `lib/posts/post_submitter.dart`: the submission seam. Until the create-post Dart client from #16 is wired in, `UnavailablePostSubmitter` keeps drafts safe and reports posting as unavailable.
+- `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily post creation](../../docs/dayli/daily-posts.md) for how each server response is handled.
+- `lib/posts/post_submitter.dart`: `GeneratedPostSubmitter` sends the draft through the generated Dart client with its stored idempotency key and the bearer session. It maps each `409` reason, `401`, `422`, outages, and lost connections to results the composer handles.
 
 iOS keeps Keychain entries after an app is deleted. On the first launch of a new installation, `clearProtectedStorageAfterReinstall` wipes the previous installation's session and drafts. A draft that can no longer be decrypted, for example after the platform key is invalidated, is removed and the author is told.
 

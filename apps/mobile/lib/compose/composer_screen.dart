@@ -11,7 +11,8 @@ import 'deadline_countdown.dart';
 import 'media_input.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
-/// rating, and the words, with the Post button pinned above the keyboard.
+/// rating, the words, a note to tomorrow, and who can see it, with the Post
+/// button pinned above the keyboard.
 /// Every edit is saved to protected storage as the author types.
 class ComposerScreen extends StatefulWidget {
   const ComposerScreen({super.key});
@@ -24,6 +25,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
   ComposerController? _controller;
   final _answer = TextEditingController();
   final _caption = TextEditingController();
+  final _tomorrowNote = TextEditingController();
   String? _boundDraftKey;
 
   @override
@@ -55,6 +57,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     _boundDraftKey = key;
     _answer.text = draft.reflectiveAnswer;
     _caption.text = draft.caption;
+    _tomorrowNote.text = draft.tomorrowNote;
   }
 
   @override
@@ -63,6 +66,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     _controller?.dispose();
     _answer.dispose();
     _caption.dispose();
+    _tomorrowNote.dispose();
     super.dispose();
   }
 
@@ -122,41 +126,61 @@ class _ComposerScreenState extends State<ComposerScreen> {
     );
   }
 
-  Widget _body(BuildContext context, ComposerController controller) =>
-      switch (controller.phase) {
-        ComposerPhase.loading => const Center(
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-        ComposerPhase.editing => _editor(context, controller),
-        ComposerPhase.posted => _StateMessage(
-          icon: Icons.check_circle_rounded,
-          title: "You've posted today's dayli",
-          body: 'Come back tomorrow for a new prompt.',
-          action: DayliButton(
-            label: 'Back to daylies',
-            arrow: true,
-            fullWidth: true,
-            height: 52,
-            onPressed: _close,
-          ),
-        ),
-        ComposerPhase.missedDeadline => _MissedDeadline(
-          draft: controller.draft,
-          message: controller.message,
-          onDiscard: controller.discardMissedDraft,
-        ),
-        ComposerPhase.unavailable => _StateMessage(
-          icon: Icons.cloud_off_rounded,
-          title: "Today's prompt isn't here yet",
-          body: controller.message ?? 'Try again shortly.',
-          action: DayliButton(
-            label: 'Try again',
-            fullWidth: true,
-            height: 52,
-            onPressed: controller.load,
-          ),
-        ),
-      };
+  Widget _body(
+    BuildContext context,
+    ComposerController controller,
+  ) => switch (controller.phase) {
+    ComposerPhase.loading => const Center(
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+    ComposerPhase.editing => _editor(context, controller),
+    ComposerPhase.posted => _StateMessage(
+      icon: Icons.check_circle_rounded,
+      title: "You've posted today's dayli",
+      body: 'Come back tomorrow for a new prompt.',
+      action: DayliButton(
+        label: 'Back to daylies',
+        arrow: true,
+        fullWidth: true,
+        height: 52,
+        onPressed: _close,
+      ),
+    ),
+    ComposerPhase.missedDeadline => _UnpostedDraft(
+      icon: Icons.nightlight_round,
+      title: 'This dayli missed its day',
+      body:
+          controller.message ??
+          "Your dayli for ${controller.draft?.localDate ?? 'an earlier day'} "
+              "wasn't posted before midnight, so it can't be posted now. "
+              "You can read it here, then start today's.",
+      draft: controller.draft,
+      discardLabel: "Discard it and start today's",
+      onDiscard: controller.discardDraft,
+    ),
+    ComposerPhase.alreadyPosted => _UnpostedDraft(
+      icon: Icons.check_circle_rounded,
+      title: "Today's dayli is already posted",
+      body:
+          controller.message ??
+          "Today's dayli was already posted, so these words can't be "
+              "posted. They're still saved on this device.",
+      draft: controller.draft,
+      discardLabel: 'Discard these words',
+      onDiscard: controller.discardDraft,
+    ),
+    ComposerPhase.unavailable => _StateMessage(
+      icon: Icons.cloud_off_rounded,
+      title: "Today's prompt isn't here yet",
+      body: controller.message ?? 'Try again shortly.',
+      action: DayliButton(
+        label: 'Try again',
+        fullWidth: true,
+        height: 52,
+        onPressed: controller.load,
+      ),
+    ),
+  };
 
   Widget _editor(BuildContext context, ComposerController controller) {
     final draft = controller.draft!;
@@ -199,7 +223,6 @@ class _ComposerScreenState extends State<ComposerScreen> {
         const _SectionLabel('your day in pictures'),
         MediaInput(
           attachments: draft.attachments,
-          error: errors.media,
           onPick: (slot) => _pick(controller, slot),
           onRemove: (slot) => _remove(controller, slot),
         ),
@@ -247,6 +270,38 @@ class _ComposerScreenState extends State<ComposerScreen> {
           error: errors.caption,
           onChanged: (value) => controller.update(caption: value),
         ),
+        const SizedBox(height: 20),
+        DayliFormInput(
+          label: "Note to tomorrow's you",
+          fieldKey: const Key('composer.tomorrowNote'),
+          controller: _tomorrowNote,
+          placeholder: 'Something to remember tomorrow (optional)',
+          helper: 'Only you can read it, from tomorrow.',
+          minLines: 2,
+          maxLines: 6,
+          textCapitalization: TextCapitalization.sentences,
+          error: errors.tomorrowNote,
+          onChanged: (value) => controller.update(tomorrowNote: value),
+        ),
+        const SizedBox(height: 28),
+        const _SectionLabel('who can see this'),
+        _AudiencePicker(
+          value: draft.audience,
+          invalid: errors.audience != null,
+          onChanged: (audience) => controller.update(audience: audience),
+        ),
+        if (errors.audience != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            errors.audience!,
+            key: const Key('composer.audience.error'),
+            style: DayliText.sans(
+              context,
+              size: DayliTextSize.sm,
+              color: colors.danger,
+            ),
+          ),
+        ],
         if (controller.message != null) ...[
           const SizedBox(height: 20),
           Container(
@@ -537,49 +592,189 @@ class _StateMessage extends StatelessWidget {
   }
 }
 
-class _MissedDeadline extends StatelessWidget {
-  const _MissedDeadline({
+/// A draft that can no longer be posted. Its words stay readable and
+/// selectable until the author discards them.
+class _UnpostedDraft extends StatelessWidget {
+  const _UnpostedDraft({
+    required this.icon,
+    required this.title,
+    required this.body,
     required this.draft,
-    required this.message,
+    required this.discardLabel,
     required this.onDiscard,
   });
 
+  final IconData icon;
+  final String title;
+  final String body;
   final DailyPostDraft? draft;
-  final String? message;
+  final String discardLabel;
   final Future<void> Function() onDiscard;
 
   @override
   Widget build(BuildContext context) {
-    final saved = draft;
     final colors = DayliColors.of(context);
+    final saved = draft;
+    final words = saved == null
+        ? const <(String, String)>[]
+        : [
+            ('Your answer', saved.reflectiveAnswer),
+            ('Word dump', saved.caption),
+            ("Note to tomorrow's you", saved.tomorrowNote),
+          ].where((entry) => entry.$2.trim().isNotEmpty).toList();
     return _StateMessage(
-      icon: Icons.nightlight_round,
-      title: 'This dayli missed its day',
-      body:
-          message ??
-          "Your dayli for ${saved?.localDate ?? 'an earlier day'} wasn't "
-              "posted before midnight, so it can't be posted now. You can "
-              "read it here, then start today's.",
-      extra: saved == null || saved.reflectiveAnswer.trim().isEmpty
+      icon: icon,
+      title: title,
+      body: body,
+      extra: words.isEmpty
           ? null
           : Container(
+              key: const Key('composer.unpostedWords'),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: colors.card,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: DayliShadows.card,
               ),
-              child: SelectableText(
-                saved.reflectiveAnswer,
-                style: DayliText.sans(context, size: DayliTextSize.base),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (index, (label, text)) in words.indexed) ...[
+                    if (index > 0) const SizedBox(height: 14),
+                    Text(
+                      label,
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.sm,
+                        weight: FontWeight.w500,
+                        color: colors.foregroundTertiary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SelectableText(
+                      text,
+                      style: DayliText.sans(context, size: DayliTextSize.base),
+                    ),
+                  ],
+                ],
               ),
             ),
       action: DayliButton(
-        key: const Key('composer.discardMissed'),
-        label: "Discard it and start today's",
+        key: const Key('composer.discardDraft'),
+        label: discardLabel,
         fullWidth: true,
         height: 52,
         onPressed: onDiscard,
+      ),
+    );
+  }
+}
+
+/// Solo or friends, with nothing chosen until the author picks one.
+class _AudiencePicker extends StatelessWidget {
+  const _AudiencePicker({
+    required this.value,
+    required this.invalid,
+    required this.onChanged,
+  });
+
+  final PostAudience? value;
+  final bool invalid;
+  final ValueChanged<PostAudience> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    Widget option(
+      PostAudience audience,
+      IconData icon,
+      String title,
+      String body,
+    ) {
+      final selected = value == audience;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          inMutuallyExclusiveGroup: true,
+          selected: selected,
+          label: '$title. $body',
+          excludeSemantics: true,
+          child: Material(
+            color: selected
+                ? colors.foregroundAccent
+                : colors.backgroundSecondary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(
+                color: invalid ? colors.danger : Colors.transparent,
+              ),
+            ),
+            child: InkWell(
+              key: Key('composer.audience.${audience.wireValue}'),
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => onChanged(audience),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 88),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 22,
+                        color: selected ? Colors.white : colors.foreground,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        title,
+                        style: DayliText.serif(
+                          context,
+                          size: DayliTextSize.lg,
+                          weight: FontWeight.w600,
+                          color: selected ? Colors.white : colors.foreground,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        body,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.sm,
+                          color: selected
+                              ? Colors.white.withValues(alpha: 0.85)
+                              : colors.foregroundSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Both cards match the taller one's height.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          option(
+            PostAudience.friends,
+            Icons.group_rounded,
+            'Friends',
+            'Your friends see it after midnight.',
+          ),
+          const SizedBox(width: 10),
+          option(
+            PostAudience.solo,
+            Icons.lock_rounded,
+            'Solo',
+            'Only you can see it.',
+          ),
+        ],
       ),
     );
   }

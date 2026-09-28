@@ -112,8 +112,10 @@ Future<void> main() async {
                 iosClientId: config.googleIosClientId,
               )
             : null,
-        // Replaced by the generated posts client once #16 is merged.
-        submitter: const UnavailablePostSubmitter(),
+        submitter: GeneratedPostSubmitter(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
       ),
     ),
   );
