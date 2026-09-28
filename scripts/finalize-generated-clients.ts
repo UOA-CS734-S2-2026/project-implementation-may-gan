@@ -43,7 +43,7 @@ final systemApi = SystemApi(client);
 final health = await systemApi.systemHealth();
 \`\`\`
 
-For local HTTPS auth, use \`https://localhost:8787\` in iOS Simulator. Android emulators and USB-connected debug devices use that same URL with \`adb reverse tcp:8787 tcp:8787\` after the mkcert CA is installed on the device. It is not a LAN-accessible endpoint. See [Environments](../../docs/dayli/environments.md) for the trust and launch steps. Staging and production URLs must come from application configuration.
+For local HTTPS auth, use \`https://localhost:8787\` in iOS Simulator. Android emulators and USB-connected debug devices use that same URL with \`adb reverse tcp:8787 tcp:8787\` in a debug build that passes the mkcert root as \`DAYLI_DEV_CA_PEM_B64\`, because Dart HTTP ignores CAs installed on the device. It is not a LAN-accessible endpoint. See [Environments](../../docs/dayli/environments.md) for the trust and launch steps. Staging and production URLs must come from application configuration.
 
 Regenerate this package from the repository root with \`pnpm generate:clients\`.
 `;

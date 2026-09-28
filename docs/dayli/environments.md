@@ -82,16 +82,20 @@ Do not point `MIGRATION_TARGET=development` at another host, port, database, or 
 
 ## Android debug builds
 
-Android local authentication remains HTTPS-only. The debug manifest trusts a user-installed CA through `debug-overrides`; release and profile manifests do not trust user CAs and no manifest enables cleartext traffic.
+Android local authentication remains HTTPS-only. No manifest enables cleartext traffic.
 
-1. Ensure the emulator or USB device is running and manually install `$(mkcert -CAROOT)/rootCA.pem` as a **CA certificate** in its security settings. Use only a development device or emulator. This is separate from `mkcert -install` on the development machine.
+The app's HTTP clients, including the generated API client and the native Better Auth session, use Dart's `HttpClient`. On Android it verifies TLS against the system CA store only. It ignores user-installed CAs and `network_security_config`, so installing the mkcert root on the device does not make `https://localhost:8787` reachable from the app. Debug builds instead accept the mkcert root through the `DAYLI_DEV_CA_PEM_B64` Dart define. `lib/main.dart` reads it only when `kDebugMode` is true and adds exactly that one certificate to Dart's default security context, on top of the system roots. Profile and release builds ignore it.
+
+1. Ensure the emulator or USB device is running. Use only a development device or emulator.
 2. Start `pnpm dev:api:https` on the development machine.
-3. For a USB device or Android emulator, map device loopback to the API without exposing it on the LAN:
+3. For a USB device or Android emulator, map device loopback to the API without exposing it on the LAN, then run a debug build with the base64-encoded mkcert root:
 
 ```bash
 adb reverse tcp:8787 tcp:8787
 cd apps/mobile
-flutter run --debug --dart-define=DAYLI_API_BASE_URL=https://localhost:8787
+flutter run --debug \
+  --dart-define=DAYLI_API_BASE_URL=https://localhost:8787 \
+  --dart-define=DAYLI_DEV_CA_PEM_B64="$(base64 < "$(mkcert -CAROOT)/rootCA.pem" | tr -d '\n')"
 ```
 
 4. Remove the mapping when finished:
@@ -100,7 +104,9 @@ flutter run --debug --dart-define=DAYLI_API_BASE_URL=https://localhost:8787
 adb reverse --remove tcp:8787
 ```
 
-The debug-only trust override permits the mkcert user CA, not arbitrary cleartext. Do not add `usesCleartextTraffic`, a cleartext domain configuration, or user CA trust to a release source set.
+Pass `rootCA.pem`, never `rootCA-key.pem`. The app rejects a value that is not a single PEM certificate or that contains a private key. Do not pass the define to profile or release builds.
+
+The debug manifest's `debug-overrides` still trusts user-installed CAs for Android platform networking, such as `HttpURLConnection` or a WebView. It does not affect Dart HTTP, and the app's API calls do not need a user-installed CA. Do not add `usesCleartextTraffic`, a cleartext domain configuration, or user CA trust to a release source set.
 
 ### Staging Android emulator
 

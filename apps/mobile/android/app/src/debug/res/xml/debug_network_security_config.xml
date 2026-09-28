@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug only: trust a user-installed local development CA for HTTPS. -->
+<!-- Debug only: trust a user-installed local development CA for Android
+     platform HTTPS. Dart's HttpClient ignores this file; the app trusts the
+     local CA through DAYLI_DEV_CA_PEM_B64 instead. -->
 <network-security-config>
     <debug-overrides>
         <trust-anchors>
