@@ -30,4 +30,4 @@ The server derives the actor solely from Better Auth. Relationship mutations con
 
 ## Integration note
 
-Migration `0009_relationship_search` and the generated relationship contracts overlap with the separate messaging work. No deployed migration history was changed and this branch must not be rebased or cherry-picked onto messaging until the orchestrator selects the migration ordering and resolves the shared contract generation deliberately.
+Migration `0009_relationship_search` and the generated relationship contracts overlap with the separate messaging work. The confirmed integration order is refactor, then friends, then messaging. Friends remains directly based on refactor and owns `0009_relationship_search`; messaging will rebase onto friends and regenerate its undeployed migrations. The orchestrator owns that coordination. No deployed migration history was changed.
