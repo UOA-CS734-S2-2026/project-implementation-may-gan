@@ -8,10 +8,11 @@ export function createPostgresPushDeviceStore(database: DayliDatabase): PushDevi
       await database.transaction(async (tx) => {
         await tx.execute(sql`delete from public.push_devices where token_hash = ${device.tokenHash} and user_id <> ${device.userId}`);
         await tx.execute(sql`
-          insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_hash, opted_in, registered_at, invalidated_at)
-          values (${device.id}, ${device.userId}, ${device.sessionId}, ${device.installationId}, ${device.platform}, ${device.token}, ${device.tokenHash}, ${device.optedIn}, ${device.now}::timestamptz, null)
+          insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_ciphertext, token_key_version, token_hash, opted_in, registered_at, invalidated_at)
+          values (${device.id}, ${device.userId}, ${device.sessionId}, ${device.installationId}, ${device.platform}, ${device.tokenCiphertext}, ${device.tokenCiphertext}, ${device.tokenKeyVersion}, ${device.tokenHash}, ${device.optedIn}, ${device.now}::timestamptz, null)
           on conflict (user_id, installation_id) do update set
             session_id = excluded.session_id, platform = excluded.platform, token = excluded.token,
+            token_ciphertext = excluded.token_ciphertext, token_key_version = excluded.token_key_version,
             token_hash = excluded.token_hash, opted_in = excluded.opted_in,
             registered_at = excluded.registered_at, invalidated_at = null
         `);

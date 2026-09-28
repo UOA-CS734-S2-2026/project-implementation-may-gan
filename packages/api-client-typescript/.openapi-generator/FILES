@@ -16,6 +16,7 @@ src/models/ApiErrorError.ts
 src/models/CreateDailyPostRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
+src/models/CreateRealtimeTicket201Response.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPost.ts
 src/models/DailyPostPrompt.ts
@@ -31,6 +32,7 @@ src/models/MediaValidationFailureReason.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
+src/models/RegisterPushDeviceRequest.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts

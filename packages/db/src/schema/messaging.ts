@@ -139,7 +139,10 @@ export const pushDevices = pgTable("push_devices", {
   sessionId: text("session_id").notNull(),
   installationId: text("installation_id").notNull(),
   platform: pushPlatform("platform").notNull(),
+  /** Legacy column carries ciphertext on all new writes until its external drop migration. */
   token: text("token").notNull(),
+  tokenCiphertext: text("token_ciphertext"),
+  tokenKeyVersion: text("token_key_version"),
   tokenHash: text("token_hash").notNull(),
   optedIn: boolean("opted_in").notNull().default(true),
   registeredAt: timestamp("registered_at", { withTimezone: true }).notNull(),

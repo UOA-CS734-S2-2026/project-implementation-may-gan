@@ -24,6 +24,7 @@ lib/model/api_error_error.dart
 lib/model/create_daily_post_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
+lib/model/create_realtime_ticket201_response.dart
 lib/model/current_posting_day_response.dart
 lib/model/daily_post.dart
 lib/model/daily_post_prompt.dart
@@ -39,6 +40,7 @@ lib/model/media_validation_failure_reason.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
+lib/model/register_push_device_request.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart

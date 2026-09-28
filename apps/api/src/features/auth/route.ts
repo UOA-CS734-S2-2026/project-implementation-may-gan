@@ -13,6 +13,7 @@ import {
   type SocialLinkConfirmationStore,
 } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
+import { sql } from "@dayli/db";
 
 const corsMethods = ["GET", "POST"];
 const corsHeaders = ["authorization", "content-type"];
@@ -193,8 +194,17 @@ export function registerBetterAuthCompatibilityRoutes<E extends Env>(
   ));
 }
 
+export interface SessionRevocationHook {
+  revokeSessions(userId: string, sessionIds: readonly string[]): Promise<void>;
+}
+
+function isSessionRevocationRequest(request: Request): boolean {
+  const path = new URL(request.url).pathname;
+  return request.method === "POST" && (path === `${authBasePath}/sign-out` || path === `${authBasePath}/revoke-sessions`);
+}
+
 /** Register the production authority only after all Worker bindings validate. */
-export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono<E>, env: ApiEnv) {
+export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono<E>, env: ApiEnv, revocations?: SessionRevocationHook) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   if (!configuration) return false;
 
@@ -209,7 +219,17 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
         google: configuration.google,
         resend: configuration.resend,
       });
-      return handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
+      const revoke = isSessionRevocationRequest(request) && revocations
+        ? await readAuthoritativeSession(request, auth.handler)
+        : undefined;
+      let sessionIds: string[] = [];
+      if (revoke) {
+        const stored = await database.execute(sql`select id from public.session where user_id = ${revoke.userId}`);
+        sessionIds = [...stored as Iterable<{ id: unknown }>].map((row) => String(row.id));
+      }
+      const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
+      if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
+      return response;
     },
   ));
   return true;

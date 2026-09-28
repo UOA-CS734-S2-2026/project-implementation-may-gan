@@ -4553,6 +4553,179 @@
           }
         }
       }
+    },
+    "/api/v1/realtime/tickets": {
+      "post": {
+        "tags": [
+          "Messaging"
+        ],
+        "operationId": "createRealtimeTicket",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A short-lived single-use ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ticket": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "webSocketUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "ticket",
+                    "expiresAt",
+                    "webSocketUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "503": {
+            "description": "Realtime is unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/push/devices/{installationId}": {
+      "put": {
+        "tags": [
+          "Messaging"
+        ],
+        "operationId": "registerPushDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "installationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 8192
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "android"
+                    ]
+                  },
+                  "optedIn": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "token",
+                  "platform",
+                  "optedIn"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Device registration updated."
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "503": {
+            "description": "Push registration unavailable."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Messaging"
+        ],
+        "operationId": "unregisterPushDevice",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "required": true,
+            "name": "installationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Device registration removed."
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "503": {
+            "description": "Push registration unavailable."
+          }
+        }
+      }
     }
   }
 }

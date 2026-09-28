@@ -58,6 +58,15 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
     const eventId = crypto.randomUUID(); const createdAt = new Date().toISOString();
     await this.queryable.execute(sql`insert into public.conversation_changes (conversation_id, change_sequence, kind, message_id, created_at) values (${input.conversationId}, ${change.sequence}::bigint, ${input.kind}, ${input.messageId}, ${createdAt}::timestamptz)`);
     await this.queryable.execute(sql`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, created_at) values (${crypto.randomUUID()}, ${eventId}, ${change.user_low_id}, ${input.conversationId}, ${change.sequence}::bigint, 'realtime', 'pending', 0, ${createdAt}::timestamptz, ${createdAt}::timestamptz), (${crypto.randomUUID()}, ${eventId}, ${change.user_high_id}, ${input.conversationId}, ${change.sequence}::bigint, 'realtime', 'pending', 0, ${createdAt}::timestamptz, ${createdAt}::timestamptz)`);
+    if (input.kind === "message.created" && input.messageId) {
+      const [message] = rows<{ sender_id: string }>(await this.queryable.execute(sql`select sender_id from public.messages where id = ${input.messageId}`));
+      const peerId = message?.sender_id === change.user_low_id ? change.user_high_id : change.user_low_id;
+      const devices = rows<{ id: string }>(await this.queryable.execute(sql`
+        select d.id from public.push_devices d join public.session s on s.id = d.session_id and s.user_id = d.user_id and s.expires_at > now()
+        where d.user_id = ${peerId} and d.opted_in and d.invalidated_at is null and d.token_ciphertext is not null and d.token_key_version is not null
+      `));
+      for (const device of devices) await this.queryable.execute(sql`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, device_registration_id, status, attempts, available_at, created_at) values (${crypto.randomUUID()}, ${crypto.randomUUID()}, ${peerId}, ${input.conversationId}, ${change.sequence}::bigint, 'push', ${device.id}, 'pending', 0, ${createdAt}::timestamptz, ${createdAt}::timestamptz)`);
+    }
   }
 }
 
