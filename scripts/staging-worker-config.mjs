@@ -56,6 +56,9 @@ export function createStagingWorkerConfigs({
   };
   const probe = {
     ...sharedWorkerConfig,
+    // The dedicated module exports only the service entrypoint. It cannot
+    // publish UserRealtime or require a shared Durable Object namespace.
+    main: "src/features/system/hyperdrive/test-worker.ts",
     name: "dayli-api-hyperdrive-integration-test",
     workers_dev: false,
     services: [{

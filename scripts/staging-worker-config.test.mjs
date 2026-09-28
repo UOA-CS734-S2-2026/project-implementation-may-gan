@@ -23,6 +23,7 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
 
 test("keeps the remote service probe free of cron and shared Durable Object bindings", () => {
   const { probe } = createStagingWorkerConfigs(input);
+  assert.equal(probe.main, "src/features/system/hyperdrive/test-worker.ts");
   assert.equal(probe.triggers, undefined);
   assert.equal(probe.durable_objects, undefined);
   assert.equal(probe.migrations, undefined);
