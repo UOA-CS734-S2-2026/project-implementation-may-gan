@@ -7,10 +7,14 @@ enum PostAudience {
 
   final String wireValue;
 
-  static PostAudience fromWire(Object? value) => PostAudience.values.firstWhere(
-    (audience) => audience.wireValue == value,
-    orElse: () => PostAudience.friends,
-  );
+  /// Null when the stored value is absent or unknown, so the author chooses
+  /// again rather than posting to an audience they did not pick.
+  static PostAudience? fromWire(Object? value) {
+    for (final audience in values) {
+      if (audience.wireValue == value) return audience;
+    }
+    return null;
+  }
 }
 
 /// A reference to a locally captured attachment. Upload and validation arrive
@@ -49,7 +53,7 @@ class DailyPostDraft {
     this.reflectiveAnswer = '',
     this.caption = '',
     this.rating,
-    this.audience = PostAudience.friends,
+    this.audience,
     this.tomorrowNote = '',
     this.attachments = const [],
   });
@@ -67,7 +71,9 @@ class DailyPostDraft {
   final String reflectiveAnswer;
   final String caption;
   final int? rating;
-  final PostAudience audience;
+
+  /// Unset until the author chooses; there is deliberately no default.
+  final PostAudience? audience;
   final String tomorrowNote;
   final List<DraftAttachment> attachments;
 
@@ -114,7 +120,7 @@ class DailyPostDraft {
     'reflectiveAnswer': reflectiveAnswer,
     'caption': caption,
     'rating': rating,
-    'audience': audience.wireValue,
+    'audience': audience?.wireValue,
     'tomorrowNote': tomorrowNote,
     'attachments': [for (final attachment in attachments) attachment.toJson()],
   };

@@ -66,8 +66,10 @@ class MediaInput extends StatelessWidget {
         Text(
           error ??
               (attachments.isEmpty
-                  ? 'Add up to 3 photos, or 1 video.'
-                  : '${attachments.length}/3 added'),
+                  ? "Optional. Add up to 3 photos, or 1 video. They stay on "
+                        "this device for now and aren't posted yet."
+                  : "${attachments.length}/3 added. They stay on this device "
+                        "for now and aren't posted yet."),
           style: DayliText.sans(
             context,
             size: DayliTextSize.sm,

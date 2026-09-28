@@ -4,7 +4,9 @@ import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/app/theme.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
+import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/friends/friends_screen.dart';
+import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -146,7 +148,7 @@ void main() {
     expect(find.text('Username'), findsNothing);
   });
 
-  testWidgets('signs in, adds a photo, and posts today\'s dayli', (
+  testWidgets('signs in, chooses an audience, and posts today\'s dayli', (
     tester,
   ) async {
     final harness = TestHarness();
@@ -174,22 +176,33 @@ void main() {
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
 
-    // Posting without media is refused, as in WDCC.
-    await tester.tap(find.byKey(const Key('composer.submit')));
-    await tester.pumpAndSettle();
-    expect(find.text('Please upload at least one file'), findsOneWidget);
-    expect(harness.submitter.submitted, isEmpty);
-
-    await tester.tap(find.byKey(const Key('composer.media.0')));
-    await tester.pumpAndSettle();
-    expect(find.text('1/3 added'), findsOneWidget);
-
     final list = find
         .descendant(
           of: find.byType(ComposerScreen),
           matching: find.byType(Scrollable),
         )
         .first;
+
+    // Nothing is sent until the author chooses who can see it.
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.audience.error')),
+      200,
+      scrollable: list,
+    );
+    expect(find.byKey(const Key('composer.audience.error')), findsOneWidget);
+    expect(harness.submitter.submitted, isEmpty);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.media.0')),
+      -200,
+      scrollable: list,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('1/3 added'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const Key('composer.rating.8')),
       100,
@@ -211,7 +224,24 @@ void main() {
       find.byKey(const Key('composer.reflectiveAnswer')),
       'Coffee by the harbour',
     );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.tomorrowNote')),
+      100,
+      scrollable: list,
+    );
+    await tester.enterText(
+      find.byKey(const Key('composer.tomorrowNote')),
+      'Bring the camera.',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.audience.solo')),
+      100,
+      scrollable: list,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.audience.solo')));
     await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byKey(const Key('composer.audience.error')), findsNothing);
     await tester.ensureVisible(find.byKey(const Key('composer.submit')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('composer.submit')));
@@ -220,8 +250,81 @@ void main() {
     final sent = harness.submitter.submitted.single;
     expect(sent.rating, 8);
     expect(sent.reflectiveAnswer, 'Coffee by the harbour');
+    expect(sent.tomorrowNote, 'Bring the camera.');
+    expect(sent.audience, PostAudience.solo);
     expect(sent.attachments.single.localPath, '/photos/0.jpg');
     expect(find.byKey(const Key('home.empty')), findsOneWidget);
+    expect(harness.drafts.drafts, isEmpty);
+  });
+
+  testWidgets('keeps and shows the words when today is already posted', (
+    tester,
+  ) async {
+    final harness = TestHarness(
+      submission: const SubmissionRejected(SubmissionConflict.alreadyPosted),
+    );
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    final list = find
+        .descendant(
+          of: find.byType(ComposerScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.rating.6')),
+      100,
+      scrollable: list,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.rating.6')));
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.reflectiveAnswer')),
+      100,
+      scrollable: list,
+    );
+    await tester.enterText(
+      find.byKey(const Key('composer.reflectiveAnswer')),
+      'Written on a second phone',
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.audience.friends')),
+      100,
+      scrollable: list,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.audience.friends')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Today's dayli is already posted"), findsOneWidget);
+    expect(find.text('Written on a second phone'), findsOneWidget);
+    expect(
+      harness.drafts.drafts['user-1']!.reflectiveAnswer,
+      'Written on a second phone',
+    );
+    expect(harness.submitter.submitted.single.audience, PostAudience.friends);
+
+    await tester.tap(find.byKey(const Key('composer.discardDraft')));
+    await tester.pumpAndSettle();
     expect(harness.drafts.drafts, isEmpty);
   });
 }

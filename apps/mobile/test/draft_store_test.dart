@@ -77,4 +77,18 @@ void main() {
     final parsed = DailyPostDraft.fromJson({...draft().toJson(), 'rating': 11});
     expect(parsed?.rating, isNull);
   });
+
+  test('leaves the audience unchosen rather than guessing one', () {
+    for (final stored in [null, 'public', 42]) {
+      final parsed = DailyPostDraft.fromJson({
+        ...draft().toJson(),
+        'audience': stored,
+      });
+      expect(parsed?.audience, isNull);
+    }
+    expect(
+      DailyPostDraft.fromJson(draft().toJson())?.audience,
+      PostAudience.solo,
+    );
+  });
 }
