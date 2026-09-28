@@ -20,4 +20,18 @@ describe("POST /conversations/{id}/messages", () => {
     const response = await request(app(async () => { throw new Error("auth down"); }));
     expect(response.status).toBe(503);
   });
+
+  it("schedules bounded immediate dispatch only after a saved response", async () => {
+    const dispatchImmediately = vi.fn(async () => undefined);
+    const api = createApp({ messaging: { resolveSession: async () => ({ userId: "alice" }), service, dispatchImmediately } });
+    const waits: Promise<unknown>[] = [];
+    const response = await api.fetch(
+      new Request("http://localhost/api/v1/conversations/c1/messages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientMessageId: "client", text: "hello" }) }),
+      undefined,
+      { waitUntil: (promise) => { waits.push(promise); }, passThroughOnException: () => undefined, props: undefined },
+    );
+    expect(response.status).toBe(201);
+    expect(dispatchImmediately).toHaveBeenCalledTimes(1);
+    await Promise.all(waits);
+  });
 });

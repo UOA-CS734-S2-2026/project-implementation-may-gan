@@ -20,4 +20,6 @@ export interface ApiEnv {
   USER_REALTIME?: DurableObjectNamespace;
   /** Worker secret containing a Firebase service-account JSON document. */
   FCM_SERVICE_ACCOUNT_JSON?: string;
+  /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */
+  PUSH_TOKEN_ENCRYPTION_KEY?: string;
 }

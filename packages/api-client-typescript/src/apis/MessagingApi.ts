@@ -34,6 +34,11 @@ import {
     CreateDirectConversationRequestToJSON,
 } from '../models/CreateDirectConversationRequest';
 import {
+    type CreateRealtimeTicket201Response,
+    CreateRealtimeTicket201ResponseFromJSON,
+    CreateRealtimeTicket201ResponseToJSON,
+} from '../models/CreateRealtimeTicket201Response';
+import {
     type EditMessageRequest,
     EditMessageRequestFromJSON,
     EditMessageRequestToJSON,
@@ -74,6 +79,11 @@ import {
     MessageToJSON,
 } from '../models/Message';
 import {
+    type RegisterPushDeviceRequest,
+    RegisterPushDeviceRequestFromJSON,
+    RegisterPushDeviceRequestToJSON,
+} from '../models/RegisterPushDeviceRequest';
+import {
     type ResolveMessageRequestRequest,
     ResolveMessageRequestRequestFromJSON,
     ResolveMessageRequestRequestToJSON,
@@ -94,6 +104,13 @@ export interface CreateDirectConversationOperationRequest {
      *
      */
     createDirectConversationRequest: CreateDirectConversationRequest;
+}
+
+export interface CreateRealtimeTicketRequest {
+    /**
+     *
+     */
+    requestBody: { [key: string]: any | null; };
 }
 
 export interface EditMessageOperationRequest {
@@ -189,6 +206,17 @@ export interface MarkConversationReadOperationRequest {
     markConversationReadRequest: MarkConversationReadRequest;
 }
 
+export interface RegisterPushDeviceOperationRequest {
+    /**
+     *
+     */
+    installationId: string;
+    /**
+     *
+     */
+    registerPushDeviceRequest: RegisterPushDeviceRequest;
+}
+
 export interface RemoveMessageReactionRequest {
     /**
      *
@@ -235,6 +263,13 @@ export interface SetMessageReactionOperationRequest {
      *
      */
     setMessageReactionRequest: SetMessageReactionRequest;
+}
+
+export interface UnregisterPushDeviceRequest {
+    /**
+     *
+     */
+    installationId: string;
 }
 
 export interface UnsendMessageRequest {
@@ -303,6 +338,59 @@ export class MessagingApi extends runtime.BaseAPI {
      */
     async createDirectConversation(requestParameters: CreateDirectConversationOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CreateDirectConversation200Response> {
         const response = await this.createDirectConversationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for createRealtimeTicket without sending the request
+     */
+    async createRealtimeTicketRequestOpts(requestParameters: CreateRealtimeTicketRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['requestBody'] == null) {
+            throw new runtime.RequiredError(
+                'requestBody',
+                'Required parameter "requestBody" was null or undefined when calling createRealtimeTicket().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/realtime/tickets`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: requestParameters['requestBody'],
+        };
+    }
+
+    /**
+     */
+    async createRealtimeTicketRaw(requestParameters: CreateRealtimeTicketRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CreateRealtimeTicket201Response>> {
+        const requestOptions = await this.createRealtimeTicketRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CreateRealtimeTicket201ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async createRealtimeTicket(requestParameters: CreateRealtimeTicketRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CreateRealtimeTicket201Response> {
+        const response = await this.createRealtimeTicketRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -767,6 +855,66 @@ export class MessagingApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for registerPushDevice without sending the request
+     */
+    async registerPushDeviceRequestOpts(requestParameters: RegisterPushDeviceOperationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['installationId'] == null) {
+            throw new runtime.RequiredError(
+                'installationId',
+                'Required parameter "installationId" was null or undefined when calling registerPushDevice().'
+            );
+        }
+
+        if (requestParameters['registerPushDeviceRequest'] == null) {
+            throw new runtime.RequiredError(
+                'registerPushDeviceRequest',
+                'Required parameter "registerPushDeviceRequest" was null or undefined when calling registerPushDevice().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/push/devices/{installationId}`;
+        urlPath = urlPath.replace('{installationId}', encodeURIComponent(String(requestParameters['installationId'])));
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RegisterPushDeviceRequestToJSON(requestParameters['registerPushDeviceRequest']),
+        };
+    }
+
+    /**
+     */
+    async registerPushDeviceRaw(requestParameters: RegisterPushDeviceOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.registerPushDeviceRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     */
+    async registerPushDevice(requestParameters: RegisterPushDeviceOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.registerPushDeviceRaw(requestParameters, initOverrides);
+    }
+
+    /**
      * Creates request options for removeMessageReaction without sending the request
      */
     async removeMessageReactionRequestOpts(requestParameters: RemoveMessageReactionRequest): Promise<runtime.RequestOpts> {
@@ -1014,6 +1162,56 @@ export class MessagingApi extends runtime.BaseAPI {
     async setMessageReaction(requestParameters: SetMessageReactionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
         const response = await this.setMessageReactionRaw(requestParameters, initOverrides);
         return await response.value();
+    }
+
+    /**
+     * Creates request options for unregisterPushDevice without sending the request
+     */
+    async unregisterPushDeviceRequestOpts(requestParameters: UnregisterPushDeviceRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['installationId'] == null) {
+            throw new runtime.RequiredError(
+                'installationId',
+                'Required parameter "installationId" was null or undefined when calling unregisterPushDevice().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/push/devices/{installationId}`;
+        urlPath = urlPath.replace('{installationId}', encodeURIComponent(String(requestParameters['installationId'])));
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async unregisterPushDeviceRaw(requestParameters: UnregisterPushDeviceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<void>> {
+        const requestOptions = await this.unregisterPushDeviceRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.VoidApiResponse(response);
+    }
+
+    /**
+     */
+    async unregisterPushDevice(requestParameters: UnregisterPushDeviceRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<void> {
+        await this.unregisterPushDeviceRaw(requestParameters, initOverrides);
     }
 
     /**

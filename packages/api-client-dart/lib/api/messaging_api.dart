@@ -75,6 +75,65 @@ class MessagingApi {
     return null;
   }
 
+  /// Performs an HTTP 'POST /api/v1/realtime/tickets' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [Map<String, Object?>] requestBody (required):
+  Future<Response> createRealtimeTicketWithHttpInfo(
+    Map<String, Object?> requestBody, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/realtime/tickets';
+
+    // ignore: prefer_final_locals
+    Object? postBody = requestBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [Map<String, Object?>] requestBody (required):
+  Future<CreateRealtimeTicket201Response?> createRealtimeTicket(
+    Map<String, Object?> requestBody, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await createRealtimeTicketWithHttpInfo(
+      requestBody,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'CreateRealtimeTicket201Response',
+      ) as CreateRealtimeTicket201Response;
+    }
+    return null;
+  }
+
   /// Performs an HTTP 'PATCH /api/v1/conversations/{conversationId}/messages/{messageId}' operation and returns the [Response].
   /// Parameters:
   ///
@@ -651,6 +710,62 @@ class MessagingApi {
     return null;
   }
 
+  /// Performs an HTTP 'PUT /api/v1/push/devices/{installationId}' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] installationId (required):
+  ///
+  /// * [RegisterPushDeviceRequest] registerPushDeviceRequest (required):
+  Future<Response> registerPushDeviceWithHttpInfo(
+    String installationId,
+    RegisterPushDeviceRequest registerPushDeviceRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/push/devices/{installationId}'
+        .replaceAll('{installationId}', installationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody = registerPushDeviceRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] installationId (required):
+  ///
+  /// * [RegisterPushDeviceRequest] registerPushDeviceRequest (required):
+  Future<void> registerPushDevice(
+    String installationId,
+    RegisterPushDeviceRequest registerPushDeviceRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await registerPushDeviceWithHttpInfo(
+      installationId,
+      registerPushDeviceRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+  }
+
   /// Performs an HTTP 'DELETE /api/v1/conversations/{conversationId}/messages/{messageId}/reaction' operation and returns the [Response].
   /// Parameters:
   ///
@@ -928,6 +1043,55 @@ class MessagingApi {
       ) as Message;
     }
     return null;
+  }
+
+  /// Performs an HTTP 'DELETE /api/v1/push/devices/{installationId}' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [String] installationId (required):
+  Future<Response> unregisterPushDeviceWithHttpInfo(
+    String installationId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/push/devices/{installationId}'
+        .replaceAll('{installationId}', installationId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [String] installationId (required):
+  Future<void> unregisterPushDevice(
+    String installationId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await unregisterPushDeviceWithHttpInfo(
+      installationId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
   }
 
   /// Performs an HTTP 'DELETE /api/v1/conversations/{conversationId}/messages/{messageId}' operation and returns the [Response].

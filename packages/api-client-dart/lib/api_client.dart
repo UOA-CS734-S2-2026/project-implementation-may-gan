@@ -216,6 +216,8 @@ class ApiClient {
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
           return CreateMediaReservationResponse.fromJson(value);
+        case 'CreateRealtimeTicket201Response':
+          return CreateRealtimeTicket201Response.fromJson(value);
         case 'CurrentPostingDayResponse':
           return CurrentPostingDayResponse.fromJson(value);
         case 'DailyPost':
@@ -246,6 +248,8 @@ class ApiClient {
           return PendingRequestPage.fromJson(value);
         case 'PostAudience':
           return PostAudienceTypeTransformer().decode(value);
+        case 'RegisterPushDeviceRequest':
+          return RegisterPushDeviceRequest.fromJson(value);
         case 'RelationshipState':
           return RelationshipStateTypeTransformer().decode(value);
         case 'RelationshipStatus':

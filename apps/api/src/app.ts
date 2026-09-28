@@ -29,6 +29,7 @@ import {
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/get-current-posting-day/get-current-posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
+import { sql } from "@dayli/db";
 import {
   registerCreateDailyPostRoute,
   type CreateDailyPostRouteDependencies,
@@ -50,6 +51,16 @@ import { createSetReactionService } from "./features/messaging/messages/set-reac
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
 import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/conversations/conversation.repository";
+import { registerRealtimeTicketRoute, type RealtimeTicketRouteDependencies } from "./features/messaging/realtime/ticket.route";
+import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/ticket.repository";
+import { createRealtimeTicketService, type VerifiedRealtimeSession } from "./features/messaging/realtime/ticket.service";
+import { registerRealtimeConnectRoute, type RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect.route";
+import { registerPushDeviceRoutes, type PushDeviceRouteDependencies } from "./features/messaging/push/push-device.route";
+import { createPostgresPushDeviceStore } from "./features/messaging/push/push-device.repository";
+import { createPushDeviceService } from "./features/messaging/push/push-device.service";
+import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
+import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
+import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -58,6 +69,9 @@ export interface AppDependencies {
   posts?: CreateDailyPostRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
+  realtimeTicket?: RealtimeTicketRouteDependencies;
+  realtimeConnect?: RealtimeConnectRouteDependencies;
+  pushDevices?: PushDeviceRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -69,6 +83,9 @@ export function createApp({
   posts,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
+  realtimeTicket = unavailableRealtimeTicket,
+  realtimeConnect = {},
+  pushDevices = unavailablePushDevices,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -113,6 +130,9 @@ export function createApp({
   registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
   registerRelationshipsRoutes(api, relationships);
   registerMessagingRoutes(api, messaging);
+  registerRealtimeTicketRoute(api, realtimeTicket);
+  registerPushDeviceRoutes(api, pushDevices);
+  registerRealtimeConnectRoute(api, realtimeConnect);
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -138,7 +158,9 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
-  const messaging = configuration ? createMessagingDependencies(configuration) : undefined;
+  const messaging = configuration ? createMessagingDependencies(configuration, env) : undefined;
+  const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env) : undefined;
+  const pushDevices = configuration ? createPushDeviceDependencies(configuration, env) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
@@ -160,14 +182,28 @@ export function createAppForEnv(env: ApiEnv) {
     media,
     relationships,
     messaging,
+    realtimeTicket: realtime?.ticket,
+    realtimeConnect: realtime?.connect,
+    pushDevices,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
-  registerPostgresBetterAuthRoutes(api, env);
+  registerPostgresBetterAuthRoutes(api, env, env.USER_REALTIME ? {
+    revokeSessions: async (userId, sessionIds) => {
+      const publisher = createDurableObjectRealtimePublisher(env.USER_REALTIME!, configuration.hyperdrive);
+      await Promise.allSettled(sessionIds.map((sessionId) => publisher.revokeSession(userId, sessionId)));
+    },
+  } : undefined);
   return api;
 }
 
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
+const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
+  resolveSession: async () => null,
+  resolveRealtimeSession: async () => null,
+  webSocketUrl: "wss://realtime.invalid/api/v1/realtime/connect",
+};
+const unavailablePushDevices: PushDeviceRouteDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
 
 const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
@@ -227,8 +263,28 @@ function createSessionResolver(configuration: RuntimeConfiguration) {
   });
 }
 
-function createMessagingDependencies(configuration: RuntimeConfiguration): MessagingRouteDependencies {
+function createVerifiedRealtimeSessionResolver(configuration: RuntimeConfiguration) {
+  return async (request: Request): Promise<VerifiedRealtimeSession | null> => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+    const auth = createPostgresBetterAuth({ baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins, database, google: configuration.google, resend: configuration.resend });
+    const current = await auth.api.getSession({ headers: request.headers }) as { user?: { id?: string }; session?: { id?: string; expiresAt?: string | Date } } | null;
+    const userId = current?.user?.id;
+    const sessionId = current?.session?.id;
+    const expiresAt = current?.session?.expiresAt ? new Date(current.session.expiresAt) : null;
+    return userId && sessionId && expiresAt && Number.isFinite(expiresAt.getTime()) ? { userId, sessionId, expiresAt } : null;
+  });
+}
+
+function resolveRealtimeSessionById(configuration: RuntimeConfiguration, sessionId: string): Promise<VerifiedRealtimeSession | null> {
+  return withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+    const result = await database.execute(sql`select id, user_id, expires_at from public.session where id = ${sessionId} and expires_at > now() limit 1`);
+    const [row] = [...result as Iterable<{ id: unknown; user_id: unknown; expires_at: unknown }>];
+    return row ? { sessionId: String(row.id), userId: String(row.user_id), expiresAt: new Date(String(row.expires_at)) } : null;
+  });
+}
+
+function createMessagingDependencies(configuration: RuntimeConfiguration, env: ApiEnv): MessagingRouteDependencies {
   const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
+  const userRealtime = env.USER_REALTIME;
   return {
     resolveSession: createSessionResolver(configuration),
     service: createSendMessageService({ store }),
@@ -238,6 +294,37 @@ function createMessagingDependencies(configuration: RuntimeConfiguration): Messa
     removeReaction: createRemoveReactionService({ store }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
     reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,
+  };
+}
+
+function createRealtimeDependencies(configuration: RuntimeConfiguration, env: ApiEnv): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
+  const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
+  const tickets = {
+    issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
+    consume: async (ticket: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).consume(ticket)),
+  };
+  const webSocketUrl = new URL("/api/v1/realtime/connect", configuration.baseURL);
+  webSocketUrl.protocol = webSocketUrl.protocol === "https:" ? "wss:" : "ws:";
+  const connect: RealtimeConnectRouteDependencies = {
+    tickets,
+    resolveActiveSession: async (sessionId) => resolveRealtimeSessionById(configuration, sessionId),
+    userRealtime: env.USER_REALTIME!,
+    trustedOrigins: configuration.trustedOrigins,
+  };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString() }, connect };
+}
+
+function createPushDeviceDependencies(configuration: RuntimeConfiguration, env: ApiEnv): PushDeviceRouteDependencies {
+  const resolvePushSession = createVerifiedRealtimeSessionResolver(configuration);
+  if (!hasWorkerPushTokenProtection(env.PUSH_TOKEN_ENCRYPTION_KEY)) return { resolveSession: createSessionResolver(configuration), resolvePushSession };
+  return {
+    resolveSession: createSessionResolver(configuration),
+    resolvePushSession,
+    devices: {
+      register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
+      unregister: (session, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).unregister(session, installationId)),
+    },
   };
 }
 

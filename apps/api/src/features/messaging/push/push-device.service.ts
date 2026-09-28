@@ -12,7 +12,8 @@ export interface PushDeviceStore {
     sessionId: string;
     installationId: string;
     platform: PushPlatform;
-    token: string;
+    tokenCiphertext: string;
+    tokenKeyVersion: string;
     tokenHash: string;
     optedIn: boolean;
     now: Date;
@@ -20,13 +21,14 @@ export interface PushDeviceStore {
   unregister(userId: string, installationId: string): Promise<void>;
 }
 
-export function createPushDeviceService(input: { store: PushDeviceStore; now?: () => Date; createId?: () => string }) {
+export function createPushDeviceService(input: { store: PushDeviceStore; protector: { encrypt(token: string): Promise<{ ciphertext: string; keyVersion: string }> }; now?: () => Date; createId?: () => string }) {
   const now = input.now ?? (() => new Date());
   const createId = input.createId ?? (() => crypto.randomUUID());
   return {
     async register(session: VerifiedPushSession, device: { installationId: string; platform: PushPlatform; token: string; optedIn: boolean }) {
       if (device.token.length < 16 || device.token.length > 8_192) throw new Error("Invalid push token.");
-      await input.store.register({ ...device, id: createId(), userId: session.userId, sessionId: session.sessionId, tokenHash: await hashPushToken(device.token), now: now() });
+      const encrypted = await input.protector.encrypt(device.token);
+      await input.store.register({ id: createId(), userId: session.userId, sessionId: session.sessionId, installationId: device.installationId, platform: device.platform, tokenCiphertext: encrypted.ciphertext, tokenKeyVersion: encrypted.keyVersion, tokenHash: await hashPushToken(device.token), optedIn: device.optedIn, now: now() });
     },
     unregister(session: VerifiedPushSession, installationId: string) {
       return input.store.unregister(session.userId, installationId);
