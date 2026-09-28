@@ -28,6 +28,14 @@ test("sync source excludes the push encryption key even when it is present", () 
   assert.throws(() => readStagingWorkerSecretSource(sourceEnvironment, ["ARBITRARY_SECRET"]), /unreviewed/);
 });
 
+test("supports the initial no-push release without FCM or a push key", () => {
+  const source = readStagingWorkerSecretSource({ BETTER_AUTH_SECRET: "test-auth" }, ["BETTER_AUTH_SECRET"]);
+  assert.deepEqual(source.values, { BETTER_AUTH_SECRET: "test-auth" });
+  assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
+    existingSecretNames: new Set(), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"],
+  }));
+});
+
 test("requires public provider pairing and a Cloudflare-provisioned key for FCM", () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   assert.throws(
@@ -69,10 +77,32 @@ test("uses Cloudflare's documented bulk patch endpoint and validates every retur
   assert.doesNotMatch(request.options.body, /push-key-value|runner-token/);
 });
 
+test("accepts documented success without metadata or with unrelated map keys", async () => {
+  const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
+  for (const payload of [
+    { success: true, errors: [] },
+    { success: true, errors: [], result: {
+      foo: { name: "BETTER_AUTH_SECRET", type: "secret_text" },
+      bar: { name: "FCM_SERVICE_ACCOUNT_JSON", type: "secret_text" },
+    } },
+  ]) {
+    await syncStagingWorkerSecrets({
+      accountId: "a".repeat(32), workerName: "dayli-api-staging", apiToken: "runner-token", source,
+      fetchImpl: async () => new Response(JSON.stringify(payload), { status: 200 }),
+    });
+  }
+});
+
 test("rejects malformed, partial, or provider-error bulk responses without leaking values", async () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   for (const response of [
     new Response("not json", { status: 200 }),
+    new Response(JSON.stringify({ success: true, errors: [], result: null }), { status: 200 }),
+    new Response(JSON.stringify({ success: true, errors: [], result: [] }), { status: 200 }),
+    new Response(JSON.stringify({ success: true, errors: [], result: {
+      foo: { name: "BETTER_AUTH_SECRET", type: "secret_text" },
+      bar: { name: "BETTER_AUTH_SECRET", type: "secret_text" },
+    } }), { status: 200 }),
     new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET"])), { status: 200 }),
     new Response(JSON.stringify({
       ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]),
