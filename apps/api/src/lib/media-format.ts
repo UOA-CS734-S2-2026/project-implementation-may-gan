@@ -22,6 +22,12 @@ function readUint32BE(bytes: Uint8Array, offset: number): number | undefined {
   );
 }
 
+/** RIFF/WEBP fields are little-endian, unlike ISO-BMFF's big-endian box sizes. */
+function readUint32LE(bytes: Uint8Array, offset: number): number | undefined {
+  if (offset < 0 || offset + 4 > bytes.byteLength) return undefined;
+  return (bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16) | (bytes[offset + 3]! << 24)) >>> 0;
+}
+
 function matchesBytes(bytes: Uint8Array, offset: number, expected: number[]): boolean {
   if (offset + expected.length > bytes.byteLength) return false;
   return expected.every((value, index) => bytes[offset + index] === value);
@@ -286,7 +292,31 @@ export async function checkEssentialStructure(
 
     case "image/webp": {
       const chunkId = readAscii(window, 12, 4);
-      return chunkId && WEBP_CHUNK_IDS.has(chunkId) ? "match" : "mismatch";
+      if (!chunkId || !WEBP_CHUNK_IDS.has(chunkId)) return "mismatch";
+
+      // RIFF's own declared container size must actually match the real file
+      // size — a fabricated chunk id with no real payload behind it won't have
+      // this line up, since nothing computed it from real content.
+      const riffSize = readUint32LE(window, 4);
+      if (riffSize === undefined || riffSize !== source.fileSize - 8) return "mismatch";
+
+      if (chunkId === "VP8X") {
+        // VP8X's body is a fixed-size 10-byte feature/canvas-size header, no
+        // bitstream of its own to check — but its declared size must match that.
+        return readUint32LE(window, 16) === 10 ? "match" : "mismatch";
+      }
+
+      const chunkSize = readUint32LE(window, 16);
+      if (chunkSize === undefined || chunkSize === 0 || 20 + chunkSize > source.fileSize) return "mismatch";
+
+      if (chunkId === "VP8L") {
+        // A real VP8L bitstream always starts with this signature byte.
+        return window.length > 20 && window[20] === 0x2f ? "match" : "mismatch";
+      }
+
+      // VP8 (lossy): a 3-byte frame tag precedes this well-known key-frame start
+      // code (RFC 6386 §9.1) — every single-image WebP frame is a key frame.
+      return matchesBytes(window, 23, [0x9d, 0x01, 0x2a]) ? "match" : "mismatch";
     }
 
     case "image/heic": {
@@ -294,8 +324,9 @@ export async function checkEssentialStructure(
         const tracker = new BudgetTracker(DEFAULT_DURATION_BUDGET);
         const meta = await findBoxInRange(source, 0, source.fileSize, "meta", tracker);
         return meta ? "match" : "mismatch";
-      } catch {
-        return "mismatch";
+      } catch (error) {
+        if (error instanceof BudgetExceededError) return "mismatch";
+        throw error;
       }
     }
 
@@ -308,15 +339,19 @@ export async function checkEssentialStructure(
   }
 }
 
-/** Reads mvhd's duration/timescale fields, handling both the v0 (32-bit) and v1 (64-bit) layouts. */
-async function parseMvhdDurationSeconds(
+/**
+ * Reads the duration/timescale fields shared by `mvhd` (movie header) and `mdhd`
+ * (a track's own media header) — byte-identical version 0/1 layouts — handling
+ * both the v0 (32-bit) and v1 (64-bit) forms.
+ */
+async function parseDurationBoxSeconds(
   source: BoxSource,
-  mvhd: BoxHeader,
+  box: BoxHeader,
   tracker: BudgetTracker,
 ): Promise<number | undefined> {
-  const probeEnd = Math.min(mvhd.bodyStart + 39, mvhd.boxEnd - 1);
-  if (probeEnd < mvhd.bodyStart) return undefined;
-  const body = await tracker.read(source, mvhd.bodyStart, probeEnd);
+  const probeEnd = Math.min(box.bodyStart + 39, box.boxEnd - 1);
+  if (probeEnd < box.bodyStart) return undefined;
+  const body = await tracker.read(source, box.bodyStart, probeEnd);
   if (!body || body.byteLength < 1) return undefined;
 
   const version = body[0];
@@ -369,10 +404,32 @@ export async function extractIsoBmffDurationSeconds(
     const mdat = await findBoxInRange(source, 0, source.fileSize, "mdat", tracker);
     if (!mdat || mdat.boxEnd <= mdat.bodyStart) return { outcome: "malformed" };
 
-    const seconds = await parseMvhdDurationSeconds(source, mvhd, tracker);
-    if (seconds === undefined || !Number.isFinite(seconds)) return { outcome: "malformed" };
-    return { outcome: "duration", seconds };
-  } catch {
-    return { outcome: "malformed" };
+    // mvhd's duration alone is just a declared header field with no structural
+    // tie to the track's actual media — a fabricated `trak` with junk bytes could
+    // carry any mvhd duration. mdia/mdhd is the track's OWN media header (same
+    // v0/v1 layout as mvhd, in the track's own timescale); requiring it present,
+    // and cross-checking it against mvhd, means both would have to be faked
+    // together, and rules out a `trak` that's just an empty placeholder box.
+    const mdia = await findBoxInRange(source, trak.bodyStart, trak.boxEnd, "mdia", tracker);
+    if (!mdia) return { outcome: "malformed" };
+    const mdhd = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "mdhd", tracker);
+    if (!mdhd) return { outcome: "malformed" };
+
+    const movieSeconds = await parseDurationBoxSeconds(source, mvhd, tracker);
+    const trackSeconds = await parseDurationBoxSeconds(source, mdhd, tracker);
+    if (movieSeconds === undefined || !Number.isFinite(movieSeconds)) return { outcome: "malformed" };
+    if (trackSeconds === undefined || !Number.isFinite(trackSeconds)) return { outcome: "malformed" };
+
+    const larger = Math.max(movieSeconds, trackSeconds);
+    const smaller = Math.min(movieSeconds, trackSeconds);
+    const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
+    if (larger - smaller > tolerance) return { outcome: "malformed" };
+
+    // The larger of the two: never let one falsified field alone understate the
+    // real duration relative to MAX_VIDEO_DURATION_SECONDS.
+    return { outcome: "duration", seconds: larger };
+  } catch (error) {
+    if (error instanceof BudgetExceededError) return { outcome: "malformed" };
+    throw error;
   }
 }

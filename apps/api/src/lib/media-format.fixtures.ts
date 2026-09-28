@@ -56,27 +56,48 @@ export function buildMvhdBoxV1({ timescale, duration }: { timescale: number; dur
   return wrapBox("mvhd", body);
 }
 
-export function buildMoovBox(children: Uint8Array[]): Uint8Array {
+function wrapContainerBox(type: string, children: Uint8Array[]): Uint8Array {
   const totalChildBytes = children.reduce((sum, child) => sum + child.byteLength, 0);
-  const moov = wrapBox("moov", new Uint8Array(totalChildBytes));
+  const box = wrapBox(type, new Uint8Array(totalChildBytes));
   let offset = 8;
   for (const child of children) {
-    moov.set(child, offset);
+    box.set(child, offset);
     offset += child.byteLength;
   }
-  return moov;
+  return box;
+}
+
+export function buildMoovBox(children: Uint8Array[]): Uint8Array {
+  return wrapContainerBox("moov", children);
+}
+
+/** mdhd shares mvhd's exact v0 layout — see buildMvhdBoxV0. */
+export function buildMdhdBoxV0({ timescale, duration }: { timescale: number; duration: number }): Uint8Array {
+  const body = new Uint8Array(20);
+  writeUint32BE(body, 12, timescale);
+  writeUint32BE(body, 16, duration);
+  return wrapBox("mdhd", body);
+}
+
+/** trak(mdia(mdhd)) — the minimum real track structure extractIsoBmffDurationSeconds requires. */
+export function buildTrakBox({ timescale, duration }: { timescale: number; duration: number }): Uint8Array {
+  const mdhd = buildMdhdBoxV0({ timescale, duration });
+  const mdia = wrapContainerBox("mdia", [mdhd]);
+  return wrapContainerBox("trak", [mdia]);
 }
 
 /**
- * ftyp + moov(mvhd, trak) + mdat — a minimal but structurally *complete* MP4 for a
- * given duration: a real capture always has a track and a non-empty media-data
- * box, which is exactly what keeps a fabricated ftyp+moov+mvhd (no real content)
- * from validating.
+ * ftyp + moov(mvhd, trak(mdia(mdhd))) + mdat — a minimal but structurally
+ * *complete* MP4 for a given duration: a real capture always has a track with
+ * its own media header (cross-checked against mvhd) and a non-empty media-data
+ * box, which is exactly what keeps a fabricated ftyp+moov+mvhd (no real track or
+ * media data) from validating.
  */
 export function buildMinimalMp4(durationSeconds: number, timescale = 1000): Uint8Array {
   const ftyp = buildFtypBox("isom", ["isom"]);
-  const mvhd = buildMvhdBoxV0({ timescale, duration: Math.round(durationSeconds * timescale) });
-  const trak = wrapBox("trak", new Uint8Array(4));
+  const duration = Math.round(durationSeconds * timescale);
+  const mvhd = buildMvhdBoxV0({ timescale, duration });
+  const trak = buildTrakBox({ timescale, duration });
   const moov = buildMoovBox([mvhd, trak]);
   const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
   return concatBoxes(ftyp, moov, mdat);

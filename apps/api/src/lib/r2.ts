@@ -130,23 +130,39 @@ export type HeadObjectOutcome =
   | { outcome: "found"; contentLength: number }
   | { outcome: "not_found" };
 
+/**
+ * client.fetch() can throw a raw network error (DNS failure, connection reset,
+ * timeout) instead of ever returning a response, rather than the R2ReadInfrastructureError
+ * callers already know to catch and map to 503 — wrap it so a transient outage
+ * surfaces as the same typed error instead of an uncaught exception.
+ */
+function wrapAsInfrastructureError(error: unknown, context: string): R2ReadInfrastructureError {
+  if (error instanceof R2ReadInfrastructureError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new R2ReadInfrastructureError(`${context}: ${message}`);
+}
+
 /** A real HEAD against R2 — confirms the object exists and its actual byte count. */
 export async function headR2Object(
   configuration: R2RuntimeConfiguration,
   objectKey: string,
 ): Promise<HeadObjectOutcome> {
-  const client = createAwsClient(configuration);
-  const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "HEAD" });
-  if (response.status === 404) return { outcome: "not_found" };
-  if (!response.ok) {
-    throw new R2ReadInfrastructureError(`R2 HEAD failed with status ${response.status}`);
-  }
+  try {
+    const client = createAwsClient(configuration);
+    const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "HEAD" });
+    if (response.status === 404) return { outcome: "not_found" };
+    if (!response.ok) {
+      throw new R2ReadInfrastructureError(`R2 HEAD failed with status ${response.status}`);
+    }
 
-  const contentLength = Number(response.headers.get("content-length"));
-  if (!Number.isFinite(contentLength) || contentLength < 0) {
-    throw new R2ReadInfrastructureError("R2 HEAD response is missing a valid Content-Length");
+    const contentLength = Number(response.headers.get("content-length"));
+    if (!Number.isFinite(contentLength) || contentLength < 0) {
+      throw new R2ReadInfrastructureError("R2 HEAD response is missing a valid Content-Length");
+    }
+    return { outcome: "found", contentLength };
+  } catch (error) {
+    throw wrapAsInfrastructureError(error, "R2 HEAD request failed");
   }
-  return { outcome: "found", contentLength };
 }
 
 export type RangedReadResult =
@@ -164,25 +180,29 @@ export async function readR2ObjectRange(
   objectKey: string,
   range: { start: number; end: number },
 ): Promise<RangedReadResult> {
-  const client = createAwsClient(configuration);
-  const response = await client.fetch(buildObjectUrl(configuration, objectKey), {
-    method: "GET",
-    headers: { Range: `bytes=${range.start}-${range.end}` },
-  });
-  if (response.status === 404) return { outcome: "not_found" };
-  if (response.status === 416) return { outcome: "range_not_satisfiable" };
-  if (response.status !== 200 && response.status !== 206) {
-    throw new R2ReadInfrastructureError(`R2 GET failed with status ${response.status}`);
-  }
+  try {
+    const client = createAwsClient(configuration);
+    const response = await client.fetch(buildObjectUrl(configuration, objectKey), {
+      method: "GET",
+      headers: { Range: `bytes=${range.start}-${range.end}` },
+    });
+    if (response.status === 404) return { outcome: "not_found" };
+    if (response.status === 416) return { outcome: "range_not_satisfiable" };
+    if (response.status !== 200 && response.status !== 206) {
+      throw new R2ReadInfrastructureError(`R2 GET failed with status ${response.status}`);
+    }
 
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const expectedLength = range.end - range.start + 1;
-  if (bytes.byteLength !== expectedLength) {
-    // R2 returned fewer bytes than requested — the object is shorter than the
-    // earlier HEAD implied, a content-level inconsistency, not a hard error.
-    return { outcome: "range_not_satisfiable" };
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const expectedLength = range.end - range.start + 1;
+    if (bytes.byteLength !== expectedLength) {
+      // R2 returned fewer bytes than requested — the object is shorter than the
+      // earlier HEAD implied, a content-level inconsistency, not a hard error.
+      return { outcome: "range_not_satisfiable" };
+    }
+    return { outcome: "read", bytes };
+  } catch (error) {
+    throw wrapAsInfrastructureError(error, "R2 GET request failed");
   }
-  return { outcome: "read", bytes };
 }
 
 export interface MediaR2Reader {
