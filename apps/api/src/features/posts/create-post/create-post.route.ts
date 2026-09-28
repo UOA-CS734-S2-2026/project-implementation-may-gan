@@ -7,8 +7,8 @@ import {
   dailyPostSchema,
   idempotencyKeyHeaderSchema,
   type DailyPostResponse,
-} from "./contract";
-import { CreateDailyPostError, type CreateDailyPostService, type StoredDailyPost } from "./service";
+} from "./create-post.contract";
+import { CreateDailyPostError, type CreateDailyPostService, type StoredDailyPost } from "./create-post.service";
 
 export interface CreateDailyPostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a body-supplied user. */

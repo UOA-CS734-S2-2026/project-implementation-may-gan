@@ -1,8 +1,8 @@
 import { createDayliDatabase } from "@dayli/db";
 import { createAucklandDayService } from "@dayli/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPostgresDailyPostStore } from "./repository";
-import { CreateDailyPostError, createDailyPostService, type CreateDailyPostInput } from "./service";
+import { createPostgresDailyPostStore } from "./create-post.repository";
+import { CreateDailyPostError, createDailyPostService, type CreateDailyPostInput } from "./create-post.service";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;

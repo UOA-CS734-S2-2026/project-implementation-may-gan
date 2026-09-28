@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAucklandDayService } from "@dayli/domain";
 import { createApp } from "../../../app";
-import { createMemoryDailyPostStore } from "./memory-store";
-import { createDailyPostService, type CreateDailyPostService } from "./service";
-import type { CreateDailyPostRouteDependencies } from "./route";
+import { createMemoryDailyPostStore } from "./create-post.memory-store";
+import { createDailyPostService, type CreateDailyPostService } from "./create-post.service";
+import type { CreateDailyPostRouteDependencies } from "./create-post.route";
 
 const fixedNow = new Date("2026-09-25T03:00:00.000Z");
 

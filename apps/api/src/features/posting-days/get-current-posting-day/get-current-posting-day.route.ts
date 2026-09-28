@@ -1,10 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute } from "@hono/zod-openapi";
-import { apiErrorSchema } from "./contract";
+import { apiErrorSchema } from "./get-current-posting-day.contract";
 import {
   type CurrentPostingDayService,
-} from "./service";
-import { currentPostingDayResponseSchema } from "./contract";
+} from "./get-current-posting-day.service";
+import { currentPostingDayResponseSchema } from "./get-current-posting-day.contract";
 
 export interface CurrentPostingDayRouteDependencies {
   authenticate: (request: Request) => Promise<string | null>;
