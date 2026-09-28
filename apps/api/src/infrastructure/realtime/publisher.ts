@@ -47,6 +47,8 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       join public.conversation_changes change on change.conversation_id = outbox.conversation_id and change.change_sequence = outbox.change_sequence
       left join public.messages message on message.id = change.message_id
       where outbox.id = ${job.id} and outbox.recipient_id = ${job.recipientId}
+        and outbox.status = 'leased' and outbox.lease_token = ${job.leaseToken}
+        and outbox.lease_expires_at > now()
       limit 1
     `);
     const [row] = [...result as Iterable<Record<string, unknown>>];

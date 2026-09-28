@@ -73,9 +73,10 @@ export function createOutboxDispatcher(input: {
       // that lost the lease must not call a provider at all.
       const job = await input.store.renewLease(claimed, { now: now(), leaseForMs });
       if (!job) { summary.fenced += 1; continue; }
-      const heartbeat = maintainLease(input.store, job, { now, leaseForMs });
+      const controller = new AbortController();
+      const heartbeat = maintainLease(input.store, job, { now, leaseForMs }, controller);
       const remainingBudget = deadline === Number.POSITIVE_INFINITY ? deliveryTimeoutMs : Math.max(1, deadline - now().getTime());
-      const outcome = await deliver(input.handlers, job, Math.min(deliveryTimeoutMs, remainingBudget));
+      const outcome = await deliver(input.handlers, job, controller, Math.min(deliveryTimeoutMs, remainingBudget));
       const leaseMaintained = await heartbeat.stop();
       if (!leaseMaintained) { summary.fenced += 1; continue; }
       if (outcome.ok) {
@@ -99,13 +100,14 @@ export function createOutboxDispatcher(input: {
   };
 }
 
-async function deliver(handlers: OutboxDeliveryHandlers, job: OutboxJob, timeoutMs: number): Promise<DeliveryResult> {
-  const controller = new AbortController();
+async function deliver(handlers: OutboxDeliveryHandlers, job: OutboxJob, controller: AbortController, timeoutMs: number): Promise<DeliveryResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const operation = job.channel === "realtime" ? handlers.realtime(job, { signal: controller.signal }) : handlers.push(job, { signal: controller.signal });
     // Providers receive an abort signal. The race is still required to keep a
     // stuck dependency from consuming the worker's entire dispatch lifetime.
+    // An already-started non-cancelable provider effect cannot be rolled back,
+    // so delivery remains at-least-once and providers must deduplicate event IDs.
     const timeout = new Promise<DeliveryResult>((resolve) => {
       timer = setTimeout(() => { controller.abort(); resolve({ ok: false, retryable: true, category: "transient" }); }, timeoutMs);
     });
@@ -118,8 +120,7 @@ async function deliver(handlers: OutboxDeliveryHandlers, job: OutboxJob, timeout
   }
 }
 
-function maintainLease(store: OutboxStore, job: OutboxJob, input: { now: () => Date; leaseForMs: number }) {
-  const controller = new AbortController();
+function maintainLease(store: OutboxStore, job: OutboxJob, input: { now: () => Date; leaseForMs: number }, controller: AbortController) {
   let current = job;
   let healthy = true;
   const interval = Math.max(1, Math.floor(input.leaseForMs / 3));
@@ -129,12 +130,13 @@ function maintainLease(store: OutboxStore, job: OutboxJob, input: { now: () => D
       if (controller.signal.aborted) return;
       try {
         const renewed = await store.renewLease(current, { now: input.now(), leaseForMs: input.leaseForMs });
-        if (!renewed) { healthy = false; return; }
+        if (!renewed) { healthy = false; controller.abort(); return; }
         current = renewed;
       } catch {
         // A renewal error is indistinguishable from a lost fence. Do not
         // acknowledge or reschedule as though this worker still owns it.
         healthy = false;
+        controller.abort();
         return;
       }
     }
