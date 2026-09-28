@@ -88,6 +88,23 @@ describe("outbox dispatcher", () => {
     expect(aborted).toBe(true);
   });
 
+  it("aborts a blocked provider when lease renewal loses ownership", async () => {
+    const outbox = store([job()]);
+    (outbox.renewLease as ReturnType<typeof vi.fn>).mockResolvedValueOnce(job()).mockResolvedValueOnce(null);
+    let observedAbort = false;
+    let sent = false;
+    const realtime = vi.fn(async (_job: OutboxJob, options: { signal: AbortSignal }) => {
+      await new Promise<void>((resolve) => options.signal.addEventListener("abort", () => { observedAbort = true; resolve(); }, { once: true }));
+      sent = !options.signal.aborted;
+      return { ok: true as const };
+    });
+    const dispatcher = createOutboxDispatcher({ store: outbox, handlers: { realtime, push: vi.fn() }, immediateBudgetMs: 100, leaseForMs: 30, deliveryTimeoutMs: 25, now: () => new Date("2026-09-28T00:00:00.000Z") });
+    await expect(dispatcher.dispatchImmediately()).resolves.toMatchObject({ fenced: 1, delivered: 0 });
+    expect(observedAbort).toBe(true);
+    expect(sent).toBe(false);
+    expect(outbox.markDelivered).not.toHaveBeenCalled();
+  });
+
   it("uses capped jittered exponential retry delays", () => {
     expect(retryDelayMs(1, () => 0)).toBe(750);
     expect(retryDelayMs(20, () => 1)).toBe(75_000);
