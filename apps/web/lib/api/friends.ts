@@ -29,16 +29,16 @@ async function call<T>(operation: (api: RelationshipsApi) => Promise<T>): Promis
   }
 }
 
-export function loadFriends() {
-  return call((api) => api.relationshipsListFriends({ limit: 20 }, { cache: "no-store" }));
+export function loadFriends(cursor?: string) {
+  return call((api) => api.relationshipsListFriends({ limit: 20, cursor }, { cache: "no-store" }));
 }
 
-export function loadRequests() {
-  return call((api) => api.relationshipsListPendingRequests({ direction: "all", limit: 20 }, { cache: "no-store" }));
+export function loadRequests(direction: "incoming" | "outgoing", cursor?: string) {
+  return call((api) => api.relationshipsListPendingRequests({ direction, limit: 20, cursor }, { cache: "no-store" }));
 }
 
-export function searchFriends(query: string) {
-  return call((api) => api.relationshipsSearchUsers({ q: query, limit: 20 }, { cache: "no-store" }));
+export function searchFriends(query: string, cursor?: string) {
+  return call((api) => api.relationshipsSearchUsers({ q: query, limit: 20, cursor }, { cache: "no-store" }));
 }
 
 export function sendFriendRequest(recipientId: string) {

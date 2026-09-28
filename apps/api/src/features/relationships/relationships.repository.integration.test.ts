@@ -92,25 +92,54 @@ suite("Postgres relationship persistence", () => {
     const privateUser = users[4]!;
     const blockedUser = users[5]!;
     const bannedUser = users[3]!;
+    const wildcardDecoy = users[2]!;
     await database.client`
       update public."user" set username = case id
         when ${privateUser} then 'bobby_private'
         when ${blockedUser} then 'bobby_blocked'
         when ${bannedUser} then 'bobby_banned'
+        when ${wildcardDecoy} then 'bobbywild'
       end,
       display_username = case id when ${privateUser} then 'Bobby' else 'Hidden person' end,
       profile_visibility = case when id = ${privateUser} then 'private'::profile_visibility else profile_visibility end,
       banned = case when id = ${bannedUser} then true else banned end
-      where id = any(${[privateUser, blockedUser, bannedUser]}::text[])
+      where id = any(${[privateUser, blockedUser, bannedUser, wildcardDecoy]}::text[])
     `;
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${actor}, ${blockedUser}, now())`;
 
     const page = await service.searchUsers(actor, 'bob', 20);
 
-    expect(page.items).toEqual([{ id: privateUser, username: 'bobby_private', displayName: 'Bobby', relationship: 'none' }]);
+    expect(page.items.map((item) => item.username)).toEqual(['bobby_private', 'bobbywild']);
+    expect(page.items[0]).toEqual({ id: privateUser, username: 'bobby_private', displayName: 'Bobby', relationship: 'none' });
     expect(Object.keys(page.items[0]!)).toEqual(['id', 'username', 'displayName', 'relationship']);
-    for (let attempt = 0; attempt < 29; attempt += 1) await service.searchUsers(actor, 'bob', 20);
+    await expect(service.searchUsers(actor, 'bobby_', 20)).resolves.toMatchObject({
+      items: [{ id: privateUser, username: 'bobby_private' }],
+    });
+    for (let attempt = 0; attempt < 28; attempt += 1) await service.searchUsers(actor, 'bob', 20);
     await expect(service.searchUsers(actor, 'bob', 20)).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+  });
+
+  it("paginates pending requests with qualified, microsecond-precise request cursors", async () => {
+    const actor = users[6]!;
+    const first = users[0]!;
+    const second = users[1]!;
+    await database.client`
+      update public."user" set username = case id when ${first} then 'request_first' when ${second} then 'request_second' end
+      where id = any(${[first, second]}::text[])
+    `;
+    await database.client`
+      insert into public.friend_requests (id, sender_id, recipient_id, status, created_at)
+      values ('request-page-1', ${actor}, ${first}, 'pending', '2026-09-22T00:00:00.000001Z'),
+             ('request-page-2', ${actor}, ${second}, 'pending', '2026-09-22T00:00:00.000002Z')
+    `;
+
+    const firstPage = await service.listPendingRequests(actor, 'outgoing', 1);
+    const secondPage = await service.listPendingRequests(actor, 'outgoing', 1, firstPage.nextCursor ?? undefined);
+
+    expect(firstPage.items.map((item) => item.id)).toEqual(['request-page-1']);
+    expect(firstPage.hasMore).toBe(true);
+    expect(secondPage.items.map((item) => item.id)).toEqual(['request-page-2']);
+    expect(secondPage.hasMore).toBe(false);
   });
 
   it("enforces five sends in a rolling 24-hour window", async () => {

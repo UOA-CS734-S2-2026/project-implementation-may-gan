@@ -27,3 +27,7 @@ The server derives the actor solely from Better Auth. Relationship mutations con
 2. Register routes and regenerate OpenAPI TypeScript and Dart clients.
 3. Add client-side relationship adapters/controllers, then web and Flutter screens with focused tests, including in-flight account-switch safety.
 4. Verify unit, route, generated-client, type, lint, Flutter, and isolated PostgreSQL coverage. Do not use or tear down shared database volumes.
+
+## Integration note
+
+Migration `0009_relationship_search` and the generated relationship contracts overlap with the separate messaging work. No deployed migration history was changed and this branch must not be rebased or cherry-picked onto messaging until the orchestrator selects the migration ordering and resolves the shared contract generation deliberately.

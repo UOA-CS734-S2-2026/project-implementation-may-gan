@@ -8,7 +8,7 @@ function cursorValue(cursor: string | undefined): { createdAt: string; id: strin
     const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
     const parsed = JSON.parse(atob(padded)) as { createdAt?: unknown; id?: unknown };
     if (typeof parsed.createdAt === "string" && !Number.isNaN(Date.parse(parsed.createdAt)) && typeof parsed.id === "string" && parsed.id.length > 0) {
-      return parsed as { createdAt: string; id: string };
+      return { createdAt: parsed.createdAt, id: parsed.id };
     }
   } catch {
     // Invalid cursor input uses the stable public validation error below.
@@ -37,10 +37,11 @@ function requestFromRow(row: RelationshipRow, actorId: string): StoredPendingReq
 
 export async function listPendingRequestRows(queryable: RelationshipQueryable, actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage> {
   const after = cursorValue(cursor);
-  const directionSql = direction === "incoming" ? sql`and recipient_id = ${actorId}` : direction === "outgoing" ? sql`and sender_id = ${actorId}` : sql`and (sender_id = ${actorId} or recipient_id = ${actorId})`;
-  const cursorSql = after ? sql`and (created_at, id) > (${after.createdAt}::timestamptz, ${after.id})` : sql``;
+  const directionSql = direction === "incoming" ? sql`and request.recipient_id = ${actorId}` : direction === "outgoing" ? sql`and request.sender_id = ${actorId}` : sql`and (request.sender_id = ${actorId} or request.recipient_id = ${actorId})`;
+  const cursorSql = after ? sql`and (request.created_at, request.id) > (${after.createdAt}::timestamptz, ${after.id})` : sql``;
   const result = relationshipRows<RelationshipRow>(await queryable.execute(sql`
     select request.id, request.sender_id, request.recipient_id, request.created_at,
+      to_char(request.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor_created_at,
       other.id as user_id, other.username, coalesce(other.display_username, other.name) as display_name
     from public.friend_requests request
     join public."user" other on other.id = case when request.sender_id = ${actorId} then request.recipient_id else request.sender_id end
@@ -55,6 +56,10 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
   `));
   const hasMore = result.length > limit;
   const items = result.slice(0, limit).map((row) => requestFromRow(row, actorId));
-  const last = items.at(-1);
-  return { items, hasMore, nextCursor: hasMore && last ? nextCursor(last.createdAt, last.id) : null };
+  const last = result[Math.min(result.length, limit) - 1];
+  return {
+    items,
+    hasMore,
+    nextCursor: hasMore && last ? nextCursor(String(last.cursor_created_at), String(last.id)) : null,
+  };
 }

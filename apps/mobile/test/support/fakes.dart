@@ -14,12 +14,35 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 class FakeFriendsClient implements FriendsClient {
+  static const emptyFriends = FriendPage(
+    items: [],
+    nextCursor: null,
+    hasMore: false,
+  );
+  static const emptyRequests = FriendRequestPage(
+    items: [],
+    nextCursor: null,
+    hasMore: false,
+  );
   @override
-  Future<ApiResult<FriendsSnapshot>> load() async =>
-      const ApiSuccess(FriendsSnapshot(friends: [], requests: []));
+  Future<ApiResult<FriendsSnapshot>> load() async => const ApiSuccess(
+    FriendsSnapshot(
+      friends: emptyFriends,
+      incoming: emptyRequests,
+      outgoing: emptyRequests,
+    ),
+  );
   @override
-  Future<ApiResult<List<FriendCard>>> search(String query) async =>
-      const ApiSuccess([]);
+  Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
+      const ApiSuccess(emptyFriends);
+  @override
+  Future<ApiResult<FriendRequestPage>> loadRequests(
+    String direction, {
+    String? cursor,
+  }) async => const ApiSuccess(emptyRequests);
+  @override
+  Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
+      const ApiSuccess(emptyFriends);
   @override
   Future<ApiResult<void>> send(String userId) async => const ApiSuccess(null);
   @override
