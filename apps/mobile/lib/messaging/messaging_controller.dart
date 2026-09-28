@@ -62,8 +62,9 @@ class MessagingController extends ChangeNotifier {
     if (_eventIds.contains(event.eventId)) return;
     final previous = _lastChangeSequence[event.conversationId];
     if (previous != null &&
-        BigInt.parse(event.changeSequence) <= BigInt.parse(previous))
+        BigInt.parse(event.changeSequence) <= BigInt.parse(previous)) {
       return;
+    }
     _eventIds.add(event.eventId);
     if (_eventIds.length > 512) _eventIds.remove(_eventIds.first);
     var cursor = previous ?? '0';
