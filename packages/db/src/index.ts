@@ -6,6 +6,7 @@ import { schema } from "./schema";
 export { schema } from "./schema";
 export { sql } from "drizzle-orm";
 export * from "./content-validation";
+export { lockRelationshipPair, type RelationshipPairLockTransaction } from "./relationship-pair-lock";
 
 export type DayliDatabase = PostgresJsDatabase<typeof schema>;
 

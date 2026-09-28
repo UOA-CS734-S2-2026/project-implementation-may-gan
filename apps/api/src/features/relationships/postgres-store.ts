@@ -1,4 +1,10 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import {
+  createHyperdriveDatabase,
+  lockRelationshipPair,
+  sql,
+  type DayliDatabase,
+  type HyperdriveBinding,
+} from "@dayli/db";
 import {
   RelationshipStoreError,
   type PendingRequestPage,
@@ -13,13 +19,6 @@ type Row = Record<string, unknown>;
 
 function rows<T extends Row>(value: unknown): T[] {
   return [...(value as Iterable<T>)];
-}
-
-function pairKey(left: string, right: string): string {
-  return [left, right]
-    .sort()
-    .map((value) => `${value.length}:${value}`)
-    .join(":");
 }
 
 function cursorValue(cursor: string | undefined): { createdAt: string; id: string } | undefined {
@@ -67,9 +66,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
   }
 
   private transaction(queryable: Queryable): RelationshipTransaction {
-    const lockPair = async (left: string, right: string) => {
-      await queryable.execute(sql`select pg_advisory_xact_lock(hashtextextended(${pairKey(left, right)}, 734))`);
-    };
+    const lockPair = (left: string, right: string) => lockRelationshipPair(queryable, left, right);
 
     const targetExists = async (userId: string) => {
       const result = rows<{ id: string }>(await queryable.execute(sql`select id from public."user" where id = ${userId}`));
