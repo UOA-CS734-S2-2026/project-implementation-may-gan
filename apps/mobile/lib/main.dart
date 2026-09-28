@@ -10,6 +10,7 @@ import 'app/app.dart';
 import 'app/app_scope.dart';
 import 'app/config.dart';
 import 'app/fresh_install.dart';
+import 'app/session_integrations.dart';
 import 'auth/native_session.dart';
 import 'auth/session_controller.dart';
 import 'drafts/draft_store.dart';
@@ -67,29 +68,27 @@ Future<void> main() async {
       onNotificationTap: (_) {},
     );
   }
+  final integrations = SessionIntegrations(
+    startRealtime: messaging.startRealtime,
+    stopRealtime: messaging.stopRealtime,
+    clearMessaging: messaging.clear,
+    startPush: () async {
+      await push?.start();
+    },
+    stopPush: () async {
+      await push?.stop();
+    },
+  );
   final session = SessionController(
     session: nativeSession,
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
-    onSignedIn: (startup) async {
-      await messaging.startRealtime();
-      // The socket has its own stop/start epoch. Check before beginning push,
-      // because an old startup may have awaited its ticket through a switch.
-      if (!startup.isCurrent) return;
-      await push?.start();
-    },
-    onBeforeSessionReplacement: () async {
-      // Must run before Better Auth stores the new bearer token.
-      await push?.stop();
-      await messaging.stopRealtime();
-      messaging.clear();
-    },
-    onPrivateDataClear: () async {
-      await push?.stop();
-      await messaging.stopRealtime();
-      messaging.clear();
-    },
+    onSignedIn: integrations.start,
+    // Must run before Better Auth stores a replacement token. [clear] always
+    // stops and clears messaging, then rethrows any unsafe push cleanup error.
+    onBeforeSessionReplacement: integrations.clear,
+    onPrivateDataClear: integrations.clear,
   );
 
   runApp(

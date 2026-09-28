@@ -171,12 +171,16 @@ class SessionController extends ChangeNotifier {
     final userId = _user?.id;
     // Fence a late authenticated startup before its cleanup awaits.
     _invalidateSessionStartup();
+    // Cleanup and revocation are intentionally independent. A failed push
+    // cleanup must never suppress the old-session revoke attempt.
     try {
       await onPrivateDataClear?.call();
+    } catch (_) {}
+    try {
       await _session.signOut();
     } catch (_) {
-      // Revocation failed (for example offline); the local token is still
-      // removed below so this device no longer holds the session.
+      // Local credentials are removed below even when offline revocation does
+      // not receive an acknowledgement.
     }
     if (userId != null) await _drafts.clear(userId);
     await _signedOutLocally(clearPrivateData: false);
@@ -189,7 +193,38 @@ class SessionController extends ChangeNotifier {
     // Fence existing startup before old-bearer cleanup. The hook can await
     // ticket, Firebase, or provider work and must not resume for the new user.
     _invalidateSessionStartup();
-    if (_user != null) await onBeforeSessionReplacement?.call();
+    final hasOldToken = await _tokenStore.read() != null;
+    Object? failure;
+    Object? revokeFailure;
+    StackTrace? stackTrace;
+    if (hasOldToken || _user != null) {
+      try {
+        await onBeforeSessionReplacement?.call();
+      } catch (error, trace) {
+        failure = error;
+        stackTrace = trace;
+      }
+      if (hasOldToken) {
+        // Revoke under the old bearer before any sign-in endpoint can store a
+        // replacement token. A tardy old push registration is then rejected by
+        // the backend's live-session dispatch check.
+        try {
+          await _session.signOut();
+        } catch (error, trace) {
+          revokeFailure = error;
+          failure ??= error;
+          stackTrace ??= trace;
+        }
+      }
+    }
+    if (failure != null) {
+      // Do not layer another account over a session whose revoke was not
+      // acknowledged. Retain only that old bearer in protected storage so a
+      // later replacement can retry revocation. The app itself is signed out
+      // and its user/cache state is cleared in the meantime.
+      await _clearLocalSessionState(clearToken: revokeFailure == null);
+      Error.throwWithStackTrace(failure, stackTrace ?? StackTrace.current);
+    }
   }
 
   Future<void> _afterAuthentication() async {
@@ -225,8 +260,18 @@ class SessionController extends ChangeNotifier {
 
   Future<void> _signedOutLocally({bool clearPrivateData = true}) async {
     _invalidateSessionStartup();
-    if (clearPrivateData) await onPrivateDataClear?.call();
-    await _tokenStore.clear();
+    if (clearPrivateData) {
+      try {
+        await onPrivateDataClear?.call();
+      } catch (_) {
+        // Protected state still has to be removed after cleanup failures.
+      }
+    }
+    await _clearLocalSessionState();
+  }
+
+  Future<void> _clearLocalSessionState({bool clearToken = true}) async {
+    if (clearToken) await _tokenStore.clear();
     await _userCache.clear();
     _set(SessionStatus.signedOut, null);
   }

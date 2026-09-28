@@ -85,16 +85,30 @@ class PushService {
     // Fence async permission, token, registration, and stream work before
     // cleanup so a late old-account start cannot resume after a switch.
     ++_epoch;
-    await _subscription?.cancel();
+    Object? failure;
+    StackTrace? stackTrace;
+
+    Future<void> attempt(Future<void> Function() operation) async {
+      try {
+        await operation();
+      } catch (error, trace) {
+        failure ??= error;
+        stackTrace ??= trace;
+      }
+    }
+
+    await attempt(() async => _subscription?.cancel());
     _subscription = null;
     // Drain every locally initiated registration before deleting under the
     // old bearer. A transport timeout cannot prove that a remote PUT did not
-    // commit. Local token invalidation plus server session/account checks are
-    // the fail-closed mitigation if that distributed ambiguity remains.
-    await _registrationTail;
+    // commit. Session revocation prevents a tardy remote PUT from passing the
+    // backend's live-session delivery check after an account replacement.
+    await attempt(() async => _registrationTail);
     // This call uses the currently installed bearer credential. Callers that
     // are about to replace accounts must await it before replacing that token.
-    await client.unregister(installationId);
-    await source.invalidateLocalToken();
+    await attempt(() => client.unregister(installationId));
+    // Always attempt provider-token invalidation, even when DELETE fails.
+    await attempt(source.invalidateLocalToken);
+    if (failure != null) Error.throwWithStackTrace(failure!, stackTrace!);
   }
 }
