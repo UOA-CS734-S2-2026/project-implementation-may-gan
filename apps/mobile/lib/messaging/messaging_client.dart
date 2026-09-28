@@ -231,8 +231,9 @@ class HttpMessagingClient implements MessagingClient {
         return ApiError(_rawFailure(response.statusCode));
       }
       final value = jsonDecode(text);
-      if (value is! Map<String, dynamic>)
+      if (value is! Map<String, dynamic>) {
         return const ApiError(ServiceUnavailable());
+      }
       return ApiSuccess(decode(value));
     } on IOException {
       return const ApiError(NetworkUnavailable());
