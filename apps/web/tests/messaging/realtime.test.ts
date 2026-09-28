@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MessagingRealtime, type RealtimeSocket } from "@/lib/messaging/realtime";
+import { MessagingRealtime, type RealtimeSocket } from "@/features/messaging/realtime/MessagingRealtime";
 
 class Socket implements RealtimeSocket {
   onopen: RealtimeSocket["onopen"] = null;

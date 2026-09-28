@@ -1,6 +1,6 @@
 "use client";
 
-import type { MessagingMessage, Reaction } from "@/lib/api/messaging";
+import type { MessagingMessage, Reaction } from "./messaging.api";
 
 const reactionLabels: Record<Reaction, string> = { like: "Like", love: "Love", laugh: "Laugh", surprised: "Surprised", sad: "Sad", thanks: "Thanks" };
 

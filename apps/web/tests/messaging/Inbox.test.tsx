@@ -1,17 +1,19 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Inbox } from "@/components/messages/Inbox";
-import { messagingApi } from "@/lib/api/messaging";
+import { Inbox } from "@/features/messaging/inbox/Inbox";
+import { messagingApi } from "@/features/messaging/shared/messaging.api";
 
 let userId = "me";
 const push = vi.fn();
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
-vi.mock("@/components/messages/MessagingProvider", () => ({ useMessagingLive: () => ({ revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread: vi.fn() }) }));
+vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => ({ revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
-vi.mock("@/lib/api/messaging", () => ({ messagingApi: { inbox: vi.fn(), direct: vi.fn() } }));
+vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: { inbox: vi.fn(), direct: vi.fn() } }));
 
 const api = messagingApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
+function render(ui: Parameters<typeof rtlRender>[0]) { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>); return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) }; }
 const conversation = { id: "c1", peer: { id: "them", name: "Ada" }, requestState: "active", latestMessage: { text: "hello" }, unreadCount: 1 };
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 import { Navbar } from "@/components/ui/layout/Navbar";
 import { MobileNavCloseListener } from "@/components/ui/layout/MobileNavCloseListener";
 import { Suspense } from "react";
-import { MessagingProvider } from "@/components/messages/MessagingProvider";
+import { MessagingProvider } from "@/features/messaging/realtime/MessagingProvider";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
