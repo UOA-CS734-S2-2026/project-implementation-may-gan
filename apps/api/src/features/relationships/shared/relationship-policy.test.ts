@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createRelationshipsService,
   deriveRelationshipAccess,
   deriveRelationshipState,
   hasActiveFriendship,
@@ -8,7 +7,8 @@ import {
   type RelationshipStore,
   type RelationshipTransaction,
   type StoredRelationshipSnapshot,
-} from "./relationships.service";
+} from "./relationship-service";
+import { createRelationshipsService } from "../relationships.service";
 
 const fixedNow = new Date("2026-09-22T00:00:00.000Z");
 
