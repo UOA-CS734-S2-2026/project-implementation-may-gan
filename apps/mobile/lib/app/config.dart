@@ -4,6 +4,7 @@ class AppConfig {
     required this.apiBaseUrl,
     this.googleWebClientId = '',
     this.googleIosClientId = '',
+    this.firebaseConfigured = false,
   });
 
   /// The Hono API origin, for example `https://api.example.test`. See
@@ -14,6 +15,9 @@ class AppConfig {
   /// only when the web (server) client ID is set.
   final String googleWebClientId;
   final String googleIosClientId;
+
+  /// Set only in builds that include owner-provided Firebase platform files.
+  final bool firebaseConfigured;
 
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty;
 
@@ -28,6 +32,7 @@ class AppConfig {
       apiBaseUrl: apiBaseUrl,
       googleWebClientId: String.fromEnvironment('DAYLI_GOOGLE_WEB_CLIENT_ID'),
       googleIosClientId: String.fromEnvironment('DAYLI_GOOGLE_IOS_CLIENT_ID'),
+      firebaseConfigured: bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED'),
     );
   }
 }

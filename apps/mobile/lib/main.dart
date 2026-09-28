@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +15,9 @@ import 'auth/session_controller.dart';
 import 'drafts/draft_store.dart';
 import 'messaging/messaging_client.dart';
 import 'messaging/messaging_controller.dart';
+import 'notifications/firebase_push_source.dart';
+import 'notifications/push_registration_client.dart';
+import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
 
 Future<void> main() async {
@@ -44,12 +49,35 @@ Future<void> main() async {
       bearerToken: nativeSession.bearerToken,
     ),
   );
+  PushService? push;
+  FirebasePushLifecycle? notifications;
+  if (config.firebaseConfigured) {
+    await initializeFirebasePush();
+    push = PushService(
+      source: FirebasePushTokenSource(),
+      client: HttpPushRegistrationClient(
+        baseUrl: config.apiBaseUrl,
+        bearerToken: nativeSession.bearerToken,
+      ),
+      installationId: await loadInstallationId(secureStorage),
+      platform: Platform.isIOS ? 'ios' : 'android',
+    );
+    notifications = FirebasePushLifecycle(
+      onForegroundData: (_) => messaging.refreshInbox(),
+      // DayliApp replaces this callback with deferred authenticated routing.
+      onNotificationTap: (_) {},
+    );
+  }
   final session = SessionController(
     session: nativeSession,
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
-    onPrivateDataClear: messaging.clear,
+    onSignedIn: push?.start,
+    onPrivateDataClear: () async {
+      await push?.stop();
+      messaging.clear();
+    },
   );
 
   runApp(
@@ -66,6 +94,7 @@ Future<void> main() async {
         ),
         drafts: drafts,
         messaging: messaging,
+        notifications: notifications,
         google: config.googleSignInConfigured
             ? FlutterGoogleIdTokenProvider(
                 webClientId: config.googleWebClientId,
