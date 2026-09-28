@@ -204,13 +204,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('1/3 added'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.byKey(const Key('composer.rating.8')),
+      find.byKey(const Key('composer.rating')),
       100,
       scrollable: list,
     );
-    await tester.ensureVisible(find.byKey(const Key('composer.rating.8')));
+    await tester.ensureVisible(find.byKey(const Key('composer.rating')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('composer.rating.8')));
+    // The slider starts unset; dragging sets it.
+    expect(find.text('Slide to rate your day'), findsOneWidget);
+    expect(find.textContaining('/10', skipOffstage: false), findsNothing);
+    await tester.drag(
+      find.byKey(const Key('composer.rating')),
+      const Offset(370, 0),
+    );
+    await tester.pump();
+    expect(find.text('10/10', skipOffstage: false), findsOneWidget);
+    expect(find.text('Slide to rate your day'), findsNothing);
     await tester.scrollUntilVisible(
       find.byKey(const Key('composer.reflectiveAnswer')),
       100,
@@ -248,7 +257,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final sent = harness.submitter.submitted.single;
-    expect(sent.rating, 8);
+    expect(sent.rating, 10);
     expect(sent.reflectiveAnswer, 'Coffee by the harbour');
     expect(sent.tomorrowNote, 'Bring the camera.');
     expect(sent.audience, PostAudience.solo);
@@ -289,12 +298,21 @@ void main() {
         )
         .first;
     await tester.scrollUntilVisible(
-      find.byKey(const Key('composer.rating.6')),
+      find.byKey(const Key('composer.rating')),
       100,
       scrollable: list,
     );
+    await tester.ensureVisible(find.byKey(const Key('composer.rating')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('composer.rating.6')));
+    await tester.drag(
+      find.byKey(const Key('composer.rating')),
+      const Offset(-370, 0),
+    );
+    await tester.pump();
+    expect(
+      tester.widget<Slider>(find.byKey(const Key('composer.rating'))).value,
+      1,
+    );
     await tester.scrollUntilVisible(
       find.byKey(const Key('composer.reflectiveAnswer')),
       100,
@@ -326,5 +344,49 @@ void main() {
     await tester.tap(find.byKey(const Key('composer.discardDraft')));
     await tester.pumpAndSettle();
     expect(harness.drafts.drafts, isEmpty);
+  });
+
+  testWidgets('sets a rating of 1 by tapping the start of an unset slider', (
+    tester,
+  ) async {
+    final harness = TestHarness();
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    final slider = find.byKey(const Key('composer.rating'));
+    await tester.scrollUntilVisible(
+      slider,
+      100,
+      scrollable: find
+          .descendant(
+            of: find.byType(ComposerScreen),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    // The slider is drawn at 1 while unset; a tap there must still count.
+    await tester.tapAt(tester.getRect(slider).centerLeft + const Offset(24, 0));
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(harness.drafts.drafts['user-1']!.rating, 1);
+    expect(find.text('1/10', skipOffstage: false), findsOneWidget);
   });
 }

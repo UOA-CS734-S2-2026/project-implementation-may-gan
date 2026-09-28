@@ -231,7 +231,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
           'rate your day',
           trailing: draft.rating == null ? null : '${draft.rating}/10',
         ),
-        _RatingPicker(
+        _RatingSlider(
           value: draft.rating,
           onChanged: (rating) => controller.update(rating: () => rating),
         ),
@@ -443,9 +443,10 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// Ten 48dp targets in two rows, so the rating needs one tap and no keyboard.
-class _RatingPicker extends StatelessWidget {
-  const _RatingPicker({required this.value, required this.onChanged});
+/// A 1–10 slider that starts unset, so a rating is always chosen on purpose.
+/// The first tap or drag on the track sets it.
+class _RatingSlider extends StatelessWidget {
+  const _RatingSlider({required this.value, required this.onChanged});
 
   final int? value;
   final ValueChanged<int> onChanged;
@@ -453,53 +454,69 @@ class _RatingPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    Widget chip(int rating) {
-      final selected = value == rating;
-      return Expanded(
-        child: Semantics(
-          button: true,
-          selected: selected,
-          label: 'Rate $rating out of 10',
-          excludeSemantics: true,
-          child: Material(
-            color: selected
+    final rated = value != null;
+    final ends = DayliText.sans(
+      context,
+      size: DayliTextSize.sm,
+      color: colors.foregroundTertiary,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 6,
+            activeTrackColor: rated
                 ? colors.foregroundAccent
-                : colors.backgroundSecondary,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              key: Key('composer.rating.$rating'),
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => onChanged(rating),
-              child: SizedBox(
-                height: 48,
-                child: Center(
-                  child: Text(
-                    '$rating',
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.lg,
-                      weight: FontWeight.w600,
-                      color: selected ? Colors.white : colors.foreground,
-                    ),
-                  ),
-                ),
-              ),
+                : colors.backgroundTertiary,
+            inactiveTrackColor: colors.backgroundTertiary,
+            thumbColor: rated
+                ? colors.foregroundAccent
+                : colors.foregroundTertiary,
+            overlayColor: colors.foregroundAccent.withValues(alpha: 0.12),
+            activeTickMarkColor: Colors.white.withValues(alpha: 0.6),
+            inactiveTickMarkColor: colors.foregroundTertiary.withValues(
+              alpha: 0.5,
             ),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
+            showValueIndicator: ShowValueIndicator.never,
+          ),
+          child: Slider(
+            key: const Key('composer.rating'),
+            min: DailyPostLimits.ratingMin.toDouble(),
+            max: DailyPostLimits.ratingMax.toDouble(),
+            divisions: DailyPostLimits.ratingMax - DailyPostLimits.ratingMin,
+            value: (value ?? DailyPostLimits.ratingMin).toDouble(),
+            semanticFormatterCallback: (rating) =>
+                rated ? '${rating.round()} out of 10' : 'Not rated yet',
+            onChanged: (rating) => onChanged(rating.round()),
+            // Slider skips onChanged when the new value equals the one it was
+            // built with. Unset, that is 1, so a tap on 1 would otherwise be
+            // lost; onChangeEnd always reports where the interaction ended.
+            onChangeEnd: (rating) => onChanged(rating.round()),
           ),
         ),
-      );
-    }
-
-    Widget row(int from) => Row(
-      children: [
-        for (var rating = from; rating < from + 5; rating++) ...[
-          if (rating > from) const SizedBox(width: 8),
-          chip(rating),
-        ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Row(
+            children: [
+              Text('1', style: ends),
+              Expanded(
+                child: rated
+                    ? const SizedBox.shrink()
+                    : Text(
+                        'Slide to rate your day',
+                        textAlign: TextAlign.center,
+                        style: ends,
+                      ),
+              ),
+              Text('10', style: ends),
+            ],
+          ),
+        ),
       ],
     );
-
-    return Column(children: [row(1), const SizedBox(height: 8), row(6)]);
   }
 }
 

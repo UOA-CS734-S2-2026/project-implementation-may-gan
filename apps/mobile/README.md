@@ -50,7 +50,7 @@ The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue
 - A bottom tab bar (daylies, friends, my days, messages) with a raised "new dayli" button in the middle, and a top bar with the logo and the profile button.
 - Home leads with today's prompt, the time left to post, and a full-width Post button, then yesterday's daylies.
 - The composer and settings open as full-screen pages with close and back buttons. The Post button stays above the keyboard.
-- Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is ten one-tap buttons instead of a number field.
+- Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is a 1–10 slider that starts unset, so a rating is always chosen on purpose.
 
 Only the data layer is missing features:
 
