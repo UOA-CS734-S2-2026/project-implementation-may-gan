@@ -94,7 +94,7 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     const authMigration = await readFile(new URL("../../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
     const rateLimitMigration = await readFile(new URL("../../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
     const mediaReservationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0003_add_media_reservation.sql", import.meta.url), "utf8");
-    const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0008_add_media_reservation_validation.sql", import.meta.url), "utf8");
+    const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0009_add_media_reservation_validation.sql", import.meta.url), "utf8");
     await migrator.client.unsafe(authMigration);
     await migrator.client.unsafe(rateLimitMigration);
     await migrator.client.unsafe(mediaReservationMigration);
