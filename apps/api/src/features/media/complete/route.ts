@@ -1,7 +1,8 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
-import { apiErrorResponse } from "../../../lib/api-error";
+import { apiErrorResponse } from "../../../http/api-error";
 import { R2ReadInfrastructureError } from "../../../infrastructure/media/r2";
-import type { MediaReservationRuntime } from "../reserve/runtime";
+import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import type { MediaReservationRouteDependencies } from "../shared/media-reservation-route-dependencies";
 import { apiErrorSchema, mediaReservationIdParamSchema, mediaReservationResponseSchema } from "./contract";
 import { completeMediaReservation } from "./service";
 
@@ -38,9 +39,13 @@ const completeReservationRoute = createRoute({
   },
 });
 
-export function registerMediaCompleteRoute(app: OpenAPIHono, media?: MediaReservationRuntime) {
+export function registerMediaCompleteRoute(
+  app: OpenAPIHono<AuthenticatedApiEnv>,
+  dependencies: MediaReservationRouteDependencies = {},
+) {
   app.openapi(completeReservationRoute, async (context) => {
-    if (!media) {
+    const runtime = dependencies.runtime;
+    if (!runtime) {
       return apiErrorResponse(
         context,
         503,
@@ -49,17 +54,12 @@ export function registerMediaCompleteRoute(app: OpenAPIHono, media?: MediaReserv
       );
     }
 
-    return media.withRequestContext(context.req.raw, async ({ user, repository }) => {
-      if (!user) {
-        return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Sign in to complete a media reservation.");
-      }
-
-      const { id } = context.req.valid("param");
-
-      try {
+    const { id } = context.req.valid("param");
+    try {
+      return runtime.withRepository(async (repository) => {
         const result = await completeMediaReservation(
-          { repository, r2Reader: media.r2Reader },
-          user.userId,
+          { repository, r2Reader: runtime.r2Reader },
+          context.get("actor").userId,
           id,
         );
 
@@ -75,12 +75,12 @@ export function registerMediaCompleteRoute(app: OpenAPIHono, media?: MediaReserv
           );
         }
         return context.json(result.reservation, 200, noStoreHeaders);
-      } catch (error) {
-        if (error instanceof R2ReadInfrastructureError) {
-          return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media storage is temporarily unavailable.");
-        }
-        throw error;
+      });
+    } catch (error) {
+      if (error instanceof R2ReadInfrastructureError) {
+        return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media storage is temporarily unavailable.");
       }
-    });
+      throw error;
+    }
   });
 }

@@ -3,9 +3,9 @@ import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { MAX_ATTACHMENT_BYTES, MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createUnusedR2Reader } from "../../../infrastructure/media/r2.fake";
-import { createFakeMediaReservationRepository } from "./repository.fake";
-import type { MediaReservationRepository } from "./reserve-upload.repository";
-import type { MediaReservationRuntime } from "./reserve-upload.runtime";
+import { createFakeMediaReservationRepository } from "../shared/media-reservation.repository.fake";
+import type { MediaReservationRepository } from "../shared/media-reservation.repository";
+import type { MediaReservationRuntime } from "../shared/media-reservation-runtime";
 
 const origin = "https://worker.test";
 
@@ -16,17 +16,12 @@ const testR2Configuration = {
   secretAccessKey: "test-secret-access-key",
 };
 
-function createFakeMediaRuntime(
-  auth: BetterAuthCompatibilitySlice,
-  repository: MediaReservationRepository,
-): MediaReservationRuntime {
+function createFakeMediaRuntime(repository: MediaReservationRepository): MediaReservationRuntime {
   return {
     r2: testR2Configuration,
     r2Reader: createUnusedR2Reader(),
-    async withRequestContext(request, operation) {
-      const result = await auth.auth.api.getSession({ headers: request.headers });
-      const user = result?.user?.id ? { userId: result.user.id } : undefined;
-      return operation({ user, repository });
+    async withRepository(operation) {
+      return operation(repository);
     },
   };
 }
@@ -37,7 +32,16 @@ function createTestApp(repository: MediaReservationRepository = createFakeMediaR
     secret: `${crypto.randomUUID()}${crypto.randomUUID()}`,
     database: { account: [], session: [], user: [], verification: [] },
   });
-  const app = createApp({ auth, media: createFakeMediaRuntime(auth, repository) });
+  const app = createApp({
+    auth,
+    media: {
+      runtime: createFakeMediaRuntime(repository),
+      resolveSession: async (request) => {
+        const result = await auth.auth.api.getSession({ headers: request.headers });
+        return result?.user?.id ? { userId: result.user.id } : null;
+      },
+    },
+  });
   return { app, auth, repository };
 }
 

@@ -6,7 +6,9 @@ import { readBetterAuthRuntimeConfiguration } from "../../auth/better-auth";
 import { registerPostgresBetterAuthRoutes } from "../../auth/route";
 import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
 import { validJpegBytes } from "../../../infrastructure/media/media-format.fixtures";
-import { createHyperdriveMediaReservationRuntime } from "../reserve/runtime";
+import { createHyperdriveMediaReservationRuntime } from "../shared/media-reservation-runtime";
+import { resolveSession } from "../../../infrastructure/auth/session";
+import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import type { ApiEnv } from "../../../env";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
@@ -46,9 +48,8 @@ function createProductionApp(objects: Map<string, Uint8Array>) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   if (!configuration) throw new Error("Test Better Auth configuration is invalid.");
 
-  const media = createHyperdriveMediaReservationRuntime(
+  const runtime = createHyperdriveMediaReservationRuntime(
     configuration.hyperdrive,
-    { baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins },
     {
       accountId: r2Bindings.R2_ACCOUNT_ID,
       bucketName: r2Bindings.R2_BUCKET_NAME,
@@ -57,7 +58,15 @@ function createProductionApp(objects: Map<string, Uint8Array>) {
     },
     createFakeR2Reader(objects),
   );
-  const api = createApp({ media });
+  const api = createApp({
+    media: {
+      runtime,
+      resolveSession: (request) => withHyperdriveDatabase(
+        configuration.hyperdrive,
+        (database) => resolveSession(request, configuration, database),
+      ),
+    },
+  });
   registerPostgresBetterAuthRoutes(api, env);
   return api;
 }
