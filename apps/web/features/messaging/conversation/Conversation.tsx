@@ -14,7 +14,7 @@ import { useResolveRequestMutation } from "@/features/messaging/resolve-request/
 import { useSendMessageMutation, type SendMessageIntent } from "@/features/messaging/send-message/use-send-message-mutation";
 import { useSetReactionMutation } from "@/features/messaging/set-reaction/use-set-reaction-mutation";
 import { useUnsendMessageMutation } from "@/features/messaging/unsend-message/use-unsend-message-mutation";
-import { createClientMessageId } from "@/lib/messaging/client-id";
+import { createClientMessageId } from "../shared/client-id";
 import { useSession } from "@/lib/session/hooks";
 import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvider";
 import { MessageBubble } from "../shared/MessageBubble";

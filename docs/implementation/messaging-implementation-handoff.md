@@ -1,6 +1,6 @@
 # Dayli messaging implementation handoff
 
-Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. The approved web and Flutter messaging flows are integrated, including mobile old-session revocation and quarantine before credential replacement. REST clients are regenerated from the merged Hono app. TanStack Query web adoption remains separate pending its approved integration.
+Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. Approved web and Flutter messaging flows are integrated, including mobile old-session revocation and quarantine before credential replacement. REST clients are regenerated from the merged Hono app. The web uses session-scoped TanStack Query messaging hooks.
 
 Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The three stack layers share reviewed interfaces: refactor first, friends second, messaging third. Friends owns `0009_relationship_search`; messaging follows with undeployed `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. Do not modify deployed migration history. Freeze auth, registration, locking, and test interfaces before adding work from independently reviewed client branches.
 
@@ -28,25 +28,25 @@ This is not end-to-end encrypted messaging. TLS and provider encryption at rest 
 | Existing path | Relevant behavior |
 | --- | --- |
 | `apps/api/src/app.ts` | `createApp` injects test dependencies and registers OpenAPI routes. `createAppForEnv` wires auth, Hyperdrive, and feature services. Default app must remain DB-free so contract generation works. |
-| `apps/api/src/index.ts` | Fetch-only Worker entry today. Add named Durable Object export and scheduled handler here. |
-| `apps/api/src/env.ts` | Worker binding types. No messaging bindings yet. |
+| `apps/api/src/index.ts` | Worker entry exports the messaging Durable Object and scheduled dispatcher. |
+| `apps/api/src/env.ts` | Worker binding types include messaging delivery, realtime, and protected push configuration. |
 | `apps/api/src/features/relationships/{contract,route,service,postgres-store}.ts` | Concrete vertical-slice pattern to follow. Route adapters validate/authenticate, services enforce policy, stores own transactions. |
 | `apps/api/src/features/relationships/postgres-store.ts` | Pair lock uses sorted, length-prefixed IDs and `pg_advisory_xact_lock(hashtextextended(pairKey, 734))`. Messaging must share this exact lock identity. |
 | `apps/api/src/features/permissions/` | Existing permission helpers. History access still needs messaging membership checks. |
 | `apps/api/src/features/auth/better-auth.ts`, `apps/api/src/lib/session.ts` | Better Auth identity, secure browser cookies, native bearer sessions. Socket auth additionally needs session ID and expiry, not only user ID. |
 | `apps/api/src/lib/hyperdrive.ts`, `packages/db/src/index.ts` | Invocation-scoped postgres.js/Drizzle clients, disposal, transactions. Hyperdrive cache must remain disabled. |
-| `packages/db/src/schema/{index,relationships,users}.ts` | Existing schema exports. No messaging schema. |
+| `packages/db/src/schema/{index,messaging,relationships,users}.ts` | Messaging and relationship schema exports support the stacked migrations. |
 | `packages/db/migrations/` | Additive controlled migrations. This stack orders friends `0009_relationship_search`, messaging `0010_messaging_foundation`, then encrypted push tokens in `0011_encrypt_push_device_tokens`. |
 | `packages/contracts/src/common/` | Shared IDs, timestamps, errors, pagination. Feature contracts currently live beside Hono routes, not in a central feature-contract directory. |
 | `scripts/generate-openapi.ts` | Uses registered Hono routes to produce `packages/contracts/openapi.json`. |
 | `packages/api-client-typescript/`, `packages/api-client-dart/` | Generated REST clients. Never hand-edit generated models. Dart currently uses the generated HTTP client, not Dio. |
-| `apps/web/lib/api/daily-posts.ts`, `apps/web/lib/session/` | Existing generated-client adapter and session lifecycle patterns. TanStack Query is not installed yet. |
-| `apps/web/app/(main)/messages/page.tsx` | Placeholder, not an existing messaging UI to migrate. |
+| `apps/web/features/messaging/`, `apps/web/lib/session/` | Action-scoped TanStack Query hooks, session-scoped cache boundaries, realtime reconciliation, and generated-client adapters. |
+| `apps/web/app/(main)/messages/page.tsx` | Messaging inbox route backed by the feature hooks. |
 | `apps/mobile/lib/app/{app_scope,router}.dart`, `apps/mobile/lib/auth/session_controller.dart` | Existing dependency injection, navigation, and session lifecycle. Flutter currently uses controllers, not Riverpod. |
 | `apps/mobile/lib/placeholders/placeholder_screens.dart` | Messaging placeholder. Preserve unrelated placeholder screens. |
 | `apps/api/vitest.postgres.config.ts`, `apps/api/vitest.config.ts` | Real-Postgres and ordinary API test entry points. |
 
-No conversation tables, messaging endpoints, outbox dispatcher, socket infrastructure, or push registration exists. Historical SSE/tRPC messaging was not imported. Do not spend this work deleting nonexistent legacy code. Some older documentation describes a desired stack rather than checked-in dependencies.
+Messaging tables, REST endpoints, outbox dispatch, ticketed socket invalidations, protected push registration, and web and mobile flows are integrated. Historical SSE/tRPC messaging was not imported. Local verification does not replace Firebase/APNs configuration, physical-device delivery evidence, or staging validation.
 
 ## Architecture in plain terms
 

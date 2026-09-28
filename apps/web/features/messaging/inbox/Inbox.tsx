@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { createClientMessageId } from "@/lib/messaging/client-id";
+import { createClientMessageId } from "../shared/client-id";
 import { useCreateConversationMutation } from "@/features/messaging/create-conversation/use-create-conversation-mutation";
 import { useInboxQuery } from "./use-inbox-query";
 import { useSession } from "@/lib/session/hooks";
