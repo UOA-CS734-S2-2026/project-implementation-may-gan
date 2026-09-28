@@ -20,7 +20,7 @@ export function Inbox() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void Promise.resolve().then(refresh); }, [refresh]);
 
   return (
     <section className="mx-auto max-w-3xl px-6 py-16 md:px-12">

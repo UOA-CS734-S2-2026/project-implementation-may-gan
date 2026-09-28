@@ -77,7 +77,7 @@ describe("message action services", () => {
     const state = memory(message({ reactions: [{ reaction: "love", count: 1, reactedByActor: true }] }));
     const result = await createUnsendMessageService({ store: state.store, now: () => now }).unsend("alice", "conversation-1", "message-1");
     expect(result).toMatchObject({ replayed: false, message: { text: null, unsentAt: now.toISOString(), reactions: [] } });
-    expect(await createUnsendMessageService({ store: state.store }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ replayed: true });
+    await expect(createUnsendMessageService({ store: state.store }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ replayed: true });
   });
 
   it("sets one reaction per actor and makes repeated set/remove no-ops", async () => {
