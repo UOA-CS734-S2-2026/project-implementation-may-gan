@@ -78,9 +78,9 @@ Implemented on this branch:
 - The relationship pair advisory lock now lives in `@dayli/db`. It keeps the sorted length-prefixed key and hash seed `734`.
 - Post creation, current posting day, media reservation creation and lookup, health, API docs, HTTP helpers, and provider adapters moved to the named paths used by this branch. URLs, operation IDs, and generated OpenAPI output are unchanged.
 - Renamed repository integration tests are included by the Postgres Vitest config.
-- Flutter has an `integration_test` dependency and an implemented synthetic sign-in and navigation journey. Hosted CI remains manual-only pending the documented approval gate.
+- Flutter has an `integration_test` dependency and a native fake-session navigation smoke test. It does not prove real API login. A real isolated API journey is blocked on owner-provided disposable Worker configuration and synthetic credentials. Hosted CI remains manual-only pending the documented approval gate.
 
-Relationship actions now register from their own action directories. Their existing service, repository, and schema modules remain shared because they own the common transactional transition policy. Media creation and lookup register from separate action directories and share the request-scoped repository runtime. These are structural changes only.
+Relationship actions own their route, operation service, and PostgreSQL mutation or query modules. Shared policy, snapshots, locking, error mapping, and the transaction composition stay in `relationships/shared`. `relationships.service.ts` is only a compatibility composition facade. Media creation and lookup register from separate action directories and share the request-scoped repository runtime. These are structural changes only.
 
 ## Goal and scope
 
