@@ -38,7 +38,7 @@ export function registerReserveUploadRoute(
 ) {
   app.openapi(reserveUploadRoute, async (context) => {
     const runtime = dependencies.runtime;
-    if (!runtime) {
+    if (!runtime || !dependencies.resolveSession) {
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media reservations are not currently configured.");
     }
 
