@@ -5,18 +5,6 @@ import '../ui/nav_icons.dart';
 
 // Tabs whose REST APIs have not landed yet.
 
-/// Friend lists return with the relationships UI (#46, #47).
-class FriendsScreen extends StatelessWidget {
-  const FriendsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) => const ComingSoonScreen(
-    title: 'friends',
-    icon: NavIcons.friends,
-    message: 'Find friends and see who you share your daylies with.',
-  );
-}
-
 /// Profiles and past daylies return with the profile API (#68).
 class MyDaysScreen extends StatelessWidget {
   const MyDaysScreen({super.key});

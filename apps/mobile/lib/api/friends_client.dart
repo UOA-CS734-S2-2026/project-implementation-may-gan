@@ -1,0 +1,158 @@
+import 'dart:io';
+
+import 'package:dayli_api_client/api.dart' as generated;
+
+import 'api_failure.dart';
+import 'posting_day_client.dart' show failureForStatus;
+
+class FriendCard {
+  const FriendCard({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    required this.relationship,
+  });
+  final String id;
+  final String username;
+  final String displayName;
+  final String relationship;
+}
+
+class FriendRequest {
+  const FriendRequest({
+    required this.id,
+    required this.senderId,
+    required this.recipientId,
+    required this.user,
+  });
+  final String id;
+  final String senderId;
+  final String recipientId;
+  final FriendCard? user;
+}
+
+class FriendsSnapshot {
+  const FriendsSnapshot({required this.friends, required this.requests});
+  final List<FriendCard> friends;
+  final List<FriendRequest> requests;
+}
+
+abstract interface class FriendsClient {
+  Future<ApiResult<FriendsSnapshot>> load();
+  Future<ApiResult<List<FriendCard>>> search(String query);
+  Future<ApiResult<void>> send(String userId);
+  Future<ApiResult<void>> accept(String requestId);
+  Future<ApiResult<void>> decline(String requestId);
+  Future<ApiResult<void>> cancel(String requestId);
+  Future<ApiResult<void>> remove(String userId);
+}
+
+class GeneratedFriendsClient implements FriendsClient {
+  GeneratedFriendsClient({required String baseUrl, required this._bearerToken})
+    : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
+  final String _baseUrl;
+  final Future<String?> Function() _bearerToken;
+
+  Future<generated.RelationshipsApi?> _api() async {
+    final token = await _bearerToken();
+    if (token == null) return null;
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    return generated.RelationshipsApi(
+      generated.ApiClient(basePath: _baseUrl, authentication: auth),
+    );
+  }
+
+  @override
+  Future<ApiResult<FriendsSnapshot>> load() async {
+    final api = await _api();
+    if (api == null) return const ApiError(Unauthenticated());
+    try {
+      final values = await Future.wait([
+        api.relationshipsListFriends(limit: 20),
+        api.relationshipsListPendingRequests(direction: 'all', limit: 20),
+      ]);
+      final friends = values[0] as generated.RelationshipUserPage?;
+      final requests = values[1] as generated.PendingRequestPage?;
+      return ApiSuccess(
+        FriendsSnapshot(
+          friends: (friends?.items ?? []).map(_card).toList(growable: false),
+          requests: (requests?.items ?? [])
+              .map(
+                (item) => FriendRequest(
+                  id: item.id,
+                  senderId: item.senderId,
+                  recipientId: item.recipientId,
+                  user: item.user == null ? null : _card(item.user!),
+                ),
+              )
+              .toList(growable: false),
+        ),
+      );
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+  }
+
+  @override
+  Future<ApiResult<List<FriendCard>>> search(String query) async => _read(
+    (api) async =>
+        (await api.relationshipsSearchUsers(
+          query,
+          limit: 20,
+        ))?.items.map(_card).toList(growable: false) ??
+        [],
+  );
+  @override
+  Future<ApiResult<void>> send(String userId) => _write(
+    (api) => api.relationshipsSendRequest(
+      sendRelationshipRequest: generated.SendRelationshipRequest(
+        recipientId: userId,
+      ),
+    ),
+  );
+  @override
+  Future<ApiResult<void>> accept(String requestId) =>
+      _write((api) => api.relationshipsAcceptRequest(requestId));
+  @override
+  Future<ApiResult<void>> decline(String requestId) =>
+      _write((api) => api.relationshipsDeclineRequest(requestId));
+  @override
+  Future<ApiResult<void>> cancel(String requestId) =>
+      _write((api) => api.relationshipsCancelRequest(requestId));
+  @override
+  Future<ApiResult<void>> remove(String userId) =>
+      _write((api) => api.relationshipsRemoveFriendship(userId));
+
+  Future<ApiResult<T>> _read<T>(
+    Future<T> Function(generated.RelationshipsApi) operation,
+  ) async {
+    final api = await _api();
+    if (api == null) return const ApiError(Unauthenticated());
+    try {
+      return ApiSuccess(await operation(api));
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+  }
+
+  Future<ApiResult<void>> _write(
+    Future<Object?> Function(generated.RelationshipsApi) operation,
+  ) async {
+    final result = await _read(operation);
+    return switch (result) {
+      ApiSuccess() => const ApiSuccess(null),
+      ApiError(:final failure) => ApiError(failure),
+    };
+  }
+}
+
+FriendCard _card(generated.RelationshipUserCard card) => FriendCard(
+  id: card.id,
+  username: card.username,
+  displayName: card.displayName,
+  relationship: card.relationship.name,
+);

@@ -87,6 +87,30 @@ suite("Postgres relationship persistence", () => {
     expect(afterBlock).toEqual({ pending: 0, active: 0, blocks: 1 });
   });
 
+  it("lists only minimal discoverable cards and omits private blocked and banned identities", async () => {
+    const actor = users[6]!;
+    const privateUser = users[4]!;
+    const blockedUser = users[5]!;
+    const bannedUser = users[3]!;
+    await database.client`
+      update public."user" set username = case id
+        when ${privateUser} then 'bobby_private'
+        when ${blockedUser} then 'bobby_blocked'
+        when ${bannedUser} then 'bobby_banned'
+      end,
+      display_username = case id when ${privateUser} then 'Bobby' else 'Hidden person' end,
+      profile_visibility = case when id = ${privateUser} then 'private'::profile_visibility else profile_visibility end,
+      banned = case when id = ${bannedUser} then true else banned end
+      where id = any(${[privateUser, blockedUser, bannedUser]}::text[])
+    `;
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${actor}, ${blockedUser}, now())`;
+
+    const page = await service.searchUsers(actor, 'bob', 20);
+
+    expect(page.items).toEqual([{ id: privateUser, username: 'bobby_private', displayName: 'Bobby', relationship: 'none' }]);
+    expect(Object.keys(page.items[0]!)).toEqual(['id', 'username', 'displayName', 'relationship']);
+  });
+
   it("enforces five sends in a rolling 24-hour window", async () => {
     for (let index = 0; index < 5; index += 1) {
       const result = await service.sendRequest(users[2]!, users[3]!);

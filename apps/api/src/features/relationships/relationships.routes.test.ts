@@ -124,6 +124,19 @@ describe("relationships routes", () => {
     expect(body).not.toContain("database password");
   });
 
+  it("searches only with the verified actor, requires a bounded username prefix, and keeps replies private", async () => {
+    const { app, service } = createTestApp();
+    const response = await app.request("/api/v1/relationships/search?q=bo&limit=20");
+
+    expect(response.status).toBe(200);
+    expectNoStore(response);
+    expect(service.searchUsers).toHaveBeenCalledWith("user_alice", "bo", 20, undefined);
+
+    const tooShort = await app.request("/api/v1/relationships/search?q=b");
+    expect(tooShort.status).toBe(422);
+    expectNoStore(tooShort);
+  });
+
   it("maps the rolling send throttle to 429 with a retry hint", async () => {
     const { app } = createTestApp({
       service: {
