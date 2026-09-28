@@ -43,6 +43,37 @@ class _DeferredSource implements PushTokenSource {
   Future<void> invalidateLocalToken() async {}
 }
 
+class _DeferredWriteClient implements PushRegistrationClient {
+  _DeferredWriteClient(this.deferredTokens);
+
+  final Set<String> deferredTokens;
+  final pending = <String, Completer<void>>{};
+  final observed = <String>[];
+  String? serverBinding;
+
+  @override
+  Future<void> register({
+    required String installationId,
+    required String token,
+    required String platform,
+    required bool optedIn,
+  }) async {
+    observed.add('register-start:$token');
+    if (deferredTokens.contains(token)) {
+      final wait = pending.putIfAbsent(token, Completer<void>.new);
+      await wait.future;
+    }
+    observed.add('register-commit:$token');
+    serverBinding = token;
+  }
+
+  @override
+  Future<void> unregister(String installationId) async {
+    observed.add('unregister');
+    serverBinding = null;
+  }
+}
+
 class _Client implements PushRegistrationClient {
   final registrations = <String>[];
   final unregistrations = <String>[];
@@ -115,6 +146,62 @@ void main() {
       await bobStart;
       await aliceStart;
       expect(client.registrations, ['install:bob-token:ios:true']);
+    },
+  );
+
+  test(
+    'drains an initial registration before unregistering old account',
+    () async {
+      final source = _Source(PushPermission.granted, 'alice-token');
+      final client = _DeferredWriteClient({'alice-token'});
+      final service = PushService(
+        source: source,
+        client: client,
+        installationId: 'install',
+        platform: 'ios',
+      );
+
+      final starting = service.start();
+      await Future<void>.delayed(Duration.zero);
+      expect(client.observed, ['register-start:alice-token']);
+      final stopping = service.stop();
+      await Future<void>.delayed(Duration.zero);
+      expect(client.observed, ['register-start:alice-token']);
+      client.pending['alice-token']!.complete();
+      await starting;
+      await stopping;
+      expect(client.observed, [
+        'register-start:alice-token',
+        'register-commit:alice-token',
+        'unregister',
+      ]);
+      expect(client.serverBinding, isNull);
+    },
+  );
+
+  test(
+    'drains a refresh registration before unregistering old account',
+    () async {
+      final source = _Source(PushPermission.granted, 'initial-token');
+      final client = _DeferredWriteClient({'alice-refresh'});
+      final service = PushService(
+        source: source,
+        client: client,
+        installationId: 'install',
+        platform: 'ios',
+      );
+      await service.start();
+      source.controller.add('alice-refresh');
+      await Future<void>.delayed(Duration.zero);
+      expect(client.observed.last, 'register-start:alice-refresh');
+
+      final stopping = service.stop();
+      await Future<void>.delayed(Duration.zero);
+      expect(client.observed.last, 'register-start:alice-refresh');
+      client.pending['alice-refresh']!.complete();
+      await stopping;
+      expect(client.observed.last, 'unregister');
+      expect(client.serverBinding, isNull);
     },
   );
 

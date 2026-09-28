@@ -41,6 +41,10 @@ class PushService {
   StreamSubscription<String>? _subscription;
   int _epoch = 0;
 
+  // Registration writes are serialized so cleanup's DELETE is always issued
+  // after all locally started PUTs have settled.
+  Future<void> _registrationTail = Future<void>.value();
+
   bool _current(int epoch) => epoch == _epoch;
 
   Future<void> start() async {
@@ -54,18 +58,27 @@ class PushService {
     await _subscription?.cancel();
     if (!_current(epoch)) return;
     _subscription = source.tokenRefreshes.listen((token) {
-      unawaited(_register(epoch, token));
+      // A refresh is best effort, but its write remains in the serialized
+      // tail so stop can drain it before unregistering the installation.
+      unawaited(_register(epoch, token).catchError((_) {}));
     });
   }
 
-  Future<void> _register(int epoch, String token) async {
-    if (!_current(epoch)) return;
-    await client.register(
-      installationId: installationId,
-      token: token,
-      platform: platform,
-      optedIn: true,
-    );
+  Future<void> _register(int epoch, String token) {
+    if (!_current(epoch)) return Future<void>.value();
+    final operation = _registrationTail.catchError((_) {}).then((_) async {
+      if (!_current(epoch)) return;
+      await client.register(
+        installationId: installationId,
+        token: token,
+        platform: platform,
+        optedIn: true,
+      );
+    });
+    // Preserve the operation's error for an initial start caller, while the
+    // tail always recovers so a failed PUT cannot block cleanup or later work.
+    _registrationTail = operation.catchError((_) {});
+    return operation;
   }
 
   Future<void> stop() async {
@@ -74,6 +87,11 @@ class PushService {
     ++_epoch;
     await _subscription?.cancel();
     _subscription = null;
+    // Drain every locally initiated registration before deleting under the
+    // old bearer. A transport timeout cannot prove that a remote PUT did not
+    // commit. Local token invalidation plus server session/account checks are
+    // the fail-closed mitigation if that distributed ambiguity remains.
+    await _registrationTail;
     // This call uses the currently installed bearer credential. Callers that
     // are about to replace accounts must await it before replacing that token.
     await client.unregister(installationId);
