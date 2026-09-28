@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
+import 'package:dayli_api_client/api.dart' as generated;
 
 import '../api/api_failure.dart';
 
@@ -96,60 +96,53 @@ class UnavailableMessagingClient implements MessagingClient {
   }) async => const ApiError(ServiceUnavailable());
 }
 
-/// REST boundary for the generated messaging client that lands with OpenAPI.
-/// This temporary adapter keeps Flutter UI testable while PR1 auth and route
-/// registration are integrated. It sends no actor identifier from the app.
+/// Generated OpenAPI client boundary. It sends no actor identifier from the app.
 class HttpMessagingClient implements MessagingClient {
-  HttpMessagingClient({
-    required String baseUrl,
-    required this.bearerToken,
-    http.Client? client,
-  }) : _base = Uri.parse(baseUrl.replaceFirst(RegExp(r'/$'), '')),
-       _client = client ?? http.Client();
+  HttpMessagingClient({required String baseUrl, required this.bearerToken})
+    : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
 
-  final Uri _base;
+  final String _baseUrl;
   final Future<String?> Function() bearerToken;
-  final http.Client _client;
+
+  Future<generated.MessagingApi?> _api() async {
+    final token = await bearerToken();
+    if (token == null) return null;
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    return generated.MessagingApi(
+      generated.ApiClient(basePath: _baseUrl, authentication: auth),
+    );
+  }
 
   @override
   Future<ApiResult<List<MessagingConversation>>> inbox() async {
-    final result = await _request('/api/v1/conversations?folder=inbox');
-    if (result is ApiError<Map<String, dynamic>>) {
-      return ApiError(result.failure);
+    final api = await _api();
+    if (api == null) return const ApiError(Unauthenticated());
+    try {
+      final result = await api.listConversations(folder: 'inbox');
+      if (result == null) return const ApiError(ServiceUnavailable());
+      return ApiSuccess(result.items.map(_conversation).toList());
+    } on generated.ApiException catch (error) {
+      return ApiError(_failure(error));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
     }
-    final body = (result as ApiSuccess<Map<String, dynamic>>).value;
-    final items = body['items'];
-    if (items is! List) {
-      return const ApiError(ServiceUnavailable());
-    }
-    return ApiSuccess(
-      items
-          .whereType<Map<String, dynamic>>()
-          .map(MessagingConversation.fromJson)
-          .toList(),
-    );
   }
 
   @override
   Future<ApiResult<List<MessagingMessage>>> messages(
     String conversationId,
   ) async {
-    final result = await _request(
-      '/api/v1/conversations/${Uri.encodeComponent(conversationId)}/messages',
-    );
-    if (result is ApiError<Map<String, dynamic>>) {
-      return ApiError(result.failure);
+    final api = await _api();
+    if (api == null) return const ApiError(Unauthenticated());
+    try {
+      final result = await api.listMessages(conversationId);
+      if (result == null) return const ApiError(ServiceUnavailable());
+      return ApiSuccess(result.items.map(_message).toList());
+    } on generated.ApiException catch (error) {
+      return ApiError(_failure(error));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
     }
-    final items = (result as ApiSuccess<Map<String, dynamic>>).value['items'];
-    if (items is! List) {
-      return const ApiError(ServiceUnavailable());
-    }
-    return ApiSuccess(
-      items
-          .whereType<Map<String, dynamic>>()
-          .map(MessagingMessage.fromJson)
-          .toList(),
-    );
   }
 
   @override
@@ -158,68 +151,39 @@ class HttpMessagingClient implements MessagingClient {
     required String clientMessageId,
     required String text,
   }) async {
-    final result = await _request(
-      '/api/v1/conversations/${Uri.encodeComponent(conversationId)}/messages',
-      method: 'POST',
-      body: {'clientMessageId': clientMessageId, 'text': text},
-    );
-    if (result is ApiError<Map<String, dynamic>>) {
-      return ApiError(result.failure);
-    }
+    final api = await _api();
+    if (api == null) return const ApiError(Unauthenticated());
     try {
-      return ApiSuccess(
-        MessagingMessage.fromJson(
-          (result as ApiSuccess<Map<String, dynamic>>).value,
+      final result = await api.sendMessage(
+        conversationId,
+        generated.SendMessageRequest(
+          clientMessageId: clientMessageId,
+          text: text,
         ),
       );
-    } on FormatException {
-      return const ApiError(ServiceUnavailable());
+      if (result == null) return const ApiError(ServiceUnavailable());
+      return ApiSuccess(_message(result));
+    } on generated.ApiException catch (error) {
+      return ApiError(_failure(error));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
     }
   }
 
-  Future<ApiResult<Map<String, dynamic>>> _request(
-    String path, {
-    String method = 'GET',
-    Map<String, dynamic>? body,
-  }) async {
-    final token = await bearerToken();
-    if (token == null) {
-      return const ApiError(Unauthenticated());
-    }
-    try {
-      final response = await _client.send(
-        http.Request(method, _base.resolve(path))
-          ..headers.addAll({
-            'authorization': 'Bearer $token',
-            'accept': 'application/json',
-            if (body != null) 'content-type': 'application/json',
-          })
-          ..body = body == null ? '' : jsonEncode(body),
+  static MessagingMessage _message(generated.Message value) =>
+      MessagingMessage.fromJson(
+        jsonDecode(jsonEncode(value.toJson())) as Map<String, dynamic>,
       );
-      final text = await response.stream.bytesToString();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        if (response.statusCode == 401) {
-          return const ApiError(Unauthenticated());
-        }
-        if (response.statusCode == 400 ||
-            response.statusCode == 409 ||
-            response.statusCode == 422) {
-          return const ApiError(
-            InvalidRequest('That message could not be saved.'),
-          );
-        }
-        return const ApiError(ServiceUnavailable());
-      }
-      final decoded = jsonDecode(text);
-      return decoded is Map<String, dynamic>
-          ? ApiSuccess(decoded)
-          : const ApiError(ServiceUnavailable());
-    } on SocketException {
-      return const ApiError(NetworkUnavailable());
-    } on http.ClientException {
-      return const ApiError(NetworkUnavailable());
-    } on FormatException {
-      return const ApiError(ServiceUnavailable());
+  static MessagingConversation _conversation(generated.Conversation value) =>
+      MessagingConversation.fromJson(
+        jsonDecode(jsonEncode(value.toJson())) as Map<String, dynamic>,
+      );
+  static ApiFailure _failure(generated.ApiException error) {
+    if (error.innerException != null) return const NetworkUnavailable();
+    if (error.code == 401) return const Unauthenticated();
+    if (error.code == 400 || error.code == 409 || error.code == 422) {
+      return const InvalidRequest('That message could not be saved.');
     }
+    return const ServiceUnavailable();
   }
 }
