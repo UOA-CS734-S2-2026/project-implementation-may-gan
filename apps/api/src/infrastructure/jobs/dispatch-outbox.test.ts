@@ -55,6 +55,6 @@ describe("outbox dispatcher", () => {
 
   it("uses capped jittered exponential retry delays", () => {
     expect(retryDelayMs(1, () => 0)).toBe(750);
-    expect(retryDelayMs(20, () => 1)).toBe(90_000);
+    expect(retryDelayMs(20, () => 1)).toBe(75_000);
   });
 });
