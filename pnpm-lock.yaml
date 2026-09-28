@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  zod: 4.5.4
+
 importers:
 
   .:
@@ -256,7 +259,7 @@ packages:
   '@asteasolutions/zod-to-openapi@9.1.0':
     resolution: {integrity: sha512-pLMeRgRYS7/vZIgAAkOe2P6+XGTifR1MT9pqDoxZ11EmcJJ+DPmdPqLN8ZZF4U8R9KHCCQCS9c2wtuE8wSrfkw==}
     peerDependencies:
-      zod: ^4.0.0
+      zod: 4.5.4
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -1013,13 +1016,13 @@ packages:
     engines: {node: '>=16.0.0'}
     peerDependencies:
       hono: '>=4.10.0'
-      zod: ^4.0.0
+      zod: 4.5.4
 
   '@hono/zod-validator@0.9.1':
     resolution: {integrity: sha512-iiv6w0qrIc0arfvCtUqBWsvl4fXjzaTcQcCJTTtCnkawF9HHGE+KjEl0ox3gQJ6rKZEgE3mLExlQCF72M+mNuw==}
     peerDependencies:
       hono: '>=4.11.2'
-      zod: ^3.25.0 || ^4.0.0
+      zod: 4.5.4
 
   '@hookform/resolvers@5.2.2':
     resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
@@ -2427,7 +2430,7 @@ packages:
   better-call@1.4.0:
     resolution: {integrity: sha512-bBKOT4vv1kZLDgxVePdilk/Jwkn+dtRRsmi3DzHcDP+WnswyVl6dR59l2HEeP/0cB+bDoopASAesWDPIdd/zZA==}
     peerDependencies:
-      zod: ^4.0.0
+      zod: 4.5.4
     peerDependenciesMeta:
       zod:
         optional: true
@@ -4893,10 +4896,7 @@ packages:
     resolution: {integrity: sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
-
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+      zod: 4.5.4
 
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
@@ -5100,7 +5100,7 @@ snapshots:
       miniflare: 5.20260925.0-alpha(@types/node@24.12.0)
       vitest: 4.1.11(@types/node@24.12.0)(vite@8.3.1(@types/node@24.12.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
       wrangler: 4.141.0(@cloudflare/workers-types@5.20260925.1)(@types/node@24.12.0)
-      zod: 4.4.3
+      zod: 4.5.4
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@types/node'
@@ -9312,7 +9312,5 @@ snapshots:
   zod-validation-error@4.0.2(zod@4.5.4):
     dependencies:
       zod: 4.5.4
-
-  zod@4.4.3: {}
 
   zod@4.5.4: {}
