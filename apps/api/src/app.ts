@@ -13,8 +13,8 @@ import type { ApiEnv } from "./env";
 import {
   createHyperdriveMediaReservationRuntime,
   registerMediaReservationRoutes,
-  type MediaReservationRuntime,
-} from "./features/media/reserve-upload/reserve-upload.route";
+  type MediaReservationRouteDependencies,
+} from "./features/media/media.routes";
 import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,
@@ -44,7 +44,7 @@ import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticat
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
-  media?: MediaReservationRuntime;
+  media?: MediaReservationRouteDependencies;
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
@@ -119,11 +119,10 @@ export function createAppForEnv(env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   const r2Runtime = readR2RuntimeConfiguration(env);
   const media = configuration && r2Runtime
-    ? createHyperdriveMediaReservationRuntime(
-        configuration.hyperdrive,
-        { baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins },
-        r2Runtime,
-      )
+    ? {
+        runtime: createHyperdriveMediaReservationRuntime(configuration.hyperdrive, r2Runtime),
+        resolveSession: createSessionResolver(configuration),
+      } satisfies MediaReservationRouteDependencies
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;

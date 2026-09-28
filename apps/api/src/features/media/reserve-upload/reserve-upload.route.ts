@@ -1,22 +1,17 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
-import type { Env } from "hono";
+import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { apiErrorResponse } from "../../../http/api-error";
 import {
   apiErrorSchema,
   createMediaReservationRequestSchema,
   createMediaReservationResponseSchema,
-  mediaReservationIdParamSchema,
-  mediaReservationResponseSchema,
 } from "./reserve-upload.contract";
-import { createMediaReservation, getMediaReservation } from "./reserve-upload.service";
-import type { MediaReservationRuntime } from "./reserve-upload.runtime";
-
-export type { MediaReservationRuntime } from "./reserve-upload.runtime";
-export { createHyperdriveMediaReservationRuntime } from "./reserve-upload.runtime";
+import { createMediaReservation } from "./reserve-upload.service";
+import type { MediaReservationRouteDependencies } from "../shared/media-reservation-route-dependencies";
 
 const noStoreHeaders = { "cache-control": "no-store" };
 
-const createReservationRoute = createRoute({
+const reserveUploadRoute = createRoute({
   method: "post",
   path: "/api/v1/media-reservations",
   tags: ["Media"],
@@ -30,71 +25,30 @@ const createReservationRoute = createRoute({
       description: "The reservation and a short-lived, single-object presigned upload URL.",
       content: { "application/json": { schema: createMediaReservationResponseSchema } },
     },
-    401: {
-      description: "No valid session.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-    422: {
-      description: "The request body is invalid.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-    429: {
-      description: "Too many pending reservations for this owner.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-    503: {
-      description: "Media reservations are not currently configured.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
+    401: { description: "No valid session.", content: { "application/json": { schema: apiErrorSchema } } },
+    422: { description: "The request body is invalid.", content: { "application/json": { schema: apiErrorSchema } } },
+    429: { description: "Too many pending reservations for this owner.", content: { "application/json": { schema: apiErrorSchema } } },
+    503: { description: "Media reservations are not currently configured.", content: { "application/json": { schema: apiErrorSchema } } },
   },
 });
 
-const getReservationRoute = createRoute({
-  method: "get",
-  path: "/api/v1/media-reservations/{id}",
-  tags: ["Media"],
-  operationId: "media.reservations.get",
-  summary: "Read the caller's own media reservation",
-  request: { params: mediaReservationIdParamSchema },
-  responses: {
-    200: {
-      description: "The reservation's current state.",
-      content: { "application/json": { schema: mediaReservationResponseSchema } },
-    },
-    401: {
-      description: "No valid session.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-    404: {
-      description: "No reservation with that id owned by the caller.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-    503: {
-      description: "Media reservations are not currently configured.",
-      content: { "application/json": { schema: apiErrorSchema } },
-    },
-  },
-});
-
-export function registerMediaReservationRoutes<E extends Env>(app: OpenAPIHono<E>, media?: MediaReservationRuntime) {
-  app.openapi(createReservationRoute, async (context) => {
-    if (!media) {
-      return apiErrorResponse(
-        context,
-        503,
-        "SERVICE_UNAVAILABLE",
-        "Media reservations are not currently configured.",
-      );
+export function registerReserveUploadRoute(
+  app: OpenAPIHono<AuthenticatedApiEnv>,
+  dependencies: MediaReservationRouteDependencies,
+) {
+  app.openapi(reserveUploadRoute, async (context) => {
+    const runtime = dependencies.runtime;
+    if (!runtime) {
+      return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media reservations are not currently configured.");
     }
 
-    return media.withRequestContext(context.req.raw, async ({ user, repository }) => {
-      if (!user) {
-        return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Sign in to reserve a media upload.");
-      }
-
-      const body = context.req.valid("json");
-      const result = await createMediaReservation({ repository, r2: media.r2 }, user.userId, body);
-
+    const body = context.req.valid("json");
+    return runtime.withRepository(async (repository) => {
+      const result = await createMediaReservation(
+        { repository, r2: runtime.r2 },
+        context.get("actor").userId,
+        body,
+      );
       if (result.outcome === "quota_exceeded") {
         return apiErrorResponse(
           context,
@@ -103,34 +57,7 @@ export function registerMediaReservationRoutes<E extends Env>(app: OpenAPIHono<E
           "Too many pending media reservations. Wait for one to expire and try again.",
         );
       }
-
       return context.json(result.reservation, 201, noStoreHeaders);
-    });
-  });
-
-  app.openapi(getReservationRoute, async (context) => {
-    if (!media) {
-      return apiErrorResponse(
-        context,
-        503,
-        "SERVICE_UNAVAILABLE",
-        "Media reservations are not currently configured.",
-      );
-    }
-
-    return media.withRequestContext(context.req.raw, async ({ user, repository }) => {
-      if (!user) {
-        return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Sign in to read a media reservation.");
-      }
-
-      const { id } = context.req.valid("param");
-      const result = await getMediaReservation({ repository }, user.userId, id);
-
-      if (result.outcome === "not_found") {
-        return apiErrorResponse(context, 404, "NOT_FOUND", "No media reservation with that id.");
-      }
-
-      return context.json(result.reservation, 200, noStoreHeaders);
     });
   });
 }

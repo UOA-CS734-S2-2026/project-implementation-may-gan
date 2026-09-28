@@ -8,13 +8,13 @@ import {
 import type { MediaR2Reader } from "../../../infrastructure/media/r2";
 import { MAX_VIDEO_DURATION_SECONDS, type AllowedContentType } from "../shared/media-reservation-policy";
 import { toMediaReservationResponse } from "../reservation-status";
-import type { MediaReservationResponse } from "../reserve/contract";
+import type { MediaReservationResponse } from "../get-reservation/get-reservation.contract";
 import type {
   MediaReservationRecord,
   MediaReservationRepository,
   MediaValidationFailureReason,
   ValidationOutcome,
-} from "../reserve/repository";
+} from "../shared/media-reservation.repository";
 
 export interface CompleteMediaReservationDependencies {
   repository: MediaReservationRepository;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
 import { validJpegBytes } from "../../../infrastructure/media/media-format.fixtures";
-import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
-import type { MediaReservationRecord } from "../reserve/repository";
+import { createFakeMediaReservationRepository } from "../shared/media-reservation.repository.fake";
+import type { MediaReservationRecord } from "../shared/media-reservation.repository";
 import { completeMediaReservation } from "./service";
 
 const ownerId = "user_owner";

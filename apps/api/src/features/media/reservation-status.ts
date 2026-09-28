@@ -1,5 +1,5 @@
-import type { MediaReservationRecord } from "./reserve/repository";
-import type { MediaReservationResponse } from "./reserve/contract";
+import type { MediaReservationRecord } from "./shared/media-reservation.repository";
+import type { MediaReservationResponse } from "./get-reservation/get-reservation.contract";
 
 export type ClientMediaReservationStatus = "pending" | "expired" | "validated" | "failed";
 

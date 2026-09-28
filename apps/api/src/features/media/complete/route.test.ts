@@ -12,9 +12,9 @@ import {
   validJpegBytes,
 } from "../../../infrastructure/media/media-format.fixtures";
 import { MAX_VIDEO_DURATION_SECONDS, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
-import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
-import type { MediaReservationRepository } from "../reserve/repository";
-import type { MediaReservationRuntime } from "../reserve/runtime";
+import { createFakeMediaReservationRepository } from "../shared/media-reservation.repository.fake";
+import type { MediaReservationRepository } from "../shared/media-reservation.repository";
+import type { MediaReservationRuntime } from "../shared/media-reservation-runtime";
 
 const origin = "https://worker.test";
 
@@ -33,17 +33,14 @@ interface ReservationJson {
 }
 
 function createFakeMediaRuntime(
-  auth: BetterAuthCompatibilitySlice,
   repository: MediaReservationRepository,
   objects: Map<string, Uint8Array>,
 ): MediaReservationRuntime {
   return {
     r2: testR2Configuration,
     r2Reader: createFakeR2Reader(objects),
-    async withRequestContext(request, operation) {
-      const result = await auth.auth.api.getSession({ headers: request.headers });
-      const user = result?.user?.id ? { userId: result.user.id } : undefined;
-      return operation({ user, repository });
+    async withRepository(operation) {
+      return operation(repository);
     },
   };
 }
@@ -56,7 +53,16 @@ function createTestApp() {
   });
   const repository = createFakeMediaReservationRepository();
   const objects = new Map<string, Uint8Array>();
-  const app = createApp({ auth, media: createFakeMediaRuntime(auth, repository, objects) });
+  const app = createApp({
+    auth,
+    media: {
+      runtime: createFakeMediaRuntime(repository, objects),
+      resolveSession: async (request) => {
+        const result = await auth.auth.api.getSession({ headers: request.headers });
+        return result?.user?.id ? { userId: result.user.id } : null;
+      },
+    },
+  });
   return { app, repository, objects };
 }
 
