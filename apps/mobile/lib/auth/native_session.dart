@@ -94,10 +94,22 @@ class FlutterGoogleIdTokenProvider implements GoogleIdTokenProvider {
 }
 
 class AuthenticationFailure implements Exception {
-  const AuthenticationFailure(this.operation, this.statusCode);
+  const AuthenticationFailure(
+    this.operation,
+    this.statusCode, {
+    this.code,
+    this.message,
+  });
 
   final String operation;
   final int statusCode;
+  final String? code;
+  final String? message;
+
+  bool get needsGoogleLink =>
+      operation == 'google-sign-in' &&
+      code == 'OAUTH_LINK_ERROR' &&
+      message == 'account not linked';
 
   @override
   String toString() => 'AuthenticationFailure($operation, $statusCode)';
@@ -287,6 +299,23 @@ class BetterAuthNativeSession {
       throw const AuthenticationFailure('pending-revocation', 409);
     }
     if (response.statusCode >= 400) {
+      if (operation == 'google-sign-in') {
+        try {
+          final body = jsonDecode(response.body);
+          if (body is Map<String, dynamic>) {
+            throw AuthenticationFailure(
+              operation,
+              response.statusCode,
+              code: body['code'] is String ? body['code'] as String : null,
+              message: body['message'] is String
+                  ? body['message'] as String
+                  : null,
+            );
+          }
+        } on FormatException {
+          // A non-JSON error still uses the generic sign-in message.
+        }
+      }
       throw AuthenticationFailure(operation, response.statusCode);
     }
 

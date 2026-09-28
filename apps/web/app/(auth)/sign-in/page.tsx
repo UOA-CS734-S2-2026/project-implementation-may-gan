@@ -1,7 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +18,24 @@ const signInSchema = z.object({
 });
 
 type SignInValues = z.infer<typeof signInSchema>;
+
+function GoogleSignInError() {
+  const error = useSearchParams().get("error");
+  if (!error) return null;
+
+  return (
+    <div role="alert" className="rounded-lg bg-background-accent px-4 py-3 text-sm text-foreground-accent">
+      {error === "account_not_linked" ? (
+        <>
+          <p className="font-semibold">Sign in with your password first</p>
+          <p className="mt-1">Then go to Settings and choose Connect Google. You only need to do this once.</p>
+        </>
+      ) : (
+        <p>Google sign-in couldn&apos;t finish. Please try again.</p>
+      )}
+    </div>
+  );
+}
 
 export default function SignInPage() {
   const router = useRouter();
@@ -54,6 +73,7 @@ export default function SignInPage() {
 
       <div className="flex flex-col gap-4">
         <GoogleSignInButton />
+        <Suspense fallback={null}><GoogleSignInError /></Suspense>
 
         <div className="relative flex items-center">
           <div className="flex-grow border-t border-foreground/10" />

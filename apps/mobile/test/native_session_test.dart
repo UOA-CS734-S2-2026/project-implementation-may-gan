@@ -167,6 +167,49 @@ void main() {
   );
 
   test(
+    'identifies only an unlinked Google account for password sign-in guidance',
+    () async {
+      final tokenStore = MemorySessionTokenStore();
+      final client = MockClient(
+        (request) async => http.Response(
+          jsonEncode({
+            'code': 'OAUTH_LINK_ERROR',
+            'message': 'account not linked',
+          }),
+          401,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: client,
+      );
+
+      await expectLater(
+        session.signInWithGoogle(FakeGoogleIdTokenProvider('google-id-token')),
+        throwsA(
+          isA<AuthenticationFailure>().having(
+            (failure) => failure.needsGoogleLink,
+            'needsGoogleLink',
+            isTrue,
+          ),
+        ),
+      );
+      expect(tokenStore.value, isNull);
+      expect(
+        const AuthenticationFailure(
+          'google-sign-in',
+          401,
+          code: 'OAUTH_LINK_ERROR',
+          message: 'account already linked',
+        ).needsGoogleLink,
+        isFalse,
+      );
+    },
+  );
+
+  test(
     'links Google with the current password over the existing bearer session',
     () async {
       final tokenStore = MemorySessionTokenStore()..value = 'worker-token';

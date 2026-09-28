@@ -8,6 +8,7 @@ export function GoogleSignInButton() {
     await authClient.signIn.social({
       provider: "google",
       callbackURL: `${window.location.origin}/home`,
+      errorCallbackURL: `${window.location.origin}/sign-in`,
     });
   }
 
