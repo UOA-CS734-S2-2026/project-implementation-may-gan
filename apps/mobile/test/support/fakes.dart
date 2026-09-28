@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
@@ -11,6 +12,28 @@ import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+class FakeFriendsClient implements FriendsClient {
+  @override
+  Future<ApiResult<FriendsSnapshot>> load() async =>
+      const ApiSuccess(FriendsSnapshot(friends: [], requests: []));
+  @override
+  Future<ApiResult<List<FriendCard>>> search(String query) async =>
+      const ApiSuccess([]);
+  @override
+  Future<ApiResult<void>> send(String userId) async => const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> accept(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> decline(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> cancel(String requestId) async =>
+      const ApiSuccess(null);
+  @override
+  Future<ApiResult<void>> remove(String userId) async => const ApiSuccess(null);
+}
 
 class MemoryTokenStore implements SessionTokenStore {
   String? value;
@@ -167,6 +190,7 @@ class TestHarness {
   AppServices get services => AppServices(
     session: session,
     postingDays: postingDays,
+    friends: FakeFriendsClient(),
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,

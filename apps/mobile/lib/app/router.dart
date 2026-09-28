@@ -3,9 +3,11 @@ import 'package:go_router/go_router.dart';
 import '../auth/auth_screens.dart';
 import '../auth/session_controller.dart';
 import '../compose/composer_screen.dart';
+import '../friends/friends_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
-import '../placeholders/placeholder_screens.dart';
+import '../placeholders/placeholder_screens.dart'
+    show MessagesScreen, MyDaysScreen;
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
 import 'splash_screen.dart';

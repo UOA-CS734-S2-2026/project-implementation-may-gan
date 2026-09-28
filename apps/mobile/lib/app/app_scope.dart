@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../api/friends_client.dart';
 import '../api/posting_day_client.dart';
 import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
@@ -12,6 +13,7 @@ class AppServices {
   const AppServices({
     required this.session,
     required this.postingDays,
+    required this.friends,
     required this.drafts,
     required this.submitter,
     this.google,
@@ -21,6 +23,7 @@ class AppServices {
 
   final SessionController session;
   final PostingDayClient postingDays;
+  final FriendsClient friends;
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
 
