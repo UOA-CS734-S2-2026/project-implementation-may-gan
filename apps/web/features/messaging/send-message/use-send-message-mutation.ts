@@ -18,5 +18,6 @@ export function useSendMessageMutation(conversationId: string) {
     onMutate: async (intent) => { await queryClient.cancelQueries({ queryKey: messagingKeys.messages(userId, conversationId) }); updateMessagePages(queryClient, userId, conversationId, (data) => mergeMessageIntoPages(data, [pendingMessage(userId, conversationId, intent)]) ?? data); },
     onSuccess: (message, intent) => { updateMessagePages(queryClient, userId, conversationId, (data) => { const withoutPending: MessagePages = { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.filter((entry) => entry.clientMessageId !== intent.clientMessageId) })) }; return mergeMessageIntoPages(withoutPending, [message]); }); void queryClient.invalidateQueries({ queryKey: messagingKeys.unread(userId) }); void queryClient.invalidateQueries({ queryKey: messagingKeys.inbox(userId, "inbox") }); },
     onError: (_error, intent) => updateMessagePages(queryClient, userId, conversationId, (data) => ({ ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map((message) => message.clientMessageId === intent.clientMessageId ? { ...message, delivery: "failed", retryIntent: intent } : message) })) })),
+    onSettled: () => { void queryClient.invalidateQueries({ queryKey: messagingKeys.messages(userId, conversationId) }); },
   });
 }

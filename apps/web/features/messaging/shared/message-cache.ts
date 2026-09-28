@@ -14,8 +14,8 @@ export function flattenMessagePages(data: MessagePages | undefined): LocalMessag
 }
 
 /** Keep every loaded page and its cursor while merging canonical projections and reply previews. */
-export function mergeMessageIntoPages(data: MessagePages | undefined, incoming: readonly LocalMessagingMessage[]): MessagePages | undefined {
-  if (!data) return data;
+export function mergeMessageIntoPages(data: MessagePages | undefined, incoming: readonly LocalMessagingMessage[]): MessagePages {
+  if (!data) return { pages: [{ items: reconcileReplyPreviews(mergeMessages([], incoming)), nextCursor: null, hasMore: false }], pageParams: [undefined] };
   const existing = data.pages.flatMap((page) => page.items);
   const merged = reconcileReplyPreviews(mergeMessages(existing, incoming));
   const byId = new Map(merged.map((message) => [message.id, message]));
@@ -25,5 +25,5 @@ export function mergeMessageIntoPages(data: MessagePages | undefined, incoming: 
 }
 
 export function updateMessagePages(queryClient: QueryClient, userId: string, conversationId: string, update: (data: MessagePages) => MessagePages | undefined) {
-  queryClient.setQueryData<MessagePages>(messagingKeys.messages(userId, conversationId), (data) => data ? update(data) : data);
+  queryClient.setQueryData<MessagePages>(messagingKeys.messages(userId, conversationId), (data) => update(data ?? { pages: [{ items: [], nextCursor: null, hasMore: false }], pageParams: [undefined] }));
 }
