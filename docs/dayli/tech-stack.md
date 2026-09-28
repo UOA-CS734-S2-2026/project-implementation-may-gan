@@ -3,7 +3,7 @@
 | Layer | Choice |
 | --- | --- |
 | Mobile | Flutter, GoRouter, controller-based state, generated HTTP client. Messaging follows these existing patterns. |
-| Web | Next.js, React, Tailwind. TanStack Query is planned for messaging, not currently installed. |
+| Web | Next.js, React, Tailwind, and pinned TanStack Query 5.90.21 for session-scoped messaging state. |
 | API | Hono on Cloudflare Workers, Zod, REST/OpenAPI. |
 | Contracts | Hono OpenAPI, generated Dart HTTP and TypeScript fetch clients; a small handwritten socket decoder on Flutter. |
 | Auth | Better Auth, browser cookies, native bearer sessions. |
