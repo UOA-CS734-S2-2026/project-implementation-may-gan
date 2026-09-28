@@ -74,6 +74,17 @@ class MessagingController extends ChangeNotifier {
     for (final conversationId in _threads.keys.toList()) {
       if (generation != _generation) return;
       await loadConversation(conversationId);
+      if (generation != _generation) return;
+      final highWatermark = _conversations[conversationId]?.lastChangeSequence;
+      if (highWatermark != null) {
+        await _realtimeChange(
+          ConversationChanged(
+            'ready-$generation-$conversationId-$highWatermark',
+            conversationId,
+            highWatermark,
+          ),
+        );
+      }
     }
   }
 
@@ -99,6 +110,8 @@ class MessagingController extends ChangeNotifier {
       );
       if (generation != _generation) return;
       if (page is ApiError<MessagingChangePage>) {
+        // Do not poison durable recovery with a transient failed event.
+        _eventIds.remove(event.eventId);
         _failure = page.failure;
         notifyListeners();
         return;
@@ -365,10 +378,6 @@ class MessagingController extends ChangeNotifier {
     switch (result) {
       case ApiSuccess<MessagingConversation>(:final value):
         _conversations[id] = value;
-        _lastChangeSequence[id] = _maxSequence(
-          _lastChangeSequence[id],
-          value.lastChangeSequence,
-        );
         _replaceConversation(value);
         _failure = null;
       case ApiError<MessagingConversation>(:final failure):
@@ -419,10 +428,6 @@ class MessagingController extends ChangeNotifier {
 
   static bool _sequenceAtMost(String value, String maximum) =>
       BigInt.parse(value) <= BigInt.parse(maximum);
-  static String _maxSequence(String? first, String second) =>
-      first == null || BigInt.parse(second) > BigInt.parse(first)
-      ? second
-      : first;
 
   /// Called before another account may see state. Async results from the old
   /// generation cannot write after this point.
