@@ -76,11 +76,11 @@ Implemented on this branch:
 
 - Typed `AuthenticatedActor` and injected `createRequireSession` middleware. Existing post, posting-day, and relationship routes now use it. Missing or invalid credentials return private 401 responses, and resolver failures return private 503 responses.
 - The relationship pair advisory lock now lives in `@dayli/db`. It keeps the sorted length-prefixed key and hash seed `734`.
-- Post creation, current posting day, media reservation, health, API docs, HTTP helpers, and provider adapters moved to the named paths used by this branch. URLs, operation IDs, and generated OpenAPI output are unchanged.
+- Post creation, current posting day, media reservation creation and lookup, health, API docs, HTTP helpers, and provider adapters moved to the named paths used by this branch. URLs, operation IDs, and generated OpenAPI output are unchanged.
 - Renamed repository integration tests are included by the Postgres Vitest config.
 - Flutter has an `integration_test` dependency and an implemented synthetic sign-in and navigation journey. Hosted CI remains manual-only pending the documented approval gate.
 
-The relationship actions still share their existing route, service, repository, and contract modules under `features/relationships`. Splitting every relationship action into separate directories is deferred. The current media reservation route still contains both reservation creation and lookup. These are explicit structural exceptions, not new behavior.
+Relationship actions now register from their own action directories. Their existing service, repository, and schema modules remain shared because they own the common transactional transition policy. Media creation and lookup register from separate action directories and share the request-scoped repository runtime. These are structural changes only.
 
 ## Goal and scope
 
