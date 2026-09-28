@@ -16,15 +16,3 @@ class MyDaysScreen extends StatelessWidget {
     message: 'Every dayli you post will be kept here, one day at a time.',
   );
 }
-
-/// Messaging returns with its REST API.
-class MessagesScreen extends StatelessWidget {
-  const MessagesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) => const ComingSoonScreen(
-    title: 'messages',
-    icon: NavIcons.messages,
-    message: 'Chat with friends about their daylies.',
-  );
-}

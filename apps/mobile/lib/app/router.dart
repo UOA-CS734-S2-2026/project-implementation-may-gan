@@ -6,8 +6,9 @@ import '../compose/composer_screen.dart';
 import '../friends/friends_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
-import '../placeholders/placeholder_screens.dart'
-    show MessagesScreen, MyDaysScreen;
+import '../messaging/conversation_screen.dart';
+import '../messaging/messages_screen.dart';
+import '../placeholders/placeholder_screens.dart' show MyDaysScreen;
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
 import 'splash_screen.dart';
@@ -53,6 +54,11 @@ GoRouter buildRouter(SessionController session) => GoRouter(
         GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
         GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
         GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
+        GoRoute(
+          path: '/messages/:id',
+          builder: (_, state) =>
+              ConversationScreen(conversationId: state.pathParameters['id']!),
+        ),
       ],
     ),
   ],

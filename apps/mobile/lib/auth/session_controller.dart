@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -58,12 +59,16 @@ class SessionController extends ChangeNotifier {
     required this._tokenStore,
     required this._userCache,
     required this._drafts,
+    this.onPrivateDataClear,
   });
 
   final BetterAuthNativeSession _session;
   final SessionTokenStore _tokenStore;
   final SessionUserCache _userCache;
   final DraftStore _drafts;
+
+  /// Closes sockets and clears messaging caches before account state changes.
+  final FutureOr<void> Function()? onPrivateDataClear;
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
@@ -155,11 +160,13 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> _signedIn(SessionUser user) async {
+    if (_user != null && _user!.id != user.id) await onPrivateDataClear?.call();
     await _userCache.write(user);
     _set(SessionStatus.signedIn, user);
   }
 
   Future<void> _signedOutLocally() async {
+    await onPrivateDataClear?.call();
     await _tokenStore.clear();
     await _userCache.clear();
     _set(SessionStatus.signedOut, null);
