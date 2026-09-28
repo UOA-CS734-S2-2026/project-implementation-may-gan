@@ -1,6 +1,6 @@
 # Backend action-slice refactor implementation plan
 
-Status: documentation-only handoff. No backend implementation has been changed. The [backend architecture](../backend-architecture.md) records the target conventions and rationale. The [messaging handoff](messaging-implementation-handoff.md) is a separate feature implementation, not part of this behavior-preserving refactor.
+Status: PR 1 implementation is in progress on `refactor/backend-action-slices`. The [backend architecture](../backend-architecture.md) records the target conventions and rationale. The [messaging handoff](messaging-implementation-handoff.md) is a separate feature implementation, not part of this behavior-preserving refactor.
 
 ## Two-PR delivery and parallel agent plan
 
@@ -69,6 +69,18 @@ Keep that agreement in the PR descriptions or a short section in this plan. Do n
 - Integration checkpoint: rebase messaging onto the refactor branch, resolve shared-file edits deliberately, and verify both PR diffs and all test discovery.
 - Review checkpoint: review security, permissions, transaction races, native/web regressions and deployment configuration. Record external gates instead of reporting them as passed.
 - Delivery checkpoint: present two PRs with commands/results, remaining gates and merge order. Repository publication, privileged workflow execution, deployment and merging remain subject to their own approval boundaries.
+
+## PR 1 implementation status
+
+Implemented on this branch:
+
+- Typed `AuthenticatedActor` and injected `createRequireSession` middleware. Existing post, posting-day, and relationship routes now use it. Missing or invalid credentials return private 401 responses, and resolver failures return private 503 responses.
+- The relationship pair advisory lock now lives in `@dayli/db`. It keeps the sorted length-prefixed key and hash seed `734`.
+- Post creation, current posting day, media reservation, health, API docs, HTTP helpers, and provider adapters moved to the named paths used by this branch. URLs, operation IDs, and generated OpenAPI output are unchanged.
+- Renamed repository integration tests are included by the Postgres Vitest config.
+- Flutter has an `integration_test` dependency and an implemented synthetic sign-in and navigation journey. Hosted CI remains manual-only pending the documented approval gate.
+
+The relationship actions still share their existing route, service, repository, and contract modules under `features/relationships`. Splitting every relationship action into separate directories is deferred. The current media reservation route still contains both reservation creation and lookup. These are explicit structural exceptions, not new behavior.
 
 ## Goal and scope
 

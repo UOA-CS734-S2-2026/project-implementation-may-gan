@@ -25,11 +25,11 @@ HTTP request
   -> PostgreSQL
 ```
 
-Examples are `apps/api/src/features/posts/create/`, `posting-days/current/`, and `media/reserve/`. Relationships currently has one feature-wide route/service/store set. Auth is a Better Auth integration, not an application CRUD service to duplicate.
+Examples are `apps/api/src/features/posts/create-post/`, `posting-days/get-current-posting-day/`, and `media/reserve-upload/`. Relationships currently has one feature-wide route/service/repository set. Auth is a Better Auth integration, not an application CRUD service to duplicate.
 
 `contract.ts` defines request and response schemas; it is not another execution layer. `packages/domain` currently provides Auckland-day logic. `packages/db` owns database setup, schema and migrations. `apps/api/src/app.ts` is the composition root: it registers routes and supplies concrete dependencies. Existing route tests replace those dependencies with test doubles.
 
-Most protected handlers currently resolve the session explicitly. `apps/api/src/lib/session.ts` exposes a reusable resolver, but wiring varies between features. The inspected relationship resolver returns `{ userId }`; its handlers distinguish unauthenticated callers from authentication infrastructure failure. The user schema contains a nullable `role` column, but that alone is not an enforced RBAC system.
+Most protected handlers currently resolve the session explicitly. `apps/api/src/infrastructure/auth/session.ts` exposes a reusable resolver, but wiring varies between features. The inspected relationship resolver returns `{ userId }`; its handlers distinguish unauthenticated callers from authentication infrastructure failure. The user schema contains a nullable `role` column, but that alone is not an enforced RBAC system.
 
 ## Target file tree
 
