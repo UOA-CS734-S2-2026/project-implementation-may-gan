@@ -226,6 +226,8 @@ class ApiClient {
           return DailyPostTomorrowNote.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
+        case 'EditMessageRequest':
+          return EditMessageRequest.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
         case 'MediaContentType':
@@ -254,6 +256,8 @@ class ApiClient {
           return RelationshipUserPage.fromJson(value);
         case 'SendRelationshipRequest':
           return SendRelationshipRequest.fromJson(value);
+        case 'SetMessageReactionRequest':
+          return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
         default:

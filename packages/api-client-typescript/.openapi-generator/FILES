@@ -21,6 +21,7 @@ src/models/DailyPost.ts
 src/models/DailyPostPrompt.ts
 src/models/DailyPostTomorrowNote.ts
 src/models/DailyPromptResponse.ts
+src/models/EditMessageRequest.ts
 src/models/HealthResponse.ts
 src/models/MediaContentType.ts
 src/models/MediaReservation.ts
@@ -35,6 +36,7 @@ src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts
 src/models/RelationshipUserPage.ts
 src/models/SendRelationshipRequest.ts
+src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/index.ts
 src/runtime.ts

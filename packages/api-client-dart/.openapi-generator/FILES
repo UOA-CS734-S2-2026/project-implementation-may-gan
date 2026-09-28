@@ -29,6 +29,7 @@ lib/model/daily_post.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
+lib/model/edit_message_request.dart
 lib/model/health_response.dart
 lib/model/media_content_type.dart
 lib/model/media_reservation.dart
@@ -43,5 +44,6 @@ lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart
 lib/model/relationship_user_page.dart
 lib/model/send_relationship_request.dart
+lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 pubspec.yaml
