@@ -16,6 +16,14 @@ Pass the API origin at build time. Use the addresses in [environments](../../doc
 flutter run --dart-define=DAYLI_API_BASE_URL=https://api.example.test
 ```
 
+For the local HTTPS API on an Android emulator or USB device, Dart's `HttpClient` ignores CAs installed on the device, so pass the mkcert root to a debug build. The app trusts it only when `kDebugMode` is true. Run `adb reverse tcp:8787 tcp:8787` first, as described in [Android debug builds](../../docs/dayli/environments.md#android-debug-builds):
+
+```bash
+flutter run --debug \
+  --dart-define=DAYLI_API_BASE_URL=https://localhost:8787 \
+  --dart-define=DAYLI_DEV_CA_PEM_B64="$(base64 < "$(mkcert -CAROOT)/rootCA.pem" | tr -d '\n')"
+```
+
 Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` is passed with `--dart-define`. Register the debug build's `.staging` application ID and its current debug SHA-1 in the staging Google project. Get the fingerprint with `./gradlew signingReport` from `apps/mobile/android`; keep it out of chat and Git. On iOS, also pass `DAYLI_GOOGLE_IOS_CLIENT_ID` and configure the callback scheme before running:
 
 ```bash
@@ -61,7 +69,7 @@ Only the data layer is missing features:
 
 ## Structure
 
-- `lib/app/`: configuration, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
+- `lib/app/`: configuration, the debug-only development CA check, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
 - `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.

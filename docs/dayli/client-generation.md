@@ -49,7 +49,7 @@ Applications must pass a base URL when constructing a client. Do not rely on the
 | Environment | Typical URL |
 | --- | --- |
 | Local browser or iOS Simulator | `https://localhost:8787` after `pnpm local:auth:setup` and `pnpm dev:api:https` |
-| Android Emulator or USB-connected development device | `https://localhost:8787` works with `adb reverse tcp:8787 tcp:8787` after manually trusting the mkcert CA on the debug device. It is not a LAN-accessible endpoint. |
+| Android Emulator or USB-connected development device | `https://localhost:8787` works in a debug build with `adb reverse tcp:8787 tcp:8787` and the mkcert root passed as `DAYLI_DEV_CA_PEM_B64`. Dart HTTP ignores CAs installed on the device. It is not a LAN-accessible endpoint. |
 | iOS physical device | A reachable HTTPS API whose certificate the device trusts. The staging API is deployed but not yet validated. |
 | Staging or production | URL supplied by application configuration after that environment is provisioned. Production is not deployed. |
 

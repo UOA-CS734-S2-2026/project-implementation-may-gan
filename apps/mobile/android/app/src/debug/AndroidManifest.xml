@@ -4,7 +4,9 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Debug builds trust a developer-installed user CA for local HTTPS.
-         Release builds do not include this override. -->
+    <!-- Debug builds trust a developer-installed user CA for Android platform
+         HTTPS. Dart HTTP ignores it; see DAYLI_DEV_CA_PEM_B64 in
+         docs/dayli/environments.md. Release builds do not include this
+         override. -->
     <application android:networkSecurityConfig="@xml/debug_network_security_config"/>
 </manifest>
