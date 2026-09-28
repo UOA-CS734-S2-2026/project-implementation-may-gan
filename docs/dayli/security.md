@@ -18,7 +18,7 @@ Enforce checks on every list/detail/export/preview route. A public profile does 
 
 ## Sessions and sockets
 
-Detailed ticket, alarm, and revocation behaviour is in the [implementation reference](implementation-reference.md).
+Detailed ticket, alarm, and revocation behaviour is in the [implementation reference](../implementation/implementation-reference.md).
 
 Better Auth is the sole identity authority. Browser cookies need Secure/HttpOnly settings, appropriate SameSite, exact credentialed CORS, and CSRF/origin checks. Flutter stores bearer sessions in protected native storage. OAuth needs safe state, redirects, PKCE where supported, and no reusable credentials in URLs. The [authentication compatibility slice](authentication-compatibility.md) records the current Worker and Flutter proof and the remaining deployment checks.
 

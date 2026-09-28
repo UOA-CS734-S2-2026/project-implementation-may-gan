@@ -6,7 +6,7 @@ Use this while building. The other guides explain the design; this document reco
 
 - Hono on Workers gives mobile and web one independently deployed backend with direct Cloudflare bindings. Next.js routes would require less migration and can also scale. An always-on Node service is the fallback for incompatible dependencies or heavy processing, not a prerequisite for thousands of users.
 - REST/OpenAPI supports generated Dart and TypeScript clients. tRPC's TypeScript inference does not transfer to Flutter. GraphQL is unnecessary for the initial bounded operations.
-- REST owns commands/history; WebSockets carry change notifications; push reaches suspended apps. PostgreSQL remains authoritative.
+- REST owns commands/history; hibernating WebSockets carry small change notifications and clients fetch authorized state through REST. Push reaches suspended mobile apps through FCM/APNs. PostgreSQL remains authoritative. No periodic client polling is planned. See the [messaging handoff](messaging-implementation-handoff.md) for the agreed scope and implementation sequence.
 - Domain services must not depend on `NextRequest`, Hono contexts, or `TRPCError`. Inject database, clock, and external-service interfaces. Map errors in adapters.
 - Better Auth in Hono is the sole identity authority. Temporary Next.js tRPC proxies call Hono with the user's verified credentials, not an unrestricted service account.
 
@@ -24,7 +24,7 @@ Better Auth has Worker and local PostgreSQL coverage. The web and Flutter auth s
 
 Pin working dependencies and OpenAPI generators. Follow driver-specific connection lifecycle guidance; request-scoped connection objects must not leak across Worker invocations. Supply Better Auth with the fresh-read database client.
 
-Wrangler deploys code/bindings, not PostgreSQL migrations. Apply additive Drizzle migrations through the controlled Neon workflow in [Database migrations](database-migrations.md) before dependent releases. Declare Durable Object migrations separately. Keep secrets and `.dev.vars` untracked, and separate staging/production resources. Test old mobile clients and document rollback before removing fields/routes.
+Wrangler deploys code/bindings, not PostgreSQL migrations. Apply additive Drizzle migrations through the controlled Neon workflow in [Database migrations](../dayli/database-migrations.md) before dependent releases. Declare Durable Object migrations separately. Keep secrets and `.dev.vars` untracked, and separate staging/production resources. Test old mobile clients and document rollback before removing fields/routes.
 
 ## 3. PostgreSQL constraints and indexes
 
@@ -58,11 +58,11 @@ Use the Hibernation API. Ordinary fields and timers cannot be trusted after evic
 
 Test heartbeat behaviour separately in browsers and Flutter. Prefer supported automatic responses that preserve hibernation. Do not let frequent typing/presence or repeating timers keep idle objects running.
 
-On reconnect, subscribe and catch up without a gap: establish the connection, buffer events, fetch history, then merge by stable IDs. Refresh conversation/read state too; a new-message cursor alone cannot reconcile edits or deletions. If realtime fails, poll only visible conversations with bounded backoff. Stop on background/logout and use push for suspended apps.
+On reconnect, subscribe and catch up without a gap: establish the connection, buffer events, fetch history and durable change references, then merge by stable IDs and versions. Refresh conversation/read state too; a new-message cursor alone cannot reconcile edits, reactions, or unsending. If realtime fails, reconnect with bounded backoff and jitter, show a disconnected state, and offer manual refresh. Do not introduce periodic client polling, including a fallback loop. Stop sockets on background/logout and use push for suspended mobile apps.
 
 ## 5. Outbox and scheduled jobs
 
-A mutation transaction saves content and per-recipient outbox records together. Attempt bounded publication after commit. `waitUntil` can extend an immediate attempt, but is not durable storage or guaranteed retry.
+A mutation transaction saves content and per-audience outbox records together. Realtime invalidations reach all affected participants, including the actor's other sessions; private-only read changes reach that user's sessions only. Push targets eligible peer devices, never the actor's devices. Attempt bounded publication immediately after commit so healthy foreground delivery does not wait for a scheduled tick. `waitUntil` can extend an immediate attempt, but is not durable storage or guaranteed retry. Delayed dispatch must acquire and dispose its own invocation-scoped database client. Scheduled processing repairs failed or interrupted attempts; it is not the normal live-delivery path.
 
 The scheduled handler claims a batch with `FOR UPDATE SKIP LOCKED`, records leases, and commits before external calls. On completion, update only if the worker still owns the lease. Reclaim expired leases, cap attempts, and move persistent failures to a reviewable failed state. Use exponential backoff with jitter.
 
@@ -84,7 +84,7 @@ Protect local drafts and credentials beyond a biometric UI prompt. Test access a
 
 Turn each mechanism into an issue acceptance test. Include concurrent writes, expired tickets after hibernation, provider outages, lost/duplicate events, stale caches, malformed media, and fresh-device recovery. Record runtime versions, test data, network, and provider plan. Use synthetic data and authorised staging only.
 
-See [Security](security.md), [Testing](testing-and-delivery.md), and [Scalability](scalability.md) for the concise release rules and workload targets.
+See [Security](../dayli/security.md), [Testing](../dayli/testing-and-delivery.md), and [Scalability](../dayli/scalability.md) for the concise release rules and workload targets.
 
 ## 8. Readiness checklist
 
@@ -95,7 +95,7 @@ These items remain open:
 - Provision isolated Cloudflare resources and PostgreSQL, confirm quotas/budget, choose web/API domains, and configure email, OAuth, FCM/APNs, and iOS signing. Use placeholders until owners supply secrets through approved stores. Staging has user-verified restricted database roles but no deployed service or applied application migrations. Production is undeployed.
 - Run the local auth walkthrough, then prove the Worker integrations against provisioned staging. This includes native and web login, a Hyperdrive transaction as `app`, real R2 signing and upload rejection, and a WebSocket update with reconnect. Select the Next.js deployment adapter only after its compatibility check.
 - Wire the Flutter daily-post client and media reservation/upload flow. Link completed media to posts only after byte-size and actual-format validation.
-- Implement the agreed rules in [Product decisions](product-decisions.md): friends see earlier released friends posts, released edits retain visible revision history, and blocks stop interaction while preserving message history.
+- Implement the agreed rules in [Product decisions](../dayli/product-decisions.md): friends see earlier released friends posts, released edits retain visible revision history, and blocks stop interaction while preserving message history.
 - Enforce three mixed attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. Test iOS 16+ and Android 10/API 29+ plus documented fallbacks.
 - Apply immediate application deletion, 30-day backup expiry, and the initial 24-hour RPO and 8-hour RTO. Verify the recovery targets through a recorded restoration exercise.
 - Assign the first issues and reviewers in the course board. Keep frontend reuse approval, test evidence, and service-account ownership in team records. Do not create a separate project-management system.
