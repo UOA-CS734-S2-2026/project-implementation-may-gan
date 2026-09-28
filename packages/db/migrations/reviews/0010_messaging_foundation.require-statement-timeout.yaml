@@ -1,0 +1,6 @@
+reason: The migration runner sets a five-minute statement timeout for this generated initial schema migration.
+affected_data_and_clients: Empty messaging tables only.
+rollout_sequence: Apply through the protected migration runner.
+backup_checkpoint: Confirm the required Neon restore point before dispatch.
+forward_fix_plan: Use a reviewed forward migration if timeout behavior needs adjustment.
+reviewer: Required database CODEOWNER review.

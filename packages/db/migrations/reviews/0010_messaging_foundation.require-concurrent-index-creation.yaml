@@ -1,0 +1,6 @@
+reason: Indexes are created with their empty new tables in the atomic initial schema migration. Concurrent index creation cannot run inside that transaction.
+affected_data_and_clients: Empty messaging tables only.
+rollout_sequence: Apply schema before dependent Worker code.
+backup_checkpoint: Confirm the required Neon restore point before dispatch.
+forward_fix_plan: Add later indexes concurrently in a reviewed forward migration.
+reviewer: Required database CODEOWNER review.

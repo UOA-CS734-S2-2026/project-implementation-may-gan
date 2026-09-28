@@ -17,6 +17,21 @@ import {
 import { sql } from "drizzle-orm";
 import { dailyPrompts } from "./daily-prompts";
 import { friendRequests, friendships, relationshipBlocks, relationshipSearchQuota } from "./relationships";
+import {
+  conversationChanges,
+  conversationKind,
+  conversationMembers,
+  conversations,
+  messageReactions,
+  messageRequestState,
+  messages,
+  messagingOutbox,
+  messagingOutboxChannel,
+  messagingOutboxStatus,
+  pushDevices,
+  pushPlatform,
+  socketTickets,
+} from "./messaging";
 import { user } from "./users";
 
 export { profileVisibility, tier, user } from "./users";
@@ -281,6 +296,21 @@ export const mediaReservation = pgTable("media_reservation", {
 ]);
 
 export { dailyPrompts } from "./daily-prompts";
+export {
+  conversationChanges,
+  conversationKind,
+  conversationMembers,
+  conversations,
+  messageReactions,
+  messageRequestState,
+  messages,
+  messagingOutbox,
+  messagingOutboxChannel,
+  messagingOutboxStatus,
+  pushDevices,
+  pushPlatform,
+  socketTickets,
+} from "./messaging";
 
 export {
   friendRequestStatus,
@@ -293,7 +323,15 @@ export {
 
 export const schema = {
   account,
+  conversationChanges,
+  conversationMembers,
+  conversations,
   mediaReservation,
+  messageReactions,
+  messages,
+  messagingOutbox,
+  pushDevices,
+  socketTickets,
   dailyPrompts,
   friendRequests,
   friendships,
