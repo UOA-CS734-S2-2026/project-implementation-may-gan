@@ -1,8 +1,8 @@
 # Staging API deployment
 
-The API staging workflow is `.github/workflows/staging-hyperdrive.yml`. It runs only through manual dispatch from `main`. Its `staging` GitHub Environment must approve the job before it can read credentials, synchronize Worker secrets, or deploy.
+The API staging workflow is `.github/workflows/staging-hyperdrive.yml`. It runs only through manual dispatch from `main` and references the `staging` GitHub Environment before it can read credentials, synchronize Worker secrets, or deploy.
 
-This is not a PR deployment path. Do not add `push`, `pull_request`, or `pull_request_target` triggers. GitHub Environment rules are repository settings, not code. An owner must create the `staging` Environment, restrict it to `main`, require the designated external reviewers, dismiss stale approvals, and disable administrator bypass where policy allows. The repository cannot prove those settings exist.
+This is not a PR deployment path. Do not add `push`, `pull_request`, or `pull_request_target` triggers. GitHub Environment rules are repository settings, not code. An owner must restrict `staging` to `main`, require the designated external reviewers, dismiss stale approvals, and disable administrator bypass where policy allows. This checkout cannot verify those settings or claim that reviewer approval is currently enforced.
 
 ## Data flow
 
@@ -34,7 +34,6 @@ Set these `staging` Environment variables:
 - `STAGING_AUTH_WEB_ORIGIN`
 - `STAGING_GOOGLE_WEB_CLIENT_ID`, `STAGING_GOOGLE_IOS_CLIENT_ID`, and `STAGING_GOOGLE_ANDROID_CLIENT_ID` together, or leave all three blank
 - `STAGING_RESEND_FROM` only when Resend is enabled
-- `STAGING_PUSH_TOKEN_ENCRYPTION_KEY_VERSION` only when staging push is enabled
 
 Set these `staging` Environment secrets:
 
@@ -43,9 +42,11 @@ Set these `staging` Environment secrets:
 - `BETTER_AUTH_SECRET`
 - `GOOGLE_CLIENT_SECRET` when the Google variable tuple is set
 - `RESEND_API_KEY` when `STAGING_RESEND_FROM` is set
-- `FCM_SERVICE_ACCOUNT_JSON` and `PUSH_TOKEN_ENCRYPTION_KEY` together when push is enabled
+- `FCM_SERVICE_ACCOUNT_JSON` when push delivery is enabled
 
-The source names are an allowlist. The workflow does not accept arbitrary secret names, does not put a secret in Wrangler `vars`, does not write secret values to generated files or artifacts, and does not delete an absent optional Worker secret. It validates every required source secret before any Cloudflare mutation. It then bulk-upserts only the reviewed values. A failed bulk request stops deployment. Cloudflare secret changes are not transactional with a later code deployment, so inspect the Worker secret store and rerun the approved workflow after a sanitized failure. A changed secret can activate behavior in the currently deployed Worker before the code deployment completes. Keep configuration backward compatible and use the documented rollback procedure.
+Provision `PUSH_TOKEN_ENCRYPTION_KEY` directly in the Cloudflare staging Worker secret store. Never add it to GitHub, workflow inputs, or routine secret sync.
+
+The source names are an allowlist. The workflow does not accept arbitrary secret names, does not put a secret in Wrangler `vars`, does not write secret values to generated files or artifacts, and does not delete an absent optional Worker secret. It validates every required source secret, the public provider pairing, and the existing Cloudflare push-key prerequisite before any mutation. It uses Cloudflare's `PATCH .../secrets-bulk` API to upsert only reviewed auth, email, and optional FCM values. The push key is omitted from every routine request. A failed bulk request stops deployment. Cloudflare secret changes are not transactional with a later code deployment, so inspect the Worker secret store and rerun the approved workflow after a sanitized failure. A changed auth, email, or FCM secret can activate behavior in the currently deployed Worker before the code deployment completes. Keep configuration backward compatible and use the documented rollback procedure.
 
 The Cloudflare token needs permission to read the named Hyperdrive, list and read the exact Worker, read Worker secret names and settings, bulk-update that Worker's secrets, and deploy that Worker. Do not grant production resources to this token.
 
@@ -54,21 +55,24 @@ The Cloudflare token needs permission to read the named Hyperdrive, list and rea
 1. Apply reviewed PostgreSQL migrations through the database migration workflow when required.
 2. Dispatch `Deploy staging API and Hyperdrive proof` from `main`.
 3. Wait for the `staging` Environment owner approval.
-4. The workflow validates exact origins, uncached named Hyperdrive, account ID, and the existing exact Worker before synchronizing secrets.
-5. It generates ignored configuration, performs Wrangler dry runs for the API and proof Worker, deploys the API, and runs the private Hyperdrive check.
-6. Inspect the sanitized proof artifact. It contains commit and tool version evidence only, never configuration or secrets.
-7. Verify staging API health, auth, Durable Object connection behavior, and scheduled outbox repair with approved test accounts. Firebase and APNs physical-device delivery still need separate evidence.
+4. The workflow validates exact origins, uncached named Hyperdrive, account ID, the existing exact Worker, and the projected public-secret pairing.
+5. It generates ignored configuration and performs Wrangler dry runs for the API and proof Worker before it synchronizes secrets.
+6. It synchronizes reviewed secrets, deploys the API, and runs the private Hyperdrive check.
+7. Inspect the sanitized proof artifact. It contains commit and tool version evidence only, never configuration or secrets.
+8. Verify staging API health, auth, Durable Object connection behavior, and scheduled outbox repair with approved test accounts. Firebase and APNs physical-device delivery still need separate evidence.
 
 A failed secret synchronization can leave some values updated. Do not claim code and secret updates are atomic. Stop, review the named staging Worker and the approved source values without printing them, then rerun only after the owner decides the state is safe.
 
-## Push encryption key guard and recovery
+## Push encryption key provisioning and recovery
 
-`PUSH_TOKEN_ENCRYPTION_KEY` encrypts stored push tokens. Replacing it makes existing ciphertext unreadable. The generated public Worker metadata `PUSH_TOKEN_ENCRYPTION_KEY_VERSION` is the authoritative deployed version check. It is a version label, not a hash of the proposed GitHub secret.
+`PUSH_TOKEN_ENCRYPTION_KEY` encrypts stored push tokens. Replacing it makes existing ciphertext unreadable. It is a Cloudflare-only Worker secret and this workflow never reads, writes, deletes, fingerprints, or versions it.
 
-When push is enabled, the workflow requires both push secrets and a valid version label. It reads the deployed Worker settings before any update. A mismatched version fails. An existing key with no version metadata also fails because the workflow cannot compare the proposed key with deployed material.
+Before enabling `FCM_SERVICE_ACCOUNT_JSON`, an owner must provision the push key directly on the exact `dayli-api-staging` Worker. Generate a new key only for a new Worker with:
 
-For a legacy Worker with an unversioned key, an external owner must verify that the approved GitHub value is the already deployed key. Only then may the owner dispatch with `push_key_owner_bootstrap=true` to establish the version metadata and synchronize the same value. Record that approval outside this repository. Do not use this switch for a key change.
+```bash
+openssl rand -base64 32
+```
 
-A rotation needs a reviewed migration or backfill that can decrypt old token ciphertext and re-encrypt it under the new key, plus an approved rollback plan. After the backfill and verification, update the version metadata and secret in a controlled owner operation. This deployment workflow deliberately rejects a version mismatch rather than silently rotating data out from under existing ciphertext.
+Store the single output as `PUSH_TOKEN_ENCRYPTION_KEY` in Cloudflare. It encodes exactly 32 random bytes. Do not print it in tickets, paste it into GitHub, or use this command against an existing Worker. The workflow checks only that the Worker has a secret with this binding name before it accepts FCM synchronization. It cannot inspect or validate the secret value.
 
-For a code rollback, keep the secret version and bindings compatible with the prior Worker. Do not delete the Durable Object migration or shared object namespace. If secrets changed before a failed deploy, restore only the reviewed prior secret values through an approved owner procedure, then deploy compatible code.
+For an existing Worker, keep its current key. A rotation needs a reviewed migration or backfill that can decrypt old token ciphertext and re-encrypt it under the new key, plus an approved rollback plan. Perform that Cloudflare-only operation separately from this workflow, verify the backfill, and retain the old value until recovery is complete. For a code rollback, keep the Worker key and bindings compatible with the prior code. Do not delete the Durable Object migration or shared object namespace.
