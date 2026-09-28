@@ -1,8 +1,12 @@
-import { MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../policy";
+import { MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createPresignedUploadUrl, type R2RuntimeConfiguration } from "../../../lib/r2";
 import { toMediaReservationResponse } from "../reservation-status";
-import type { CreateMediaReservationRequest, CreateMediaReservationResponse, MediaReservationResponse } from "./contract";
-import type { MediaReservationRepository } from "./repository";
+import type {
+  CreateMediaReservationRequest,
+  CreateMediaReservationResponse,
+  MediaReservationResponse,
+} from "./reserve-upload.contract";
+import type { MediaReservationRepository } from "./reserve-upload.repository";
 
 export interface CreateMediaReservationDependencies {
   repository: MediaReservationRepository;

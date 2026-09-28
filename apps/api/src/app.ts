@@ -14,7 +14,7 @@ import {
   createHyperdriveMediaReservationRuntime,
   registerMediaReservationRoutes,
   type MediaReservationRuntime,
-} from "./features/media/reserve/route";
+} from "./features/media/reserve-upload/reserve-upload.route";
 import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,

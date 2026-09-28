@@ -2,7 +2,7 @@ import { createDayliDatabase } from "@dayli/db";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAppForEnv } from "../../../app";
-import { MAX_PENDING_RESERVATIONS_PER_OWNER } from "../policy";
+import { MAX_PENDING_RESERVATIONS_PER_OWNER } from "../shared/media-reservation-policy";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;

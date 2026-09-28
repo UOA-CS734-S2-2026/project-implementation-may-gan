@@ -7,12 +7,12 @@ import {
   createMediaReservationResponseSchema,
   mediaReservationIdParamSchema,
   mediaReservationResponseSchema,
-} from "./contract";
-import { createMediaReservation, getMediaReservation } from "./service";
-import type { MediaReservationRuntime } from "./runtime";
+} from "./reserve-upload.contract";
+import { createMediaReservation, getMediaReservation } from "./reserve-upload.service";
+import type { MediaReservationRuntime } from "./reserve-upload.runtime";
 
-export type { MediaReservationRuntime } from "./runtime";
-export { createHyperdriveMediaReservationRuntime } from "./runtime";
+export type { MediaReservationRuntime } from "./reserve-upload.runtime";
+export { createHyperdriveMediaReservationRuntime } from "./reserve-upload.runtime";
 
 const noStoreHeaders = { "cache-control": "no-store" };
 
