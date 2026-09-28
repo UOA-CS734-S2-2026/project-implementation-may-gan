@@ -4,7 +4,7 @@
 
 Merge order is refactor PR #134, friends PR #137, then the messaging PR based on `feature/friends-ui`. Messaging includes the approved REST/storage/delivery implementation, both client action flows, action-scoped TanStack Query on web, and Flutter session/startup/quarantine fixes. Changes are split into focused commits; generated client changes accompany API changes.
 
-Migration order is `0009_relationship_search`, `0010_messaging_foundation`, then `0011_encrypt_push_device_tokens`. These feature migrations have been exercised locally, not deployed by this work. Do not use an earlier parallel branch's `0009_messaging_foundation` journal.
+Migration order is immutable media validation `0009_add_media_reservation_validation`, friends `0010_relationship_search`, messaging `0011_messaging_foundation`, then `0012_encrypt_push_device_tokens`. These feature migrations have been exercised locally, not deployed by this work. Do not reuse an earlier parallel branch's messaging migration journal.
 
 ## Final combined local verification
 
@@ -49,6 +49,6 @@ Independent read-only reviews approved the reviewed fixes for REST authorization
 - Configure Firebase/APNs and test on physical iOS/Android devices, including denied permission, background/terminated delivery, token rotation and notification taps. Mock-provider success is not device delivery proof.
 - Run the deployed phone-to-browser conversation and recovery demo. Rendered web tests use jsdom, not an actual browser deployment. Flutter unit/widget tests do not constitute a real API emulator/device journey.
 - Record a measured staging send-to-visible latency and workload test. No production capacity or cost claim follows from the unit/integration counts above.
-- CI remains manual-only pending repository-owner budget/publication approval. No visibility change, hosted workflow execution, or merge was performed.
+- PR and main CI run automatically with read-only repository access and no deployment credentials. No hosted workflow execution, visibility change, or merge was performed by this work.
 
 Images/video remain blocked on the R2 owner's integration. Group chats remain deferred pending policy. Browser push, typing/presence and E2EE remain outside this release. Read the messaging handoff for those boundaries and the current architecture for API/security rationale.

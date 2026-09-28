@@ -12,6 +12,7 @@ postgres_port="${VERIFY_POSTGRES_PORT:-5433}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-verify-postgres.XXXXXX")"
 main_database="dayli_test"
 relationship_database="dayli_relationship_test"
+messaging_database="dayli_messaging_test"
 
 cleanup() {
   local status=$?
@@ -75,6 +76,8 @@ docker compose -p "$compose_project" -f "$compose_file" up -d --wait
 
 echo 'Provisioning isolated relationship test database'
 provision_isolated_database "$relationship_database"
+echo 'Provisioning isolated messaging test database'
+provision_isolated_database "$messaging_database"
 
 # Future suites may request additional disposable databases without sharing a
 # volume or credential with development. Comma-separated names only.
@@ -92,11 +95,14 @@ export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
 export RELATIONSHIP_TEST_DATABASE_URL="$(migrator_url "$relationship_database")"
+export MESSAGING_TEST_DATABASE_URL="$(migrator_url "$messaging_database")"
+export MESSAGING_DELIVERY_TEST_DATABASE_URL="$MESSAGING_TEST_DATABASE_URL"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
 pnpm db:check
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate
@@ -105,6 +111,7 @@ fi
 pnpm db:verify
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate
