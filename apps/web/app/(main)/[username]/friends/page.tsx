@@ -31,7 +31,11 @@ export default function FriendsPage() {
 }
 
 function FriendsContent({ accountId }: { accountId: string | null }) {
-  const generation = useRef(0);
+  const sessionEpoch = useRef(0);
+  const bootstrapGeneration = useRef(0);
+  const searchGeneration = useRef(0);
+  const mutationGeneration = useRef(0);
+  const continuationGeneration = useRef<Record<string, number>>({});
   const alive = useRef(true);
   const [friends, setFriends] = useState<Page<FriendCard>>(emptyPage);
   const [incoming, setIncoming] = useState<Page<FriendRequest>>(emptyPage);
@@ -42,13 +46,14 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const valid = (requestGeneration: number) => alive.current && requestGeneration === generation.current;
+  const validSession = (epoch: number) => alive.current && epoch === sessionEpoch.current;
 
   const refresh = useCallback(async () => {
-    const requestGeneration = ++generation.current;
+    const epoch = sessionEpoch.current;
+    const requestGeneration = ++bootstrapGeneration.current;
     setLoading(true); setError(null); setFriends(emptyPage); setIncoming(emptyPage); setOutgoing(emptyPage); setResults(emptyPage);
     const [friendResult, incomingResult, outgoingResult] = await Promise.all([loadFriends(), loadRequests("incoming"), loadRequests("outgoing")]);
-    if (!valid(requestGeneration)) return;
+    if (!validSession(epoch) || requestGeneration !== bootstrapGeneration.current) return;
     if (!friendResult.ok) setError(failureMessage[friendResult.failure]); else setFriends(friendResult.value);
     if (!incomingResult.ok) setError(failureMessage[incomingResult.failure]); else setIncoming(incomingResult.value);
     if (!outgoingResult.ok) setError(failureMessage[outgoingResult.failure]); else setOutgoing(outgoingResult.value);
@@ -59,18 +64,19 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(); }, 0);
-    return () => { alive.current = false; generation.current += 1; window.clearTimeout(timer); };
+    return () => { alive.current = false; sessionEpoch.current += 1; window.clearTimeout(timer); };
   }, [refresh]);
 
   const search = useCallback((value: string, cursor?: string) => {
     const normalized = value.trim();
-    const requestGeneration = ++generation.current;
+    const epoch = sessionEpoch.current;
+    const requestGeneration = ++searchGeneration.current;
     if (normalized.length < 2) { setResults(emptyPage); setSearching(false); return; }
     window.setTimeout(async () => {
-      if (!valid(requestGeneration)) return;
+      if (!validSession(epoch) || requestGeneration !== searchGeneration.current) return;
       setSearching(true);
       const response = await searchFriends(normalized, cursor);
-      if (!valid(requestGeneration)) return;
+      if (!validSession(epoch) || requestGeneration !== searchGeneration.current) return;
       setSearching(false);
       if (!response.ok) { setError(failureMessage[response.failure]); return; }
       setResults((current) => cursor ? { ...response.value, items: mergeById(current.items, response.value.items) } : response.value);
@@ -78,20 +84,23 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
   }, []);
 
   const mutate = async (key: string, operation: () => Promise<FriendsResult<unknown>>) => {
-    const requestGeneration = ++generation.current;
+    const epoch = sessionEpoch.current;
+    const requestGeneration = ++mutationGeneration.current;
     setBusy(key); setError(null);
     const response = await operation();
-    if (!valid(requestGeneration)) return;
+    if (!validSession(epoch) || requestGeneration !== mutationGeneration.current) return;
     setBusy(null);
     if (!response.ok) { setError(failureMessage[response.failure]); return; }
     await refresh();
   };
 
-  const loadMore = async <T extends { id: string }>(cursor: string | null, operation: (cursor: string) => Promise<FriendsResult<Page<T>>>, update: React.Dispatch<React.SetStateAction<Page<T>>>) => {
+  const loadMore = async <T extends { id: string }>(key: string, cursor: string | null, operation: (cursor: string) => Promise<FriendsResult<Page<T>>>, update: React.Dispatch<React.SetStateAction<Page<T>>>) => {
     if (!cursor) return;
-    const requestGeneration = ++generation.current;
+    const epoch = sessionEpoch.current;
+    const requestGeneration = (continuationGeneration.current[key] ?? 0) + 1;
+    continuationGeneration.current[key] = requestGeneration;
     const response = await operation(cursor);
-    if (!valid(requestGeneration)) return;
+    if (!validSession(epoch) || requestGeneration !== continuationGeneration.current[key]) return;
     if (!response.ok) { setError(failureMessage[response.failure]); return; }
     update((current) => ({ ...response.value, items: mergeById(current.items, response.value.items) }));
   };
@@ -100,7 +109,7 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
     <header className="max-w-2xl mb-10"><p className="font-serif text-sm font-semibold text-foreground-tertiary">your people</p><h1 className="font-serif tracking-tight text-5xl md:text-6xl font-medium mt-2">friends</h1><p className="font-serif text-lg text-foreground-secondary mt-3">Find people by username, then keep your circle close.</p></header>
     <div className="bg-background rounded-2xl shadow-card p-5 md:p-7 mb-10"><label htmlFor="friend-search" className="block font-serif text-xl font-semibold tracking-tight">find someone</label><div className="mt-3 flex gap-3 items-center border-b-2 border-foreground/15 focus-within:border-foreground-accent"><span aria-hidden className="font-serif text-2xl text-foreground-tertiary">@</span><input id="friend-search" value={query} onChange={(event) => { const next = event.target.value; setQuery(next); search(next); }} placeholder="username" autoComplete="off" maxLength={32} className="w-full bg-transparent py-3 font-serif text-lg outline-none placeholder:text-foreground-tertiary" />{searching && <span className="text-sm text-foreground-tertiary">searching</span>}</div><p className="mt-3 text-sm text-foreground-tertiary">Search starts after two characters. Private accounts appear only as a username and display name.</p>{query.trim().length >= 2 && !searching && results.items.length === 0 && <p className="mt-5 font-serif text-foreground-secondary">No matching usernames yet.</p>}<div className="mt-5 grid gap-3 sm:grid-cols-2">{results.items.map((person) => <Person key={person.id} person={person} action={person.relationship === "none" ? "add friend" : person.relationship === "incoming_pending" ? "check requests" : person.relationship === "outgoing_pending" ? "request sent" : "friends"} disabled={person.relationship !== "none" || busy === person.id} onAction={() => void mutate(person.id, () => sendFriendRequest(person.id))} />)}</div><More visible={results.hasMore} onClick={() => search(query, results.nextCursor ?? undefined)} /></div>
     {error && <div role="alert" className="mb-8 rounded-xl bg-red-950/10 px-5 py-4 font-serif text-foreground-secondary">{error} <button className="underline font-semibold" onClick={() => void refresh()}>Try again</button></div>}
-    <div className="grid gap-8 lg:grid-cols-2"><section className="bg-background rounded-2xl shadow-card p-6"><h2 className="font-serif text-3xl font-semibold tracking-tight">requests</h2>{loading ? <Loading /> : <div className="mt-5 space-y-7"><RequestGroup title="incoming" empty="No one is waiting on you." requests={incoming.items} busy={busy} actions={(request) => <><Action label="accept" disabled={busy === request.id} onClick={() => void mutate(request.id, () => acceptFriendRequest(request.id))} /><Action label="decline" muted disabled={busy === request.id} onClick={() => void mutate(request.id, () => declineFriendRequest(request.id))} /></>} /><More visible={incoming.hasMore} onClick={() => void loadMore(incoming.nextCursor, (cursor) => loadRequests("incoming", cursor), setIncoming)} /><RequestGroup title="sent" empty="You have not sent any requests." requests={outgoing.items} busy={busy} actions={(request) => <Action label="cancel request" muted disabled={busy === request.id} onClick={() => void mutate(request.id, () => cancelFriendRequest(request.id))} />} /><More visible={outgoing.hasMore} onClick={() => void loadMore(outgoing.nextCursor, (cursor) => loadRequests("outgoing", cursor), setOutgoing)} /></div>}</section><section className="bg-background rounded-2xl shadow-card p-6"><h2 className="font-serif text-3xl font-semibold tracking-tight">your circle</h2>{loading ? <Loading /> : friends.items.length === 0 ? <p className="mt-5 font-serif text-foreground-secondary">No friends here yet. Search a username to start.</p> : <div className="mt-5 space-y-3">{friends.items.map((person) => <Person key={person.id} person={person} action="remove" disabled={busy === person.id} onAction={() => void mutate(person.id, () => removeFriend(person.id))} muted />)}<More visible={friends.hasMore} onClick={() => void loadMore(friends.nextCursor, loadFriends, setFriends)} /></div>}</section></div>
+    <div className="grid gap-8 lg:grid-cols-2"><section className="bg-background rounded-2xl shadow-card p-6"><h2 className="font-serif text-3xl font-semibold tracking-tight">requests</h2>{loading ? <Loading /> : <div className="mt-5 space-y-7"><RequestGroup title="incoming" empty="No one is waiting on you." requests={incoming.items} busy={busy} actions={(request) => <><Action label="accept" disabled={busy === request.id} onClick={() => void mutate(request.id, () => acceptFriendRequest(request.id))} /><Action label="decline" muted disabled={busy === request.id} onClick={() => void mutate(request.id, () => declineFriendRequest(request.id))} /></>} /><More visible={incoming.hasMore} onClick={() => void loadMore("incoming", incoming.nextCursor, (cursor) => loadRequests("incoming", cursor), setIncoming)} /><RequestGroup title="sent" empty="You have not sent any requests." requests={outgoing.items} busy={busy} actions={(request) => <Action label="cancel request" muted disabled={busy === request.id} onClick={() => void mutate(request.id, () => cancelFriendRequest(request.id))} />} /><More visible={outgoing.hasMore} onClick={() => void loadMore("outgoing", outgoing.nextCursor, (cursor) => loadRequests("outgoing", cursor), setOutgoing)} /></div>}</section><section className="bg-background rounded-2xl shadow-card p-6"><h2 className="font-serif text-3xl font-semibold tracking-tight">your circle</h2>{loading ? <Loading /> : friends.items.length === 0 ? <p className="mt-5 font-serif text-foreground-secondary">No friends here yet. Search a username to start.</p> : <div className="mt-5 space-y-3">{friends.items.map((person) => <Person key={person.id} person={person} action="remove" disabled={busy === person.id} onAction={() => void mutate(person.id, () => removeFriend(person.id))} muted />)}<More visible={friends.hasMore} onClick={() => void loadMore("friends", friends.nextCursor, loadFriends, setFriends)} /></div>}</section></div>
   </section>;
 }
 

@@ -47,6 +47,36 @@ describe("friends page", () => {
     expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
   });
 
+  it("keeps bootstrap and search independent in either completion order", async () => {
+    let resolveBootstrap!: (value: TestPage) => void;
+    let resolveSearch!: (value: TestPage) => void;
+    api.loadFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveBootstrap = resolve; }));
+    api.loadRequests.mockResolvedValueOnce(emptyRequests).mockResolvedValueOnce(emptyRequests);
+    api.searchFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveSearch = resolve; }));
+    render(<FriendsPage />);
+    await waitFor(() => expect(api.loadFriends).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "se" } });
+    await waitFor(() => expect(api.searchFriends).toHaveBeenCalledWith("se", undefined));
+    await act(async () => { resolveSearch(page([card("search", "Search result")])); });
+    expect(screen.getByText("Search result")).toBeInTheDocument();
+    await act(async () => { resolveBootstrap(page([card("friend", "Bootstrap friend")])); });
+    await waitFor(() => expect(screen.getByText("Bootstrap friend")).toBeInTheDocument());
+    expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
+  });
+
+  it("keeps a deferred search valid when bootstrap finishes first", async () => {
+    let resolveSearch!: (value: TestPage) => void;
+    queueInitial(page([card("friend", "Bootstrap friend")]));
+    api.searchFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveSearch = resolve; }));
+    render(<FriendsPage />);
+    await waitFor(() => expect(screen.getByText("Bootstrap friend")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "se" } });
+    await waitFor(() => expect(api.searchFriends).toHaveBeenCalledWith("se", undefined));
+    await act(async () => { resolveSearch(page([card("search", "Search result")])); });
+    expect(screen.getByText("Search result")).toBeInTheDocument();
+    expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
+  });
+
   it("renders bounded continuation controls and appends de-duplicated pages", async () => {
     queueInitial(page(Array.from({ length: 20 }, (_, index) => card(`friend-${index}`)), true, "friends-2"));
     render(<FriendsPage />);

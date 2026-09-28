@@ -13,11 +13,12 @@ const _emptyRequests = FriendRequestPage(
 
 class DelayedFriendsClient implements FriendsClient {
   final loadResult = Completer<ApiResult<FriendsSnapshot>>();
+  final searchResult = Completer<ApiResult<FriendPage>>();
   @override
   Future<ApiResult<FriendsSnapshot>> load() => loadResult.future;
   @override
-  Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
-      const ApiSuccess(FriendPage(items: [], nextCursor: null, hasMore: false));
+  Future<ApiResult<FriendPage>> search(String query, {String? cursor}) =>
+      searchResult.future;
   @override
   Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
       const ApiSuccess(FriendPage(items: [], nextCursor: null, hasMore: false));
@@ -122,6 +123,113 @@ void main() {
     await loading;
     expect(controller.snapshot, isNull);
     expect(controller.loading, isTrue);
+  });
+
+  test(
+    'keeps bootstrap and search independent when search completes first',
+    () async {
+      final client = DelayedFriendsClient();
+      final controller = FriendsController(
+        client: client,
+        activeUserId: () => 'alice',
+      );
+      final bootstrap = controller.load();
+      final searching = controller.search('se');
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      client.searchResult.complete(
+        const ApiSuccess(
+          FriendPage(
+            items: [
+              FriendCard(
+                id: 'search',
+                username: 'search',
+                displayName: 'Search',
+                relationship: 'none',
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      );
+      await searching;
+      expect(controller.results.items.single.displayName, 'Search');
+      client.loadResult.complete(
+        const ApiSuccess(
+          FriendsSnapshot(
+            friends: FriendPage(
+              items: [
+                FriendCard(
+                  id: 'friend',
+                  username: 'friend',
+                  displayName: 'Friend',
+                  relationship: 'friends',
+                ),
+              ],
+              nextCursor: null,
+              hasMore: false,
+            ),
+            incoming: _emptyRequests,
+            outgoing: _emptyRequests,
+          ),
+        ),
+      );
+      await bootstrap;
+      expect(controller.loading, isFalse);
+      expect(controller.snapshot!.friends.items.single.displayName, 'Friend');
+    },
+  );
+
+  test('keeps a deferred search valid when bootstrap finishes first', () async {
+    final client = DelayedFriendsClient();
+    final controller = FriendsController(
+      client: client,
+      activeUserId: () => 'alice',
+    );
+    final bootstrap = controller.load();
+    final searching = controller.search('se');
+    client.loadResult.complete(
+      const ApiSuccess(
+        FriendsSnapshot(
+          friends: FriendPage(
+            items: [
+              FriendCard(
+                id: 'friend',
+                username: 'friend',
+                displayName: 'Friend',
+                relationship: 'friends',
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+          incoming: _emptyRequests,
+          outgoing: _emptyRequests,
+        ),
+      ),
+    );
+    await bootstrap;
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    client.searchResult.complete(
+      const ApiSuccess(
+        FriendPage(
+          items: [
+            FriendCard(
+              id: 'search',
+              username: 'search',
+              displayName: 'Search',
+              relationship: 'none',
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      ),
+    );
+    await searching;
+    expect(controller.loading, isFalse);
+    expect(controller.snapshot!.friends.items.single.displayName, 'Friend');
+    expect(controller.results.items.single.displayName, 'Search');
   });
 
   test(

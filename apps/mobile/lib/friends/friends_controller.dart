@@ -19,12 +19,16 @@ List<T> _merge<T extends Object>(List<T> current, List<T> incoming) {
   return merged;
 }
 
-/// Keeps only responses belonging to the active account and latest search.
+/// Keeps only responses belonging to the active account and latest operation.
 class FriendsController extends ChangeNotifier {
   FriendsController({required this.client, required this.activeUserId});
   final FriendsClient client;
   final String? Function() activeUserId;
-  int _generation = 0;
+  int _sessionEpoch = 0;
+  int _bootstrapGeneration = 0;
+  int _searchGeneration = 0;
+  int _mutationGeneration = 0;
+  final Map<String, int> _continuationGeneration = {};
   FriendsSnapshot? snapshot;
   FriendPage results = const FriendPage(
     items: [],
@@ -36,14 +40,18 @@ class FriendsController extends ChangeNotifier {
   bool searching = false;
   String? busyId;
 
+  bool _current(int epoch, String? userId) =>
+      epoch == _sessionEpoch && userId == activeUserId();
+
   Future<void> load() async {
     final userId = activeUserId();
-    final generation = ++_generation;
+    final epoch = _sessionEpoch;
+    final generation = ++_bootstrapGeneration;
     loading = true;
     failure = null;
     notifyListeners();
     final result = await client.load();
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) || generation != _bootstrapGeneration) return;
     loading = false;
     switch (result) {
       case ApiSuccess(value: final value):
@@ -57,7 +65,8 @@ class FriendsController extends ChangeNotifier {
   Future<void> search(String value) async {
     final query = value.trim();
     final userId = activeUserId();
-    final generation = ++_generation;
+    final epoch = _sessionEpoch;
+    final generation = ++_searchGeneration;
     if (query.length < 2) {
       results = const FriendPage(items: [], nextCursor: null, hasMore: false);
       searching = false;
@@ -68,9 +77,9 @@ class FriendsController extends ChangeNotifier {
     failure = null;
     notifyListeners();
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) || generation != _searchGeneration) return;
     final result = await client.search(query);
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) || generation != _searchGeneration) return;
     searching = false;
     switch (result) {
       case ApiSuccess(value: final value):
@@ -82,51 +91,68 @@ class FriendsController extends ChangeNotifier {
   }
 
   Future<void> loadMoreFriends() => _loadMore(
+    'friends',
     snapshot?.friends.nextCursor,
     (cursor) => client.loadFriends(cursor: cursor),
-    (page) => snapshot = FriendsSnapshot(
-      friends: FriendPage(
-        items: _merge(snapshot?.friends.items ?? [], page.items),
-        nextCursor: page.nextCursor,
-        hasMore: page.hasMore,
-      ),
-      incoming: snapshot!.incoming,
-      outgoing: snapshot!.outgoing,
-    ),
+    (page) {
+      final current = snapshot;
+      if (current == null) return;
+      snapshot = FriendsSnapshot(
+        friends: FriendPage(
+          items: _merge(current.friends.items, page.items),
+          nextCursor: page.nextCursor,
+          hasMore: page.hasMore,
+        ),
+        incoming: current.incoming,
+        outgoing: current.outgoing,
+      );
+    },
   );
   Future<void> loadMoreIncoming() => _loadMore(
+    'incoming',
     snapshot?.incoming.nextCursor,
     (cursor) => client.loadRequests('incoming', cursor: cursor),
-    (page) => snapshot = FriendsSnapshot(
-      friends: snapshot!.friends,
-      incoming: FriendRequestPage(
-        items: _merge(snapshot?.incoming.items ?? [], page.items),
-        nextCursor: page.nextCursor,
-        hasMore: page.hasMore,
-      ),
-      outgoing: snapshot!.outgoing,
-    ),
+    (page) {
+      final current = snapshot;
+      if (current == null) return;
+      snapshot = FriendsSnapshot(
+        friends: current.friends,
+        incoming: FriendRequestPage(
+          items: _merge(current.incoming.items, page.items),
+          nextCursor: page.nextCursor,
+          hasMore: page.hasMore,
+        ),
+        outgoing: current.outgoing,
+      );
+    },
   );
   Future<void> loadMoreOutgoing() => _loadMore(
+    'outgoing',
     snapshot?.outgoing.nextCursor,
     (cursor) => client.loadRequests('outgoing', cursor: cursor),
-    (page) => snapshot = FriendsSnapshot(
-      friends: snapshot!.friends,
-      incoming: snapshot!.incoming,
-      outgoing: FriendRequestPage(
-        items: _merge(snapshot?.outgoing.items ?? [], page.items),
-        nextCursor: page.nextCursor,
-        hasMore: page.hasMore,
-      ),
-    ),
+    (page) {
+      final current = snapshot;
+      if (current == null) return;
+      snapshot = FriendsSnapshot(
+        friends: current.friends,
+        incoming: current.incoming,
+        outgoing: FriendRequestPage(
+          items: _merge(current.outgoing.items, page.items),
+          nextCursor: page.nextCursor,
+          hasMore: page.hasMore,
+        ),
+      );
+    },
   );
+
   Future<void> loadMoreSearch(String query) async {
     final cursor = results.nextCursor;
     if (cursor == null) return;
     final userId = activeUserId();
-    final generation = ++_generation;
+    final epoch = _sessionEpoch;
+    final generation = ++_searchGeneration;
     final result = await client.search(query.trim(), cursor: cursor);
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) || generation != _searchGeneration) return;
     switch (result) {
       case ApiSuccess(value: final value):
         results = FriendPage(
@@ -141,15 +167,21 @@ class FriendsController extends ChangeNotifier {
   }
 
   Future<void> _loadMore<T extends Object>(
+    String key,
     String? cursor,
     Future<ApiResult<T>> Function(String cursor) operation,
     void Function(T page) apply,
   ) async {
     if (cursor == null) return;
     final userId = activeUserId();
-    final generation = ++_generation;
+    final epoch = _sessionEpoch;
+    final generation = (_continuationGeneration[key] ?? 0) + 1;
+    _continuationGeneration[key] = generation;
     final result = await operation(cursor);
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) ||
+        generation != _continuationGeneration[key]) {
+      return;
+    }
     switch (result) {
       case ApiSuccess(value: final value):
         apply(value);
@@ -164,12 +196,13 @@ class FriendsController extends ChangeNotifier {
     Future<ApiResult<void>> Function() operation,
   ) async {
     final userId = activeUserId();
-    final generation = ++_generation;
+    final epoch = _sessionEpoch;
+    final generation = ++_mutationGeneration;
     busyId = id;
     failure = null;
     notifyListeners();
     final result = await operation();
-    if (generation != _generation || userId != activeUserId()) return;
+    if (!_current(epoch, userId) || generation != _mutationGeneration) return;
     busyId = null;
     if (result case ApiError(failure: final value)) {
       failure = value;
@@ -180,7 +213,7 @@ class FriendsController extends ChangeNotifier {
   }
 
   void resetForAccount() {
-    _generation++;
+    _sessionEpoch++;
     snapshot = null;
     results = const FriendPage(items: [], nextCursor: null, hasMore: false);
     failure = null;
