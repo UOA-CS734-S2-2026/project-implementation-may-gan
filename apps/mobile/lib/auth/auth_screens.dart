@@ -29,6 +29,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _busy = false;
   Map<String, String> _fieldErrors = const {};
   String? _error;
+  bool _googleNeedsLink = false;
 
   bool get _signUp => widget.mode == AuthMode.signUp;
 
@@ -90,9 +91,10 @@ class _AuthScreenState extends State<AuthScreen> {
     final services = AppScope.of(context);
     final google = services.google;
     if (google == null) {
-      setState(
-        () => _error = "Google sign-in isn't set up for this build yet.",
-      );
+      setState(() {
+        _googleNeedsLink = false;
+        _error = "Google sign-in isn't set up for this build yet.";
+      });
       return;
     }
     await _run(
@@ -108,15 +110,19 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _googleNeedsLink = false;
     });
     try {
       await action();
     } on AuthenticationFailure catch (failure) {
-      setState(
-        () => _error = failure.statusCode == 401 || failure.statusCode == 400
+      setState(() {
+        _googleNeedsLink = failure.needsGoogleLink;
+        _error = _googleNeedsLink
+            ? 'Then open Settings and choose Connect Google. You only need to do this once.'
+            : failure.statusCode == 401 || failure.statusCode == 400
             ? rejected
-            : 'Dayli is having trouble right now. Try again shortly.',
-      );
+            : 'Dayli is having trouble right now. Try again shortly.';
+      });
     } catch (_) {
       setState(() => _error = "You're offline. Connect and try again.");
     } finally {
@@ -212,17 +218,38 @@ class _AuthScreenState extends State<AuthScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: colors.danger.withValues(alpha: 0.08),
+              color: _googleNeedsLink
+                  ? colors.backgroundAccent
+                  : colors.danger.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(
-              _error!,
-              key: const Key('auth.error'),
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.sm,
-                color: colors.danger,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_googleNeedsLink) ...[
+                  Text(
+                    'Sign in with your password first',
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      weight: FontWeight.w600,
+                      color: colors.foregroundAccent,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Text(
+                  _error!,
+                  key: const Key('auth.error'),
+                  style: DayliText.sans(
+                    context,
+                    size: DayliTextSize.sm,
+                    color: _googleNeedsLink
+                        ? colors.foregroundAccent
+                        : colors.danger,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
