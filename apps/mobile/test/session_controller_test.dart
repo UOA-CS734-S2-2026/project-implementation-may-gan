@@ -1,15 +1,19 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/app/fresh_install.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'dart:convert';
 
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
+import 'package:dayli_mobile/messaging/messaging_controller.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'messaging_controller_test.dart' show FakeMessagingClient;
 import 'support/fakes.dart';
 
 void main() {
@@ -118,6 +122,79 @@ void main() {
       expect(cleanupToken, 'alice-token');
       expect(signInCalls, 0);
       expect(tokens.value, 'alice-token');
+    },
+  );
+
+  test(
+    'offline cached restore starts realtime once and lets it recover',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'cached-token';
+      final users = MemoryUserCache()
+        ..value = const SessionUser(
+          id: 'cached-user',
+          name: 'Cached',
+          email: 'cached@example.test',
+        );
+      final client = FakeMessagingClient();
+      final messaging = MessagingController(client);
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient(
+            (_) async => throw http.ClientException('offline'),
+          ),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+        onSignedIn: messaging.startRealtime,
+        onPrivateDataClear: messaging.stopRealtime,
+      );
+
+      await session.restore();
+      expect(session.status, SessionStatus.signedIn);
+      expect(client.ticketCalls, 1);
+      await session.restore();
+      expect(client.ticketCalls, 1);
+      await messaging.foreground();
+      expect(client.ticketCalls, 2);
+      await session.signOut();
+      expect(session.status, SessionStatus.signedOut);
+    },
+  );
+
+  test(
+    'logout racing session startup cannot restore signed-in state',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'cached-token';
+      final users = MemoryUserCache()
+        ..value = const SessionUser(
+          id: 'alice',
+          name: 'Alice',
+          email: 'a@test',
+        );
+      final startup = Completer<void>();
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient(
+            (_) async => throw http.ClientException('offline'),
+          ),
+        ),
+        tokenStore: tokens,
+        userCache: users,
+        drafts: MemoryDraftStore(),
+        onSignedIn: () => startup.future,
+      );
+      final restoring = session.restore();
+      await Future<void>.delayed(Duration.zero);
+      await session.signOut();
+      startup.complete();
+      await restoring;
+      expect(session.status, SessionStatus.signedOut);
+      expect(session.user, isNull);
     },
   );
 
