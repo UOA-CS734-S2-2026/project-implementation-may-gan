@@ -13,6 +13,8 @@ export interface StoredIdempotentMessage {
  */
 export interface MessageWriteTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
+  /** Activates a pending or declined direct thread only when friendship is current under the pair lock. */
+  activateForFriendship(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
   insertMessage(input: {
@@ -35,7 +37,7 @@ export interface MessageWriteTransaction {
   setReaction(messageId: string, actorId: string, reaction: ReactionKey): Promise<StoredMessage>;
   removeReaction(messageId: string, actorId: string): Promise<StoredMessage>;
   /** Atomically appends the change record and body-free realtime delivery intent. */
-  appendPeerChange(input: { conversationId: string; messageId: string; kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" }): Promise<void>;
+  appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" | "request.active" }): Promise<void>;
 }
 
 export interface MessageWriteStore {
