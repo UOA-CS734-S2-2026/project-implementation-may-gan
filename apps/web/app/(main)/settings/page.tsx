@@ -6,6 +6,7 @@ import { useSession } from "@/lib/session/hooks";
 import { SignOutButton } from "./_components/SignOutButton";
 import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
 import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -43,6 +44,12 @@ export default function SettingsPage() {
           <h2 className="text-sm font-medium">Sign-in methods</h2>
           <p className="text-xs text-foreground/60">Google is connected only when you choose it here. Matching emails are never connected automatically.</p>
           <LinkGoogleAccount />
+        </section>
+
+        <section className="space-y-2 rounded-lg border border-foreground/10 p-4">
+          <h2 className="text-sm font-medium">Legal</h2>
+          <LegalLinks className="text-sm text-foreground-secondary" />
+          <LegalDraftNotice />
         </section>
 
         {/* Paid features — hidden until billing is wired up */}

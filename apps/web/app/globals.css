@@ -88,3 +88,25 @@
     color: var(--color-foreground);
   }
 }
+
+@media print {
+  .legal-page {
+    background: white;
+  }
+
+  .legal-page header,
+  .legal-document nav,
+  .legal-document footer {
+    display: none;
+  }
+
+  .legal-document {
+    max-width: none;
+    padding: 0;
+  }
+
+  .legal-document a {
+    color: inherit;
+    text-decoration: none;
+  }
+}

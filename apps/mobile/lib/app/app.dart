@@ -10,17 +10,22 @@ class DayliApp extends StatefulWidget {
     super.key,
     required this.services,
     this.useGoogleFonts = true,
+    this.initialLocation = '/',
   });
 
   final AppServices services;
   final bool useGoogleFonts;
+  final String initialLocation;
 
   @override
   State<DayliApp> createState() => _DayliAppState();
 }
 
 class _DayliAppState extends State<DayliApp> {
-  late final GoRouter _router = buildRouter(widget.services.session);
+  late final GoRouter _router = buildRouter(
+    widget.services.session,
+    initialLocation: widget.initialLocation,
+  );
 
   @override
   void initState() {

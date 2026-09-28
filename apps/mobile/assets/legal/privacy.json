@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "id": "privacy",
+  "title": "Privacy Policy",
+  "status": "draft",
+  "version": "draft-1",
+  "effectiveDate": null,
+  "summary": "This is a draft for operator and legal review. It describes checked-in Dayli behavior and does not state a published privacy policy.",
+  "sections": [
+    {
+      "id": "draft-status",
+      "title": "Draft status",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "This document is not approved, has no effective date, and is not a final privacy policy. Dayli must not publish it until the operator, contact details, jurisdictions, retention practices, and final wording have been approved."
+        }
+      ]
+    },
+    {
+      "id": "operator-and-contact",
+      "title": "Operator and contact",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The legal operator of Dayli and a privacy contact have not been supplied. This draft does not identify a business, address, support channel, or data protection contact."
+        }
+      ]
+    },
+    {
+      "id": "information-in-current-software",
+      "title": "Information in the current software",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The checked-in account and authentication code can store a name, email address, account identifier, profile fields, credentials or a password hash, optional Google account associations, sessions, session IP address and user agent, verification records, password recovery records, and rate-limit records. Passwords are not stored as plaintext by the application schema. Whether optional provider tokens or fields are present in a deployment needs confirmation."
+        },
+        {
+          "type": "paragraph",
+          "text": "The checked-in post and relationship code can store post text, captions, ratings, audiences, release times, post revisions, tomorrow notes, friendship state, friend requests, and blocks. Editing a released post creates a revision record. A public profile does not itself make a journal public."
+        },
+        {
+          "type": "paragraph",
+          "text": "The current mobile client stores a bearer session, cached identity, and unsent drafts in protected native storage. The web client uses credentialed requests and stores a theme preference in browser storage. This draft does not claim end-to-end encryption, device-backup behavior, or storage removal after uninstall."
+        }
+      ]
+    },
+    {
+      "id": "why-information-is-used",
+      "title": "Why information is used",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The current code uses account and session information to authenticate people, protect accounts, manage sign-in and password recovery, apply rate limits, and operate available post and relationship features. It uses posts, notes, and relationship state to show content to people who have permission to see it. Legal bases for processing have not been reviewed for any jurisdiction."
+        }
+      ]
+    },
+    {
+      "id": "post-visibility",
+      "title": "Post visibility and sharing limits",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "In the checked-in access rules, solo posts are for their author. Friends posts are available to active friends after release, subject to blocks. Posts can retain earlier revisions. Blocking stops journal access and new interaction, but it cannot take back information another person already saw or saved."
+        }
+      ]
+    },
+    {
+      "id": "media-and-messaging-not-released",
+      "title": "Media and messaging are not described as released",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The repository has server-side media reservation code, but neither client completes an upload, attachment linking, private download, validation, or cleanup flow. Messaging and push delivery are also planned work, not a released feature in this draft. This document makes no promise about media deletion, message retention, notifications, or message confidentiality."
+        }
+      ]
+    },
+    {
+      "id": "providers-and-transfers",
+      "title": "Providers and international processing",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Production hosting providers, regions, analytics, advertising, external processors, and administrator access have not been confirmed. The repository records Neon PostgreSQL and Cloudflare components as development and planned infrastructure, but source code does not prove a production deployment or processing location."
+        }
+      ]
+    },
+    {
+      "id": "cookies-and-device-storage",
+      "title": "Cookies and device storage",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The web client is designed to use authentication cookies through credentialed requests and stores a selected theme locally. The mobile client uses protected native storage for its session, cached identity, and draft data. No analytics, advertising, tracking, location, contacts, microphone, camera, or biometric disclosure can be made until the released app and its permissions are reviewed."
+        }
+      ]
+    },
+    {
+      "id": "retention-and-requests",
+      "title": "Retention, deletion, and requests",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "No verified account deletion workflow, data export, retention schedule, backup expiry setting, or request-handling process is available for publication. Planning documents describe deletion and backup targets, but targets are not operational evidence. This draft does not promise a deletion button, a response time, or a backup purge period."
+        }
+      ]
+    },
+    {
+      "id": "security-age-and-changes",
+      "title": "Security, age, and changes",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli content is server-readable. Transport security, access controls, and encryption at rest do not guarantee absolute confidentiality. Age eligibility, applicable law, complaint channels, and how notice of a future policy change will be given need operator and legal approval."
+        },
+        {
+          "type": "link",
+          "label": "Read the draft Terms of Service",
+          "href": "/terms"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "id": "terms",
+  "title": "Terms of Service",
+  "status": "draft",
+  "version": "draft-1",
+  "effectiveDate": null,
+  "summary": "This is a draft for operator and legal review. It describes checked-in Dayli behavior and does not state published terms.",
+  "sections": [
+    {
+      "id": "draft-status",
+      "title": "Draft status",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "This document is not approved, has no effective date, and is not final Terms of Service. Dayli must not publish it until the operator, eligibility, governing law, dispute terms, contact details, and final wording have been approved."
+        }
+      ]
+    },
+    {
+      "id": "operator-scope-and-eligibility",
+      "title": "Operator, scope, and eligibility",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The legal operator, the countries where Dayli is offered, and any age requirement have not been supplied. This draft does not set a minimum age, a governing law, a business address, or a support contact."
+        }
+      ]
+    },
+    {
+      "id": "accounts-and-security",
+      "title": "Accounts and sign-in security",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The current software supports email and password sign-in and may support Google sign-in when it is configured. People should protect their account credentials and use accurate account information. The final terms need an approved rule for account responsibility, suspension, and recovery."
+        }
+      ]
+    },
+    {
+      "id": "your-content",
+      "title": "Your content",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The checked-in software stores posts, captions, ratings, tomorrow notes, and post revisions. This draft does not transfer ownership of user content and does not grant permission to use content for AI training. Final terms need a reviewed, limited permission for the operator to store, process, and display content only as needed to run released Dayli features."
+        }
+      ]
+    },
+    {
+      "id": "available-post-features",
+      "title": "Available post features",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The checked-in post rules support author-only solo posts and friends posts that active friends can read after release, subject to blocks. Authors can edit released posts, and earlier revisions can remain visible to people who still have permission. A public profile is not a public journal."
+        }
+      ]
+    },
+    {
+      "id": "acceptable-use-and-reports",
+      "title": "Acceptable use and reports",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Final terms should prohibit unlawful use, abuse, attempts to access another person's account or content, interference with the service, and content that the operator cannot lawfully host. A reporting contact and a process for concerns have not been approved, so this draft does not direct people to a channel that does not exist."
+        }
+      ]
+    },
+    {
+      "id": "unreleased-features",
+      "title": "Unreleased features",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Media reservation code exists in the repository, but complete uploads, attachment linking, validation, downloads, and cleanup are not shipped by the clients. Messaging, push notifications, account deletion, data exports, and recorded agreement acceptance are not implemented by this legal-pages work. These draft terms do not create rules or promises for them."
+        }
+      ]
+    },
+    {
+      "id": "availability-third-parties-and-ending-access",
+      "title": "Availability, third parties, and ending access",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The operator has not approved service availability commitments, third-party provider terms, suspension procedures, termination procedures, or deletion handling. The final terms need these decisions and must preserve mandatory consumer rights where they apply."
+        }
+      ]
+    },
+    {
+      "id": "warranties-liability-and-disputes",
+      "title": "Warranties, liability, and disputes",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "No warranty disclaimer, liability limit, dispute process, arbitration term, or governing-law clause is included in this draft. Those terms require legal review for the applicable jurisdiction and cannot be selected from repository evidence."
+        }
+      ]
+    },
+    {
+      "id": "changes-and-contact",
+      "title": "Changes and contact",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The final terms must identify how changes will be communicated, who approves a new version, its effective date, and how people can contact the operator. No final terms acceptance record is created by these links."
+        },
+        {
+          "type": "link",
+          "label": "Read the draft Privacy Policy",
+          "href": "/privacy"
+        }
+      ]
+    }
+  ]
+}

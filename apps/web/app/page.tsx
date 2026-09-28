@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "@/lib/session/hooks";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 import GallerySquiggle1 from "@/assets/GallerySquiggle01";
 import GallerySquiggle2 from "@/assets/GallerySquiggle02";
@@ -61,9 +62,11 @@ export default function App() {
         <p className="absolute top-6 text-xs opacity-50">
           Dayli by Team WDCC | COMPSCI 732
         </p>
-        <p className="absolute bottom-12 text-lg font-medium  opacity-50">
-          one post, every day.
-        </p>
+        <div className="absolute bottom-4 z-30 flex max-w-[calc(100%-2rem)] flex-col items-center gap-1 text-center">
+          <p className="text-lg font-medium opacity-50">one post, every day.</p>
+          <LegalLinks className="text-xs text-foreground-secondary" />
+          <LegalDraftNotice />
+        </div>
       </div>
 
       {/* Decorative images and assets etc */}

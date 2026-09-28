@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 const signUpSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -53,6 +54,11 @@ export default function SignUpPage() {
       </p>
 
       <div className="flex flex-col gap-4">
+        <div className="space-y-1">
+          <p className="text-xs leading-5 text-foreground-secondary">By creating an account or continuing with Google, you can review the documents that apply to Dayli.</p>
+          <LegalLinks className="text-xs text-foreground-secondary" />
+          <LegalDraftNotice />
+        </div>
         <GoogleSignInButton />
 
         <div className="relative flex items-center">
