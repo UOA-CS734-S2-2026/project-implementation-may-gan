@@ -38,6 +38,11 @@
     "verify:local": "bash scripts/verify-local.sh",
     "verify:local:full": "VERIFY_LOCAL_FULL=1 bash scripts/verify-local.sh"
   },
+  "pnpm": {
+    "overrides": {
+      "zod": "4.5.4"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@openapitools/openapi-generator-cli": "2.41.0",
