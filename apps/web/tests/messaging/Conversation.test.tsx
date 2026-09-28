@@ -8,7 +8,7 @@ import { messagingApi } from "@/features/messaging/shared/messaging.api";
 let userId = "me";
 const push = vi.fn();
 let changes: Array<{ changeSequence: string; kind: string; messageId: string; memberId: string | null }> = [];
-const live = { revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => changes, refreshUnread: vi.fn() }; 
+const live = { revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => changes, refreshUnread: vi.fn() };
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
 vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => live }));
