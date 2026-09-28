@@ -43,6 +43,9 @@ src/models/MediaReservation.ts
 src/models/MediaReservationStatus.ts
 src/models/MediaReservationUpload.ts
 src/models/MediaValidationFailureReason.ts
+src/models/Message.ts
+src/models/MessageReactionsInner.ts
+src/models/MessageReplyPreview.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
