@@ -2,7 +2,7 @@ import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
-import type { VerifiedPushSession } from "./push-device.service";
+import { PushSessionInactiveError, type VerifiedPushSession } from "./push-device.service";
 
 export interface PushDeviceRouteDependencies {
   resolveSession: ResolveSession;
@@ -33,7 +33,12 @@ export function registerPushDeviceRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, 
     if (!dependencies.devices) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Push registration is temporarily unavailable.") as never;
     const session = await dependencies.resolvePushSession(context.req.raw);
     if (!session || session.userId !== context.get("actor").userId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.") as never;
-    await dependencies.devices.register(session, { installationId: context.req.valid("param").installationId, ...context.req.valid("json") });
+    try {
+      await dependencies.devices.register(session, { installationId: context.req.valid("param").installationId, ...context.req.valid("json") });
+    } catch (error) {
+      if (error instanceof PushSessionInactiveError) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.") as never;
+      throw error;
+    }
     return context.body(null, 204);
   });
   app.openapi(unregisterRoute, async (context) => {

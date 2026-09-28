@@ -15,6 +15,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         select d.token_ciphertext, d.token_key_version
         from public.push_devices d
         join public.session s on s.id = d.session_id and s.user_id = d.user_id and s.expires_at > now()
+        join public."user" u on u.id = d.user_id and (coalesce(u.banned, false) = false or (u.ban_expires is not null and u.ban_expires <= now()))
         join public.conversation_members member on member.conversation_id = ${job.conversationId} and member.user_id = d.user_id
         join public.conversations c on c.id = ${job.conversationId}
         where d.id = ${job.deviceRegistrationId} and d.user_id = ${job.recipientId}
