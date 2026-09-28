@@ -74,6 +74,10 @@ test("rejects malformed, partial, or provider-error bulk responses without leaki
   for (const response of [
     new Response("not json", { status: 200 }),
     new Response(JSON.stringify(successResult(["BETTER_AUTH_SECRET"])), { status: 200 }),
+    new Response(JSON.stringify({
+      ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]),
+      result: { ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]).result, UNEXPECTED: { name: "UNEXPECTED", type: "plain_text" } },
+    }), { status: 200 }),
     new Response(JSON.stringify({ ...successResult(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON"]), errors: [{ message: "push-key-value" }] }), { status: 200 }),
     new Response(JSON.stringify({ success: false, errors: [{ message: "push-key-value" }] }), { status: 403 }),
   ]) {
