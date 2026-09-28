@@ -10,7 +10,9 @@ const job = (overrides: Partial<OutboxJob> = {}): OutboxJob => ({
 
 function store(jobs: OutboxJob[]): OutboxStore {
   return {
-    claimDue: vi.fn(async () => jobs.splice(0)),
+    claimDue: vi.fn(async () => jobs.splice(0, 1)),
+    renewLease: vi.fn(async (job: OutboxJob) => job),
+    releaseLease: vi.fn(async () => true),
     markDelivered: vi.fn(async () => true),
     reschedule: vi.fn(async () => true),
   };
@@ -51,6 +53,39 @@ describe("outbox dispatcher", () => {
     const dispatcher = createOutboxDispatcher({ store: outbox, handlers: { realtime: vi.fn(), push }, immediateBudgetMs: 100, now: () => new Date("2026-09-28T00:00:00.000Z") });
     await expect(dispatcher.dispatchImmediately()).resolves.toMatchObject({ failed: 1, rescheduled: 0 });
     expect(outbox.reschedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ terminal: true, failureCategory: "provider_rejected" }));
+  });
+
+  it("never calls a provider after a lease is reclaimed before delivery", async () => {
+    const outbox = store([job()]);
+    (outbox.renewLease as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const realtime = vi.fn(async () => ({ ok: true as const }));
+    const dispatcher = createOutboxDispatcher({ store: outbox, handlers: { realtime, push: vi.fn() }, immediateBudgetMs: 100, now: () => new Date("2026-09-28T00:00:00.000Z") });
+    await expect(dispatcher.dispatchImmediately()).resolves.toMatchObject({ fenced: 1, delivered: 0 });
+    expect(realtime).not.toHaveBeenCalled();
+  });
+
+  it("claims one job at a time so a competing worker cannot reclaim an unstarted batch", async () => {
+    const jobs = [job({ id: "first" }), job({ id: "second" })];
+    const outbox = store(jobs);
+    const clock = { value: new Date("2026-09-28T00:00:00.000Z") };
+    const firstDelivery = vi.fn(async () => { clock.value = new Date(clock.value.getTime() + 31_000); return { ok: true as const }; });
+    const dispatcher = createOutboxDispatcher({ store: outbox, handlers: { realtime: firstDelivery, push: vi.fn() }, scheduledBatchSize: 2, leaseForMs: 30_000, now: () => clock.value });
+    await dispatcher.dispatchScheduled();
+    expect(outbox.claimDue).toHaveBeenNthCalledWith(1, expect.objectContaining({ limit: 1 }));
+    expect(outbox.claimDue).toHaveBeenNthCalledWith(2, expect.objectContaining({ limit: 1 }));
+    expect(firstDelivery).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts a stalled provider before the owned lease can expire", async () => {
+    const outbox = store([job()]);
+    let aborted = false;
+    const realtime = vi.fn(async (_job: OutboxJob, options: { signal: AbortSignal }) => {
+      await new Promise<void>((resolve) => options.signal.addEventListener("abort", () => { aborted = true; resolve(); }, { once: true }));
+      return { ok: false as const, retryable: true, category: "transient" as const };
+    });
+    const dispatcher = createOutboxDispatcher({ store: outbox, handlers: { realtime, push: vi.fn() }, immediateBudgetMs: 100, deliveryTimeoutMs: 1, leaseForMs: 20, now: () => new Date("2026-09-28T00:00:00.000Z") });
+    await expect(dispatcher.dispatchImmediately()).resolves.toMatchObject({ rescheduled: 1 });
+    expect(aborted).toBe(true);
   });
 
   it("uses capped jittered exponential retry delays", () => {

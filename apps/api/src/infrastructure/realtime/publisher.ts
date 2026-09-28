@@ -16,9 +16,10 @@ export function createDurableObjectRealtimePublisher(
 ) {
   const stubFor = (userId: string) => namespace.get(namespace.idFromName(userId)) as unknown as UserRealtimeRpc;
   return {
-    async deliver(job: OutboxJob) {
+    async deliver(job: OutboxJob, options?: { signal: AbortSignal }) {
+      if (options?.signal.aborted) return { ok: false as const, retryable: true, category: "transient" as const };
       if (job.channel !== "realtime") return { ok: false as const, retryable: false, category: "provider_rejected" as const };
-      if (!await authorize(job)) return { ok: true as const };
+      if (!await authorize(job) || options?.signal.aborted) return options?.signal.aborted ? { ok: false as const, retryable: true, category: "transient" as const } : { ok: true as const };
       await stubFor(job.recipientId).publish(bodyFreeRealtimeEvent(job));
       return { ok: true as const };
     },
