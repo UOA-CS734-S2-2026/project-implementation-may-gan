@@ -307,16 +307,20 @@ apps/web/
   app/(main)/layout.tsx               [modify] Mount session-scoped messaging provider for all signed-in screens
   app/(main)/messages/page.tsx        [replace placeholder] Inbox/thread container
   app/(main)/messages/[id]/page.tsx   [new] Deep-linkable conversation
-  components/messages/
-    MessagingProvider.tsx            [new] Session-scoped cache and connection lifecycle
-    Inbox.tsx                        [new] Active/request folders and unread state
-    Conversation.tsx                 [new] History, visibility-based reads, older-page loading
-    MessageComposer.tsx              [new] Text, reply/edit modes, pending/failed retry
-    MessageBubble.tsx                [new] Replies, reactions, edited/unsent state
-  lib/api/messaging.ts               [new] Generated-client adapter with credential/error handling
-  lib/messaging/queries.ts           [new] User-scoped keys, pagination, optimistic reconciliation
-  lib/messaging/realtime.ts          [new] Native browser WebSocket and reconnect state machine
-  lib/messaging/reconcile.ts         [new] Versioned merging, buffering, change cursor handling
+  components/providers/QueryProvider.tsx [new] Stable QueryClient for one mounted private account scope
+  features/messaging/
+    shared/{messaging.api,messaging.keys,query-result,message-cache,MessageBubble}.ts[x]
+                                        Generated-client Result adapter, user-scoped keys, cache reconciliation, shared view
+    inbox/{Inbox,use-inbox-query}.tsx   Inbox and request pagination
+    conversation/{Conversation,use-conversation-query}.tsx
+                                        Thread view and conversation projection
+    message-history/use-message-history-query.ts
+    {send-message,edit-message,unsend-message,set-reaction,remove-reaction,mark-read,create-conversation,resolve-request}/
+                                        One action-owned TanStack mutation hook per command
+    realtime/{MessagingProvider,MessagingRealtime}.ts[x]
+                                        One foreground socket and durable change reconciliation
+  lib/api/config.ts                    [existing] Browser API base URL configuration
+  lib/messaging/{client-id,reconcile}.ts [existing] ID generation and pure versioned merge helpers
   components/ui/layout/Navbar.tsx    [modify] Unread count
   lib/session/provider.tsx           [modify or integrate] Clear cache/socket on session changes
   tests/messaging/                   [new] Controller/component and two-user browser scenarios
@@ -348,7 +352,7 @@ No new `packages/cloudflare`, `apps/realtime`, or independently deployed socket 
 
 A Durable Object binding and migration are deployment configuration, not npm dependencies. Put `USER_REALTIME` and a new `new_sqlite_classes` migration for `UserRealtime` in the API Worker configs, including environment-specific bindings where required. Export the class from that Worker's entrypoint. Provision cron there too. Do not put DO/Hyperdrive bindings or push secrets in the separate web Worker. PostgreSQL migrations remain in `packages/db/migrations`, entirely separate from Durable Object migrations.
 
-Web uses its browser-native WebSocket and adds `@tanstack/react-query` to `apps/web`, not the root. Flutter can use a platform-compatible WebSocket adapter such as `web_socket_channel` in `apps/mobile/pubspec.yaml`; Firebase client packages belong there too. Do not introduce Riverpod or Dio solely for this feature; follow existing controllers and generated-client adapters. Socket code is handwritten, generated clients cover REST only.
+Web uses its browser-native WebSocket and the pinned `@tanstack/react-query` 5.90.21 dependency in `apps/web`, not the root. `QueryProvider` is remounted by authenticated user ID, cancels and clears its client on unmount, and every messaging key includes that user ID. Result-shaped adapter failures are unwrapped into typed rejections before Query sees them. No query or socket path uses periodic polling. Flutter can use a platform-compatible WebSocket adapter such as `web_socket_channel` in `apps/mobile/pubspec.yaml`; Firebase client packages belong there too. Do not introduce Riverpod or Dio solely for this feature; follow existing controllers and generated-client adapters. Socket code is handwritten, generated clients cover REST only.
 
 ## Implementation sequence and independently reviewable pieces
 
