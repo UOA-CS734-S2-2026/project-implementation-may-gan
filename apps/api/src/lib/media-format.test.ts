@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFtypBox,
-  buildMdhdBoxV0,
   buildMinimalMp4,
   buildMoovBox,
   buildMvhdBoxV0,
@@ -310,10 +309,34 @@ describe("extractIsoBmffDurationSeconds", () => {
     // mvhd declares 5s, but the track's own media header declares 900s — mvhd's
     // duration alone (what the old check trusted) would have passed the 15s cap.
     const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 5000 });
-    const mdhd = buildMdhdBoxV0({ timescale: 1000, duration: 900_000 });
-    const trak = wrapBox("trak", wrapBox("mdia", mdhd));
+    const trak = buildTrakBox({ timescale: 1000, duration: 900_000 });
     const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
     const file = concatBoxes(ftyp, buildMoovBox([mvhd, trak]), mdat);
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "malformed" });
+  });
+
+  it("cross-checks against the video track even when an audio track with a divergent duration comes first", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 10_000 });
+    // Audio trails the video by 3s — legitimately outside the 5%/1s tolerance
+    // against mvhd, and listed first. It must not cause a false rejection.
+    const audio = buildTrakBox({ timescale: 44_100, duration: 13 * 44_100, handlerType: "soun" });
+    const video = buildTrakBox({ timescale: 600, duration: 6000 });
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, audio, video]), mdat);
+
+    const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
+    expect(result).toEqual({ outcome: "duration", seconds: 10 });
+  });
+
+  it("is malformed when no track is a video track, even if its duration agrees with mvhd", async () => {
+    const ftyp = buildFtypBox("isom", ["isom"]);
+    const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: 5000 });
+    const audioOnly = buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "soun" });
+    const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+    const file = concatBoxes(ftyp, buildMoovBox([mvhd, audioOnly]), mdat);
 
     const result = await extractIsoBmffDurationSeconds(boxSourceFor(file));
     expect(result).toEqual({ outcome: "malformed" });

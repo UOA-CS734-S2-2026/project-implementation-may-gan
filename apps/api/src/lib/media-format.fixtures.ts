@@ -79,19 +79,34 @@ export function buildMdhdBoxV0({ timescale, duration }: { timescale: number; dur
   return wrapBox("mdhd", body);
 }
 
-/** trak(mdia(mdhd)) — the minimum real track structure extractIsoBmffDurationSeconds requires. */
-export function buildTrakBox({ timescale, duration }: { timescale: number; duration: number }): Uint8Array {
+/** version/flags(4) + pre_defined(4) + handler_type(4) + reserved(12) + empty null-terminated name(1). */
+export function buildHdlrBox(handlerType: string): Uint8Array {
+  const body = new Uint8Array(25);
+  writeAscii(body, 8, handlerType);
+  return wrapBox("hdlr", body);
+}
+
+/** trak(mdia(mdhd, hdlr)) — the minimum real track structure extractIsoBmffDurationSeconds requires. */
+export function buildTrakBox({
+  timescale,
+  duration,
+  handlerType = "vide",
+}: {
+  timescale: number;
+  duration: number;
+  handlerType?: string;
+}): Uint8Array {
   const mdhd = buildMdhdBoxV0({ timescale, duration });
-  const mdia = wrapContainerBox("mdia", [mdhd]);
+  const mdia = wrapContainerBox("mdia", [mdhd, buildHdlrBox(handlerType)]);
   return wrapContainerBox("trak", [mdia]);
 }
 
 /**
- * ftyp + moov(mvhd, trak(mdia(mdhd))) + mdat — a minimal but structurally
- * *complete* MP4 for a given duration: a real capture always has a track with
- * its own media header (cross-checked against mvhd) and a non-empty media-data
- * box, which is exactly what keeps a fabricated ftyp+moov+mvhd (no real track or
- * media data) from validating.
+ * ftyp + moov(mvhd, trak(mdia(mdhd, hdlr=vide))) + mdat — a minimal but
+ * structurally *complete* MP4 for a given duration: a real capture always has a
+ * video track with its own media header (cross-checked against mvhd) and a
+ * non-empty media-data box, which is exactly what keeps a fabricated
+ * ftyp+moov+mvhd (no real track or media data) from validating.
  */
 export function buildMinimalMp4(durationSeconds: number, timescale = 1000): Uint8Array {
   const ftyp = buildFtypBox("isom", ["isom"]);

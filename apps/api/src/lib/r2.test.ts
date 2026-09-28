@@ -99,4 +99,18 @@ describe("headR2Object / readR2ObjectRange — infrastructure error wrapping", (
 
     await expect(headR2Object(configuration, "media/owner/id")).rejects.toThrow(/R2 HEAD failed with status 403/);
   });
+
+  it("treats a HEAD response with a missing or blank Content-Length as an infrastructure error, not a zero-byte object", async () => {
+    // A plain object rather than `new Response(...)`, so the runtime can't fill in
+    // a Content-Length on its own and mask the missing-header case.
+    const headResponse = (headers: Headers) => ({ status: 200, ok: true, headers }) as Response;
+
+    for (const headers of [new Headers(), new Headers({ "content-length": "" }), new Headers({ "content-length": "abc" })]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(headResponse(headers)));
+      await expect(headR2Object(configuration, "media/owner/id")).rejects.toThrow(/missing a valid Content-Length/);
+    }
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(headResponse(new Headers({ "content-length": "1024" }))));
+    await expect(headR2Object(configuration, "media/owner/id")).resolves.toEqual({ outcome: "found", contentLength: 1024 });
+  });
 });
