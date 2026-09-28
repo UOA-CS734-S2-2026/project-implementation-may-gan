@@ -1,5 +1,5 @@
 import { MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
-import { createPresignedUploadUrl, type R2RuntimeConfiguration } from "../../../lib/r2";
+import { createPresignedUploadUrl, type R2RuntimeConfiguration } from "../../../infrastructure/media/r2";
 import { toMediaReservationResponse } from "../reservation-status";
 import type {
   CreateMediaReservationRequest,

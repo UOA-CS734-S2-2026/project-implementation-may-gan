@@ -8,7 +8,7 @@ import {
   readBetterAuthRuntimeConfiguration,
   type BetterAuthCompatibilitySlice,
 } from "./features/auth/better-auth";
-import { withHyperdriveDatabase } from "./lib/hyperdrive";
+import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
 import type { ApiEnv } from "./env";
 import {
   createHyperdriveMediaReservationRuntime,
@@ -38,8 +38,8 @@ import { createHyperdriveDailyPostStore } from "./features/posts/create-post/cre
 import { registerApiDocsRoute } from "./features/system/get-api-docs/get-api-docs.route";
 import { registerHealthRoute } from "./features/system/get-health/get-health.route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
-import { readR2RuntimeConfiguration } from "./lib/r2";
-import { registerApplicationCors } from "./lib/cors";
+import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { registerApplicationCors } from "./http/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 
 export interface AppDependencies {

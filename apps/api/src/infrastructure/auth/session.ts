@@ -1,5 +1,5 @@
 import type { DayliDatabase } from "@dayli/db";
-import { createPostgresBetterAuth } from "../features/auth/better-auth";
+import { createPostgresBetterAuth } from "../../features/auth/better-auth";
 
 /** The subset of Better Auth runtime configuration session resolution needs. */
 export interface SessionRuntimeConfiguration {

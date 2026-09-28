@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createFakeR2Reader } from "../../../lib/r2.fake";
-import { validJpegBytes } from "../../../lib/media-format.fixtures";
+import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
+import { validJpegBytes } from "../../../infrastructure/media/media-format.fixtures";
 import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
 import type { MediaReservationRecord } from "../reserve/repository";
 import { completeMediaReservation } from "./service";

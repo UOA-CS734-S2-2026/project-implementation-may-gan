@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
-import { createFakeR2Reader } from "../../../lib/r2.fake";
-import { R2ReadInfrastructureError, type MediaR2Reader } from "../../../lib/r2";
+import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
+import { R2ReadInfrastructureError, type MediaR2Reader } from "../../../infrastructure/media/r2";
 import {
   buildFtypBox,
   buildMinimalMp4,
@@ -10,7 +10,7 @@ import {
   buildMvhdBoxV0,
   concatBoxes,
   validJpegBytes,
-} from "../../../lib/media-format.fixtures";
+} from "../../../infrastructure/media/media-format.fixtures";
 import { MAX_VIDEO_DURATION_SECONDS, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
 import type { MediaReservationRepository } from "../reserve/repository";

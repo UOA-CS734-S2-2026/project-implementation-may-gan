@@ -1,6 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../lib/api-error";
-import { R2ReadInfrastructureError } from "../../../lib/r2";
+import { R2ReadInfrastructureError } from "../../../infrastructure/media/r2";
 import type { MediaReservationRuntime } from "../reserve/runtime";
 import { apiErrorSchema, mediaReservationIdParamSchema, mediaReservationResponseSchema } from "./contract";
 import { completeMediaReservation } from "./service";

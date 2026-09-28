@@ -4,8 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
 import { readBetterAuthRuntimeConfiguration } from "../../auth/better-auth";
 import { registerPostgresBetterAuthRoutes } from "../../auth/route";
-import { createFakeR2Reader } from "../../../lib/r2.fake";
-import { validJpegBytes } from "../../../lib/media-format.fixtures";
+import { createFakeR2Reader } from "../../../infrastructure/media/r2.fake";
+import { validJpegBytes } from "../../../infrastructure/media/media-format.fixtures";
 import { createHyperdriveMediaReservationRuntime } from "../reserve/runtime";
 import type { ApiEnv } from "../../../env";
 

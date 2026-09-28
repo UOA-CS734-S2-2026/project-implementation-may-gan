@@ -1,6 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "hono";
-import { apiErrorResponse } from "../../../lib/api-error";
+import { apiErrorResponse } from "../../../http/api-error";
 import {
   apiErrorSchema,
   createMediaReservationRequestSchema,

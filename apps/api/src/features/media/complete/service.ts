@@ -4,8 +4,8 @@ import {
   extractIsoBmffDurationSeconds,
   readMagicByteWindow,
   type BoxSource,
-} from "../../../lib/media-format";
-import type { MediaR2Reader } from "../../../lib/r2";
+} from "../../../infrastructure/media/media-format";
+import type { MediaR2Reader } from "../../../infrastructure/media/r2";
 import { MAX_VIDEO_DURATION_SECONDS, type AllowedContentType } from "../shared/media-reservation-policy";
 import { toMediaReservationResponse } from "../reservation-status";
 import type { MediaReservationResponse } from "../reserve/contract";
