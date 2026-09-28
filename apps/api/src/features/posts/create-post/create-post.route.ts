@@ -2,8 +2,8 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import type { Context } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
-import type { ResolveSession } from "../../../http/require-session";
-import { createRequireSession } from "../../../http/require-session";
+import type { ResolveSession } from "../../../http/middleware/require-session";
+import { createRequireSession } from "../../../http/middleware/require-session";
 import {
   createDailyPostErrorResponses,
   createDailyPostRequestSchema,

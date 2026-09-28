@@ -230,7 +230,7 @@ apps/api/
     env.ts                             [modify] DO namespace, push config, feature flags
     app.ts                             [modify] Register routes and inject feature dependencies
     http/
-      require-session.ts               [new or reuse refactor] Typed injected auth middleware
+      middleware/require-session.ts    [reuse refactor] Typed injected auth middleware
       authenticated-actor.ts           [new or reuse refactor] Verified actor/session projection
     features/
       messaging/

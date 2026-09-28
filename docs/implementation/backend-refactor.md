@@ -127,7 +127,7 @@ Prefix schema/service/repository/test names, but preserve public contract names 
 
 ## HTTP authentication target
 
-Create `src/http/authenticated-actor.ts` and `src/http/require-session.ts`. Use a middleware factory with an injected resolver so routes/tests remain configurable and no real database is constructed during contract generation.
+Create `src/http/authenticated-actor.ts` and `src/http/middleware/require-session.ts`. Use a middleware factory with an injected resolver so routes/tests remain configurable and no real database is constructed during contract generation.
 
 - Actor identity must come only from Better Auth cookie/bearer lookup.
 - Set a typed Hono context actor and use explicit middleware in each protected `createRoute` definition.

@@ -1,6 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
-import { createRequireSession } from "../../http/require-session";
+import { createRequireSession } from "../../http/middleware/require-session";
 import { registerGetReservationRoute } from "./get-reservation/get-reservation.route";
 import { registerReserveUploadRoute } from "./reserve-upload/reserve-upload.route";
 import type { MediaReservationRouteDependencies } from "./shared/media-reservation-route-dependencies";

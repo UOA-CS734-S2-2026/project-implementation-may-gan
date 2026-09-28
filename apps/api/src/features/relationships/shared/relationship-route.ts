@@ -3,7 +3,7 @@ import type { ApiError } from "@dayli/contracts";
 import type { Context } from "hono";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { RelationshipServiceError, type RelationshipsService } from "../relationships.service";
-import type { ResolveSession } from "../../../http/require-session";
+import type { ResolveSession } from "../../../http/middleware/require-session";
 
 export interface RelationshipsRouteDependencies {
   service: RelationshipsService;
