@@ -50,7 +50,7 @@ Messaging tables, REST endpoints, outbox dispatch, ticketed socket invalidations
 
 ## Merge readiness and deployment handoff
 
-The Worker fetch entrypoint now forwards the Cloudflare execution context into Hono, so successful message writes retain their bounded `waitUntil` dispatch. The staging generator includes the `USER_REALTIME` binding, SQLite migration, and retry cron. The probe Worker has no scheduler or shared Durable Object binding. Staging secret synchronization is part of the approved manual deployment, not a separate workflow.
+The Worker fetch entrypoint now forwards the Cloudflare execution context into Hono, so successful message writes retain their bounded `waitUntil` dispatch. The staging generator includes the `USER_REALTIME` binding, SQLite migration, and retry cron. The probe Worker has no scheduler or shared Durable Object binding. Staging auth, email, and optional FCM secret synchronization is part of the approved manual deployment. `PUSH_TOKEN_ENCRYPTION_KEY` stays Cloudflare-only and outside routine sync.
 
 Local evidence on this branch includes the API Worker test suite and typecheck, Node tests for staging origins, auth bindings, generated configuration, and mocked secret synchronization, plus Wrangler dry runs for synthetic staging API and probe configurations. No hosted workflow, remote deployment, Cloudflare write, or real credential use occurred. `actionlint` was unavailable locally.
 
