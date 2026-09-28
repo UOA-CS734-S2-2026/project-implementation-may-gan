@@ -33,7 +33,7 @@ export function createSendMessageService(dependencies: {
       assertMessageText(input.text);
       const replyToMessageId = input.replyToMessageId ?? null;
       return dependencies.store.withConversationTransaction(actorId, conversationId, async (transaction) => {
-        const access = await transaction.getAccess(actorId, conversationId);
+        let access = await transaction.getAccess(actorId, conversationId);
         assertConversationMember(access);
         const fingerprint = await fingerprintMessageRequest({
           conversationId,
@@ -47,6 +47,7 @@ export function createSendMessageService(dependencies: {
           return { message: toMessageDto(previous.message), replayed: true };
         }
 
+        if (access.requestState !== "active") access = await transaction.activateForFriendship(actorId, conversationId);
         assertPeerActivityAllowed(access);
         if (replyToMessageId) {
           const parent = await transaction.findMessage(conversationId, replyToMessageId);

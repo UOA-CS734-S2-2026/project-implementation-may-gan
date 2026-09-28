@@ -24,6 +24,7 @@ function memory(initial = message()) {
   const changes: string[] = [];
   const transaction: MessageWriteTransaction = {
     getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
+    activateForFriendship: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
     findIdempotentMessage: async (sender, clientMessageId) => {
       const found = idempotency.get(`${sender}:${clientMessageId}`);
       return found ? { requestFingerprint: found.requestFingerprint, message: found } : null;
