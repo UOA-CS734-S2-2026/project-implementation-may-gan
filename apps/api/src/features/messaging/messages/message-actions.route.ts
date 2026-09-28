@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/require-session";
+import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 import { MessagingError } from "../shared/messaging-error";
 import { editMessageBodySchema, messageParamsSchema, messageSchema, messagingErrorResponses, setReactionBodySchema } from "./message.contract";
 import type { EditMessageService } from "./edit-message/edit-message.service";

@@ -17,6 +17,7 @@ class EditMessageRequest {
     required this.expectedVersion,
   });
 
+  /// 1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text.
   final String text;
 
   /// Minimum value: 1

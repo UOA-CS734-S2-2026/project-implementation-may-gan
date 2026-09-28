@@ -1,7 +1,8 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/require-session";
+import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { CreateDirectConversationService } from "./create-direct-conversation/create-direct-conversation.service";
 import type { ConversationReader } from "./conversation.repository";
 import { MessagingError } from "../shared/messaging-error";

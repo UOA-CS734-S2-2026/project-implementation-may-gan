@@ -2722,8 +2722,8 @@
                   },
                   "text": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 16000
+                    "maxLength": 8000,
+                    "description": "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text."
                   },
                   "replyToMessageId": {
                     "$ref": "#/components/schemas/OpaqueId"
@@ -3012,8 +3012,8 @@
                 "properties": {
                   "text": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 16000
+                    "maxLength": 8000,
+                    "description": "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text."
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -3577,8 +3577,8 @@
                   },
                   "text": {
                     "type": "string",
-                    "minLength": 1,
-                    "maxLength": 16000
+                    "maxLength": 8000,
+                    "description": "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text."
                   }
                 },
                 "required": [

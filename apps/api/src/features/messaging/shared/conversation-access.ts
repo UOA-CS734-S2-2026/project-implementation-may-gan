@@ -17,6 +17,13 @@ export function assertPeerActivityAllowed(access: ConversationAccess): void {
   if (access.requestState === "declined") throw new MessagingError("DECLINED");
 }
 
+/** Pending initiators may only unsend their own initial message. Other new peer activity remains blocked. */
+export function assertUnsendAllowed(access: ConversationAccess): void {
+  assertConversationMember(access);
+  if (access.peerActivityBlocked) throw new MessagingError("BLOCKED");
+  if (access.requestState === "declined") throw new MessagingError("DECLINED");
+}
+
 export function assertPendingRecipient(access: ConversationAccess, actorId: string): void {
   assertConversationMember(access);
   if (access.peerActivityBlocked) throw new MessagingError("BLOCKED");

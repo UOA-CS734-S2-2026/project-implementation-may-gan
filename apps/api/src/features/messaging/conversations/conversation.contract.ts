@@ -4,7 +4,8 @@ import { messageSchema } from "../messages/message.contract";
 
 const sequence = z.string().regex(/^\d+$/).openapi({ example: "42" });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
-export const directConversationBodySchema = z.object({ recipientId: opaqueIdSchema, clientMessageId: opaqueIdSchema, text: z.string().min(1).max(16_000) }).strict();
+const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
+export const directConversationBodySchema = z.object({ recipientId: opaqueIdSchema, clientMessageId: opaqueIdSchema, text: messageTextSchema }).strict();
 export const conversationFolderSchema = z.object({ folder: z.enum(["inbox", "requests"]).default("inbox"), cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });
 export const messagesQuerySchema = z.object({ beforeSequence: sequence.optional(), afterSequence: sequence.optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).superRefine((value, context) => { if (value.beforeSequence && value.afterSequence) context.addIssue({ code: "custom", message: "Only one cursor direction is allowed." }); });
 export const changesQuerySchema = z.object({ afterChangeSequence: sequence.optional(), limit: z.coerce.number().int().min(1).max(200).default(100) });

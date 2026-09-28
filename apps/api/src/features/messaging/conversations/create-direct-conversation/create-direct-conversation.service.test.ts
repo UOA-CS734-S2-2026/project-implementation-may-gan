@@ -12,6 +12,7 @@ function transaction(blocked: boolean): DirectConversationTransaction {
     recipientExists: async () => true,
     hasActiveFriendship: async () => false,
     findIdempotentMessage: async () => null,
+    activateConversation: async (conversation) => ({ ...conversation, requestState: "active" }),
     createConversationWithMessage: async (input) => ({
       conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState },
       message: { id: input.messageId, conversationId: input.conversationId, sequence: 1n, senderId: input.initiatorId, clientMessageId: input.clientMessageId, requestFingerprint: input.requestFingerprint, body: input.text, replyToMessageId: null, version: 1, createdAt: input.createdAt, editedAt: null, unsentAt: null, reactions: [] },
