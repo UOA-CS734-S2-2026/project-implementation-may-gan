@@ -84,6 +84,9 @@ class _AuthScreenState extends State<AuthScreen> {
       rejected: _signUp
           ? "That account couldn't be created. Check your details."
           : 'Invalid credentials.',
+      alreadyExists: _signUp
+          ? 'An account with this email already exists. Sign in instead.'
+          : null,
     );
   }
 
@@ -106,6 +109,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _run(
     Future<void> Function() action, {
     required String rejected,
+    String? alreadyExists,
   }) async {
     setState(() {
       _busy = true;
@@ -115,13 +119,19 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await action();
     } on AuthenticationFailure catch (failure) {
+      // Better Auth answers 422 when a sign-up email is taken and 429 when
+      // its attempt limit is hit; neither is an outage.
+      final message = failure.needsGoogleLink
+          ? 'Then open Settings and choose Connect Google. You only need to do this once.'
+          : switch (failure.statusCode) {
+              400 || 401 => rejected,
+              422 when alreadyExists != null => alreadyExists,
+              429 => 'Too many attempts. Wait a few seconds and try again.',
+              _ => 'Dayli is having trouble right now. Try again shortly.',
+            };
       setState(() {
         _googleNeedsLink = failure.needsGoogleLink;
-        _error = _googleNeedsLink
-            ? 'Then open Settings and choose Connect Google. You only need to do this once.'
-            : failure.statusCode == 401 || failure.statusCode == 400
-            ? rejected
-            : 'Dayli is having trouble right now. Try again shortly.';
+        _error = message;
       });
     } catch (_) {
       setState(() => _error = "You're offline. Connect and try again.");

@@ -148,6 +148,59 @@ void main() {
     expect(find.text('Username'), findsNothing);
   });
 
+  for (final (name, email, signUp, message) in [
+    (
+      'a taken sign-up email',
+      'taken@example.test',
+      true,
+      'An account with this email already exists. Sign in instead.',
+    ),
+    (
+      'rate-limited sign-up',
+      'busy@example.test',
+      true,
+      'Too many attempts. Wait a few seconds and try again.',
+    ),
+    (
+      'rate-limited sign-in',
+      'busy@example.test',
+      false,
+      'Too many attempts. Wait a few seconds and try again.',
+    ),
+  ]) {
+    testWidgets('explains $name instead of reporting an outage', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      await tester.pumpWidget(
+        DayliApp(services: harness.services, useGoogleFonts: false),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(Key(signUp ? 'landing.sign-up' : 'landing.sign-in')),
+      );
+      await tester.pumpAndSettle();
+      if (signUp) {
+        await tester.enterText(find.byKey(const Key('auth.name')), 'Jos');
+      }
+      await tester.enterText(find.byKey(const Key('auth.email')), email);
+      await tester.enterText(
+        find.byKey(const Key('auth.password')),
+        'correct-password',
+      );
+      await tester.ensureVisible(find.byKey(const Key('auth.submit')));
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await tester.pumpAndSettle();
+
+      expect(find.text(message), findsOneWidget);
+      expect(
+        find.text('Dayli is having trouble right now. Try again shortly.'),
+        findsNothing,
+      );
+      expect(harness.tokens.value, isNull);
+    });
+  }
+
   testWidgets('signs in, chooses an audience, and posts today\'s dayli', (
     tester,
   ) async {
