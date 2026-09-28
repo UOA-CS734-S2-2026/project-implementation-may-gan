@@ -30,4 +30,4 @@ The server derives the actor solely from Better Auth. Relationship mutations con
 
 ## Integration note
 
-Migration `0009_relationship_search` and the generated relationship contracts overlap with the separate messaging work. The confirmed integration order is refactor, then friends, then messaging. Friends remains directly based on refactor and owns `0009_relationship_search`; messaging will rebase onto friends and regenerate its undeployed migrations. The orchestrator owns that coordination. No deployed migration history was changed.
+Migration `0010_relationship_search` and the generated relationship contracts overlap with the separate messaging work. The confirmed integration order is refactor, then friends, then messaging. Friends remains directly based on refactor and owns `0010_relationship_search`; `0009_add_media_reservation_validation` remains immutable from main. Messaging will rebase onto friends and regenerate its undeployed migrations. The orchestrator owns that coordination. No deployed migration history was changed.
