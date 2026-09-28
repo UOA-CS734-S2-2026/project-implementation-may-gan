@@ -8,7 +8,9 @@ import '../test/support/fakes.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('fake-session navigation reaches the existing home screen', (tester) async {
+  testWidgets('fake-session navigation reaches the existing home screen', (
+    tester,
+  ) async {
     final harness = TestHarness();
     await tester.pumpWidget(
       DayliApp(services: harness.services, useGoogleFonts: false),
