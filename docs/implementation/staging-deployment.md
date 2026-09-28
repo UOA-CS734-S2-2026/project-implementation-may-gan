@@ -8,8 +8,9 @@ This is not a PR deployment path. Do not add `push`, `pull_request`, or `pull_re
 
 ```text
 GitHub staging variables and secrets
-  -> scripts/run-staging-api-deploy.mjs
-  -> generated ignored Wrangler configuration and Cloudflare Worker secret API
+  -> scripts/run-staging-api-deploy.mjs validates and generates ignored Wrangler configuration
+  -> Wrangler dry-runs
+  -> scripts/sync-staging-api-secrets.mjs calls the Cloudflare Worker secret API
   -> Wrangler deploy through the Cloudflare control plane
   -> Worker runtime bindings
 ```
