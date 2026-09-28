@@ -103,13 +103,17 @@ export async function syncStagingWorkerSecrets({ accountId, workerName, apiToken
   }
   const errors = payload?.errors;
   const result = payload?.result;
+  const requestedNames = entries.map(([name]) => name).sort();
+  const resultNames = result !== null && typeof result === "object" && !Array.isArray(result)
+    ? Object.keys(result).sort()
+    : [];
   const complete = response.ok
     && payload?.success === true
     && Array.isArray(errors)
     && errors.length === 0
-    && result !== null
-    && typeof result === "object"
-    && entries.every(([name]) => result[name]?.name === name && result[name]?.type === "secret_text");
+    && resultNames.length === requestedNames.length
+    && resultNames.every((name, index) => name === requestedNames[index])
+    && resultNames.every((name) => result[name]?.name === name && result[name]?.type === "secret_text");
   if (!complete) {
     throw new Error(`Cloudflare secret sync failed (HTTP ${response.status}). No deployment was attempted; inspect the Worker secret store before retrying.`);
   }

@@ -5,7 +5,6 @@ import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-w
 import {
   assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
-  syncStagingWorkerSecrets,
 } from "./staging-secret-sync.mjs";
 
 const expectedWorkerName = "dayli-api-staging";
@@ -76,9 +75,4 @@ const { api, probe } = createStagingWorkerConfigs({
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));
-if (process.env.STAGING_SECRET_SYNC === "true") {
-  await syncStagingWorkerSecrets({ accountId, workerName: expectedWorkerName, apiToken, source: secretSource });
-  console.log("Staging target validated and reviewed Worker secrets synchronized.");
-} else {
-  console.log("Staging target and configuration validated. Worker secrets have not been changed.");
-}
+console.log("Staging target and configuration validated. Worker secrets have not been changed.");
