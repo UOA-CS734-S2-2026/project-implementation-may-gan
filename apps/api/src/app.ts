@@ -44,6 +44,10 @@ import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticat
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
 import { createHyperdriveMessageWriteStore } from "./features/messaging/messages/send-message/send-message.repository";
+import { createEditMessageService } from "./features/messaging/messages/edit-message/edit-message.service";
+import { createUnsendMessageService } from "./features/messaging/messages/unsend-message/unsend-message.service";
+import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
+import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -132,10 +136,7 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
-  const messaging = configuration ? {
-    resolveSession: createSessionResolver(configuration),
-    service: createSendMessageService({ store: createHyperdriveMessageWriteStore(configuration.hyperdrive) }),
-  } satisfies MessagingRouteDependencies : undefined;
+  const messaging = configuration ? createMessagingDependencies(configuration) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
@@ -222,6 +223,18 @@ function createSessionResolver(configuration: RuntimeConfiguration) {
     const session = await auth.api.getSession({ headers: request.headers });
     return session?.user?.id ? { userId: session.user.id } : null;
   });
+}
+
+function createMessagingDependencies(configuration: RuntimeConfiguration): MessagingRouteDependencies {
+  const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
+  return {
+    resolveSession: createSessionResolver(configuration),
+    service: createSendMessageService({ store }),
+    edit: createEditMessageService({ store }),
+    unsend: createUnsendMessageService({ store }),
+    setReaction: createSetReactionService({ store }),
+    removeReaction: createRemoveReactionService({ store }),
+  };
 }
 
 function createDailyPostDependencies(configuration: RuntimeConfiguration): CreateDailyPostRouteDependencies {
