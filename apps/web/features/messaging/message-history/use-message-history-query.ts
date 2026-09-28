@@ -2,7 +2,7 @@ import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { messagingApi } from "@/features/messaging/shared/messaging.api";
 import { messagingKeys } from "@/features/messaging/shared/messaging.keys";
 import { type MessagePages } from "@/features/messaging/shared/message-cache";
-import { mergeMessages } from "@/lib/messaging/reconcile";
+import { mergeMessages } from "../shared/reconcile";
 import { unwrapMessagingResult } from "@/features/messaging/shared/query-result";
 import { useSession } from "@/lib/session/hooks";
 
