@@ -4,7 +4,7 @@ import { createApp } from "../app";
 const origin = "https://web.dayli.test";
 const app = () => createApp({
   trustedOrigins: [origin],
-  posts: { authenticate: async () => null },
+  posts: { resolveSession: async () => null },
 });
 
 describe("application CORS", () => {

@@ -1,4 +1,5 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import type { Env } from "hono";
 import {
   apiErrorSchema,
   cursorPaginationQuerySchema,
@@ -25,7 +26,7 @@ const testContractsRoute = createRoute({
   },
 });
 
-export function registerTestContractsRoute(app: OpenAPIHono) {
+export function registerTestContractsRoute<E extends Env>(app: OpenAPIHono<E>) {
   app.openapi(testContractsRoute, (context) => {
     const { limit } = context.req.valid("query");
     return context.json(getContractExample(new Date(), limit), 200);

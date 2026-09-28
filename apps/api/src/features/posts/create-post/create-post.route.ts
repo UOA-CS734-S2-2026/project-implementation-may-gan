@@ -1,6 +1,9 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import type { Context } from "hono";
 import { apiErrorResponse } from "../../../lib/api-error";
+import type { ResolveSession } from "../../../http/require-session";
+import { createRequireSession } from "../../../http/require-session";
 import {
   createDailyPostErrorResponses,
   createDailyPostRequestSchema,
@@ -12,7 +15,7 @@ import { CreateDailyPostError, type CreateDailyPostService, type StoredDailyPost
 
 export interface CreateDailyPostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a body-supplied user. */
-  authenticate: (request: Request) => Promise<string | null>;
+  resolveSession: ResolveSession;
   service?: CreateDailyPostService;
 }
 
@@ -68,17 +71,12 @@ function unavailable(context: Context) {
   return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Post storage is temporarily unavailable.");
 }
 
-export function registerCreateDailyPostRoute(app: OpenAPIHono, dependencies: CreateDailyPostRouteDependencies) {
+export function registerCreateDailyPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: CreateDailyPostRouteDependencies) {
+  app.use("/api/v1/posts", createRequireSession(dependencies.resolveSession));
   app.openapi(createDailyPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
 
-    let authorId: string | null;
-    try {
-      authorId = await dependencies.authenticate(context.req.raw);
-    } catch {
-      return unavailable(context);
-    }
-    if (!authorId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.");
+    const authorId = context.get("actor").userId;
     if (!dependencies.service) return unavailable(context);
 
     const { "idempotency-key": idempotencyKey } = context.req.valid("header");

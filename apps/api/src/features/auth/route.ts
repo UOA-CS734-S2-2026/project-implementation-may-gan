@@ -1,4 +1,5 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import type { Env } from "hono";
 import type { ApiEnv } from "../../env";
 import {
   authBasePath,
@@ -150,8 +151,8 @@ async function handleOAuthCallback(
   return handler(request);
 }
 
-function registerStrictAuthRoutes(
-  app: OpenAPIHono,
+function registerStrictAuthRoutes<E extends Env>(
+  app: OpenAPIHono<E>,
   trustedOrigins: readonly string[],
   dispatch: (request: Request) => Promise<Response>,
 ) {
@@ -183,8 +184,8 @@ async function handleAuthRequest(
   return handler(request);
 }
 
-export function registerBetterAuthCompatibilityRoutes(
-  app: OpenAPIHono,
+export function registerBetterAuthCompatibilityRoutes<E extends Env>(
+  app: OpenAPIHono<E>,
   auth: BetterAuthCompatibilitySlice,
 ) {
   registerStrictAuthRoutes(app, auth.trustedOrigins, (request) => (
@@ -193,7 +194,7 @@ export function registerBetterAuthCompatibilityRoutes(
 }
 
 /** Register the production authority only after all Worker bindings validate. */
-export function registerPostgresBetterAuthRoutes(app: OpenAPIHono, env: ApiEnv) {
+export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono<E>, env: ApiEnv) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
   if (!configuration) return false;
 

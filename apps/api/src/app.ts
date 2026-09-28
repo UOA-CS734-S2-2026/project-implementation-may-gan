@@ -40,6 +40,7 @@ import { registerHealthRoute } from "./features/system/get-health/get-health.rou
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import { readR2RuntimeConfiguration } from "./lib/r2";
 import { registerApplicationCors } from "./lib/cors";
+import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -59,7 +60,7 @@ export function createApp({
   relationships = unavailableRelationships,
   trustedOrigins = [],
 }: AppDependencies = {}) {
-  const api = new OpenAPIHono({
+  const api = new OpenAPIHono<AuthenticatedApiEnv>({
     defaultHook: (result, context) => {
       if (!result.success) {
         return context.json(
@@ -97,8 +98,8 @@ export function createApp({
   registerMediaReservationRoutes(api, media);
   registerMediaCompleteRoute(api, media);
   registerApiDocsRoute(api);
-  registerCurrentPostingDayRoute(api, postingDay ?? { authenticate: async () => null });
-  registerCreateDailyPostRoute(api, posts ?? { authenticate: async () => null });
+  registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
+  registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
   registerRelationshipsRoutes(api, relationships);
 
   api.doc("/api/v1/openapi.json", {
@@ -138,7 +139,7 @@ export function createAppForEnv(env: ApiEnv) {
         resend: configuration.resend,
       });
       const session = await auth.api.getSession({ headers: request.headers });
-      return session?.user?.id ? { userId: session.user.id } : null;
+      return session?.user?.id ? { userId: session.user.id } satisfies AuthenticatedActor : null;
     }),
   } satisfies RelationshipsRouteDependencies : undefined;
   const api = createApp({
@@ -175,7 +176,7 @@ function createPostingDayDependencies(
   const dayService = createAucklandDayService(clock);
 
   return {
-    authenticate: createSessionAuthenticator(configuration),
+    resolveSession: createSessionResolver(configuration),
     service: createCurrentPostingDayService({
       clock,
       dayService,
@@ -195,8 +196,8 @@ function createPostingDayDependencies(
 type RuntimeConfiguration = NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>;
 
 /** Resolve the Better Auth cookie or bearer session to a user ID. */
-function createSessionAuthenticator(configuration: RuntimeConfiguration) {
-  return (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+function createSessionResolver(configuration: RuntimeConfiguration) {
+  return (request: Request): Promise<AuthenticatedActor | null> => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
     const auth = createPostgresBetterAuth({
       baseURL: configuration.baseURL,
       secret: configuration.secret,
@@ -206,14 +207,14 @@ function createSessionAuthenticator(configuration: RuntimeConfiguration) {
       resend: configuration.resend,
     });
     const session = await auth.api.getSession({ headers: request.headers });
-    return session?.user?.id ?? null;
+    return session?.user?.id ? { userId: session.user.id } : null;
   });
 }
 
 function createDailyPostDependencies(configuration: RuntimeConfiguration): CreateDailyPostRouteDependencies {
   const clock = { now: () => new Date() };
   return {
-    authenticate: createSessionAuthenticator(configuration),
+    resolveSession: createSessionResolver(configuration),
     service: createDailyPostService({
       store: createHyperdriveDailyPostStore(configuration.hyperdrive),
       clock,

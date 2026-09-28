@@ -1,13 +1,15 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRoute } from "@hono/zod-openapi";
 import { apiErrorSchema } from "./get-current-posting-day.contract";
 import {
   type CurrentPostingDayService,
 } from "./get-current-posting-day.service";
 import { currentPostingDayResponseSchema } from "./get-current-posting-day.contract";
+import { createRequireSession, type ResolveSession } from "../../../http/require-session";
 
 export interface CurrentPostingDayRouteDependencies {
-  authenticate: (request: Request) => Promise<string | null>;
+  resolveSession: ResolveSession;
   service?: CurrentPostingDayService;
 }
 
@@ -40,7 +42,7 @@ const currentPostingDayRoute = createRoute({
 });
 
 function errorResponse(
-  context: Parameters<Parameters<OpenAPIHono["openapi"]>[1]>[0],
+  context: Parameters<Parameters<OpenAPIHono<AuthenticatedApiEnv>["openapi"]>[1]>[0],
   status: 401 | 503,
   code: "UNAUTHENTICATED" | "SERVICE_UNAVAILABLE",
   message: string,
@@ -52,23 +54,14 @@ function errorResponse(
 }
 
 export function registerCurrentPostingDayRoute(
-  app: OpenAPIHono,
+  app: OpenAPIHono<AuthenticatedApiEnv>,
   dependencies: CurrentPostingDayRouteDependencies,
 ) {
+  app.use("/api/v1/posting-days/current", createRequireSession(dependencies.resolveSession));
   app.openapi(currentPostingDayRoute, async (context) => {
     context.header("Cache-Control", "no-store");
 
-    let userId: string | null;
-    try {
-      userId = await dependencies.authenticate(context.req.raw);
-    } catch {
-      return errorResponse(context, 503, "SERVICE_UNAVAILABLE", "The posting-day service is temporarily unavailable.");
-    }
-
-    if (!userId) {
-      return errorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.");
-    }
-
+    const userId = context.get("actor").userId;
     if (!dependencies.service) {
       return errorResponse(context, 503, "SERVICE_UNAVAILABLE", "The posting-day service is temporarily unavailable.");
     }
