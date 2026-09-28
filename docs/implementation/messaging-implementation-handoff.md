@@ -2,7 +2,7 @@
 
 Status: implementation handoff and stack record. The approved order is refactor at `cd00116`, friends UI at `79bcceb`, then messaging rebased on friends. Approved web and Flutter messaging flows are integrated, including mobile old-session revocation and quarantine before credential replacement. REST clients are regenerated from the merged Hono app. The web uses session-scoped TanStack Query messaging hooks.
 
-Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The three stack layers share reviewed interfaces: refactor first, friends second, messaging third. Friends owns `0009_relationship_search`; messaging follows with undeployed `0010_messaging_foundation` and `0011_encrypt_push_device_tokens`. Do not modify deployed migration history. Freeze auth, registration, locking, and test interfaces before adding work from independently reviewed client branches.
+Follow the [backend architecture](../backend-architecture.md) for action slices, action-prefixed filenames, optional layers, shared transactions, and typed session middleware. The three stack layers share reviewed interfaces: refactor first, friends second, messaging third. Immutable media validation owns `0009_add_media_reservation_validation`; friends owns `0010_relationship_search`; messaging follows with undeployed `0011_messaging_foundation` and `0012_encrypt_push_device_tokens`. Do not modify deployed migration history. Freeze auth, registration, locking, and test interfaces before adding work from independently reviewed client branches.
 
 ## Goal and scope
 
@@ -36,7 +36,7 @@ This is not end-to-end encrypted messaging. TLS and provider encryption at rest 
 | `apps/api/src/features/auth/better-auth.ts`, `apps/api/src/lib/session.ts` | Better Auth identity, secure browser cookies, native bearer sessions. Socket auth additionally needs session ID and expiry, not only user ID. |
 | `apps/api/src/lib/hyperdrive.ts`, `packages/db/src/index.ts` | Invocation-scoped postgres.js/Drizzle clients, disposal, transactions. Hyperdrive cache must remain disabled. |
 | `packages/db/src/schema/{index,messaging,relationships,users}.ts` | Messaging and relationship schema exports support the stacked migrations. |
-| `packages/db/migrations/` | Additive controlled migrations. This stack orders friends `0009_relationship_search`, messaging `0010_messaging_foundation`, then encrypted push tokens in `0011_encrypt_push_device_tokens`. |
+| `packages/db/migrations/` | Additive controlled migrations. This stack orders immutable media validation `0009_add_media_reservation_validation`, friends `0010_relationship_search`, messaging `0011_messaging_foundation`, then encrypted push tokens in `0012_encrypt_push_device_tokens`. |
 | `packages/contracts/src/common/` | Shared IDs, timestamps, errors, pagination. Feature contracts currently live beside Hono routes, not in a central feature-contract directory. |
 | `scripts/generate-openapi.ts` | Uses registered Hono routes to produce `packages/contracts/openapi.json`. |
 | `packages/api-client-typescript/`, `packages/api-client-dart/` | Generated REST clients. Never hand-edit generated models. Dart currently uses the generated HTTP client, not Dio. |
