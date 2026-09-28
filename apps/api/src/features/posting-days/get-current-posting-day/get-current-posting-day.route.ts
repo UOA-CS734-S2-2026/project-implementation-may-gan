@@ -6,7 +6,7 @@ import {
   type CurrentPostingDayService,
 } from "./get-current-posting-day.service";
 import { currentPostingDayResponseSchema } from "./get-current-posting-day.contract";
-import { createRequireSession, type ResolveSession } from "../../../http/require-session";
+import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 
 export interface CurrentPostingDayRouteDependencies {
   resolveSession: ResolveSession;

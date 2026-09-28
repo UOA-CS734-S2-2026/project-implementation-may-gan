@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
-import type { AuthenticatedApiEnv } from "./authenticated-actor";
+import type { AuthenticatedApiEnv } from "../authenticated-actor";
 import { createRequireSession } from "./require-session";
 
 function createApp(resolveSession: Parameters<typeof createRequireSession>[0]) {

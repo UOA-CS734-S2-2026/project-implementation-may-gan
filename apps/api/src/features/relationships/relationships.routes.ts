@@ -1,6 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
-import { createRequireSession } from "../../http/require-session";
+import { createRequireSession } from "../../http/middleware/require-session";
 import { registerAcceptFriendRequestRoute } from "./accept-friend-request/accept-friend-request.route";
 import { registerBlockUserRoute } from "./block-user/block-user.route";
 import { registerCancelFriendRequestRoute } from "./cancel-friend-request/cancel-friend-request.route";

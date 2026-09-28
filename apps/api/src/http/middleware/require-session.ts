@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
-import { apiErrorResponse } from "./api-error";
-import type { AuthenticatedActor, AuthenticatedApiEnv } from "./authenticated-actor";
+import { apiErrorResponse } from "../api-error";
+import type { AuthenticatedActor, AuthenticatedApiEnv } from "../authenticated-actor";
 
 /** Resolves a Better Auth cookie or bearer credential to a server-verified actor. */
 export type ResolveSession = (request: Request) => Promise<AuthenticatedActor | null | undefined>;

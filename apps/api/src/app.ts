@@ -39,7 +39,7 @@ import { registerApiDocsRoute } from "./features/system/get-api-docs/get-api-doc
 import { registerHealthRoute } from "./features/system/get-health/get-health.route";
 import { registerTestContractsRoute } from "./features/system/test-contracts/route";
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
-import { registerApplicationCors } from "./http/cors";
+import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 
 export interface AppDependencies {

@@ -39,12 +39,14 @@ apps/api/src/
   app.ts                                    App composition and route registration
   env.ts                                    Binding/configuration types
   http/
-    require-session.ts                      Typed session middleware factory
-    require-session.test.ts                 Credential and outage behavior
+    middleware/
+      require-session.ts                    Typed session middleware factory
+      require-session.test.ts               Credential and outage behavior
+      cors.ts                               Existing trusted-origin/CORS handling
+      cors.test.ts                          Cross-origin request tests
+      require-role.ts                       Future only, when real role-protected actions exist
     authenticated-actor.ts                  Server-verified identity type
     api-error.ts                            Existing HTTP error mapping helpers
-    cors.ts                                 Existing trusted-origin/CORS handling
-    require-role.ts                         Future only, when real role-protected actions exist
   features/
     messaging/
       messaging.routes.ts                   Thin registration function, not business logic
