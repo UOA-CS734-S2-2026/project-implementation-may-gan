@@ -11,7 +11,7 @@ const origin = "https://api.example.test";
 const trustedOrigins = "https://api.example.test,https://web.example.test";
 const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
 
-// R2 presigning is a pure local computation (see lib/r2.ts), so fake credentials
+// R2 presigning is a pure local computation (see infrastructure/media/r2.ts), so fake credentials
 // prove the whole reservation flow against real Postgres without needing real R2.
 const r2Bindings = {
   R2_ACCOUNT_ID: "test-account",

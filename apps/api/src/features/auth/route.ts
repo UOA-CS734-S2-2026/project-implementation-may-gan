@@ -12,7 +12,7 @@ import {
   type CurrentSocialLinkSession,
   type SocialLinkConfirmationStore,
 } from "./social-link-confirmation";
-import { withHyperdriveDatabase } from "../../lib/hyperdrive";
+import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
 
 const corsMethods = ["GET", "POST"];
 const corsHeaders = ["authorization", "content-type"];

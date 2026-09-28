@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { apiErrorResponse } from "../lib/api-error";
+import { apiErrorResponse } from "./api-error";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./authenticated-actor";
 
 /** Resolves a Better Auth cookie or bearer credential to a server-verified actor. */

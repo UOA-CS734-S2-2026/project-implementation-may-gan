@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice, type BetterAuthCompatibilitySlice } from "../../auth/better-auth";
 import { MAX_ATTACHMENT_BYTES, MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
-import { createUnusedR2Reader } from "../../../lib/r2.fake";
+import { createUnusedR2Reader } from "../../../infrastructure/media/r2.fake";
 import { createFakeMediaReservationRepository } from "./repository.fake";
 import type { MediaReservationRepository } from "./reserve-upload.repository";
 import type { MediaReservationRuntime } from "./reserve-upload.runtime";

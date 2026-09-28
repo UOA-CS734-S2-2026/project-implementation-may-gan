@@ -1,4 +1,4 @@
-import type { AllowedContentType } from "../features/media/policy";
+import type { AllowedContentType } from "../features/media/shared/media-reservation-policy";
 
 export type MagicByteCheckResult = "match" | "mismatch";
 
@@ -57,7 +57,7 @@ function parseFtypBrands(window: Uint8Array, declaredBoxSize: number): FtypBrand
 /**
  * A targeted claim-check — does this file's leading bytes match what we'd expect
  * *given its declared type*, not general-purpose format sniffing. Appropriate here
- * because the allowed content types are a fixed, small set (see policy.ts).
+ * because the allowed content types are a fixed, small set (see media-reservation-policy.ts).
  */
 export function checkMagicBytes(declaredContentType: AllowedContentType, window: Uint8Array): MagicByteCheckResult {
   switch (declaredContentType) {
