@@ -81,7 +81,7 @@ export function createPostgresOutboxStore(database: DayliDatabase): OutboxStore 
         deviceRegistrationId: row.device_registration_id === null ? null : String(row.device_registration_id),
         attempts: toNumber(row.attempts), leaseToken: String(row.lease_token), leaseExpiresAt: toDate(row.lease_expires_at),
       }));
-    }, { isolationLevel: "read committed" });
+    },
     async markDelivered(job, deliveredAt) {
       const result = await database.execute(sql`
         update public.messaging_outbox

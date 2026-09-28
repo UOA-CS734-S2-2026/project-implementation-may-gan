@@ -7,6 +7,7 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "test:realtime": "vitest run --config vitest.realtime.config.ts",
     "test:hyperdrive:staging": "vitest run --config vitest.hyperdrive.staging.config.ts",
     "typecheck": "tsc"
   },
@@ -20,12 +21,12 @@
     "better-auth": "1.7.5",
     "drizzle-orm": "0.45.2",
     "hono": "4.13.7",
+    "jose": "6.2.12",
     "zod": "4.5.4"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.2.8",
     "@cloudflare/workers-types": "5.20260925.1",
-    "jose": "6.2.12",
     "typescript": "6.0.3",
     "vitest": "4.1.11",
     "wrangler": "4.141.0"

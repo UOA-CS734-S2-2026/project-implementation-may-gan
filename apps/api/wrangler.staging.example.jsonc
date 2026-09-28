@@ -17,5 +17,10 @@
       "binding": "HYPERDRIVE",
       "id": "REPLACE_WITH_STAGING_HYPERDRIVE_ID"
     }
-  ]
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "USER_REALTIME", "class_name": "UserRealtime" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserRealtime"] }],
+  "triggers": { "crons": ["*/1 * * * *"] }
 }

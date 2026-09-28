@@ -16,4 +16,8 @@ export interface ApiEnv {
   R2_BUCKET_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  /** Required in deployed delivery environments. Optional for DB-free and legacy test composition. */
+  USER_REALTIME?: DurableObjectNamespace;
+  /** Worker secret containing a Firebase service-account JSON document. */
+  FCM_SERVICE_ACCOUNT_JSON?: string;
 }

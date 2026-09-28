@@ -4,5 +4,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-03-10",
   "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "USER_REALTIME", "class_name": "UserRealtime" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserRealtime"] }],
+  "triggers": { "crons": ["*/1 * * * *"] }
 }

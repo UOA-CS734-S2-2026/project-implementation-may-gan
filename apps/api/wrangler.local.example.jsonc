@@ -7,5 +7,10 @@
   "observability": { "enabled": true },
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "local-hyperdrive" }
-  ]
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "USER_REALTIME", "class_name": "UserRealtime" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["UserRealtime"] }],
+  "triggers": { "crons": ["*/1 * * * *"] }
 }

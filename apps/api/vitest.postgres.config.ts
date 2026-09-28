@@ -8,6 +8,7 @@ export default defineConfig({
       "src/features/**/postgres.integration.test.ts",
       "src/features/**/*.repository.integration.test.ts",
       "src/features/permissions/**/*.test.ts",
+      "src/infrastructure/**/*.integration.test.ts",
     ],
   },
 });
