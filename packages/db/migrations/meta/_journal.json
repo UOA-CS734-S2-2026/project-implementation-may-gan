@@ -68,7 +68,6 @@
     {
       "idx": 9,
       "version": "7",
-<<<<<<< HEAD
       "when": 1790553055288,
       "tag": "0009_add_media_reservation_validation",
       "breakpoints": true
@@ -83,8 +82,15 @@
     {
       "idx": 10,
       "version": "7",
+      "when": 1790576039828,
+      "tag": "0010_messaging_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
       "when": 1790576040000,
-      "tag": "0010_encrypt_push_device_tokens",
+      "tag": "0011_encrypt_push_device_tokens",
       "breakpoints": true
     }
   ]

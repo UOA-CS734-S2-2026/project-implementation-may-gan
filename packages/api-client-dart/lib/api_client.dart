@@ -210,8 +210,22 @@ class ApiClient {
           return ApiErrorCodeTypeTransformer().decode(value);
         case 'ApiErrorError':
           return ApiErrorError.fromJson(value);
+        case 'Conversation':
+          return Conversation.fromJson(value);
+        case 'ConversationCapabilities':
+          return ConversationCapabilities.fromJson(value);
         case 'CreateDailyPostRequest':
           return CreateDailyPostRequest.fromJson(value);
+        case 'CreateDirectConversation200Response':
+          return CreateDirectConversation200Response.fromJson(value);
+        case 'CreateDirectConversation200ResponseConversation':
+          return CreateDirectConversation200ResponseConversation.fromJson(
+              value);
+        case 'CreateDirectConversation200ResponseConversationPeer':
+          return CreateDirectConversation200ResponseConversationPeer.fromJson(
+              value);
+        case 'CreateDirectConversationRequest':
+          return CreateDirectConversationRequest.fromJson(value);
         case 'CreateMediaReservationRequest':
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
@@ -230,8 +244,22 @@ class ApiClient {
           return DailyPromptResponse.fromJson(value);
         case 'EditMessageRequest':
           return EditMessageRequest.fromJson(value);
+        case 'GetMessagingUnread200Response':
+          return GetMessagingUnread200Response.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'ListConversationChanges200Response':
+          return ListConversationChanges200Response.fromJson(value);
+        case 'ListConversationChanges200ResponseItemsInner':
+          return ListConversationChanges200ResponseItemsInner.fromJson(value);
+        case 'ListConversations200Response':
+          return ListConversations200Response.fromJson(value);
+        case 'ListMessages200Response':
+          return ListMessages200Response.fromJson(value);
+        case 'MarkConversationRead200Response':
+          return MarkConversationRead200Response.fromJson(value);
+        case 'MarkConversationReadRequest':
+          return MarkConversationReadRequest.fromJson(value);
         case 'MediaContentType':
           return MediaContentTypeTypeTransformer().decode(value);
         case 'MediaReservation':
@@ -258,6 +286,10 @@ class ApiClient {
           return RelationshipUserCard.fromJson(value);
         case 'RelationshipUserPage':
           return RelationshipUserPage.fromJson(value);
+        case 'ResolveMessageRequestRequest':
+          return ResolveMessageRequestRequest.fromJson(value);
+        case 'SendMessageRequest':
+          return SendMessageRequest.fromJson(value);
         case 'SendRelationshipRequest':
           return SendRelationshipRequest.fromJson(value);
         case 'SetMessageReactionRequest':
