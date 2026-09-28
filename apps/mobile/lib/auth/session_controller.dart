@@ -11,6 +11,19 @@ import 'native_session.dart';
 
 enum SessionStatus { unknown, signedOut, signedIn }
 
+/// A capability passed to async startup work. It becomes invalid before old
+/// credentials are replaced or cleared, so late startup cannot affect a new
+/// account.
+class SessionStartup {
+  const SessionStartup._(this.user, this.epoch, this._isCurrent);
+
+  final SessionUser user;
+  final int epoch;
+  final bool Function() _isCurrent;
+
+  bool get isCurrent => _isCurrent();
+}
+
 /// Caches the signed-in identity in protected storage so drafts stay
 /// available offline. The identity is not a credential; the bearer token is.
 abstract interface class SessionUserCache {
@@ -78,7 +91,7 @@ class SessionController extends ChangeNotifier {
   final FutureOr<void> Function()? onBeforeSessionReplacement;
 
   /// Starts session-bound integrations such as push after verified sign-in.
-  final FutureOr<void> Function()? onSignedIn;
+  final FutureOr<void> Function(SessionStartup startup)? onSignedIn;
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
@@ -156,6 +169,8 @@ class SessionController extends ChangeNotifier {
   /// Signs out and removes this user's protected draft from the device.
   Future<void> signOut() async {
     final userId = _user?.id;
+    // Fence a late authenticated startup before its cleanup awaits.
+    _invalidateSessionStartup();
     try {
       await onPrivateDataClear?.call();
       await _session.signOut();
@@ -171,6 +186,9 @@ class SessionController extends ChangeNotifier {
   Future<void> sessionExpired() => _signedOutLocally();
 
   Future<void> _beforeCredentialReplacement() async {
+    // Fence existing startup before old-bearer cleanup. The hook can await
+    // ticket, Firebase, or provider work and must not resume for the new user.
+    _invalidateSessionStartup();
     if (_user != null) await onBeforeSessionReplacement?.call();
   }
 
@@ -190,8 +208,13 @@ class SessionController extends ChangeNotifier {
     if (_startedSessionUserId == user.id) return;
     _startedSessionUserId = user.id;
     final generation = _sessionGeneration;
+    final startup = SessionStartup._(
+      user,
+      generation,
+      () => _sessionGeneration == generation && _user?.id == user.id,
+    );
     try {
-      await onSignedIn?.call();
+      await onSignedIn?.call(startup);
     } catch (_) {
       // Notification setup must not turn a valid authentication into failure.
     }
@@ -201,12 +224,16 @@ class SessionController extends ChangeNotifier {
   }
 
   Future<void> _signedOutLocally({bool clearPrivateData = true}) async {
-    _sessionGeneration++;
-    _startedSessionUserId = null;
+    _invalidateSessionStartup();
     if (clearPrivateData) await onPrivateDataClear?.call();
     await _tokenStore.clear();
     await _userCache.clear();
     _set(SessionStatus.signedOut, null);
+  }
+
+  void _invalidateSessionStartup() {
+    _sessionGeneration++;
+    _startedSessionUserId = null;
   }
 
   void _set(SessionStatus status, SessionUser? user) {
