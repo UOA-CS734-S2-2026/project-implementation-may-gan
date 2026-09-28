@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { createApp } from "../../app";
-import { registerRelationshipsRoutes } from "./route";
-import { RelationshipServiceError, type RelationshipsService } from "./service";
+import { registerRelationshipsRoutes } from "./relationships.routes";
+import { RelationshipServiceError, type RelationshipsService } from "./relationships.service";
 
 const status = {
   userId: "user_bob",

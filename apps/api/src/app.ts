@@ -19,9 +19,9 @@ import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,
   type RelationshipsRouteDependencies,
-} from "./features/relationships/route";
-import { createHyperdriveRelationshipsStore } from "./features/relationships/postgres-store";
-import { createRelationshipsService } from "./features/relationships/service";
+} from "./features/relationships/relationships.routes";
+import { createHyperdriveRelationshipsStore } from "./features/relationships/relationships.repository";
+import { createRelationshipsService } from "./features/relationships/relationships.service";
 import {
   registerCurrentPostingDayRoute,
   type CurrentPostingDayRouteDependencies,
