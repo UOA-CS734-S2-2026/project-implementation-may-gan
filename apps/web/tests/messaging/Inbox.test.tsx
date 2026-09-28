@@ -29,4 +29,17 @@ describe("Inbox", () => {
     userId = "other"; api.inbox.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } }); view.rerender(<Inbox />);
     await waitFor(() => expect(screen.queryByText("Ada")).toBeNull());
   });
+
+  it("retries an ambiguous direct-create failure with the original client message ID", async () => {
+    const actor = userEvent.setup();
+    api.direct.mockResolvedValueOnce({ ok: false, failure: "network", message: "connection lost" }).mockResolvedValueOnce({ ok: true, value: { conversation, message: {} } });
+    render(<Inbox />); await screen.findByText("Ada");
+    await actor.type(screen.getByLabelText("Recipient ID"), "known-user"); await actor.type(screen.getByLabelText("First message"), "Retry this");
+    await actor.click(screen.getByRole("button", { name: "start" }));
+    const firstId = api.direct.mock.calls[0][1];
+    expect(await screen.findByRole("button", { name: "retry" })).toBeTruthy();
+    await actor.click(screen.getByRole("button", { name: "retry" }));
+    await waitFor(() => expect(api.direct).toHaveBeenCalledTimes(2));
+    expect(api.direct.mock.calls[1]).toEqual(["known-user", firstId, "Retry this"]);
+  });
 });
