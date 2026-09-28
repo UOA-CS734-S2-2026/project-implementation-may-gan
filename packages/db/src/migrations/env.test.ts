@@ -17,16 +17,22 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
+  it("accepts the isolated local messaging test database", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_messaging_test", "local"),
+    ).not.toThrow();
+  });
+
   it("rejects local databases that are not explicitly designated test databases", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_relationship_test_copy", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, or dayli_messaging_test.");
   });
 
   it("rejects local databases on another port", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test or dayli_relationship_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, or dayli_messaging_test.");
   });
 
   it("accepts only the dedicated development database", () => {
