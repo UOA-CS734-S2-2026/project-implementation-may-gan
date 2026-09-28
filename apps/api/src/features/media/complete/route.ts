@@ -45,7 +45,8 @@ export function registerMediaCompleteRoute(
 ) {
   app.openapi(completeReservationRoute, async (context) => {
     const runtime = dependencies.runtime;
-    if (!runtime) {
+    if (!runtime || !dependencies.resolveSession) {
+      context.header("cache-control", "no-store");
       return apiErrorResponse(
         context,
         503,
