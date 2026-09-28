@@ -82,6 +82,8 @@ class SessionController extends ChangeNotifier {
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
+  String? _startedSessionUserId;
+  int _sessionGeneration = 0;
 
   SessionStatus get status => _status;
   SessionUser? get user => _user;
@@ -108,10 +110,13 @@ class SessionController extends ChangeNotifier {
       final cached = await _tokenStore.read() == null
           ? null
           : await _userCache.read();
-      _set(
-        cached == null ? SessionStatus.signedOut : SessionStatus.signedIn,
-        cached,
-      );
+      if (cached == null) {
+        _set(SessionStatus.signedOut, null);
+      } else {
+        // A cached authenticated identity still needs the foreground socket.
+        // Its ticket request will reconnect with backoff when the network returns.
+        await _signedIn(cached, persistUser: false);
+      }
       return;
     }
     if (user == null) {
@@ -177,19 +182,27 @@ class SessionController extends ChangeNotifier {
     await _signedIn(user);
   }
 
-  Future<void> _signedIn(SessionUser user) async {
+  Future<void> _signedIn(SessionUser user, {bool persistUser = true}) async {
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
-    await _userCache.write(user);
+    if (persistUser) await _userCache.write(user);
     _set(SessionStatus.signedIn, user);
+    if (_startedSessionUserId == user.id) return;
+    _startedSessionUserId = user.id;
+    final generation = _sessionGeneration;
     try {
       await onSignedIn?.call();
     } catch (_) {
       // Notification setup must not turn a valid authentication into failure.
     }
+    // A sign-out while startup was awaiting must not mark a later account as
+    // started. Its own successful authentication will run its own hook.
+    if (generation != _sessionGeneration) return;
   }
 
   Future<void> _signedOutLocally({bool clearPrivateData = true}) async {
+    _sessionGeneration++;
+    _startedSessionUserId = null;
     if (clearPrivateData) await onPrivateDataClear?.call();
     await _tokenStore.clear();
     await _userCache.clear();
