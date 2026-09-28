@@ -2,7 +2,7 @@ import type { HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../lib/hyperdrive";
 import { createR2Reader, type MediaR2Reader, type R2RuntimeConfiguration } from "../../../lib/r2";
 import { resolveSession, type AuthenticatedUser, type SessionRuntimeConfiguration } from "../../../lib/session";
-import { createDrizzleMediaReservationRepository, type MediaReservationRepository } from "./repository";
+import { createDrizzleMediaReservationRepository, type MediaReservationRepository } from "./reserve-upload.repository";
 
 export interface MediaReservationRequestContext {
   user: AuthenticatedUser | undefined;

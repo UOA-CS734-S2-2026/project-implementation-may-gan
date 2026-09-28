@@ -1,6 +1,6 @@
 import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
-import { allowedContentTypes, MAX_ATTACHMENT_BYTES } from "../policy";
+import { allowedContentTypes, MAX_ATTACHMENT_BYTES } from "../shared/media-reservation-policy";
 
 export { apiErrorSchema };
 

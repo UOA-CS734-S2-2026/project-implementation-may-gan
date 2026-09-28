@@ -1,4 +1,4 @@
-import type { MediaReservationRecord, MediaReservationRepository } from "./repository";
+import type { MediaReservationRecord, MediaReservationRepository } from "./reserve-upload.repository";
 
 /**
  * Shared in-memory fake, reused by reserve/route.test.ts and complete/route.test.ts.

@@ -11,7 +11,7 @@ import {
   concatBoxes,
   validJpegBytes,
 } from "../../../lib/media-format.fixtures";
-import { MAX_VIDEO_DURATION_SECONDS, RESERVATION_TTL_SECONDS } from "../policy";
+import { MAX_VIDEO_DURATION_SECONDS, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createFakeMediaReservationRepository } from "../reserve/repository.fake";
 import type { MediaReservationRepository } from "../reserve/repository";
 import type { MediaReservationRuntime } from "../reserve/runtime";
