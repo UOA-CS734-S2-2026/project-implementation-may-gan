@@ -17,6 +17,7 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> {
   FriendsController? _controller;
   String? _accountId;
+  String _query = '';
 
   FriendsController _forContext(BuildContext context) {
     final services = AppScope.of(context);
@@ -46,20 +47,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
       animation: controller,
       builder: (context, _) {
         final snapshot = controller.snapshot;
-        final incoming =
-            snapshot?.requests
-                .where(
-                  (item) => item.recipientId == _accountId && item.user != null,
-                )
-                .toList() ??
-            const <FriendRequest>[];
-        final outgoing =
-            snapshot?.requests
-                .where(
-                  (item) => item.senderId == _accountId && item.user != null,
-                )
-                .toList() ??
-            const <FriendRequest>[];
+        final incoming = snapshot?.incoming.items ?? const <FriendRequest>[];
+        final outgoing = snapshot?.outgoing.items ?? const <FriendRequest>[];
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
@@ -98,7 +87,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                   ),
                   TextField(
                     key: const Key('friends.search'),
-                    onChanged: controller.search,
+                    onChanged: (value) {
+                      setState(() => _query = value);
+                      controller.search(value);
+                    },
                     maxLength: 32,
                     decoration: const InputDecoration(
                       prefixText: '@',
@@ -121,7 +113,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  ...controller.results.map(
+                  ...controller.results.items.map(
                     (person) => _Card(
                       person: person,
                       action: person.relationship == 'none'
@@ -140,6 +132,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       ),
                     ),
                   ),
+                  if (controller.results.hasMore)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: DayliButton(
+                        label: 'load more',
+                        size: ButtonSize.sm,
+                        onPressed: () => controller.loadMoreSearch(_query),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -153,6 +154,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 title: 'requests',
                 incoming: incoming,
                 outgoing: outgoing,
+                incomingMore: snapshot?.incoming.hasMore ?? false,
+                outgoingMore: snapshot?.outgoing.hasMore ?? false,
                 controller: controller,
               ),
             ),
@@ -178,7 +181,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     )
-                  else if (snapshot?.friends.isEmpty ?? true)
+                  else if (snapshot?.friends.items.isEmpty ?? true)
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
                       child: Text(
@@ -190,7 +193,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       ),
                     )
                   else
-                    ...snapshot!.friends.map(
+                    ...snapshot!.friends.items.map(
                       (person) => _Card(
                         person: person,
                         action: 'remove',
@@ -199,6 +202,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                           person.id,
                           () => AppScope.of(context).friends.remove(person.id),
                         ),
+                      ),
+                    ),
+                  if (snapshot!.friends.hasMore)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: DayliButton(
+                        label: 'load more',
+                        size: ButtonSize.sm,
+                        onPressed: controller.loadMoreFriends,
                       ),
                     ),
                 ],
@@ -216,11 +228,15 @@ class _Requests extends StatelessWidget {
     required this.title,
     required this.incoming,
     required this.outgoing,
+    required this.incomingMore,
+    required this.outgoingMore,
     required this.controller,
   });
   final String title;
   final List<FriendRequest> incoming;
   final List<FriendRequest> outgoing;
+  final bool incomingMore;
+  final bool outgoingMore;
   final FriendsController controller;
   @override
   Widget build(BuildContext context) => Column(
@@ -241,6 +257,15 @@ class _Requests extends StatelessWidget {
         requests: incoming,
         controller: controller,
       ),
+      if (incomingMore)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DayliButton(
+            label: 'load more',
+            size: ButtonSize.sm,
+            onPressed: controller.loadMoreIncoming,
+          ),
+        ),
       const SizedBox(height: 16),
       _RequestGroup(
         title: 'sent',
@@ -248,6 +273,15 @@ class _Requests extends StatelessWidget {
         requests: outgoing,
         controller: controller,
       ),
+      if (outgoingMore)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: DayliButton(
+            label: 'load more',
+            size: ButtonSize.sm,
+            onPressed: controller.loadMoreOutgoing,
+          ),
+        ),
     ],
   );
 }

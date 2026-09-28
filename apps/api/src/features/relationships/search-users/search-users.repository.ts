@@ -31,6 +31,11 @@ function nextCursor(usernameKey: string, id: string): string {
   return btoa(JSON.stringify({ usernameKey, id })).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
+/** Escape the three PostgreSQL LIKE metacharacters before adding our trailing prefix wildcard. */
+function literalUsernamePrefix(query: string): string {
+  return query.replace(/[\\%_]/g, "\\$&");
+}
+
 function card(row: SearchRow): RelationshipUserCard {
   return {
     id: String(row.id),
@@ -72,6 +77,7 @@ export async function consumeUsernameSearchQuota(queryable: RelationshipQueryabl
 /** Private profiles are discoverable here only as a minimal username/display-name card. */
 export async function searchUsernameRows(queryable: RelationshipQueryable, actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage> {
   const after = cursorValue(cursor);
+  const prefix = literalUsernamePrefix(query);
   const cursorSql = after ? sql`and (lower(candidate.username), candidate.id) > (${after.usernameKey}, ${after.id})` : sql``;
   const rows = relationshipRows<SearchRow>(await queryable.execute(sql`
     select candidate.id, candidate.username, coalesce(candidate.display_username, candidate.name) as display_name,
@@ -85,7 +91,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
     from public."user" candidate
     where candidate.id <> ${actorId}
       and candidate.username is not null
-      and lower(candidate.username) like lower(${query}) || '%'
+      and lower(candidate.username) like lower(${prefix}) || '%' escape E'\\\\'
       and (coalesce(candidate.banned, false) = false or (candidate.ban_expires is not null and candidate.ban_expires <= now()))
       and not exists (
         select 1 from public.relationship_blocks block
