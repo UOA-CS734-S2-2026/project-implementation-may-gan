@@ -53,9 +53,9 @@ flowchart TB
 
 `GET /api/v1/posting-days/current` returns the server-owned Auckland posting day, deadline, prompt, and whether the authenticated author has posted. Both web and Flutter use this route.
 
-The web post form calls `POST /api/v1/posts` with an idempotency key. It submits the prompt response, rating, optional caption, and the fixed `friends` audience. The form requires a selected photo or video before it enables the rest of the form, but it does not send that file or a media reference. The selected files stay in the browser. The API accepts one post per author and Auckland day and stores idempotency data for accepted requests.
+The web post form calls `POST /api/v1/posts` with an idempotency key. It submits the prompt response, rating, optional caption, optional tomorrow note, and the `solo` or `friends` audience the author chose. Media is optional and is not sent. The selected files stay in the browser. The API accepts one post per author and Auckland day and stores idempotency data for accepted requests.
 
-Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day through the generated Dart client, but `main.dart` supplies `UnavailablePostSubmitter`. Flutter therefore does not send `POST /api/v1/posts`; a submission reports unavailable and retains the draft.
+Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day and sends `POST /api/v1/posts` through the generated Dart client with the draft's stored idempotency key. The draft is removed only after the server accepts the post, and media references stay on the device.
 
 The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
 
