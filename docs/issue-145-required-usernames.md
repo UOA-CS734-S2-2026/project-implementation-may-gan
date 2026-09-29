@@ -6,7 +6,7 @@ Password registration now sends a required username, email, password, and an opt
 
 Google does not copy a provider name into the public profile. New Google accounts and imported accounts without a username are routed to `/setup-username` on web and mobile before application screens or session-bound integrations start. Logout remains available there.
 
-`POST /api/v1/profile/username` is actor-scoped, private (`Cache-Control: no-store`), and one-time. It cannot rename an existing username. Relationship APIs reject username-less actors in production, even if a client bypasses navigation.
+`POST /api/v1/profile/username` is actor-scoped, private (`Cache-Control: no-store`), and one-time. It cannot rename an existing username. Relationship, messaging, realtime, and push-device APIs reject username-less actors in production, even if a client bypasses navigation.
 
 ## Migration and rollout
 
@@ -14,7 +14,7 @@ Google does not copy a provider name into the public profile. New Google account
 
 1. Adds a trigger that normalizes and validates new handles while leaving legacy rows untouched when unrelated profile fields change.
 2. Takes a transaction advisory lock per case-folded handle in that trigger. It rejects case-insensitive collisions without requiring a unique lower-case index that could fail against legacy duplicates.
-3. Copies established users' existing `name` into `display_username` only when they already have a username and no explicit public name. Friend cards then use `display_username`, falling back to username, never an OAuth provider name.
+3. Does not backfill `display_username` from Better Auth's provider-owned `name`. Public cards and messaging peers use an explicitly chosen `display_username`, falling back to the username.
 
 Apply the migration using the protected migration workflow, after its required restore-point check, before deploying the Worker and clients. Do not apply it directly to a live database. Existing duplicate or uppercase imports are intentionally left unchanged and may not be renamed by this release.
 
