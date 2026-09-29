@@ -59,6 +59,7 @@ lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
 lib/model/register_push_device_request.dart
+lib/model/relationship_profile.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart

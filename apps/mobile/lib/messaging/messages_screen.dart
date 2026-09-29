@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../api/api_failure.dart';
+import '../api/friends_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 
 class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({super.key});
+  const MessagesScreen({super.key, this.recipientId, this.recipientName});
+  final String? recipientId;
+  final String? recipientName;
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -25,7 +29,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _startConversation() async {
     final result = await showDialog<String>(
       context: context,
-      builder: (_) => const _NewConversationDialog(),
+      builder: (_) => _NewConversationDialog(
+        recipientId: widget.recipientId,
+        recipientName: widget.recipientName,
+      ),
     );
     if (mounted && result != null) context.go('/messages/$result');
   }
@@ -153,14 +160,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _NewConversationDialog extends StatefulWidget {
-  const _NewConversationDialog();
+  const _NewConversationDialog({this.recipientId, this.recipientName});
+  final String? recipientId;
+  final String? recipientName;
 
   @override
   State<_NewConversationDialog> createState() => _NewConversationDialogState();
 }
 
 class _NewConversationDialogState extends State<_NewConversationDialog> {
-  final _recipient = TextEditingController();
+  late String? _recipientId = widget.recipientId;
   final _text = TextEditingController();
   String? _intent;
   String? _clientMessageId;
@@ -168,13 +177,12 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
 
   @override
   void dispose() {
-    _recipient.dispose();
     _text.dispose();
     super.dispose();
   }
 
   void _changed() {
-    final intent = '${_recipient.text.trim()}\u0000${_text.text}';
+    final intent = '${_recipientId ?? ''}\u0000${_text.text}';
     if (intent != _intent) {
       _intent = intent;
       _clientMessageId = null;
@@ -183,7 +191,7 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
 
   Future<void> _send() async {
     _changed();
-    final recipientId = _recipient.text.trim();
+    final recipientId = _recipientId ?? '';
     final text = _text.text;
     if (_sending || recipientId.isEmpty || text.trim().isEmpty) return;
     final intent = _intent!;
@@ -211,13 +219,39 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextField(
-          key: const Key('messages.recipientId'),
-          controller: _recipient,
-          enabled: !_sending,
-          onChanged: (_) => _changed(),
-          decoration: const InputDecoration(labelText: 'Profile or user ID'),
-        ),
+        if (widget.recipientId != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('To: ${widget.recipientName ?? 'this person'}'),
+          )
+        else
+          FutureBuilder<ApiResult<FriendPage>>(
+            future: AppScope.of(context).friends.loadFriends(),
+            builder: (context, snapshot) {
+              final friends = snapshot.data is ApiSuccess<FriendPage>
+                  ? (snapshot.data! as ApiSuccess<FriendPage>).value.items
+                  : const <FriendCard>[];
+              return DropdownButtonFormField<String>(
+                key: const Key('messages.friendPicker'),
+                initialValue: _recipientId,
+                decoration: const InputDecoration(labelText: 'Friend'),
+                items: friends
+                    .map(
+                      (friend) => DropdownMenuItem(
+                        value: friend.id,
+                        child: Text(friend.displayName),
+                      ),
+                    )
+                    .toList(),
+                onChanged: _sending
+                    ? null
+                    : (value) {
+                        setState(() => _recipientId = value);
+                        _changed();
+                      },
+              );
+            },
+          ),
         TextField(
           key: const Key('messages.firstText'),
           controller: _text,

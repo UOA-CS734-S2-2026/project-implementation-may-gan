@@ -51,6 +51,7 @@ src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
 src/models/RegisterPushDeviceRequest.ts
+src/models/RelationshipProfile.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts

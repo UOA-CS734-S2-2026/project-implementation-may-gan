@@ -48,6 +48,15 @@ export const relationshipUserParamsSchema = z.object({
   userId: opaqueIdSchema,
 });
 
+export const usernameProfileParamsSchema = z.object({
+  username: z.string().trim().min(2).max(32).regex(/^[a-zA-Z0-9_]+$/),
+}).openapi("UsernameProfileParams");
+
+/** A privacy-safe profile is intentionally no richer than the discovery card. */
+export const relationshipProfileSchema = relationshipUserCardSchema.openapi("RelationshipProfile", {
+  description: "Authenticated, actor-scoped profile projection. Blocked and unknown usernames both return 404.",
+});
+
 export const relationshipRequestParamsSchema = z.object({
   requestId: opaqueIdSchema,
 });

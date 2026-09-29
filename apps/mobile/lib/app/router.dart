@@ -5,6 +5,7 @@ import '../auth/session_controller.dart';
 import '../auth/username_setup_screen.dart';
 import '../compose/composer_screen.dart';
 import '../friends/friends_screen.dart';
+import '../friends/social_profile_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
 import '../messaging/conversation_screen.dart';
@@ -61,8 +62,19 @@ GoRouter buildRouter(SessionController session) => GoRouter(
       routes: [
         GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
         GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
+        GoRoute(
+          path: '/people/:username',
+          builder: (_, state) =>
+              SocialProfileScreen(username: state.pathParameters['username']!),
+        ),
         GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
-        GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
+        GoRoute(
+          path: '/messages',
+          builder: (_, state) => MessagesScreen(
+            recipientId: state.uri.queryParameters['to'],
+            recipientName: state.uri.queryParameters['name'],
+          ),
+        ),
         GoRoute(
           path: '/messages/:id',
           builder: (_, state) =>

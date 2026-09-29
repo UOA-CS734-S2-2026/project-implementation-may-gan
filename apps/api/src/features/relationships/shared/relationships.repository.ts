@@ -13,6 +13,7 @@ import { listPendingRequestRows } from "./list-friend-requests.repository";
 import { listFriendRows } from "./list-friends.repository";
 import { consumeUsernameSearchQuota, searchUsernameRows } from "./search-users.repository";
 import { endFriendshipRows } from "./remove-friendship.repository";
+import { findProfileByUsername } from "./get-profile.repository";
 import { insertFriendRequest } from "./send-friend-request.repository";
 import {
   RelationshipStoreError,
@@ -108,6 +109,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         await consumeUsernameSearchQuota(queryable, actorId, new Date(searchedAt));
         return searchUsernameRows(queryable, actorId, query, limit, cursor);
       },
+      findProfileByUsername: (actorId, username) => findProfileByUsername(queryable, actorId, username),
       sendRequest: (input) => insertFriendRequest(context, input),
       acceptRequest: (input) => acceptFriendRequestRow(context, input),
       declineRequest: (input) => declineFriendRequestRow(context, input),

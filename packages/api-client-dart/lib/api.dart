@@ -75,6 +75,7 @@ part 'model/pending_relationship_request.dart';
 part 'model/pending_request_page.dart';
 part 'model/post_audience.dart';
 part 'model/register_push_device_request.dart';
+part 'model/relationship_profile.dart';
 part 'model/relationship_state.dart';
 part 'model/relationship_status.dart';
 part 'model/relationship_user_card.dart';

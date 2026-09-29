@@ -143,6 +143,16 @@ class GeneratedFriendsClient implements FriendsClient {
       await api.relationshipsSearchUsers(query, cursor: cursor, limit: 20),
     ),
   );
+  Future<ApiResult<FriendCard>> profile(String username) => _read((api) async {
+    final profile = await api.relationshipsGetProfileByUsername(username);
+    if (profile == null) throw const FormatException('empty profile');
+    return FriendCard(
+      id: profile.id,
+      username: profile.username,
+      displayName: profile.displayName,
+      relationship: profile.relationship.name,
+    );
+  });
   @override
   Future<ApiResult<void>> send(String userId) => _write(
     (api) => api.relationshipsSendRequest(

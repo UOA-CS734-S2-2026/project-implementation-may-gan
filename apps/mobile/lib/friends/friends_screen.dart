@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
 import '../api/friends_client.dart';
@@ -361,26 +362,30 @@ class _Card extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                person.displayName,
-                style: DayliText.serif(
-                  context,
-                  size: DayliTextSize.lg,
-                  weight: FontWeight.w600,
+          child: InkWell(
+            onTap: () =>
+                context.go('/people/${Uri.encodeComponent(person.username)}'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  person.displayName,
+                  style: DayliText.serif(
+                    context,
+                    size: DayliTextSize.lg,
+                    weight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              Text(
-                '@${person.username}',
-                style: DayliText.sans(
-                  context,
-                  size: DayliTextSize.sm,
-                  color: DayliColors.of(context).foregroundTertiary,
+                Text(
+                  '@${person.username}',
+                  style: DayliText.sans(
+                    context,
+                    size: DayliTextSize.sm,
+                    color: DayliColors.of(context).foregroundTertiary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (secondary != null)

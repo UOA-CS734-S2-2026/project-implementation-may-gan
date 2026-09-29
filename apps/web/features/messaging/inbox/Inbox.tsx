@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { createClientMessageId } from "../shared/client-id";
 import { useCreateConversationMutation } from "@/features/messaging/create-conversation/use-create-conversation-mutation";
 import { useInboxQuery } from "./use-inbox-query";
 import { useSession } from "@/lib/session/hooks";
 import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvider";
+import { loadFriends } from "@/lib/api/friends";
+import { useQuery } from "@tanstack/react-query";
 
 type Folder = "inbox" | "requests";
 const validText = (text: string) => text.trim().length > 0 && Array.from(text).length <= 4_000;
@@ -19,11 +21,16 @@ export function Inbox() {
 
 function InboxBody() {
   const router = useRouter();
+  const search = useSearchParams();
+  const { user } = useSession();
   const { unread } = useMessagingLive();
   const [folder, setFolder] = useState<Folder>("inbox");
   const inbox = useInboxQuery(folder);
   const direct = useCreateConversationMutation();
-  const [recipientId, setRecipientId] = useState("");
+  const draftRecipientId = search.get("to") ?? "";
+  const draftRecipientName = search.get("name") ?? "";
+  const friends = useQuery({ queryKey: ["friends", user?.id ?? "anonymous", "picker"], retry: false, queryFn: async () => { const result = await loadFriends(); if (!result.ok) throw new Error(result.failure); return result.value.items; } });
+  const [recipientId, setRecipientId] = useState(draftRecipientId);
   const [firstText, setFirstText] = useState("");
   const [directIntent, setDirectIntent] = useState<{ clientMessageId: string; recipientId: string; text: string } | null>(null);
   const items = inbox.data?.pages.flatMap((page) => page.items).filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index) ?? [];
@@ -49,10 +56,9 @@ function InboxBody() {
       </header>
 
       <form onSubmit={startDirect} className="mb-8 rounded-2xl border border-foreground/10 bg-background-secondary/50 p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Start a private note</h2><span className="font-sans text-xs text-foreground-tertiary">Known user ID only</span></div>
-        <p className="mt-1 font-sans text-xs text-foreground-secondary">People discovery stays in Friends. Paste an ID from an authorized profile.</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="sr-only" htmlFor="recipient-id">Recipient ID</label><input id="recipient-id" value={recipientId} onChange={(event) => { setRecipientId(event.target.value); setDirectIntent(null); }} placeholder="Recipient user ID" className="rounded-xl border border-foreground/15 bg-background px-3 py-2 font-sans text-sm outline-none focus:ring-2 focus:ring-accent" /></div>
-        <div className="mt-2 flex gap-2"><label className="sr-only" htmlFor="first-message">First message</label><input id="first-message" value={firstText} onChange={(event) => { setFirstText(event.target.value); setDirectIntent(null); }} placeholder="Write the first message" className="min-w-0 flex-1 rounded-xl border border-foreground/15 bg-background px-3 py-2 font-sans text-sm outline-none focus:ring-2 focus:ring-accent" /><button type="submit" disabled={!recipientId.trim() || !validText(firstText) || direct.isPending} className="rounded-xl bg-foreground-accent px-4 font-serif text-sm text-white disabled:opacity-50">{directIntent ? "retry" : "start"}</button></div>
+        <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Start a private note</h2><span className="font-sans text-xs text-foreground-tertiary">friends</span></div>
+        {draftRecipientId ? <p className="mt-2 font-sans text-sm text-foreground-secondary">Writing to {draftRecipientName || "this person"}.</p> : <><p className="mt-1 font-sans text-xs text-foreground-secondary">Choose a friend to start a new conversation.</p><div className="mt-3 flex flex-wrap gap-2">{friends.data?.map((friend) => <button key={friend.id} type="button" onClick={() => { setRecipientId(friend.id); setDirectIntent(null); }} className={`rounded-full border px-3 py-1.5 font-sans text-sm ${recipientId === friend.id ? "border-foreground-accent bg-background-accent text-foreground-accent" : "border-foreground/15"}`}>{friend.displayName}</button>)}{friends.isPending && <span className="text-sm text-foreground-tertiary">Loading friends…</span>}{!friends.isPending && friends.data?.length === 0 && <span className="text-sm text-foreground-tertiary">Add a friend to start a conversation here.</span>}</div></>}
+        <div className="mt-3 flex gap-2"><label className="sr-only" htmlFor="first-message">First message</label><input id="first-message" value={firstText} onChange={(event) => { setFirstText(event.target.value); setDirectIntent(null); }} placeholder="Write the first message" className="min-w-0 flex-1 rounded-xl border border-foreground/15 bg-background px-3 py-2 font-sans text-sm outline-none focus:ring-2 focus:ring-accent" /><button type="submit" disabled={!recipientId.trim() || !validText(firstText) || direct.isPending} className="rounded-xl bg-foreground-accent px-4 font-serif text-sm text-white disabled:opacity-50">{directIntent ? "retry" : "start"}</button></div>
       </form>
 
       <div className="mb-5 flex gap-2 border-b border-foreground/10" role="tablist" aria-label="Message folders">

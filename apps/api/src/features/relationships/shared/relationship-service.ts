@@ -88,6 +88,7 @@ export interface RelationshipTransaction {
   ): Promise<PendingRequestPage>;
   listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
   searchUsers(actorId: string, query: string, limit: number, searchedAt: string, cursor?: string): Promise<RelationshipUserPage>;
+  findProfileByUsername(actorId: string, username: string): Promise<RelationshipUserCard | null>;
 
   /**
    * Must lock the canonical unordered participant pair, reject blocks and

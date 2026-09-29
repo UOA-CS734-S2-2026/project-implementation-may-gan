@@ -39,6 +39,7 @@ export * from './PendingRelationshipRequest';
 export * from './PendingRequestPage';
 export * from './PostAudience';
 export * from './RegisterPushDeviceRequest';
+export * from './RelationshipProfile';
 export * from './RelationshipState';
 export * from './RelationshipStatus';
 export * from './RelationshipUserCard';

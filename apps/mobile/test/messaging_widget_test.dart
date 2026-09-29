@@ -34,7 +34,10 @@ void main() {
     final harness = TestHarness();
     final router = GoRouter(
       routes: [
-        GoRoute(path: '/', builder: (_, __) => const MessagesScreen()),
+        GoRoute(
+          path: '/',
+          builder: (_, __) => const MessagesScreen(recipientId: 'known-id'),
+        ),
         GoRoute(
           path: '/messages/:id',
           builder: (_, __) => const Scaffold(body: Text('conversation')),
@@ -97,10 +100,6 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('messages.new')));
       await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('messages.recipientId')),
-        'known-id',
-      );
       await tester.enterText(
         find.byKey(const Key('messages.firstText')),
         'first intent',

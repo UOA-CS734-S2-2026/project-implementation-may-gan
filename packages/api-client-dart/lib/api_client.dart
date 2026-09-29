@@ -284,6 +284,8 @@ class ApiClient {
           return PostAudienceTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
+        case 'RelationshipProfile':
+          return RelationshipProfile.fromJson(value);
         case 'RelationshipState':
           return RelationshipStateTypeTransformer().decode(value);
         case 'RelationshipStatus':

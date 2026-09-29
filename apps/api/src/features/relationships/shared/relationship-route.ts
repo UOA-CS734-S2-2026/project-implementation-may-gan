@@ -7,6 +7,7 @@ import {
   type PendingRequestDirection,
   type PendingRequestPage,
   type RelationshipStatus,
+  type RelationshipUserCard,
   type RelationshipUserPage,
 } from "./relationship-service";
 import type { ResolveSession } from "../../../http/middleware/require-session";
@@ -16,6 +17,7 @@ export interface RelationshipsService {
   listPendingRequests(actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage>;
   listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
   searchUsers(actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  getProfileByUsername(actorId: string, username: string): Promise<RelationshipUserCard>;
   sendRequest(actorId: string, recipientId: string): Promise<RelationshipStatus>;
   acceptRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
   declineRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
