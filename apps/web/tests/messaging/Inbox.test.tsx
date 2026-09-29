@@ -6,43 +6,61 @@ import { Inbox } from "@/features/messaging/inbox/Inbox";
 import { messagingApi } from "@/features/messaging/shared/messaging.api";
 
 let userId = "me";
-const push = vi.fn();
+const refreshUnread = vi.fn();
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
-vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => ({ revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread: vi.fn() }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams("to=known-user&name=Ada") }));
-vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: { inbox: vi.fn(), direct: vi.fn() } }));
-vi.mock("@/lib/api/friends", () => ({ loadFriends: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null, hasMore: false } })) }));
+vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => ({ revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread }) }));
+vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: { inbox: vi.fn(), resolveRequest: vi.fn() } }));
 
 const api = messagingApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
-function render(ui: Parameters<typeof rtlRender>[0]) { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>); return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) }; }
-const conversation = { id: "c1", peer: { id: "them", name: "Ada" }, requestState: "active", latestMessage: { text: "hello" }, unreadCount: 1 };
+function render(ui: Parameters<typeof rtlRender>[0]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
+}
+const conversation = {
+  id: "c1",
+  peer: { id: "them", name: "Ada" },
+  requestState: "active",
+  latestMessage: { id: "m1", text: "hello", createdAt: "2026-06-09T12:00:00.000Z" },
+  unreadCount: 1,
+  updatedAt: "2026-06-08T12:00:00.000Z",
+  capabilities: { canSend: true, canResolveRequest: false },
+};
 
 beforeEach(() => {
-  vi.clearAllMocks(); userId = "me";
+  vi.clearAllMocks();
+  userId = "me";
   api.inbox.mockResolvedValue({ ok: true, value: { items: [conversation], nextCursor: null, hasMore: false } });
-  api.direct.mockResolvedValue({ ok: true, value: { conversation, message: {} } });
+  api.resolveRequest.mockResolvedValue({ ok: true, value: conversation });
 });
 
 describe("Inbox", () => {
-  it("loads folders, starts a known-ID conversation, and clears visible rows on account switch", async () => {
-    const actor = userEvent.setup(); const view = render(<Inbox />); await screen.findByText("Ada");
-    await actor.click(screen.getByRole("tab", { name: /requests 1/i })); await waitFor(() => expect(api.inbox).toHaveBeenLastCalledWith("requests"));
-    await actor.type(screen.getByLabelText("First message"), "Hi Ada"); await actor.click(screen.getByRole("button", { name: "start" }));
-    await waitFor(() => expect(api.direct).toHaveBeenCalledWith("known-user", expect.any(String), "Hi Ada")); expect(push).toHaveBeenCalledWith("/messages/c1");
-    userId = "other"; api.inbox.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } }); view.rerender(<Inbox />);
-    await waitFor(() => expect(screen.queryByText("Ada")).toBeNull());
+  it("renders the WDCC list with a real latest-message date, unread count, and the friend-only composer route", async () => {
+    render(<Inbox />);
+    expect(await screen.findByText("Ada")).toBeInTheDocument();
+    expect(screen.getByText("09/06/2026")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 unread messages")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "new message" })).toHaveAttribute("href", "/messages/new");
   });
 
-  it("retries an ambiguous direct-create failure with the original client message ID", async () => {
+  it("switches folders and preserves message request actions", async () => {
     const actor = userEvent.setup();
-    api.direct.mockResolvedValueOnce({ ok: false, failure: "network", message: "connection lost" }).mockResolvedValueOnce({ ok: true, value: { conversation, message: {} } });
-    render(<Inbox />); await screen.findByText("Ada");
-    await actor.type(screen.getByLabelText("First message"), "Retry this");
-    await actor.click(screen.getByRole("button", { name: "start" }));
-    const firstId = api.direct.mock.calls[0][1];
-    expect(await screen.findByRole("button", { name: "retry" })).toBeTruthy();
-    await actor.click(screen.getByRole("button", { name: "retry" }));
-    await waitFor(() => expect(api.direct).toHaveBeenCalledTimes(2));
-    expect(api.direct.mock.calls[1]).toEqual(["known-user", firstId, "Retry this"]);
+    api.inbox.mockImplementation(async (folder: string) => ({ ok: true, value: { items: folder === "requests" ? [{ ...conversation, id: "request-1", requestState: "pending", capabilities: { canSend: false, canResolveRequest: true } }] : [conversation], nextCursor: null, hasMore: false } }));
+    render(<Inbox />);
+    await screen.findByText("Ada");
+    await actor.click(screen.getByRole("tab", { name: /requests\s*1/i }));
+    await waitFor(() => expect(api.inbox).toHaveBeenLastCalledWith("requests"));
+    await actor.click(screen.getByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(api.resolveRequest).toHaveBeenCalledWith("request-1", "accept"));
+    expect(refreshUnread).toHaveBeenCalled();
+  });
+
+  it("clears visible rows on account switch", async () => {
+    const view = render(<Inbox />);
+    await screen.findByText("Ada");
+    userId = "other";
+    api.inbox.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } });
+    view.rerender(<Inbox />);
+    await waitFor(() => expect(screen.queryByText("Ada")).toBeNull());
   });
 });

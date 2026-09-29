@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let sessionUser: { id: string } | null = { id: "alice" };
 const api: Record<string, ReturnType<typeof vi.fn>> = {
-  loadFriends: vi.fn(), loadRequests: vi.fn(), searchFriends: vi.fn(),
-  sendFriendRequest: vi.fn(), acceptFriendRequest: vi.fn(), declineFriendRequest: vi.fn(), cancelFriendRequest: vi.fn(), removeFriend: vi.fn(),
+  loadFriends: vi.fn(), loadRequests: vi.fn(),
+  acceptFriendRequest: vi.fn(), declineFriendRequest: vi.fn(), cancelFriendRequest: vi.fn(),
 };
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: sessionUser, session: null, isPending: false }) }));
@@ -15,12 +16,15 @@ const { default: FriendsPage } = await import("./page");
 
 type TestPage = { ok: true; value: { items: Array<{ id: string; [key: string]: unknown }>; hasMore: boolean; nextCursor: string | null } };
 const page = <T extends { id: string }>(items: T[], hasMore = false, nextCursor: string | null = null): TestPage => ({ ok: true, value: { items, hasMore, nextCursor } });
-const card = (id: string, displayName = id) => ({ id, username: id, displayName, relationship: "none" as const });
+const card = (id: string, displayName = id) => ({ id, username: id, displayName, relationship: "friends" as const });
 const emptyRequests = page([] as Array<{ id: string; senderId: string; recipientId: string }>);
 
-function queueInitial(friends: TestPage = page([])) {
-  api.loadFriends.mockResolvedValueOnce(friends);
-  api.loadRequests.mockResolvedValueOnce(emptyRequests).mockResolvedValueOnce(emptyRequests);
+function setup(friends: TestPage = page([]), incoming: TestPage = emptyRequests, outgoing: TestPage = emptyRequests) {
+  api.loadFriends.mockResolvedValue(friends);
+  api.loadRequests.mockImplementation(async (direction: string) => direction === "incoming" ? incoming : outgoing);
+  api.acceptFriendRequest.mockResolvedValue({ ok: true, value: {} });
+  api.declineFriendRequest.mockResolvedValue({ ok: true, value: {} });
+  api.cancelFriendRequest.mockResolvedValue({ ok: true, value: {} });
 }
 
 describe("friends page", () => {
@@ -30,113 +34,67 @@ describe("friends page", () => {
   });
 
   it("finishes loading when Strict Mode replays the mount effect", async () => {
-    queueInitial(page([card("friend", "Friend Name")]));
+    setup(page([card("friend", "Friend Name")]));
     render(<StrictMode><FriendsPage /></StrictMode>);
     expect(await screen.findByText("Friend Name")).toBeInTheDocument();
     expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
   });
 
-  it("does not render old account cards while deferred account requests finish", async () => {
-    let resolveOldFriends!: (value: TestPage) => void;
-    const oldFriends = new Promise<TestPage>((resolve) => { resolveOldFriends = resolve; });
-    api.loadFriends.mockReturnValueOnce(oldFriends);
-    api.loadRequests.mockResolvedValueOnce(emptyRequests).mockResolvedValueOnce(emptyRequests);
-    const view = render(<FriendsPage />);
-    await waitFor(() => expect(api.loadFriends).toHaveBeenCalledTimes(1));
-
-    sessionUser = { id: "bob" };
-    queueInitial(page([card("bob", "Bob")]))
-    view.rerender(<FriendsPage />);
-    await waitFor(() => expect(screen.getByText("Bob")).toBeInTheDocument());
-    expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
-
-    await act(async () => { resolveOldFriends(page([card("alice", "Alice private")])); });
-    expect(screen.getByText("Bob")).toBeInTheDocument();
-    expect(screen.queryByText("Alice private")).not.toBeInTheDocument();
+  it("uses equally sized tabs and filters the already loaded friend list locally", async () => {
+    const actor = userEvent.setup();
+    setup(page([card("ada", "Ada Lovelace"), card("grace", "Grace Hopper")]));
+    render(<FriendsPage />);
+    expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+    await actor.type(screen.getByRole("textbox", { name: "Search friends" }), "grace");
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+    expect(screen.getByText("Grace Hopper")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Friends" })).toHaveClass("flex-1");
+    expect(api.loadFriends).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps bootstrap and search independent in either completion order", async () => {
-    let resolveBootstrap!: (value: TestPage) => void;
-    let resolveSearch!: (value: TestPage) => void;
-    api.loadFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveBootstrap = resolve; }));
-    api.loadRequests.mockResolvedValueOnce(emptyRequests).mockResolvedValueOnce(emptyRequests);
-    api.searchFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveSearch = resolve; }));
+  it("links each friend to their profile and the friend-only message draft", async () => {
+    setup(page([card("ada", "Ada Lovelace")]));
     render(<FriendsPage />);
-    await waitFor(() => expect(api.loadFriends).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "se" } });
-    await waitFor(() => expect(api.searchFriends).toHaveBeenCalledWith("se", undefined));
-    await act(async () => { resolveSearch(page([card("search", "Search result")])); });
-    expect(screen.getByText("Search result")).toBeInTheDocument();
-    await act(async () => { resolveBootstrap(page([card("friend", "Bootstrap friend")])); });
-    await waitFor(() => expect(screen.getByText("Bootstrap friend")).toBeInTheDocument());
-    expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /Ada Lovelace/ })).toHaveAttribute("href", "/ada");
+    expect(screen.getByRole("link", { name: "Message" })).toHaveAttribute("href", "/messages/new/ada");
+    expect(screen.getAllByText("friends")).toHaveLength(2);
   });
 
-  it("keeps a deferred search valid when bootstrap finishes first", async () => {
-    let resolveSearch!: (value: TestPage) => void;
-    queueInitial(page([card("friend", "Bootstrap friend")]));
-    api.searchFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveSearch = resolve; }));
+  it("shows received and sent requests with their applicable actions", async () => {
+    const actor = userEvent.setup();
+    setup(page([]), page([{ id: "in-1", senderId: "ada", recipientId: "alice", user: card("ada", "Ada") }]), page([{ id: "out-1", senderId: "alice", recipientId: "grace", user: card("grace", "Grace") }]));
     render(<FriendsPage />);
-    await waitFor(() => expect(screen.getByText("Bootstrap friend")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "se" } });
-    await waitFor(() => expect(api.searchFriends).toHaveBeenCalledWith("se", undefined));
-    await act(async () => { resolveSearch(page([card("search", "Search result")])); });
-    expect(screen.getByText("Search result")).toBeInTheDocument();
-    expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
+    await screen.findByText("No friends yet");
+    await actor.click(screen.getByRole("tab", { name: /Requests\s*1/ }));
+    expect(await screen.findByText("Received")).toBeInTheDocument();
+    await actor.click(screen.getByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(api.acceptFriendRequest).toHaveBeenCalledWith("in-1"));
+    expect(screen.getByRole("button", { name: "Decline" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("renders bounded continuation controls and appends de-duplicated pages", async () => {
-    queueInitial(page(Array.from({ length: 20 }, (_, index) => card(`friend-${index}`)), true, "friends-2"));
+  it("appends a bounded friend page without duplicates", async () => {
+    setup(page([card("friend-19")], true, "friends-2"));
     render(<FriendsPage />);
-    await waitFor(() => expect(screen.getByText("friend-19")).toBeInTheDocument());
-
-    api.loadFriends.mockResolvedValueOnce(page([card("friend-19"), card("friend-20")]))
-    const loadMore = screen.getByRole("button", { name: "load more" });
-    fireEvent.click(loadMore);
-    await waitFor(() => expect(screen.getByText("friend-20")).toBeInTheDocument());
+    expect(await screen.findByText("friend-19")).toBeInTheDocument();
+    api.loadFriends.mockResolvedValueOnce(page([card("friend-19"), card("friend-20")]));
+    fireEvent.click(screen.getByRole("button", { name: "load more" }));
+    expect(await screen.findByText("friend-20")).toBeInTheDocument();
     expect(screen.getAllByText("friend-19")).toHaveLength(1);
     expect(api.loadFriends).toHaveBeenLastCalledWith("friends-2");
   });
 
-  it("reaches bounded request and search continuations", async () => {
-    api.loadFriends.mockResolvedValueOnce(page([]));
-    api.loadRequests
-      .mockResolvedValueOnce(page(Array.from({ length: 20 }, (_, index) => ({ id: `in-${index}`, senderId: `in-${index}`, recipientId: "alice", user: card(`in-${index}`) })), true, "incoming-2"))
-      .mockResolvedValueOnce(page(Array.from({ length: 20 }, (_, index) => ({ id: `out-${index}`, senderId: "alice", recipientId: `out-${index}`, user: card(`out-${index}`) })), true, "outgoing-2"));
-    render(<FriendsPage />);
-    await waitFor(() => expect(screen.getByText("in-19")).toBeInTheDocument());
-    api.loadRequests.mockResolvedValueOnce(page([{ id: "in-20", senderId: "in-20", recipientId: "alice", user: card("in-20") }]));
-    fireEvent.click(screen.getAllByRole("button", { name: "load more" })[0]!);
-    await waitFor(() => expect(screen.getByText("in-20")).toBeInTheDocument());
-    expect(api.loadRequests).toHaveBeenLastCalledWith("incoming", "incoming-2");
-
-    api.searchFriends.mockResolvedValueOnce(page(Array.from({ length: 20 }, (_, index) => card(`search-${index}`)), true, "search-2"));
-    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "se" } });
-    await waitFor(() => expect(screen.getByText("search-19")).toBeInTheDocument());
-    api.searchFriends.mockResolvedValueOnce(page([card("search-20")]));
-    fireEvent.click(screen.getAllByRole("button", { name: "load more" })[0]!);
-    await waitFor(() => expect(screen.getByText("search-20")).toBeInTheDocument());
-    expect(api.searchFriends).toHaveBeenLastCalledWith("se", "search-2");
-  });
-
-  it("ignores a late mutation failure after a session switch", async () => {
-    queueInitial();
-    api.searchFriends.mockResolvedValueOnce(page([card("alice-result", "Alice result")]));
-    let resolveMutation!: (value: { ok: false; failure: "unavailable" }) => void;
-    const pendingMutation = new Promise<{ ok: false; failure: "unavailable" }>((resolve) => { resolveMutation = resolve; });
-    api.sendFriendRequest.mockReturnValueOnce(pendingMutation);
+  it("does not render cards from a prior account after an account switch", async () => {
+    let resolveOldFriends!: (value: TestPage) => void;
+    api.loadFriends.mockReturnValueOnce(new Promise<TestPage>((resolve) => { resolveOldFriends = resolve; }));
+    api.loadRequests.mockResolvedValue(emptyRequests);
     const view = render(<FriendsPage />);
     await waitFor(() => expect(api.loadFriends).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText("find someone"), { target: { value: "al" } });
-    await waitFor(() => expect(screen.getByText("Alice result")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "add friend" }));
-
     sessionUser = { id: "bob" };
-    queueInitial(page([card("bob", "Bob")]));
+    setup(page([card("bob", "Bob")]));
     view.rerender(<FriendsPage />);
-    await waitFor(() => expect(screen.getByText("Bob")).toBeInTheDocument());
-    await act(async () => { resolveMutation({ ok: false, failure: "unavailable" }); });
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.queryByText("Alice result")).not.toBeInTheDocument();
+    expect(await screen.findByText("Bob")).toBeInTheDocument();
+    await act(async () => { resolveOldFriends(page([card("alice", "Alice private")])); });
+    expect(screen.queryByText("Alice private")).toBeNull();
   });
 });
