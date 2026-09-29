@@ -162,5 +162,7 @@ function requireLocalTestUrl(value: string): string {
 
   it("rejects an unreadable cursor", async () => {
     await expect(feed().listFeed(users.viewer, now, 20, "not-a-cursor")).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    const impossibleDate = btoa(JSON.stringify(["2026-99-99", id("b-24")])).replaceAll("=", "");
+    await expect(feed().listFeed(users.viewer, now, 20, impossibleDate)).rejects.toBeInstanceOf(InvalidFeedCursorError);
   });
 });

@@ -1,3 +1,4 @@
+import { aucklandDateSchema } from "@dayli/contracts";
 import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
@@ -21,7 +22,14 @@ interface FeedCursor {
   id: string;
 }
 
-const LOCAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * A calendar day PostgreSQL can cast, not just the `YYYY-MM-DD` shape, so a
+ * forged cursor such as `2026-99-99` is a 422 rather than a failed query.
+ * PostgreSQL has no year zero.
+ */
+function isLocalDate(value: unknown): value is string {
+  return typeof value === "string" && aucklandDateSchema.safeParse(value).success && value >= "0001-01-01";
+}
 
 function encodeCursor(cursor: FeedCursor): string {
   return btoa(JSON.stringify([cursor.localDate, cursor.id]))
@@ -35,7 +43,7 @@ function decodeCursor(value: string | undefined): FeedCursor | undefined {
     const parsed: unknown = JSON.parse(atob(base64 + "=".repeat((4 - base64.length % 4) % 4)));
     if (
       Array.isArray(parsed) && parsed.length === 2
-      && typeof parsed[0] === "string" && LOCAL_DATE.test(parsed[0])
+      && isLocalDate(parsed[0])
       && typeof parsed[1] === "string" && parsed[1].length > 0
     ) {
       return { localDate: parsed[0], id: parsed[1] };
