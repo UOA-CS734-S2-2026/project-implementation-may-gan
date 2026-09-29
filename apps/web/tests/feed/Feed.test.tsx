@@ -81,6 +81,14 @@ describe("Feed", () => {
     expect(text.className).toContain("line-clamp-2");
   });
 
+  it("links each card to the full post", async () => {
+    page.mockResolvedValue({ ok: true, value: { items: [post("1", "Walked to the harbour.")], nextCursor: null, hasMore: false } });
+
+    render(<Feed />);
+    const link = await screen.findByRole("link", { name: /open friend 1's dayli/i });
+    expect(link.getAttribute("href")).toBe("/friend_1/1");
+  });
+
   it("shows an empty state when friends have no released posts", async () => {
     page.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } });
 

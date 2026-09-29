@@ -158,9 +158,13 @@ export function PostCard({
           >
             {expanded ? "See less" : "See more"}
           </Button>
-          <span className="text-xs text-foreground-secondary">
+          <Link
+            href={`/${username}/${postId}`}
+            aria-label={`Open ${displayName}'s dayli from ${date}`}
+            className="text-xs text-foreground-secondary hover:text-foreground hover:underline"
+          >
             {date} | {time}
-          </span>
+          </Link>
         </div>
       </div>
     </div>
