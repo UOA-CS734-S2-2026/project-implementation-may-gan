@@ -43,7 +43,7 @@ async function signUp(app: ReturnType<typeof createProductionApp>, email = "post
   return app.fetch(request("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: "PostgreSQL User", email, password: "not-a-real-password" }),
+    body: JSON.stringify({ name: "PostgreSQL User", username: `postgres_${email.replace(/[^a-z0-9]/gi, "_").toLowerCase()}`.slice(0, 30), email, password: "not-a-real-password" }),
   }));
 }
 
@@ -145,6 +145,18 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));
     await expect(expired.json()).resolves.toBeNull();
+  });
+
+  it("atomically admits only one case-insensitive concurrent username claim", async () => {
+    const bodies = ["first", "second"].map((name) => request("/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, username: "Race_Handle", email: `${name}@example.test`, password: "not-a-real-password" }),
+    }));
+    const responses = await Promise.all(bodies.map((body) => createProductionApp().fetch(body)));
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+    const [row] = await migrator.client`select count(*)::int as count from public."user" where lower(username) = 'race_handle'`;
+    expect(row?.count).toBe(1);
   });
 
   it("shares recovery limits across fresh Worker app instances using Cloudflare's edge IP", async () => {
