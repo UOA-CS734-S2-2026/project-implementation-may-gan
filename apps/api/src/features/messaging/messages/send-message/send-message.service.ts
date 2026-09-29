@@ -2,8 +2,8 @@ import { assertConversationMember, assertPeerActivityAllowed } from "../../share
 import { MessagingError } from "../../shared/messaging-error";
 import { fingerprintMessageRequest, assertMessageText } from "../../shared/message-validation";
 import { toMessageDto } from "../../shared/message-projection";
-import type { MessageWriteStore } from "../../shared/message-store";
 import type { MessageDto } from "../../shared/messaging-types";
+import type { SendMessageStore } from "./send-message.repository";
 
 export interface SendMessageInput {
   clientMessageId: string;
@@ -21,7 +21,7 @@ export interface SendMessageService {
 }
 
 export function createSendMessageService(dependencies: {
-  store: MessageWriteStore;
+  store: SendMessageStore;
   now?: () => Date;
   generateId?: () => string;
 }): SendMessageService {

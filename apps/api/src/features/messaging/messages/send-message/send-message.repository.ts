@@ -1,13 +1,47 @@
 import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
-import type { MessageWriteStore, MessageWriteTransaction, StoredIdempotentMessage } from "../../shared/message-store";
-import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
+import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
+
+export interface StoredIdempotentMessage {
+  requestFingerprint: string;
+  message: StoredMessage;
+}
+
+/**
+ * This action-local transaction requires the relationship-pair advisory lock
+ * before access resolution and a conversation row lock before message writes.
+ */
+export interface SendMessageTransaction {
+  getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
+  activateForFriendship(actorId: string, conversationId: string): Promise<ConversationAccess>;
+  findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null>;
+  findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
+  insertMessage(input: {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    clientMessageId: string;
+    requestFingerprint: string;
+    text: string;
+    replyToMessageId: string | null;
+    createdAt: Date;
+  }): Promise<StoredMessage>;
+  appendPeerChange(input: ConversationPeerChange): Promise<void>;
+}
+
+export interface SendMessageStore {
+  withConversationTransaction<T>(
+    actorId: string,
+    conversationId: string,
+    operation: (transaction: SendMessageTransaction) => Promise<T>,
+  ): Promise<T>;
+}
 
 type Row = Record<string, unknown>;
 const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
 
-class PostgresMessageTransaction implements MessageWriteTransaction {
+class PostgresMessageTransaction implements SendMessageTransaction {
   constructor(private readonly queryable: MessageWriteQueryable, private readonly actorId: string, private readonly conversationId: string) {}
   async getAccess(actorId: string, conversationId: string): Promise<ConversationAccess> {
     return getAccess(this.queryable, actorId, conversationId);
@@ -20,18 +54,18 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
   async findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null> {
     return findMessage(this.queryable, this.actorId, conversationId, messageId);
   }
-  async insertMessage(input: Parameters<MessageWriteTransaction["insertMessage"]>[0]): Promise<StoredMessage> {
+  async insertMessage(input: Parameters<SendMessageTransaction["insertMessage"]>[0]): Promise<StoredMessage> {
     const [allocated] = rows<{ sequence: unknown }>(await this.queryable.execute(sql`update public.conversations set last_message_sequence = last_message_sequence + 1, last_activity_at = ${input.createdAt.toISOString()}::timestamptz, updated_at = ${input.createdAt.toISOString()}::timestamptz where id = ${input.conversationId} returning last_message_sequence as sequence`));
     if (!allocated) throw new Error("Conversation disappeared during message insert.");
     const result = await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, reply_to_message_id, version, created_at) values (${input.id}, ${input.conversationId}, ${allocated.sequence}::bigint, ${input.senderId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, ${input.replyToMessageId}, 1, ${input.createdAt.toISOString()}::timestamptz) returning *`);
     return mapStoredMessage(rows<Row>(result)[0]!);
   }
-  async appendPeerChange(input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
+  async appendPeerChange(input: ConversationPeerChange): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
 }
 
-export function createPostgresMessageWriteStore(database: DayliDatabase): MessageWriteStore {
+export function createPostgresMessageWriteStore(database: DayliDatabase): SendMessageStore {
   return {
     withConversationTransaction: (actorId, conversationId, operation) =>
       withPostgresConversationMessageTransaction(database, conversationId, (transaction) =>
@@ -39,7 +73,7 @@ export function createPostgresMessageWriteStore(database: DayliDatabase): Messag
   };
 }
 
-export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): MessageWriteStore {
+export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): SendMessageStore {
   return {
     withConversationTransaction: (actorId, conversationId, operation) =>
       withHyperdriveConversationMessageTransaction(hyperdrive, conversationId, (transaction) =>

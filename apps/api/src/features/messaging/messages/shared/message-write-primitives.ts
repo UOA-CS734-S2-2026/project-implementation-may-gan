@@ -1,6 +1,5 @@
 import { sql, type DayliDatabase } from "@dayli/db";
-import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
-import type { MessageWriteTransaction } from "../../shared/message-store";
+import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "execute">;
 type Row = Record<string, unknown>;
@@ -32,7 +31,7 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
   return stored;
 }
 
-export async function appendPeerChange(queryable: MessageWriteQueryable, input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
+export async function appendPeerChange(queryable: MessageWriteQueryable, input: ConversationPeerChange): Promise<void> {
   const [change] = rows<{ sequence: unknown; user_low_id: string; user_high_id: string }>(await queryable.execute(sql`update public.conversations set last_change_sequence = last_change_sequence + 1, updated_at = now() where id = ${input.conversationId} returning last_change_sequence as sequence, user_low_id, user_high_id`));
   if (!change) throw new Error("Conversation disappeared during change append.");
   const eventId = crypto.randomUUID(); const createdAt = new Date().toISOString();

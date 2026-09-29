@@ -1,5 +1,4 @@
-import type { MessageWriteStore, MessageWriteTransaction } from "../../../src/features/messaging/shared/message-store";
-import type { StoredMessage } from "../../../src/features/messaging/shared/messaging-types";
+import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../../src/features/messaging/shared/messaging-types";
 
 export const fixedMessageNow = new Date("2026-09-28T05:00:00.000Z");
 
@@ -22,9 +21,14 @@ export function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
   };
 }
 
+type MessageMemoryTransaction = {
+  getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
+  findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
+  appendPeerChange(input: ConversationPeerChange): Promise<void>;
+};
+
 export function messageMemory(initial = message()) {
   const messages = new Map([[initial.id, initial]]);
-  const idempotency = new Map<string, StoredMessage>();
   const changes: string[] = [];
   const updateMessage = async (input: {
     messageId: string;
@@ -46,35 +50,12 @@ export function messageMemory(initial = message()) {
     messages.set(updated.id, updated);
     return updated;
   };
-  const transaction: MessageWriteTransaction = {
+  const transaction: MessageMemoryTransaction = {
     getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
-    activateForFriendship: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
-    findIdempotentMessage: async (sender, clientMessageId) => {
-      const found = idempotency.get(`${sender}:${clientMessageId}`);
-      return found ? { requestFingerprint: found.requestFingerprint, message: found } : null;
-    },
     findMessage: async (_conversationId, id) => messages.get(id) ?? null,
-    insertMessage: async (input) => {
-      const saved = message({
-        id: input.id,
-        senderId: input.senderId,
-        clientMessageId: input.clientMessageId,
-        requestFingerprint: input.requestFingerprint,
-        body: input.text,
-        replyToMessageId: input.replyToMessageId,
-        createdAt: input.createdAt,
-        sequence: BigInt(messages.size + 1),
-      });
-      messages.set(saved.id, saved);
-      idempotency.set(`${saved.senderId}:${saved.clientMessageId}`, saved);
-      return saved;
-    },
     appendPeerChange: async (input) => {
       changes.push(input.kind);
     },
-  };
-  const store: MessageWriteStore = {
-    withConversationTransaction: async (_actor, _conversation, action) => action(transaction),
   };
   const editMessageTransaction = {
     getAccess: transaction.getAccess,
@@ -126,5 +107,5 @@ export function messageMemory(initial = message()) {
   const removeReactionStore = {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof removeReactionTransaction) => Promise<T>) => action(removeReactionTransaction),
   };
-  return { store, editStore, unsendStore, setReactionStore, removeReactionStore, messages, changes, transaction };
+  return { editStore, unsendStore, setReactionStore, removeReactionStore, messages, changes, transaction };
 }
