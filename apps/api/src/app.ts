@@ -44,6 +44,8 @@ import { sql, type DayliDatabase } from "@dayli/db";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
+import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
+import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
@@ -138,6 +140,7 @@ export interface AppDependencies {
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
   feed?: ListFeedRouteDependencies;
+  postDetail?: GetPostRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -154,6 +157,7 @@ export function createApp({
   postingDay,
   posts,
   feed,
+  postDetail,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -201,6 +205,7 @@ export function createApp({
   registerPostsRoutes(api, {
     create: posts ?? { resolveSession: async () => null },
     feed: feed ?? { resolveSession: async () => null },
+    detail: postDetail ?? { resolveSession: async () => null },
   });
   registerRelationshipsRoutes(api, relationships);
   registerMessagingRoutes(api, {
@@ -239,6 +244,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveFeedRepository(configuration.hyperdrive),
   } satisfies ListFeedRouteDependencies : undefined;
+  const postDetail = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostDetailRepository(configuration.hyperdrive),
+  } satisfies GetPostRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
@@ -267,6 +276,7 @@ export function createAppForEnv(env: ApiEnv) {
     postingDay,
     posts,
     feed,
+    postDetail,
     media,
     relationships,
     messaging,

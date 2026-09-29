@@ -54,6 +54,9 @@ src/models/MessageReplyPreview.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
+src/models/PostDetail.ts
+src/models/PostDetailAuthor.ts
+src/models/PostDetailPrompt.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts

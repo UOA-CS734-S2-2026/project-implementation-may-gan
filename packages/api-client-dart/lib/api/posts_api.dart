@@ -94,6 +94,75 @@ class PostsApi {
     return null;
   }
 
+  /// Read one post
+  ///
+  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsGetWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/posts/{postId}'.replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read one post
+  ///
+  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<PostDetail?> postsGet(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostDetail',
+      ) as PostDetail;
+    }
+    return null;
+  }
+
   /// List released posts from friends
   ///
   /// Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
