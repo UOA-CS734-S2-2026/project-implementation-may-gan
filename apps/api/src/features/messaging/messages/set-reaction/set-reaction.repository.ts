@@ -1,5 +1,5 @@
-import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
+import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import type { ConversationAccess, ReactionKey, StoredMessage } from "../../shared/messaging-types";
 
@@ -49,15 +49,23 @@ class PostgresSetReactionTransaction implements SetReactionTransaction {
 export function createPostgresSetReactionStore(database: DayliDatabase): SetReactionStore {
   return {
     withConversationTransaction: (actorId, conversationId, operation) =>
-      withPostgresConversationMessageTransaction(database, conversationId, (transaction) =>
-        operation(new PostgresSetReactionTransaction(transaction, actorId, conversationId))),
+      database.transaction((transaction) =>
+        withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
+          operation(new PostgresSetReactionTransaction(lockedTransaction, actorId, conversationId)))),
   };
 }
 
 export function createHyperdriveSetReactionStore(hyperdrive: HyperdriveBinding): SetReactionStore {
   return {
-    withConversationTransaction: (actorId, conversationId, operation) =>
-      withHyperdriveConversationMessageTransaction(hyperdrive, conversationId, (transaction) =>
-        operation(new PostgresSetReactionTransaction(transaction, actorId, conversationId))),
+    async withConversationTransaction(actorId, conversationId, operation) {
+      const database = createHyperdriveDatabase(hyperdrive);
+      try {
+        return await database.db.transaction((transaction) =>
+          withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
+            operation(new PostgresSetReactionTransaction(lockedTransaction, actorId, conversationId))));
+      } finally {
+        await database.close();
+      }
+    },
   };
 }

@@ -1,6 +1,6 @@
-import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
-import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export interface StoredIdempotentMessage {
@@ -68,15 +68,23 @@ class PostgresMessageTransaction implements SendMessageTransaction {
 export function createPostgresMessageWriteStore(database: DayliDatabase): SendMessageStore {
   return {
     withConversationTransaction: (actorId, conversationId, operation) =>
-      withPostgresConversationMessageTransaction(database, conversationId, (transaction) =>
-        operation(new PostgresMessageTransaction(transaction, actorId, conversationId))),
+      database.transaction((transaction) =>
+        withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
+          operation(new PostgresMessageTransaction(lockedTransaction, actorId, conversationId)))),
   };
 }
 
 export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): SendMessageStore {
   return {
-    withConversationTransaction: (actorId, conversationId, operation) =>
-      withHyperdriveConversationMessageTransaction(hyperdrive, conversationId, (transaction) =>
-        operation(new PostgresMessageTransaction(transaction, actorId, conversationId))),
+    async withConversationTransaction(actorId, conversationId, operation) {
+      const database = createHyperdriveDatabase(hyperdrive);
+      try {
+        return await database.db.transaction((transaction) =>
+          withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
+            operation(new PostgresMessageTransaction(lockedTransaction, actorId, conversationId))));
+      } finally {
+        await database.close();
+      }
+    },
   };
 }
