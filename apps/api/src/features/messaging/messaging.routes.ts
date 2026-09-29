@@ -1,14 +1,77 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
+import { createRequireSession } from "../../http/middleware/require-session";
+import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
+import { registerGetConversationRoute } from "./conversations/get-conversation/get-conversation.route";
+import { registerGetMessageRoute } from "./conversations/get-message/get-message.route";
+import { registerGetMessagingUnreadRoute } from "./conversations/get-messaging-unread/get-messaging-unread.route";
+import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
+import { registerListConversationsRoute } from "./conversations/list-conversations/list-conversations.route";
+import { registerListMessagesRoute } from "./conversations/list-messages/list-messages.route";
+import { registerMarkConversationReadRoute } from "./conversations/mark-conversation-read/mark-conversation-read.route";
+import { registerResolveMessageRequestRoute } from "./conversations/resolve-message-request/resolve-message-request.route";
+import { registerEditMessageRoute, type EditMessageRouteDependencies } from "./messages/edit-message/edit-message.route";
+import { registerRemoveReactionRoute, type RemoveReactionRouteDependencies } from "./messages/remove-reaction/remove-reaction.route";
 import { registerSendMessageRoute, type SendMessageRouteDependencies } from "./messages/send-message/send-message.route";
-import { registerMessageActionsRoutes, type MessageActionsRouteDependencies } from "./messages/message-actions.route";
-import { registerConversationRoutes, type ConversationRouteDependencies } from "./conversations/conversation.route";
-
+import { registerSetReactionRoute, type SetReactionRouteDependencies } from "./messages/set-reaction/set-reaction.route";
+import { registerUnsendMessageRoute, type UnsendMessageRouteDependencies } from "./messages/unsend-message/unsend-message.route";
+import { registerRegisterDeviceRoute } from "./push/register-device/register-device.route";
+import { registerUnregisterDeviceRoute } from "./push/unregister-device/unregister-device.route";
+import type { PushDeviceRouteDependencies } from "./push/shared/push-device-route-dependencies";
+import { registerConnectRealtimeRoute } from "./realtime/connect/connect.route";
+import type { RealtimeConnectRouteDependencies } from "./realtime/connect/connect.route";
+import { registerIssueRealtimeTicketRoute } from "./realtime/issue-ticket/issue-ticket.route";
+import type { RealtimeTicketRouteDependencies } from "./realtime/issue-ticket/issue-ticket.route";
+import type { ConversationReader } from "./shared/conversation-types";
 /** Feature composition stays injectable so createApp remains database-free. */
-export interface MessagingRouteDependencies extends SendMessageRouteDependencies, MessageActionsRouteDependencies, ConversationRouteDependencies {}
+export interface MessagingRouteDependencies extends
+  SendMessageRouteDependencies,
+  EditMessageRouteDependencies,
+  UnsendMessageRouteDependencies,
+  SetReactionRouteDependencies,
+  RemoveReactionRouteDependencies,
+  CreateDirectConversationRouteDependencies {
+  direct?: CreateDirectConversationRouteDependencies["direct"];
+  reader?: ConversationReader;
+  realtimeTicket?: RealtimeTicketRouteDependencies;
+  pushDevices?: PushDeviceRouteDependencies;
+  realtimeConnect?: RealtimeConnectRouteDependencies;
+}
 
-export function registerMessagingRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: MessagingRouteDependencies) {
+export function registerMessagingRoutes(
+  app: OpenAPIHono<AuthenticatedApiEnv>,
+  dependencies: MessagingRouteDependencies,
+) {
+  app.use("/api/v1/conversations/*", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/conversations", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/messaging/*", createRequireSession(dependencies.resolveSession));
+  if (dependencies.realtimeTicket) {
+    app.use("/api/v1/realtime/tickets", createRequireSession(dependencies.realtimeTicket.resolveSession));
+  }
+  if (dependencies.pushDevices) {
+    app.use("/api/v1/push/devices/*", createRequireSession(dependencies.pushDevices.resolveSession));
+  }
+
   registerSendMessageRoute(app, dependencies);
-  registerMessageActionsRoutes(app, dependencies);
-  registerConversationRoutes(app, dependencies);
+  registerEditMessageRoute(app, dependencies);
+  registerUnsendMessageRoute(app, dependencies);
+  registerSetReactionRoute(app, dependencies);
+  registerRemoveReactionRoute(app, dependencies);
+
+  registerCreateDirectConversationRoute(app, dependencies);
+  registerListConversationsRoute(app, dependencies);
+  registerGetConversationRoute(app, dependencies);
+  registerGetMessagingUnreadRoute(app, dependencies);
+  registerListMessagesRoute(app, dependencies);
+  registerGetMessageRoute(app, dependencies);
+  registerResolveMessageRequestRoute(app, dependencies);
+  registerMarkConversationReadRoute(app, dependencies);
+  registerListConversationChangesRoute(app, dependencies);
+
+  if (dependencies.realtimeTicket) registerIssueRealtimeTicketRoute(app, dependencies.realtimeTicket);
+  if (dependencies.pushDevices) {
+    registerRegisterDeviceRoute(app, dependencies.pushDevices);
+    registerUnregisterDeviceRoute(app, dependencies.pushDevices);
+  }
+  if (dependencies.realtimeConnect) registerConnectRealtimeRoute(app, dependencies.realtimeConnect);
 }

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDayliDatabase, sql } from "@dayli/db";
-import { createPostgresPushDeviceStore } from "../../features/messaging/push/push-device.repository";
-import { PushSessionInactiveError } from "../../features/messaging/push/push-device.service";
+import { createPostgresPushDeviceStore } from "../../features/messaging/push/shared/push-device.repository";
+import { PushSessionInactiveError } from "../../features/messaging/push/shared/push-device.service";
 import { createPushOutboxHandler } from "./push-dispatcher";
 import { createPostgresPushDestinationResolver } from "./push-destination.repository";
 

@@ -32,7 +32,7 @@
     "local:auth:setup": "bash scripts/local-auth.sh setup",
     "dev:api:https": "bash scripts/local-auth.sh api",
     "dev:web:https": "bash scripts/local-auth.sh web",
-    "lint": "eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
+    "lint": "node scripts/check-api-boundaries.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:local": "bash scripts/verify-local.sh",

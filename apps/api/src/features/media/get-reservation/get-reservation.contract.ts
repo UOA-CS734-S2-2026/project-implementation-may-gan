@@ -3,4 +3,4 @@ export {
   mediaReservationIdParamSchema,
   mediaReservationResponseSchema,
   type MediaReservationResponse,
-} from "../reserve-upload/reserve-upload.contract";
+} from "../shared/media-reservation.contract";

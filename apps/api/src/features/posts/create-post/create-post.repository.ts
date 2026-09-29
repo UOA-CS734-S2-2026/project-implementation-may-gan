@@ -7,7 +7,7 @@ import {
   type DayliDatabase,
   type HyperdriveBinding,
 } from "@dayli/db";
-import { createDailyPromptRepository } from "../../posting-days/get-current-posting-day/get-current-posting-day.repository";
+import { createDailyPromptRepository } from "../../../infrastructure/database/posting-day.repository";
 import {
   CreateDailyPostError,
   type DailyPostAudience,

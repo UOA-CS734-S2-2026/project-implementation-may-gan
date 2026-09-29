@@ -15,19 +15,30 @@ import {
   registerMediaReservationRoutes,
   type MediaReservationRouteDependencies,
 } from "./features/media/media.routes";
-import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,
   type RelationshipsRouteDependencies,
 } from "./features/relationships/relationships.routes";
-import { createHyperdriveRelationshipsStore } from "./features/relationships/relationships.repository";
-import { createRelationshipsService } from "./features/relationships/relationships.service";
+import { createHyperdriveRelationshipsStore } from "./features/relationships/shared/relationships.repository";
+import type { RelationshipsService } from "./features/relationships/shared/relationship-route";
+import type { RelationshipStore } from "./features/relationships/shared/relationship-service";
+import { getRelationship } from "./features/relationships/get-relationship/get-relationship.service";
+import { listFriendRequests } from "./features/relationships/list-friend-requests/list-friend-requests.service";
+import { listFriends } from "./features/relationships/list-friends/list-friends.service";
+import { searchUsers } from "./features/relationships/search-users/search-users.service";
+import { sendFriendRequest } from "./features/relationships/send-friend-request/send-friend-request.service";
+import { acceptFriendRequest } from "./features/relationships/accept-friend-request/accept-friend-request.service";
+import { declineFriendRequest } from "./features/relationships/decline-friend-request/decline-friend-request.service";
+import { cancelFriendRequest } from "./features/relationships/cancel-friend-request/cancel-friend-request.service";
+import { removeFriendship } from "./features/relationships/remove-friendship/remove-friendship.service";
+import { blockUser } from "./features/relationships/block-user/block-user.service";
+import { unblockUser } from "./features/relationships/unblock-user/unblock-user.service";
 import {
   registerCurrentPostingDayRoute,
   type CurrentPostingDayRouteDependencies,
 } from "./features/posting-days/get-current-posting-day/get-current-posting-day.route";
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
-import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/get-current-posting-day/get-current-posting-day.repository";
+import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
 import { sql } from "@dayli/db";
 import {
@@ -36,9 +47,7 @@ import {
 } from "./features/posts/create-post/create-post.route";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
-import { registerApiDocsRoute } from "./features/system/get-api-docs/get-api-docs.route";
-import { registerHealthRoute } from "./features/system/get-health/get-health.route";
-import { registerTestContractsRoute } from "./features/system/test-contracts/route";
+import { registerSystemRoutes } from "./features/system/system.routes";
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
@@ -50,14 +59,15 @@ import { createUnsendMessageService } from "./features/messaging/messages/unsend
 import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
-import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/conversations/conversation.repository";
-import { registerRealtimeTicketRoute, type RealtimeTicketRouteDependencies } from "./features/messaging/realtime/ticket.route";
-import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/ticket.repository";
-import { createRealtimeTicketService, type VerifiedRealtimeSession } from "./features/messaging/realtime/ticket.service";
-import { registerRealtimeConnectRoute, type RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect.route";
-import { registerPushDeviceRoutes, type PushDeviceRouteDependencies } from "./features/messaging/push/push-device.route";
-import { createPostgresPushDeviceStore } from "./features/messaging/push/push-device.repository";
-import { createPushDeviceService } from "./features/messaging/push/push-device.service";
+import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/shared/conversation.repository";
+import type { RealtimeTicketRouteDependencies } from "./features/messaging/realtime/issue-ticket/issue-ticket.route";
+import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/issue-ticket/issue-ticket.repository";
+import { createRealtimeTicketService } from "./features/messaging/realtime/issue-ticket/issue-ticket.service";
+import type { VerifiedRealtimeSession } from "./features/messaging/realtime/shared/realtime-types";
+import type { RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect/connect.route";
+import type { PushDeviceRouteDependencies } from "./features/messaging/push/shared/push-device-route-dependencies";
+import { createPostgresPushDeviceStore } from "./features/messaging/push/shared/push-device.repository";
+import { createPushDeviceService } from "./features/messaging/push/shared/push-device.service";
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
@@ -121,18 +131,17 @@ export function createApp({
     name: "better-auth.session_token",
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
-  registerHealthRoute(api);
-  registerTestContractsRoute(api);
+  registerSystemRoutes(api);
   registerMediaReservationRoutes(api, media);
-  registerMediaCompleteRoute(api, media);
-  registerApiDocsRoute(api);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
   registerRelationshipsRoutes(api, relationships);
-  registerMessagingRoutes(api, messaging);
-  registerRealtimeTicketRoute(api, realtimeTicket);
-  registerPushDeviceRoutes(api, pushDevices);
-  registerRealtimeConnectRoute(api, realtimeConnect);
+  registerMessagingRoutes(api, {
+    ...messaging,
+    realtimeTicket,
+    pushDevices,
+    realtimeConnect,
+  });
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -242,6 +251,23 @@ function createPostingDayDependencies(
       )),
       onOperationalAlert: (alert) => console.error("dayli posting-day operational alert", alert),
     }),
+  };
+}
+
+function createRelationshipsService(store: RelationshipStore, options: { now?: () => Date } = {}): RelationshipsService {
+  const dependencies = { store, now: options.now ?? (() => new Date()) };
+  return {
+    getStatus: (actorId, subjectId) => getRelationship(dependencies, actorId, subjectId),
+    listPendingRequests: (actorId, direction, limit, cursor) => listFriendRequests(dependencies, actorId, direction, limit, cursor),
+    listFriends: (actorId, limit, cursor) => listFriends(dependencies, actorId, limit, cursor),
+    searchUsers: (actorId, query, limit, cursor) => searchUsers(dependencies, actorId, query, limit, cursor),
+    sendRequest: (actorId, recipientId) => sendFriendRequest(dependencies, actorId, recipientId),
+    acceptRequest: (actorId, requestId) => acceptFriendRequest(dependencies, actorId, requestId),
+    declineRequest: (actorId, requestId) => declineFriendRequest(dependencies, actorId, requestId),
+    cancelRequest: (actorId, requestId) => cancelFriendRequest(dependencies, actorId, requestId),
+    removeFriendship: (actorId, subjectId) => removeFriendship(dependencies, actorId, subjectId),
+    block: (actorId, subjectId) => blockUser(dependencies, actorId, subjectId),
+    unblock: (actorId, subjectId) => unblockUser(dependencies, actorId, subjectId),
   };
 }
 

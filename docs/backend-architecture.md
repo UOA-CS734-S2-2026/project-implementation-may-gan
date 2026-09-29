@@ -1,6 +1,6 @@
 # Backend architecture
 
-Status: target conventions agreed during backend/messaging planning. This is not a claim that the current code has been refactored. See the [current architecture](dayli/architecture.md), [refactor implementation plan](implementation/backend-refactor.md), and [messaging handoff](implementation/messaging-implementation-handoff.md).
+Status: backend action boundaries are implemented. See the [current architecture](dayli/architecture.md), [refactor implementation plan](implementation/backend-refactor.md), [boundary inventory](implementation/backend-action-boundaries-inventory.md), and [messaging handoff](implementation/messaging-implementation-handoff.md).
 
 ## Decisions
 
@@ -25,11 +25,17 @@ HTTP request
   -> PostgreSQL
 ```
 
-Examples are `apps/api/src/features/posts/create-post/`, `posting-days/get-current-posting-day/`, and `media/reserve-upload/`. Relationships currently has one feature-wide route/service/repository set. Auth is a Better Auth integration, not an application CRUD service to duplicate.
+Examples are `apps/api/src/features/posts/create-post/`, `posting-days/get-current-posting-day/`, and `media/reserve-upload/`. Relationships now has action-owned routes and services over narrowly shared transaction and policy modules. Auth is a Better Auth integration, not an application CRUD service to duplicate.
 
-`contract.ts` defines request and response schemas; it is not another execution layer. `packages/domain` currently provides Auckland-day logic. `packages/db` owns database setup, schema and migrations. `apps/api/src/app.ts` is the composition root: it registers routes and supplies concrete dependencies. Existing route tests replace those dependencies with test doubles.
+`<action>.contract.ts` defines request and response schemas; feature `shared/` contracts hold schemas used by multiple actions. Neither is another execution layer. `packages/domain` currently provides Auckland-day logic. `packages/db` owns database setup, schema and migrations. `apps/api/src/app.ts` is the composition root: it registers feature registrars and supplies concrete dependencies. Existing route tests replace those dependencies with test doubles.
 
 Most protected handlers currently resolve the session explicitly. `apps/api/src/infrastructure/auth/session.ts` exposes a reusable resolver, but wiring varies between features. The inspected relationship resolver returns `{ userId }`; its handlers distinguish unauthenticated callers from authentication infrastructure failure. The user schema contains a nullable `role` column, but that alone is not an enforced RBAC system.
+
+## Registration and import boundaries
+
+Each feature registrar is the only feature-root implementation file. It registers action route functions and shared middleware, but does not contain handler or persistence logic. An action route is the HTTP adapter for one method and path. Its service, repository, contract, and focused route test stay in the action directory when they are action-owned. Feature-shared modules contain narrowly named policies, projections, contracts, and transaction capabilities that are intentionally used by more than one action.
+
+`apps/api/src/features` is checked by `scripts/check-api-boundaries.mjs`, which runs as part of the root `pnpm lint` command. An action may import its own action files, same-feature `shared/` modules, `src/http`, `src/infrastructure`, and approved workspace packages. It may not import a sibling action or another feature's internals. The check covers relative imports, re-exports, dynamic imports, type-only imports, and CommonJS `require` calls. This repository has no TypeScript path aliases, so non-relative specifiers are treated as external boundaries; a future alias must add resolver support and a fixture before use. Workspace package specifiers beginning with `@dayli/` are treated as approved package boundaries. Better Auth provider integration, permissions, and system Hyperdrive compatibility entrypoints are explicit exceptions documented by their feature locations.
 
 ## Target file tree
 
@@ -51,16 +57,7 @@ apps/api/src/
     messaging/
       messaging.routes.ts                   Thin registration function, not business logic
       messages/
-        send-message/
-          send-message.contract.ts          Request/response schemas and route metadata
-          send-message.route.ts             Hono adapter, attached auth, operation invocation
-          send-message.service.ts           Send operation orchestration
-          send-message.repository.ts        Action-specific transactional persistence
-          send-message.route.test.ts        HTTP/auth/schema/error behavior
-          send-message.service.test.ts      Rules with injected clock/store
-          send-message.repository.integration.test.ts
-        list-messages/                      Same naming convention, omit unnecessary layers
-        get-message/
+        send-message/                       Action route and service, with shared message persistence
         edit-message/
         unsend-message/
         set-reaction/
@@ -69,24 +66,27 @@ apps/api/src/
         create-direct-conversation/
         list-conversations/
         get-conversation/
-        accept-message-request/
-        decline-message-request/
-        resolve-message-request/            Thin adapter for the proposed decision endpoint
-        mark-read/
-        list-changes/
-        get-unread-counts/
+        get-messaging-unread/
+        list-messages/
+        get-message/
+        resolve-message-request/
+        mark-conversation-read/
+        list-conversation-changes/
       realtime/
         issue-ticket/
         connect/                            Explicit protocol-upgrade adapter, not JSON CRUD
+        shared/                             Verified realtime session and ticket types
       push/
         register-device/
         unregister-device/
+        shared/                             Device store, service and route dependencies
       shared/
         conversation-access.ts              Membership/block/request authorization helpers
-        conversation-transaction.ts         Common pair-then-conversation lock discipline
-        insert-message.ts                   Insert into caller-owned transaction
-        append-conversation-change.ts       Change record and delivery intent, no network call
+        conversation-types.ts               Conversation operations and transaction capabilities
+        conversation.repository.ts           Shared conversation persistence and reads
         message-projection.ts               Safe canonical DTO/reply/tombstone projection
+        message-store.ts                    Shared message write transaction interface
+        message.contract.ts                Shared message schemas
     posts/
       create-post/                          Existing posts/create action, renamed in refactor
     posting-days/
@@ -94,7 +94,8 @@ apps/api/src/
     media/
       reserve-upload/
       get-reservation/
-      shared/                               Reservation policy shared by those actions
+      complete/
+      shared/                               Reservation policy, schemas and runtime shared by actions
     relationships/
       relationships.routes.ts               Thin registration only
       get-relationship/
@@ -110,9 +111,10 @@ apps/api/src/
     permissions/                            Existing shared authorization module, not an HTTP slice
     auth/                                   Better Auth provider integration, intentional exception
     system/
+      system.routes.ts                      Thin feature registrar
       get-health/
       get-api-docs/
-      test-contracts/                       Explicit test-only exception
+      test-contracts/                       Explicit test-contract action
   infrastructure/
     auth/                                   Session resolver and lifecycle adapters when extracted
     database/                               Existing Hyperdrive lifecycle helpers
