@@ -45,7 +45,7 @@ Set these `staging` Environment secrets:
 - `GOOGLE_CLIENT_SECRET` when the Google variable tuple is set
 - `RESEND_API_KEY` when `STAGING_RESEND_FROM` is set
 - `FCM_SERVICE_ACCOUNT_JSON` when push delivery is enabled
-- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` together when `STAGING_R2_BUCKET_NAME` is set. This is a bucket-scoped R2 API token, separate from `CLOUDFLARE_API_TOKEN`.
+- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` together when `STAGING_R2_BUCKET_NAME` is set. This is a bucket-scoped R2 API token, separate from `CLOUDFLARE_API_TOKEN`. The workflow uses these keys to list the bucket before deploying, so `CLOUDFLARE_API_TOKEN` needs no R2 permission.
 
 Provision `PUSH_TOKEN_ENCRYPTION_KEY` directly in the Cloudflare staging Worker secret store. Never add it to GitHub, workflow inputs, or routine secret sync.
 
