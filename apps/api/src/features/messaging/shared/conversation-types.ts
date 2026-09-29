@@ -56,7 +56,6 @@ export interface DirectConversationStore {
 }
 
 export interface ConversationReader {
-  unread(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
   resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
   markRead(
     actorId: string,

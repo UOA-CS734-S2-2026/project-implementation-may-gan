@@ -53,8 +53,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(second.message.sequence).toBe("2");
     const history = await listMessages.list(users[2]!, created.conversation.id, undefined, undefined, 50);
     expect(history.items.map((item) => item.sequence)).toEqual(["1", "2"]);
-    const before = await reader.unread(users[2]!);
-    expect(before.inboxCount).toBe(2);
     const read = await reader.markRead(users[2]!, created.conversation.id, "2");
     expect(read.lastReadSequence).toBe("2");
     expect(read.receiptSequence).toBe("2");

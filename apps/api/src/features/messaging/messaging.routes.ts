@@ -5,7 +5,7 @@ import { createRequireUsername, type HasUsername } from "../../http/middleware/r
 import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
 import { registerGetConversationRoute, type GetConversationRouteDependencies } from "./conversations/get-conversation/get-conversation.route";
 import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./conversations/get-message/get-message.route";
-import { registerGetMessagingUnreadRoute } from "./conversations/get-messaging-unread/get-messaging-unread.route";
+import { registerGetMessagingUnreadRoute, type GetMessagingUnreadRouteDependencies } from "./conversations/get-messaging-unread/get-messaging-unread.route";
 import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
 import { registerListConversationsRoute, type ListConversationsRouteDependencies } from "./conversations/list-conversations/list-conversations.route";
 import { registerListMessagesRoute, type ListMessagesRouteDependencies } from "./conversations/list-messages/list-messages.route";
@@ -33,6 +33,7 @@ export interface MessagingRouteDependencies extends
   RemoveReactionRouteDependencies,
   CreateDirectConversationRouteDependencies,
   GetConversationRouteDependencies,
+  GetMessagingUnreadRouteDependencies,
   GetMessageRouteDependencies,
   ListConversationsRouteDependencies,
   ListMessagesRouteDependencies {
