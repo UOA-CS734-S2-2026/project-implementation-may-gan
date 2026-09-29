@@ -2,14 +2,14 @@ import { assertPeerActivityAllowed } from "../../shared/conversation-access";
 import { MessagingError } from "../../shared/messaging-error";
 import { assertReactionKey } from "../../shared/message-validation";
 import { toMessageDto } from "../../shared/message-projection";
-import type { MessageWriteStore } from "../../shared/message-store";
+import type { SetReactionStore } from "./set-reaction.repository";
 import type { MessageDto, ReactionKey } from "../../shared/messaging-types";
 
 export interface SetReactionService {
   set(actorId: string, conversationId: string, messageId: string, reaction: ReactionKey): Promise<{ message: MessageDto; changed: boolean }>;
 }
 
-export function createSetReactionService(dependencies: { store: MessageWriteStore }): SetReactionService {
+export function createSetReactionService(dependencies: { store: SetReactionStore }): SetReactionService {
   return {
     async set(actorId, conversationId, messageId, reaction) {
       assertReactionKey(reaction);

@@ -11,6 +11,7 @@ export default tseslint.config(
       "packages/api-client-dart/**",
       "packages/api-client-typescript/**",
       "**/coverage/**",
+      "**/*.boundary-fixture.ts",
     ],
   },
   eslint.configs.recommended,
@@ -28,7 +29,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/api/src/features/**/service.ts"],
+    files: [
+      "apps/api/src/features/**/service.ts",
+      "apps/api/src/features/**/*.service.ts",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -43,7 +47,7 @@ export default tseslint.config(
               message: "Services must not depend on the Cloudflare runtime.",
             },
             {
-              group: ["**/route", "**/route.*"],
+              group: ["**/route", "**/route.*", "**/*.route", "**/*.route.*"],
               message: "Services must not import HTTP routes.",
             },
             {
@@ -58,6 +62,7 @@ export default tseslint.config(
   {
     files: [
       "apps/api/src/features/**/contract.ts",
+      "apps/api/src/features/**/*.contract.ts",
       "packages/contracts/**/*.ts",
     ],
     rules: {
@@ -71,10 +76,14 @@ export default tseslint.config(
                 "@dayli/db/**",
                 "**/route",
                 "**/route.*",
+                "**/*.route",
+                "**/*.route.*",
                 "**/handler",
                 "**/handler.*",
                 "**/service",
                 "**/service.*",
+                "**/*.service",
+                "**/*.service.*",
               ],
               message: "Contracts must not depend on routes, handlers, services, or database code.",
             },
@@ -84,7 +93,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/api/src/features/**/route.ts"],
+    files: [
+      "apps/api/src/features/**/route.ts",
+      "apps/api/src/features/**/*.route.ts",
+    ],
     rules: {
       "no-restricted-globals": [
         "error",
@@ -98,8 +110,8 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ["**/route", "**/route.*"],
-              message: "Routes must not import other routes. Compose routes outside operation slices.",
+              group: ["**/route", "**/route.*", "**/*.route", "**/*.route.*"],
+              message: "Routes must not import other routes. Compose routes outside operation slices."
             },
           ],
         },

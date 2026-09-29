@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDayliDatabase, sql } from "@dayli/db";
-import { createPostgresPushDeviceStore } from "../../features/messaging/push/push-device.repository";
-import { PushSessionInactiveError } from "../../features/messaging/push/push-device.service";
+import { createPostgresRegisterDeviceStore } from "../../features/messaging/push/register-device/register-device.repository";
+import { PushSessionInactiveError } from "../../features/messaging/push/register-device/register-device.service";
 import { createPushOutboxHandler } from "./push-dispatcher";
 import { createPostgresPushDestinationResolver } from "./push-destination.repository";
 
@@ -10,7 +10,7 @@ const suite = connectionString ? describe : describe.skip;
 
 suite("Postgres push destination authorization", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_delivery");
-  const devices = createPostgresPushDeviceStore(database.db);
+  const devices = createPostgresRegisterDeviceStore(database.db);
   const resolver = createPostgresPushDestinationResolver(database.db, {
     encrypt: async (token) => ({ ciphertext: token, keyVersion: "test" }),
     decrypt: async ({ ciphertext, keyVersion }) => keyVersion === "test" ? ciphertext : null,

@@ -15,54 +15,122 @@ import {
   registerMediaReservationRoutes,
   type MediaReservationRouteDependencies,
 } from "./features/media/media.routes";
-import { registerMediaCompleteRoute } from "./features/media/complete/route";
 import {
   registerRelationshipsRoutes,
   type RelationshipsRouteDependencies,
 } from "./features/relationships/relationships.routes";
-import { createHyperdriveRelationshipsStore } from "./features/relationships/relationships.repository";
-import { createRelationshipsService } from "./features/relationships/relationships.service";
+import { createHyperdriveRelationshipsStore } from "./features/relationships/shared/relationships.repository";
+import type { RelationshipsService } from "./features/relationships/shared/relationship-route";
+import type { RelationshipStore } from "./features/relationships/shared/relationship-service";
+import { getRelationship } from "./features/relationships/get-relationship/get-relationship.service";
+import { listFriendRequests } from "./features/relationships/list-friend-requests/list-friend-requests.service";
+import { listFriends } from "./features/relationships/list-friends/list-friends.service";
+import { searchUsers } from "./features/relationships/search-users/search-users.service";
+import { sendFriendRequest } from "./features/relationships/send-friend-request/send-friend-request.service";
+import { acceptFriendRequest } from "./features/relationships/accept-friend-request/accept-friend-request.service";
+import { declineFriendRequest } from "./features/relationships/decline-friend-request/decline-friend-request.service";
+import { cancelFriendRequest } from "./features/relationships/cancel-friend-request/cancel-friend-request.service";
+import { removeFriendship } from "./features/relationships/remove-friendship/remove-friendship.service";
+import { blockUser } from "./features/relationships/block-user/block-user.service";
+import { unblockUser } from "./features/relationships/unblock-user/unblock-user.service";
 import {
   registerCurrentPostingDayRoute,
   type CurrentPostingDayRouteDependencies,
 } from "./features/posting-days/get-current-posting-day/get-current-posting-day.route";
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
-import { createDailyPromptRepository, hasPostedOnDay } from "./features/posting-days/get-current-posting-day/get-current-posting-day.repository";
+import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
-import { sql } from "@dayli/db";
+import { sql, type DayliDatabase } from "@dayli/db";
 import {
   registerCreateDailyPostRoute,
   type CreateDailyPostRouteDependencies,
 } from "./features/posts/create-post/create-post.route";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
-import { registerApiDocsRoute } from "./features/system/get-api-docs/get-api-docs.route";
-import { registerHealthRoute } from "./features/system/get-health/get-health.route";
-import { registerTestContractsRoute } from "./features/system/test-contracts/route";
+import { registerSystemRoutes } from "./features/system/system.routes";
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
-import { createHyperdriveMessageWriteStore } from "./features/messaging/messages/send-message/send-message.repository";
+import {
+  createHyperdriveMessageWriteStore,
+  createPostgresMessageWriteStore,
+} from "./features/messaging/messages/send-message/send-message.repository";
 import { createEditMessageService } from "./features/messaging/messages/edit-message/edit-message.service";
+import {
+  createHyperdriveEditMessageStore,
+  createPostgresEditMessageStore,
+} from "./features/messaging/messages/edit-message/edit-message.repository";
 import { createUnsendMessageService } from "./features/messaging/messages/unsend-message/unsend-message.service";
+import {
+  createHyperdriveUnsendMessageStore,
+  createPostgresUnsendMessageStore,
+} from "./features/messaging/messages/unsend-message/unsend-message.repository";
 import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
+import {
+  createHyperdriveSetReactionStore,
+  createPostgresSetReactionStore,
+} from "./features/messaging/messages/set-reaction/set-reaction.repository";
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
+import {
+  createHyperdriveRemoveReactionStore,
+  createPostgresRemoveReactionStore,
+} from "./features/messaging/messages/remove-reaction/remove-reaction.repository";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
-import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/conversations/conversation.repository";
-import { registerRealtimeTicketRoute, type RealtimeTicketRouteDependencies } from "./features/messaging/realtime/ticket.route";
-import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/ticket.repository";
-import { createRealtimeTicketService, type VerifiedRealtimeSession } from "./features/messaging/realtime/ticket.service";
-import { registerRealtimeConnectRoute, type RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect.route";
-import { registerPushDeviceRoutes, type PushDeviceRouteDependencies } from "./features/messaging/push/push-device.route";
-import { createPostgresPushDeviceStore } from "./features/messaging/push/push-device.repository";
-import { createPushDeviceService } from "./features/messaging/push/push-device.service";
+import {
+  createHyperdriveDirectConversationStore,
+  createPostgresDirectConversationStore,
+} from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.repository";
+import {
+  createHyperdriveGetConversationRepository,
+  createPostgresGetConversationRepository,
+} from "./features/messaging/conversations/get-conversation/get-conversation.repository";
+import {
+  createHyperdriveGetMessageRepository,
+  createPostgresGetMessageRepository,
+} from "./features/messaging/messages/get-message/get-message.repository";
+import {
+  createHyperdriveListMessagesRepository,
+  createPostgresListMessagesRepository,
+} from "./features/messaging/messages/list-messages/list-messages.repository";
+import {
+  createHyperdriveGetMessagingUnreadRepository,
+  createPostgresGetMessagingUnreadRepository,
+} from "./features/messaging/conversations/get-messaging-unread/get-messaging-unread.repository";
+import {
+  createHyperdriveListConversationChangesRepository,
+  createPostgresListConversationChangesRepository,
+} from "./features/messaging/conversations/list-conversation-changes/list-conversation-changes.repository";
+import {
+  createHyperdriveMarkConversationReadRepository,
+  createPostgresMarkConversationReadRepository,
+} from "./features/messaging/conversations/mark-conversation-read/mark-conversation-read.repository";
+import {
+  createHyperdriveResolveMessageRequestRepository,
+  createPostgresResolveMessageRequestRepository,
+} from "./features/messaging/conversations/resolve-message-request/resolve-message-request.repository";
+import {
+  createHyperdriveListConversationsRepository,
+  createPostgresListConversationsRepository,
+} from "./features/messaging/conversations/list-conversations/list-conversations.repository";
+import type { RealtimeTicketRouteDependencies } from "./features/messaging/realtime/issue-ticket/issue-ticket.route";
+import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/issue-ticket/issue-ticket.repository";
+import { createRealtimeTicketService } from "./features/messaging/realtime/issue-ticket/issue-ticket.service";
+import type { VerifiedRealtimeSession } from "./features/messaging/realtime/shared/realtime-types";
+import type { RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect/connect.route";
+import type { RegisterDeviceRouteDependencies } from "./features/messaging/push/register-device/register-device.route";
+import { createPostgresRegisterDeviceStore } from "./features/messaging/push/register-device/register-device.repository";
+import { createRegisterDeviceService } from "./features/messaging/push/register-device/register-device.service";
+import type { UnregisterDeviceRouteDependencies } from "./features/messaging/push/unregister-device/unregister-device.route";
+import { createPostgresUnregisterDeviceRepository } from "./features/messaging/push/unregister-device/unregister-device.repository";
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
+
+type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -73,7 +141,7 @@ export interface AppDependencies {
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
-  pushDevices?: PushDeviceRouteDependencies;
+  pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
@@ -125,19 +193,18 @@ export function createApp({
     name: "better-auth.session_token",
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
-  registerHealthRoute(api);
-  registerTestContractsRoute(api);
+  registerSystemRoutes(api);
   registerMediaReservationRoutes(api, media);
-  registerMediaCompleteRoute(api, media);
-  registerApiDocsRoute(api);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
   registerRelationshipsRoutes(api, relationships);
-  registerMessagingRoutes(api, messaging);
-  registerRealtimeTicketRoute(api, realtimeTicket);
-  registerPushDeviceRoutes(api, pushDevices);
+  registerMessagingRoutes(api, {
+    ...messaging,
+    realtimeTicket,
+    pushDevices,
+    realtimeConnect,
+  });
   registerUsernameProfileRoutes(api, usernameProfile);
-  registerRealtimeConnectRoute(api, realtimeConnect);
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -216,7 +283,7 @@ const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveRealtimeSession: async () => null,
   webSocketUrl: "wss://realtime.invalid/api/v1/realtime/connect",
 };
-const unavailablePushDevices: PushDeviceRouteDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
+const unavailablePushDevices: PushDeviceDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
 
 const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
@@ -262,6 +329,43 @@ function createPostingDayDependencies(
       )),
       onOperationalAlert: (alert) => console.error("dayli posting-day operational alert", alert),
     }),
+  };
+}
+
+export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date } = {}) {
+  const store = createPostgresMessageWriteStore(database);
+  return {
+    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
+    resolveMessageRequest: createPostgresResolveMessageRequestRepository(database),
+    markConversationRead: createPostgresMarkConversationReadRepository(database),
+    getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
+    listConversationChanges: createPostgresListConversationChangesRepository(database),
+    listConversations: createPostgresListConversationsRepository(database),
+    getConversation: createPostgresGetConversationRepository(database),
+    getMessage: createPostgresGetMessageRepository(database),
+    listMessages: createPostgresListMessagesRepository(database),
+    send: createSendMessageService({ store, now: options.now }),
+    edit: createEditMessageService({ store: createPostgresEditMessageStore(database), now: options.now }),
+    unsend: createUnsendMessageService({ store: createPostgresUnsendMessageStore(database), now: options.now }),
+    set: createSetReactionService({ store: createPostgresSetReactionStore(database) }),
+    remove: createRemoveReactionService({ store: createPostgresRemoveReactionStore(database) }),
+  };
+}
+
+export function createRelationshipsService(store: RelationshipStore, options: { now?: () => Date } = {}): RelationshipsService {
+  const dependencies = { store, now: options.now ?? (() => new Date()) };
+  return {
+    getStatus: (actorId, subjectId) => getRelationship(dependencies, actorId, subjectId),
+    listPendingRequests: (actorId, direction, limit, cursor) => listFriendRequests(dependencies, actorId, direction, limit, cursor),
+    listFriends: (actorId, limit, cursor) => listFriends(dependencies, actorId, limit, cursor),
+    searchUsers: (actorId, query, limit, cursor) => searchUsers(dependencies, actorId, query, limit, cursor),
+    sendRequest: (actorId, recipientId) => sendFriendRequest(dependencies, actorId, recipientId),
+    acceptRequest: (actorId, requestId) => acceptFriendRequest(dependencies, actorId, requestId),
+    declineRequest: (actorId, requestId) => declineFriendRequest(dependencies, actorId, requestId),
+    cancelRequest: (actorId, requestId) => cancelFriendRequest(dependencies, actorId, requestId),
+    removeFriendship: (actorId, subjectId) => removeFriendship(dependencies, actorId, subjectId),
+    block: (actorId, subjectId) => blockUser(dependencies, actorId, subjectId),
+    unblock: (actorId, subjectId) => unblockUser(dependencies, actorId, subjectId),
   };
 }
 
@@ -317,12 +421,19 @@ function createMessagingDependencies(
     resolveSession: createSessionResolver(configuration),
     hasUsername,
     service: createSendMessageService({ store }),
-    edit: createEditMessageService({ store }),
-    unsend: createUnsendMessageService({ store }),
-    setReaction: createSetReactionService({ store }),
-    removeReaction: createRemoveReactionService({ store }),
+    edit: createEditMessageService({ store: createHyperdriveEditMessageStore(configuration.hyperdrive) }),
+    unsend: createUnsendMessageService({ store: createHyperdriveUnsendMessageStore(configuration.hyperdrive) }),
+    setReaction: createSetReactionService({ store: createHyperdriveSetReactionStore(configuration.hyperdrive) }),
+    removeReaction: createRemoveReactionService({ store: createHyperdriveRemoveReactionStore(configuration.hyperdrive) }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
-    reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    resolveMessageRequest: createHyperdriveResolveMessageRequestRepository(configuration.hyperdrive),
+    markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
+    getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),
+    listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),
+    listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),
+    getConversation: createHyperdriveGetConversationRepository(configuration.hyperdrive),
+    getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
+    listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),
     dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,
   };
 }
@@ -353,16 +464,18 @@ function createPushDeviceDependencies(
   configuration: RuntimeConfiguration,
   env: ApiEnv,
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
-): PushDeviceRouteDependencies {
+): PushDeviceDependencies {
   const resolvePushSession = createVerifiedRealtimeSessionResolver(configuration);
   if (!hasWorkerPushTokenProtection(env.PUSH_TOKEN_ENCRYPTION_KEY)) return { resolveSession: createSessionResolver(configuration), resolvePushSession, hasUsername };
   return {
     resolveSession: createSessionResolver(configuration),
     resolvePushSession,
     hasUsername,
-    devices: {
-      register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
-      unregister: (session, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).unregister(session, installationId)),
+    register: {
+      register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRegisterDeviceService({ store: createPostgresRegisterDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
+    },
+    unregister: {
+      unregister: (actorId, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUnregisterDeviceRepository(database).unregister(actorId, installationId)),
     },
   };
 }

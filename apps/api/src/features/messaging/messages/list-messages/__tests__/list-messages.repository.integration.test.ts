@@ -1,0 +1,80 @@
+import { createDayliDatabase } from "@dayli/db";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createMessagingPersistenceServices } from "../../../../../app";
+import { createPostgresListMessagesRepository } from "../list-messages.repository";
+
+const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
+const enabled = Boolean(connectionString);
+const target = connectionString ? new URL(connectionString) : undefined;
+if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+  throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
+}
+const suite = enabled ? describe : describe.skip;
+
+suite("list messages Postgres repository", () => {
+  const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
+  const users = Array.from({ length: 3 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
+  const { direct, send, set: setReaction } = createMessagingPersistenceServices(database.db);
+  const repository = createPostgresListMessagesRepository(database.db);
+
+  beforeAll(async () => {
+    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+  });
+
+  afterAll(async () => {
+    try {
+      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
+      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
+      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
+      await database.client`delete from public.user where id = any(${users}::text[])`;
+    } finally {
+      await database.close();
+    }
+  });
+
+  it("authorizes history pagination, keeps ordering, projects replies and reactions, and hides private conversations", async () => {
+    const initial = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "parent message",
+    });
+    const reply = await send.send(users[1]!, initial.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "reply message",
+      replyToMessageId: initial.message.id,
+    });
+    await send.send(users[0]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third message" });
+    await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
+    await setReaction.set(users[0]!, initial.conversation.id, reply.message.id, "love");
+
+    await expect(repository.list(users[2]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).resolves.toMatchObject({
+      items: [{ sequence: "3" }, { sequence: "4" }],
+      nextCursor: "4",
+      hasMore: true,
+    });
+    await expect(repository.list(users[0]!, initial.conversation.id, "3", undefined, 2)).resolves.toMatchObject({
+      items: [
+        { sequence: "1" },
+        {
+          sequence: "2",
+          replyToMessageId: initial.message.id,
+          replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
+          reactions: [{ reaction: "love", count: 1, reactedByActor: true }],
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
+      items: [{ sequence: "2" }, { sequence: "3" }],
+      nextCursor: "3",
+      hasMore: true,
+    });
+    await expect(repository.list(users[1]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
+      items: [{ sequence: "2", reactions: [{ reaction: "love", count: 1, reactedByActor: false }] }, { sequence: "3" }],
+    });
+  });
+});

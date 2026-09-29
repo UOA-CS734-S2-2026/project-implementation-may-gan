@@ -2,8 +2,28 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { ApiError } from "@dayli/contracts";
 import type { Context } from "hono";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { RelationshipServiceError, type RelationshipsService } from "../relationships.service";
+import {
+  RelationshipServiceError,
+  type PendingRequestDirection,
+  type PendingRequestPage,
+  type RelationshipStatus,
+  type RelationshipUserPage,
+} from "./relationship-service";
 import type { ResolveSession } from "../../../http/middleware/require-session";
+
+export interface RelationshipsService {
+  getStatus(actorId: string, subjectId: string): Promise<RelationshipStatus>;
+  listPendingRequests(actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage>;
+  listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  searchUsers(actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  sendRequest(actorId: string, recipientId: string): Promise<RelationshipStatus>;
+  acceptRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
+  declineRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
+  cancelRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
+  removeFriendship(actorId: string, subjectId: string): Promise<RelationshipStatus>;
+  block(actorId: string, subjectId: string): Promise<RelationshipStatus>;
+  unblock(actorId: string, subjectId: string): Promise<RelationshipStatus>;
+}
 
 export interface RelationshipsRouteDependencies {
   service: RelationshipsService;

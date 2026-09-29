@@ -47,7 +47,7 @@ export const mediaReservationStatus = pgEnum("media_reservation_status", [
  * "object_not_found" is written only for a rare TOCTOU case (the object existed at
  * a HEAD check but vanished before a following read). The common case — the client
  * simply hasn't finished the PUT yet — is a transient, retryable condition and is
- * never persisted at all. See apps/api/src/features/media/complete/service.ts.
+ * never persisted at all. See apps/api/src/features/media/complete/complete.service.ts.
  */
 export const mediaValidationFailureReason = pgEnum("media_validation_failure_reason", [
   "byte_size_mismatch",

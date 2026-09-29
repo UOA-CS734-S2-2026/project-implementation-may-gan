@@ -1,15 +1,7 @@
 import type { AucklandDayService, ClockLike } from "@dayli/domain";
+import type { DailyPromptRecord, DailyPromptRepository } from "../shared/posting-day-types";
 
-export interface DailyPromptRecord {
-  id: string;
-  text: string;
-  version: number;
-  effectiveDate: string;
-}
-
-export interface DailyPromptRepository {
-  findActivePrompt(monthDay: string, localDate: string): Promise<DailyPromptRecord | null>;
-}
+export type { DailyPromptRecord, DailyPromptRepository } from "../shared/posting-day-types";
 
 export interface PostingDayOperationalAlert {
   code: "MISSING_DAILY_PROMPT";

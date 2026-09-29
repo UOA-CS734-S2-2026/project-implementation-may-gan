@@ -1,14 +1,14 @@
 import { assertPeerActivityAllowed } from "../../shared/conversation-access";
 import { MessagingError } from "../../shared/messaging-error";
 import { toMessageDto } from "../../shared/message-projection";
-import type { MessageWriteStore } from "../../shared/message-store";
 import type { MessageDto } from "../../shared/messaging-types";
+import type { RemoveReactionStore } from "./remove-reaction.repository";
 
 export interface RemoveReactionService {
   remove(actorId: string, conversationId: string, messageId: string): Promise<{ message: MessageDto; changed: boolean }>;
 }
 
-export function createRemoveReactionService(dependencies: { store: MessageWriteStore }): RemoveReactionService {
+export function createRemoveReactionService(dependencies: { store: RemoveReactionStore }): RemoveReactionService {
   return {
     async remove(actorId, conversationId, messageId) {
       return dependencies.store.withConversationTransaction(actorId, conversationId, async (transaction) => {

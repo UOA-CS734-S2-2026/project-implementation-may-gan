@@ -33,6 +33,12 @@ export interface ConversationAccess {
   peerActivityBlocked: boolean;
 }
 
+export interface ConversationPeerChange {
+  conversationId: string;
+  messageId: string | null;
+  kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" | "request.active";
+}
+
 export interface MessageReplyPreview {
   id: string;
   senderId: string;

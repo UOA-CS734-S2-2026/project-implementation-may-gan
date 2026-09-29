@@ -1,5 +1,5 @@
 import { createRoute } from "@hono/zod-openapi";
-import { friendsQuerySchema, relationshipErrorResponses, relationshipUserPageSchema } from "../relationships.contract";
+import { friendsQuerySchema, relationshipErrorResponses, relationshipUserPageSchema } from "../shared/relationships.contract";
 import { relationshipSecurity, relationshipServiceError, type RelationshipRouteApp, type RelationshipsRouteDependencies } from "../shared/relationship-route";
 
 const route = createRoute({

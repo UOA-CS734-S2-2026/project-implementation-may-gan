@@ -8,7 +8,7 @@ import {
   type RelationshipTransaction,
   type StoredRelationshipSnapshot,
 } from "./relationship-service";
-import { createRelationshipsService } from "../relationships.service";
+import { createRelationshipsService } from "../../../app";
 
 const fixedNow = new Date("2026-09-22T00:00:00.000Z");
 

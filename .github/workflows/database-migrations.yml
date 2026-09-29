@@ -32,6 +32,8 @@ jobs:
       TEST_DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_test
       TEST_APP_DATABASE_URL: postgresql://app:app@localhost:5433/dayli_test
       RELATIONSHIP_TEST_DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_relationship_test
+      MESSAGING_TEST_DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_messaging_test
+      MESSAGING_DELIVERY_TEST_DATABASE_URL: postgresql://migrator:migrator@localhost:5433/dayli_messaging_test
       PERMISSIONS_POSTGRES_TEST: "1"
       PGPASSWORD: postgres
     steps:
@@ -48,10 +50,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Provision local migration test roles
         run: psql -v ON_ERROR_STOP=1 -h localhost -p 5433 -U postgres -d dayli_test -f packages/db/test/init/001-local-roles.sql
-      - name: Provision isolated relationship test database
+      - name: Provision isolated relationship and messaging test databases
         run: |
-          psql -h localhost -p 5433 -U postgres -d postgres -c "CREATE DATABASE dayli_relationship_test OWNER migrator;"
-          psql -h localhost -p 5433 -U postgres -d dayli_relationship_test <<'SQL'
+          provision_isolated_database() {
+            local database_name="$1"
+            psql -v ON_ERROR_STOP=1 -h localhost -p 5433 -U postgres -d postgres -c "CREATE DATABASE ${database_name} OWNER migrator;"
+            psql -v ON_ERROR_STOP=1 -h localhost -p 5433 -U postgres -d "${database_name}" <<'SQL'
           GRANT USAGE, CREATE ON SCHEMA public TO migrator;
           GRANT USAGE ON SCHEMA public TO app;
           ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
@@ -60,18 +64,25 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA drizzle TO migrator;
           REVOKE ALL ON SCHEMA drizzle FROM app;
           SQL
+          }
+          provision_isolated_database dayli_relationship_test
+          provision_isolated_database dayli_messaging_test
       - name: Check migration metadata, drift, immutability, and safety
         run: pnpm db:check
       - name: Apply baseline migrations to fresh PostgreSQL 18
         run: pnpm db:migrate
       - name: Apply baseline migrations to isolated relationship database
         run: MIGRATION_TARGET=local DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
+      - name: Apply baseline migrations to isolated messaging database
+        run: MIGRATION_TARGET=local DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
       - name: Verify migration state is read-only and strict
         run: pnpm db:verify
       - name: Repeat migration application is idempotent
         run: pnpm db:migrate
       - name: Repeat isolated relationship migration application
         run: MIGRATION_TARGET=local DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
+      - name: Repeat isolated messaging migration application
+        run: MIGRATION_TARGET=local DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
       - name: Run migration integration tests
         run: pnpm db:test
       - name: Safe failure for missing credentials
