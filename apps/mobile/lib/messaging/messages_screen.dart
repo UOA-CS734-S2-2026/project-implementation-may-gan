@@ -428,12 +428,15 @@ class _RequestAction extends StatelessWidget {
 
 /// WDCC displays the latest message date. Conversations without a message use
 /// the server-provided conversation update timestamp when one is available.
-String? conversationListDate(MessagingConversation conversation) {
+String? conversationListDate(
+  MessagingConversation conversation, {
+  DateTime Function(DateTime date)? toLocal,
+}) {
   final date = conversation.latestMessage?.createdAt ?? conversation.updatedAt;
   if (date == null) return null;
-  final utc = date.toUtc();
+  final local = (toLocal ?? (value) => value.toLocal())(date);
   String pad(int value) => value.toString().padLeft(2, '0');
-  return '${pad(utc.day)}/${pad(utc.month)}/${utc.year}';
+  return '${pad(local.day)}/${pad(local.month)}/${local.year}';
 }
 
 class _NewConversationDialog extends StatefulWidget {

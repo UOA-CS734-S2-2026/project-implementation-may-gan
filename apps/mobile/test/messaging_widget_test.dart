@@ -26,6 +26,61 @@ class DelayedProfileFriendsClient extends FakeFriendsClient {
       calls++ == 0 ? first.future : second.future;
 }
 
+class DelayedInboxMessagingClient extends FakeMessagingClient {
+  Completer<ApiResult<List<MessagingConversation>>>? deferredInbox;
+
+  @override
+  Future<ApiResult<List<MessagingConversation>>> inbox({
+    String folder = 'inbox',
+  }) {
+    if (folder == 'inbox' && deferredInbox != null) {
+      return deferredInbox!.future;
+    }
+    return super.inbox(folder: folder);
+  }
+}
+
+MessagingConversation namedConversation(
+  String id,
+  String name, {
+  DateTime? createdAt,
+}) {
+  final base = testConversation(id: id);
+  final latest = base.latestMessage;
+  final message = latest == null || createdAt == null
+      ? latest
+      : MessagingMessage(
+          id: latest.id,
+          conversationId: latest.conversationId,
+          sequence: latest.sequence,
+          senderId: latest.senderId,
+          clientMessageId: latest.clientMessageId,
+          text: latest.text,
+          replyToMessageId: latest.replyToMessageId,
+          replyPreview: latest.replyPreview,
+          version: latest.version,
+          createdAt: createdAt,
+          editedAt: latest.editedAt,
+          unsentAt: latest.unsentAt,
+          reactions: latest.reactions,
+        );
+  return MessagingConversation(
+    id: base.id,
+    peerId: base.peerId,
+    peerName: name,
+    requestState: base.requestState,
+    unreadCount: base.unreadCount,
+    latestMessage: message,
+    lastMessageSequence: base.lastMessageSequence,
+    lastChangeSequence: base.lastChangeSequence,
+    lastReadSequence: base.lastReadSequence,
+    receiptSequence: base.receiptSequence,
+    canSend: base.canSend,
+    canResolveRequest: base.canResolveRequest,
+    updatedAt: base.updatedAt,
+  );
+}
+
 class PickerFriendsClient extends FakeFriendsClient {
   @override
   Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
@@ -113,6 +168,57 @@ void main() {
       await tester.tap(find.text('Accept'));
       await tester.pumpAndSettle();
       expect(client.calls, contains('resolve:accept'));
+    },
+  );
+
+  test(
+    'formats a latest-message date with the local calendar day at a timezone boundary',
+    () {
+      final conversation = namedConversation(
+        'timezone',
+        'Timezone',
+        createdAt: DateTime.utc(2026, 1, 1, 0, 30),
+      );
+      expect(
+        conversationListDate(
+          conversation,
+          toLocal: (date) => date.toUtc().subtract(const Duration(hours: 2)),
+        ),
+        '31/12/2025',
+      );
+    },
+  );
+
+  testWidgets(
+    'clears an old inbox before a delayed replacement-account refresh resolves',
+    (tester) async {
+      final client = DelayedInboxMessagingClient()
+        ..conversations.clear()
+        ..conversations['old'] = namedConversation('old', 'Old account');
+      final controller = MessagingController(client);
+      await controller.refreshInbox();
+      await tester.pumpWidget(messagesScreen(controller));
+      await tester.pumpAndSettle();
+      expect(find.text('Old account'), findsOneWidget);
+
+      client.conversations
+        ..clear()
+        ..['new'] = namedConversation('new', 'New account');
+      client.deferredInbox =
+          Completer<ApiResult<List<MessagingConversation>>>();
+      controller.clear();
+      final replacement = controller.refreshInbox();
+      await tester.pump();
+      expect(find.text('Old account'), findsNothing);
+
+      client.deferredInbox!.complete(
+        ApiSuccess([client.conversations['new']!]),
+      );
+      client.deferredInbox = null;
+      await replacement;
+      await tester.pumpAndSettle();
+      expect(find.text('New account'), findsOneWidget);
+      expect(find.text('Old account'), findsNothing);
     },
   );
 

@@ -20,6 +20,10 @@ class SocialFriendsClient extends FakeFriendsClient {
   final List<FriendsSnapshot> pages;
   final FriendPage? discovered;
   final accepted = <String>[];
+  final declined = <String>[];
+  final cancelled = <String>[];
+  final sent = <String>[];
+  final removed = <String>[];
   var calls = 0;
 
   @override
@@ -35,6 +39,30 @@ class SocialFriendsClient extends FakeFriendsClient {
   @override
   Future<ApiResult<void>> accept(String requestId) async {
     accepted.add(requestId);
+    return const ApiSuccess(null);
+  }
+
+  @override
+  Future<ApiResult<void>> decline(String requestId) async {
+    declined.add(requestId);
+    return const ApiSuccess(null);
+  }
+
+  @override
+  Future<ApiResult<void>> cancel(String requestId) async {
+    cancelled.add(requestId);
+    return const ApiSuccess(null);
+  }
+
+  @override
+  Future<ApiResult<void>> send(String userId) async {
+    sent.add(userId);
+    return const ApiSuccess(null);
+  }
+
+  @override
+  Future<ApiResult<void>> remove(String userId) async {
+    removed.add(userId);
     return const ApiSuccess(null);
   }
 }
@@ -213,6 +241,12 @@ void main() {
       expect(find.byKey(const Key('friends.tab.friends')), findsOneWidget);
       expect(find.byKey(const Key('friends.filter')), findsOneWidget);
       expect(find.text('Message'), findsNWidgets(2));
+      await tester.tap(find.byKey(const Key('friends.actions.Grace Hopper')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove friend'));
+      await tester.pumpAndSettle();
+      expect(friends.removed, ['grace']);
+
       await tester.enterText(find.byKey(const Key('friends.filter')), 'grace');
       await tester.pumpAndSettle();
       expect(find.text('Ada Lovelace With A Long Name'), findsNothing);
@@ -227,6 +261,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
       expect(find.text('Search User'), findsOneWidget);
+      await tester.tap(find.text('Add'));
+      await tester.pumpAndSettle();
+      expect(friends.sent, ['search-user']);
       Navigator.of(tester.element(find.text('Search User'))).pop();
       await tester.pumpAndSettle();
 
@@ -237,6 +274,79 @@ void main() {
       await tester.tap(find.text('Accept'));
       await tester.pumpAndSettle();
       expect(friends.accepted, ['incoming-1']);
+      await tester.tap(find.text('Decline'));
+      await tester.pumpAndSettle();
+      expect(friends.declined, ['incoming-1']);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(friends.cancelled, ['outgoing-1']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'keeps a full username discovery page scrollable above the phone keyboard',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final discovered = FriendPage(
+        items: List.generate(
+          20,
+          (index) => FriendCard(
+            id: 'search-$index',
+            username: 'search-$index',
+            displayName: 'Search result $index',
+            relationship: 'none',
+          ),
+        ),
+        nextCursor: 'next-page',
+        hasMore: true,
+      );
+      final friends = SocialFriendsClient(
+        pages: const [
+          FriendsSnapshot(
+            friends: FriendPage(items: [], nextCursor: null, hasMore: false),
+            incoming: _emptyRequestPage,
+            outgoing: _emptyRequestPage,
+          ),
+        ],
+        discovered: discovered,
+      );
+      final harness = TestHarness(friends: friends);
+      await tester.pumpWidget(
+        AppScope(
+          services: harness.services,
+          child: MaterialApp(
+            theme: buildDayliTheme(useGoogleFonts: false),
+            home: const Scaffold(body: FriendsScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('friends.discover')));
+      await tester.pumpAndSettle();
+      final search = find.byKey(const Key('friends.discoverySearch'));
+      await tester.showKeyboard(search);
+      await tester.enterText(search, 'se');
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('friends.discoveryResults')), findsOneWidget);
+      final discoveryScroll = find.descendant(
+        of: find.byKey(const Key('friends.discoveryResults')),
+        matching: find.byType(Scrollable),
+      );
+      await tester.scrollUntilVisible(
+        find.text('Search result 19'),
+        180,
+        scrollable: discoveryScroll,
+      );
+      expect(find.text('Search result 19'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('load more'),
+        180,
+        scrollable: discoveryScroll,
+      );
+      expect(find.text('load more'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

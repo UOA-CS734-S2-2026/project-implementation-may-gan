@@ -87,6 +87,11 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 friends: visibleFriends,
                 loading: controller.loading,
                 hasMore: snapshot?.friends.hasMore ?? false,
+                busyId: controller.busyId,
+                onRemove: (friendId) => controller.mutate(
+                  friendId,
+                  () => AppScope.of(context).friends.remove(friendId),
+                ),
                 onLoadMore: controller.loadMoreFriends,
                 onDiscover: () => _showDiscovery(context, controller),
               )
@@ -257,6 +262,8 @@ class _FriendsList extends StatelessWidget {
     required this.friends,
     required this.loading,
     required this.hasMore,
+    required this.busyId,
+    required this.onRemove,
     required this.onLoadMore,
     required this.onDiscover,
   });
@@ -266,6 +273,8 @@ class _FriendsList extends StatelessWidget {
   final List<FriendCard> friends;
   final bool loading;
   final bool hasMore;
+  final String? busyId;
+  final ValueChanged<String> onRemove;
   final VoidCallback onLoadMore;
   final VoidCallback onDiscover;
 
@@ -328,7 +337,13 @@ class _FriendsList extends StatelessWidget {
             ),
           )
         else
-          ...friends.map((friend) => _FriendRow(friend: friend)),
+          ...friends.map(
+            (friend) => _FriendRow(
+              friend: friend,
+              busy: busyId == friend.id,
+              onRemove: () => onRemove(friend.id),
+            ),
+          ),
         if (hasMore) _LoadMore(onPressed: onLoadMore, label: 'load more'),
       ],
     );
@@ -446,8 +461,14 @@ class _RequestHeading extends StatelessWidget {
 }
 
 class _FriendRow extends StatelessWidget {
-  const _FriendRow({required this.friend});
+  const _FriendRow({
+    required this.friend,
+    required this.busy,
+    required this.onRemove,
+  });
   final FriendCard friend;
+  final bool busy;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) => _PersonRow(
@@ -463,7 +484,11 @@ class _FriendRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 7),
-        const _RelationshipBadge(),
+        _RelationshipBadge(
+          name: friend.displayName,
+          enabled: !busy,
+          onRemove: onRemove,
+        ),
       ],
     ),
   );
@@ -601,22 +626,45 @@ class _PersonRow extends StatelessWidget {
 }
 
 class _RelationshipBadge extends StatelessWidget {
-  const _RelationshipBadge();
+  const _RelationshipBadge({
+    required this.name,
+    required this.enabled,
+    required this.onRemove,
+  });
+
+  final String name;
+  final bool enabled;
+  final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-    decoration: BoxDecoration(
-      color: DayliColors.of(context).backgroundAccent,
-      borderRadius: BorderRadius.circular(17),
-    ),
-    child: Text(
-      'friends',
-      style: DayliText.serif(
-        context,
-        size: DayliTextSize.base,
-        weight: FontWeight.w600,
-        color: DayliColors.of(context).foregroundAccent,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: 'Friend actions for $name',
+    child: PopupMenuButton<String>(
+      key: Key('friends.actions.$name'),
+      enabled: enabled,
+      tooltip: 'Friend actions',
+      onSelected: (value) {
+        if (value == 'remove') onRemove();
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'remove', child: Text('Remove friend')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+        decoration: BoxDecoration(
+          color: DayliColors.of(context).backgroundAccent,
+          borderRadius: BorderRadius.circular(17),
+        ),
+        child: Text(
+          'friends',
+          style: DayliText.serif(
+            context,
+            size: DayliTextSize.base,
+            weight: FontWeight.w600,
+            color: DayliColors.of(context).foregroundAccent,
+          ),
+        ),
       ),
     ),
   );
@@ -695,87 +743,116 @@ class _DiscoverySheetState extends State<_DiscoverySheet> {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
+    final availableHeight =
+        MediaQuery.sizeOf(context).height -
+        MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          20,
-          20,
-          20,
-          20 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: AnimatedBuilder(
-          animation: widget.controller,
-          builder: (context, _) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'find someone',
-                style: DayliText.serif(
-                  context,
-                  size: DayliTextSize.xxl,
-                  weight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                key: const Key('friends.discoverySearch'),
-                autofocus: true,
-                maxLength: 32,
-                onChanged: (value) {
-                  setState(() => _query = value);
-                  widget.controller.search(value);
-                },
-                decoration: const InputDecoration(
-                  prefixText: '@',
-                  hintText: 'username',
-                  counterText: '',
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (widget.controller.searching)
-                const Center(child: CircularProgressIndicator(strokeWidth: 2))
-              else if (_query.trim().length >= 2 &&
-                  widget.controller.results.items.isEmpty)
+      child: SizedBox(
+        height: availableHeight * 0.88,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: AnimatedBuilder(
+            animation: widget.controller,
+            builder: (context, _) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 Text(
-                  'No matching usernames yet.',
-                  style: DayliText.sans(
+                  'find someone',
+                  style: DayliText.serif(
                     context,
-                    size: DayliTextSize.sm,
-                    color: colors.foregroundTertiary,
-                  ),
-                )
-              else
-                ...widget.controller.results.items.map(
-                  (person) => _PersonRow(
-                    person: person,
-                    trailing: _SoftAction(
-                      label: person.relationship == 'none'
-                          ? 'Add'
-                          : person.relationship == 'friends'
-                          ? 'friends'
-                          : 'requested',
-                      onPressed:
-                          person.relationship == 'none' &&
-                              widget.controller.busyId != person.id
-                          ? () => widget.controller.mutate(
-                              person.id,
-                              () =>
-                                  AppScope.of(context).friends.send(person.id),
-                            )
-                          : null,
-                    ),
+                    size: DayliTextSize.xxl,
+                    weight: FontWeight.w600,
                   ),
                 ),
-              if (widget.controller.results.hasMore)
-                _LoadMore(
-                  onPressed: () => widget.controller.loadMoreSearch(_query),
-                  label: 'load more',
+                const SizedBox(height: 12),
+                TextField(
+                  key: const Key('friends.discoverySearch'),
+                  autofocus: true,
+                  maxLength: 32,
+                  onChanged: (value) {
+                    setState(() => _query = value);
+                    widget.controller.search(value);
+                  },
+                  decoration: const InputDecoration(
+                    prefixText: '@',
+                    hintText: 'username',
+                    counterText: '',
+                  ),
                 ),
-            ],
+                const SizedBox(height: 12),
+                Expanded(
+                  child: _DiscoveryResults(
+                    query: _query,
+                    controller: widget.controller,
+                    colors: colors,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DiscoveryResults extends StatelessWidget {
+  const _DiscoveryResults({
+    required this.query,
+    required this.controller,
+    required this.colors,
+  });
+
+  final String query;
+  final FriendsController controller;
+  final DayliColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.searching) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (query.trim().length >= 2 && controller.results.items.isEmpty) {
+      return Center(
+        child: Text(
+          'No matching usernames yet.',
+          style: DayliText.sans(
+            context,
+            size: DayliTextSize.sm,
+            color: colors.foregroundTertiary,
+          ),
+        ),
+      );
+    }
+    return ListView(
+      key: const Key('friends.discoveryResults'),
+      children: [
+        ...controller.results.items.map(
+          (person) => _PersonRow(
+            person: person,
+            trailing: _SoftAction(
+              label: person.relationship == 'none'
+                  ? 'Add'
+                  : person.relationship == 'friends'
+                  ? 'friends'
+                  : 'requested',
+              onPressed:
+                  person.relationship == 'none' &&
+                      controller.busyId != person.id
+                  ? () => controller.mutate(
+                      person.id,
+                      () => AppScope.of(context).friends.send(person.id),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+        if (controller.results.hasMore)
+          _LoadMore(
+            onPressed: () => controller.loadMoreSearch(query),
+            label: 'load more',
+          ),
+      ],
     );
   }
 }
