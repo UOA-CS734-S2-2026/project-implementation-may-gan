@@ -2,9 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import React, { useId, useMemo, useState } from "react";
-import { Button } from "@/components/ui/core/Button";
-import { cn } from "@/utils/cn";
+import React, { useMemo } from "react";
 
 type PostCardProps = {
   postId: string;
@@ -13,7 +11,6 @@ type PostCardProps = {
   userImage?: string | null;
   prompt?: string;
   promptResponse: string;
-  caption?: string | null;
   mediaUrl?: string | null;
   createdAt: Date | string;
 };
@@ -43,7 +40,6 @@ export function PostCard({
   userImage,
   prompt,
   promptResponse,
-  caption,
   mediaUrl,
   createdAt,
 }: PostCardProps) {
@@ -63,19 +59,19 @@ export function PostCard({
   }).format(new Date(createdAt));
   const isVideo = postImageUrl ? isVideoMediaUrl(postImageUrl) : false;
   const rotation = useMemo(() => getRotation(postId), [postId]);
-  // Expands in place so a long answer can always be read in full.
-  const [expanded, setExpanded] = useState(false);
-  const contentId = useId();
 
   return (
-    <div
-      className={cn(
-        `flex flex-col rounded-sm bg-white shadow-md w-full min-w-75 overflow-hidden border-white
-      transition duration-500 hover:duration-300 hover:border hover:border-background-tertiary hover:z-1 hover:-translate-y-1 hover:-translate-x-1 hover:-rotate-2 hover:scale-[1.03] hover:shadow-xl`,
-        !expanded && "aspect-4/6"
-      )}
+    <article
+      className="relative flex flex-col h-full rounded-sm bg-white shadow-md w-full min-w-75 overflow-hidden border-white
+      transition duration-500 hover:duration-300 hover:border hover:border-background-tertiary hover:z-1 hover:-translate-y-1 hover:-translate-x-1 hover:-rotate-2 hover:scale-[1.03] hover:shadow-xl"
       style={{ transform: `rotate(${rotation}deg)` }}
     >
+      {/* The whole card opens the post. The author link sits above it. */}
+      <Link
+        href={`/${username}/${postId}`}
+        aria-label={`Open ${displayName}'s dayli from ${date}`}
+        className="absolute inset-0 z-0"
+      />
       <div className="m-5 mb-0 shrink-0">
         {postImageUrl ? (
           <div className="relative aspect-square w-full overflow-hidden bg-background-secondary">
@@ -105,10 +101,10 @@ export function PostCard({
         )}
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0 gap-3 p-4">
+      <div className="flex flex-col flex-1 gap-3 p-4">
         <Link
           href={`/${username}`}
-          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+          className="relative z-10 flex items-center gap-2 self-start hover:opacity-70 transition-opacity"
         >
           {userImage ? (
             <Image
@@ -133,36 +129,22 @@ export function PostCard({
           </div>
         </Link>
 
-        <div id={contentId} className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-col gap-1">
           {prompt && (
-            <p className={cn("text-xs text-foreground-secondary", !expanded && "line-clamp-1")}>
+            <p className="text-xs text-foreground-secondary line-clamp-1">
               {prompt}
             </p>
           )}
-          <p className={cn("text-sm text-foreground whitespace-pre-line", !expanded && "line-clamp-2")}>
+          {/* Clamped whole lines only; the full answer is on the post page. */}
+          <p className="text-sm text-foreground line-clamp-3">
             {promptResponse}
           </p>
-          {caption && (
-            <p className={cn("text-sm italic text-foreground-secondary whitespace-pre-line", !expanded && "line-clamp-1")}>
-              {caption}
-            </p>
-          )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <Button
-            onClick={() => setExpanded((open) => !open)}
-            aria-expanded={expanded}
-            aria-controls={contentId}
-            variant={{ color: "accent", size: "sm", weight: "secondary" }}
-          >
-            {expanded ? "See less" : "See more"}
-          </Button>
-          <span className="text-xs text-foreground-secondary">
-            {date} | {time}
-          </span>
-        </div>
+        <p className="mt-auto text-right text-xs text-foreground-secondary">
+          {date} | {time}
+        </p>
       </div>
-    </div>
+    </article>
   );
 }

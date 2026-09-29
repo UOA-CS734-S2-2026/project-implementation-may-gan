@@ -290,6 +290,12 @@ class ApiClient {
           return PendingRequestPage.fromJson(value);
         case 'PostAudience':
           return PostAudienceTypeTransformer().decode(value);
+        case 'PostDetail':
+          return PostDetail.fromJson(value);
+        case 'PostDetailAuthor':
+          return PostDetailAuthor.fromJson(value);
+        case 'PostDetailPrompt':
+          return PostDetailPrompt.fromJson(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
         case 'RelationshipState':

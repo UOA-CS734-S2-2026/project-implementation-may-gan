@@ -54,7 +54,13 @@ void main() {
     await signIn(tester, harness);
 
     expect(find.text('Baked bread.'), findsOneWidget);
-    expect(find.text('Third time lucky'), findsOneWidget);
+    // The word dump is only on the post; the answer is clamped to 3 lines.
+    expect(find.text('Third time lucky'), findsNothing);
+    final answer = tester.widget<Text>(
+      find.byKey(const Key('home.feed.answer.1')),
+    );
+    expect(answer.maxLines, 3);
+    expect(answer.overflow, TextOverflow.ellipsis);
     expect(find.text('@friend_1'), findsOneWidget);
     expect(find.text('24 Sep · 7/10'), findsOneWidget);
     expect(find.byKey(const Key('home.empty')), findsNothing);

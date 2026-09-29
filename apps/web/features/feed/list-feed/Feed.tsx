@@ -106,7 +106,6 @@ export function Feed() {
             displayName={post.author.displayName}
             prompt={post.prompt.text}
             promptResponse={post.reflectiveAnswer}
-            caption={post.caption}
             createdAt={post.acceptedAt}
           />
         ))}

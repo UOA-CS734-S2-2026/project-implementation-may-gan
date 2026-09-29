@@ -591,6 +591,105 @@
           "text"
         ]
       },
+      "PostDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "author": {
+            "$ref": "#/components/schemas/PostDetailAuthor"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PostDetailPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "friends"
+            ]
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "releasedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True when the author has edited the post since it was accepted."
+          },
+          "viewerIsAuthor": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "localDate",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience",
+          "acceptedAt",
+          "releasedAt",
+          "edited",
+          "viewerIsAuthor"
+        ],
+        "description": "One post the caller may read. Tomorrow notes and media are not part of this projection."
+      },
+      "PostDetailAuthor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName"
+        ]
+      },
+      "PostDetailPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "description": "The prompt stored with the post, not the current day's prompt."
+      },
       "PendingRequestPage": {
         "type": "object",
         "properties": {
@@ -1540,6 +1639,93 @@
           },
           "503": {
             "description": "The feed is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.get",
+        "summary": "Read one post",
+        "description": "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The post.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The post ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

@@ -94,6 +94,7 @@ apps/api/src/
       posts.routes.ts                       Thin registration only
       create-post/                          Action-owned route, service, and repository
       list-feed/                            Route and repository over the shared visibility filter
+      get-post/                             Detail route and repository over the same filter
     posting-days/
       get-current-posting-day/
     media/

@@ -22,7 +22,7 @@ flowchart LR
 
 The API entry point builds a Hono application. With valid local Better Auth and Hyperdrive settings, it mounts Better Auth on `/api/auth` and database-backed routes on `/api/v1`. PostgreSQL holds Better Auth records, daily prompts, posts, post idempotency keys, relationship records, and media reservations.
 
-The API currently registers routes for health and API documentation, Better Auth, the current posting day, post creation, the friends feed, relationships, and media reservations. A route returns an unavailable response when its required runtime configuration is absent.
+The API currently registers routes for health and API documentation, Better Auth, the current posting day, post creation, the friends feed, post detail, relationships, and media reservations. A route returns an unavailable response when its required runtime configuration is absent.
 
 ## Email and password authentication
 
@@ -57,7 +57,7 @@ The web post form calls `POST /api/v1/posts` with an idempotency key. It submits
 
 Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day and sends `POST /api/v1/posts` through the generated Dart client with the draft's stored idempotency key. The draft is removed only after the server accepts the post, and media references stay on the device.
 
-`GET /api/v1/feed` returns released `friends` posts from active, unblocked friends, newest day first, using the shared post visibility predicate. The web home page and the Flutter home screen page through it. See [Friends feed](friends-feed.md).
+`GET /api/v1/feed` returns released `friends` posts from active, unblocked friends, newest day first, using the shared post visibility predicate. The web home page and the Flutter home screen page through it. See [Friends feed](friends-feed.md). `GET /api/v1/posts/{postId}` returns one post through the same predicate and conceals unreadable posts as 404. See [Post detail](post-detail.md).
 
 The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
 

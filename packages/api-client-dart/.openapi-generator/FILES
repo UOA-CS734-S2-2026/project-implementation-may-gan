@@ -62,6 +62,9 @@ lib/model/message_reply_preview.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
+lib/model/post_detail.dart
+lib/model/post_detail_author.dart
+lib/model/post_detail_prompt.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart

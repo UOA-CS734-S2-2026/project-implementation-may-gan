@@ -11,6 +11,7 @@ import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../compose/deadline_countdown.dart';
 import '../ui/dayli_button.dart';
+import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 import 'feed_controller.dart';
 
@@ -435,32 +436,6 @@ class _FeedSection extends StatelessWidget {
   }
 }
 
-const _months = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-/// `2026-09-29` as `29 Sep`; the Auckland day is shown as written.
-String _dayLabel(String localDate) {
-  final parts = localDate.split('-');
-  final month = parts.length == 3 ? int.tryParse(parts[1]) : null;
-  final day = parts.length == 3 ? int.tryParse(parts[2]) : null;
-  if (month == null || day == null || month < 1 || month > 12) {
-    return localDate;
-  }
-  return '$day ${_months[month - 1]}';
-}
-
 class _FeedPostCard extends StatelessWidget {
   const _FeedPostCard({super.key, required this.post});
 
@@ -472,7 +447,7 @@ class _FeedPostCard extends StatelessWidget {
     final initial = post.displayName.isEmpty
         ? '?'
         : post.displayName.characters.first.toUpperCase();
-    return DayliCard(
+    final card = DayliCard(
       padding: const EdgeInsets.all(18),
       radius: 18,
       child: Column(
@@ -520,7 +495,7 @@ class _FeedPostCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${_dayLabel(post.localDate)} · ${post.rating}/10',
+                '${shortDayLabel(post.localDate)} · ${post.rating}/10',
                 style: DayliText.sans(
                   context,
                   size: DayliTextSize.xs,
@@ -532,6 +507,8 @@ class _FeedPostCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             post.promptText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: DayliText.sans(
               context,
               size: DayliTextSize.xs,
@@ -540,8 +517,12 @@ class _FeedPostCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
+          // Whole lines only; the full answer and word dump are on the post.
           Text(
             post.reflectiveAnswer,
+            key: Key('home.feed.answer.${post.id}'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
             style: DayliText.serif(
               context,
               size: DayliTextSize.lg,
@@ -549,13 +530,6 @@ class _FeedPostCard extends StatelessWidget {
               tracking: DayliTracking.tight,
             ),
           ),
-          if (post.caption case final caption?) ...[
-            const SizedBox(height: 10),
-            Text(
-              caption,
-              style: DayliText.sans(context, size: DayliTextSize.sm),
-            ),
-          ],
           if (post.edited) ...[
             const SizedBox(height: 10),
             Text(
@@ -568,6 +542,15 @@ class _FeedPostCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: 'Open ${post.displayName}\'s dayli',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push('/posts/${post.id}'),
+        child: card,
       ),
     );
   }

@@ -62,7 +62,7 @@ The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue
 
 Only the data layer is missing features:
 
-- Feed cards show text only until media downloads (#24), and have no detail page until #74/#75.
+- Feed cards and post detail show text only until media downloads (#24). Likes and comments arrive with #79/#80.
 - Friends, my days, and messages are placeholders until their APIs land.
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
 - Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media stays on the device with the draft until uploads land (#22), and photos are not cropped.

@@ -33,6 +33,11 @@ import {
     FeedPageFromJSON,
     FeedPageToJSON,
 } from '../models/FeedPage';
+import {
+    type PostDetail,
+    PostDetailFromJSON,
+    PostDetailToJSON,
+} from '../models/PostDetail';
 
 export interface PostsCreateRequest {
     /**
@@ -43,6 +48,13 @@ export interface PostsCreateRequest {
      *
      */
     createDailyPostRequest: CreateDailyPostRequest;
+}
+
+export interface PostsGetRequest {
+    /**
+     *
+     */
+    postId: string;
 }
 
 export interface PostsListFeedRequest {
@@ -126,6 +138,61 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsCreate(requestParameters: PostsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DailyPost> {
         const response = await this.postsCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGet without sending the request
+     */
+    async postsGetRequestOpts(requestParameters: PostsGetRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGet().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Read one post
+     */
+    async postsGetRaw(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostDetail>> {
+        const requestOptions = await this.postsGetRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Read one post
+     */
+    async postsGet(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
+        const response = await this.postsGetRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

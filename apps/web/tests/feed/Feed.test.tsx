@@ -58,9 +58,8 @@ describe("Feed", () => {
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
-  it("shows the prompt and caption, and expands a post in place to read it in full", async () => {
-    const actor = userEvent.setup();
-    const answer = "A long answer about the harbour that goes on well past two lines of the card.";
+  it("shows the prompt and a clamped answer, and opens the post from the whole card", async () => {
+    const answer = "A long answer about the harbour that goes on well past three lines of the card.";
     page.mockResolvedValue({
       ok: true,
       value: { items: [{ ...post("1", answer), caption: "Low tide." }], nextCursor: null, hasMore: false },
@@ -69,16 +68,13 @@ describe("Feed", () => {
     render(<Feed />);
     const text = await screen.findByText(answer);
     expect(screen.getByText("What made you smile today?")).toBeTruthy();
-    expect(screen.getByText("Low tide.")).toBeTruthy();
-    expect(text.className).toContain("line-clamp-2");
-    expect(screen.queryByRole("link", { name: /see more/i })).toBeNull();
+    expect(text.className).toContain("line-clamp-3");
+    // The word dump is only on the post page.
+    expect(screen.queryByText("Low tide.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /see more/i })).toBeNull();
 
-    await actor.click(screen.getByRole("button", { name: "See more" }));
-    expect(screen.getByRole("button", { name: "See less" }).getAttribute("aria-expanded")).toBe("true");
-    expect(text.className).not.toContain("line-clamp");
-
-    await actor.click(screen.getByRole("button", { name: "See less" }));
-    expect(text.className).toContain("line-clamp-2");
+    expect(screen.getByRole("link", { name: /open friend 1's dayli/i }).getAttribute("href")).toBe("/friend_1/1");
+    expect(screen.getByRole("link", { name: /@friend_1/ }).getAttribute("href")).toBe("/friend_1");
   });
 
   it("shows an empty state when friends have no released posts", async () => {
