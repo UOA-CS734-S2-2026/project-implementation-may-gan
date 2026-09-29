@@ -58,6 +58,29 @@ describe("Feed", () => {
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
   });
 
+  it("shows the prompt and caption, and expands a post in place to read it in full", async () => {
+    const actor = userEvent.setup();
+    const answer = "A long answer about the harbour that goes on well past two lines of the card.";
+    page.mockResolvedValue({
+      ok: true,
+      value: { items: [{ ...post("1", answer), caption: "Low tide." }], nextCursor: null, hasMore: false },
+    });
+
+    render(<Feed />);
+    const text = await screen.findByText(answer);
+    expect(screen.getByText("What made you smile today?")).toBeTruthy();
+    expect(screen.getByText("Low tide.")).toBeTruthy();
+    expect(text.className).toContain("line-clamp-2");
+    expect(screen.queryByRole("link", { name: /see more/i })).toBeNull();
+
+    await actor.click(screen.getByRole("button", { name: "See more" }));
+    expect(screen.getByRole("button", { name: "See less" }).getAttribute("aria-expanded")).toBe("true");
+    expect(text.className).not.toContain("line-clamp");
+
+    await actor.click(screen.getByRole("button", { name: "See less" }));
+    expect(text.className).toContain("line-clamp-2");
+  });
+
   it("shows an empty state when friends have no released posts", async () => {
     page.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } });
 

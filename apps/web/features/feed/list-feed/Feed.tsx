@@ -104,7 +104,9 @@ export function Feed() {
             postId={post.id}
             username={post.author.username}
             displayName={post.author.displayName}
+            prompt={post.prompt.text}
             promptResponse={post.reflectiveAnswer}
+            caption={post.caption}
             createdAt={post.acceptedAt}
           />
         ))}
