@@ -16,7 +16,7 @@ Google does not copy a provider name into the public profile. New Google account
 2. Takes a transaction advisory lock per case-folded handle in that trigger. It rejects case-insensitive collisions without requiring a unique lower-case index that could fail against legacy duplicates.
 3. Does not backfill `display_username` from Better Auth's provider-owned `name`. Public cards and messaging peers use an explicitly chosen `display_username`, falling back to the username.
 
-Apply the migration using the protected migration workflow, after its required restore-point check, before deploying the Worker and clients. Do not apply it directly to a live database. Existing duplicate or uppercase imports are intentionally left unchanged and may not be renamed by this release.
+Apply the migration using the manual database workflow before deploying the Worker and clients. The workflow requires a restore-point confirmation for production, not staging. Do not apply it directly to a live database. Existing duplicate or uppercase imports are intentionally left unchanged and may not be renamed by this release.
 
 ## Verification
 
