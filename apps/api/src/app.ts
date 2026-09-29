@@ -88,6 +88,10 @@ import {
   createPostgresGetConversationRepository,
 } from "./features/messaging/conversations/get-conversation/get-conversation.repository";
 import {
+  createHyperdriveGetDirectConversationRepository,
+  createPostgresGetDirectConversationRepository,
+} from "./features/messaging/conversations/get-direct-conversation/get-direct-conversation.repository";
+import {
   createHyperdriveGetMessageRepository,
   createPostgresGetMessageRepository,
 } from "./features/messaging/messages/get-message/get-message.repository";
@@ -344,6 +348,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     listConversationChanges: createPostgresListConversationChangesRepository(database),
     listConversations: createPostgresListConversationsRepository(database),
     getConversation: createPostgresGetConversationRepository(database),
+    findDirectConversation: createPostgresGetDirectConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
     send: createSendMessageService({ store, now: options.now }),
@@ -435,6 +440,7 @@ function createMessagingDependencies(
     listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),
     listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),
     getConversation: createHyperdriveGetConversationRepository(configuration.hyperdrive),
+    findDirectConversation: createHyperdriveGetDirectConversationRepository(configuration.hyperdrive),
     getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),
     dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,
