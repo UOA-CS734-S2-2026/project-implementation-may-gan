@@ -24,6 +24,7 @@ export function createStagingWorkerConfigs({
   authApiOrigin,
   authWebOrigin,
   authVars = {},
+  mediaVars = {},
 }) {
   if (typeof workerName !== "string" || !/^dayli-api-staging$/.test(workerName)) {
     throw new Error("Refusing an unexpected staging Worker name.");
@@ -38,6 +39,7 @@ export function createStagingWorkerConfigs({
     BETTER_AUTH_BASE_URL: authApiOrigin,
     BETTER_AUTH_TRUSTED_ORIGINS: `${authApiOrigin},${authWebOrigin}`,
     ...authVars,
+    ...mediaVars,
   };
   const api = {
     ...sharedWorkerConfig,

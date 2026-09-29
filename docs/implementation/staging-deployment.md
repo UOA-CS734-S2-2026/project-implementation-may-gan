@@ -35,6 +35,7 @@ Set these `staging` Environment variables:
 - `STAGING_AUTH_WEB_ORIGIN`
 - `STAGING_GOOGLE_WEB_CLIENT_ID`, `STAGING_GOOGLE_IOS_CLIENT_ID`, and `STAGING_GOOGLE_ANDROID_CLIENT_ID` together, or leave all three blank
 - `STAGING_RESEND_FROM` only when Resend is enabled
+- `STAGING_R2_BUCKET_NAME` only when media uploads are enabled (see [media reservations](../dayli/media-reservations.md#one-time-cloudflare-setup)); the Worker's `R2_ACCOUNT_ID` is `CLOUDFLARE_ACCOUNT_ID`
 
 Set these `staging` Environment secrets:
 
@@ -44,10 +45,11 @@ Set these `staging` Environment secrets:
 - `GOOGLE_CLIENT_SECRET` when the Google variable tuple is set
 - `RESEND_API_KEY` when `STAGING_RESEND_FROM` is set
 - `FCM_SERVICE_ACCOUNT_JSON` when push delivery is enabled
+- `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` together when `STAGING_R2_BUCKET_NAME` is set. This is a bucket-scoped R2 API token, separate from `CLOUDFLARE_API_TOKEN`.
 
 Provision `PUSH_TOKEN_ENCRYPTION_KEY` directly in the Cloudflare staging Worker secret store. Never add it to GitHub, workflow inputs, or routine secret sync.
 
-The source names are an allowlist. The workflow does not accept arbitrary secret names, does not put a secret in Wrangler `vars`, does not write secret values to generated files or artifacts, and does not delete an absent optional Worker secret. It validates every required source secret, the public provider pairing, and the existing Cloudflare push-key prerequisite before any mutation. It uses Cloudflare's `PATCH .../secrets-bulk` API to upsert only reviewed auth, email, and optional FCM values. The push key is omitted from every routine request. A failed bulk request or a failed readback of the requested secret binding names stops deployment. Cloudflare may include other existing bindings in a successful bulk response, so the workflow uses its success flag and verifies the requested names in a separate list call. List responses do not expose secret values. Cloudflare secret changes are not transactional with a later code deployment, so inspect the Worker secret store and rerun the approved workflow after a sanitized failure. A changed auth, email, or FCM secret can activate behavior in the currently deployed Worker before the code deployment completes. Keep configuration backward compatible and use the documented rollback procedure.
+The source names are an allowlist. The workflow does not accept arbitrary secret names, does not put a secret in Wrangler `vars`, does not write secret values to generated files or artifacts, and does not delete an absent optional Worker secret. It validates every required source secret, the public provider pairing, and the existing Cloudflare push-key prerequisite before any mutation. It uses Cloudflare's `PATCH .../secrets-bulk` API to upsert only reviewed auth, email, R2, and optional FCM values. The push key is omitted from every routine request. A failed bulk request or a failed readback of the requested secret binding names stops deployment. Cloudflare may include other existing bindings in a successful bulk response, so the workflow uses its success flag and verifies the requested names in a separate list call. List responses do not expose secret values. Cloudflare secret changes are not transactional with a later code deployment, so inspect the Worker secret store and rerun the approved workflow after a sanitized failure. A changed auth, email, or FCM secret can activate behavior in the currently deployed Worker before the code deployment completes. Keep configuration backward compatible and use the documented rollback procedure.
 
 The Cloudflare token needs permission to read the named Hyperdrive, list and read the exact Worker, read Worker secret names and settings, bulk-update that Worker's secrets, and deploy that Worker. Do not grant production resources to this token.
 

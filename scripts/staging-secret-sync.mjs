@@ -6,6 +6,8 @@ export const stagingWorkerSecretNames = Object.freeze({
   resend: "RESEND_API_KEY",
   fcm: "FCM_SERVICE_ACCOUNT_JSON",
   pushKey: "PUSH_TOKEN_ENCRYPTION_KEY",
+  r2AccessKeyId: "R2_ACCESS_KEY_ID",
+  r2SecretAccessKey: "R2_SECRET_ACCESS_KEY",
 });
 
 // PUSH_TOKEN_ENCRYPTION_KEY is intentionally absent. It is provisioned and
@@ -15,7 +17,17 @@ const syncedSecretNames = new Set([
   stagingWorkerSecretNames.google,
   stagingWorkerSecretNames.resend,
   stagingWorkerSecretNames.fcm,
+  stagingWorkerSecretNames.r2AccessKeyId,
+  stagingWorkerSecretNames.r2SecretAccessKey,
 ]);
+
+// Each of these must exist on the Worker exactly when its public bindings do.
+const pairedSecretNames = [
+  stagingWorkerSecretNames.google,
+  stagingWorkerSecretNames.resend,
+  stagingWorkerSecretNames.r2AccessKeyId,
+  stagingWorkerSecretNames.r2SecretAccessKey,
+];
 
 function requiredSecret(environment, name) {
   const value = environment[name];
@@ -33,12 +45,12 @@ function optionalSecret(environment, name) {
 }
 
 /** Read only the reviewed GitHub Environment secret allowlist. */
-export function readStagingWorkerSecretSource(environment, requiredAuthSecretNames) {
-  if (!Array.isArray(requiredAuthSecretNames) || !requiredAuthSecretNames.every((name) => syncedSecretNames.has(name))) {
+export function readStagingWorkerSecretSource(environment, requiredSecretNames) {
+  if (!Array.isArray(requiredSecretNames) || !requiredSecretNames.every((name) => syncedSecretNames.has(name))) {
     throw new Error("Refusing an unreviewed Worker secret name.");
   }
   const values = {};
-  for (const name of requiredAuthSecretNames) values[name] = requiredSecret(environment, name);
+  for (const name of requiredSecretNames) values[name] = requiredSecret(environment, name);
   const fcm = optionalSecret(environment, stagingWorkerSecretNames.fcm);
   if (fcm !== undefined) values[stagingWorkerSecretNames.fcm] = fcm;
   return { values };
@@ -49,14 +61,14 @@ export function readStagingWorkerSecretSource(environment, requiredAuthSecretNam
  * A key by itself is allowed for one-time owner provisioning. FCM is never
  * allowed without that existing key. Provider secrets must match public vars.
  */
-export function assertProjectedWorkerSecretPairing({ existingSecretNames, source, requiredAuthSecretNames }) {
+export function assertProjectedWorkerSecretPairing({ existingSecretNames, source, requiredSecretNames }) {
   if (!(existingSecretNames instanceof Set)) throw new Error("Cloudflare returned invalid Worker secret names.");
-  if (!Array.isArray(requiredAuthSecretNames) || !requiredAuthSecretNames.every((name) => syncedSecretNames.has(name))) {
+  if (!Array.isArray(requiredSecretNames) || !requiredSecretNames.every((name) => syncedSecretNames.has(name))) {
     throw new Error("Refusing an unreviewed Worker secret name.");
   }
   const projected = new Set([...existingSecretNames, ...Object.keys(source.values)]);
-  for (const name of [stagingWorkerSecretNames.google, stagingWorkerSecretNames.resend]) {
-    const required = requiredAuthSecretNames.includes(name);
+  for (const name of pairedSecretNames) {
+    const required = requiredSecretNames.includes(name);
     if (projected.has(name) !== required) {
       throw new Error(`${name} must match its complete public staging configuration.`);
     }
