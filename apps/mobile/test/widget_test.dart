@@ -62,6 +62,9 @@ class RetryFriendsClient implements FriendsClient {
   Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
       const ApiSuccess(FriendPage(items: [], nextCursor: null, hasMore: false));
   @override
+  Future<ApiResult<FriendCard>> profile(String username) async =>
+      const ApiError(ServiceUnavailable());
+  @override
   Future<ApiResult<void>> accept(String requestId) async =>
       const ApiSuccess(null);
   @override

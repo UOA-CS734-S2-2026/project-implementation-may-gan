@@ -72,6 +72,7 @@ abstract interface class FriendsClient {
     String? cursor,
   });
   Future<ApiResult<FriendPage>> search(String query, {String? cursor});
+  Future<ApiResult<FriendCard>> profile(String username);
   Future<ApiResult<void>> send(String userId);
   Future<ApiResult<void>> accept(String requestId);
   Future<ApiResult<void>> decline(String requestId);
@@ -143,6 +144,7 @@ class GeneratedFriendsClient implements FriendsClient {
       await api.relationshipsSearchUsers(query, cursor: cursor, limit: 20),
     ),
   );
+  @override
   Future<ApiResult<FriendCard>> profile(String username) => _read((api) async {
     final profile = await api.relationshipsGetProfileByUsername(username);
     if (profile == null) throw const FormatException('empty profile');

@@ -7,6 +7,7 @@ import 'package:dayli_mobile/messaging/conversation_screen.dart';
 import 'package:dayli_mobile/messaging/messaging_client.dart';
 import 'package:dayli_mobile/messaging/messaging_controller.dart';
 import 'package:dayli_mobile/messaging/messages_screen.dart';
+import 'package:dayli_mobile/messaging/new_message_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'messaging_controller_test.dart'
     show FakeMessagingClient, testConversation, testMessage;
 import 'support/fakes.dart';
+
+class DelayedProfileFriendsClient extends FakeFriendsClient {
+  final first = Completer<ApiResult<FriendCard>>();
+  final second = Completer<ApiResult<FriendCard>>();
+  var calls = 0;
+
+  @override
+  Future<ApiResult<FriendCard>> profile(String username) =>
+      calls++ == 0 ? first.future : second.future;
+}
 
 class PickerFriendsClient extends FakeFriendsClient {
   @override
@@ -73,6 +84,48 @@ void main() {
       child: MaterialApp.router(routerConfig: router),
     );
   }
+
+  testWidgets('clears a delayed draft profile when the session actor changes', (
+    tester,
+  ) async {
+    final friends = DelayedProfileFriendsClient();
+    final harness = TestHarness(friends: friends);
+    await harness.session.signIn(
+      email: 'test@example.test',
+      password: 'correct-password',
+    );
+    final controller = MessagingController(FakeMessagingClient());
+    await tester.pumpWidget(
+      AppScope(
+        services: AppServices(
+          session: harness.session,
+          postingDays: harness.postingDays,
+          friends: friends,
+          drafts: harness.drafts,
+          submitter: harness.submitter,
+          messaging: controller,
+        ),
+        child: const MaterialApp(home: NewMessageScreen(username: 'ada')),
+      ),
+    );
+    await tester.pump();
+    await harness.session.signOut();
+    friends.first.complete(
+      const ApiSuccess(
+        FriendCard(
+          id: 'stale',
+          username: 'ada',
+          displayName: 'Ada Private',
+          relationship: 'none',
+        ),
+      ),
+    );
+    friends.second.complete(const ApiError(ServiceUnavailable()));
+    await tester.pumpAndSettle();
+    expect(find.text('Ada Private'), findsNothing);
+    expect(find.text('This profile is unavailable.'), findsOneWidget);
+    expect(find.byKey(const Key('messages.send')), findsNothing);
+  });
 
   testWidgets('renders reply composition and sends with its parent ID', (
     tester,

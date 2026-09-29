@@ -45,6 +45,9 @@ class FakeFriendsClient implements FriendsClient {
   Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
       const ApiSuccess(emptyFriends);
   @override
+  Future<ApiResult<FriendCard>> profile(String username) async =>
+      const ApiError(ServiceUnavailable());
+  @override
   Future<ApiResult<void>> send(String userId) async => const ApiSuccess(null);
   @override
   Future<ApiResult<void>> accept(String requestId) async =>

@@ -70,12 +70,8 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
     }
   }
 
-  Future<ApiResult<FriendCard>> _load() {
-    final client = AppScope.of(context).friends;
-    return client is GeneratedFriendsClient
-        ? client.profile(widget.username)
-        : Future.value(const ApiError(ServiceUnavailable()));
-  }
+  Future<ApiResult<FriendCard>> _load() =>
+      AppScope.of(context).friends.profile(widget.username);
 
   @override
   void dispose() {

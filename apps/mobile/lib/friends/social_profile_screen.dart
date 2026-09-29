@@ -26,12 +26,8 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   String? _notice;
   String? _authorizedProfileId;
 
-  Future<ApiResult<FriendCard>> _load() {
-    final client = AppScope.of(context).friends;
-    return client is GeneratedFriendsClient
-        ? client.profile(widget.username)
-        : Future.value(const ApiError(ServiceUnavailable()));
-  }
+  Future<ApiResult<FriendCard>> _load() =>
+      AppScope.of(context).friends.profile(widget.username);
 
   @override
   void didChangeDependencies() {
