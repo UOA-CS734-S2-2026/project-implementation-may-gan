@@ -54,7 +54,3 @@ export interface DirectConversationStore {
     action: (transaction: DirectConversationTransaction) => Promise<T>,
   ): Promise<T>;
 }
-
-export interface ConversationReader {
-  resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
-}

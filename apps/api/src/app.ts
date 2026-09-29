@@ -75,9 +75,7 @@ import {
   createPostgresListMessagesRepository,
 } from "./features/messaging/messages/list-messages/list-messages.repository";
 import {
-  createHyperdriveConversationReader,
   createHyperdriveDirectConversationStore,
-  createPostgresConversationReader,
   createPostgresDirectConversationStore,
 } from "./features/messaging/shared/conversation.repository";
 import {
@@ -92,6 +90,10 @@ import {
   createHyperdriveMarkConversationReadRepository,
   createPostgresMarkConversationReadRepository,
 } from "./features/messaging/conversations/mark-conversation-read/mark-conversation-read.repository";
+import {
+  createHyperdriveResolveMessageRequestRepository,
+  createPostgresResolveMessageRequestRepository,
+} from "./features/messaging/conversations/resolve-message-request/resolve-message-request.repository";
 import {
   createHyperdriveListConversationsRepository,
   createPostgresListConversationsRepository,
@@ -314,7 +316,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
   const store = createPostgresMessageWriteStore(database);
   return {
     direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
-    reader: createPostgresConversationReader(database),
+    resolveMessageRequest: createPostgresResolveMessageRequestRepository(database),
     markConversationRead: createPostgresMarkConversationReadRepository(database),
     getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
     listConversationChanges: createPostgresListConversationChangesRepository(database),
@@ -402,7 +404,7 @@ function createMessagingDependencies(
     setReaction: createSetReactionService({ store }),
     removeReaction: createRemoveReactionService({ store }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
-    reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    resolveMessageRequest: createHyperdriveResolveMessageRequestRepository(configuration.hyperdrive),
     markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
     getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),
     listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),

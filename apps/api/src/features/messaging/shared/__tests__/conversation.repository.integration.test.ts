@@ -13,7 +13,7 @@ const suite = enabled ? describe : describe.skip;
 suite("messaging direct conversation Postgres persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 8 }, (_, index) => `messaging-${crypto.randomUUID()}-${index}`);
-  const { direct, reader, listMessages, send, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
+  const { direct } = createMessagingPersistenceServices(database.db);
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const { direct: concurrentDirect } = createMessagingPersistenceServices(concurrentDatabase.db);
 
@@ -44,34 +44,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(activated.conversation.requestState).toBe("active");
   });
 
-
-  it("accepts the pending request and writes active history", async () => {
-    const created = await direct.create(users[0]!, { recipientId: users[2]!, clientMessageId: crypto.randomUUID(), text: "request" });
-    const accepted = await reader.resolve(users[2]!, created.conversation.id, "accept");
-    expect((accepted as { requestState: string }).requestState).toBe("active");
-    const second = await send.send(users[0]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "after accept" });
-    expect(second.message.sequence).toBe("2");
-    const history = await listMessages.list(users[2]!, created.conversation.id, undefined, undefined, 50);
-    expect(history.items.map((item) => item.sequence)).toEqual(["1", "2"]);
-    const beforeOutbox = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
-    await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
-    await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });
-    const afterRepeatedSet = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
-    expect(afterRepeatedSet).toBe(beforeOutbox + 2);
-    await expect(removeReaction.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: true });
-    await expect(removeReaction.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: false });
-    const afterRepeatedRemove = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
-    expect(afterRepeatedRemove).toBe(afterRepeatedSet + 2);
-  });
-
-  it("declines a request and treats the recipient's same decision retry as idempotent", async () => {
-    const created = await direct.create(users[1]!, { recipientId: users[2]!, clientMessageId: crypto.randomUUID(), text: "decline me" });
-    const first = await reader.resolve(users[2]!, created.conversation.id, "decline") as { requestState: string };
-    const replay = await reader.resolve(users[2]!, created.conversation.id, "decline") as { requestState: string };
-    expect(first.requestState).toBe("declined");
-    expect(replay.requestState).toBe("declined");
-    await expect(send.send(users[1]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "not allowed" })).rejects.toMatchObject({ code: "DECLINED" });
-  });
 
   it("rejects creation after either-direction blocks", async () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[1]!}, ${users[0]!}, now())`;

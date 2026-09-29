@@ -4,10 +4,10 @@ import { conversationParamsSchema, conversationSchema, messagingReadErrors, reso
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
 import { scheduleImmediateDispatch, type ImmediateDispatchDependencies } from "../../shared/immediate-dispatch";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { ResolveMessageRequestRepository } from "./resolve-message-request.repository";
 
 export interface ResolveMessageRequestRouteDependencies extends ImmediateDispatchDependencies {
-  reader?: Pick<ConversationReader, "resolve">;
+  resolveMessageRequest?: ResolveMessageRequestRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -33,10 +33,10 @@ export function registerResolveMessageRequestRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.resolveMessageRequest) return messagingUnavailable(context);
     try {
       const params = context.req.valid("param");
-      const result = await dependencies.reader.resolve(
+      const result = await dependencies.resolveMessageRequest.resolve(
         context.get("actor").userId,
         params.conversationId,
         context.req.valid("json").decision,

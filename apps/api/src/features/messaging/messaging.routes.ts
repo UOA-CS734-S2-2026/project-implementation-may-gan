@@ -10,7 +10,7 @@ import { registerListConversationChangesRoute, type ListConversationChangesRoute
 import { registerListConversationsRoute, type ListConversationsRouteDependencies } from "./conversations/list-conversations/list-conversations.route";
 import { registerListMessagesRoute, type ListMessagesRouteDependencies } from "./messages/list-messages/list-messages.route";
 import { registerMarkConversationReadRoute, type MarkConversationReadRouteDependencies } from "./conversations/mark-conversation-read/mark-conversation-read.route";
-import { registerResolveMessageRequestRoute } from "./conversations/resolve-message-request/resolve-message-request.route";
+import { registerResolveMessageRequestRoute, type ResolveMessageRequestRouteDependencies } from "./conversations/resolve-message-request/resolve-message-request.route";
 import { registerEditMessageRoute, type EditMessageRouteDependencies } from "./messages/edit-message/edit-message.route";
 import { registerRemoveReactionRoute, type RemoveReactionRouteDependencies } from "./messages/remove-reaction/remove-reaction.route";
 import { registerSendMessageRoute, type SendMessageRouteDependencies } from "./messages/send-message/send-message.route";
@@ -23,7 +23,6 @@ import { registerConnectRealtimeRoute } from "./realtime/connect/connect.route";
 import type { RealtimeConnectRouteDependencies } from "./realtime/connect/connect.route";
 import { registerIssueRealtimeTicketRoute } from "./realtime/issue-ticket/issue-ticket.route";
 import type { RealtimeTicketRouteDependencies } from "./realtime/issue-ticket/issue-ticket.route";
-import type { ConversationReader } from "./shared/conversation-types";
 /** Feature composition stays injectable so createApp remains database-free. */
 export interface MessagingRouteDependencies extends
   SendMessageRouteDependencies,
@@ -38,11 +37,11 @@ export interface MessagingRouteDependencies extends
   GetMessageRouteDependencies,
   ListConversationsRouteDependencies,
   ListMessagesRouteDependencies,
-  MarkConversationReadRouteDependencies {
+  MarkConversationReadRouteDependencies,
+  ResolveMessageRequestRouteDependencies {
   /** Blocks all conversation reads and mutations until setup is complete. */
   hasUsername?: HasUsername;
   direct?: CreateDirectConversationRouteDependencies["direct"];
-  reader?: ConversationReader;
   realtimeTicket?: RealtimeTicketRouteDependencies;
   pushDevices?: PushDeviceRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
