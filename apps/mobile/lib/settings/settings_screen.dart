@@ -4,8 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 
-/// Account settings as grouped rows. Usernames and profile visibility arrive
-/// with the profile API (#68). Signing out also removes the unsent draft.
+/// Account settings show the established username. Signing out also removes the unsent draft.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -176,10 +175,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       _Row(label: 'Name', value: name),
                       _Row(label: 'Email', value: user?.email ?? ''),
-                      const _Row(
+                      _Row(
                         label: 'Username',
-                        value: 'not set yet',
-                        muted: true,
+                        value: user?.username == null
+                            ? 'not set'
+                            : '@${user!.username}',
+                        muted: user?.username == null,
                       ),
                     ],
                   ),

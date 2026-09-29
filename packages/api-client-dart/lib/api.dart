@@ -32,6 +32,7 @@ part 'api/media_api.dart';
 part 'api/messaging_api.dart';
 part 'api/posting_days_api.dart';
 part 'api/posts_api.dart';
+part 'api/profile_api.dart';
 part 'api/relationships_api.dart';
 part 'api/system_api.dart';
 
@@ -83,6 +84,8 @@ part 'model/send_message_request.dart';
 part 'model/send_relationship_request.dart';
 part 'model/set_message_reaction_request.dart';
 part 'model/test_response.dart';
+part 'model/username_profile.dart';
+part 'model/username_setup_request.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from
 /// the OpenAPI specification file.

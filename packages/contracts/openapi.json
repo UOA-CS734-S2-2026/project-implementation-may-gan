@@ -868,6 +868,47 @@
           "capabilities",
           "updatedAt"
         ]
+      },
+      "UsernameProfile": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[a-z0-9][a-z0-9_]{2,29}$",
+            "example": "alexa_park"
+          },
+          "publicName": {
+            "type": "string",
+            "nullable": true
+          },
+          "needsUsernameSetup": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "username",
+          "publicName",
+          "needsUsernameSetup"
+        ]
+      },
+      "UsernameSetupRequest": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_]{2,29}$",
+            "example": "alexa_park"
+          },
+          "publicName": {
+            "type": "string",
+            "maxLength": 80,
+            "example": "Alexa"
+          }
+        },
+        "required": [
+          "username"
+        ]
       }
     },
     "parameters": {}
@@ -4723,6 +4764,133 @@
           },
           "503": {
             "description": "Push registration unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/profile/username": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.getUsername",
+        "summary": "Get username setup state",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The authenticated account's public identity state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The username is already claimed or this account has completed setup.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Profile storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.claimInitialUsername",
+        "summary": "Claim an initial username",
+        "description": "Completes the one-time required username setup for the authenticated account. It never renames an established handle.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsernameSetupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The established public identity.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The username is already claimed or this account has completed setup.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Profile storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }

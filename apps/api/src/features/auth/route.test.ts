@@ -45,6 +45,8 @@ async function signUp(app: ReturnType<typeof createCompatibilityApp>) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name: "Compatibility User",
+        username: "compatibility_user",
+        displayUsername: "Compatibility User",
         email: "compatibility@example.test",
         password: "not-a-real-password",
       }),
@@ -176,6 +178,16 @@ describe("Better Auth compatibility route", () => {
     expect(denied.headers.get("access-control-allow-origin")).toBeNull();
   });
 
+  it("rejects password registration without a username", async () => {
+    const app = createCompatibilityApp();
+    const response = await app.fetch(request("/api/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Missing Handle", email: "missing-handle@example.test", password: "not-a-real-password" }),
+    }));
+    expect(response.status).toBe(400);
+    expect(response.headers.get("set-auth-token")).toBeNull();
+  });
+
   it("creates a secure browser session and accepts its signed native bearer handoff", async () => {
     const app = createCompatibilityApp();
     const signUpResponse = await signUp(app);
@@ -200,10 +212,10 @@ describe("Better Auth compatibility route", () => {
     );
 
     await expect(browserSession.json()).resolves.toMatchObject({
-      user: { email: "compatibility@example.test" },
+      user: { email: "compatibility@example.test", username: "compatibility_user", displayUsername: "Compatibility User" },
     });
     await expect(nativeSession.json()).resolves.toMatchObject({
-      user: { email: "compatibility@example.test" },
+      user: { email: "compatibility@example.test", username: "compatibility_user", displayUsername: "Compatibility User" },
     });
   });
 

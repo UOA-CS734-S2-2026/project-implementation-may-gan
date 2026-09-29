@@ -74,6 +74,7 @@ function request(path: string, body: object, headers: HeadersInit = { origin, "c
 async function signUpPasswordUser(app: ReturnType<typeof createGoogleApp>, email: string) {
   const response = await app.fetch(request("/api/auth/sign-up/email", {
     name: "Password User",
+    username: `user_${email.replace(/[^a-z0-9]/gi, "_").toLowerCase()}`.slice(0, 30),
     email,
     password,
   }));
@@ -142,6 +143,7 @@ describe("Google Better Auth provider", () => {
       user: [{
         id: "password-user",
         name: "Password User",
+        username: "collision_user",
         email: "collision@example.test",
         emailVerified: true,
         createdAt: new Date(),
@@ -235,6 +237,7 @@ describe("Google Better Auth provider", () => {
     }) });
     const signUp = await app.fetch(request("/api/auth/sign-up/email", {
       name: "Password User",
+      username: "browser_reset_user",
       email: "browser-reset@example.test",
       password,
     }));

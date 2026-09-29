@@ -40,6 +40,12 @@ export function registerRelationshipsRoutes(
     }
   });
   app.use("/api/v1/relationships/*", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/relationships/*", async (context, next) => {
+    if (dependencies.hasUsername && !await dependencies.hasUsername(context.get("actor").userId)) {
+      return context.json({ error: { code: "FORBIDDEN", message: "Choose a username before using friends.", requestId: `req_${crypto.randomUUID()}` } }, 403);
+    }
+    await next();
+  });
 
   registerListFriendRequestsRoute(app, dependencies);
   registerListFriendsRoute(app, dependencies);

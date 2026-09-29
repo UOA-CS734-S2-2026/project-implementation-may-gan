@@ -15,6 +15,7 @@ const status = {
 function createTestApp(options: {
   authenticated?: boolean;
   sessionError?: boolean;
+  hasUsername?: boolean;
   service?: Partial<RelationshipsService>;
 } = {}) {
   const service: RelationshipsService = {
@@ -51,6 +52,7 @@ function createTestApp(options: {
       if (options.sessionError) throw new Error("database password leaked by backend");
       return options.authenticated === false ? null : { userId: "user_alice" };
     }),
+    hasUsername: options.hasUsername === undefined ? undefined : vi.fn(async () => options.hasUsername!),
   });
   app.doc("/openapi.json", {
     openapi: "3.1.0",
@@ -74,6 +76,14 @@ describe("relationships routes", () => {
       { BearerAuth: [] },
       { cookieAuth: [] },
     ]);
+  });
+
+  it("rejects username-less actors at the server boundary", async () => {
+    const { app, service } = createTestApp({ hasUsername: false });
+    const response = await app.request("/api/v1/relationships/search?q=bo");
+    expect(response.status).toBe(403);
+    expectNoStore(response);
+    expect(service.searchUsers).not.toHaveBeenCalled();
   });
 
   it("requires an authenticated Better Auth session at the route boundary", async () => {

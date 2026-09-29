@@ -199,6 +199,7 @@ class TestHarness {
                     'id': 'user-1',
                     'name': 'Jos',
                     'email': 'jos@example.test',
+                    'username': 'jos',
                   },
                   'session': {'id': 's1'},
                 }),

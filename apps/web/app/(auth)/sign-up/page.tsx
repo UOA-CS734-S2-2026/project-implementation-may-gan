@@ -11,7 +11,8 @@ import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 
 const signUpSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores."),
+  publicName: z.string().trim().max(80, "Public name is too long"),
   email: z.email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
@@ -28,11 +29,12 @@ export default function SignUpPage() {
     formState: { isSubmitting, errors },
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", email: "", password: "" },
+    defaultValues: { username: "", publicName: "", email: "", password: "" },
   });
 
-  const onSubmit = async ({ name, email, password }: SignUpValues) => {
-    const { error } = await authClient.signUp.email({ name, email, password });
+  const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
+    // Better Auth requires name, but the handle remains the public fallback.
+    const { error } = await authClient.signUp.email({ name: publicName || username, username, displayUsername: publicName || undefined, email, password } as Parameters<typeof authClient.signUp.email>[0]);
 
     if (error) {
       setError("root", { message: error.message ?? "Something went wrong." });
@@ -63,8 +65,14 @@ export default function SignUpPage() {
 
         <FormInput
           control={control}
-          name="name"
-          label="Name"
+          name="username"
+          label="Username"
+          autoComplete="username"
+        />
+        <FormInput
+          control={control}
+          name="publicName"
+          label="Public name (optional)"
           autoComplete="name"
         />
         <FormInput

@@ -2,6 +2,7 @@ import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { betterAuth } from "better-auth/minimal";
+import { APIError } from "better-auth/api";
 import { bearer } from "better-auth/plugins/bearer";
 import { createMemorySocialLinkConfirmationStore } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
@@ -34,12 +35,47 @@ interface BetterAuthOptions {
 }
 
 const silentAuthLogger = { disabled: true };
+const usernamePattern = /^[a-z0-9][a-z0-9_]{2,29}$/;
 
 function createBetterAuth(options: BetterAuthOptions) {
   return betterAuth({
     baseURL: options.baseURL,
     secret: options.secret,
     database: options.database,
+    user: {
+      additionalFields: {
+        // This is accepted only while a user is created. The database trigger
+        // serializes case-folded claims so concurrent registrations cannot win
+        // the same public handle.
+        username: { type: "string", required: false },
+        // The public name is deliberately separate from Better Auth's name.
+        // OAuth providers can populate name, but never this explicit field.
+        displayUsername: { type: "string", required: false },
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user, hookContext) => {
+            const username = typeof user.username === "string" ? user.username.trim().toLowerCase() : undefined;
+            // Only password registration supplies a public identity. Social
+            // sign-in intentionally creates a setup-pending account instead.
+            const path = (hookContext as { path?: unknown } | null)?.path;
+            if (path === "/sign-up/email" && username === undefined) {
+              throw new APIError("BAD_REQUEST", { message: "Username is required." });
+            }
+            if (username !== undefined && !usernamePattern.test(username)) {
+              throw new APIError("BAD_REQUEST", { message: "Username must be 3-30 lowercase letters, numbers, or underscores." });
+            }
+            const displayUsername = typeof user.displayUsername === "string" ? user.displayUsername.trim() : undefined;
+            if (displayUsername !== undefined && displayUsername.length > 80) {
+              throw new APIError("BAD_REQUEST", { message: "Public name is too long." });
+            }
+            return { data: { ...user, username, displayUsername: displayUsername || null } };
+          },
+        },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // Existing imported users retain their email_verified value and can sign in.
