@@ -69,11 +69,11 @@ import {
 import {
   createHyperdriveGetMessageRepository,
   createPostgresGetMessageRepository,
-} from "./features/messaging/conversations/get-message/get-message.repository";
+} from "./features/messaging/messages/get-message/get-message.repository";
 import {
   createHyperdriveListMessagesRepository,
   createPostgresListMessagesRepository,
-} from "./features/messaging/conversations/list-messages/list-messages.repository";
+} from "./features/messaging/messages/list-messages/list-messages.repository";
 import {
   createHyperdriveConversationReader,
   createHyperdriveDirectConversationStore,
