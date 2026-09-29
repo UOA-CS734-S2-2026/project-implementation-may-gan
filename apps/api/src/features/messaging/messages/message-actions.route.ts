@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { ResolveSession } from "../../../http/middleware/require-session";
 import { MessagingError } from "../shared/messaging-error";
 import { editMessageBodySchema, messageParamsSchema, messageSchema, messagingErrorResponses, setReactionBodySchema } from "./message.contract";
 import type { EditMessageService } from "./edit-message/edit-message.service";
@@ -20,7 +20,6 @@ const removeRoute = createRoute({ method: "delete", path: "/api/v1/conversations
 function failure(context: Parameters<OpenAPIHono<AuthenticatedApiEnv>["openapi"]>[1] extends (context: infer C, ...x: never[]) => unknown ? C : never, error: MessagingError) { const status = error.code === "NOT_FOUND" ? 404 : error.code === "VALIDATION_FAILED" ? 422 : error.code === "BLOCKED" || error.code === "FORBIDDEN" ? 403 : 409; return apiErrorResponse(context as never, status, status === 404 ? "NOT_FOUND" : status === 422 ? "VALIDATION_FAILED" : status === 403 ? "FORBIDDEN" : "CONFLICT", error.message, { reason: error.code }) as never; }
 
 export function registerMessageActionsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: MessageActionsRouteDependencies) {
-  app.use("/api/v1/conversations/*", createRequireSession(dependencies.resolveSession));
   app.openapi(editRoute, async (context) => { context.header("Cache-Control", "no-store"); if (!dependencies.edit) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Messaging is temporarily unavailable.") as never; try { const p = context.req.valid("param"); const result = await dependencies.edit.edit(context.get("actor").userId, p.conversationId, p.messageId, context.req.valid("json")); scheduleImmediateDispatch(context, dependencies); return context.json(result, 200); } catch (error) { if (error instanceof MessagingError) return failure(context, error); throw error; } });
   app.openapi(unsendRoute, async (context) => { context.header("Cache-Control", "no-store"); if (!dependencies.unsend) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Messaging is temporarily unavailable.") as never; try { const p = context.req.valid("param"); const result = await dependencies.unsend.unsend(context.get("actor").userId, p.conversationId, p.messageId); scheduleImmediateDispatch(context, dependencies); return context.json(result.message, 200); } catch (error) { if (error instanceof MessagingError) return failure(context, error); throw error; } });
   app.openapi(setRoute, async (context) => { context.header("Cache-Control", "no-store"); if (!dependencies.setReaction) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Messaging is temporarily unavailable.") as never; try { const p = context.req.valid("param"); const result = await dependencies.setReaction.set(context.get("actor").userId, p.conversationId, p.messageId, context.req.valid("json").reaction); scheduleImmediateDispatch(context, dependencies); return context.json(result.message, 200); } catch (error) { if (error instanceof MessagingError) return failure(context, error); throw error; } });

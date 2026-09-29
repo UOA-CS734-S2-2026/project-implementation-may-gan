@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../../http/middleware/require-session";
+import type { ResolveSession } from "../../../../http/middleware/require-session";
 import { messagingErrorResponses, conversationParamsSchema, messageSchema, sendMessageBodySchema } from "../message.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import type { SendMessageService } from "./send-message.service";
@@ -16,7 +16,6 @@ const route = createRoute({
 });
 
 export function registerSendMessageRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: SendMessageRouteDependencies) {
-  app.use("/api/v1/conversations/*", createRequireSession(dependencies.resolveSession));
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.service) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Messaging is temporarily unavailable.") as never;

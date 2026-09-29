@@ -37,10 +37,3 @@ CREATE TRIGGER enforce_case_insensitive_username
 BEFORE INSERT OR UPDATE OF username ON public."user"
 FOR EACH ROW EXECUTE FUNCTION public.enforce_case_insensitive_username();
 --> statement-breakpoint
-
--- Preserve established public names before new cards stop deriving them from
--- Better Auth's provider-owned name field.
-UPDATE public."user"
-SET display_username = name
-WHERE username IS NOT NULL
-  AND display_username IS NULL;

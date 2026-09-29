@@ -2,7 +2,7 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { ResolveSession } from "../../../http/middleware/require-session";
 import type { CreateDirectConversationService } from "./create-direct-conversation/create-direct-conversation.service";
 import type { ConversationReader } from "./conversation.repository";
 import { MessagingError } from "../shared/messaging-error";
@@ -24,7 +24,6 @@ const changesRoute = createRoute({ method: "get", path: "/api/v1/conversations/{
 function unavailable(context: any) { return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Messaging is temporarily unavailable.") as never; }
 function fail(context: any, error: MessagingError) { const status = error.code === "NOT_FOUND" ? 404 : error.code === "VALIDATION_FAILED" ? 422 : error.code === "BLOCKED" || error.code === "FORBIDDEN" ? 403 : 409; return apiErrorResponse(context, status, status === 404 ? "NOT_FOUND" : status === 422 ? "VALIDATION_FAILED" : status === 403 ? "FORBIDDEN" : "CONFLICT", error.message, { reason: error.code }) as never; }
 export function registerConversationRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: ConversationRouteDependencies) {
-  app.use("/api/v1/conversations/*", createRequireSession(dependencies.resolveSession)); app.use("/api/v1/conversations", createRequireSession(dependencies.resolveSession)); app.use("/api/v1/messaging/*", createRequireSession(dependencies.resolveSession));
   const action = (callback: (actorId: string, context: any) => Promise<unknown>, dispatch = false) => async (context: any) => { context.header("Cache-Control", "no-store"); if (!dependencies.reader) return unavailable(context); try { const result = await callback(context.get("actor").userId, context); if (dispatch) scheduleImmediateDispatch(context, dependencies); return context.json(result, 200); } catch (error) { if (error instanceof MessagingError) return fail(context, error); throw error; } };
   app.openapi(directRoute, async (context) => { context.header("Cache-Control", "no-store"); if (!dependencies.direct) return unavailable(context); try { const result = await dependencies.direct.create(context.get("actor").userId, context.req.valid("json")); scheduleImmediateDispatch(context, dependencies); return context.json({ conversation: { id: result.conversation.id, peer: { id: result.conversation.peerId, name: null }, requestState: result.conversation.requestState }, message: result.message }, result.replayed ? 200 : 201); } catch (error) { if (error instanceof MessagingError) return fail(context, error); throw error; } });
   app.openapi(listRoute, action(async (actor, context) => { if (!dependencies.reader) throw new MessagingError("CONFLICT"); const query = context.req.valid("query"); return dependencies.reader.list(actor, query.folder, query.cursor, query.limit); }));

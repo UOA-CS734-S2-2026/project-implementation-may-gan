@@ -163,16 +163,17 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
-  const messaging = configuration ? createMessagingDependencies(configuration, env) : undefined;
-  const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env) : undefined;
-  const pushDevices = configuration ? createPushDeviceDependencies(configuration, env) : undefined;
+  const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
+  const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
+  const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
+  const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
   const usernameProfile = configuration ? {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
-    hasUsername: async (userId: string) => (await withHyperdriveUsernameProfileStore(configuration).get(userId))?.needsUsernameSetup === false,
+    hasUsername,
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({
         baseURL: configuration.baseURL,
@@ -301,11 +302,20 @@ function resolveRealtimeSessionById(configuration: RuntimeConfiguration, session
   });
 }
 
-function createMessagingDependencies(configuration: RuntimeConfiguration, env: ApiEnv): MessagingRouteDependencies {
+function createUsernameChecker(configuration: RuntimeConfiguration) {
+  return async (userId: string) => (await withHyperdriveUsernameProfileStore(configuration).get(userId))?.needsUsernameSetup === false;
+}
+
+function createMessagingDependencies(
+  configuration: RuntimeConfiguration,
+  env: ApiEnv,
+  hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
+): MessagingRouteDependencies {
   const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
   const userRealtime = env.USER_REALTIME;
   return {
     resolveSession: createSessionResolver(configuration),
+    hasUsername,
     service: createSendMessageService({ store }),
     edit: createEditMessageService({ store }),
     unsend: createUnsendMessageService({ store }),
@@ -317,7 +327,11 @@ function createMessagingDependencies(configuration: RuntimeConfiguration, env: A
   };
 }
 
-function createRealtimeDependencies(configuration: RuntimeConfiguration, env: ApiEnv): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
+function createRealtimeDependencies(
+  configuration: RuntimeConfiguration,
+  env: ApiEnv,
+  hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
+): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
   const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
   const tickets = {
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
@@ -330,16 +344,22 @@ function createRealtimeDependencies(configuration: RuntimeConfiguration, env: Ap
     resolveActiveSession: async (sessionId) => resolveRealtimeSessionById(configuration, sessionId),
     userRealtime: env.USER_REALTIME!,
     trustedOrigins: configuration.trustedOrigins,
+    hasUsername,
   };
-  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString() }, connect };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
 }
 
-function createPushDeviceDependencies(configuration: RuntimeConfiguration, env: ApiEnv): PushDeviceRouteDependencies {
+function createPushDeviceDependencies(
+  configuration: RuntimeConfiguration,
+  env: ApiEnv,
+  hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
+): PushDeviceRouteDependencies {
   const resolvePushSession = createVerifiedRealtimeSessionResolver(configuration);
-  if (!hasWorkerPushTokenProtection(env.PUSH_TOKEN_ENCRYPTION_KEY)) return { resolveSession: createSessionResolver(configuration), resolvePushSession };
+  if (!hasWorkerPushTokenProtection(env.PUSH_TOKEN_ENCRYPTION_KEY)) return { resolveSession: createSessionResolver(configuration), resolvePushSession, hasUsername };
   return {
     resolveSession: createSessionResolver(configuration),
     resolvePushSession,
+    hasUsername,
     devices: {
       register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
       unregister: (session, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).unregister(session, installationId)),
