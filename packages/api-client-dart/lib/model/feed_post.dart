@@ -89,7 +89,7 @@ class FeedPost {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
     json[r'author'] = this.author;
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
     json[r'caption'] = this.caption;
@@ -191,7 +191,7 @@ class FeedPost {
       return FeedPost(
         id: mapValueOfType<String>(json, r'id')!,
         author: FeedPostAuthor.fromJson(json[r'author'])!,
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: FeedPostPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
         caption: mapValueOfType<String>(json, r'caption')!,
