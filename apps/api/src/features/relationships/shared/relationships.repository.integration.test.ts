@@ -1,7 +1,7 @@
 import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createRelationshipsService } from "../../../app";
 import { createHyperdriveRelationshipsStore } from "./relationships.repository";
-import { createRelationshipsService } from "../../../../test/relationships-service";
 
 /**
  * These tests must use a disposable database containing migration 0006.

@@ -1,11 +1,6 @@
 import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createCreateDirectConversationService } from "../conversations/create-direct-conversation/create-direct-conversation.service";
-import { createPostgresConversationReader, createPostgresDirectConversationStore } from "./conversation.repository";
-import { createPostgresMessageWriteStore } from "../messages/send-message/send-message.repository";
-import { createSendMessageService } from "../messages/send-message/send-message.service";
-import { createSetReactionService } from "../messages/set-reaction/set-reaction.service";
-import { createRemoveReactionService } from "../messages/remove-reaction/remove-reaction.service";
+import { createMessagingPersistenceServices } from "../../../app";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
@@ -18,11 +13,9 @@ const suite = enabled ? describe : describe.skip;
 suite("messaging direct conversation Postgres persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 8 }, (_, index) => `messaging-${crypto.randomUUID()}-${index}`);
-  const direct = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db) });
+  const { direct, reader, send, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const concurrentDirect = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(concurrentDatabase.db) });
-  const reader = createPostgresConversationReader(database.db);
-  const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
+  const { direct: concurrentDirect } = createMessagingPersistenceServices(concurrentDatabase.db);
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -55,7 +48,7 @@ suite("messaging direct conversation Postgres persistence", () => {
 
   it("uses an exact database timestamp cursor so same-second inbox entries are not omitted", async () => {
     const now = new Date("2026-09-28T06:00:00.123Z");
-    const service = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db), now: () => now });
+    const { direct: service } = createMessagingPersistenceServices(database.db, { now: () => now });
     for (const peer of users.slice(5, 8)) {
       await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[4]!}, ${peer}, 'active', now()), (${peer}, ${users[4]!}, 'active', now())`;
       await service.create(users[4]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
@@ -83,15 +76,13 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(read.unreadCount).toBe(0);
     const changes = await reader.changes(users[2]!, created.conversation.id, undefined, 50) as { items: Array<{ kind: string }> };
     expect(changes.items.map((item) => item.kind)).toContain("read.updated");
-    const set = createSetReactionService({ store: createPostgresMessageWriteStore(database.db) });
-    const remove = createRemoveReactionService({ store: createPostgresMessageWriteStore(database.db) });
     const beforeOutbox = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
-    await expect(set.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
-    await expect(set.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });
+    await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
+    await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });
     const afterRepeatedSet = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
     expect(afterRepeatedSet).toBe(beforeOutbox + 2);
-    await expect(remove.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: true });
-    await expect(remove.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: false });
+    await expect(removeReaction.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: true });
+    await expect(removeReaction.remove(users[2]!, created.conversation.id, second.message.id)).resolves.toMatchObject({ changed: false });
     const afterRepeatedRemove = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
     expect(afterRepeatedRemove).toBe(afterRepeatedSet + 2);
   });

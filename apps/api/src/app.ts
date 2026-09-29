@@ -40,7 +40,7 @@ import {
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
-import { sql } from "@dayli/db";
+import { sql, type DayliDatabase } from "@dayli/db";
 import {
   registerCreateDailyPostRoute,
   type CreateDailyPostRouteDependencies,
@@ -53,13 +53,21 @@ import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
-import { createHyperdriveMessageWriteStore } from "./features/messaging/messages/send-message/send-message.repository";
+import {
+  createHyperdriveMessageWriteStore,
+  createPostgresMessageWriteStore,
+} from "./features/messaging/messages/send-message/send-message.repository";
 import { createEditMessageService } from "./features/messaging/messages/edit-message/edit-message.service";
 import { createUnsendMessageService } from "./features/messaging/messages/unsend-message/unsend-message.service";
 import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
-import { createHyperdriveConversationReader, createHyperdriveDirectConversationStore } from "./features/messaging/shared/conversation.repository";
+import {
+  createHyperdriveConversationReader,
+  createHyperdriveDirectConversationStore,
+  createPostgresConversationReader,
+  createPostgresDirectConversationStore,
+} from "./features/messaging/shared/conversation.repository";
 import type { RealtimeTicketRouteDependencies } from "./features/messaging/realtime/issue-ticket/issue-ticket.route";
 import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/issue-ticket/issue-ticket.repository";
 import { createRealtimeTicketService } from "./features/messaging/realtime/issue-ticket/issue-ticket.service";
@@ -254,7 +262,18 @@ function createPostingDayDependencies(
   };
 }
 
-function createRelationshipsService(store: RelationshipStore, options: { now?: () => Date } = {}): RelationshipsService {
+export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date } = {}) {
+  const store = createPostgresMessageWriteStore(database);
+  return {
+    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
+    reader: createPostgresConversationReader(database),
+    send: createSendMessageService({ store, now: options.now }),
+    set: createSetReactionService({ store }),
+    remove: createRemoveReactionService({ store }),
+  };
+}
+
+export function createRelationshipsService(store: RelationshipStore, options: { now?: () => Date } = {}): RelationshipsService {
   const dependencies = { store, now: options.now ?? (() => new Date()) };
   return {
     getStatus: (actorId, subjectId) => getRelationship(dependencies, actorId, subjectId),

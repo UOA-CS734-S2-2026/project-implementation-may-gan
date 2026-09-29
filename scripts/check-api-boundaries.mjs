@@ -6,6 +6,7 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const tsModule = await import(resolve(repositoryRoot, "apps/api/node_modules/typescript/lib/typescript.js"));
 const ts = tsModule.default ?? tsModule;
 const featureRoot = resolve(repositoryRoot, "apps/api/src/features");
+const apiTestRoot = resolve(repositoryRoot, "apps/api/test");
 const fixtureMarker = ".boundary-fixture.ts";
 const allowedFeatureRootFiles = new Set([
   "auth",
@@ -40,9 +41,27 @@ function featureRelative(path) {
   return normalized(value);
 }
 
+function apiTestRelative(path) {
+  const value = relative(apiTestRoot, path);
+  if (value.startsWith("..")) return undefined;
+  return normalized(value);
+}
+
 function sourceInfo(path) {
   const value = featureRelative(path);
-  if (!value) return undefined;
+  if (!value) {
+    const testValue = apiTestRelative(path);
+    if (!testValue) return undefined;
+    return {
+      path,
+      feature: undefined,
+      fileName: testValue.replace(fixtureMarker, ".ts"),
+      isTest: true,
+      kind: "test-support",
+      action: undefined,
+      isRegistrar: false,
+    };
+  }
   const parts = value.split("/");
   const feature = parts[0];
   const fileName = parts.at(-1);
@@ -120,6 +139,11 @@ function isApprovedAdapter(targetPath) {
   return value.startsWith("apps/api/src/http/") || value.startsWith("apps/api/src/infrastructure/");
 }
 
+function isApiTestFile(targetPath) {
+  const value = normalized(relative(repositoryRoot, targetPath));
+  return value.startsWith("apps/api/test/");
+}
+
 function isWorkspaceImport(specifier) {
   return specifier.startsWith("@dayli/");
 }
@@ -133,12 +157,13 @@ function allowedBoundary(source, target, specifier) {
   if (!target) return true;
   if (isOutsideFeatureImport(target) || isApprovedAdapter(target)) {
     const targetValue = normalized(relative(repositoryRoot, target));
-    if (targetValue === "apps/api/src/app.ts" || targetValue === "apps/api/src/index.ts") return source.isTest;
+    if (targetValue === "apps/api/src/app.ts" || targetValue === "apps/api/src/index.ts" || isApiTestFile(target)) return source.isTest;
     return true;
   }
 
   const targetInfo = sourceInfo(target);
   if (!targetInfo) return true;
+  if (source.kind === "test-support") return targetInfo.kind === "shared";
   if (source.feature === "auth" || source.feature === "permissions") return true;
 
   if (source.feature !== targetInfo.feature) {
@@ -155,7 +180,6 @@ function allowedBoundary(source, target, specifier) {
   if (source.kind === "shared") {
     if (targetInfo.kind === "shared") return true;
     if (source.isTest && targetInfo.kind === "root" && targetInfo.isRegistrar) return true;
-    return source.isTest && source.fileName.endsWith(".repository.integration.test.ts");
   }
 
   if (source.kind === "action") {
@@ -194,7 +218,11 @@ async function runFixtureChecks(errors) {
   const fixtureDirectory = resolve(featureRoot, "messaging/messages/send-message");
   const fixtureNames = (await readdir(fixtureDirectory)).filter((name) => name.endsWith(fixtureMarker));
   const fixturePaths = fixtureNames.map((name) => resolve(fixtureDirectory, name));
-  fixturePaths.push(resolve(featureRoot, "messaging/messaging.routes.boundary-fixture.ts"));
+  fixturePaths.push(
+    resolve(featureRoot, "messaging/messaging.routes.boundary-fixture.ts"),
+    resolve(featureRoot, "messaging/shared/messaging.repository.integration.test.boundary-fixture.ts"),
+    resolve(apiTestRoot, "relationships-service.boundary-fixture.ts"),
+  );
   const before = errors.length;
   for (const path of fixturePaths) await checkFile(path, errors);
   const fixtureErrors = errors.splice(before);
@@ -208,6 +236,8 @@ async function runFixtureChecks(errors) {
     "send-message.app.test.boundary-fixture.ts",
     "send-message.workspace.boundary-fixture.ts",
     "messaging.routes.boundary-fixture.ts",
+    "messaging.repository.integration.test.boundary-fixture.ts",
+    "relationships-service.boundary-fixture.ts",
   ];
   const errorsByFile = new Map(expected.map((name) => [name, fixtureErrors.filter((error) => error.includes(name))]));
   const passingFixtures = new Set([
@@ -227,7 +257,10 @@ async function runFixtureChecks(errors) {
 }
 
 async function main() {
-  const files = await collectTypeScriptFiles(featureRoot);
+  const files = [
+    ...await collectTypeScriptFiles(featureRoot),
+    ...await collectTypeScriptFiles(apiTestRoot),
+  ];
   const errors = [];
   for (const file of files) await checkFile(file, errors);
   await runFixtureChecks(errors);
