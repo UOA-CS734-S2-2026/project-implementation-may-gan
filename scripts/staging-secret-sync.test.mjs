@@ -40,31 +40,54 @@ test("supports the initial no-push release without FCM or a push key", () => {
   const source = readStagingWorkerSecretSource({ BETTER_AUTH_SECRET: "test-auth" }, ["BETTER_AUTH_SECRET"]);
   assert.deepEqual(source.values, { BETTER_AUTH_SECRET: "test-auth" });
   assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
-    existingSecretNames: new Set(), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"],
+    existingSecretNames: new Set(), source, requiredSecretNames: ["BETTER_AUTH_SECRET"],
   }));
 });
 
 test("requires public provider pairing and a Cloudflare-provisioned key for FCM", () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   assert.throws(
-    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(), source, requiredSecretNames: ["BETTER_AUTH_SECRET"] }),
     /PUSH_TOKEN_ENCRYPTION_KEY/,
   );
   assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
-    existingSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), source, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"],
+    existingSecretNames: new Set(["PUSH_TOKEN_ENCRYPTION_KEY"]), source, requiredSecretNames: ["BETTER_AUTH_SECRET"],
   }));
   assert.throws(
-    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["GOOGLE_CLIENT_SECRET"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["GOOGLE_CLIENT_SECRET"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredSecretNames: ["BETTER_AUTH_SECRET"] }),
     /GOOGLE_CLIENT_SECRET.*public staging/,
   );
   assert.throws(
-    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["RESEND_API_KEY"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["RESEND_API_KEY"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredSecretNames: ["BETTER_AUTH_SECRET"] }),
     /RESEND_API_KEY.*public staging/,
   );
   assert.throws(
-    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["FCM_SERVICE_ACCOUNT_JSON"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredAuthSecretNames: ["BETTER_AUTH_SECRET"] }),
+    () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set(["FCM_SERVICE_ACCOUNT_JSON"]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredSecretNames: ["BETTER_AUTH_SECRET"] }),
     /FCM_SERVICE_ACCOUNT_JSON requires/,
   );
+});
+
+test("reads and pairs both R2 keys only when the media bindings require them", () => {
+  const r2Names = ["R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"];
+  const required = ["BETTER_AUTH_SECRET", ...r2Names];
+  const environment = { BETTER_AUTH_SECRET: "x", R2_ACCESS_KEY_ID: "key-id", R2_SECRET_ACCESS_KEY: "key-secret" };
+
+  const source = readStagingWorkerSecretSource(environment, required);
+  assert.deepEqual(source.values, environment);
+  assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
+    existingSecretNames: new Set(), source, requiredSecretNames: required,
+  }));
+
+  // A bucket with only one of its keys available is refused before any mutation.
+  assert.throws(() => readStagingWorkerSecretSource({ BETTER_AUTH_SECRET: "x", R2_ACCESS_KEY_ID: "key-id" }, required), /R2_SECRET_ACCESS_KEY/);
+
+  // Keys left on the Worker after the bucket variable is removed are refused.
+  for (const name of r2Names) {
+    assert.throws(
+      () => assertProjectedWorkerSecretPairing({ existingSecretNames: new Set([name]), source: { values: { BETTER_AUTH_SECRET: "x" } }, requiredSecretNames: ["BETTER_AUTH_SECRET"] }),
+      new RegExp(`${name}.*public staging`),
+    );
+  }
 });
 
 test("uses the bulk endpoint then verifies secret names without exposing values", async () => {
