@@ -57,9 +57,4 @@ export interface DirectConversationStore {
 
 export interface ConversationReader {
   resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
-  markRead(
-    actorId: string,
-    conversationId: string,
-    throughSequence: string,
-  ): Promise<{ lastReadSequence: string; receiptSequence: string; unreadCount: number }>;
 }

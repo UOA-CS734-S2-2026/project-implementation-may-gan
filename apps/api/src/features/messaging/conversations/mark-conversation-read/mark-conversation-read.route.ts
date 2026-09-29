@@ -4,10 +4,10 @@ import { conversationParamsSchema, markReadBodySchema, messagingReadErrors, read
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
 import { scheduleImmediateDispatch, type ImmediateDispatchDependencies } from "../../shared/immediate-dispatch";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { MarkConversationReadRepository } from "./mark-conversation-read.repository";
 
 export interface MarkConversationReadRouteDependencies extends ImmediateDispatchDependencies {
-  reader?: Pick<ConversationReader, "markRead">;
+  markConversationRead?: MarkConversationReadRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -33,10 +33,10 @@ export function registerMarkConversationReadRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.markConversationRead) return messagingUnavailable(context);
     try {
       const params = context.req.valid("param");
-      const result = await dependencies.reader.markRead(
+      const result = await dependencies.markConversationRead.markRead(
         context.get("actor").userId,
         params.conversationId,
         context.req.valid("json").throughSequence,

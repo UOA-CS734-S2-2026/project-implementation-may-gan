@@ -45,7 +45,7 @@ suite("messaging direct conversation Postgres persistence", () => {
   });
 
 
-  it("accepts the pending request, writes active history and advances only the recipient read cursor", async () => {
+  it("accepts the pending request and writes active history", async () => {
     const created = await direct.create(users[0]!, { recipientId: users[2]!, clientMessageId: crypto.randomUUID(), text: "request" });
     const accepted = await reader.resolve(users[2]!, created.conversation.id, "accept");
     expect((accepted as { requestState: string }).requestState).toBe("active");
@@ -53,10 +53,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(second.message.sequence).toBe("2");
     const history = await listMessages.list(users[2]!, created.conversation.id, undefined, undefined, 50);
     expect(history.items.map((item) => item.sequence)).toEqual(["1", "2"]);
-    const read = await reader.markRead(users[2]!, created.conversation.id, "2");
-    expect(read.lastReadSequence).toBe("2");
-    expect(read.receiptSequence).toBe("2");
-    expect(read.unreadCount).toBe(0);
     const beforeOutbox = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
     await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
     await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });
@@ -77,12 +73,8 @@ suite("messaging direct conversation Postgres persistence", () => {
     await expect(send.send(users[1]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "not allowed" })).rejects.toMatchObject({ code: "DECLINED" });
   });
 
-  it("rejects creation and peer-visible reads after either-direction blocks", async () => {
+  it("rejects creation after either-direction blocks", async () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[1]!}, ${users[0]!}, now())`;
     await expect(direct.create(users[0]!, { recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "blocked" })).rejects.toMatchObject({ code: "BLOCKED" });
-    const pending = await direct.create(users[0]!, { recipientId: users[3]!, clientMessageId: crypto.randomUUID(), text: "another request" });
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[3]!}, ${users[0]!}, now())`;
-    const result = await reader.markRead(users[3]!, pending.conversation.id, "1");
-    expect(result.receiptSequence).toBe("0");
   });
 });

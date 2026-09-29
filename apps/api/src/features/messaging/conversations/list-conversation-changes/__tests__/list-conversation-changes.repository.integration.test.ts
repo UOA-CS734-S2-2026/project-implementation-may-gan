@@ -14,7 +14,7 @@ const suite = enabled ? describe : describe.skip;
 suite("list conversation changes Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 3 }, (_, index) => `list-conversation-changes-${crypto.randomUUID()}-${index}`);
-  const { direct, reader, send } = createMessagingPersistenceServices(database.db);
+  const { direct, markConversationRead, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListConversationChangesRepository(database.db);
 
   beforeAll(async () => {
@@ -47,7 +47,7 @@ suite("list conversation changes Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "third message",
     });
-    await reader.markRead(users[0]!, first.conversation.id, "3");
+    await markConversationRead.markRead(users[0]!, first.conversation.id, "3");
 
     await expect(repository.list(users[2]!, first.conversation.id, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
 

@@ -89,6 +89,10 @@ import {
   createPostgresListConversationChangesRepository,
 } from "./features/messaging/conversations/list-conversation-changes/list-conversation-changes.repository";
 import {
+  createHyperdriveMarkConversationReadRepository,
+  createPostgresMarkConversationReadRepository,
+} from "./features/messaging/conversations/mark-conversation-read/mark-conversation-read.repository";
+import {
   createHyperdriveListConversationsRepository,
   createPostgresListConversationsRepository,
 } from "./features/messaging/conversations/list-conversations/list-conversations.repository";
@@ -311,6 +315,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
   return {
     direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
     reader: createPostgresConversationReader(database),
+    markConversationRead: createPostgresMarkConversationReadRepository(database),
     getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
     listConversationChanges: createPostgresListConversationChangesRepository(database),
     listConversations: createPostgresListConversationsRepository(database),
@@ -398,6 +403,7 @@ function createMessagingDependencies(
     removeReaction: createRemoveReactionService({ store }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
     reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
     getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),
     listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),
     listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),

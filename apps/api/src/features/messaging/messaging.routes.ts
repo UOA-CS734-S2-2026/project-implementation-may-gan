@@ -9,7 +9,7 @@ import { registerGetMessagingUnreadRoute, type GetMessagingUnreadRouteDependenci
 import { registerListConversationChangesRoute, type ListConversationChangesRouteDependencies } from "./conversations/list-conversation-changes/list-conversation-changes.route";
 import { registerListConversationsRoute, type ListConversationsRouteDependencies } from "./conversations/list-conversations/list-conversations.route";
 import { registerListMessagesRoute, type ListMessagesRouteDependencies } from "./messages/list-messages/list-messages.route";
-import { registerMarkConversationReadRoute } from "./conversations/mark-conversation-read/mark-conversation-read.route";
+import { registerMarkConversationReadRoute, type MarkConversationReadRouteDependencies } from "./conversations/mark-conversation-read/mark-conversation-read.route";
 import { registerResolveMessageRequestRoute } from "./conversations/resolve-message-request/resolve-message-request.route";
 import { registerEditMessageRoute, type EditMessageRouteDependencies } from "./messages/edit-message/edit-message.route";
 import { registerRemoveReactionRoute, type RemoveReactionRouteDependencies } from "./messages/remove-reaction/remove-reaction.route";
@@ -37,7 +37,8 @@ export interface MessagingRouteDependencies extends
   ListConversationChangesRouteDependencies,
   GetMessageRouteDependencies,
   ListConversationsRouteDependencies,
-  ListMessagesRouteDependencies {
+  ListMessagesRouteDependencies,
+  MarkConversationReadRouteDependencies {
   /** Blocks all conversation reads and mutations until setup is complete. */
   hasUsername?: HasUsername;
   direct?: CreateDirectConversationRouteDependencies["direct"];
