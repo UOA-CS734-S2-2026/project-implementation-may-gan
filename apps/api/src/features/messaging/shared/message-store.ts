@@ -34,7 +34,6 @@ export interface MessageWriteTransaction {
     unsentAt?: Date | null;
     expectedVersion?: number;
   }): Promise<StoredMessage>;
-  removeReaction(messageId: string, actorId: string): Promise<StoredMessage>;
   /** Atomically appends the change record and body-free realtime delivery intent. */
   appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" | "request.active" }): Promise<void>;
 }

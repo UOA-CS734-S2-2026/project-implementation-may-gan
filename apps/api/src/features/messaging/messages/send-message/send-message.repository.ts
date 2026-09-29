@@ -32,10 +32,6 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
     if (input.unsentAt !== undefined) await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${input.messageId}`);
     return mapStoredMessage(row);
   }
-  async removeReaction(messageId: string, actorId: string): Promise<StoredMessage> {
-    await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and user_id = ${actorId}`);
-    const current = await this.findMessage(this.conversationId, messageId); if (!current) throw new Error("Message disappeared during reaction."); return current;
-  }
   async appendPeerChange(input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
