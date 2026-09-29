@@ -3,7 +3,7 @@ import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { createRequireSession } from "../../http/middleware/require-session";
 import { createRequireUsername, type HasUsername } from "../../http/middleware/require-username";
 import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
-import { registerGetConversationRoute } from "./conversations/get-conversation/get-conversation.route";
+import { registerGetConversationRoute, type GetConversationRouteDependencies } from "./conversations/get-conversation/get-conversation.route";
 import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./conversations/get-message/get-message.route";
 import { registerGetMessagingUnreadRoute } from "./conversations/get-messaging-unread/get-messaging-unread.route";
 import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
@@ -32,6 +32,7 @@ export interface MessagingRouteDependencies extends
   SetReactionRouteDependencies,
   RemoveReactionRouteDependencies,
   CreateDirectConversationRouteDependencies,
+  GetConversationRouteDependencies,
   GetMessageRouteDependencies,
   ListMessagesRouteDependencies {
   /** Blocks all conversation reads and mutations until setup is complete. */

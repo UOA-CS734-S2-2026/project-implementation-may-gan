@@ -3,10 +3,10 @@ import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { conversationParamsSchema, conversationSchema, messagingReadErrors } from "../../shared/conversation.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { GetConversationRepository } from "./get-conversation.repository";
 
 export interface GetConversationRouteDependencies {
-  reader?: Pick<ConversationReader, "get">;
+  getConversation?: GetConversationRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -29,9 +29,9 @@ export function registerGetConversationRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.getConversation) return messagingUnavailable(context);
     try {
-      return context.json((await dependencies.reader.get(
+      return context.json((await dependencies.getConversation.get(
         context.get("actor").userId,
         context.req.valid("param").conversationId,
       )) as never, 200);

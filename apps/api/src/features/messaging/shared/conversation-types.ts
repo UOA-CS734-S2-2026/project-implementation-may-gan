@@ -56,14 +56,12 @@ export interface DirectConversationStore {
 }
 
 export interface ConversationReader {
-  conversationFromRow(row: Record<string, unknown>, actorId: string): Promise<unknown>;
   list(
     actorId: string,
     folder: "inbox" | "requests",
     cursor: string | undefined,
     limit: number,
   ): Promise<{ items: unknown[]; nextCursor: string | null }>;
-  get(actorId: string, conversationId: string): Promise<unknown>;
   unread(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
   resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
   markRead(
