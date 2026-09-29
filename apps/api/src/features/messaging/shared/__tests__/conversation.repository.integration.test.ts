@@ -13,7 +13,7 @@ const suite = enabled ? describe : describe.skip;
 suite("messaging direct conversation Postgres persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 8 }, (_, index) => `messaging-${crypto.randomUUID()}-${index}`);
-  const { direct, reader, send, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
+  const { direct, reader, listMessages, send, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const { direct: concurrentDirect } = createMessagingPersistenceServices(concurrentDatabase.db);
 
@@ -66,7 +66,7 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect((accepted as { requestState: string }).requestState).toBe("active");
     const second = await send.send(users[0]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "after accept" });
     expect(second.message.sequence).toBe("2");
-    const history = await reader.messages(users[2]!, created.conversation.id, undefined, undefined, 50);
+    const history = await listMessages.list(users[2]!, created.conversation.id, undefined, undefined, 50);
     expect(history.items.map((item) => item.sequence)).toEqual(["1", "2"]);
     const before = await reader.unread(users[2]!);
     expect(before.inboxCount).toBe(2);

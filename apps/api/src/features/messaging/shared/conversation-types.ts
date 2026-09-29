@@ -1,4 +1,4 @@
-import type { MessageDto, StoredMessage } from "./messaging-types";
+import type { StoredMessage } from "./messaging-types";
 
 export interface DirectConversation {
   id: string;
@@ -64,13 +64,6 @@ export interface ConversationReader {
     limit: number,
   ): Promise<{ items: unknown[]; nextCursor: string | null }>;
   get(actorId: string, conversationId: string): Promise<unknown>;
-  messages(
-    actorId: string,
-    conversationId: string,
-    before: string | undefined,
-    after: string | undefined,
-    limit: number,
-  ): Promise<{ items: MessageDto[]; nextCursor: string | null; hasMore: boolean }>;
   unread(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
   resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
   markRead(
