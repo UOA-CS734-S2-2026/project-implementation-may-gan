@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api/feed_client.dart';
 import 'api/friends_client.dart';
 import 'api/posting_day_client.dart';
 import 'app/app.dart';
@@ -109,6 +110,10 @@ Future<void> main() async {
       services: AppServices(
         session: session,
         postingDays: GeneratedPostingDayClient(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
+        feed: GeneratedFeedClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),

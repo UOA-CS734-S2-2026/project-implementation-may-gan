@@ -57,7 +57,7 @@ The web post form calls `POST /api/v1/posts` with an idempotency key. It submits
 
 Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day and sends `POST /api/v1/posts` through the generated Dart client with the draft's stored idempotency key. The draft is removed only after the server accepts the post, and media references stay on the device.
 
-`GET /api/v1/feed` returns released `friends` posts from active, unblocked friends, newest day first, using the shared post visibility predicate. See [Friends feed](friends-feed.md).
+`GET /api/v1/feed` returns released `friends` posts from active, unblocked friends, newest day first, using the shared post visibility predicate. The web home page and the Flutter home screen page through it. See [Friends feed](friends-feed.md).
 
 The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
 
