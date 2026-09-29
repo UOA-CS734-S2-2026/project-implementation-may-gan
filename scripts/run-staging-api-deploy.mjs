@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { validateStagingOrigins } from "./staging-origins.mjs";
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
-import { readStagingMediaBindings } from "./staging-media-bindings.mjs";
+import { assertStagingR2BucketAccess, readStagingMediaBindings } from "./staging-media-bindings.mjs";
 import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-worker-config.mjs";
 import {
   assertProjectedWorkerSecretPairing,
@@ -68,6 +68,14 @@ assertProjectedWorkerSecretPairing({
   source: secretSource,
   requiredSecretNames,
 });
+if (mediaBindings.vars.R2_BUCKET_NAME !== undefined) {
+  await assertStagingR2BucketAccess({
+    accountId: mediaBindings.vars.R2_ACCOUNT_ID,
+    bucketName: mediaBindings.vars.R2_BUCKET_NAME,
+    accessKeyId: secretSource.values.R2_ACCESS_KEY_ID,
+    secretAccessKey: secretSource.values.R2_SECRET_ACCESS_KEY,
+  });
+}
 
 const { api, probe } = createStagingWorkerConfigs({
   workerName: expectedWorkerName,
