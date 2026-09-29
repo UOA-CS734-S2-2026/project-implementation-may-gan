@@ -1,15 +1,9 @@
 -- squawk-ignore-file require-lock-timeout
 -- squawk-ignore-file require-statement-timeout
 -- squawk-ignore-file prefer-robust-stmts
--- squawk-ignore-file constraint-missing-not-valid
 -- Existing imported usernames can contain mixed case or historical duplicates.
--- This NOT VALID constraint protects every new write without rewriting or
--- invalidating those rows. The trigger below serializes case-folded claims.
-ALTER TABLE public."user"
-  ADD CONSTRAINT user_username_format
-  CHECK (username IS NULL OR username ~ '^[a-z0-9][a-z0-9_]{2,29}$') NOT VALID;
---> statement-breakpoint
-
+-- The trigger only runs for new username writes, so it never revalidates or
+-- rewrites these historical rows when another profile field changes.
 CREATE OR REPLACE FUNCTION public.enforce_case_insensitive_username()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -20,6 +14,9 @@ BEGIN
   END IF;
 
   NEW.username := lower(NEW.username);
+  IF NEW.username !~ '^[a-z0-9][a-z0-9_]{2,29}$' THEN
+    RAISE EXCEPTION 'username has an invalid format' USING ERRCODE = 'check_violation';
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('dayli:username:' || NEW.username, 145));
 
   IF EXISTS (
