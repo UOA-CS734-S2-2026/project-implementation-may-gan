@@ -8,7 +8,7 @@ describe("register push device route", () => {
       pushDevices: {
         resolveSession: async () => ({ userId: "alice" }),
         resolvePushSession: async () => ({ userId: "alice", sessionId: "session" }),
-        devices: { register, unregister: async () => undefined },
+        register: { register },
       },
     });
     const response = await api.request("/api/v1/push/devices/install", {

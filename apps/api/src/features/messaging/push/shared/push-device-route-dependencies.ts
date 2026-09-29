@@ -1,21 +1,9 @@
 import type { ResolveSession } from "../../../../http/middleware/require-session";
 import type { HasUsername } from "../../../../http/middleware/require-username";
-import type { PushPlatform, VerifiedPushSession } from "./push-device.service";
+import type { VerifiedPushSession } from "./push-device-types";
 
 export interface PushDeviceRouteDependencies {
   resolveSession: ResolveSession;
   hasUsername?: HasUsername;
   resolvePushSession(request: Request): Promise<VerifiedPushSession | null>;
-  devices?: {
-    register(
-      session: VerifiedPushSession,
-      device: {
-        installationId: string;
-        platform: PushPlatform;
-        token: string;
-        optedIn: boolean;
-      },
-    ): Promise<void>;
-    unregister(session: VerifiedPushSession, installationId: string): Promise<void>;
-  };
 }

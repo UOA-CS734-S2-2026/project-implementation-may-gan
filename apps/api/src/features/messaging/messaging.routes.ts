@@ -16,9 +16,14 @@ import { registerRemoveReactionRoute, type RemoveReactionRouteDependencies } fro
 import { registerSendMessageRoute, type SendMessageRouteDependencies } from "./messages/send-message/send-message.route";
 import { registerSetReactionRoute, type SetReactionRouteDependencies } from "./messages/set-reaction/set-reaction.route";
 import { registerUnsendMessageRoute, type UnsendMessageRouteDependencies } from "./messages/unsend-message/unsend-message.route";
-import { registerRegisterDeviceRoute } from "./push/register-device/register-device.route";
-import { registerUnregisterDeviceRoute } from "./push/unregister-device/unregister-device.route";
-import type { PushDeviceRouteDependencies } from "./push/shared/push-device-route-dependencies";
+import {
+  registerRegisterDeviceRoute,
+  type RegisterDeviceRouteDependencies,
+} from "./push/register-device/register-device.route";
+import {
+  registerUnregisterDeviceRoute,
+  type UnregisterDeviceRouteDependencies,
+} from "./push/unregister-device/unregister-device.route";
 import { registerConnectRealtimeRoute } from "./realtime/connect/connect.route";
 import type { RealtimeConnectRouteDependencies } from "./realtime/connect/connect.route";
 import { registerIssueRealtimeTicketRoute } from "./realtime/issue-ticket/issue-ticket.route";
@@ -43,7 +48,7 @@ export interface MessagingRouteDependencies extends
   hasUsername?: HasUsername;
   direct?: CreateDirectConversationRouteDependencies["direct"];
   realtimeTicket?: RealtimeTicketRouteDependencies;
-  pushDevices?: PushDeviceRouteDependencies;
+  pushDevices?: RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
 }
 

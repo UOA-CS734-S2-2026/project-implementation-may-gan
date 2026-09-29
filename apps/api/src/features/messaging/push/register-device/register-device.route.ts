@@ -2,8 +2,12 @@ import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { usernameSetupStatus } from "../../../../http/middleware/require-username";
-import { PushSessionInactiveError } from "../shared/push-device.service";
+import { PushSessionInactiveError, type RegisterDeviceService } from "./register-device.service";
 import type { PushDeviceRouteDependencies } from "../shared/push-device-route-dependencies";
+
+export interface RegisterDeviceRouteDependencies extends PushDeviceRouteDependencies {
+  register?: RegisterDeviceService;
+}
 
 const installationParams = z.object({ installationId: z.string().min(1).max(128) });
 const registerBody = z.object({
@@ -32,18 +36,18 @@ const route = createRoute({
 
 export function registerRegisterDeviceRoute(
   app: OpenAPIHono<AuthenticatedApiEnv>,
-  dependencies: PushDeviceRouteDependencies,
+  dependencies: RegisterDeviceRouteDependencies,
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
     const usernameStatus = await usernameSetupStatus(dependencies.hasUsername, context.get("actor").userId);
     if (usernameStatus === "unavailable") return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Username setup is temporarily unavailable.") as never;
     if (usernameStatus === "missing") return apiErrorResponse(context, 403, "FORBIDDEN", "Choose a username before using messaging.") as never;
-    if (!dependencies.devices) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Push registration is temporarily unavailable.") as never;
+    if (!dependencies.register) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Push registration is temporarily unavailable.") as never;
     const session = await dependencies.resolvePushSession(context.req.raw);
     if (!session || session.userId !== context.get("actor").userId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.") as never;
     try {
-      await dependencies.devices.register(session, {
+      await dependencies.register.register(session, {
         installationId: context.req.valid("param").installationId,
         ...context.req.valid("json"),
       });

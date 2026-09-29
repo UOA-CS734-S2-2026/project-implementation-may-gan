@@ -1,8 +1,8 @@
 import { sql, type DayliDatabase } from "@dayli/db";
-import { PushSessionInactiveError, type PushDeviceStore } from "./push-device.service";
+import { PushSessionInactiveError, type RegisterPushDeviceStore } from "./register-device.service";
 
 /** Token ownership rotates transactionally, so a device reused after account switch has one owner. */
-export function createPostgresPushDeviceStore(database: DayliDatabase): PushDeviceStore {
+export function createPostgresRegisterDeviceStore(database: DayliDatabase): RegisterPushDeviceStore {
   return {
     async register(device) {
       await database.transaction(async (tx) => {
@@ -31,9 +31,6 @@ export function createPostgresPushDeviceStore(database: DayliDatabase): PushDevi
             registered_at = excluded.registered_at, invalidated_at = null
         `);
       });
-    },
-    async unregister(userId, installationId) {
-      await database.execute(sql`delete from public.push_devices where user_id = ${userId} and installation_id = ${installationId}`);
     },
   };
 }

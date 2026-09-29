@@ -8,11 +8,11 @@ describe("unregister push device route", () => {
       pushDevices: {
         resolveSession: async () => ({ userId: "alice" }),
         resolvePushSession: async () => ({ userId: "alice", sessionId: "session" }),
-        devices: { register: async () => undefined, unregister },
+        unregister: { unregister },
       },
     });
     const response = await api.request("/api/v1/push/devices/install", { method: "DELETE" });
     expect(response.status).toBe(204);
-    expect(unregister).toHaveBeenCalledWith({ userId: "alice", sessionId: "session" }, "install");
+    expect(unregister).toHaveBeenCalledWith("alice", "install");
   });
 });

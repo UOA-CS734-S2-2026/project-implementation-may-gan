@@ -119,14 +119,18 @@ import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime
 import { createRealtimeTicketService } from "./features/messaging/realtime/issue-ticket/issue-ticket.service";
 import type { VerifiedRealtimeSession } from "./features/messaging/realtime/shared/realtime-types";
 import type { RealtimeConnectRouteDependencies } from "./features/messaging/realtime/connect/connect.route";
-import type { PushDeviceRouteDependencies } from "./features/messaging/push/shared/push-device-route-dependencies";
-import { createPostgresPushDeviceStore } from "./features/messaging/push/shared/push-device.repository";
-import { createPushDeviceService } from "./features/messaging/push/shared/push-device.service";
+import type { RegisterDeviceRouteDependencies } from "./features/messaging/push/register-device/register-device.route";
+import { createPostgresRegisterDeviceStore } from "./features/messaging/push/register-device/register-device.repository";
+import { createRegisterDeviceService } from "./features/messaging/push/register-device/register-device.service";
+import type { UnregisterDeviceRouteDependencies } from "./features/messaging/push/unregister-device/unregister-device.route";
+import { createPostgresUnregisterDeviceRepository } from "./features/messaging/push/unregister-device/unregister-device.repository";
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
+
+type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -137,7 +141,7 @@ export interface AppDependencies {
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
-  pushDevices?: PushDeviceRouteDependencies;
+  pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
@@ -279,7 +283,7 @@ const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveRealtimeSession: async () => null,
   webSocketUrl: "wss://realtime.invalid/api/v1/realtime/connect",
 };
-const unavailablePushDevices: PushDeviceRouteDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
+const unavailablePushDevices: PushDeviceDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
 
 const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     getStatus: async () => { throw new Error("Relationship storage is unavailable."); },
@@ -460,16 +464,18 @@ function createPushDeviceDependencies(
   configuration: RuntimeConfiguration,
   env: ApiEnv,
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
-): PushDeviceRouteDependencies {
+): PushDeviceDependencies {
   const resolvePushSession = createVerifiedRealtimeSessionResolver(configuration);
   if (!hasWorkerPushTokenProtection(env.PUSH_TOKEN_ENCRYPTION_KEY)) return { resolveSession: createSessionResolver(configuration), resolvePushSession, hasUsername };
   return {
     resolveSession: createSessionResolver(configuration),
     resolvePushSession,
     hasUsername,
-    devices: {
-      register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
-      unregister: (session, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPushDeviceService({ store: createPostgresPushDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).unregister(session, installationId)),
+    register: {
+      register: (session, device) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRegisterDeviceService({ store: createPostgresRegisterDeviceStore(database), protector: createDeferredWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY!) }).register(session, device)),
+    },
+    unregister: {
+      unregister: (actorId, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUnregisterDeviceRepository(database).unregister(actorId, installationId)),
     },
   };
 }
