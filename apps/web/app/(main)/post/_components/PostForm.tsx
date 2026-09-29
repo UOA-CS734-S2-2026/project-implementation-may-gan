@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,8 @@ import {
   type ApiFailure,
   type PostingDay,
 } from "@/lib/api/daily-posts";
+import AudienceInput from "./AudienceInput";
+import RatingInput from "./RatingInput";
 
 const postSchema = z.object({
   promptResponse: z
@@ -23,8 +25,9 @@ const postSchema = z.object({
       (value) => Array.from(value).length <= 4000,
       "Your response must be at most 4000 characters"
     ),
-  dayRating: z.coerce
-    .number<number>()
+  // Set by the slider, which starts unset.
+  dayRating: z
+    .number({ error: "Rating must be between 1 and 10" })
     .int()
     .min(1, "Rating must be between 1 and 10")
     .max(10, "Rating must be between 1 and 10"),
@@ -36,6 +39,18 @@ const postSchema = z.object({
       "Word dump must be at most 1000 characters"
     )
     .optional(),
+  tomorrowNote: z
+    .string()
+    .trim()
+    .refine(
+      (value) => Array.from(value).length <= 1000,
+      "Your note must be at most 1000 characters"
+    )
+    .optional(),
+  // No default: the author must choose who can see the post.
+  audience: z.enum(["friends", "solo"], {
+    error: "Choose who can see this dayli",
+  }),
   media: z.array(z.instanceof(File)).refine(
     (files) => {
       if (!files?.length) return true;
@@ -111,30 +126,24 @@ export default function PostForm({
     },
   });
 
-  const media = useWatch({ control, name: "media" });
-  const hasMedia = media && media.length > 0;
-
   const onSubmit = async ({
     promptResponse,
     dayRating,
     caption,
-    media,
+    tomorrowNote,
+    audience,
   }: PostValues) => {
-    if (!media?.length) {
-      setError("media", { message: "Please upload at least one file" });
-      return;
-    }
-
-    // Media upload arrives with the media API; until then the post is sent as
-    // text only and the chosen files stay on this device.
+    // Media is optional. Upload arrives with the media API; until then the
+    // post is sent as text only and any chosen files stay on this device.
     const result = await submitDailyPost(
       {
         localDate: postingDay.localDate,
         promptId: postingDay.prompt.id,
         reflectiveAnswer: promptResponse,
         rating: dayRating,
-        audience: "friends",
+        audience,
         ...(caption ? { caption } : {}),
+        ...(tomorrowNote ? { tomorrowNote } : {}),
       },
       idempotencyKey
     );
@@ -164,49 +173,56 @@ export default function PostForm({
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <MediaInput control={control} name="media" />
 
-        {hasMedia && (
-          <div className="space-y-5 mt-9">
-            <h2 className="pt-5 font-semibold tracking-tighter font-serif text-xl pb-2">
-              A bit about your day...
-            </h2>
-            <FormInput
-              control={control}
-              name="dayRating"
-              label="Day rating"
-              type="number"
-              variant="posts"
-            />
-            <FormInput
-              control={control}
-              name="promptResponse"
-              label={postingDay.prompt.text}
-              variant="posts"
-            />
-            <FormInput
-              control={control}
-              name="caption"
-              label="Word dump"
-              variant="posts"
-              multiline
-              rows={4}
-            />
+        <p className="text-sm text-foreground-secondary">
+          Photos and videos are optional. They stay on this device for now and
+          aren&apos;t posted yet.
+        </p>
 
-            {errors.root && (
-              <p className="text-sm text-red-500">{errors.root.message}</p>
-            )}
+        <div className="space-y-5 mt-9">
+          <h2 className="pt-5 font-semibold tracking-tighter font-serif text-xl pb-2">
+            A bit about your day...
+          </h2>
+          <RatingInput control={control} name="dayRating" />
+          <FormInput
+            control={control}
+            name="promptResponse"
+            label={postingDay.prompt.text}
+            variant="posts"
+          />
+          <FormInput
+            control={control}
+            name="caption"
+            label="Word dump"
+            variant="posts"
+            multiline
+            rows={4}
+          />
+          <FormInput
+            control={control}
+            name="tomorrowNote"
+            label="Note to tomorrow's you (only you can read it, from tomorrow)"
+            placeholder="Something to remember tomorrow (optional)"
+            variant="posts"
+            multiline
+            rows={2}
+          />
+          <AudienceInput control={control} name="audience" />
 
-            <div className="flex gap-3 pt-4">
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                variant={{ weight: "secondary", color: "accent" }}
-                arrow
-              >
-                {isSubmitting ? "Posting..." : "Post"}
-              </Button>
-            </div>
+          {errors.root && (
+            <p className="text-sm text-red-500">{errors.root.message}</p>
+          )}
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              variant={{ weight: "secondary", color: "accent" }}
+              arrow
+            >
+              {isSubmitting ? "Posting..." : "Post"}
+            </Button>
           </div>
-        )}
+        </div>
       </form>
     </div>
   );

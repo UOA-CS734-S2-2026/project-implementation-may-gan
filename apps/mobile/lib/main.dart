@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,6 +10,7 @@ import 'api/posting_day_client.dart';
 import 'app/app.dart';
 import 'app/app_scope.dart';
 import 'app/config.dart';
+import 'app/development_ca.dart';
 import 'app/fresh_install.dart';
 import 'app/session_integrations.dart';
 import 'auth/native_session.dart';
@@ -24,6 +26,17 @@ import 'posts/post_submitter.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = AppConfig.fromEnvironment();
+
+  // Debug only: trust a local development CA in Dart's HTTP stack, which
+  // ignores Android user CAs. See docs/dayli/environments.md.
+  if (kDebugMode) {
+    final ca = developmentCaBytes(
+      const String.fromEnvironment(developmentCaDefine),
+    );
+    if (ca != null) {
+      SecurityContext.defaultContext.setTrustedCertificatesBytes(ca);
+    }
+  }
 
   // One protected store shared by the session token, identity cache, and
   // drafts so a reinstall wipe covers all of them.
@@ -112,8 +125,10 @@ Future<void> main() async {
                 iosClientId: config.googleIosClientId,
               )
             : null,
-        // Replaced by the generated posts client once #16 is merged.
-        submitter: const UnavailablePostSubmitter(),
+        submitter: GeneratedPostSubmitter(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
       ),
     ),
   );

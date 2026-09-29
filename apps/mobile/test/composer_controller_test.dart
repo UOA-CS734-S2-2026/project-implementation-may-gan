@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/compose/composer_controller.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
@@ -28,8 +31,19 @@ void main() {
   void fill(ComposerController composer) => composer.update(
     reflectiveAnswer: '  Coffee by the harbour  ',
     rating: () => 7,
+    audience: PostAudience.friends,
     tomorrowNote: 'Bring the camera.',
     attachments: const [photo],
+  );
+
+  DailyPostDraft savedToday({String answer = 'Unsent words'}) => DailyPostDraft(
+    userId: 'user-1',
+    localDate: '2026-09-25',
+    promptId: 'prompt-09-25',
+    promptText: 'What made you smile today?',
+    idempotencyKey: 'saved-key',
+    updatedAt: DateTime.utc(2026, 9, 25),
+    reflectiveAnswer: answer,
   );
 
   setUp(() {
@@ -80,6 +94,7 @@ void main() {
 
     expect(composer.errors.rating, isNotNull);
     expect(composer.errors.reflectiveAnswer, isNotNull);
+    expect(composer.errors.audience, 'Choose who can see this dayli');
     expect(submitter.submitted, isEmpty);
   });
 
@@ -147,7 +162,7 @@ void main() {
     expect(composer.phase, ComposerPhase.missedDeadline);
     expect(composer.draft!.reflectiveAnswer, 'Unsent');
 
-    await composer.discardMissedDraft();
+    await composer.discardDraft();
     expect(composer.phase, ComposerPhase.editing);
     expect(composer.draft!.localDate, '2026-09-25');
     expect(composer.draft!.reflectiveAnswer, isEmpty);
@@ -204,17 +219,230 @@ void main() {
     expect(composer.phase, ComposerPhase.posted);
   });
 
-  test('requires a photo or video, like WDCC', () async {
+  test('clears an empty draft for a day that is already posted', () async {
+    await drafts.write(savedToday(answer: ''));
+    days.result = ApiSuccess(postingDay(hasPosted: true));
+    final composer = controller();
+    await composer.load();
+
+    expect(composer.phase, ComposerPhase.posted);
+    expect(drafts.drafts, isEmpty);
+  });
+
+  test('keeps unposted words when today is already posted', () async {
+    await drafts.write(savedToday());
+    days.result = ApiSuccess(postingDay(hasPosted: true));
+    final composer = controller();
+    await composer.load();
+
+    expect(composer.phase, ComposerPhase.alreadyPosted);
+    expect(composer.draft!.reflectiveAnswer, 'Unsent words');
+    expect(drafts.drafts['user-1'], isNotNull);
+
+    await composer.discardDraft();
+    expect(composer.phase, ComposerPhase.posted);
+    expect(drafts.drafts, isEmpty);
+  });
+
+  for (final (conflict, text) in [
+    (SubmissionConflict.alreadyPosted, 'already posted'),
+    (SubmissionConflict.idempotencyKeyReused, 'earlier version'),
+  ]) {
+    test('keeps the draft after ${conflict.reason}', () async {
+      submitter.result = SubmissionRejected(conflict);
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      await composer.submit();
+
+      expect(composer.phase, ComposerPhase.alreadyPosted);
+      expect(composer.message, contains(text));
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      expect(drafts.drafts['user-1']!.reflectiveAnswer, contains('harbour'));
+    });
+  }
+
+  test(
+    'reloads the day when the draft is dated before the server day',
+    () async {
+      submitter.result = const SubmissionRejected(
+        SubmissionConflict.postingDayNotOpen,
+      );
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      await composer.submit();
+
+      expect(days.calls, 2);
+      expect(composer.phase, ComposerPhase.editing);
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+    },
+  );
+
+  test('keeps the draft when the session expires while posting', () async {
+    submitter.result = const SubmissionFailed(Unauthenticated());
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    await composer.submit();
+
+    expect(unauthenticated, 1);
+    expect(composer.message, contains('Sign in again'));
+    expect(drafts.drafts['user-1']!.reflectiveAnswer, contains('harbour'));
+  });
+
+  test('shows a rejected field message and keeps the draft', () async {
+    submitter.result = const SubmissionFailed(
+      InvalidRequest('Some details need another look.'),
+    );
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    await composer.submit();
+
+    expect(composer.phase, ComposerPhase.editing);
+    expect(composer.message, 'Some details need another look.');
+    expect(drafts.drafts['user-1'], isNotNull);
+  });
+
+  test('allows a text-only post once an audience is chosen', () async {
     final composer = controller();
     await composer.load();
     composer.update(reflectiveAnswer: 'Coffee', rating: () => 7);
     await composer.submit();
 
-    expect(composer.errors.media, 'Please upload at least one file');
+    expect(composer.errors.audience, isNotNull);
     expect(submitter.submitted, isEmpty);
 
-    composer.update(attachments: const [photo]);
-    expect(composer.errors.media, isNull);
+    composer.update(audience: PostAudience.solo);
+    expect(composer.errors.audience, isNull);
+    await composer.submit();
+
+    expect(submitter.submitted.single.audience, PostAudience.solo);
+    expect(submitter.submitted.single.attachments, isEmpty);
+    expect(composer.phase, ComposerPhase.posted);
+  });
+
+  test('rechecks the server day when the deadline passes', () {
+    fakeAsync((async) {
+      final composer = controller();
+      composer.load();
+      async.flushMicrotasks();
+      fill(composer);
+      async.flushMicrotasks();
+      expect(composer.phase, ComposerPhase.editing);
+
+      // The server now reports the next day; the draft must not be backdated.
+      days.result = ApiSuccess(
+        postingDay(localDate: '2026-09-26', promptId: 'prompt-09-26'),
+      );
+      // serverNow is 03:00Z and the deadline 12:00Z.
+      async.elapse(const Duration(hours: 8, minutes: 59));
+      expect(days.calls, 1);
+      async.elapse(const Duration(minutes: 2));
+
+      expect(days.calls, 2);
+      expect(composer.phase, ComposerPhase.missedDeadline);
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      composer.dispose();
+    });
+  });
+
+  test(
+    'ignores edits while a post is sending, then keeps what was sent',
+    () async {
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      submitter.hold = Completer();
+      final sending = composer.submit();
+      await Future<void>.delayed(Duration.zero);
+      expect(composer.submitting, isTrue);
+
+      composer.update(
+        reflectiveAnswer: 'Typed while sending',
+        rating: () => 2,
+        audience: PostAudience.solo,
+      );
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      expect(composer.draft!.rating, 7);
+      expect(composer.draft!.audience, PostAudience.friends);
+
+      submitter.hold!.complete(
+        const SubmissionAccepted(postId: 'post-1', replayed: false),
+      );
+      await sending;
+      expect(submitter.submitted.single.reflectiveAnswer, contains('harbour'));
+      expect(composer.phase, ComposerPhase.posted);
+    },
+  );
+
+  test('allows edits again when a post fails to send', () async {
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    submitter.hold = Completer();
+    final sending = composer.submit();
+    await Future<void>.delayed(Duration.zero);
+    submitter.hold!.complete(const SubmissionFailed(NetworkUnavailable()));
+    await sending;
+
+    expect(composer.submitting, isFalse);
+    composer.update(reflectiveAnswer: 'Edited after the failure');
+    expect(composer.draft!.reflectiveAnswer, 'Edited after the failure');
+  });
+
+  test('rechecks the day after a send that spanned the deadline fails', () {
+    fakeAsync((async) {
+      final composer = controller();
+      composer.load();
+      async.flushMicrotasks();
+      fill(composer);
+      async.flushMicrotasks();
+
+      submitter.hold = Completer();
+      composer.submit();
+      async.flushMicrotasks();
+      expect(composer.submitting, isTrue);
+
+      // The deadline (12:00Z, server time 03:00Z) passes mid-request.
+      days.result = ApiSuccess(
+        postingDay(localDate: '2026-09-26', promptId: 'prompt-09-26'),
+      );
+      async.elapse(const Duration(hours: 9, minutes: 1));
+      expect(days.calls, 1);
+
+      submitter.hold!.complete(const SubmissionFailed(NetworkUnavailable()));
+      async.flushMicrotasks();
+
+      expect(days.calls, 2);
+      expect(composer.phase, ComposerPhase.missedDeadline);
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      composer.dispose();
+    });
+  });
+
+  test('does not recheck the day when the spanning send is accepted', () {
+    fakeAsync((async) {
+      final composer = controller();
+      composer.load();
+      async.flushMicrotasks();
+      fill(composer);
+      async.flushMicrotasks();
+
+      submitter.hold = Completer();
+      composer.submit();
+      async.flushMicrotasks();
+      async.elapse(const Duration(hours: 9, minutes: 1));
+      submitter.hold!.complete(
+        const SubmissionAccepted(postId: 'post-1', replayed: false),
+      );
+      async.flushMicrotasks();
+
+      expect(days.calls, 1);
+      expect(composer.phase, ComposerPhase.posted);
+      composer.dispose();
+    });
   });
 
   test('counts emoji as single characters', () {
@@ -226,7 +454,7 @@ void main() {
       idempotencyKey: 'k',
       updatedAt: DateTime.utc(2026),
       rating: 5,
-      attachments: const [photo],
+      audience: PostAudience.friends,
     );
     expect(
       validateDraft(base.copyWith(reflectiveAnswer: '😀' * 4000)).isEmpty,

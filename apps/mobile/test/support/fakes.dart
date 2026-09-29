@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
@@ -149,10 +150,14 @@ class FakeSubmitter implements DailyPostSubmitter {
   SubmissionResult result;
   final submitted = <DailyPostDraft>[];
 
+  /// When set, submissions stay in flight until this completes.
+  Completer<SubmissionResult>? hold;
+
   @override
   Future<SubmissionResult> submit(DailyPostDraft draft) async {
     submitted.add(draft);
-    return result;
+    final pending = hold;
+    return pending == null ? result : pending.future;
   }
 }
 
@@ -185,8 +190,23 @@ class TestHarness {
        ) {
     final client = MockClient((request) async {
       final path = request.url.path;
+      if (path.endsWith('/sign-up/email')) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        // Better Auth's responses for a taken email and its attempt limit.
+        return switch (body['email']) {
+          'taken@example.test' => http.Response(
+            '{"code":"USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"}',
+            422,
+          ),
+          'busy@example.test' => http.Response('{}', 429),
+          _ => http.Response('{}', 200, headers: {'set-auth-token': 'token-1'}),
+        };
+      }
       if (path.endsWith('/sign-in/email')) {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (body['email'] == 'busy@example.test') {
+          return http.Response('{}', 429);
+        }
         return body['password'] == 'correct-password'
             ? http.Response('{}', 200, headers: {'set-auth-token': 'token-1'})
             : http.Response('{}', 401);

@@ -16,6 +16,14 @@ Pass the API origin at build time. Use the addresses in [environments](../../doc
 flutter run --dart-define=DAYLI_API_BASE_URL=https://api.example.test
 ```
 
+For the local HTTPS API on an Android emulator or USB device, Dart's `HttpClient` ignores CAs installed on the device, so pass the mkcert root to a debug build. The app trusts it only when `kDebugMode` is true. Run `adb reverse tcp:8787 tcp:8787` first, as described in [Android debug builds](../../docs/dayli/environments.md#android-debug-builds):
+
+```bash
+flutter run --debug \
+  --dart-define=DAYLI_API_BASE_URL=https://localhost:8787 \
+  --dart-define=DAYLI_DEV_CA_PEM_B64="$(base64 < "$(mkcert -CAROOT)/rootCA.pem" | tr -d '\n')"
+```
+
 Google sign-in is offered when `DAYLI_GOOGLE_WEB_CLIENT_ID` is passed with `--dart-define`. Register the debug build's `.staging` application ID and its current debug SHA-1 in the staging Google project. Get the fingerprint with `./gradlew signingReport` from `apps/mobile/android`; keep it out of chat and Git. On iOS, also pass `DAYLI_GOOGLE_IOS_CLIENT_ID` and configure the callback scheme before running:
 
 ```bash
@@ -50,23 +58,23 @@ The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue
 - A bottom tab bar (daylies, friends, my days, messages) with a raised "new dayli" button in the middle, and a top bar with the logo and the profile button.
 - Home leads with today's prompt, the time left to post, and a full-width Post button, then yesterday's daylies.
 - The composer and settings open as full-screen pages with close and back buttons. The Post button stays above the keyboard.
-- Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is ten one-tap buttons instead of a number field.
+- Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is a 1–10 slider that starts unset, so a rating is always chosen on purpose.
 
 Only the data layer is missing features:
 
 - The feed is empty until the released-feed API (#19, #20).
 - Friends, my days, and messages are placeholders until their APIs land.
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
-- Posting needs a photo or video, as in WDCC. Chosen media stays on the device with the draft until the media API lands, and photos are not cropped.
+- Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media stays on the device with the draft until uploads land (#22), and photos are not cropped.
 
 ## Structure
 
-- `lib/app/`: configuration, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
+- `lib/app/`: configuration, the debug-only development CA check, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
 - `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
-- `lib/compose/`: the daily composer (#18). Edits, including chosen media, are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated.
-- `lib/posts/post_submitter.dart`: the submission seam. Until the create-post Dart client from #16 is wired in, `UnavailablePostSubmitter` keeps drafts safe and reports posting as unavailable.
+- `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily post creation](../../docs/dayli/daily-posts.md) for how each server response is handled.
+- `lib/posts/post_submitter.dart`: `GeneratedPostSubmitter` sends the draft through the generated Dart client with its stored idempotency key and the bearer session. It maps each `409` reason, `401`, `422`, outages, and lost connections to results the composer handles.
 
 iOS keeps Keychain entries after an app is deleted. On the first launch of a new installation, `clearProtectedStorageAfterReinstall` wipes the previous installation's session and drafts. A draft that can no longer be decrypted, for example after the platform key is invalidated, is removed and the author is told.
 

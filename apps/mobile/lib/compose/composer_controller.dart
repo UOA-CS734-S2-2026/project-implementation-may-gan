@@ -37,27 +37,32 @@ enum ComposerPhase {
   /// or discarded but never backdated.
   missedDeadline,
 
+  /// Today already has a post, but this device still holds unposted words,
+  /// for example edits made after an earlier attempt was accepted. They can
+  /// be read or discarded.
+  alreadyPosted,
+
   /// Neither the server nor a saved draft is available.
   unavailable,
 }
 
 class ComposerFieldErrors {
   const ComposerFieldErrors({
-    this.media,
+    this.audience,
     this.rating,
     this.reflectiveAnswer,
     this.caption,
     this.tomorrowNote,
   });
 
-  final String? media;
+  final String? audience;
   final String? rating;
   final String? reflectiveAnswer;
   final String? caption;
   final String? tomorrowNote;
 
   bool get isEmpty =>
-      media == null &&
+      audience == null &&
       rating == null &&
       reflectiveAnswer == null &&
       caption == null &&
@@ -68,7 +73,7 @@ ComposerFieldErrors validateDraft(DailyPostDraft draft) {
   final answer = draft.reflectiveAnswer.trim();
   final rating = draft.rating;
   return ComposerFieldErrors(
-    media: draft.attachments.isEmpty ? 'Please upload at least one file' : null,
+    audience: draft.audience == null ? 'Choose who can see this dayli' : null,
     rating:
         rating == null ||
             rating < DailyPostLimits.ratingMin ||
@@ -131,10 +136,15 @@ class ComposerController extends ChangeNotifier {
   DailyPostDraft? _draft;
   bool _offline = false;
   bool _submitting = false;
+
+  /// Set when the deadline passed while a submission was in flight, so the
+  /// day is rechecked once it settles.
+  bool _deadlinePassedWhileSubmitting = false;
   bool _draftWasDiscarded = false;
   String? _message;
   ComposerFieldErrors _errors = const ComposerFieldErrors();
   Timer? _saveTimer;
+  Timer? _deadlineTimer;
   Future<void> _pendingSave = Future.value();
   bool _disposed = false;
 
@@ -150,6 +160,8 @@ class ComposerController extends ChangeNotifier {
   ComposerFieldErrors get errors => _errors;
 
   Future<void> load() async {
+    _deadlineTimer?.cancel();
+    _deadlinePassedWhileSubmitting = false;
     _phase = ComposerPhase.loading;
     _message = null;
     _notify();
@@ -163,22 +175,21 @@ class ComposerController extends ChangeNotifier {
       case ApiSuccess(value: final day):
         _offline = false;
         _day = day;
-        if (day.hasPosted) {
-          if (saved != null && saved.localDate == day.localDate) {
-            await _drafts.clear(userId);
-          }
-          _draft = saved != null && saved.localDate != day.localDate
-              ? saved
-              : null;
-          _phase = _draft == null
-              ? ComposerPhase.posted
-              : ComposerPhase.missedDeadline;
-        } else if (saved != null && saved.localDate != day.localDate) {
+        if (saved != null && saved.localDate != day.localDate) {
           _draft = saved;
           _phase = ComposerPhase.missedDeadline;
+        } else if (day.hasPosted) {
+          if (saved != null && saved.isEmpty) await _drafts.clear(userId);
+          // Unposted words for a day that already has a post are kept until
+          // the author discards them.
+          _draft = saved == null || saved.isEmpty ? null : saved;
+          _phase = _draft == null
+              ? ComposerPhase.posted
+              : ComposerPhase.alreadyPosted;
         } else {
           _draft = _forDay(saved, day);
           _phase = ComposerPhase.editing;
+          _scheduleDeadlineCheck(day);
         }
       case ApiError(failure: Unauthenticated()):
         _onUnauthenticated();
@@ -200,6 +211,8 @@ class ComposerController extends ChangeNotifier {
   }
 
   /// Applies an edit and saves it to protected storage shortly afterwards.
+  /// Edits are ignored while a submission is in flight, so the draft always
+  /// matches what was sent and an accepted post never discards later words.
   void update({
     String? reflectiveAnswer,
     String? caption,
@@ -209,7 +222,9 @@ class ComposerController extends ChangeNotifier {
     List<DraftAttachment>? attachments,
   }) {
     final current = _draft;
-    if (current == null || _phase != ComposerPhase.editing) return;
+    if (current == null || _submitting || _phase != ComposerPhase.editing) {
+      return;
+    }
     _draft = current.copyWith(
       reflectiveAnswer: reflectiveAnswer,
       caption: caption,
@@ -231,7 +246,7 @@ class ComposerController extends ChangeNotifier {
     if (_errors.isEmpty) return;
     final next = validateDraft(draft);
     _errors = ComposerFieldErrors(
-      media: _errors.media == null ? null : next.media,
+      audience: _errors.audience == null ? null : next.audience,
       rating: _errors.rating == null ? null : next.rating,
       reflectiveAnswer: _errors.reflectiveAnswer == null
           ? null
@@ -242,7 +257,7 @@ class ComposerController extends ChangeNotifier {
   }
 
   /// Removes a draft that can no longer be posted and starts today's.
-  Future<void> discardMissedDraft() async {
+  Future<void> discardDraft() async {
     await _drafts.clear(userId);
     _draft = null;
     await load();
@@ -284,14 +299,18 @@ class ComposerController extends ChangeNotifier {
         await load();
         _message =
             "The day's prompt has changed. Check your answer and post again.";
+      case SubmissionRejected(conflict: SubmissionConflict.alreadyPosted):
+        _phase = ComposerPhase.alreadyPosted;
+        _message =
+            "Today's dayli was already posted, so this one can't be posted. "
+            'Your words are still saved on this device.';
       case SubmissionRejected(
-        conflict: SubmissionConflict.alreadyPosted ||
-            SubmissionConflict.idempotencyKeyReused,
+        conflict: SubmissionConflict.idempotencyKeyReused,
       ):
-        await _drafts.clear(userId);
-        _draft = null;
-        _phase = ComposerPhase.posted;
-        _message = "You've already posted today's dayli.";
+        _phase = ComposerPhase.alreadyPosted;
+        _message =
+            'An earlier version of this dayli was already posted, so these '
+            "edits can't be posted. They're still saved on this device.";
       case SubmissionFailed(failure: Unauthenticated()):
         _message = 'Sign in again to post. Your dayli is saved on this device.';
         _onUnauthenticated();
@@ -305,6 +324,18 @@ class ComposerController extends ChangeNotifier {
         _message =
             "Posting isn't available right now. Your dayli is saved on this "
             'device; try again shortly.';
+    }
+    final signedOut =
+        result is SubmissionFailed && result.failure is Unauthenticated;
+    if (_deadlinePassedWhileSubmitting &&
+        _phase == ComposerPhase.editing &&
+        !signedOut) {
+      // The request didn't settle the day, so recheck it now. Keep the
+      // failure message if the day is still open.
+      final failure = _message;
+      await _flushSave();
+      await load();
+      if (_phase == ComposerPhase.editing) _message ??= failure;
     }
     _notify();
   }
@@ -329,6 +360,25 @@ class ComposerController extends ChangeNotifier {
     );
     _scheduleSave(refreshed);
     return refreshed;
+  }
+
+  /// Asks the server for the day again once its deadline passes, so an open
+  /// composer shows the missed state instead of a countdown stuck at zero.
+  /// The server remains authoritative; a submission already in flight is
+  /// decided by the server's clock, not this timer.
+  void _scheduleDeadlineCheck(PostingDay day) {
+    _deadlineTimer?.cancel();
+    var remaining = day.deadlineAt.difference(day.serverNow);
+    if (remaining.isNegative) remaining = Duration.zero;
+    _deadlineTimer = Timer(remaining + const Duration(seconds: 1), () {
+      if (_disposed || _phase != ComposerPhase.editing) return;
+      if (_submitting) {
+        // submit() rechecks the day once the request settles.
+        _deadlinePassedWhileSubmitting = true;
+        return;
+      }
+      unawaited(_flushSave().then((_) => _disposed ? null : load()));
+    });
   }
 
   void _scheduleSave([DailyPostDraft? draft]) {
@@ -360,6 +410,7 @@ class ComposerController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _deadlineTimer?.cancel();
     if (_saveTimer?.isActive ?? false) {
       _saveTimer!.cancel();
       unawaited(_save(_draft));

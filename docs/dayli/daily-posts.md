@@ -1,6 +1,6 @@
 # Daily post creation
 
-`POST /api/v1/posts` accepts the authenticated user's one post for the current Auckland day. The Worker route and web client are implemented. The Flutter composer reads `GET /api/v1/posting-days/current` and keeps protected drafts, but currently uses `UnavailablePostSubmitter`, so it does not call this endpoint. Clients that submit use an `Idempotency-Key` header.
+`POST /api/v1/posts` accepts the authenticated user's one post for the current Auckland day. The Worker route, the web composer, and the Flutter composer are implemented. Both clients read `GET /api/v1/posting-days/current`, send an `Idempotency-Key` header, and require the author to choose `solo` or `friends`; there is no default audience. Both send the optional caption and tomorrow note only when they are not blank.
 
 ## Request
 
@@ -14,7 +14,7 @@
 | `audience` | `solo` or `friends`. |
 | `tomorrowNote` | Optional, trimmed, 1–1000 characters. It is stored outside the post and never returned; the response only reports `tomorrowNote.availableOn`. |
 
-The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media reservations exist separately, but post attachment linking, upload completion checks, and client upload integration are not implemented. The web composer currently keeps selected files on the device and submits text fields only.
+The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media reservations exist separately, but post attachment linking, upload completion checks, and client upload integration are not implemented. Both composers treat media as optional, keep selected files on the device, and submit text fields only. The generated Dart request model writes omitted optional fields as `null`, which this strict schema rejects, so the Flutter submitter removes null keys before sending.
 
 ## Acceptance
 
@@ -27,6 +27,8 @@ The service takes a transaction-scoped advisory lock for the author, then, in or
 5. Inserts the post with `released_at` at the next Auckland midnight, the optional tomorrow note, and the idempotency record in one transaction.
 
 Only accepted submissions are recorded, so a rejected attempt can be retried with the same key. Clients should keep the draft for every `409` except a replay, and must not backdate a draft that missed midnight.
+
+The Flutter composer follows this rule. Its draft, including the idempotency key, stays in protected storage until a `201`, whether original or replayed. `POSTING_DAY_CLOSED` shows the draft as missed. `PROMPT_CHANGED` and `POSTING_DAY_NOT_OPEN` reload the day and keep the text. `ALREADY_POSTED` and `IDEMPOTENCY_KEY_REUSED` show the unposted words until the author discards them. Opening the composer when the day already has a post does the same for a non-empty draft. When the server's deadline passes while the composer is open, it reloads the posting day so the draft is shown as missed rather than submitted late. If the deadline passes while a submission is in flight, the reload waits until that request settles and is skipped if the post was accepted. The composer is read-only while a submission is in flight, so the draft always matches what was sent and an accepted post never discards later edits.
 
 ## Storage
 
