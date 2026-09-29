@@ -184,6 +184,10 @@ void main() {
       await tester.pumpAndSettle();
       if (signUp) {
         await tester.enterText(find.byKey(const Key('auth.name')), 'Jos');
+        await tester.enterText(
+          find.byKey(const Key('auth.username')),
+          'jos_example',
+        );
       }
       await tester.enterText(find.byKey(const Key('auth.email')), email);
       await tester.enterText(
