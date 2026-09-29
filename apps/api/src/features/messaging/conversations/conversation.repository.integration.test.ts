@@ -72,13 +72,15 @@ suite("messaging direct conversation Postgres persistence", () => {
   it("uses an exact database timestamp cursor so same-second inbox entries are not omitted", async () => {
     const now = new Date("2026-09-28T06:00:00.123Z");
     const service = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db), now: () => now });
-    for (const peer of users.slice(5, 8)) {
-      await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[4]!}, ${peer}, 'active', now()), (${peer}, ${users[4]!}, 'active', now())`;
-      await service.create(users[4]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
+    // This actor and these peers have not been paired by the earlier tests.
+    // Keep the cursor fixture independent of the direct-pair lookup fixture.
+    for (const peer of users.slice(0, 3)) {
+      await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[7]!}, ${peer}, 'active', now()), (${peer}, ${users[7]!}, 'active', now())`;
+      await service.create(users[7]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
     }
-    const first = await reader.list(users[4]!, "inbox", undefined, 1);
-    const second = await reader.list(users[4]!, "inbox", first.nextCursor ?? undefined, 1);
-    const third = await reader.list(users[4]!, "inbox", second.nextCursor ?? undefined, 1);
+    const first = await reader.list(users[7]!, "inbox", undefined, 1);
+    const second = await reader.list(users[7]!, "inbox", first.nextCursor ?? undefined, 1);
+    const third = await reader.list(users[7]!, "inbox", second.nextCursor ?? undefined, 1);
     const ids = [...first.items, ...second.items, ...third.items].map((item) => (item as { id: string }).id);
     expect(new Set(ids)).toHaveLength(3);
   });
