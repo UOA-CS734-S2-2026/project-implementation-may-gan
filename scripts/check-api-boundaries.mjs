@@ -70,7 +70,10 @@ function featureSourceInfo(path, value) {
     if (rest[0] === "shared") {
       return { path, feature, fileName: virtualName, isTest, kind: "domain-shared", subfeature: undefined, action: undefined, isRegistrar: false };
     }
-    if (groupingDirectories.has(rest[0]) && rest[1] === "shared") {
+    if (!groupingDirectories.has(rest[0])) {
+      return { path, feature, fileName: virtualName, isTest, kind: "unknown-subfeature", subfeature: rest[0], action: undefined, isRegistrar: false };
+    }
+    if (rest[1] === "shared") {
       return { path, feature, fileName: virtualName, isTest, kind: "subfeature-shared", subfeature: rest[0], action: undefined, isRegistrar: false };
     }
     return { path, feature, fileName: virtualName, isTest, kind: "action", subfeature: rest[0], action: rest[1], isRegistrar: false };
@@ -246,6 +249,9 @@ function allowedBoundary(source, target, specifier) {
 }
 
 function lintRootFile(info) {
+  if (info.kind === "unknown-subfeature") {
+    return `${describe(info)} is in an unapproved messaging subfeature. Use one of: ${[...groupingDirectories].join(", ")}.`;
+  }
   if (info.kind !== "root") return undefined;
   if (allowedFeatureRootFiles.has(info.feature)) return undefined;
   if (info.isRegistrar) return undefined;
@@ -276,6 +282,8 @@ async function runFixtureChecks(errors) {
     resolve(apiTestRoot, "boundaries/messaging/messaging.routes.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/messaging/messages/shared/messages-shared-action.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/messaging/messages/shared/messages-shared-own.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/messages/send-message/send-message.approved.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/unapproved/shared/unapproved-shared.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/messaging/shared/domain-shared-owner.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/messaging/shared/messaging.repository.integration.test.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/test-support/messaging-domain-shared.boundary-fixture.ts"),
@@ -301,6 +309,8 @@ async function runFixtureChecks(errors) {
     "messaging.routes.boundary-fixture.ts",
     "messages-shared-action.boundary-fixture.ts",
     "messages-shared-own.boundary-fixture.ts",
+    "send-message.approved.boundary-fixture.ts",
+    "unapproved-shared.boundary-fixture.ts",
     "domain-shared-owner.boundary-fixture.ts",
     "messaging.repository.integration.test.boundary-fixture.ts",
     "messaging-domain-shared.boundary-fixture.ts",
@@ -316,6 +326,7 @@ async function runFixtureChecks(errors) {
     "send-message.domain-shared.boundary-fixture.ts",
     "messaging.routes.boundary-fixture.ts",
     "messages-shared-own.boundary-fixture.ts",
+    "send-message.approved.boundary-fixture.ts",
     "domain-shared-owner.boundary-fixture.ts",
     "messaging-domain-shared.boundary-fixture.ts",
   ]);
