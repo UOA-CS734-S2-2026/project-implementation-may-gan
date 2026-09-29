@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../api/api_failure.dart';
 import '../api/friends_client.dart';
 import '../app/app_scope.dart';
+import '../auth/session_controller.dart';
 import '../app/theme.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
@@ -20,8 +21,10 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Future<ApiResult<FriendCard>>? _profile;
   String? _accountId;
   String? _loadedUsername;
+  SessionController? _session;
   bool _busy = false;
   String? _notice;
+  String? _authorizedProfileId;
 
   Future<ApiResult<FriendCard>> _load() {
     final client = AppScope.of(context).friends;
@@ -31,16 +34,51 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final accountId = AppScope.of(context).session.user?.id;
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session;
+      _session!.addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  @override
+  void didUpdateWidget(covariant SocialProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.username != widget.username) _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+    setState(() {});
+  }
+
+  void _syncActor() {
+    final accountId = _session?.user?.id;
     if (_profile == null ||
         _accountId != accountId ||
         _loadedUsername != widget.username) {
       _accountId = accountId;
       _loadedUsername = widget.username;
       _notice = null;
+      _authorizedProfileId = null;
       _profile = _load();
     }
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _syncActor();
     return FutureBuilder<ApiResult<FriendCard>>(
       future: _profile,
       builder: (context, snapshot) {
@@ -48,6 +86,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
+          _authorizedProfileId = person.id;
           return _profileCard(context, person);
         }
         return Center(
@@ -64,7 +103,11 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   }
 
   Future<void> _friend(FriendCard person) async {
-    if (_busy) {
+    _syncActor();
+    final accountAtStart = _accountId;
+    if (_busy ||
+        accountAtStart != _session?.user?.id ||
+        _authorizedProfileId != person.id) {
       return;
     }
     setState(() {
@@ -77,7 +120,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
         : person.relationship == 'friends'
         ? await client.remove(person.id)
         : const ApiSuccess<void>(null);
-    if (!mounted) return;
+    if (!mounted || accountAtStart != _session?.user?.id) return;
     setState(() {
       _busy = false;
       _notice = result is ApiError<void>

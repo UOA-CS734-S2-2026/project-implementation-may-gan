@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../api/api_failure.dart';
 import '../api/friends_client.dart';
 import '../app/app_scope.dart';
+import '../auth/session_controller.dart';
 import '../app/theme.dart';
 
 /// Route-backed draft. It never creates a blank conversation.
@@ -20,15 +21,39 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   Future<ApiResult<String?>>? _existing;
   String? _accountId;
   String? _loadedUsername;
+  SessionController? _session;
   String? _intent;
   String? _clientMessageId;
   bool _sending = false;
   bool _redirected = false;
+  String? _authorizedRecipientId;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final accountId = AppScope.of(context).session.user?.id;
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session;
+      _session!.addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  @override
+  void didUpdateWidget(covariant NewMessageScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.username != widget.username) _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+    setState(() {});
+  }
+
+  void _syncActor() {
+    final accountId = _session?.user?.id;
     if (_profile == null ||
         _accountId != accountId ||
         _loadedUsername != widget.username) {
@@ -39,6 +64,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
       _intent = null;
       _clientMessageId = null;
       _redirected = false;
+      _authorizedRecipientId = null;
       _sending = false;
       _text.clear();
     }
@@ -53,12 +79,18 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
 
   @override
   void dispose() {
+    _session?.removeListener(_onSessionChanged);
     _text.dispose();
     super.dispose();
   }
 
   Future<void> _send(FriendCard recipient) async {
+    _syncActor();
     final accountAtStart = _accountId;
+    if (accountAtStart != _session?.user?.id ||
+        _authorizedRecipientId != recipient.id) {
+      return;
+    }
     final text = _text.text;
     if (_sending || text.trim().isEmpty) return;
     final intent = '${recipient.id}\u0000$text';
@@ -91,6 +123,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
+          _authorizedRecipientId = person.id;
           final accountAtLookup = _accountId;
           _existing ??= AppScope.of(context).messaging.findDirect(person.id);
           return FutureBuilder<ApiResult<String?>>(
