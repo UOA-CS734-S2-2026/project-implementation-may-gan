@@ -12,8 +12,8 @@ Google does not copy a provider name into the public profile. New Google account
 
 `0013_required_usernames.sql` deliberately does not rewrite legacy handles. It:
 
-1. Adds a `NOT VALID` format constraint, so historical imported values remain intact while new values must be lowercase `3..30` character handles.
-2. Adds a trigger that normalizes new handles and takes a transaction advisory lock per case-folded value. It rejects case-insensitive collisions without requiring a unique lower-case index that could fail against legacy duplicates.
+1. Adds a trigger that normalizes and validates new handles while leaving legacy rows untouched when unrelated profile fields change.
+2. Takes a transaction advisory lock per case-folded handle in that trigger. It rejects case-insensitive collisions without requiring a unique lower-case index that could fail against legacy duplicates.
 3. Copies established users' existing `name` into `display_username` only when they already have a username and no explicit public name. Friend cards then use `display_username`, falling back to username, never an OAuth provider name.
 
 Apply the migration using the protected migration workflow, after its required restore-point check, before deploying the Worker and clients. Do not apply it directly to a live database. Existing duplicate or uppercase imports are intentionally left unchanged and may not be renamed by this release.
