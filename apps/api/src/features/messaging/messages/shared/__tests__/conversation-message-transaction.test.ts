@@ -1,6 +1,6 @@
 import type { DayliDatabase } from "@dayli/db";
 import { describe, expect, it } from "vitest";
-import { withLockedConversationMessageTransaction } from "./conversation-message-transaction";
+import { withLockedConversationMessageTransaction } from "../conversation-message-transaction";
 
 describe("withLockedConversationMessageTransaction", () => {
   it("locks the looked-up relationship pair before invoking the caller callback", async () => {
