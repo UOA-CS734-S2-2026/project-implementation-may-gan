@@ -2,13 +2,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NewMessage } from "../../app/(main)/messages/new/[username]/page";
+import { ActorScopedNewMessage, NewMessage } from "../../app/(main)/messages/new/[username]/page";
 
+let actorId = "actor-a";
 const replace = vi.fn();
 const loadSocialProfile = vi.fn();
 const findDirect = vi.fn();
 const mutateAsync = vi.fn();
-vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "actor" } }) }));
+vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: actorId } }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 vi.mock("@/lib/api/friends", () => ({ loadSocialProfile: (...args: unknown[]) => loadSocialProfile(...args) }));
 vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: { findDirect: (...args: unknown[]) => findDirect(...args) } }));
@@ -17,7 +18,7 @@ vi.mock("@/features/messaging/create-conversation/use-create-conversation-mutati
 const person = { id: "recipient", username: "ada", displayName: "Ada", relationship: "none" };
 function renderDraft() { return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><NewMessage username="ada" /></QueryClientProvider>); }
 
-beforeEach(() => { vi.clearAllMocks(); loadSocialProfile.mockResolvedValue({ ok: true, value: person }); findDirect.mockResolvedValue({ ok: false, failure: "notFound", message: "missing" }); });
+beforeEach(() => { vi.clearAllMocks(); actorId = "actor-a"; loadSocialProfile.mockResolvedValue({ ok: true, value: person }); findDirect.mockResolvedValue({ ok: false, failure: "notFound", message: "missing" }); });
 
 describe("NewMessagePage", () => {
   it("shows an unavailable profile instead of an indefinitely pending lookup", async () => {
@@ -45,6 +46,20 @@ describe("NewMessagePage", () => {
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
     expect(mutateAsync.mock.calls[1][0]).toEqual(mutateAsync.mock.calls[0][0]);
     expect(replace).toHaveBeenCalledWith("/messages/new");
+  });
+
+  it("clears private draft state when the route's authenticated actor changes", async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const view = render(<QueryClientProvider client={client}><ActorScopedNewMessage actorId={actorId} username="ada" /></QueryClientProvider>);
+    await screen.findByText("Ada");
+    await user.type(screen.getByLabelText("Message"), "A private note");
+    actorId = "actor-b";
+    loadSocialProfile.mockResolvedValueOnce({ ok: false, failure: "notFound" });
+    view.rerender(<QueryClientProvider client={client}><ActorScopedNewMessage actorId={actorId} username="ada" /></QueryClientProvider>);
+    expect(await screen.findByRole("heading", { name: "This profile is unavailable" })).toBeTruthy();
+    expect(screen.queryByDisplayValue("A private note")).toBeNull();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it("does not offer send when pair lookup fails", async () => {
