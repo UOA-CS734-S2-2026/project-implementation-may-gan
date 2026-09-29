@@ -1,5 +1,5 @@
 RESULTS
-{'desktop': {'status_noop': True, 'menu_ok': True, 'long_name': {'scroll': 171, 'client': 171, 'text': 'Alexandria Catherine Montgomery'}, 'body_overflow': False}, 'mobile': {'status_noop': True, 'menu_ok': True, 'long_name': {'scroll': 127, 'client': 127, 'text': 'Alexandria Catherine Montgomery'}, 'body_overflow': False}}
+{'desktop': {'no_badge': True, 'menu_ok': True, 'actions_aligned_with_preview': True, 'reserved_name_profile': True, 'long_name': {'scroll': 242, 'client': 242, 'text': 'Alexandria Catherine Montgomery'}, 'body_overflow': False}, 'mobile': {'no_badge': True, 'menu_ok': True, 'actions_aligned_with_preview': True, 'reserved_name_profile': True, 'long_name': {'scroll': 199, 'client': 199, 'text': 'Alexandria Catherine Montgomery'}, 'body_overflow': False}}
 
 PAGE_ERRORS
 
@@ -26,6 +26,13 @@ https://mock.dayli.test/api/v1/conversations?folder=requests
 https://mock.dayli.test/api/auth/get-session
 https://mock.dayli.test/api/v1/profile/username
 https://mock.dayli.test/api/v1/profile/username
+https://mock.dayli.test/api/v1/relationships/profiles/messages
+https://mock.dayli.test/api/v1/messaging/unread
+https://mock.dayli.test/api/v1/realtime/tickets
+https://mock.dayli.test/api/v1/messaging/unread
+https://mock.dayli.test/api/auth/get-session
+https://mock.dayli.test/api/v1/profile/username
+https://mock.dayli.test/api/v1/profile/username
 https://mock.dayli.test/api/v1/messaging/unread
 https://mock.dayli.test/api/v1/relationships/friends?limit=20
 https://mock.dayli.test/api/v1/relationships/requests?limit=20&direction=incoming
@@ -40,3 +47,10 @@ https://mock.dayli.test/api/v1/messaging/unread
 https://mock.dayli.test/api/v1/realtime/tickets
 https://mock.dayli.test/api/v1/messaging/unread
 https://mock.dayli.test/api/v1/conversations?folder=requests
+https://mock.dayli.test/api/auth/get-session
+https://mock.dayli.test/api/v1/profile/username
+https://mock.dayli.test/api/v1/profile/username
+https://mock.dayli.test/api/v1/relationships/profiles/messages
+https://mock.dayli.test/api/v1/messaging/unread
+https://mock.dayli.test/api/v1/realtime/tickets
+https://mock.dayli.test/api/v1/messaging/unread
