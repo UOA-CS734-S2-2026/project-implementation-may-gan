@@ -1,4 +1,5 @@
-import { sql, type DayliDatabase } from "@dayli/db";
+import { and, eq, isNull } from "drizzle-orm";
+import { schema, sql, type DayliDatabase } from "@dayli/db";
 import type { UsernameProfile, UsernameSetupInput } from "./username.contract";
 
 export interface UsernameProfileStore {
@@ -19,21 +20,31 @@ function profile(row: { username: unknown; display_username: unknown }): Usernam
 export function createPostgresUsernameProfileStore(database: DayliDatabase): UsernameProfileStore {
   return {
     async get(userId) {
-      const rows = await database.execute(sql`select username, display_username from public."user" where id = ${userId} limit 1`);
-      const row = [...rows as Iterable<{ username: unknown; display_username: unknown }>][0];
+      const [row] = await database
+        .select({ username: schema.user.username, display_username: schema.user.displayUsername })
+        .from(schema.user)
+        .where(eq(schema.user.id, userId))
+        .limit(1);
       return row ? profile(row) : null;
     },
     async claimInitial(userId, input) {
       try {
-        const rows = await database.execute(sql`
-          update public."user"
-          set username = ${input.username}, display_username = ${input.publicName || null}, updated_at = now()
-          where id = ${userId} and username is null
-          returning id
-        `);
-        if ([...rows as Iterable<unknown>].length > 0) return "claimed";
-        const existing = await database.execute(sql`select username from public."user" where id = ${userId} limit 1`);
-        return [...existing as Iterable<unknown>].length > 0 ? "already_setup" : "missing";
+        const [claimed] = await database
+          .update(schema.user)
+          .set({
+            username: input.username,
+            displayUsername: input.publicName || null,
+            updatedAt: sql`now()`,
+          })
+          .where(and(eq(schema.user.id, userId), isNull(schema.user.username)))
+          .returning({ id: schema.user.id });
+        if (claimed) return "claimed";
+        const [existing] = await database
+          .select({ id: schema.user.id })
+          .from(schema.user)
+          .where(eq(schema.user.id, userId))
+          .limit(1);
+        return existing ? "already_setup" : "missing";
       } catch (error) {
         if (isUniqueViolation(error)) return "taken";
         throw error;
@@ -43,5 +54,9 @@ export function createPostgresUsernameProfileStore(database: DayliDatabase): Use
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "23505";
+  if (typeof error !== "object" || error === null) return false;
+  const value = error as { code?: unknown; cause?: unknown };
+  if (value.code === "23505") return true;
+  return typeof value.cause === "object" && value.cause !== null
+    && (value.cause as { code?: unknown }).code === "23505";
 }
