@@ -32,12 +32,6 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
     if (input.unsentAt !== undefined) await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${input.messageId}`);
     return mapStoredMessage(row);
   }
-  async setReaction(messageId: string, actorId: string, reaction: StoredMessage["reactions"][number]["reaction"]): Promise<StoredMessage> {
-    await this.queryable.execute(sql`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${messageId}, ${actorId}, ${reaction}, now()) on conflict (message_id, user_id) do update set reaction = excluded.reaction, created_at = excluded.created_at`);
-    const current = await this.findMessage(this.conversationId, messageId); if (!current) throw new Error("Message disappeared during reaction.");
-    const result = rows<{ reaction: string; count: number | string; reacted: boolean }>(await this.queryable.execute(sql`select reaction, count(*)::int as count, bool_or(user_id = ${actorId}) as reacted from public.message_reactions where message_id = ${messageId} group by reaction`));
-    current.reactions = result.map((row) => ({ reaction: row.reaction as StoredMessage["reactions"][number]["reaction"], count: Number(row.count), reactedByActor: row.reacted })); return current;
-  }
   async removeReaction(messageId: string, actorId: string): Promise<StoredMessage> {
     await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and user_id = ${actorId}`);
     const current = await this.findMessage(this.conversationId, messageId); if (!current) throw new Error("Message disappeared during reaction."); return current;

@@ -1,4 +1,4 @@
-import type { ConversationAccess, ReactionKey, StoredMessage } from "./messaging-types";
+import type { ConversationAccess, StoredMessage } from "./messaging-types";
 
 export interface StoredIdempotentMessage {
   requestFingerprint: string;
@@ -34,7 +34,6 @@ export interface MessageWriteTransaction {
     unsentAt?: Date | null;
     expectedVersion?: number;
   }): Promise<StoredMessage>;
-  setReaction(messageId: string, actorId: string, reaction: ReactionKey): Promise<StoredMessage>;
   removeReaction(messageId: string, actorId: string): Promise<StoredMessage>;
   /** Atomically appends the change record and body-free realtime delivery intent. */
   appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" | "request.active" }): Promise<void>;

@@ -63,12 +63,6 @@ export function messageMemory(initial = message()) {
       messages.set(updated.id, updated);
       return updated;
     },
-    setReaction: async (id, _actor, reaction) => {
-      const old = messages.get(id)!;
-      const updated = message({ ...old, reactions: [{ reaction, count: 1, reactedByActor: true }] });
-      messages.set(id, updated);
-      return updated;
-    },
     removeReaction: async (id) => {
       const old = messages.get(id)!;
       const updated = message({ ...old, reactions: [] });
@@ -82,5 +76,19 @@ export function messageMemory(initial = message()) {
   const store: MessageWriteStore = {
     withConversationTransaction: async (_actor, _conversation, action) => action(transaction),
   };
-  return { store, messages, changes, transaction };
+  const setReactionTransaction = {
+    getAccess: transaction.getAccess,
+    findMessage: transaction.findMessage,
+    setReaction: async (id: string, _actor: string, reaction: StoredMessage["reactions"][number]["reaction"]) => {
+      const old = messages.get(id)!;
+      const updated = message({ ...old, reactions: [{ reaction, count: 1, reactedByActor: true }] });
+      messages.set(id, updated);
+      return updated;
+    },
+    appendPeerChange: transaction.appendPeerChange,
+  };
+  const setReactionStore = {
+    withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof setReactionTransaction) => Promise<T>) => action(setReactionTransaction),
+  };
+  return { store, setReactionStore, messages, changes, transaction };
 }
