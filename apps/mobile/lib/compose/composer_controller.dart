@@ -136,6 +136,10 @@ class ComposerController extends ChangeNotifier {
   DailyPostDraft? _draft;
   bool _offline = false;
   bool _submitting = false;
+
+  /// Set when the deadline passed while a submission was in flight, so the
+  /// day is rechecked once it settles.
+  bool _deadlinePassedWhileSubmitting = false;
   bool _draftWasDiscarded = false;
   String? _message;
   ComposerFieldErrors _errors = const ComposerFieldErrors();
@@ -157,6 +161,7 @@ class ComposerController extends ChangeNotifier {
 
   Future<void> load() async {
     _deadlineTimer?.cancel();
+    _deadlinePassedWhileSubmitting = false;
     _phase = ComposerPhase.loading;
     _message = null;
     _notify();
@@ -206,6 +211,8 @@ class ComposerController extends ChangeNotifier {
   }
 
   /// Applies an edit and saves it to protected storage shortly afterwards.
+  /// Edits are ignored while a submission is in flight, so the draft always
+  /// matches what was sent and an accepted post never discards later words.
   void update({
     String? reflectiveAnswer,
     String? caption,
@@ -215,7 +222,9 @@ class ComposerController extends ChangeNotifier {
     List<DraftAttachment>? attachments,
   }) {
     final current = _draft;
-    if (current == null || _phase != ComposerPhase.editing) return;
+    if (current == null || _submitting || _phase != ComposerPhase.editing) {
+      return;
+    }
     _draft = current.copyWith(
       reflectiveAnswer: reflectiveAnswer,
       caption: caption,
@@ -316,6 +325,18 @@ class ComposerController extends ChangeNotifier {
             "Posting isn't available right now. Your dayli is saved on this "
             'device; try again shortly.';
     }
+    final signedOut =
+        result is SubmissionFailed && result.failure is Unauthenticated;
+    if (_deadlinePassedWhileSubmitting &&
+        _phase == ComposerPhase.editing &&
+        !signedOut) {
+      // The request didn't settle the day, so recheck it now. Keep the
+      // failure message if the day is still open.
+      final failure = _message;
+      await _flushSave();
+      await load();
+      if (_phase == ComposerPhase.editing) _message ??= failure;
+    }
     _notify();
   }
 
@@ -350,7 +371,12 @@ class ComposerController extends ChangeNotifier {
     var remaining = day.deadlineAt.difference(day.serverNow);
     if (remaining.isNegative) remaining = Duration.zero;
     _deadlineTimer = Timer(remaining + const Duration(seconds: 1), () {
-      if (_disposed || _submitting || _phase != ComposerPhase.editing) return;
+      if (_disposed || _phase != ComposerPhase.editing) return;
+      if (_submitting) {
+        // submit() rechecks the day once the request settles.
+        _deadlinePassedWhileSubmitting = true;
+        return;
+      }
       unawaited(_flushSave().then((_) => _disposed ? null : load()));
     });
   }

@@ -25,9 +25,13 @@ class DayliFormInput extends StatelessWidget {
     this.onSubmitted,
     this.suffix,
     this.textCapitalization = TextCapitalization.none,
+    this.readOnly = false,
   });
 
   final String label;
+
+  /// Shows the value without allowing edits, for example while it is sent.
+  final bool readOnly;
   final Key? fieldKey;
   final TextEditingController? controller;
   final String? placeholder;
@@ -71,6 +75,7 @@ class DayliFormInput extends StatelessWidget {
         TextField(
           key: fieldKey,
           controller: controller,
+          readOnly: readOnly,
           obscureText: obscureText,
           keyboardType: multiline ? TextInputType.multiline : keyboardType,
           textInputAction: textInputAction,

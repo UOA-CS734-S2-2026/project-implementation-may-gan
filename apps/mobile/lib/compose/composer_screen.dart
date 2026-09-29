@@ -95,6 +95,8 @@ class _ComposerScreenState extends State<ComposerScreen> {
   void _close() => context.canPop() ? context.pop() : context.go('/');
 
   Future<void> _submit(ComposerController controller) async {
+    // Close the keyboard: fields are read-only until the request settles.
+    FocusScope.of(context).unfocus();
     await controller.submit();
     if (mounted && controller.phase == ComposerPhase.posted) _close();
   }
@@ -185,6 +187,9 @@ class _ComposerScreenState extends State<ComposerScreen> {
   Widget _editor(BuildContext context, ComposerController controller) {
     final draft = controller.draft!;
     final errors = controller.errors;
+    // Nothing can change while a post is sending, so the draft always matches
+    // what the server receives.
+    final locked = controller.submitting;
     final colors = DayliColors.of(context);
 
     return ListView(
@@ -221,19 +226,25 @@ class _ComposerScreenState extends State<ComposerScreen> {
         ),
         const SizedBox(height: 28),
         const _SectionLabel('your day in pictures'),
-        MediaInput(
-          attachments: draft.attachments,
-          onPick: (slot) => _pick(controller, slot),
-          onRemove: (slot) => _remove(controller, slot),
+        _Lockable(
+          locked: locked,
+          child: MediaInput(
+            attachments: draft.attachments,
+            onPick: (slot) => _pick(controller, slot),
+            onRemove: (slot) => _remove(controller, slot),
+          ),
         ),
         const SizedBox(height: 28),
         _SectionLabel(
           'rate your day',
           trailing: draft.rating == null ? null : '${draft.rating}/10',
         ),
-        _RatingSlider(
-          value: draft.rating,
-          onChanged: (rating) => controller.update(rating: () => rating),
+        _Lockable(
+          locked: locked,
+          child: _RatingSlider(
+            value: draft.rating,
+            onChanged: (rating) => controller.update(rating: () => rating),
+          ),
         ),
         if (errors.rating != null) ...[
           const SizedBox(height: 6),
@@ -250,6 +261,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         DayliFormInput(
           label: 'Your answer',
           fieldKey: const Key('composer.reflectiveAnswer'),
+          readOnly: locked,
           controller: _answer,
           placeholder: 'Write a few words…',
           minLines: 3,
@@ -262,6 +274,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         DayliFormInput(
           label: 'Word dump',
           fieldKey: const Key('composer.caption'),
+          readOnly: locked,
           controller: _caption,
           placeholder: 'Anything else about today (optional)',
           minLines: 3,
@@ -274,6 +287,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         DayliFormInput(
           label: "Note to tomorrow's you",
           fieldKey: const Key('composer.tomorrowNote'),
+          readOnly: locked,
           controller: _tomorrowNote,
           placeholder: 'Something to remember tomorrow (optional)',
           helper: 'Only you can read it, from tomorrow.',
@@ -285,10 +299,13 @@ class _ComposerScreenState extends State<ComposerScreen> {
         ),
         const SizedBox(height: 28),
         const _SectionLabel('who can see this'),
-        _AudiencePicker(
-          value: draft.audience,
-          invalid: errors.audience != null,
-          onChanged: (audience) => controller.update(audience: audience),
+        _Lockable(
+          locked: locked,
+          child: _AudiencePicker(
+            value: draft.audience,
+            invalid: errors.audience != null,
+            onChanged: (audience) => controller.update(audience: audience),
+          ),
         ),
         if (errors.audience != null) ...[
           const SizedBox(height: 6),
@@ -401,6 +418,24 @@ class _SubmitBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Blocks taps on a control and dims it while a post is sending.
+class _Lockable extends StatelessWidget {
+  const _Lockable({required this.locked, required this.child});
+
+  final bool locked;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: locked,
+    child: AnimatedOpacity(
+      opacity: locked ? 0.5 : 1,
+      duration: const Duration(milliseconds: 150),
+      child: child,
+    ),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
