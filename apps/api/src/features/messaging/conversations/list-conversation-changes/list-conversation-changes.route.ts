@@ -3,10 +3,10 @@ import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { changesQuerySchema, changesSchema, conversationParamsSchema, messagingReadErrors } from "../../shared/conversation.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { ListConversationChangesRepository } from "./list-conversation-changes.repository";
 
 export interface ListConversationChangesRouteDependencies {
-  reader?: Pick<ConversationReader, "changes">;
+  listConversationChanges?: ListConversationChangesRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -29,11 +29,11 @@ export function registerListConversationChangesRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.listConversationChanges) return messagingUnavailable(context);
     try {
       const params = context.req.valid("param");
       const query = context.req.valid("query");
-      return context.json((await dependencies.reader.changes(
+      return context.json((await dependencies.listConversationChanges.list(
         context.get("actor").userId,
         params.conversationId,
         query.afterChangeSequence,

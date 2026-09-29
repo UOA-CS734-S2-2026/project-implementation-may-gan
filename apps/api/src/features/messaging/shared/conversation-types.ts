@@ -62,5 +62,4 @@ export interface ConversationReader {
     conversationId: string,
     throughSequence: string,
   ): Promise<{ lastReadSequence: string; receiptSequence: string; unreadCount: number }>;
-  changes(actorId: string, conversationId: string, after: string | undefined, limit: number): Promise<unknown>;
 }

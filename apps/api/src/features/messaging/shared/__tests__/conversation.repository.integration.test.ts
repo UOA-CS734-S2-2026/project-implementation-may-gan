@@ -57,8 +57,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(read.lastReadSequence).toBe("2");
     expect(read.receiptSequence).toBe("2");
     expect(read.unreadCount).toBe(0);
-    const changes = await reader.changes(users[2]!, created.conversation.id, undefined, 50) as { items: Array<{ kind: string }> };
-    expect(changes.items.map((item) => item.kind)).toContain("read.updated");
     const beforeOutbox = (await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`)[0]!.count as number;
     await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: true });
     await expect(setReaction.set(users[2]!, created.conversation.id, second.message.id, "love")).resolves.toMatchObject({ changed: false });

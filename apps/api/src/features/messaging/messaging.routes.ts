@@ -6,7 +6,7 @@ import { registerCreateDirectConversationRoute, type CreateDirectConversationRou
 import { registerGetConversationRoute, type GetConversationRouteDependencies } from "./conversations/get-conversation/get-conversation.route";
 import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./conversations/get-message/get-message.route";
 import { registerGetMessagingUnreadRoute, type GetMessagingUnreadRouteDependencies } from "./conversations/get-messaging-unread/get-messaging-unread.route";
-import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
+import { registerListConversationChangesRoute, type ListConversationChangesRouteDependencies } from "./conversations/list-conversation-changes/list-conversation-changes.route";
 import { registerListConversationsRoute, type ListConversationsRouteDependencies } from "./conversations/list-conversations/list-conversations.route";
 import { registerListMessagesRoute, type ListMessagesRouteDependencies } from "./conversations/list-messages/list-messages.route";
 import { registerMarkConversationReadRoute } from "./conversations/mark-conversation-read/mark-conversation-read.route";
@@ -34,6 +34,7 @@ export interface MessagingRouteDependencies extends
   CreateDirectConversationRouteDependencies,
   GetConversationRouteDependencies,
   GetMessagingUnreadRouteDependencies,
+  ListConversationChangesRouteDependencies,
   GetMessageRouteDependencies,
   ListConversationsRouteDependencies,
   ListMessagesRouteDependencies {
