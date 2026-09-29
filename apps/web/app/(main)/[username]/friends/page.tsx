@@ -64,6 +64,9 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
   }, [accountId]);
 
   useEffect(() => {
+    // Strict Mode replays effects without remounting this state instance.
+    // A new effect must reactivate the session after its prior cleanup.
+    alive.current = true;
     const timer = window.setTimeout(() => { void refresh(); }, 0);
     return () => { alive.current = false; sessionEpoch.current += 1; window.clearTimeout(timer); };
   }, [refresh]);

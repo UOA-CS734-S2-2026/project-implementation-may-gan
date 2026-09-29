@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let sessionUser: { id: string } | null = { id: "alice" };
@@ -26,6 +27,13 @@ describe("friends page", () => {
   beforeEach(() => {
     sessionUser = { id: "alice" };
     Object.values(api).forEach((mock) => mock.mockReset());
+  });
+
+  it("finishes loading when Strict Mode replays the mount effect", async () => {
+    queueInitial(page([card("friend", "Friend Name")]));
+    render(<StrictMode><FriendsPage /></StrictMode>);
+    expect(await screen.findByText("Friend Name")).toBeInTheDocument();
+    expect(screen.queryByText("Loading your circle...")).not.toBeInTheDocument();
   });
 
   it("does not render old account cards while deferred account requests finish", async () => {

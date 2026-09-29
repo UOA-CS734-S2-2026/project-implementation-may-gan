@@ -174,6 +174,7 @@ export function Navbar() {
       {/* Mobile Navigation Toggle */}
       <div className="md:hidden">
         <input type="checkbox" id="mobile-nav-toggle" className="peer hidden" />
+        <div aria-hidden="true" className="fixed inset-x-0 top-0 z-30 h-20 border-b border-foreground/5 bg-background/95 backdrop-blur-sm peer-checked:hidden" />
 
         {/* Floating Menu Button */}
         <label
