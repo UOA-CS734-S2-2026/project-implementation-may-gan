@@ -17,7 +17,7 @@ export default function NewMessagePage({ params }: { params: Promise<{ username:
   return <NewMessage username={use(params).username} />;
 }
 
-function NewMessage({ username }: { username: string }) {
+export function NewMessage({ username }: { username: string }) {
   const router = useRouter();
   const { user } = useSession();
   const profile = useQuery({ queryKey: ["social-profile", user?.id ?? "anonymous", username], retry: false, queryFn: async () => { const result = await loadSocialProfile(username); if (!result.ok) throw new Error(result.failure); return result.value; } });
