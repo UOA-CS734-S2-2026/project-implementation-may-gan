@@ -507,6 +507,8 @@ class _FeedPostCard extends StatelessWidget {
           const SizedBox(height: 14),
           Text(
             post.promptText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: DayliText.sans(
               context,
               size: DayliTextSize.xs,
@@ -515,8 +517,12 @@ class _FeedPostCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
+          // Whole lines only; the full answer and word dump are on the post.
           Text(
             post.reflectiveAnswer,
+            key: Key('home.feed.answer.${post.id}'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
             style: DayliText.serif(
               context,
               size: DayliTextSize.lg,
@@ -524,13 +530,6 @@ class _FeedPostCard extends StatelessWidget {
               tracking: DayliTracking.tight,
             ),
           ),
-          if (post.caption case final caption?) ...[
-            const SizedBox(height: 10),
-            Text(
-              caption,
-              style: DayliText.sans(context, size: DayliTextSize.sm),
-            ),
-          ],
           if (post.edited) ...[
             const SizedBox(height: 10),
             Text(
