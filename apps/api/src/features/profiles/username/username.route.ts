@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { apiErrorResponse } from "../../../http/api-error";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
-import { usernameErrorResponses, usernameProfileSchema, usernameSetupRequestSchema, type UsernameProfile } from "./username.contract";
+import { usernameErrorResponses, usernameProfileSchema, usernameSetupRequestSchema } from "./username.contract";
 import type { UsernameProfileStore } from "./username.repository";
 
 export interface UsernameProfileRouteDependencies {
