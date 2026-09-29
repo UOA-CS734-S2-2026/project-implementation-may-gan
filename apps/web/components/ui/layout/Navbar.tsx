@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/lib/session/hooks";
+import { useQuery } from "@tanstack/react-query";
+import { getUsernameProfile } from "@/lib/profile/username";
 import { NavSearch } from "./NavSearch";
 import { Button } from "@/components/ui/core/Button";
 import { NavLink } from "./NavLink";
@@ -11,9 +13,8 @@ import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvide
 export function Navbar() {
   const { user } = useSession();
   const { unread } = useMessagingLive();
-  // Accounts have no username until the profile API (#68); the user id stands
-  // in for the handle in profile links.
-  const handle = user?.id;
+  const username = useQuery({ queryKey: ["username-profile", user?.id ?? "anonymous"], enabled: Boolean(user), retry: false, queryFn: getUsernameProfile });
+  const handle = username.data?.username;
 
   const navContent = (
     <div className="p-10 h-full flex flex-col justify-between overflow-y-auto">
@@ -83,7 +84,7 @@ export function Navbar() {
               </div>
               daylies
             </NavLink>
-            {user && (
+            {user && handle && (
               <>
                 <NavLink href={`/${handle}/friends`}>
                   <div>
@@ -131,7 +132,7 @@ export function Navbar() {
       </div>
 
       {/* Lower section (profile) */}
-      {user && (
+      {user && handle && (
         <div className="flex flex-col gap-4">
           <Link
             href={`/${handle}`}

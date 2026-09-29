@@ -388,6 +388,18 @@ class _Card extends StatelessWidget {
             ),
           ),
         ),
+        if (person.relationship == 'friends')
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: DayliButton(
+              label: 'message',
+              size: ButtonSize.sm,
+              color: ButtonColor.foreground,
+              onPressed: () => context.go(
+                '/messages/new/${Uri.encodeComponent(person.username)}',
+              ),
+            ),
+          ),
         if (secondary != null)
           Padding(
             padding: const EdgeInsets.only(right: 6),

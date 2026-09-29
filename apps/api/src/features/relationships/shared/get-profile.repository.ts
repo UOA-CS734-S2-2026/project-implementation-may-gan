@@ -16,6 +16,7 @@ export async function findProfileByUsername(queryable: RelationshipQueryable, ac
       end as relationship
     from public."user" candidate
     where lower(candidate.username) = lower(${username})
+      and (select count(*) from public."user" same_handle where lower(same_handle.username) = lower(${username})) = 1
       and (coalesce(candidate.banned, false) = false or (candidate.ban_expires is not null and candidate.ban_expires <= now()))
       and not exists (select 1 from public.relationship_blocks block where block.unblocked_at is null and ((block.blocker_id = ${actorId} and block.blocked_id = candidate.id) or (block.blocker_id = candidate.id and block.blocked_id = ${actorId})))
     limit 1

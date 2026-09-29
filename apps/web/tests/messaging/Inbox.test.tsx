@@ -11,6 +11,7 @@ vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId 
 vi.mock("@/features/messaging/realtime/MessagingProvider", () => ({ useMessagingLive: () => ({ revision: 0, unread: { inboxCount: 2, requestCount: 1 }, changesFor: () => [], refreshUnread: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams("to=known-user&name=Ada") }));
 vi.mock("@/features/messaging/shared/messaging.api", () => ({ messagingApi: { inbox: vi.fn(), direct: vi.fn() } }));
+vi.mock("@/lib/api/friends", () => ({ loadFriends: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null, hasMore: false } })) }));
 
 const api = messagingApi as unknown as Record<string, ReturnType<typeof vi.fn>>;
 function render(ui: Parameters<typeof rtlRender>[0]) { const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }); const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>); return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) }; }

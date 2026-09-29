@@ -167,6 +167,16 @@ suite("Postgres relationship persistence", () => {
     expect(secondPage.hasMore).toBe(false);
   });
 
+  it("fails closed for legacy case-folded username collisions and resolves a unique handle", async () => {
+    const actor = users[7]!;
+    const first = users[0]!;
+    const second = users[1]!;
+    await database.client`update public."user" set username = case id when ${first} then 'Collision' when ${second} then 'collision' when ${actor} then 'profile_actor' end where id = any(${[actor, first, second]}::text[])`;
+    await expect(service.getProfileByUsername(actor, 'COLLISION')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await database.client`update public."user" set username = null where id = ${second}`;
+    await expect(service.getProfileByUsername(actor, 'collision')).resolves.toEqual({ id: first, username: 'Collision', displayName: 'Collision', relationship: 'none' });
+  });
+
   it("enforces five sends in a rolling 24-hour window", async () => {
     for (let index = 0; index < 5; index += 1) {
       const result = await service.sendRequest(users[2]!, users[3]!);

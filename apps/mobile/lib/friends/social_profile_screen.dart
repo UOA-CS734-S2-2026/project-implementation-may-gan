@@ -5,77 +5,189 @@ import '../api/api_failure.dart';
 import '../api/friends_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../ui/dayli_button.dart';
+import '../ui/surfaces.dart';
 
-/// A deliberately minimal social profile. No post, email, or provider data is rendered.
-class SocialProfileScreen extends StatelessWidget {
+/// Account-scoped, WDCC-inspired minimal profile. It never exposes provider data or invented profile fields.
+class SocialProfileScreen extends StatefulWidget {
   const SocialProfileScreen({super.key, required this.username});
   final String username;
+  @override
+  State<SocialProfileScreen> createState() => _SocialProfileScreenState();
+}
+
+class _SocialProfileScreenState extends State<SocialProfileScreen> {
+  Future<ApiResult<FriendCard>>? _profile;
+  String? _accountId;
+  bool _busy = false;
+  String? _notice;
+
+  Future<ApiResult<FriendCard>> _load() {
+    final client = AppScope.of(context).friends;
+    return client is GeneratedFriendsClient
+        ? client.profile(widget.username)
+        : Future.value(const ApiError(ServiceUnavailable()));
+  }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('profile')),
-    body: FutureBuilder(
-      future: _profile(context),
+  Widget build(BuildContext context) {
+    final accountId = AppScope.of(context).session.user?.id;
+    if (_profile == null || _accountId != accountId) {
+      _accountId = accountId;
+      _notice = null;
+      _profile = _load();
+    }
+    return FutureBuilder<ApiResult<FriendCard>>(
+      future: _profile,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        final result = snapshot.data!;
-        return switch (result) {
-          ApiSuccess<FriendCard>(value: final person) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 48,
-                    child: Text(
-                      person.displayName.substring(0, 1).toUpperCase(),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    person.displayName,
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.xxl,
-                      weight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    '@${person.username}',
-                    style: DayliText.sans(
-                      context,
-                      color: DayliColors.of(context).foregroundTertiary,
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  if (person.relationship == 'none')
-                    FilledButton(
-                      onPressed: () =>
-                          AppScope.of(context).friends.send(person.id),
-                      child: const Text('add friend'),
-                    ),
-                  OutlinedButton(
-                    onPressed: () => context.go(
-                      '/messages?to=${Uri.encodeComponent(person.id)}&name=${Uri.encodeComponent(person.displayName)}',
-                    ),
-                    child: const Text('message'),
-                  ),
-                ],
-              ),
+        if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
+          return _profileCard(context, person);
+        }
+        return Center(
+          child: DayliCard(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'This profile is unavailable.',
+              style: DayliText.serif(context),
             ),
           ),
-          _ => const Center(child: Text('This profile is unavailable.')),
-        };
+        );
       },
-    ),
-  );
+    );
+  }
 
-  Future<ApiResult<FriendCard>> _profile(BuildContext context) {
+  Future<void> _friend(FriendCard person) async {
+    if (_busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
     final client = AppScope.of(context).friends;
-    if (client is GeneratedFriendsClient) return client.profile(username);
-    return Future.value(const ApiError(ServiceUnavailable()));
+    final result = person.relationship == 'none'
+        ? await client.send(person.id)
+        : person.relationship == 'friends'
+        ? await client.remove(person.id)
+        : const ApiSuccess<void>(null);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _notice = result is ApiError<void>
+          ? 'That action is unavailable. Please try again.'
+          : null;
+      _profile = _load();
+    });
+  }
+
+  Widget _profileCard(BuildContext context, FriendCard person) {
+    final colors = DayliColors.of(context);
+    final label = person.relationship == 'none'
+        ? 'add friend'
+        : person.relationship == 'friends'
+        ? 'remove friend'
+        : person.relationship == 'incoming_pending'
+        ? 'request waiting'
+        : 'request sent';
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 36, 20, 32),
+      children: [
+        DayliCard(
+          padding: const EdgeInsets.all(28),
+          radius: 22,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 56,
+                backgroundColor: colors.backgroundAccent,
+                child: Text(
+                  person.displayName.substring(0, 1).toUpperCase(),
+                  style: DayliText.serif(
+                    context,
+                    size: DayliTextSize.xxxxl,
+                    color: colors.foregroundAccent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '@${person.username}',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.sm,
+                  color: colors.foregroundTertiary,
+                ),
+              ),
+              Text(
+                person.displayName,
+                style: DayliText.serif(
+                  context,
+                  size: DayliTextSize.xxl,
+                  weight: FontWeight.w600,
+                  tracking: DayliTracking.tighter,
+                ),
+              ),
+              const SizedBox(height: 22),
+              if (person.relationship == 'none' ||
+                  person.relationship == 'friends')
+                SizedBox(
+                  width: double.infinity,
+                  child: DayliButton(
+                    label: label,
+                    onPressed: _busy ? null : () => _friend(person),
+                  ),
+                )
+              else
+                Text(
+                  label,
+                  style: DayliText.sans(
+                    context,
+                    size: DayliTextSize.sm,
+                    color: colors.foregroundSecondary,
+                  ),
+                ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: DayliButton(
+                  label: 'message',
+                  color: ButtonColor.foreground,
+                  onPressed: () => context.go(
+                    '/messages/new/${Uri.encodeComponent(person.username)}',
+                  ),
+                ),
+              ),
+              if (_notice != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    _notice!,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      color: colors.foregroundSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            'This profile only shares the name they chose and their username.',
+            style: DayliText.sans(
+              context,
+              size: DayliTextSize.sm,
+              color: colors.foregroundTertiary,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

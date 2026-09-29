@@ -46,6 +46,10 @@ export function loadSocialProfile(username: string) {
   return call((api) => api.relationshipsGetProfileByUsername({ username }, { cache: "no-store" }));
 }
 
+export function getRelationship(userId: string) {
+  return call((api) => api.relationshipsGetStatus({ userId }, { cache: "no-store" }));
+}
+
 export function sendFriendRequest(recipientId: string) {
   return call((api) => api.relationshipsSendRequest({ sendRelationshipRequest: { recipientId } }));
 }

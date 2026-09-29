@@ -10,6 +10,7 @@ import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/messages_screen.dart';
+import '../messaging/new_message_screen.dart';
 import '../placeholders/placeholder_screens.dart' show MyDaysScreen;
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
@@ -74,6 +75,15 @@ GoRouter buildRouter(SessionController session) => GoRouter(
             recipientId: state.uri.queryParameters['to'],
             recipientName: state.uri.queryParameters['name'],
           ),
+        ),
+        GoRoute(
+          path: '/messages/new',
+          builder: (_, _) => const MessagesScreen(),
+        ),
+        GoRoute(
+          path: '/messages/new/:username',
+          builder: (_, state) =>
+              NewMessageScreen(username: state.pathParameters['username']!),
         ),
         GoRoute(
           path: '/messages/:id',

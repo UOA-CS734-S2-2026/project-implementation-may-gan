@@ -174,6 +174,28 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
   String? _intent;
   String? _clientMessageId;
   bool _sending = false;
+  Future<ApiResult<FriendPage>>? _friends;
+  FriendPage? _friendPage;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _friends ??= AppScope.of(context).friends.loadFriends();
+  }
+
+  Future<void> _moreFriends() async {
+    final cursor = _friendPage?.nextCursor;
+    if (cursor == null) return;
+    final next = await AppScope.of(context).friends.loadFriends(cursor: cursor);
+    if (!mounted || next is! ApiSuccess<FriendPage>) return;
+    setState(
+      () => _friendPage = FriendPage(
+        items: [...?_friendPage?.items, ...next.value.items],
+        nextCursor: next.value.nextCursor,
+        hasMore: next.value.hasMore,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -226,29 +248,40 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
           )
         else
           FutureBuilder<ApiResult<FriendPage>>(
-            future: AppScope.of(context).friends.loadFriends(),
+            future: _friends,
             builder: (context, snapshot) {
-              final friends = snapshot.data is ApiSuccess<FriendPage>
-                  ? (snapshot.data! as ApiSuccess<FriendPage>).value.items
-                  : const <FriendCard>[];
-              return DropdownButtonFormField<String>(
-                key: const Key('messages.friendPicker'),
-                initialValue: _recipientId,
-                decoration: const InputDecoration(labelText: 'Friend'),
-                items: friends
-                    .map(
-                      (friend) => DropdownMenuItem(
-                        value: friend.id,
-                        child: Text(friend.displayName),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _sending
-                    ? null
-                    : (value) {
-                        setState(() => _recipientId = value);
-                        _changed();
-                      },
+              final value = snapshot.data;
+              if (_friendPage == null && value is ApiSuccess<FriendPage>) {
+                _friendPage = value.value;
+              }
+              final friends = _friendPage?.items ?? const <FriendCard>[];
+              return Column(
+                children: [
+                  DropdownButtonFormField<String>(
+                    key: const Key('messages.friendPicker'),
+                    initialValue: _recipientId,
+                    decoration: const InputDecoration(labelText: 'Friend'),
+                    items: friends
+                        .map(
+                          (friend) => DropdownMenuItem(
+                            value: friend.id,
+                            child: Text(friend.displayName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: _sending
+                        ? null
+                        : (value) {
+                            setState(() => _recipientId = value);
+                            _changed();
+                          },
+                  ),
+                  if ((_friendPage?.hasMore ?? false))
+                    TextButton(
+                      onPressed: _moreFriends,
+                      child: const Text('more friends'),
+                    ),
+                ],
               );
             },
           ),
