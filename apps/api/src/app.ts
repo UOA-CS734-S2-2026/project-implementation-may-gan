@@ -63,6 +63,10 @@ import {
   createPostgresEditMessageStore,
 } from "./features/messaging/messages/edit-message/edit-message.repository";
 import { createUnsendMessageService } from "./features/messaging/messages/unsend-message/unsend-message.service";
+import {
+  createHyperdriveUnsendMessageStore,
+  createPostgresUnsendMessageStore,
+} from "./features/messaging/messages/unsend-message/unsend-message.repository";
 import { createSetReactionService } from "./features/messaging/messages/set-reaction/set-reaction.service";
 import {
   createHyperdriveSetReactionStore,
@@ -338,6 +342,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     listMessages: createPostgresListMessagesRepository(database),
     send: createSendMessageService({ store, now: options.now }),
     edit: createEditMessageService({ store: createPostgresEditMessageStore(database), now: options.now }),
+    unsend: createUnsendMessageService({ store: createPostgresUnsendMessageStore(database), now: options.now }),
     set: createSetReactionService({ store: createPostgresSetReactionStore(database) }),
     remove: createRemoveReactionService({ store: createPostgresRemoveReactionStore(database) }),
   };
@@ -413,7 +418,7 @@ function createMessagingDependencies(
     hasUsername,
     service: createSendMessageService({ store }),
     edit: createEditMessageService({ store: createHyperdriveEditMessageStore(configuration.hyperdrive) }),
-    unsend: createUnsendMessageService({ store }),
+    unsend: createUnsendMessageService({ store: createHyperdriveUnsendMessageStore(configuration.hyperdrive) }),
     setReaction: createSetReactionService({ store: createHyperdriveSetReactionStore(configuration.hyperdrive) }),
     removeReaction: createRemoveReactionService({ store: createHyperdriveRemoveReactionStore(configuration.hyperdrive) }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),

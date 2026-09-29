@@ -1,7 +1,6 @@
 import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
-import { updateMessageRow } from "../shared/update-message-row";
 import type { MessageWriteStore, MessageWriteTransaction, StoredIdempotentMessage } from "../../shared/message-store";
 import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
 
@@ -26,9 +25,6 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
     if (!allocated) throw new Error("Conversation disappeared during message insert.");
     const result = await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, reply_to_message_id, version, created_at) values (${input.id}, ${input.conversationId}, ${allocated.sequence}::bigint, ${input.senderId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, ${input.replyToMessageId}, 1, ${input.createdAt.toISOString()}::timestamptz) returning *`);
     return mapStoredMessage(rows<Row>(result)[0]!);
-  }
-  async updateMessage(input: Parameters<MessageWriteTransaction["updateMessage"]>[0]): Promise<StoredMessage> {
-    return updateMessageRow(this.queryable, input);
   }
   async appendPeerChange(input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
     return appendPeerChange(this.queryable, input);

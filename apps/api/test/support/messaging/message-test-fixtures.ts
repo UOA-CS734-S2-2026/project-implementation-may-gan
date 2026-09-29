@@ -26,6 +26,26 @@ export function messageMemory(initial = message()) {
   const messages = new Map([[initial.id, initial]]);
   const idempotency = new Map<string, StoredMessage>();
   const changes: string[] = [];
+  const updateMessage = async (input: {
+    messageId: string;
+    body?: string | null;
+    editedAt?: Date | null;
+    unsentAt?: Date | null;
+    expectedVersion?: number;
+  }) => {
+    const old = messages.get(input.messageId)!;
+    if (input.expectedVersion !== undefined && old.version !== input.expectedVersion) throw new Error("stale write");
+    const updated = message({
+      ...old,
+      body: input.body === undefined ? old.body : input.body,
+      editedAt: input.editedAt === undefined ? old.editedAt : input.editedAt,
+      unsentAt: input.unsentAt === undefined ? old.unsentAt : input.unsentAt,
+      version: old.version + 1,
+      reactions: input.unsentAt ? [] : old.reactions,
+    });
+    messages.set(updated.id, updated);
+    return updated;
+  };
   const transaction: MessageWriteTransaction = {
     getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
     activateForFriendship: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
@@ -49,20 +69,6 @@ export function messageMemory(initial = message()) {
       idempotency.set(`${saved.senderId}:${saved.clientMessageId}`, saved);
       return saved;
     },
-    updateMessage: async (input) => {
-      const old = messages.get(input.messageId)!;
-      if (input.expectedVersion !== undefined && old.version !== input.expectedVersion) throw new Error("stale write");
-      const updated = message({
-        ...old,
-        body: input.body === undefined ? old.body : input.body,
-        editedAt: input.editedAt === undefined ? old.editedAt : input.editedAt,
-        unsentAt: input.unsentAt === undefined ? old.unsentAt : input.unsentAt,
-        version: old.version + 1,
-        reactions: input.unsentAt ? [] : old.reactions,
-      });
-      messages.set(updated.id, updated);
-      return updated;
-    },
     appendPeerChange: async (input) => {
       changes.push(input.kind);
     },
@@ -73,11 +79,20 @@ export function messageMemory(initial = message()) {
   const editMessageTransaction = {
     getAccess: transaction.getAccess,
     findMessage: transaction.findMessage,
-    editMessage: transaction.updateMessage,
+    editMessage: updateMessage,
     appendPeerChange: async (input: { conversationId: string; messageId: string; kind: "message.edited" }) => transaction.appendPeerChange(input),
   };
   const editStore = {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof editMessageTransaction) => Promise<T>) => action(editMessageTransaction),
+  };
+  const unsendMessageTransaction = {
+    getAccess: (actorId: string, conversationId: string) => transaction.getAccess(actorId, conversationId),
+    findMessage: transaction.findMessage,
+    unsendMessage: async (input: { messageId: string; unsentAt: Date }) => updateMessage({ ...input, body: null }),
+    appendPeerChange: async (input: { conversationId: string; messageId: string; kind: "message.unsent" }) => transaction.appendPeerChange(input),
+  };
+  const unsendStore = {
+    withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof unsendMessageTransaction) => Promise<T>) => action(unsendMessageTransaction),
   };
   const setReactionTransaction = {
     getAccess: transaction.getAccess,
@@ -111,5 +126,5 @@ export function messageMemory(initial = message()) {
   const removeReactionStore = {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof removeReactionTransaction) => Promise<T>) => action(removeReactionTransaction),
   };
-  return { store, editStore, setReactionStore, removeReactionStore, messages, changes, transaction };
+  return { store, editStore, unsendStore, setReactionStore, removeReactionStore, messages, changes, transaction };
 }
