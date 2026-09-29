@@ -130,7 +130,7 @@ void main() {
     expect(find.text('Invalid email address'), findsOneWidget);
   });
 
-  testWidgets('defers username collection during sign-up', (tester) async {
+  testWidgets('requires username collection during sign-up', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(
       DayliApp(services: harness.services, useGoogleFonts: false),
@@ -142,8 +142,8 @@ void main() {
     await tester.tap(find.byKey(const Key('auth.switch')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('auth.username')), findsNothing);
-    expect(find.text('Username'), findsNothing);
+    expect(find.byKey(const Key('auth.username')), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
   });
 
   testWidgets('signs in, adds a photo, and posts today\'s dayli', (

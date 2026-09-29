@@ -432,6 +432,7 @@ void main() {
           id: 'cached-user',
           name: 'Cached',
           email: 'cached@example.test',
+          username: 'cached',
         );
       final client = FakeMessagingClient();
       final messaging = MessagingController(client);
@@ -510,6 +511,7 @@ void main() {
         id: 'alice',
         name: 'Alice',
         email: 'alice@example.test',
+        username: 'alice',
       );
     var offline = true;
     final aliceStartup = Completer<void>();
@@ -527,6 +529,7 @@ void main() {
                   'id': 'bob',
                   'name': 'Bob',
                   'email': 'bob@example.test',
+                  'username': 'bob',
                 },
               }),
               200,

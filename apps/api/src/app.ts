@@ -61,6 +61,8 @@ import { createPushDeviceService } from "./features/messaging/push/push-device.s
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
+import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
+import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -72,6 +74,7 @@ export interface AppDependencies {
   realtimeTicket?: RealtimeTicketRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
   pushDevices?: PushDeviceRouteDependencies;
+  usernameProfile?: UsernameProfileRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -86,6 +89,7 @@ export function createApp({
   realtimeTicket = unavailableRealtimeTicket,
   realtimeConnect = {},
   pushDevices = unavailablePushDevices,
+  usernameProfile = unavailableUsernameProfile,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -132,6 +136,7 @@ export function createApp({
   registerMessagingRoutes(api, messaging);
   registerRealtimeTicketRoute(api, realtimeTicket);
   registerPushDeviceRoutes(api, pushDevices);
+  registerUsernameProfileRoutes(api, usernameProfile);
   registerRealtimeConnectRoute(api, realtimeConnect);
 
   api.doc("/api/v1/openapi.json", {
@@ -161,8 +166,13 @@ export function createAppForEnv(env: ApiEnv) {
   const messaging = configuration ? createMessagingDependencies(configuration, env) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env) : undefined;
+  const usernameProfile = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    store: withHyperdriveUsernameProfileStore(configuration),
+  } satisfies UsernameProfileRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
+    hasUsername: async (userId: string) => (await withHyperdriveUsernameProfileStore(configuration).get(userId))?.needsUsernameSetup === false,
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({
         baseURL: configuration.baseURL,
@@ -185,6 +195,7 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeTicket: realtime?.ticket,
     realtimeConnect: realtime?.connect,
     pushDevices,
+    usernameProfile,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
@@ -197,6 +208,7 @@ export function createAppForEnv(env: ApiEnv) {
   return api;
 }
 
+const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,
@@ -220,6 +232,13 @@ const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
   },
   resolveSession: async () => null,
 };
+
+function withHyperdriveUsernameProfileStore(configuration: NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>) {
+  return {
+    get: (userId: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUsernameProfileStore(database).get(userId)),
+    claimInitial: (userId: string, input: import("./features/profiles/username/username.contract").UsernameSetupInput) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUsernameProfileStore(database).claimInitial(userId, input)),
+  };
+}
 
 function createPostingDayDependencies(
   configuration: NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>,

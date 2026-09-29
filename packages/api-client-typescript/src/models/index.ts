@@ -48,3 +48,5 @@ export * from './SendMessageRequest';
 export * from './SendRelationshipRequest';
 export * from './SetMessageReactionRequest';
 export * from './TestResponse';
+export * from './UsernameProfile';
+export * from './UsernameSetupRequest';

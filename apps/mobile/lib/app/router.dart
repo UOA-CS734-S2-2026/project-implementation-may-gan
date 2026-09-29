@@ -2,6 +2,7 @@ import 'package:go_router/go_router.dart';
 
 import '../auth/auth_screens.dart';
 import '../auth/session_controller.dart';
+import '../auth/username_setup_screen.dart';
 import '../compose/composer_screen.dart';
 import '../friends/friends_screen.dart';
 import '../home/home_screen.dart';
@@ -28,8 +29,12 @@ GoRouter buildRouter(SessionController session) => GoRouter(
         return location == '/splash' ? null : '/splash';
       case SessionStatus.signedOut:
         return public ? null : '/welcome';
+      case SessionStatus.needsUsernameSetup:
+        return location == '/setup-username' ? null : '/setup-username';
       case SessionStatus.signedIn:
-        return public || location == '/splash' ? '/' : null;
+        return public || location == '/splash' || location == '/setup-username'
+            ? '/'
+            : null;
     }
   },
   routes: [
@@ -42,6 +47,10 @@ GoRouter buildRouter(SessionController session) => GoRouter(
     GoRoute(
       path: '/sign-up',
       builder: (_, _) => const AuthScreen(mode: AuthMode.signUp),
+    ),
+    GoRoute(
+      path: '/setup-username',
+      builder: (_, _) => const UsernameSetupScreen(),
     ),
     // Full-screen pages above the tabs.
     GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
