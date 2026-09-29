@@ -4,7 +4,7 @@ import { createRequireSession } from "../../http/middleware/require-session";
 import { createRequireUsername, type HasUsername } from "../../http/middleware/require-username";
 import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
 import { registerGetConversationRoute } from "./conversations/get-conversation/get-conversation.route";
-import { registerGetMessageRoute } from "./conversations/get-message/get-message.route";
+import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./conversations/get-message/get-message.route";
 import { registerGetMessagingUnreadRoute } from "./conversations/get-messaging-unread/get-messaging-unread.route";
 import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
 import { registerListConversationsRoute } from "./conversations/list-conversations/list-conversations.route";
@@ -31,7 +31,8 @@ export interface MessagingRouteDependencies extends
   UnsendMessageRouteDependencies,
   SetReactionRouteDependencies,
   RemoveReactionRouteDependencies,
-  CreateDirectConversationRouteDependencies {
+  CreateDirectConversationRouteDependencies,
+  GetMessageRouteDependencies {
   /** Blocks all conversation reads and mutations until setup is complete. */
   hasUsername?: HasUsername;
   direct?: CreateDirectConversationRouteDependencies["direct"];

@@ -71,7 +71,6 @@ export interface ConversationReader {
     after: string | undefined,
     limit: number,
   ): Promise<{ items: MessageDto[]; nextCursor: string | null; hasMore: boolean }>;
-  message(actorId: string, conversationId: string, messageId: string): Promise<MessageDto>;
   unread(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
   resolve(actorId: string, conversationId: string, decision: "accept" | "decline"): Promise<unknown>;
   markRead(

@@ -4,10 +4,10 @@ import { messagingReadErrors } from "../../shared/conversation.contract";
 import { messageParamsSchema, messageSchema } from "../../shared/message.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { GetMessageRepository } from "./get-message.repository";
 
 export interface GetMessageRouteDependencies {
-  reader?: Pick<ConversationReader, "message">;
+  getMessage?: GetMessageRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -30,10 +30,10 @@ export function registerGetMessageRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.getMessage) return messagingUnavailable(context);
     try {
       const params = context.req.valid("param");
-      return context.json(await dependencies.reader.message(
+      return context.json(await dependencies.getMessage.get(
         context.get("actor").userId,
         params.conversationId,
         params.messageId,

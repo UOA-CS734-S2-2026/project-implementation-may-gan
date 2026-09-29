@@ -63,6 +63,10 @@ import { createSetReactionService } from "./features/messaging/messages/set-reac
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
 import {
+  createHyperdriveGetMessageRepository,
+  createPostgresGetMessageRepository,
+} from "./features/messaging/conversations/get-message/get-message.repository";
+import {
   createHyperdriveConversationReader,
   createHyperdriveDirectConversationStore,
   createPostgresConversationReader,
@@ -287,6 +291,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
   return {
     direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
     reader: createPostgresConversationReader(database),
+    getMessage: createPostgresGetMessageRepository(database),
     send: createSendMessageService({ store, now: options.now }),
     set: createSetReactionService({ store }),
     remove: createRemoveReactionService({ store }),
@@ -368,6 +373,7 @@ function createMessagingDependencies(
     removeReaction: createRemoveReactionService({ store }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
     reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,
   };
 }
