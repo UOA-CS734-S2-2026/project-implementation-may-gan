@@ -47,21 +47,7 @@ function apiTestRelative(path) {
   return normalized(value);
 }
 
-function sourceInfo(path) {
-  const value = featureRelative(path);
-  if (!value) {
-    const testValue = apiTestRelative(path);
-    if (!testValue) return undefined;
-    return {
-      path,
-      feature: undefined,
-      fileName: testValue.replace(fixtureMarker, ".ts"),
-      isTest: true,
-      kind: "test-support",
-      action: undefined,
-      isRegistrar: false,
-    };
-  }
+function featureSourceInfo(path, value) {
   const parts = value.split("/");
   const feature = parts[0];
   const fileName = parts.at(-1);
@@ -88,6 +74,37 @@ function sourceInfo(path) {
   }
   const action = groupingDirectories.has(rest[0]) ? rest[1] : rest[0];
   return { path, feature, fileName: virtualName, isTest, kind: "action", action, isRegistrar: false };
+}
+
+function sourceInfo(path) {
+  const value = featureRelative(path);
+  if (value) return featureSourceInfo(path, value);
+
+  const testValue = apiTestRelative(path);
+  if (!testValue) return undefined;
+  const boundaryPrefix = "boundaries/";
+  const virtualValue = testValue.startsWith(boundaryPrefix) ? testValue.slice(boundaryPrefix.length) : undefined;
+  if (virtualValue?.startsWith("test-support/")) {
+    return {
+      path,
+      feature: undefined,
+      fileName: virtualValue.slice("test-support/".length).replace(fixtureMarker, ".ts"),
+      isTest: true,
+      kind: "test-support",
+      action: undefined,
+      isRegistrar: false,
+    };
+  }
+  if (virtualValue) return featureSourceInfo(path, virtualValue);
+  return {
+    path,
+    feature: undefined,
+    fileName: testValue.replace(fixtureMarker, ".ts"),
+    isTest: true,
+    kind: "test-support",
+    action: undefined,
+    isRegistrar: false,
+  };
 }
 
 function resolveImport(sourcePath, specifier) {
@@ -215,13 +232,13 @@ async function checkFile(path, errors) {
 }
 
 async function runFixtureChecks(errors) {
-  const fixtureDirectory = resolve(featureRoot, "messaging/messages/send-message");
+  const fixtureDirectory = resolve(apiTestRoot, "boundaries/messaging/messages/send-message");
   const fixtureNames = (await readdir(fixtureDirectory)).filter((name) => name.endsWith(fixtureMarker));
   const fixturePaths = fixtureNames.map((name) => resolve(fixtureDirectory, name));
   fixturePaths.push(
-    resolve(featureRoot, "messaging/messaging.routes.boundary-fixture.ts"),
-    resolve(featureRoot, "messaging/shared/messaging.repository.integration.test.boundary-fixture.ts"),
-    resolve(apiTestRoot, "relationships-service.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/messaging.routes.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/shared/messaging.repository.integration.test.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/test-support/relationships-service.boundary-fixture.ts"),
   );
   const before = errors.length;
   for (const path of fixturePaths) await checkFile(path, errors);
