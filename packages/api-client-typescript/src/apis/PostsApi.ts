@@ -28,6 +28,11 @@ import {
     DailyPostFromJSON,
     DailyPostToJSON,
 } from '../models/DailyPost';
+import {
+    type FeedPage,
+    FeedPageFromJSON,
+    FeedPageToJSON,
+} from '../models/FeedPage';
 
 export interface PostsCreateRequest {
     /**
@@ -38,6 +43,17 @@ export interface PostsCreateRequest {
      *
      */
     createDailyPostRequest: CreateDailyPostRequest;
+}
+
+export interface PostsListFeedRequest {
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
 }
 
 /**
@@ -110,6 +126,61 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsCreate(requestParameters: PostsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DailyPost> {
         const response = await this.postsCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListFeed without sending the request
+     */
+    async postsListFeedRequestOpts(requestParameters: PostsListFeedRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/feed`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List released posts from friends
+     */
+    async postsListFeedRaw(requestParameters: PostsListFeedRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FeedPage>> {
+        const requestOptions = await this.postsListFeedRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => FeedPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List released posts from friends
+     */
+    async postsListFeed(requestParameters: PostsListFeedRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FeedPage> {
+        const response = await this.postsListFeedRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
