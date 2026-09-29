@@ -61,12 +61,16 @@ describe("friends page", () => {
     expect(screen.getAllByText("friends")).toHaveLength(2);
   });
 
-  it("keeps the relationship badge and offers removal from the list", async () => {
+  it("keeps the relationship badge informational and offers removal from a separate menu", async () => {
     const actor = userEvent.setup();
     setup(page([card("ada", "Ada Lovelace")]));
     render(<FriendsPage />);
     await screen.findByText("Ada Lovelace");
-    await actor.click(screen.getByLabelText("Relationship actions for Ada Lovelace"));
+    const badge = screen.getByText("friends", { selector: "span" });
+    expect(badge.tagName).toBe("SPAN");
+    await actor.click(badge);
+    expect(api.removeFriend).not.toHaveBeenCalled();
+    await actor.click(screen.getByLabelText("Friend actions for Ada Lovelace"));
     await actor.click(screen.getByRole("button", { name: "Remove friend" }));
     await waitFor(() => expect(api.removeFriend).toHaveBeenCalledWith("ada"));
     expect(api.loadFriends).toHaveBeenCalledTimes(2);

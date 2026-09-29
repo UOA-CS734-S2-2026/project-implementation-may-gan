@@ -89,8 +89,9 @@ function FriendRow({ friend, busy, onRemove }: { friend: FriendCard; busy: boole
     <ProfileLink username={friend.username} name={friend.displayName} />
     <div className="ml-auto flex shrink-0 items-center gap-2">
       <Link href={`/messages/new/${friend.username}`} aria-label={`Message ${friend.displayName}`} className="rounded-lg border border-foreground/15 px-2.5 py-2 font-sans text-xs font-medium text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent"><span className="hidden sm:inline">Message</span><span aria-hidden className="sm:hidden">✉</span></Link>
+      <span className="rounded-xl bg-background-accent px-2.5 py-2 font-serif text-sm text-foreground-accent">friends</span>
       <details className="group relative">
-        <summary aria-label={`Relationship actions for ${friend.displayName}`} className="cursor-pointer list-none rounded-xl bg-background-accent px-3 py-2 font-serif text-sm text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent [&::-webkit-details-marker]:hidden">friends</summary>
+        <summary aria-label={`Friend actions for ${friend.displayName}`} className="grid size-8 cursor-pointer list-none place-items-center rounded-lg border border-foreground/15 font-sans text-lg leading-none text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent [&::-webkit-details-marker]:hidden"><span aria-hidden="true">⋯</span></summary>
         <div className="absolute right-0 top-full z-20 mt-2 whitespace-nowrap rounded-xl border border-foreground/10 bg-background p-1 shadow-card">
           <button type="button" disabled={busy} onClick={() => onRemove(friend.id)} className="rounded-lg px-3 py-2 font-sans text-sm text-foreground-secondary hover:bg-background-accent disabled:opacity-50">Remove friend</button>
         </div>
@@ -106,7 +107,7 @@ function RequestSection({ title, requests, busy, onAccept, onDecline, onCancel }
 
 function ProfileLink({ username, name }: { username: string; name: string }) {
   const initial = (name || username).trim().slice(0, 1).toLocaleUpperCase() || "?";
-  return <Link href={`/${username}`} className="flex min-w-0 items-center gap-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent"><span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background-accent font-serif text-lg text-foreground-accent">{initial}</span><span className="min-w-0"><span className="block truncate font-serif text-lg font-semibold tracking-tighter">{name}</span><span className="block truncate font-sans text-sm text-foreground-tertiary">@{username}</span></span></Link>;
+  return <Link href={`/${username}`} title={`${name} (@${username})`} className="flex min-w-0 items-center gap-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent"><span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-background-accent font-serif text-lg text-foreground-accent">{initial}</span><span className="min-w-0"><span className="line-clamp-2 break-words font-serif text-lg font-semibold tracking-tighter">{name}</span><span className="block truncate font-sans text-sm text-foreground-tertiary">@{username}</span></span></Link>;
 }
 
 function Action({ label, disabled, onClick, muted = false }: { label: string; disabled: boolean; onClick: () => void; muted?: boolean }) {

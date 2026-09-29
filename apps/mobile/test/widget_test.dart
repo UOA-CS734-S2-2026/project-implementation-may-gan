@@ -240,7 +240,15 @@ void main() {
 
       expect(find.byKey(const Key('friends.tab.friends')), findsOneWidget);
       expect(find.byKey(const Key('friends.filter')), findsOneWidget);
-      expect(find.text('Message'), findsNWidgets(2));
+      expect(
+        find.byTooltip('Message Ada Lovelace With A Long Name'),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Message Grace Hopper'), findsOneWidget);
+      await tester.tap(find.text('friends').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Remove friend'), findsNothing);
+      expect(friends.removed, isEmpty);
       await tester.tap(find.byKey(const Key('friends.actions.Grace Hopper')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remove friend'));

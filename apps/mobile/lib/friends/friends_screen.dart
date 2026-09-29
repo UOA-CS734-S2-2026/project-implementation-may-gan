@@ -471,25 +471,49 @@ class _FriendRow extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => _PersonRow(
-    person: friend,
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _SoftAction(
-          label: 'Message',
-          muted: true,
-          onPressed: () => context.go(
-            '/messages/new/${Uri.encodeComponent(friend.username)}',
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => _PersonRow(
+      person: friend,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (constraints.maxWidth < 480)
+            IconButton(
+              tooltip: 'Message ${friend.displayName}',
+              onPressed: () => context.go(
+                '/messages/new/${Uri.encodeComponent(friend.username)}',
+              ),
+              icon: const Icon(Icons.mail_outline, size: 19),
+              style: IconButton.styleFrom(
+                minimumSize: const Size(38, 38),
+                maximumSize: const Size(38, 38),
+                padding: EdgeInsets.zero,
+                side: BorderSide(
+                  color: DayliColors.of(
+                    context,
+                  ).foreground.withValues(alpha: 0.15),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            )
+          else
+            _SoftAction(
+              label: 'Message',
+              muted: true,
+              onPressed: () => context.go(
+                '/messages/new/${Uri.encodeComponent(friend.username)}',
+              ),
+            ),
+          const SizedBox(width: 7),
+          _RelationshipBadge(
+            name: friend.displayName,
+            enabled: !busy,
+            onRemove: onRemove,
           ),
-        ),
-        const SizedBox(width: 7),
-        _RelationshipBadge(
-          name: friend.displayName,
-          enabled: !busy,
-          onRemove: onRemove,
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }
@@ -594,7 +618,7 @@ class _PersonRow extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: DayliText.serif(
                       context,
@@ -637,21 +661,11 @@ class _RelationshipBadge extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: 'Friend actions for $name',
-    child: PopupMenuButton<String>(
-      key: Key('friends.actions.$name'),
-      enabled: enabled,
-      tooltip: 'Friend actions',
-      onSelected: (value) {
-        if (value == 'remove') onRemove();
-      },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'remove', child: Text('Remove friend')),
-      ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
         decoration: BoxDecoration(
           color: DayliColors.of(context).backgroundAccent,
           borderRadius: BorderRadius.circular(17),
@@ -666,7 +680,41 @@ class _RelationshipBadge extends StatelessWidget {
           ),
         ),
       ),
-    ),
+      const SizedBox(width: 6),
+      Semantics(
+        button: true,
+        label: 'Friend actions for $name',
+        child: PopupMenuButton<String>(
+          key: Key('friends.actions.$name'),
+          enabled: enabled,
+          tooltip: 'Friend actions',
+          onSelected: (value) {
+            if (value == 'remove') onRemove();
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'remove', child: Text('Remove friend')),
+          ],
+          child: Container(
+            width: 32,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: DayliColors.of(
+                  context,
+                ).foreground.withValues(alpha: 0.15),
+              ),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(
+              Icons.more_horiz,
+              size: 21,
+              color: DayliColors.of(context).foregroundSecondary,
+            ),
+          ),
+        ),
+      ),
+    ],
   );
 }
 
