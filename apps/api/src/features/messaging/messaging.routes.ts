@@ -7,7 +7,7 @@ import { registerGetConversationRoute, type GetConversationRouteDependencies } f
 import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./conversations/get-message/get-message.route";
 import { registerGetMessagingUnreadRoute } from "./conversations/get-messaging-unread/get-messaging-unread.route";
 import { registerListConversationChangesRoute } from "./conversations/list-conversation-changes/list-conversation-changes.route";
-import { registerListConversationsRoute } from "./conversations/list-conversations/list-conversations.route";
+import { registerListConversationsRoute, type ListConversationsRouteDependencies } from "./conversations/list-conversations/list-conversations.route";
 import { registerListMessagesRoute, type ListMessagesRouteDependencies } from "./conversations/list-messages/list-messages.route";
 import { registerMarkConversationReadRoute } from "./conversations/mark-conversation-read/mark-conversation-read.route";
 import { registerResolveMessageRequestRoute } from "./conversations/resolve-message-request/resolve-message-request.route";
@@ -34,6 +34,7 @@ export interface MessagingRouteDependencies extends
   CreateDirectConversationRouteDependencies,
   GetConversationRouteDependencies,
   GetMessageRouteDependencies,
+  ListConversationsRouteDependencies,
   ListMessagesRouteDependencies {
   /** Blocks all conversation reads and mutations until setup is complete. */
   hasUsername?: HasUsername;

@@ -80,6 +80,10 @@ import {
   createPostgresConversationReader,
   createPostgresDirectConversationStore,
 } from "./features/messaging/shared/conversation.repository";
+import {
+  createHyperdriveListConversationsRepository,
+  createPostgresListConversationsRepository,
+} from "./features/messaging/conversations/list-conversations/list-conversations.repository";
 import type { RealtimeTicketRouteDependencies } from "./features/messaging/realtime/issue-ticket/issue-ticket.route";
 import { createPostgresRealtimeTicketStore } from "./features/messaging/realtime/issue-ticket/issue-ticket.repository";
 import { createRealtimeTicketService } from "./features/messaging/realtime/issue-ticket/issue-ticket.service";
@@ -299,6 +303,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
   return {
     direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
     reader: createPostgresConversationReader(database),
+    listConversations: createPostgresListConversationsRepository(database),
     getConversation: createPostgresGetConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
@@ -383,6 +388,7 @@ function createMessagingDependencies(
     removeReaction: createRemoveReactionService({ store }),
     direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
     reader: createHyperdriveConversationReader(configuration.hyperdrive),
+    listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),
     getConversation: createHyperdriveGetConversationRepository(configuration.hyperdrive),
     getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),

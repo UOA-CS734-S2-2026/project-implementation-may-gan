@@ -3,10 +3,10 @@ import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { conversationFolderSchema, conversationListSchema, messagingReadErrors } from "../../shared/conversation.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
-import type { ConversationReader } from "../../shared/conversation-types";
+import type { ListConversationsRepository } from "./list-conversations.repository";
 
 export interface ListConversationsRouteDependencies {
-  reader?: Pick<ConversationReader, "list">;
+  listConversations?: ListConversationsRepository;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -29,10 +29,10 @@ export function registerListConversationsRoute(
 ) {
   app.openapi(route, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.reader) return messagingUnavailable(context);
+    if (!dependencies.listConversations) return messagingUnavailable(context);
     try {
       const query = context.req.valid("query");
-      return context.json((await dependencies.reader.list(
+      return context.json((await dependencies.listConversations.list(
         context.get("actor").userId,
         query.folder,
         query.cursor,

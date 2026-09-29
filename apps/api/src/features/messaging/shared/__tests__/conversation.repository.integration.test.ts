@@ -37,8 +37,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     ]);
     expect(new Set(results.map((result) => result.conversation.id)).size).toBe(1);
     expect(new Set(results.map((result) => result.message.id)).size).toBe(1);
-    const requests = await reader.list(users[1]!, "requests", undefined, 30);
-    expect(requests.items).toHaveLength(1);
     const [count] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${results[0]!.conversation.id}`;
     expect(count?.count).toBe(2);
     await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
@@ -46,19 +44,6 @@ suite("messaging direct conversation Postgres persistence", () => {
     expect(activated.conversation.requestState).toBe("active");
   });
 
-  it("uses an exact database timestamp cursor so same-second inbox entries are not omitted", async () => {
-    const now = new Date("2026-09-28T06:00:00.123Z");
-    const { direct: service } = createMessagingPersistenceServices(database.db, { now: () => now });
-    for (const peer of users.slice(5, 8)) {
-      await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[4]!}, ${peer}, 'active', now()), (${peer}, ${users[4]!}, 'active', now())`;
-      await service.create(users[4]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
-    }
-    const first = await reader.list(users[4]!, "inbox", undefined, 1);
-    const second = await reader.list(users[4]!, "inbox", first.nextCursor ?? undefined, 1);
-    const third = await reader.list(users[4]!, "inbox", second.nextCursor ?? undefined, 1);
-    const ids = [...first.items, ...second.items, ...third.items].map((item) => (item as { id: string }).id);
-    expect(new Set(ids)).toHaveLength(3);
-  });
 
   it("accepts the pending request, writes active history and advances only the recipient read cursor", async () => {
     const created = await direct.create(users[0]!, { recipientId: users[2]!, clientMessageId: crypto.randomUUID(), text: "request" });

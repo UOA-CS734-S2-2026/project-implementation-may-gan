@@ -8,7 +8,7 @@ const direct = {
     message: { id: "message", conversationId: "conversation", sequence: "1", senderId: "alice", clientMessageId: "client", text: "Hello", replyToMessageId: null, replyPreview: null, version: 1, createdAt: "2026-09-28T00:00:00.000Z", editedAt: null, unsentAt: null, reactions: [] },
   })),
 };
-const reader = { list: vi.fn(async () => ({ items: [], nextCursor: null })) };
+const listConversations = { list: vi.fn(async () => ({ items: [], nextCursor: null })) };
 const send = vi.fn(async () => ({ replayed: false, message: { id: "message", conversationId: "conversation", sequence: "1", senderId: "alice", clientMessageId: "client", text: "Hello", replyToMessageId: null, replyPreview: null, version: 1, createdAt: "2026-09-28T00:00:00.000Z", editedAt: null, unsentAt: null, reactions: [] } }));
 
 function app(hasUsername: () => Promise<boolean>) {
@@ -17,7 +17,7 @@ function app(hasUsername: () => Promise<boolean>) {
       resolveSession: async () => ({ userId: "alice" }),
       hasUsername,
       direct,
-      reader: reader as never,
+      listConversations,
       service: { send },
     },
   });
@@ -29,7 +29,7 @@ const messageBody = { clientMessageId: "client", text: "Hello" };
 describe("messaging username gate", () => {
   it("blocks username-less actors before conversation reads or mutations expose messaging data", async () => {
     direct.create.mockClear();
-    reader.list.mockClear();
+    listConversations.list.mockClear();
     send.mockClear();
     const api = app(async () => false);
 
@@ -45,7 +45,7 @@ describe("messaging username gate", () => {
       await expect(response.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
     }
     expect(direct.create).not.toHaveBeenCalled();
-    expect(reader.list).not.toHaveBeenCalled();
+    expect(listConversations.list).not.toHaveBeenCalled();
     expect(send).not.toHaveBeenCalled();
   });
 
