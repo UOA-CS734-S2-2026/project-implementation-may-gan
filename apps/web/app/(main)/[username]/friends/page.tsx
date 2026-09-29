@@ -8,6 +8,7 @@ import {
   declineFriendRequest,
   loadFriends,
   loadRequests,
+  removeFriend,
   type FriendCard,
   type FriendRequest,
   type FriendsFailure,
@@ -93,8 +94,8 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
     update((current) => ({ ...response.value, items: mergeById(current.items, response.value.items) }));
   };
 
-  return <section className="mx-auto w-full max-w-2xl px-5 py-12 md:px-8 md:py-16">
-    <h1 className="mb-9 text-center font-serif text-5xl font-semibold tracking-tighter text-foreground md:text-6xl">friends</h1>
+  return <section className="mx-auto min-h-screen w-full max-w-[480px] px-4 py-12">
+    <h1 className="mb-6 text-center font-serif text-4xl font-semibold tracking-tighter text-foreground">friends</h1>
     {error && <div role="alert" className="mb-6 rounded-2xl border border-foreground/10 bg-background px-5 py-4 font-sans text-sm text-foreground-secondary">{error} <button type="button" className="font-medium underline underline-offset-4" onClick={() => void refresh()}>Try again</button></div>}
     <FriendsTabs
       friends={friends}
@@ -105,6 +106,7 @@ function FriendsContent({ accountId }: { accountId: string | null }) {
       onAccept={(requestId) => void mutate(requestId, () => acceptFriendRequest(requestId))}
       onDecline={(requestId) => void mutate(requestId, () => declineFriendRequest(requestId))}
       onCancel={(requestId) => void mutate(requestId, () => cancelFriendRequest(requestId))}
+      onRemove={(userId) => void mutate(userId, () => removeFriend(userId))}
       onLoadMoreFriends={() => void loadMore("friends", friends.nextCursor, loadFriends, setFriends)}
       onLoadMoreIncoming={() => void loadMore("incoming", incoming.nextCursor, (cursor) => loadRequests("incoming", cursor), setIncoming)}
       onLoadMoreOutgoing={() => void loadMore("outgoing", outgoing.nextCursor, (cursor) => loadRequests("outgoing", cursor), setOutgoing)}

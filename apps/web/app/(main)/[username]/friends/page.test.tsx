@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 let sessionUser: { id: string } | null = { id: "alice" };
 const api: Record<string, ReturnType<typeof vi.fn>> = {
   loadFriends: vi.fn(), loadRequests: vi.fn(),
-  acceptFriendRequest: vi.fn(), declineFriendRequest: vi.fn(), cancelFriendRequest: vi.fn(),
+  acceptFriendRequest: vi.fn(), declineFriendRequest: vi.fn(), cancelFriendRequest: vi.fn(), removeFriend: vi.fn(),
 };
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: sessionUser, session: null, isPending: false }) }));
@@ -25,6 +25,7 @@ function setup(friends: TestPage = page([]), incoming: TestPage = emptyRequests,
   api.acceptFriendRequest.mockResolvedValue({ ok: true, value: {} });
   api.declineFriendRequest.mockResolvedValue({ ok: true, value: {} });
   api.cancelFriendRequest.mockResolvedValue({ ok: true, value: {} });
+  api.removeFriend.mockResolvedValue({ ok: true, value: {} });
 }
 
 describe("friends page", () => {
@@ -55,9 +56,20 @@ describe("friends page", () => {
   it("links each friend to their profile and the friend-only message draft", async () => {
     setup(page([card("ada", "Ada Lovelace")]));
     render(<FriendsPage />);
-    expect(await screen.findByRole("link", { name: /Ada Lovelace/ })).toHaveAttribute("href", "/ada");
-    expect(screen.getByRole("link", { name: "Message" })).toHaveAttribute("href", "/messages/new/ada");
+    expect(await screen.findByRole("link", { name: /^Ada Lovelace/ })).toHaveAttribute("href", "/ada");
+    expect(screen.getByRole("link", { name: "Message Ada Lovelace" })).toHaveAttribute("href", "/messages/new/ada");
     expect(screen.getAllByText("friends")).toHaveLength(2);
+  });
+
+  it("keeps the relationship badge and offers removal from the list", async () => {
+    const actor = userEvent.setup();
+    setup(page([card("ada", "Ada Lovelace")]));
+    render(<FriendsPage />);
+    await screen.findByText("Ada Lovelace");
+    await actor.click(screen.getByLabelText("Relationship actions for Ada Lovelace"));
+    await actor.click(screen.getByRole("button", { name: "Remove friend" }));
+    await waitFor(() => expect(api.removeFriend).toHaveBeenCalledWith("ada"));
+    expect(api.loadFriends).toHaveBeenCalledTimes(2);
   });
 
   it("shows received and sent requests with their applicable actions", async () => {

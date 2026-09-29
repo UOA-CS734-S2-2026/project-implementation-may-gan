@@ -37,13 +37,13 @@ function InboxBody() {
   const items = inbox.data?.pages.flatMap((page) => page.items).filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index) ?? [];
   const notice = inbox.error instanceof Error ? inbox.error.message : resolve.error instanceof Error ? resolve.error.message : null;
 
-  return <section className="mx-auto w-full max-w-2xl px-5 py-12 md:px-8 md:py-16">
-    <header className="mb-9 text-center">
-      <h1 className="font-serif text-5xl font-semibold tracking-tighter text-foreground md:text-6xl">messages</h1>
-      <Link href="/messages/new" className="mt-3 inline-block font-sans text-sm font-medium text-foreground-secondary underline underline-offset-4 hover:text-foreground">new message</Link>
+  return <section className="mx-auto min-h-screen w-full max-w-[416px] px-4 py-12">
+    <header className="relative mb-6 text-center">
+      <h1 className="font-serif text-4xl font-semibold tracking-tighter text-foreground">messages</h1>
+      <Link href="/messages/new" aria-label="new message" title="New message" className="absolute right-0 top-1 grid h-8 w-8 place-items-center rounded-full border border-foreground/10 text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg></Link>
     </header>
 
-    <div className="mb-7 flex border-b-2 border-foreground/90" role="tablist" aria-label="Message folders">
+    <div className="mb-4 flex border-b border-foreground/60" role="tablist" aria-label="Message folders">
       <Tab active={folder === "inbox"} onClick={() => setFolder("inbox")}>Messages{unread.inboxCount > 0 && <Count count={unread.inboxCount} />}</Tab>
       <Tab active={folder === "requests"} onClick={() => setFolder("requests")}>Requests{unread.requestCount > 0 && <Count count={unread.requestCount} />}</Tab>
     </div>
@@ -55,6 +55,6 @@ function InboxBody() {
 }
 
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex flex-1 items-center justify-center border-b-4 py-3 font-sans text-xl font-medium transition-colors ${active ? "border-accent text-foreground" : "border-transparent text-foreground-secondary hover:text-foreground"}`}>{children}</button>;
+  return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex flex-1 items-center justify-center border-b-2 py-2 font-sans text-sm font-medium transition-colors ${active ? "border-accent text-foreground" : "border-transparent text-foreground-secondary hover:text-foreground"}`}>{children}</button>;
 }
 function Count({ count }: { count: number }) { return <span className="ml-2 inline-grid min-w-5 place-items-center rounded-full bg-foreground-accent px-1.5 py-0.5 font-sans text-xs text-white">{count}</span>; }

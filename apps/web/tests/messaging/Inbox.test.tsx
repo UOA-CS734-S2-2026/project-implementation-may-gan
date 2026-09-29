@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Inbox } from "@/features/messaging/inbox/Inbox";
-import { messagingApi } from "@/features/messaging/shared/messaging.api";
+import { formatConversationDate } from "@/features/messaging/inbox/ConversationList";
+import { messagingApi, type MessagingConversation } from "@/features/messaging/shared/messaging.api";
 
 let userId = "me";
 const refreshUnread = vi.fn();
@@ -38,9 +39,20 @@ describe("Inbox", () => {
   it("renders the WDCC list with a real latest-message date, unread count, and the friend-only composer route", async () => {
     render(<Inbox />);
     expect(await screen.findByText("Ada")).toBeInTheDocument();
-    expect(screen.getByText("09/06/2026")).toBeInTheDocument();
+    const localDate = new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(conversation.latestMessage.createdAt));
+    expect(screen.getByText(localDate)).toBeInTheDocument();
     expect(screen.getByLabelText("1 unread messages")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "new message" })).toHaveAttribute("href", "/messages/new");
+  });
+
+  it("uses the viewer's local calendar day for a message near midnight UTC", () => {
+    vi.stubEnv("TZ", "Pacific/Auckland");
+    try {
+      const lateMessage = { ...conversation, latestMessage: { ...conversation.latestMessage, createdAt: "2026-06-09T23:30:00.000Z" } };
+      expect(formatConversationDate(lateMessage as unknown as MessagingConversation)).toBe("10/06/2026");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("switches folders and preserves message request actions", async () => {
