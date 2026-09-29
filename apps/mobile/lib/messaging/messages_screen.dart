@@ -5,6 +5,7 @@ import '../api/api_failure.dart';
 import '../api/friends_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/session_controller.dart';
 import 'messaging_client.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -26,11 +27,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> _startConversation() async {
-    final result = await showDialog<String>(
+    final username = await showDialog<String>(
       context: context,
       builder: (_) => const _NewConversationDialog(),
     );
-    if (mounted && result != null) context.go('/messages/$result');
+    if (mounted && username != null) {
+      context.go('/messages/new/${Uri.encodeComponent(username)}');
+    }
   }
 
   @override
@@ -447,137 +450,169 @@ class _NewConversationDialog extends StatefulWidget {
 }
 
 class _NewConversationDialogState extends State<_NewConversationDialog> {
-  String? _recipientId;
-  final _text = TextEditingController();
-  String? _intent;
-  String? _clientMessageId;
-  bool _sending = false;
+  SessionController? _session;
+  String? _actorId;
   Future<ApiResult<FriendPage>>? _friends;
   FriendPage? _friendPage;
+  bool _loadingMore = false;
+  String? _moreError;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _friends ??= AppScope.of(context).friends.loadFriends();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session;
+      session.addListener(_onSessionChanged);
+      _friends = null;
+    }
+    _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+    setState(() {});
+  }
+
+  void _syncActor() {
+    final actorId = _session?.user?.id;
+    if (_friends != null && _actorId == actorId) return;
+    _actorId = actorId;
+    _friendPage = null;
+    _moreError = null;
+    _loadingMore = false;
+    _friends = AppScope.of(context).friends.loadFriends();
+  }
+
+  void _retryFriends() {
+    setState(() {
+      _friendPage = null;
+      _friends = AppScope.of(context).friends.loadFriends();
+    });
   }
 
   Future<void> _moreFriends() async {
-    final cursor = _friendPage?.nextCursor;
-    if (cursor == null) return;
-    final next = await AppScope.of(context).friends.loadFriends(cursor: cursor);
-    if (!mounted || next is! ApiSuccess<FriendPage>) return;
-    setState(
-      () => _friendPage = FriendPage(
-        items: [...?_friendPage?.items, ...next.value.items],
-        nextCursor: next.value.nextCursor,
-        hasMore: next.value.hasMore,
-      ),
-    );
+    final current = _friendPage;
+    final cursor = current?.nextCursor;
+    if (_loadingMore || current == null || cursor == null) return;
+    final actorAtStart = _actorId;
+    setState(() {
+      _loadingMore = true;
+      _moreError = null;
+    });
+    ApiResult<FriendPage> result;
+    try {
+      result = await AppScope.of(context).friends.loadFriends(cursor: cursor);
+    } catch (_) {
+      result = const ApiError(ServiceUnavailable());
+    }
+    if (!mounted || actorAtStart != _actorId || _friendPage != current) return;
+    setState(() {
+      _loadingMore = false;
+      if (result is ApiSuccess<FriendPage>) {
+        final known = current.items.map((friend) => friend.id).toSet();
+        _friendPage = FriendPage(
+          items: [
+            ...current.items,
+            ...result.value.items.where((friend) => known.add(friend.id)),
+          ],
+          nextCursor: result.value.nextCursor,
+          hasMore: result.value.hasMore,
+        );
+      } else {
+        _moreError = 'Could not load more friends.';
+      }
+    });
   }
 
   @override
   void dispose() {
-    _text.dispose();
+    _session?.removeListener(_onSessionChanged);
     super.dispose();
-  }
-
-  void _changed() {
-    final intent = '${_recipientId ?? ''}\u0000${_text.text}';
-    if (intent != _intent) {
-      _intent = intent;
-      _clientMessageId = null;
-    }
-  }
-
-  Future<void> _send() async {
-    _changed();
-    final recipientId = _recipientId ?? '';
-    final text = _text.text;
-    if (_sending || recipientId.isEmpty || text.trim().isEmpty) return;
-    final intent = _intent!;
-    final clientMessageId = _clientMessageId ??= DateTime.now()
-        .microsecondsSinceEpoch
-        .toString();
-    setState(() => _sending = true);
-    final conversationId = await AppScope.of(context).messaging.createDirect(
-      recipientId,
-      text,
-      clientMessageId: clientMessageId,
-    );
-    if (!mounted) return;
-    setState(() => _sending = false);
-    // Inputs are locked while the request is in flight. This check also keeps
-    // a future implementation that permits editing from routing stale intent.
-    if (conversationId != null && _intent == intent) {
-      Navigator.pop(context, conversationId);
-    }
   }
 
   @override
   Widget build(BuildContext context) => AlertDialog(
     title: const Text('New message'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FutureBuilder<ApiResult<FriendPage>>(
-          future: _friends,
-          builder: (context, snapshot) {
-            final value = snapshot.data;
-            if (_friendPage == null && value is ApiSuccess<FriendPage>) {
-              _friendPage = value.value;
+    content: SizedBox(
+      width: MediaQuery.sizeOf(context).width - 140,
+      height: 320,
+      child: FutureBuilder<ApiResult<FriendPage>>(
+        key: ValueKey((_actorId, _friends)),
+        future: _friends,
+        builder: (context, snapshot) {
+          if (_friendPage == null && snapshot.data is ApiSuccess<FriendPage>) {
+            _friendPage = (snapshot.data! as ApiSuccess<FriendPage>).value;
+          }
+          if (_friendPage == null) {
+            if (!snapshot.hasData && !snapshot.hasError) {
+              return const Center(child: CircularProgressIndicator());
             }
-            final friends = _friendPage?.items ?? const <FriendCard>[];
             return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                DropdownButtonFormField<String>(
-                  key: const Key('messages.friendPicker'),
-                  initialValue: _recipientId,
-                  decoration: const InputDecoration(labelText: 'Friend'),
-                  items: friends
-                      .map(
-                        (friend) => DropdownMenuItem(
-                          value: friend.id,
-                          child: Text(friend.displayName),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: _sending
-                      ? null
-                      : (value) {
-                          setState(() => _recipientId = value);
-                          _changed();
-                        },
+                const Text('Could not load friends.'),
+                TextButton(
+                  onPressed: _retryFriends,
+                  child: const Text('Retry'),
                 ),
-                if ((_friendPage?.hasMore ?? false))
-                  TextButton(
-                    onPressed: _moreFriends,
-                    child: const Text('more friends'),
-                  ),
               ],
             );
-          },
-        ),
-        TextField(
-          key: const Key('messages.firstText'),
-          controller: _text,
-          enabled: !_sending,
-          onChanged: (_) => _changed(),
-          maxLength: 4000,
-          minLines: 1,
-          maxLines: 4,
-          decoration: const InputDecoration(labelText: 'Message'),
-        ),
-      ],
+          }
+          return Column(
+            children: [
+              Expanded(
+                child: _friendPage!.items.isEmpty
+                    ? const Center(child: Text('No friends yet.'))
+                    : ListView.builder(
+                        key: const Key('messages.friendPicker'),
+                        itemCount: _friendPage!.items.length,
+                        itemBuilder: (context, index) {
+                          final friend = _friendPage!.items[index];
+                          return ListTile(
+                            key: Key('messages.friend.${friend.id}'),
+                            title: Text(
+                              friend.displayName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              '@${friend.username}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () {
+                              if (_actorId == _session?.user?.id) {
+                                Navigator.pop(context, friend.username);
+                              }
+                            },
+                          );
+                        },
+                      ),
+              ),
+              if (_moreError != null) Text(_moreError!),
+              if (_friendPage!.hasMore)
+                TextButton(
+                  onPressed: _loadingMore ? null : _moreFriends,
+                  child: Text(
+                    _loadingMore
+                        ? 'Loading…'
+                        : _moreError == null
+                        ? 'more friends'
+                        : 'Retry more friends',
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
     ),
     actions: [
       TextButton(
-        onPressed: _sending ? null : () => Navigator.pop(context),
+        onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
-      ),
-      FilledButton(
-        key: const Key('messages.createDirect'),
-        onPressed: _sending ? null : _send,
-        child: Text(_sending ? 'Sending...' : 'Send'),
       ),
     ],
   );

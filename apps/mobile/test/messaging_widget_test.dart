@@ -100,23 +100,40 @@ MessagingConversation namedConversation(
   );
 }
 
+const knownFriend = FriendCard(
+  id: 'known-id',
+  username: 'known',
+  displayName: 'Known',
+  relationship: 'friends',
+);
+
 class PickerFriendsClient extends FakeFriendsClient {
+  final results = <ApiResult<FriendPage>>[];
+  final cursors = <String?>[];
+
   @override
-  Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
-      const ApiSuccess(
-        FriendPage(
-          items: [
-            FriendCard(
-              id: 'known-id',
-              username: 'known',
-              displayName: 'Known',
-              relationship: 'friends',
-            ),
-          ],
-          nextCursor: null,
-          hasMore: false,
-        ),
-      );
+  Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async {
+    cursors.add(cursor);
+    if (results.isNotEmpty) return results.removeAt(0);
+    return const ApiSuccess(
+      FriendPage(items: [knownFriend], nextCursor: null, hasMore: false),
+    );
+  }
+
+  @override
+  Future<ApiResult<FriendCard>> profile(String username) async =>
+      const ApiSuccess(knownFriend);
+}
+
+class ExistingPairController extends MessagingController {
+  ExistingPairController(super.client);
+  final lookedUp = <String>[];
+
+  @override
+  Future<ApiResult<String?>> findDirect(String recipientId) async {
+    lookedUp.add(recipientId);
+    return const ApiSuccess('existing-thread');
+  }
 }
 
 void main() {
@@ -135,14 +152,24 @@ void main() {
     );
   }
 
-  Widget messagesScreen(MessagingController controller) {
-    final harness = TestHarness(friends: PickerFriendsClient());
+  Widget messagesScreen(
+    MessagingController controller, {
+    FriendsClient? friends,
+  }) {
+    final harness = TestHarness(friends: friends ?? PickerFriendsClient());
     final router = GoRouter(
       routes: [
         GoRoute(path: '/', builder: (_, __) => const MessagesScreen()),
         GoRoute(
+          path: '/messages/new/:username',
+          builder: (_, state) =>
+              NewMessageScreen(username: state.pathParameters['username']!),
+        ),
+        GoRoute(
           path: '/messages/:id',
-          builder: (_, __) => const Scaffold(body: Text('conversation')),
+          builder: (_, state) => Scaffold(
+            body: Text('conversation ${state.pathParameters['id']}'),
+          ),
         ),
       ],
     );
@@ -387,6 +414,7 @@ void main() {
       ..directResults.addAll([
         const ApiError(ServiceUnavailable()),
         const ApiError(ServiceUnavailable()),
+        const ApiError(ServiceUnavailable()),
       ]);
     final controller = DraftLookupController(client);
     await tester.pumpWidget(
@@ -424,6 +452,13 @@ void main() {
         .toList();
     expect(attempts, hasLength(2));
     expect(attempts[0], attempts[1]);
+    await tester.enterText(find.byType(TextField), 'Changed');
+    await tester.tap(find.text('Send'));
+    await tester.pumpAndSettle();
+    final changed = client.calls
+        .where((call) => call.startsWith('direct:'))
+        .last;
+    expect(changed.split(':')[2], isNot(attempts[0].split(':')[2]));
   });
 
   testWidgets('renders reply composition and sends with its parent ID', (
@@ -454,56 +489,94 @@ void main() {
     );
   });
 
-  testWidgets(
-    'reuses direct-create IDs for retries and replaces changed intent',
-    (tester) async {
-      final deferred = Completer<ApiResult<DirectConversationResult>>();
-      final client = FakeMessagingClient()
-        ..deferredDirect = deferred
-        ..directResults.addAll([
-          const ApiError(NetworkUnavailable()),
-          const ApiError(NetworkUnavailable()),
-        ]);
-      final controller = MessagingController(client);
-      await tester.pumpWidget(messagesScreen(controller));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('messages.new')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('messages.friendPicker')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Known').last);
-      await tester.enterText(
-        find.byKey(const Key('messages.firstText')),
-        'first intent',
-      );
-      await tester.tap(find.byKey(const Key('messages.createDirect')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('messages.createDirect')));
-      expect(
-        client.calls.where((call) => call.startsWith('direct:')),
-        hasLength(1),
-      );
+  testWidgets('the Messages picker opens an existing pair without sending', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final client = FakeMessagingClient();
+    final controller = ExistingPairController(client);
+    await tester.pumpWidget(messagesScreen(controller));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('messages.new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('messages.friend.known-id')));
+    await tester.pumpAndSettle();
+    expect(controller.lookedUp, ['known-id']);
+    expect(tester.takeException(), isNull);
+    expect(find.text('conversation existing-thread'), findsOneWidget);
+    expect(client.calls.where((call) => call.startsWith('direct:')), isEmpty);
+  });
 
-      client.deferredDirect = null;
-      deferred.complete(const ApiError(NetworkUnavailable()));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('messages.createDirect')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('messages.firstText')),
-        'changed intent',
-      );
-      await tester.tap(find.byKey(const Key('messages.createDirect')));
-      await tester.pumpAndSettle();
+  testWidgets('the Messages picker retries an initial friends load failure', (
+    tester,
+  ) async {
+    final friends = PickerFriendsClient()
+      ..results.addAll([
+        const ApiError(ServiceUnavailable()),
+        const ApiSuccess(
+          FriendPage(items: [knownFriend], nextCursor: null, hasMore: false),
+        ),
+      ]);
+    await tester.pumpWidget(
+      messagesScreen(
+        MessagingController(FakeMessagingClient()),
+        friends: friends,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('messages.new')));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load friends.'), findsOneWidget);
+    expect(find.byKey(const Key('messages.friend.known-id')), findsNothing);
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('messages.friend.known-id')), findsOneWidget);
+    expect(friends.cursors, [null, null]);
+  });
 
-      final calls = client.calls
-          .where((call) => call.startsWith('direct:'))
-          .toList();
-      final retryId = calls[0].split(':')[2];
-      expect(calls[1].split(':')[2], retryId);
-      expect(calls[2].split(':')[2], isNot(retryId));
-    },
-  );
+  testWidgets('the Messages picker retries a failed next friend page', (
+    tester,
+  ) async {
+    final friends = PickerFriendsClient()
+      ..results.addAll([
+        const ApiSuccess(
+          FriendPage(items: [knownFriend], nextCursor: 'page-2', hasMore: true),
+        ),
+        const ApiError(ServiceUnavailable()),
+        const ApiSuccess(
+          FriendPage(
+            items: [
+              FriendCard(
+                id: 'later',
+                username: 'later',
+                displayName: 'Later Friend',
+                relationship: 'friends',
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]);
+    await tester.pumpWidget(
+      messagesScreen(
+        MessagingController(FakeMessagingClient()),
+        friends: friends,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('messages.new')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('more friends'));
+    await tester.pumpAndSettle();
+    expect(find.text('Could not load more friends.'), findsOneWidget);
+    expect(find.byKey(const Key('messages.friend.known-id')), findsOneWidget);
+    await tester.tap(find.text('Retry more friends'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('messages.friend.later')), findsOneWidget);
+    expect(friends.cursors, [null, 'page-2', 'page-2']);
+  });
 
   testWidgets('renders and resolves a recipient message request', (
     tester,

@@ -159,7 +159,40 @@ class CompletedProfileFriendsClient extends FakeFriendsClient {
       : next.future;
 }
 
+class OwnProfileFriendsClient extends FakeFriendsClient {
+  @override
+  Future<ApiResult<FriendCard>> profile(String username) async =>
+      const ApiSuccess(
+        FriendCard(
+          id: 'user-1',
+          username: 'jos',
+          displayName: 'Jos',
+          relationship: 'none',
+        ),
+      );
+}
+
 void main() {
+  testWidgets('does not offer friendship or messaging actions on my profile', (
+    tester,
+  ) async {
+    final harness = TestHarness(friends: OwnProfileFriendsClient());
+    await harness.session.signIn(
+      email: 'test@example.test',
+      password: 'correct-password',
+    );
+    await tester.pumpWidget(
+      AppScope(
+        services: harness.services,
+        child: const MaterialApp(home: SocialProfileScreen(username: 'jos')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('@jos'), findsOneWidget);
+    expect(find.text('add friend'), findsNothing);
+    expect(find.text('message'), findsNothing);
+  });
+
   testWidgets('routes an app-name username to its /u profile', (tester) async {
     final harness = TestHarness();
     await harness.session.signIn(

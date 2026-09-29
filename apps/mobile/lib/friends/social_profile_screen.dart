@@ -103,6 +103,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     _syncActor();
     final accountAtStart = _accountId;
     if (_busy ||
+        accountAtStart == person.id ||
         accountAtStart != _session?.user?.id ||
         _authorizedProfileId != person.id) {
       return;
@@ -129,6 +130,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
 
   Widget _profileCard(BuildContext context, FriendCard person) {
     final colors = DayliColors.of(context);
+    final isMe = person.id == _session?.user?.id;
     final label = person.relationship == 'none'
         ? 'add friend'
         : person.relationship == 'friends'
@@ -175,8 +177,9 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              if (person.relationship == 'none' ||
-                  person.relationship == 'friends')
+              if (!isMe &&
+                  (person.relationship == 'none' ||
+                      person.relationship == 'friends'))
                 SizedBox(
                   width: double.infinity,
                   child: DayliButton(
@@ -184,7 +187,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     onPressed: _busy ? null : () => _friend(person),
                   ),
                 )
-              else
+              else if (!isMe)
                 Text(
                   label,
                   style: DayliText.sans(
@@ -193,17 +196,19 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     color: colors.foregroundSecondary,
                   ),
                 ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: DayliButton(
-                  label: 'message',
-                  color: ButtonColor.foreground,
-                  onPressed: () => context.go(
-                    '/messages/new/${Uri.encodeComponent(person.username)}',
+              if (!isMe) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: DayliButton(
+                    label: 'message',
+                    color: ButtonColor.foreground,
+                    onPressed: () => context.go(
+                      '/messages/new/${Uri.encodeComponent(person.username)}',
+                    ),
                   ),
                 ),
-              ),
+              ],
               if (_notice != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
