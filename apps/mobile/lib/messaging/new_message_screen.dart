@@ -17,7 +17,7 @@ class NewMessageScreen extends StatefulWidget {
 class _NewMessageScreenState extends State<NewMessageScreen> {
   final _text = TextEditingController();
   Future<ApiResult<FriendCard>>? _profile;
-  Future<String?>? _existing;
+  Future<ApiResult<String?>>? _existing;
   String? _accountId;
   String? _loadedUsername;
   String? _intent;
@@ -93,10 +93,13 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
         if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
           final accountAtLookup = _accountId;
           _existing ??= AppScope.of(context).messaging.findDirect(person.id);
-          return FutureBuilder<String?>(
+          return FutureBuilder<ApiResult<String?>>(
             future: _existing,
             builder: (context, lookup) {
-              final existingId = lookup.data;
+              final lookupResult = lookup.data;
+              final existingId = lookupResult is ApiSuccess<String?>
+                  ? lookupResult.value
+                  : null;
               if (existingId != null &&
                   !_redirected &&
                   accountAtLookup == AppScope.of(context).session.user?.id) {
@@ -111,6 +114,13 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
               }
               if (!lookup.hasData) {
                 return const Center(child: CircularProgressIndicator());
+              }
+              if (lookupResult is ApiError<String?>) {
+                return const Center(
+                  child: Text(
+                    'Conversation lookup is unavailable. Please try again.',
+                  ),
+                );
               }
               return ListView(
                 padding: const EdgeInsets.all(20),

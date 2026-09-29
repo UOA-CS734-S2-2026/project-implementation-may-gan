@@ -25,10 +25,11 @@ function NewMessage({ username }: { username: string }) {
   const [text, setText] = useState("");
   const [intent, setIntent] = useState<{ clientMessageId: string; text: string } | null>(null);
   const direct = useCreateConversationMutation();
-  const existing = useQuery({ queryKey: ["direct-pair", user?.id ?? "anonymous", profile.data?.id ?? ""], enabled: Boolean(profile.data?.id), retry: false, queryFn: async () => { const result = await messagingApi.findDirect(profile.data!.id); return result.ok ? result.value : null; } });
+  const existing = useQuery({ queryKey: ["direct-pair", user?.id ?? "anonymous", profile.data?.id ?? ""], enabled: Boolean(profile.data?.id), retry: false, queryFn: async () => { const result = await messagingApi.findDirect(profile.data!.id); if (result.ok) return result.value; if (result.failure === "notFound") return null; throw new Error(result.message); } });
   useEffect(() => { if (existing.data?.conversationId && !checkedExisting.current) { checkedExisting.current = true; router.replace(`/messages/${existing.data.conversationId}`); } }, [existing.data?.conversationId, router]);
   if (profile.isPending || existing.isPending) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Preparing your note…</main>;
   if (profile.isError || !profile.data) return <main className="mx-auto max-w-2xl px-6 py-12"><h1 className="font-serif text-3xl">This profile is unavailable</h1></main>;
+  if (existing.isError) return <main className="mx-auto max-w-2xl px-6 py-12"><h1 className="font-serif text-3xl">Conversation lookup is unavailable</h1><p className="mt-3 font-sans text-sm text-foreground-secondary">Please try again before sending a new message.</p></main>;
   if (existing.data?.conversationId) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Opening conversation…</main>;
   const recipient = profile.data;
   async function send() {

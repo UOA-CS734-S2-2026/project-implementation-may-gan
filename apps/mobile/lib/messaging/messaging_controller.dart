@@ -222,17 +222,14 @@ class MessagingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> findDirect(String recipientId) async {
+  Future<ApiResult<String?>> findDirect(String recipientId) async {
     final generation = _generation;
     if (_client is! HttpMessagingClient) {
-      return null;
+      return const ApiError(ServiceUnavailable());
     }
     final result = await _client.findDirect(recipientId);
-    if (generation != _generation) return null;
-    return switch (result) {
-      ApiSuccess<String?>(:final value) => value,
-      ApiError<String?>() => null,
-    };
+    if (generation != _generation) return const ApiError(Unauthenticated());
+    return result;
   }
 
   Future<String?> createDirect(
