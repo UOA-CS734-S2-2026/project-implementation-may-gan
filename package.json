@@ -46,6 +46,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.4",
     "@openapitools/openapi-generator-cli": "2.41.0",
+    "aws4fetch": "1.0.20",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "globals": "17.12.0",

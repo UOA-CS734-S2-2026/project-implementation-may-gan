@@ -1,0 +1,6 @@
+reason: The ordered migration history is applied once by the protected runner. Re-run guards around the trigger and backfill could conceal an incompatible partial application.
+affected_data_and_clients: Existing imported usernames, including historical case variants and duplicates, are retained unchanged.
+rollout_sequence: Apply through the protected migration runner before deploying the Worker and clients.
+backup_checkpoint: Confirm the required Neon restore point before dispatch.
+forward_fix_plan: Use a new reviewed forward migration for any correction.
+reviewer: Required database CODEOWNER review.

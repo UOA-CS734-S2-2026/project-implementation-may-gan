@@ -120,11 +120,13 @@ class SessionUser {
     required this.id,
     required this.name,
     required this.email,
+    this.username,
   });
 
   final String id;
   final String name;
   final String email;
+  final String? username;
 }
 
 class BetterAuthNativeSession {
@@ -153,6 +155,8 @@ class BetterAuthNativeSession {
 
   Future<void> signUp({
     required String name,
+    required String username,
+    required String? publicName,
     required String email,
     required String password,
   }) async {
@@ -160,7 +164,13 @@ class BetterAuthNativeSession {
     final response = await _client.post(
       _uri('/api/auth/sign-up/email'),
       headers: const {'content-type': 'application/json'},
-      body: jsonEncode({'name': name, 'email': email, 'password': password}),
+      body: jsonEncode({
+        'name': name,
+        'username': username,
+        'displayUsername': publicName,
+        'email': email,
+        'password': password,
+      }),
     );
     await _storeNativeToken(response, 'sign-up');
   }
@@ -243,7 +253,30 @@ class BetterAuthNativeSession {
       id: id,
       name: user['name'] is String ? user['name'] as String : '',
       email: user['email'] is String ? user['email'] as String : '',
+      username: user['username'] is String ? user['username'] as String : null,
     );
+  }
+
+  Future<void> claimInitialUsername({
+    required String username,
+    required String publicName,
+  }) async {
+    final token = await bearerToken();
+    if (token == null) throw const AuthenticationFailure('username-setup', 401);
+    final response = await _client.post(
+      _uri('/api/v1/profile/username'),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'username': username,
+        if (publicName.trim().isNotEmpty) 'publicName': publicName.trim(),
+      }),
+    );
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('username-setup', response.statusCode);
+    }
   }
 
   /// The active bearer for application API calls, if any. A quarantined old

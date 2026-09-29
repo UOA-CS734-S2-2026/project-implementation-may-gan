@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { validateStagingOrigins } from "./staging-origins.mjs";
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
+import { assertStagingR2BucketAccess, readStagingMediaBindings } from "./staging-media-bindings.mjs";
 import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-worker-config.mjs";
 import {
   assertProjectedWorkerSecretPairing,
@@ -48,8 +49,10 @@ const { apiOrigin, webOrigin } = validateStagingOrigins({
   webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
 });
 const authBindings = readStagingAuthBindings(process.env);
+const mediaBindings = readStagingMediaBindings(process.env, accountId);
+const requiredSecretNames = [...authBindings.requiredSecrets, ...mediaBindings.requiredSecrets];
 // Read every source secret before any Cloudflare mutation.
-const secretSource = readStagingWorkerSecretSource(process.env, authBindings.requiredSecrets);
+const secretSource = readStagingWorkerSecretSource(process.env, requiredSecretNames);
 
 const hyperdrive = await request(`/hyperdrive/configs/${hyperdriveId}`, apiToken);
 if (hyperdrive?.result?.name !== hyperdriveName || hyperdrive?.result?.caching?.disabled !== true) {
@@ -63,8 +66,16 @@ const secretNames = readCloudflareSecretNames(await request(`/workers/scripts/${
 assertProjectedWorkerSecretPairing({
   existingSecretNames: secretNames,
   source: secretSource,
-  requiredAuthSecretNames: authBindings.requiredSecrets,
+  requiredSecretNames,
 });
+if (mediaBindings.vars.R2_BUCKET_NAME !== undefined) {
+  await assertStagingR2BucketAccess({
+    accountId: mediaBindings.vars.R2_ACCOUNT_ID,
+    bucketName: mediaBindings.vars.R2_BUCKET_NAME,
+    accessKeyId: secretSource.values.R2_ACCESS_KEY_ID,
+    secretAccessKey: secretSource.values.R2_SECRET_ACCESS_KEY,
+  });
+}
 
 const { api, probe } = createStagingWorkerConfigs({
   workerName: expectedWorkerName,
@@ -72,6 +83,7 @@ const { api, probe } = createStagingWorkerConfigs({
   authApiOrigin: apiOrigin,
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,
+  mediaVars: mediaBindings.vars,
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));

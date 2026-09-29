@@ -84,7 +84,7 @@ describe("GET /api/v1/posting-days/current", () => {
     const signedUp = await authApp.fetch(new Request("https://worker.test/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Test User", email: "posting-day@example.test", password: "not-a-real-password" }),
+      body: JSON.stringify({ name: "Test User", username: "posting_day_user", email: "posting-day@example.test", password: "not-a-real-password" }),
     }));
     const token = signedUp.headers.get("set-auth-token");
     expect(signedUp.status).toBe(200);
@@ -115,7 +115,7 @@ describe("GET /api/v1/posting-days/current", () => {
     const signedUp = await authApp.fetch(new Request("https://worker.test/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Cookie User", email: "cookie-posting-day@example.test", password: "not-a-real-password" }),
+      body: JSON.stringify({ name: "Cookie User", username: "cookie_posting_user", email: "cookie-posting-day@example.test", password: "not-a-real-password" }),
     }));
     const setCookie = signedUp.headers.get("set-cookie");
     expect(signedUp.status).toBe(200);

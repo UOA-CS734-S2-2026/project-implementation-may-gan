@@ -28,6 +28,8 @@ export interface RelationshipsService {
 export interface RelationshipsRouteDependencies {
   service: RelationshipsService;
   resolveSession: ResolveSession;
+  /** Denies discovery and relationship mutations until the actor has a public handle. */
+  hasUsername?: (userId: string) => Promise<boolean>;
 }
 
 export const relationshipSecurity: Array<Record<string, string[]>> = [

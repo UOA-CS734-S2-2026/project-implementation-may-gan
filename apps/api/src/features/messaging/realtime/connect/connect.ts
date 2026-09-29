@@ -1,3 +1,4 @@
+import { usernameSetupStatus, type HasUsername } from "../../../../http/middleware/require-username";
 import type { VerifiedRealtimeSession } from "../shared/realtime-types";
 
 export interface RealtimeConnectDependencies {
@@ -6,6 +7,7 @@ export interface RealtimeConnectDependencies {
   resolveActiveSession(sessionId: string): Promise<VerifiedRealtimeSession | null>;
   userRealtime: DurableObjectNamespace;
   trustedOrigins: readonly string[];
+  hasUsername?: HasUsername;
 }
 
 /**
@@ -26,6 +28,9 @@ export async function connectRealtime(request: Request, dependencies: RealtimeCo
   if (!session || session.userId !== consumed.userId || session.expiresAt.getTime() <= Date.now()) {
     return new Response("Unauthorized.", { status: 401, headers: { "Cache-Control": "no-store" } });
   }
+  const usernameStatus = await usernameSetupStatus(dependencies.hasUsername, session.userId);
+  if (usernameStatus === "unavailable") return new Response("Username setup is temporarily unavailable.", { status: 503, headers: { "Cache-Control": "no-store" } });
+  if (usernameStatus === "missing") return new Response("Choose a username before using messaging.", { status: 403, headers: { "Cache-Control": "no-store" } });
 
   const headers = new Headers(request.headers);
   headers.delete("x-dayli-realtime-session");

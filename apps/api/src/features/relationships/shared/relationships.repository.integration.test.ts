@@ -20,7 +20,7 @@ suite("Postgres relationship persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/relationship_tests");
   const store = createHyperdriveRelationshipsStore({ connectionString: connectionString ?? "" });
   const service = createRelationshipsService(store, { now: () => new Date("2026-09-22T00:00:00.000Z") });
-  const users = Array.from({ length: 7 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 9 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.client`
@@ -117,6 +117,31 @@ suite("Postgres relationship persistence", () => {
     });
     for (let attempt = 0; attempt < 28; attempt += 1) await service.searchUsers(actor, 'bob', 20);
     await expect(service.searchUsers(actor, 'bob', 20)).rejects.toMatchObject({ code: 'RATE_LIMITED' });
+  });
+
+  it("never projects a provider-owned name and retains an explicit public name", async () => {
+    const actor = users[7]!;
+    const providerUser = users[8]!;
+    await database.client`
+      update public."user"
+      set username = case id when ${actor} then 'projection_actor' else 'provider_handle' end,
+          name = case id when ${actor} then 'Actor Provider Name' else 'Google Provider Name' end,
+          display_username = null
+      where id = any(${[actor, providerUser]}::text[])
+    `;
+    await database.client`
+      insert into public.friendships (user_id, friend_id, state, state_changed_at)
+      values (${actor}, ${providerUser}, 'active', now()), (${providerUser}, ${actor}, 'active', now())
+    `;
+
+    await expect(service.listFriends(actor, 20)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: providerUser, username: 'provider_handle', displayName: 'provider_handle' })],
+    });
+
+    await database.client`update public."user" set display_username = 'Chosen Public Name' where id = ${providerUser}`;
+    await expect(service.listFriends(actor, 20)).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: providerUser, displayName: 'Chosen Public Name' })],
+    });
   });
 
   it("paginates pending requests with qualified, microsecond-precise request cursors", async () => {

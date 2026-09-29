@@ -1,4 +1,5 @@
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
+import { readStagingMediaBindings } from "./staging-media-bindings.mjs";
 import {
   assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
@@ -30,12 +31,14 @@ async function request(path) {
 }
 
 const authBindings = readStagingAuthBindings(process.env);
-const source = readStagingWorkerSecretSource(process.env, authBindings.requiredSecrets);
+const mediaBindings = readStagingMediaBindings(process.env, accountId);
+const requiredSecretNames = [...authBindings.requiredSecrets, ...mediaBindings.requiredSecrets];
+const source = readStagingWorkerSecretSource(process.env, requiredSecretNames);
 const scripts = await request("/workers/scripts");
 if (!Array.isArray(scripts?.result) || !scripts.result.some((script) => script?.id === workerName)) {
   throw new Error("The exact staging Worker must exist before secret sync.");
 }
 const existingSecretNames = readCloudflareSecretNames(await request(`/workers/scripts/${workerName}/secrets`));
-assertProjectedWorkerSecretPairing({ existingSecretNames, source, requiredAuthSecretNames: authBindings.requiredSecrets });
+assertProjectedWorkerSecretPairing({ existingSecretNames, source, requiredSecretNames });
 await syncStagingWorkerSecrets({ accountId, workerName, apiToken, source });
 console.log("Reviewed staging Worker secrets synchronized.");

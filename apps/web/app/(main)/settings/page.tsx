@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/session/hooks";
 import { SignOutButton } from "./_components/SignOutButton";
 import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
 import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
+import { getUsernameProfile } from "@/lib/profile/username";
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, isPending } = useSession();
+  const [username, setUsername] = useState<string>();
 
   useEffect(() => {
     if (!isPending && !user) router.replace("/sign-in");
   }, [isPending, router, user]);
 
+  useEffect(() => {
+    if (!user) return;
+    void getUsernameProfile().then((profile) => setUsername(profile.username ?? undefined));
+  }, [user]);
+
   if (isPending || !user) return null;
 
-  // Usernames and profile visibility arrive with the profile API (#68).
   const visibility = "public" as const;
 
   return (
@@ -29,7 +35,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3 rounded-lg border border-foreground/10 p-4">
-          <Row label="Username" value="not set yet" />
+          <Row label="Username" value={username ? `@${username}` : "Loading…"} />
           <Row label="Name" value={user.name} />
           <Row label="Email" value={user.email} />
           {/* Paid features — hidden until billing is wired up */}

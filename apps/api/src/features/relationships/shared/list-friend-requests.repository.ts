@@ -42,7 +42,7 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
   const result = relationshipRows<RelationshipRow>(await queryable.execute(sql`
     select request.id, request.sender_id, request.recipient_id, request.created_at,
       to_char(request.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor_created_at,
-      other.id as user_id, other.username, coalesce(other.display_username, other.name) as display_name
+      other.id as user_id, other.username, coalesce(other.display_username, other.username) as display_name
     from public.friend_requests request
     join public."user" other on other.id = case when request.sender_id = ${actorId} then request.recipient_id else request.sender_id end
     where request.status = 'pending' ${directionSql} ${cursorSql}

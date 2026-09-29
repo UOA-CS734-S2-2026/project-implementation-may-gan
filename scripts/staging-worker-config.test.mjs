@@ -34,6 +34,16 @@ test("keeps the remote service probe free of cron and shared Durable Object bind
   }]);
 });
 
+test("adds R2 media vars to the API Worker only", () => {
+  const mediaVars = { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" };
+  const { api, probe } = createStagingWorkerConfigs({ ...input, mediaVars });
+  assert.equal(api.vars.R2_ACCOUNT_ID, "b".repeat(32));
+  assert.equal(api.vars.R2_BUCKET_NAME, "dayli-media-staging");
+  assert.equal(api.vars.GOOGLE_WEB_CLIENT_ID, "public-client-id");
+  assert.equal(probe.vars, undefined);
+  assert.equal(createStagingWorkerConfigs(input).api.vars.R2_BUCKET_NAME, undefined);
+});
+
 test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
   assert.throws(() => createStagingWorkerConfigs({ ...input, workerName: "production-api" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, hyperdriveId: "not-an-id" }));

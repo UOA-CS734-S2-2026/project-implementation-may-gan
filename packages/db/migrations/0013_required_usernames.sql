@@ -1,0 +1,39 @@
+-- squawk-ignore-file require-lock-timeout
+-- squawk-ignore-file require-statement-timeout
+-- squawk-ignore-file prefer-robust-stmts
+-- Existing imported usernames can contain mixed case or historical duplicates.
+-- The trigger only runs for new username writes, so it never revalidates or
+-- rewrites these historical rows when another profile field changes.
+CREATE OR REPLACE FUNCTION public.enforce_case_insensitive_username()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW.username IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  NEW.username := lower(NEW.username);
+  IF NEW.username !~ '^[a-z0-9][a-z0-9_]{2,29}$' THEN
+    RAISE EXCEPTION 'username has an invalid format' USING ERRCODE = 'check_violation';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('dayli:username:' || NEW.username, 145));
+
+  IF EXISTS (
+    SELECT 1
+    FROM public."user" AS candidate
+    WHERE lower(candidate.username) = NEW.username
+      AND candidate.id <> NEW.id
+  ) THEN
+    RAISE EXCEPTION 'username is already claimed' USING ERRCODE = 'unique_violation';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+
+CREATE TRIGGER enforce_case_insensitive_username
+BEFORE INSERT OR UPDATE OF username ON public."user"
+FOR EACH ROW EXECUTE FUNCTION public.enforce_case_insensitive_username();
+--> statement-breakpoint

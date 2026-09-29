@@ -80,7 +80,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
   const prefix = literalUsernamePrefix(query);
   const cursorSql = after ? sql`and (lower(candidate.username), candidate.id) > (${after.usernameKey}, ${after.id})` : sql``;
   const rows = relationshipRows<SearchRow>(await queryable.execute(sql`
-    select candidate.id, candidate.username, coalesce(candidate.display_username, candidate.name) as display_name,
+    select candidate.id, candidate.username, coalesce(candidate.display_username, candidate.username) as display_name,
       lower(candidate.username) as username_key,
       case
         when exists (select 1 from public.friendships mine join public.friendships reciprocal on reciprocal.user_id = mine.friend_id and reciprocal.friend_id = mine.user_id and reciprocal.state = 'active' where mine.user_id = ${actorId} and mine.friend_id = candidate.id and mine.state = 'active') then 'friends'

@@ -77,7 +77,7 @@ async function signUpAndGetToken(app: ReturnType<typeof createTestApp>["app"], e
     request("/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "Test User", email, password: "not-a-real-password" }),
+      body: JSON.stringify({ name: "Test User", username: `test_${email.replace(/[^a-z0-9]/gi, "_").toLowerCase()}`.slice(0, 30), email, password: "not-a-real-password" }),
     }),
   );
   const token = response.headers.get("set-auth-token");

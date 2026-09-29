@@ -92,6 +92,13 @@
       "when": 1790576040000,
       "tag": "0012_encrypt_push_device_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790640000000,
+      "tag": "0013_required_usernames",
+      "breakpoints": true
     }
   ]
 }

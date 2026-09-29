@@ -302,6 +302,10 @@ class ApiClient {
           return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
+        case 'UsernameProfile':
+          return UsernameProfile.fromJson(value);
+        case 'UsernameSetupRequest':
+          return UsernameSetupRequest.fromJson(value);
         default:
           dynamic match;
           if (value is List &&

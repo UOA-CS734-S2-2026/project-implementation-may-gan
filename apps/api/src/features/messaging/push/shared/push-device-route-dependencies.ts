@@ -1,8 +1,10 @@
 import type { ResolveSession } from "../../../../http/middleware/require-session";
+import type { HasUsername } from "../../../../http/middleware/require-username";
 import type { PushPlatform, VerifiedPushSession } from "./push-device.service";
 
 export interface PushDeviceRouteDependencies {
   resolveSession: ResolveSession;
+  hasUsername?: HasUsername;
   resolvePushSession(request: Request): Promise<VerifiedPushSession | null>;
   devices?: {
     register(

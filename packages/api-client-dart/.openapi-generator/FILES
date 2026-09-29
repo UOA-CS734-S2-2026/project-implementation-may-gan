@@ -9,6 +9,7 @@ lib/api/media_api.dart
 lib/api/messaging_api.dart
 lib/api/posting_days_api.dart
 lib/api/posts_api.dart
+lib/api/profile_api.dart
 lib/api/relationships_api.dart
 lib/api/system_api.dart
 lib/api_client.dart
@@ -67,4 +68,6 @@ lib/model/send_message_request.dart
 lib/model/send_relationship_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
+lib/model/username_profile.dart
+lib/model/username_setup_request.dart
 pubspec.yaml

@@ -23,6 +23,7 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  final _username = TextEditingController();
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
@@ -35,6 +36,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   void dispose() {
+    _username.dispose();
     _name.dispose();
     _email.dispose();
     _password.dispose();
@@ -45,7 +47,12 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _validate() {
     final errors = <String, String>{};
     if (_signUp) {
-      if (_name.text.trim().isEmpty) errors['name'] = 'Name is required';
+      if (!RegExp(
+        r'^[a-z0-9][a-z0-9_]{2,29}$',
+      ).hasMatch(_username.text.trim().toLowerCase())) {
+        errors['username'] =
+            'Use 3-30 lowercase letters, numbers, or underscores.';
+      }
       if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(_email.text.trim())) {
         errors['email'] = 'Invalid email address';
       }
@@ -76,7 +83,11 @@ class _AuthScreenState extends State<AuthScreen> {
     await _run(
       () => _signUp
           ? session.signUp(
-              name: _name.text.trim(),
+              name: _name.text.trim().isEmpty
+                  ? _username.text.trim().toLowerCase()
+                  : _name.text.trim(),
+              username: _username.text.trim().toLowerCase(),
+              publicName: _name.text.trim().isEmpty ? null : _name.text.trim(),
               email: email,
               password: _password.text,
             )
@@ -169,13 +180,22 @@ class _AuthScreenState extends State<AuthScreen> {
         const SizedBox(height: 20),
         if (_signUp) ...[
           DayliFormInput(
-            label: 'Name',
+            label: 'Username',
+            fieldKey: const Key('auth.username'),
+            controller: _username,
+            autofillHints: const [AutofillHints.username],
+            textInputAction: TextInputAction.next,
+            error: _fieldErrors['username'],
+          ),
+          const SizedBox(height: 16),
+          DayliFormInput(
+            label: 'Public name (optional)',
             fieldKey: const Key('auth.name'),
             controller: _name,
             autofillHints: const [AutofillHints.name],
             textInputAction: TextInputAction.next,
             textCapitalization: TextCapitalization.words,
-            error: _fieldErrors['name'],
+            helper: 'Leave blank to appear as your username.',
           ),
           const SizedBox(height: 16),
         ],

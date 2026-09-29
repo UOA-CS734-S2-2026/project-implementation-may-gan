@@ -9,7 +9,7 @@ import 'package:http/http.dart' show ClientException;
 import '../drafts/draft_store.dart';
 import 'native_session.dart';
 
-enum SessionStatus { unknown, signedOut, signedIn }
+enum SessionStatus { unknown, signedOut, needsUsernameSetup, signedIn }
 
 /// A capability passed to async startup work. It becomes invalid before old
 /// credentials are replaced or cleared, so late startup cannot affect a new
@@ -49,6 +49,9 @@ class ProtectedSessionUserCache implements SessionUserCache {
         id: json['id'] as String,
         name: json['name'] is String ? json['name'] as String : '',
         email: json['email'] is String ? json['email'] as String : '',
+        username: json['username'] is String
+            ? json['username'] as String
+            : null,
       );
     } catch (_) {
       await clear();
@@ -59,7 +62,12 @@ class ProtectedSessionUserCache implements SessionUserCache {
   @override
   Future<void> write(SessionUser user) => _storage.write(
     key: _key,
-    value: jsonEncode({'id': user.id, 'name': user.name, 'email': user.email}),
+    value: jsonEncode({
+      'id': user.id,
+      'name': user.name,
+      'email': user.email,
+      'username': user.username,
+    }),
   );
 
   @override
@@ -154,12 +162,40 @@ class SessionController extends ChangeNotifier {
 
   Future<void> signUp({
     required String name,
+    required String username,
+    required String? publicName,
     required String email,
     required String password,
   }) async {
     await _beforeCredentialReplacement();
-    await _session.signUp(name: name, email: email, password: password);
+    await _session.signUp(
+      name: name,
+      username: username,
+      publicName: publicName,
+      email: email,
+      password: password,
+    );
     await _afterAuthentication();
+  }
+
+  Future<void> completeUsernameSetup({
+    required String username,
+    required String publicName,
+  }) async {
+    await _session.claimInitialUsername(
+      username: username,
+      publicName: publicName,
+    );
+    final user = _user;
+    if (user == null) throw const AuthenticationFailure('username-setup', 401);
+    final completed = SessionUser(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      username: username,
+    );
+    await _userCache.write(completed);
+    _set(SessionStatus.signedIn, completed);
   }
 
   Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
@@ -264,8 +300,13 @@ class SessionController extends ChangeNotifier {
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
     if (persistUser) await _userCache.write(user);
-    _set(SessionStatus.signedIn, user);
-    if (_startedSessionUserId == user.id) return;
+    _set(
+      user.username == null
+          ? SessionStatus.needsUsernameSetup
+          : SessionStatus.signedIn,
+      user,
+    );
+    if (user.username == null || _startedSessionUserId == user.id) return;
     _startedSessionUserId = user.id;
     final generation = _sessionGeneration;
     final startup = SessionStartup._(

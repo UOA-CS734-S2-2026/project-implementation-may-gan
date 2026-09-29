@@ -88,7 +88,7 @@ async function signUp(app: ReturnType<typeof createProductionApp>, email: string
   const response = await app.fetch(request("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": syntheticIpFor(email) },
-    body: JSON.stringify({ name: "Media Test User", email, password: "not-a-real-password" }),
+    body: JSON.stringify({ name: "Media Test User", username: `media_${email.replace(/[^a-z0-9]/gi, "_").toLowerCase()}`.slice(0, 30), email, password: "not-a-real-password" }),
   }));
   const token = response.headers.get("set-auth-token");
   expect(token).toBeTruthy();

@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { createRequireSession } from "../../http/middleware/require-session";
+import { createRequireUsername, type HasUsername } from "../../http/middleware/require-username";
 import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
 import { registerGetConversationRoute } from "./conversations/get-conversation/get-conversation.route";
 import { registerGetMessageRoute } from "./conversations/get-message/get-message.route";
@@ -31,6 +32,8 @@ export interface MessagingRouteDependencies extends
   SetReactionRouteDependencies,
   RemoveReactionRouteDependencies,
   CreateDirectConversationRouteDependencies {
+  /** Blocks all conversation reads and mutations until setup is complete. */
+  hasUsername?: HasUsername;
   direct?: CreateDirectConversationRouteDependencies["direct"];
   reader?: ConversationReader;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -42,9 +45,10 @@ export function registerMessagingRoutes(
   app: OpenAPIHono<AuthenticatedApiEnv>,
   dependencies: MessagingRouteDependencies,
 ) {
-  app.use("/api/v1/conversations/*", createRequireSession(dependencies.resolveSession));
-  app.use("/api/v1/conversations", createRequireSession(dependencies.resolveSession));
-  app.use("/api/v1/messaging/*", createRequireSession(dependencies.resolveSession));
+  for (const path of ["/api/v1/conversations", "/api/v1/conversations/*", "/api/v1/messaging/*"]) {
+    app.use(path, createRequireSession(dependencies.resolveSession));
+    app.use(path, createRequireUsername(dependencies.hasUsername));
+  }
   if (dependencies.realtimeTicket) {
     app.use("/api/v1/realtime/tickets", createRequireSession(dependencies.realtimeTicket.resolveSession));
   }

@@ -1,0 +1,6 @@
+reason: The protected migration runner sets the transaction lock timeout. This migration installs a short metadata lock and a trigger without table rewriting.
+affected_data_and_clients: Existing imported users remain unchanged. New username writes serialize by handle.
+rollout_sequence: Apply through the protected migration runner before deploying the Worker and clients.
+backup_checkpoint: Confirm the required Neon restore point before dispatch.
+forward_fix_plan: Correct trigger behavior through a reviewed forward migration.
+reviewer: Required database CODEOWNER review.

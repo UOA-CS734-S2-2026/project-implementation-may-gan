@@ -37,7 +37,7 @@ export async function listFriendRows(queryable: RelationshipQueryable, actorId: 
   const after = cursorValue(cursor);
   const cursorSql = after ? sql`and (lower(friend.username), friend.id) > (${after.usernameKey}, ${after.id})` : sql``;
   const rows = relationshipRows<FriendRow>(await queryable.execute(sql`
-    select friend.id, friend.username, coalesce(friend.display_username, friend.name) as display_name, lower(friend.username) as username_key
+    select friend.id, friend.username, coalesce(friend.display_username, friend.username) as display_name, lower(friend.username) as username_key
     from public.friendships mine
     join public.friendships reciprocal on reciprocal.user_id = mine.friend_id and reciprocal.friend_id = mine.user_id and reciprocal.state = 'active'
     join public."user" friend on friend.id = mine.friend_id
