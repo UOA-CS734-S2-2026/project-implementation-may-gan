@@ -74,6 +74,15 @@ function createBetterAuth(options: BetterAuthOptions) {
             return { data: { ...user, username, displayUsername: displayUsername || null } };
           },
         },
+        update: {
+          before: async (data, hookContext) => {
+            const path = (hookContext as { path?: unknown } | null)?.path;
+            if (path === "/update-user" && ("username" in data || "displayUsername" in data)) {
+              throw new APIError("FORBIDDEN", { message: "Username and public name changes are not available." });
+            }
+            return { data };
+          },
+        },
       },
     },
     emailAndPassword: {
