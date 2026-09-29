@@ -37,7 +37,7 @@ function InboxBody() {
   const items = inbox.data?.pages.flatMap((page) => page.items).filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index) ?? [];
   const notice = inbox.error instanceof Error ? inbox.error.message : resolve.error instanceof Error ? resolve.error.message : null;
 
-  return <section className="mx-auto min-h-screen w-full max-w-[416px] px-4 py-12">
+  return <section className="mx-auto min-h-screen w-full max-w-[332px] px-4 py-12">
     <header className="relative mb-6 text-center">
       <h1 className="font-serif text-4xl font-semibold tracking-tighter text-foreground">messages</h1>
       <Link href="/messages/new" aria-label="new message" title="New message" className="absolute right-0 top-1 grid h-8 w-8 place-items-center rounded-full border border-foreground/10 text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg></Link>
