@@ -298,6 +298,7 @@ class MessagingController extends ChangeNotifier {
             receiptSequence: value.receiptSequence,
             canSend: conversation.canSend,
             canResolveRequest: conversation.canResolveRequest,
+            updatedAt: conversation.updatedAt,
           );
           _replaceConversation(_conversations[conversationId]!);
         }

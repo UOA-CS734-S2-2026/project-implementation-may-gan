@@ -85,6 +85,37 @@ void main() {
     );
   }
 
+  testWidgets(
+    'renders WDCC message tabs, latest dates, unread counts, and the friend-only new-message action',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final client = FakeMessagingClient()
+        ..conversations['c-request'] = testConversation(
+          id: 'c-request',
+          state: 'pending',
+          canSend: false,
+          canResolve: true,
+        );
+      final controller = MessagingController(client);
+      await tester.pumpWidget(messagesScreen(controller));
+      await tester.pumpAndSettle();
+
+      expect(find.text('28/09/2026'), findsOneWidget);
+      expect(find.byKey(const Key('messages.unread.c-1')), findsOneWidget);
+      expect(find.byKey(const Key('messages.new')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('messages.tab.requests')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('messages.conversation.c-request')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Accept'));
+      await tester.pumpAndSettle();
+      expect(client.calls, contains('resolve:accept'));
+    },
+  );
+
   testWidgets('clears a delayed draft profile when the session actor changes', (
     tester,
   ) async {

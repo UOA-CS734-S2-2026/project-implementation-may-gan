@@ -143,6 +143,7 @@ class MessagingConversation {
     required this.receiptSequence,
     required this.canSend,
     required this.canResolveRequest,
+    this.updatedAt,
   });
 
   final String id;
@@ -157,6 +158,7 @@ class MessagingConversation {
   final String receiptSequence;
   final bool canSend;
   final bool canResolveRequest;
+  final DateTime? updatedAt;
 
   factory MessagingConversation.fromJson(Map<String, dynamic> json) {
     final peer = json['peer'] as Map<String, dynamic>? ?? const {};
@@ -178,6 +180,7 @@ class MessagingConversation {
       receiptSequence: json['receiptSequence'] as String? ?? '0',
       canSend: capabilities['canSend'] as bool? ?? false,
       canResolveRequest: capabilities['canResolveRequest'] as bool? ?? false,
+      updatedAt: _date(json['updatedAt']),
     );
   }
 }

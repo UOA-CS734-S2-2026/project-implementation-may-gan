@@ -14,6 +14,37 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
 
+class SocialFriendsClient extends FakeFriendsClient {
+  SocialFriendsClient({required this.pages, this.discovered});
+
+  final List<FriendsSnapshot> pages;
+  final FriendPage? discovered;
+  final accepted = <String>[];
+  var calls = 0;
+
+  @override
+  Future<ApiResult<FriendsSnapshot>> load() async {
+    final page = pages[calls < pages.length ? calls++ : pages.length - 1];
+    return ApiSuccess(page);
+  }
+
+  @override
+  Future<ApiResult<FriendPage>> search(String query, {String? cursor}) async =>
+      ApiSuccess(discovered ?? FakeFriendsClient.emptyFriends);
+
+  @override
+  Future<ApiResult<void>> accept(String requestId) async {
+    accepted.add(requestId);
+    return const ApiSuccess(null);
+  }
+}
+
+const _emptyRequestPage = FriendRequestPage(
+  items: [],
+  nextCursor: null,
+  hasMore: false,
+);
+
 class RetryFriendsClient implements FriendsClient {
   var attempts = 0;
   @override
@@ -102,6 +133,173 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'renders WDCC friend tabs, local filtering, discovery, and request actions at phone width',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      const ada = FriendCard(
+        id: 'ada',
+        username: 'ada',
+        displayName: 'Ada Lovelace With A Long Name',
+        relationship: 'friends',
+      );
+      const grace = FriendCard(
+        id: 'grace',
+        username: 'grace',
+        displayName: 'Grace Hopper',
+        relationship: 'friends',
+      );
+      final friends = SocialFriendsClient(
+        pages: const [
+          FriendsSnapshot(
+            friends: FriendPage(
+              items: [ada, grace],
+              nextCursor: null,
+              hasMore: false,
+            ),
+            incoming: FriendRequestPage(
+              items: [
+                FriendRequest(
+                  id: 'incoming-1',
+                  senderId: 'ada',
+                  recipientId: 'actor',
+                  user: ada,
+                ),
+              ],
+              nextCursor: null,
+              hasMore: false,
+            ),
+            outgoing: FriendRequestPage(
+              items: [
+                FriendRequest(
+                  id: 'outgoing-1',
+                  senderId: 'actor',
+                  recipientId: 'grace',
+                  user: grace,
+                ),
+              ],
+              nextCursor: null,
+              hasMore: false,
+            ),
+          ),
+        ],
+        discovered: const FriendPage(
+          items: [
+            FriendCard(
+              id: 'search-user',
+              username: 'search-user',
+              displayName: 'Search User',
+              relationship: 'none',
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      );
+      final harness = TestHarness(friends: friends);
+      await tester.pumpWidget(
+        AppScope(
+          services: harness.services,
+          child: MaterialApp(
+            theme: buildDayliTheme(useGoogleFonts: false),
+            home: const Scaffold(body: FriendsScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('friends.tab.friends')), findsOneWidget);
+      expect(find.byKey(const Key('friends.filter')), findsOneWidget);
+      expect(find.text('Message'), findsNWidgets(2));
+      await tester.enterText(find.byKey(const Key('friends.filter')), 'grace');
+      await tester.pumpAndSettle();
+      expect(find.text('Ada Lovelace With A Long Name'), findsNothing);
+      expect(find.text('Grace Hopper'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('friends.discover')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('friends.discoverySearch')),
+        'se',
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pumpAndSettle();
+      expect(find.text('Search User'), findsOneWidget);
+      Navigator.of(tester.element(find.text('Search User'))).pop();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('friends.tab.requests')));
+      await tester.pumpAndSettle();
+      expect(find.text('Received'), findsOneWidget);
+      expect(find.text('Sent'), findsOneWidget);
+      await tester.tap(find.text('Accept'));
+      await tester.pumpAndSettle();
+      expect(friends.accepted, ['incoming-1']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('replaces friends state when the authenticated account changes', (
+    tester,
+  ) async {
+    final friends = SocialFriendsClient(
+      pages: const [
+        FriendsSnapshot(
+          friends: FriendPage(
+            items: [
+              FriendCard(
+                id: 'alice',
+                username: 'alice',
+                displayName: 'Alice private',
+                relationship: 'friends',
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+          incoming: _emptyRequestPage,
+          outgoing: _emptyRequestPage,
+        ),
+        FriendsSnapshot(
+          friends: FriendPage(
+            items: [
+              FriendCard(
+                id: 'bob',
+                username: 'bob',
+                displayName: 'Bob',
+                relationship: 'friends',
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+          incoming: _emptyRequestPage,
+          outgoing: _emptyRequestPage,
+        ),
+      ],
+    );
+    final harness = TestHarness(friends: friends);
+    Widget app() => AppScope(
+      services: harness.services,
+      child: MaterialApp(
+        theme: buildDayliTheme(useGoogleFonts: false),
+        home: const Scaffold(body: FriendsScreen()),
+      ),
+    );
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    expect(find.text('Alice private'), findsOneWidget);
+    await harness.session.signIn(
+      email: 'jos@example.test',
+      password: 'correct-password',
+    );
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    expect(find.text('Bob'), findsOneWidget);
+    expect(find.text('Alice private'), findsNothing);
+  });
 
   testWidgets('shows the WDCC landing page when signed out', (tester) async {
     final harness = TestHarness();
