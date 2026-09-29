@@ -72,9 +72,9 @@ suite("messaging direct conversation Postgres persistence", () => {
   it("uses an exact database timestamp cursor so same-second inbox entries are not omitted", async () => {
     const now = new Date("2026-09-28T06:00:00.123Z");
     const service = createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database.db), now: () => now });
-    // This actor and these peers have not been paired by the earlier tests.
-    // Keep the cursor fixture independent of the direct-pair lookup fixture.
-    for (const peer of users.slice(0, 3)) {
+    // These pairs are new, and none of their recipients is used by the next
+    // test's unread-count assertion. Keep cross-test fixtures independent.
+    for (const peer of [users[0]!, users[1]!, users[3]!]) {
       await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[7]!}, ${peer}, 'active', now()), (${peer}, ${users[7]!}, 'active', now())`;
       await service.create(users[7]!, { recipientId: peer, clientMessageId: crypto.randomUUID(), text: "same timestamp" });
     }
