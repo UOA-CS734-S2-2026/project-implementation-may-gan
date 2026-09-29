@@ -70,6 +70,15 @@ export function messageMemory(initial = message()) {
   const store: MessageWriteStore = {
     withConversationTransaction: async (_actor, _conversation, action) => action(transaction),
   };
+  const editMessageTransaction = {
+    getAccess: transaction.getAccess,
+    findMessage: transaction.findMessage,
+    editMessage: transaction.updateMessage,
+    appendPeerChange: async (input: { conversationId: string; messageId: string; kind: "message.edited" }) => transaction.appendPeerChange(input),
+  };
+  const editStore = {
+    withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof editMessageTransaction) => Promise<T>) => action(editMessageTransaction),
+  };
   const setReactionTransaction = {
     getAccess: transaction.getAccess,
     findMessage: transaction.findMessage,
@@ -102,5 +111,5 @@ export function messageMemory(initial = message()) {
   const removeReactionStore = {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof removeReactionTransaction) => Promise<T>) => action(removeReactionTransaction),
   };
-  return { store, setReactionStore, removeReactionStore, messages, changes, transaction };
+  return { store, editStore, setReactionStore, removeReactionStore, messages, changes, transaction };
 }

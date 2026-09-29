@@ -1,6 +1,7 @@
 import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
+import { updateMessageRow } from "../shared/update-message-row";
 import type { MessageWriteStore, MessageWriteTransaction, StoredIdempotentMessage } from "../../shared/message-store";
 import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
 
@@ -27,10 +28,7 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
     return mapStoredMessage(rows<Row>(result)[0]!);
   }
   async updateMessage(input: Parameters<MessageWriteTransaction["updateMessage"]>[0]): Promise<StoredMessage> {
-    const [row] = rows<Row>(await this.queryable.execute(sql`update public.messages set body = ${input.body === undefined ? sql`body` : input.body}, edited_at = ${input.editedAt === undefined ? sql`edited_at` : input.editedAt}::timestamptz, unsent_at = ${input.unsentAt === undefined ? sql`unsent_at` : input.unsentAt}::timestamptz, version = version + 1 where id = ${input.messageId} ${input.expectedVersion === undefined ? sql`` : sql`and version = ${input.expectedVersion}`} returning *`));
-    if (!row) throw new Error("Message write conflict.");
-    if (input.unsentAt !== undefined) await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${input.messageId}`);
-    return mapStoredMessage(row);
+    return updateMessageRow(this.queryable, input);
   }
   async appendPeerChange(input: Parameters<MessageWriteTransaction["appendPeerChange"]>[0]): Promise<void> {
     return appendPeerChange(this.queryable, input);

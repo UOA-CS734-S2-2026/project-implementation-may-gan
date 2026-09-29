@@ -2,14 +2,14 @@ import { assertPeerActivityAllowed } from "../../shared/conversation-access";
 import { MessagingError } from "../../shared/messaging-error";
 import { assertMessageText } from "../../shared/message-validation";
 import { toMessageDto } from "../../shared/message-projection";
-import type { MessageWriteStore } from "../../shared/message-store";
 import type { MessageDto } from "../../shared/messaging-types";
+import type { EditMessageStore } from "./edit-message.repository";
 
 export interface EditMessageService {
   edit(actorId: string, conversationId: string, messageId: string, input: { text: string; expectedVersion: number }): Promise<MessageDto>;
 }
 
-export function createEditMessageService(dependencies: { store: MessageWriteStore; now?: () => Date }): EditMessageService {
+export function createEditMessageService(dependencies: { store: EditMessageStore; now?: () => Date }): EditMessageService {
   const now = dependencies.now ?? (() => new Date());
   return {
     async edit(actorId, conversationId, messageId, input) {
@@ -26,7 +26,7 @@ export function createEditMessageService(dependencies: { store: MessageWriteStor
         if (!(now().getTime() < message.createdAt.getTime() + 15 * 60_000)) {
           throw new MessagingError("EDIT_WINDOW_EXPIRED");
         }
-        const updated = await transaction.updateMessage({
+        const updated = await transaction.editMessage({
           messageId,
           body: input.text,
           editedAt: now(),
