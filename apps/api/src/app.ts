@@ -63,6 +63,10 @@ import { createSetReactionService } from "./features/messaging/messages/set-reac
 import { createRemoveReactionService } from "./features/messaging/messages/remove-reaction/remove-reaction.service";
 import { createCreateDirectConversationService } from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.service";
 import {
+  createHyperdriveDirectConversationStore,
+  createPostgresDirectConversationStore,
+} from "./features/messaging/conversations/create-direct-conversation/create-direct-conversation.repository";
+import {
   createHyperdriveGetConversationRepository,
   createPostgresGetConversationRepository,
 } from "./features/messaging/conversations/get-conversation/get-conversation.repository";
@@ -74,10 +78,6 @@ import {
   createHyperdriveListMessagesRepository,
   createPostgresListMessagesRepository,
 } from "./features/messaging/messages/list-messages/list-messages.repository";
-import {
-  createHyperdriveDirectConversationStore,
-  createPostgresDirectConversationStore,
-} from "./features/messaging/shared/conversation.repository";
 import {
   createHyperdriveGetMessagingUnreadRepository,
   createPostgresGetMessagingUnreadRepository,
