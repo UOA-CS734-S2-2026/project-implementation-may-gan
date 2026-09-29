@@ -10,7 +10,7 @@ export function UsernameSetupGate({ children }: { children: React.ReactNode }) {
   const { user, isPending } = useSession();
   const pathname = usePathname();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [readyUserId, setReadyUserId] = useState<string>();
 
   useEffect(() => {
     let current = true;
@@ -19,16 +19,15 @@ export function UsernameSetupGate({ children }: { children: React.ReactNode }) {
       router.replace(`/sign-in?next=${encodeURIComponent(pathname)}`);
       return;
     }
-    setReady(false);
     void getUsernameProfile().then((profile) => {
       if (!current) return;
       if (profile.needsUsernameSetup) router.replace("/setup-username");
-      else setReady(true);
+      else setReadyUserId(user.id);
     }).catch(() => {
       if (current) router.replace("/sign-in");
     });
     return () => { current = false; };
   }, [isPending, pathname, router, user]);
 
-  return ready ? children : null;
+  return user && readyUserId === user.id ? children : null;
 }
