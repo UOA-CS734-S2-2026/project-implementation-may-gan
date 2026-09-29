@@ -1,4 +1,5 @@
-import { createHyperdriveDatabase, lockRelationshipPair, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { withHyperdriveConversationMessageTransaction, withPostgresConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import type { MessageWriteStore, MessageWriteTransaction, StoredIdempotentMessage } from "../../shared/message-store";
 import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
 
@@ -71,10 +72,17 @@ class PostgresMessageTransaction implements MessageWriteTransaction {
 }
 
 export function createPostgresMessageWriteStore(database: DayliDatabase): MessageWriteStore {
-  return { withConversationTransaction: (actorId, conversationId, operation) => database.transaction(async (tx) => {
-    const [pair] = rows<{ user_low_id: string; user_high_id: string }>(await tx.execute(sql`select user_low_id, user_high_id from public.conversations where id = ${conversationId}`));
-    if (pair) await lockRelationshipPair(tx, pair.user_low_id, pair.user_high_id);
-    return operation(new PostgresMessageTransaction(tx, actorId, conversationId));
-  }) };
+  return {
+    withConversationTransaction: (actorId, conversationId, operation) =>
+      withPostgresConversationMessageTransaction(database, conversationId, (transaction) =>
+        operation(new PostgresMessageTransaction(transaction, actorId, conversationId))),
+  };
 }
-export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): MessageWriteStore { return { async withConversationTransaction(actorId, conversationId, operation) { const database = createHyperdriveDatabase(hyperdrive); try { return await createPostgresMessageWriteStore(database.db).withConversationTransaction(actorId, conversationId, operation); } finally { await database.close(); } } }; }
+
+export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): MessageWriteStore {
+  return {
+    withConversationTransaction: (actorId, conversationId, operation) =>
+      withHyperdriveConversationMessageTransaction(hyperdrive, conversationId, (transaction) =>
+        operation(new PostgresMessageTransaction(transaction, actorId, conversationId))),
+  };
+}
