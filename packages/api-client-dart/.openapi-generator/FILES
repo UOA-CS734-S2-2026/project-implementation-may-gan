@@ -38,6 +38,7 @@ lib/model/daily_post.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
+lib/model/direct_pair_lookup.dart
 lib/model/edit_message_request.dart
 lib/model/get_messaging_unread200_response.dart
 lib/model/health_response.dart

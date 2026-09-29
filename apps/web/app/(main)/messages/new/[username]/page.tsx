@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/lib/session/hooks";
 import { loadSocialProfile } from "@/lib/api/friends";
-import { useInboxQuery } from "@/features/messaging/inbox/use-inbox-query";
+import { messagingApi } from "@/features/messaging/shared/messaging.api";
 import { useCreateConversationMutation } from "@/features/messaging/create-conversation/use-create-conversation-mutation";
 import { createClientMessageId } from "@/features/messaging/shared/client-id";
 
@@ -21,16 +21,15 @@ function NewMessage({ username }: { username: string }) {
   const router = useRouter();
   const { user } = useSession();
   const profile = useQuery({ queryKey: ["social-profile", user?.id ?? "anonymous", username], retry: false, queryFn: async () => { const result = await loadSocialProfile(username); if (!result.ok) throw new Error(result.failure); return result.value; } });
-  const inbox = useInboxQuery("inbox");
   const checkedExisting = useRef(false);
   const [text, setText] = useState("");
   const [intent, setIntent] = useState<{ clientMessageId: string; text: string } | null>(null);
   const direct = useCreateConversationMutation();
-  const existing = profile.data ? inbox.data?.pages.flatMap((page) => page.items).find((conversation) => conversation.peer.id === profile.data!.id) : undefined;
-  useEffect(() => { if (existing && !checkedExisting.current) { checkedExisting.current = true; router.replace(`/messages/${existing.id}`); } }, [existing, router]);
-  if (profile.isPending || inbox.isLoading) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Preparing your note…</main>;
+  const existing = useQuery({ queryKey: ["direct-pair", user?.id ?? "anonymous", profile.data?.id ?? ""], enabled: Boolean(profile.data?.id), retry: false, queryFn: async () => { const result = await messagingApi.findDirect(profile.data!.id); return result.ok ? result.value : null; } });
+  useEffect(() => { if (existing.data?.conversationId && !checkedExisting.current) { checkedExisting.current = true; router.replace(`/messages/${existing.data.conversationId}`); } }, [existing.data?.conversationId, router]);
+  if (profile.isPending || existing.isPending) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Preparing your note…</main>;
   if (profile.isError || !profile.data) return <main className="mx-auto max-w-2xl px-6 py-12"><h1 className="font-serif text-3xl">This profile is unavailable</h1></main>;
-  if (existing) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Opening conversation…</main>;
+  if (existing.data?.conversationId) return <main className="mx-auto max-w-2xl px-6 py-12 font-serif text-foreground-secondary">Opening conversation…</main>;
   const recipient = profile.data;
   async function send() {
     if (!validText(text) || direct.isPending) return;

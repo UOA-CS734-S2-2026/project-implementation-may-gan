@@ -54,6 +54,7 @@ part 'model/daily_post.dart';
 part 'model/daily_post_prompt.dart';
 part 'model/daily_post_tomorrow_note.dart';
 part 'model/daily_prompt_response.dart';
+part 'model/direct_pair_lookup.dart';
 part 'model/edit_message_request.dart';
 part 'model/get_messaging_unread200_response.dart';
 part 'model/health_response.dart';

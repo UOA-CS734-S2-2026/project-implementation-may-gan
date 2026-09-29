@@ -443,6 +443,11 @@ class HttpMessagingClient implements MessagingClient {
     decode: MessagingMessage.fromJson,
   );
 
+  Future<ApiResult<String?>> findDirect(String recipientId) => _json(
+    '/api/v1/conversations/direct/${Uri.encodeComponent(recipientId)}',
+    decode: (json) => json['conversationId'] as String?,
+  );
+
   @override
   Future<ApiResult<DirectConversationResult>> createDirect({
     required String recipientId,

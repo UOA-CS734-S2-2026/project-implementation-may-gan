@@ -4,6 +4,8 @@ import { messageSchema } from "./message.contract";
 
 const sequence = z.string().regex(/^\d+$/).openapi({ example: "42" });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
+export const directPairParamsSchema = z.object({ recipientId: opaqueIdSchema });
+export const directPairLookupSchema = z.object({ conversationId: opaqueIdSchema }).openapi("DirectPairLookup");
 const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
 export const directConversationBodySchema = z.object({ recipientId: opaqueIdSchema, clientMessageId: opaqueIdSchema, text: messageTextSchema }).strict();
 export const conversationFolderSchema = z.object({ folder: z.enum(["inbox", "requests"]).default("inbox"), cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });

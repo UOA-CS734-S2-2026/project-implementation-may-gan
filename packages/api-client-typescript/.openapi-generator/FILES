@@ -30,6 +30,7 @@ src/models/DailyPost.ts
 src/models/DailyPostPrompt.ts
 src/models/DailyPostTomorrowNote.ts
 src/models/DailyPromptResponse.ts
+src/models/DirectPairLookup.ts
 src/models/EditMessageRequest.ts
 src/models/GetMessagingUnread200Response.ts
 src/models/HealthResponse.ts

@@ -72,6 +72,7 @@ export const messagingApi = {
   inbox: (folder: "inbox" | "requests", cursor?: string) => generated((client) => client.listConversations({ folder, cursor }).then((value) => ({ items: value.items as unknown as MessagingConversation[], nextCursor: value.nextCursor ?? null, hasMore: Boolean(value.nextCursor) }))),
   unread: () => generated((client) => client.getMessagingUnread().then((value) => value as unknown as MessagingUnread)),
   direct: (recipientId: string, clientMessageId: string, text: string) => generated((client) => client.createDirectConversation({ createDirectConversationRequest: { recipientId, clientMessageId, text } }).then((value) => ({ conversation: value.conversation as unknown as MessagingConversation, message: value.message as unknown as MessagingMessage }))),
+  findDirect: (recipientId: string) => generated((client) => client.findDirectConversation({ recipientId }).then((value) => value as { conversationId: string })),
   conversation: (conversationId: string) => generated((client) => client.getConversation({ conversationId }).then((value) => value as unknown as MessagingConversation)),
   resolveRequest: (conversationId: string, decision: "accept" | "decline") => generated((client) => client.resolveMessageRequest({ conversationId, resolveMessageRequestRequest: { decision } }).then((value) => value as unknown as MessagingConversation)),
   realtimeTicket: () => generated((client) => client.createRealtimeTicket({ requestBody: {} }).then((value) => value as unknown as RealtimeTicket)),

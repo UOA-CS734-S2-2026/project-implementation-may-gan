@@ -19,6 +19,7 @@ class SocialProfileScreen extends StatefulWidget {
 class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Future<ApiResult<FriendCard>>? _profile;
   String? _accountId;
+  String? _loadedUsername;
   bool _busy = false;
   String? _notice;
 
@@ -32,8 +33,11 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final accountId = AppScope.of(context).session.user?.id;
-    if (_profile == null || _accountId != accountId) {
+    if (_profile == null ||
+        _accountId != accountId ||
+        _loadedUsername != widget.username) {
       _accountId = accountId;
+      _loadedUsername = widget.username;
       _notice = null;
       _profile = _load();
     }

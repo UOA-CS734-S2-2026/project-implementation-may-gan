@@ -39,6 +39,11 @@ import {
     CreateRealtimeTicket201ResponseToJSON,
 } from '../models/CreateRealtimeTicket201Response';
 import {
+    type DirectPairLookup,
+    DirectPairLookupFromJSON,
+    DirectPairLookupToJSON,
+} from '../models/DirectPairLookup';
+import {
     type EditMessageRequest,
     EditMessageRequestFromJSON,
     EditMessageRequestToJSON,
@@ -126,6 +131,13 @@ export interface EditMessageOperationRequest {
      *
      */
     editMessageRequest: EditMessageRequest;
+}
+
+export interface FindDirectConversationRequest {
+    /**
+     *
+     */
+    recipientId: string;
 }
 
 export interface GetConversationRequest {
@@ -460,6 +472,57 @@ export class MessagingApi extends runtime.BaseAPI {
      */
     async editMessage(requestParameters: EditMessageOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Message> {
         const response = await this.editMessageRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for findDirectConversation without sending the request
+     */
+    async findDirectConversationRequestOpts(requestParameters: FindDirectConversationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['recipientId'] == null) {
+            throw new runtime.RequiredError(
+                'recipientId',
+                'Required parameter "recipientId" was null or undefined when calling findDirectConversation().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/conversations/direct/{recipientId}`;
+        urlPath = urlPath.replace('{recipientId}', encodeURIComponent(String(requestParameters['recipientId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async findDirectConversationRaw(requestParameters: FindDirectConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<DirectPairLookup>> {
+        const requestOptions = await this.findDirectConversationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => DirectPairLookupFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async findDirectConversation(requestParameters: FindDirectConversationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DirectPairLookup> {
+        const response = await this.findDirectConversationRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

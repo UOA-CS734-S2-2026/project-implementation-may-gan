@@ -18,6 +18,7 @@ export * from './DailyPost';
 export * from './DailyPostPrompt';
 export * from './DailyPostTomorrowNote';
 export * from './DailyPromptResponse';
+export * from './DirectPairLookup';
 export * from './EditMessageRequest';
 export * from './GetMessagingUnread200Response';
 export * from './HealthResponse';

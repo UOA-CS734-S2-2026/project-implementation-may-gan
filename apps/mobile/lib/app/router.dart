@@ -69,13 +69,7 @@ GoRouter buildRouter(SessionController session) => GoRouter(
               SocialProfileScreen(username: state.pathParameters['username']!),
         ),
         GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
-        GoRoute(
-          path: '/messages',
-          builder: (_, state) => MessagesScreen(
-            recipientId: state.uri.queryParameters['to'],
-            recipientName: state.uri.queryParameters['name'],
-          ),
-        ),
+        GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
         GoRoute(
           path: '/messages/new',
           builder: (_, _) => const MessagesScreen(),

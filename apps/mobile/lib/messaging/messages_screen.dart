@@ -7,9 +7,7 @@ import '../app/app_scope.dart';
 import '../app/theme.dart';
 
 class MessagesScreen extends StatefulWidget {
-  const MessagesScreen({super.key, this.recipientId, this.recipientName});
-  final String? recipientId;
-  final String? recipientName;
+  const MessagesScreen({super.key});
 
   @override
   State<MessagesScreen> createState() => _MessagesScreenState();
@@ -29,10 +27,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Future<void> _startConversation() async {
     final result = await showDialog<String>(
       context: context,
-      builder: (_) => _NewConversationDialog(
-        recipientId: widget.recipientId,
-        recipientName: widget.recipientName,
-      ),
+      builder: (_) => const _NewConversationDialog(),
     );
     if (mounted && result != null) context.go('/messages/$result');
   }
@@ -160,16 +155,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
 }
 
 class _NewConversationDialog extends StatefulWidget {
-  const _NewConversationDialog({this.recipientId, this.recipientName});
-  final String? recipientId;
-  final String? recipientName;
+  const _NewConversationDialog();
 
   @override
   State<_NewConversationDialog> createState() => _NewConversationDialogState();
 }
 
 class _NewConversationDialogState extends State<_NewConversationDialog> {
-  late String? _recipientId = widget.recipientId;
+  String? _recipientId;
   final _text = TextEditingController();
   String? _intent;
   String? _clientMessageId;
@@ -241,50 +234,44 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.recipientId != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('To: ${widget.recipientName ?? 'this person'}'),
-          )
-        else
-          FutureBuilder<ApiResult<FriendPage>>(
-            future: _friends,
-            builder: (context, snapshot) {
-              final value = snapshot.data;
-              if (_friendPage == null && value is ApiSuccess<FriendPage>) {
-                _friendPage = value.value;
-              }
-              final friends = _friendPage?.items ?? const <FriendCard>[];
-              return Column(
-                children: [
-                  DropdownButtonFormField<String>(
-                    key: const Key('messages.friendPicker'),
-                    initialValue: _recipientId,
-                    decoration: const InputDecoration(labelText: 'Friend'),
-                    items: friends
-                        .map(
-                          (friend) => DropdownMenuItem(
-                            value: friend.id,
-                            child: Text(friend.displayName),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: _sending
-                        ? null
-                        : (value) {
-                            setState(() => _recipientId = value);
-                            _changed();
-                          },
+        FutureBuilder<ApiResult<FriendPage>>(
+          future: _friends,
+          builder: (context, snapshot) {
+            final value = snapshot.data;
+            if (_friendPage == null && value is ApiSuccess<FriendPage>) {
+              _friendPage = value.value;
+            }
+            final friends = _friendPage?.items ?? const <FriendCard>[];
+            return Column(
+              children: [
+                DropdownButtonFormField<String>(
+                  key: const Key('messages.friendPicker'),
+                  initialValue: _recipientId,
+                  decoration: const InputDecoration(labelText: 'Friend'),
+                  items: friends
+                      .map(
+                        (friend) => DropdownMenuItem(
+                          value: friend.id,
+                          child: Text(friend.displayName),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: _sending
+                      ? null
+                      : (value) {
+                          setState(() => _recipientId = value);
+                          _changed();
+                        },
+                ),
+                if ((_friendPage?.hasMore ?? false))
+                  TextButton(
+                    onPressed: _moreFriends,
+                    child: const Text('more friends'),
                   ),
-                  if ((_friendPage?.hasMore ?? false))
-                    TextButton(
-                      onPressed: _moreFriends,
-                      child: const Text('more friends'),
-                    ),
-                ],
-              );
-            },
-          ),
+              ],
+            );
+          },
+        ),
         TextField(
           key: const Key('messages.firstText'),
           controller: _text,

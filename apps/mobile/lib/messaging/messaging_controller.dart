@@ -222,6 +222,19 @@ class MessagingController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String?> findDirect(String recipientId) async {
+    final generation = _generation;
+    if (_client is! HttpMessagingClient) {
+      return null;
+    }
+    final result = await _client.findDirect(recipientId);
+    if (generation != _generation) return null;
+    return switch (result) {
+      ApiSuccess<String?>(:final value) => value,
+      ApiError<String?>() => null,
+    };
+  }
+
   Future<String?> createDirect(
     String recipientId,
     String text, {

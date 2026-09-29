@@ -17,6 +17,9 @@ class NewMessageScreen extends StatefulWidget {
 class _NewMessageScreenState extends State<NewMessageScreen> {
   final _text = TextEditingController();
   Future<ApiResult<FriendCard>>? _profile;
+  Future<String?>? _existing;
+  String? _accountId;
+  String? _loadedUsername;
   String? _intent;
   String? _clientMessageId;
   bool _sending = false;
@@ -25,7 +28,20 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _profile ??= _load();
+    final accountId = AppScope.of(context).session.user?.id;
+    if (_profile == null ||
+        _accountId != accountId ||
+        _loadedUsername != widget.username) {
+      _accountId = accountId;
+      _loadedUsername = widget.username;
+      _profile = _load();
+      _existing = null;
+      _intent = null;
+      _clientMessageId = null;
+      _redirected = false;
+      _sending = false;
+      _text.clear();
+    }
   }
 
   Future<ApiResult<FriendCard>> _load() {
@@ -42,6 +58,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   }
 
   Future<void> _send(FriendCard recipient) async {
+    final accountAtStart = _accountId;
     final text = _text.text;
     if (_sending || text.trim().isEmpty) return;
     final intent = '${recipient.id}\u0000$text';
@@ -57,7 +74,9 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
           .microsecondsSinceEpoch
           .toString(),
     );
-    if (!mounted) return;
+    if (!mounted || accountAtStart != AppScope.of(context).session.user?.id) {
+      return;
+    }
     setState(() => _sending = false);
     if (id != null) context.go('/messages/$id');
   }
@@ -72,77 +91,94 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
-          final messaging = AppScope.of(context).messaging;
-          final matches = [...messaging.inbox, ...messaging.requests]
-              .where((conversation) => conversation.peerId == person.id)
-              .toList(growable: false);
-          final existing = matches.isEmpty ? null : matches.first;
-          if (existing != null && !_redirected) {
-            _redirected = true;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) context.go('/messages/${existing.id}');
-            });
-          }
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: DayliColors.of(context).card,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'private note to',
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.sm,
-                        color: DayliColors.of(context).foregroundTertiary,
-                      ),
+          final accountAtLookup = _accountId;
+          _existing ??= AppScope.of(context).messaging.findDirect(person.id);
+          return FutureBuilder<String?>(
+            future: _existing,
+            builder: (context, lookup) {
+              final existingId = lookup.data;
+              if (existingId != null &&
+                  !_redirected &&
+                  accountAtLookup == AppScope.of(context).session.user?.id) {
+                _redirected = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted &&
+                      accountAtLookup ==
+                          AppScope.of(context).session.user?.id) {
+                    context.go('/messages/$existingId');
+                  }
+                });
+              }
+              if (!lookup.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: DayliColors.of(context).card,
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                    Text(
-                      person.displayName,
-                      style: DayliText.serif(
-                        context,
-                        size: DayliTextSize.xxl,
-                        weight: FontWeight.w600,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'private note to',
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: DayliColors.of(context).foregroundTertiary,
+                          ),
+                        ),
+                        Text(
+                          person.displayName,
+                          style: DayliText.serif(
+                            context,
+                            size: DayliTextSize.xxl,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '@${person.username}',
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: DayliColors.of(context).foregroundTertiary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Nothing is created until you send your first message.',
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                          ),
+                        ),
+                        TextField(
+                          controller: _text,
+                          minLines: 3,
+                          maxLines: 5,
+                          maxLength: 4000,
+                          enabled: !_sending,
+                          decoration: const InputDecoration(
+                            labelText: 'Message',
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton(
+                            onPressed: _sending ? null : () => _send(person),
+                            child: Text(_sending ? 'Sending…' : 'Send'),
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      '@${person.username}',
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.sm,
-                        color: DayliColors.of(context).foregroundTertiary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Nothing is created until you send your first message.',
-                      style: DayliText.sans(context, size: DayliTextSize.sm),
-                    ),
-                    TextField(
-                      controller: _text,
-                      minLines: 3,
-                      maxLines: 5,
-                      maxLength: 4000,
-                      enabled: !_sending,
-                      decoration: const InputDecoration(labelText: 'Message'),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        onPressed: _sending ? null : () => _send(person),
-                        child: Text(_sending ? 'Sending…' : 'Send'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           );
         }
         return const Center(child: Text('This profile is unavailable.'));

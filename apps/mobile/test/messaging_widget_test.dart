@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/messaging/conversation_screen.dart';
 import 'package:dayli_mobile/messaging/messaging_client.dart';
@@ -13,6 +14,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'messaging_controller_test.dart'
     show FakeMessagingClient, testConversation, testMessage;
 import 'support/fakes.dart';
+
+class PickerFriendsClient extends FakeFriendsClient {
+  @override
+  Future<ApiResult<FriendPage>> loadFriends({String? cursor}) async =>
+      const ApiSuccess(
+        FriendPage(
+          items: [
+            FriendCard(
+              id: 'known-id',
+              username: 'known',
+              displayName: 'Known',
+              relationship: 'friends',
+            ),
+          ],
+          nextCursor: null,
+          hasMore: false,
+        ),
+      );
+}
 
 void main() {
   Widget screen(MessagingController controller) {
@@ -31,13 +51,10 @@ void main() {
   }
 
   Widget messagesScreen(MessagingController controller) {
-    final harness = TestHarness();
+    final harness = TestHarness(friends: PickerFriendsClient());
     final router = GoRouter(
       routes: [
-        GoRoute(
-          path: '/',
-          builder: (_, __) => const MessagesScreen(recipientId: 'known-id'),
-        ),
+        GoRoute(path: '/', builder: (_, __) => const MessagesScreen()),
         GoRoute(
           path: '/messages/:id',
           builder: (_, __) => const Scaffold(body: Text('conversation')),
@@ -100,6 +117,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('messages.new')));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('messages.friendPicker')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Known').last);
       await tester.enterText(
         find.byKey(const Key('messages.firstText')),
         'first intent',
