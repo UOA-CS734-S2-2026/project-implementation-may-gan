@@ -41,10 +41,10 @@ import { createCurrentPostingDayService } from "./features/posting-days/get-curr
 import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
 import { sql, type DayliDatabase } from "@dayli/db";
-import {
-  registerCreateDailyPostRoute,
-  type CreateDailyPostRouteDependencies,
-} from "./features/posts/create-post/create-post.route";
+import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
+import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
+import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
+import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
@@ -137,6 +137,7 @@ export interface AppDependencies {
   media?: MediaReservationRouteDependencies;
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
+  feed?: ListFeedRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -152,6 +153,7 @@ export function createApp({
   media,
   postingDay,
   posts,
+  feed,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -196,7 +198,10 @@ export function createApp({
   registerSystemRoutes(api);
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
-  registerCreateDailyPostRoute(api, posts ?? { resolveSession: async () => null });
+  registerPostsRoutes(api, {
+    create: posts ?? { resolveSession: async () => null },
+    feed: feed ?? { resolveSession: async () => null },
+  });
   registerRelationshipsRoutes(api, relationships);
   registerMessagingRoutes(api, {
     ...messaging,
@@ -230,6 +235,10 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
+  const feed = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveFeedRepository(configuration.hyperdrive),
+  } satisfies ListFeedRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
@@ -257,6 +266,7 @@ export function createAppForEnv(env: ApiEnv) {
   const api = createApp({
     postingDay,
     posts,
+    feed,
     media,
     relationships,
     messaging,

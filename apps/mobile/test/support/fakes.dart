@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
@@ -131,6 +132,45 @@ class FakeMediaPicker implements MediaPicker {
       DraftAttachment(localPath: '/photos/${picks++}.jpg', mediaType: 'image');
 }
 
+class FakeFeedClient implements FeedClient {
+  FakeFeedClient([List<ApiResult<FeedPage>>? results])
+    : results =
+          results ??
+          [
+            const ApiSuccess(
+              FeedPage(items: [], nextCursor: null, hasMore: false),
+            ),
+          ];
+
+  /// Returned in order; the last result repeats.
+  final List<ApiResult<FeedPage>> results;
+  final cursors = <String?>[];
+
+  @override
+  Future<ApiResult<FeedPage>> page({String? cursor}) async {
+    cursors.add(cursor);
+    return results.length > 1 ? results.removeAt(0) : results.single;
+  }
+}
+
+FeedPost feedPost(
+  String id, {
+  String answer = 'Walked to the harbour.',
+  String? caption,
+}) => FeedPost(
+  id: id,
+  authorId: 'author-$id',
+  username: 'friend_$id',
+  displayName: 'Friend $id',
+  localDate: '2026-09-24',
+  promptText: 'What made you smile today?',
+  reflectiveAnswer: answer,
+  caption: caption,
+  rating: 7,
+  acceptedAt: DateTime.utc(2026, 9, 24, 3),
+  edited: false,
+);
+
 class FakePostingDayClient implements PostingDayClient {
   FakePostingDayClient(this.result);
 
@@ -182,7 +222,9 @@ class TestHarness {
     ApiResult<PostingDay>? day,
     SubmissionResult? submission,
     FriendsClient? friends,
+    FakeFeedClient? feed,
   }) : friends = friends ?? FakeFriendsClient(),
+       feed = feed ?? FakeFeedClient(),
        postingDays = FakePostingDayClient(day ?? ApiSuccess(postingDay())),
        submitter = FakeSubmitter(
          submission ??
@@ -246,6 +288,7 @@ class TestHarness {
   final users = MemoryUserCache();
   final drafts = MemoryDraftStore();
   final FakePostingDayClient postingDays;
+  final FakeFeedClient feed;
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
@@ -254,6 +297,7 @@ class TestHarness {
   AppServices get services => AppServices(
     session: session,
     postingDays: postingDays,
+    feed: feed,
     friends: friends,
     drafts: drafts,
     submitter: submitter,

@@ -1,14 +1,19 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
-import React, { useMemo } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/core/Button";
+import { cn } from "@/utils/cn";
 
 type PostCardProps = {
   postId: string;
   username: string;
   displayName: string;
   userImage?: string | null;
+  prompt?: string;
   promptResponse: string;
+  caption?: string | null;
   mediaUrl?: string | null;
   createdAt: Date | string;
 };
@@ -36,7 +41,9 @@ export function PostCard({
   username,
   displayName,
   userImage,
+  prompt,
   promptResponse,
+  caption,
   mediaUrl,
   createdAt,
 }: PostCardProps) {
@@ -56,11 +63,17 @@ export function PostCard({
   }).format(new Date(createdAt));
   const isVideo = postImageUrl ? isVideoMediaUrl(postImageUrl) : false;
   const rotation = useMemo(() => getRotation(postId), [postId]);
+  // Expands in place so a long answer can always be read in full.
+  const [expanded, setExpanded] = useState(false);
+  const contentId = useId();
 
   return (
     <div
-      className="flex flex-col rounded-sm bg-white shadow-md w-full min-w-75 aspect-4/6 overflow-hidden border-white
-      transition duration-500 hover:duration-300 hover:border hover:border-background-tertiary hover:z-1 hover:-translate-y-1 hover:-translate-x-1 hover:-rotate-2 hover:scale-[1.03] hover:shadow-xl"
+      className={cn(
+        `flex flex-col rounded-sm bg-white shadow-md w-full min-w-75 overflow-hidden border-white
+      transition duration-500 hover:duration-300 hover:border hover:border-background-tertiary hover:z-1 hover:-translate-y-1 hover:-translate-x-1 hover:-rotate-2 hover:scale-[1.03] hover:shadow-xl`,
+        !expanded && "aspect-4/6"
+      )}
       style={{ transform: `rotate(${rotation}deg)` }}
     >
       <div className="m-5 mb-0 shrink-0">
@@ -120,17 +133,30 @@ export function PostCard({
           </div>
         </Link>
 
-        <p className="text-sm text-foreground line-clamp-2 overflow-hidden flex-1 min-h-0">
-          {promptResponse}
-        </p>
+        <div id={contentId} className="flex flex-col gap-2 flex-1 min-h-0 overflow-hidden">
+          {prompt && (
+            <p className={cn("text-xs text-foreground-secondary", !expanded && "line-clamp-1")}>
+              {prompt}
+            </p>
+          )}
+          <p className={cn("text-sm text-foreground whitespace-pre-line", !expanded && "line-clamp-2")}>
+            {promptResponse}
+          </p>
+          {caption && (
+            <p className={cn("text-sm italic text-foreground-secondary whitespace-pre-line", !expanded && "line-clamp-1")}>
+              {caption}
+            </p>
+          )}
+        </div>
 
         <div className="flex items-center justify-between">
           <Button
-            href={`/${username}/${postId}`}
+            onClick={() => setExpanded((open) => !open)}
+            aria-expanded={expanded}
+            aria-controls={contentId}
             variant={{ color: "accent", size: "sm", weight: "secondary" }}
-            arrow
           >
-            See more
+            {expanded ? "See less" : "See more"}
           </Button>
           <span className="text-xs text-foreground-secondary">
             {date} | {time}
