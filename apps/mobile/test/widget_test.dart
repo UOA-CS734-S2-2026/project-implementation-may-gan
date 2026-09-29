@@ -282,6 +282,64 @@ void main() {
     },
   );
 
+  testWidgets('stacks friend request actions below the name at 320px', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    const grace = FriendCard(
+      id: 'grace',
+      username: 'grace',
+      displayName: 'Grace Hopper',
+      relationship: 'incoming_pending',
+    );
+    final friends = SocialFriendsClient(
+      pages: const [
+        FriendsSnapshot(
+          friends: FriendPage(items: [], nextCursor: null, hasMore: false),
+          incoming: FriendRequestPage(
+            items: [
+              FriendRequest(
+                id: 'in-grace',
+                senderId: 'grace',
+                recipientId: 'actor',
+                user: grace,
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+          outgoing: _emptyRequestPage,
+        ),
+      ],
+    );
+    final harness = TestHarness(friends: friends);
+    await tester.pumpWidget(
+      AppScope(
+        services: harness.services,
+        child: MaterialApp(
+          theme: buildDayliTheme(useGoogleFonts: false),
+          home: const Scaffold(body: FriendsScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('friends.tab.requests')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getTopLeft(find.text('Accept')).dy,
+      greaterThan(tester.getTopLeft(find.text('Grace Hopper')).dy),
+    );
+    await tester.tap(find.text('Accept'));
+    await tester.pumpAndSettle();
+    expect(friends.accepted, ['in-grace']);
+    await tester.tap(find.text('Decline'));
+    await tester.pumpAndSettle();
+    expect(friends.declined, ['in-grace']);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'renders WDCC friend tabs, local filtering, discovery, and request actions at phone width',
     (tester) async {

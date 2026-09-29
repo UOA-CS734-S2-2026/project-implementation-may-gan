@@ -516,35 +516,42 @@ class _RequestRow extends StatelessWidget {
   final VoidCallback? onCancel;
 
   @override
-  Widget build(BuildContext context) => _PersonRow(
-    person: request.user!,
-    trailing: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: received
-          ? [
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final stackActions = received && constraints.maxWidth < 340;
+      final buttons = received
+          ? <Widget>[
               _SoftAction(label: 'Accept', onPressed: busy ? null : onAccept),
-              const SizedBox(width: 6),
               _SoftAction(
                 label: 'Decline',
                 muted: true,
                 onPressed: busy ? null : onDecline,
               ),
             ]
-          : [
+          : <Widget>[
               _SoftAction(
                 label: 'Cancel',
                 muted: true,
                 onPressed: busy ? null : onCancel,
               ),
-            ],
-    ),
+            ];
+      final actions = stackActions
+          ? Wrap(spacing: 6, runSpacing: 6, children: buttons)
+          : Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: buttons);
+      return _PersonRow(
+        person: request.user!,
+        trailing: stackActions ? const SizedBox.shrink() : actions,
+        below: stackActions ? actions : null,
+      );
+    },
   );
 }
 
 class _PersonRow extends StatelessWidget {
-  const _PersonRow({required this.person, required this.trailing});
+  const _PersonRow({required this.person, required this.trailing, this.below});
   final FriendCard person;
   final Widget trailing;
+  final Widget? below;
 
   @override
   Widget build(BuildContext context) {
@@ -562,67 +569,77 @@ class _PersonRow extends StatelessWidget {
         border: Border.all(color: colors.foreground.withValues(alpha: 0.07)),
         boxShadow: DayliShadows.card,
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(13),
-            onTap: () =>
-                context.go('/u/${Uri.encodeComponent(person.username)}'),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: colors.backgroundAccent,
-                  child: Text(
-                    initial,
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.xl,
-                      weight: FontWeight.w600,
-                      color: colors.foregroundAccent,
+          Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(13),
+                onTap: () =>
+                    context.go('/u/${Uri.encodeComponent(person.username)}'),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: colors.backgroundAccent,
+                      child: Text(
+                        initial,
+                        style: DayliText.serif(
+                          context,
+                          size: DayliTextSize.xl,
+                          weight: FontWeight.w600,
+                          color: colors.foregroundAccent,
+                        ),
+                      ),
                     ),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () =>
+                      context.go('/u/${Uri.encodeComponent(person.username)}'),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: DayliText.serif(
+                          context,
+                          size: DayliTextSize.lg,
+                          weight: FontWeight.w600,
+                          tracking: DayliTracking.tighter,
+                        ),
+                      ),
+                      Text(
+                        '@${person.username}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.sm,
+                          color: colors.foregroundTertiary,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-              ],
-            ),
-          ),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () =>
-                  context.go('/u/${Uri.encodeComponent(person.username)}'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.lg,
-                      weight: FontWeight.w600,
-                      tracking: DayliTracking.tighter,
-                    ),
-                  ),
-                  Text(
-                    '@${person.username}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: DayliText.sans(
-                      context,
-                      size: DayliTextSize.sm,
-                      color: colors.foregroundTertiary,
-                    ),
-                  ),
-                ],
               ),
-            ),
+              const SizedBox(width: 8),
+              trailing,
+            ],
           ),
-          const SizedBox(width: 8),
-          trailing,
+          if (below != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 56, top: 8),
+              child: Align(alignment: Alignment.centerLeft, child: below),
+            ),
         ],
       ),
     );
