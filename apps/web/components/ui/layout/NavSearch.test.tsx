@@ -22,14 +22,14 @@ describe("NavSearch", () => {
     vi.useRealTimers();
   });
 
-  it("opens the selected search result by username", async () => {
-    searchFriends.mockResolvedValue({ ok: true, value: { items: [{ id: "ada", username: "ada-lovelace", displayName: "Ada Lovelace", relationship: "none" }], nextCursor: null, hasMore: false } });
+  it("opens a profile with an app-route username under the /u prefix", async () => {
+    searchFriends.mockResolvedValue({ ok: true, value: { items: [{ id: "ada", username: "messages", displayName: "Ada Lovelace", relationship: "none" }], nextCursor: null, hasMore: false } });
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><NavSearch /></QueryClientProvider>);
     const input = screen.getByRole("textbox", { name: "search users" });
     fireEvent.change(input, { target: { value: "ad" } });
-    await screen.findByRole("option", { name: /Ada Lovelace/i });
+    expect(await screen.findByRole("option", { name: /Ada Lovelace/i })).toHaveAttribute("href", "/u/messages");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(push).toHaveBeenCalledWith("/ada-lovelace");
+    expect(push).toHaveBeenCalledWith("/u/messages");
   });
 });

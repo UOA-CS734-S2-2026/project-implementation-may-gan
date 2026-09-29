@@ -62,7 +62,10 @@ describe("Inbox", () => {
     await screen.findByText("Ada");
     await actor.click(screen.getByRole("tab", { name: /requests\s*1/i }));
     await waitFor(() => expect(api.inbox).toHaveBeenLastCalledWith("requests"));
-    await actor.click(screen.getByRole("button", { name: "Accept" }));
+    const accept = screen.getByRole("button", { name: "Accept" });
+    expect(accept.parentElement).toHaveClass("ml-[52px]");
+    expect(screen.getByRole("button", { name: "Decline" }).parentElement).toBe(accept.parentElement);
+    await actor.click(accept);
     await waitFor(() => expect(api.resolveRequest).toHaveBeenCalledWith("request-1", "accept"));
     expect(refreshUnread).toHaveBeenCalled();
   });

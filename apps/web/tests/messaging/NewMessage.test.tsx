@@ -62,6 +62,17 @@ describe("NewMessagePage", () => {
     expect(mutateAsync).not.toHaveBeenCalled();
   });
 
+  it("retries an unavailable pair lookup before showing the composer", async () => {
+    const user = userEvent.setup();
+    findDirect.mockResolvedValueOnce({ ok: false, failure: "unavailable", message: "down" }).mockResolvedValueOnce({ ok: false, failure: "notFound", message: "missing" });
+    renderDraft();
+    expect(await screen.findByRole("heading", { name: "Conversation lookup is unavailable" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "send" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Retry lookup" }));
+    expect(await screen.findByRole("button", { name: "send" })).toBeInTheDocument();
+    expect(findDirect).toHaveBeenCalledTimes(2);
+  });
+
   it("does not offer send when pair lookup fails", async () => {
     findDirect.mockResolvedValue({ ok: false, failure: "unavailable", message: "down" });
     renderDraft();

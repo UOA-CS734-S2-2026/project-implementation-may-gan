@@ -76,6 +76,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Widget build(BuildContext context) {
     _syncActor();
     return FutureBuilder<ApiResult<FriendCard>>(
+      key: ValueKey((_accountId, widget.username)),
       future: _profile,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {

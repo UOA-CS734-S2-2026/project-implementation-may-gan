@@ -35,6 +35,6 @@ function ConversationRow({ conversation, folder, resolving, onResolve }: { conve
       </Link>
       {conversation.unreadCount > 0 && <span aria-label={`${conversation.unreadCount} unread messages`} className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-foreground-accent px-1.5 font-sans text-[11px] font-semibold text-white">{conversation.unreadCount}</span>}
     </div>
-    {canResolve && <div className="mt-2 flex justify-end gap-2"><button type="button" disabled={resolving} onClick={() => onResolve(conversation.id, "accept")} className="rounded-lg bg-background-accent px-3 py-2 font-sans text-xs font-medium text-foreground-accent disabled:opacity-50">Accept</button><button type="button" disabled={resolving} onClick={() => onResolve(conversation.id, "decline")} className="rounded-lg border border-foreground/15 px-3 py-2 font-sans text-xs font-medium text-foreground-secondary disabled:opacity-50">Decline</button></div>}
+    {canResolve && <div className="ml-[52px] mt-2 flex gap-2"><button type="button" disabled={resolving} onClick={() => onResolve(conversation.id, "accept")} className="rounded-lg bg-background-accent px-3 py-2 font-sans text-xs font-medium text-foreground-accent disabled:opacity-50">Accept</button><button type="button" disabled={resolving} onClick={() => onResolve(conversation.id, "decline")} className="rounded-lg border border-foreground/15 px-3 py-2 font-sans text-xs font-medium text-foreground-secondary disabled:opacity-50">Decline</button></div>}
   </li>;
 }

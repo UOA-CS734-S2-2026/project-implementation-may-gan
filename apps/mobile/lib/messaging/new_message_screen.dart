@@ -24,6 +24,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   SessionController? _session;
   String? _intent;
   String? _clientMessageId;
+  String? _sendError;
   bool _sending = false;
   bool _redirected = false;
   String? _authorizedRecipientId;
@@ -63,6 +64,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
       _existing = null;
       _intent = null;
       _clientMessageId = null;
+      _sendError = null;
       _redirected = false;
       _authorizedRecipientId = null;
       _sending = false;
@@ -94,18 +96,29 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
       _intent = intent;
       _clientMessageId = null;
     }
-    setState(() => _sending = true);
-    final id = await AppScope.of(context).messaging.createDirect(
-      recipient.id,
-      text,
-      clientMessageId: _clientMessageId ??= DateTime.now()
-          .microsecondsSinceEpoch
-          .toString(),
-    );
+    setState(() {
+      _sending = true;
+      _sendError = null;
+    });
+    String? id;
+    try {
+      id = await AppScope.of(context).messaging.createDirect(
+        recipient.id,
+        text,
+        clientMessageId: _clientMessageId ??= DateTime.now()
+            .microsecondsSinceEpoch
+            .toString(),
+      );
+    } catch (_) {
+      id = null;
+    }
     if (!mounted || accountAtStart != AppScope.of(context).session.user?.id) {
       return;
     }
-    setState(() => _sending = false);
+    setState(() {
+      _sending = false;
+      _sendError = id == null ? 'Message could not be sent. Try again.' : null;
+    });
     if (id != null) context.go('/messages/$id');
   }
 
@@ -113,6 +126,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('new message')),
     body: FutureBuilder<ApiResult<FriendCard>>(
+      key: ValueKey((_accountId, widget.username)),
       future: _profile,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -123,6 +137,7 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
           final accountAtLookup = _accountId;
           _existing ??= AppScope.of(context).messaging.findDirect(person.id);
           return FutureBuilder<ApiResult<String?>>(
+            key: ValueKey(_existing),
             future: _existing,
             builder: (context, lookup) {
               final lookupResult = lookup.data;
@@ -145,9 +160,23 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (lookupResult is ApiError<String?>) {
-                return const Center(
-                  child: Text(
-                    'Conversation lookup is unavailable. Please try again.',
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Conversation lookup is unavailable.'),
+                      TextButton(
+                        onPressed: () {
+                          if (accountAtLookup != _session?.user?.id) return;
+                          setState(() {
+                            _existing = AppScope.of(
+                              context,
+                            ).messaging.findDirect(person.id);
+                          });
+                        },
+                        child: const Text('Retry lookup'),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -201,6 +230,11 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
                           maxLines: 5,
                           maxLength: 4000,
                           enabled: !_sending,
+                          onChanged: (_) {
+                            if (_sendError != null) {
+                              setState(() => _sendError = null);
+                            }
+                          },
                           decoration: const InputDecoration(
                             labelText: 'Message',
                           ),
@@ -212,6 +246,14 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
                             child: Text(_sending ? 'Sending…' : 'Send'),
                           ),
                         ),
+                        if (_sendError != null)
+                          Text(
+                            _sendError!,
+                            style: DayliText.sans(
+                              context,
+                              color: DayliColors.of(context).danger,
+                            ),
+                          ),
                       ],
                     ),
                   ),

@@ -4,10 +4,12 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
+import 'package:dayli_mobile/app/router.dart';
 import 'package:dayli_mobile/app/theme.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/friends/friends_screen.dart';
+import 'package:dayli_mobile/friends/social_profile_screen.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -138,7 +140,78 @@ class RetryFriendsClient implements FriendsClient {
   Future<ApiResult<void>> send(String userId) async => const ApiSuccess(null);
 }
 
+class CompletedProfileFriendsClient extends FakeFriendsClient {
+  final next = Completer<ApiResult<FriendCard>>();
+  var calls = 0;
+
+  @override
+  Future<ApiResult<FriendCard>> profile(String username) => calls++ == 0
+      ? Future.value(
+          const ApiSuccess(
+            FriendCard(
+              id: 'old-profile',
+              username: 'ada',
+              displayName: 'Ada Private',
+              relationship: 'friends',
+            ),
+          ),
+        )
+      : next.future;
+}
+
 void main() {
+  testWidgets('routes an app-name username to its /u profile', (tester) async {
+    final harness = TestHarness();
+    await harness.session.signIn(
+      email: 'test@example.test',
+      password: 'correct-password',
+    );
+    final router = buildRouter(harness.session);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      AppScope(
+        services: harness.services,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    router.go('/u/messages');
+    await tester.pumpAndSettle();
+    expect(find.byType(SocialProfileScreen), findsOneWidget);
+    expect(find.text('This profile is unavailable.'), findsOneWidget);
+  });
+
+  testWidgets(
+    'clears a completed social profile before the next actor lookup finishes',
+    (tester) async {
+      final friends = CompletedProfileFriendsClient();
+      final harness = TestHarness(friends: friends);
+      await harness.session.signIn(
+        email: 'test@example.test',
+        password: 'correct-password',
+      );
+      await tester.pumpWidget(
+        AppScope(
+          services: harness.services,
+          child: const MaterialApp(home: SocialProfileScreen(username: 'ada')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ada Private'), findsOneWidget);
+      harness.testUserId = 'new-account';
+      await harness.session.signIn(
+        email: 'another@example.test',
+        password: 'correct-password',
+      );
+      await tester.pump();
+      expect(harness.session.user?.id, 'new-account');
+      expect(find.text('Ada Private'), findsNothing);
+      expect(friends.calls, 2);
+      friends.next.complete(const ApiError(ServiceUnavailable()));
+      await tester.pumpAndSettle();
+      expect(find.text('This profile is unavailable.'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'shows a recoverable friends load failure without dereferencing an absent snapshot',
     (tester) async {
@@ -159,6 +232,53 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Friend'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'keeps the load-more option when the current friend page has no match',
+    (tester) async {
+      const friend = FriendCard(
+        id: 'ada',
+        username: 'ada',
+        displayName: 'Ada',
+        relationship: 'friends',
+      );
+      final friends = SocialFriendsClient(
+        pages: const [
+          FriendsSnapshot(
+            friends: FriendPage(
+              items: [friend],
+              nextCursor: 'next',
+              hasMore: true,
+            ),
+            incoming: _emptyRequestPage,
+            outgoing: _emptyRequestPage,
+          ),
+        ],
+      );
+      final harness = TestHarness(friends: friends);
+      await tester.pumpWidget(
+        AppScope(
+          services: harness.services,
+          child: MaterialApp(
+            theme: buildDayliTheme(useGoogleFonts: false),
+            home: const Scaffold(body: FriendsScreen()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('friends.filter')),
+        'missing',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('No matches in loaded friends. Load more to keep searching.'),
+        findsOneWidget,
+      );
+      expect(find.text('No friends found'), findsNothing);
+      expect(find.text('load more'), findsOneWidget);
     },
   );
 
@@ -240,13 +360,8 @@ void main() {
 
       expect(find.byKey(const Key('friends.tab.friends')), findsOneWidget);
       expect(find.byKey(const Key('friends.filter')), findsOneWidget);
-      expect(
-        find.byTooltip('Message Ada Lovelace With A Long Name'),
-        findsOneWidget,
-      );
-      expect(find.byTooltip('Message Grace Hopper'), findsOneWidget);
-      await tester.tap(find.text('friends').last);
-      await tester.pumpAndSettle();
+      expect(find.text('Message'), findsNWidgets(2));
+      expect(find.text('friends'), findsOneWidget);
       expect(find.text('Remove friend'), findsNothing);
       expect(friends.removed, isEmpty);
       await tester.tap(find.byKey(const Key('friends.actions.Grace Hopper')));

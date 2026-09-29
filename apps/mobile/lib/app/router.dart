@@ -64,7 +64,7 @@ GoRouter buildRouter(SessionController session) => GoRouter(
         GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
         GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
         GoRoute(
-          path: '/people/:username',
+          path: '/u/:username',
           builder: (_, state) =>
               SocialProfileScreen(username: state.pathParameters['username']!),
         ),

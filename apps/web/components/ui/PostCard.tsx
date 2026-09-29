@@ -94,7 +94,7 @@ export function PostCard({
 
       <div className="flex flex-col flex-1 min-h-0 gap-3 p-4">
         <Link
-          href={`/${username}`}
+          href={`/u/${encodeURIComponent(username)}`}
           className="flex items-center gap-2 hover:opacity-70 transition-opacity"
         >
           {userImage ? (
@@ -126,7 +126,7 @@ export function PostCard({
 
         <div className="flex items-center justify-between">
           <Button
-            href={`/${username}/${postId}`}
+            href={`/u/${encodeURIComponent(username)}/${encodeURIComponent(postId)}`}
             variant={{ color: "accent", size: "sm", weight: "secondary" }}
             arrow
           >

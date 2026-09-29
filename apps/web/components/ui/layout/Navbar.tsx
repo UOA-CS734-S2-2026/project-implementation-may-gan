@@ -86,7 +86,7 @@ export function Navbar() {
             </NavLink>
             {user && handle && (
               <>
-                <NavLink href={`/${handle}/friends`}>
+                <NavLink href={`/u/${encodeURIComponent(handle)}/friends`}>
                   <div>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -99,7 +99,7 @@ export function Navbar() {
                   </div>
                   friends
                 </NavLink>
-                <NavLink href={`/${handle}`} exact>
+                <NavLink href={`/u/${encodeURIComponent(handle)}`} exact>
                   <div>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -135,7 +135,7 @@ export function Navbar() {
       {user && handle && (
         <div className="flex flex-col gap-4">
           <Link
-            href={`/${handle}`}
+            href={`/u/${encodeURIComponent(handle)}`}
             className="group transition hover:text-foreground/80 text-muted-foreground flex gap-4 items-center duration-400 hover:duration-200 hover:-translate-y-1"
           >
             {user.image ? (

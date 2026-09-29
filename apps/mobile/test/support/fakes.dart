@@ -219,7 +219,7 @@ class TestHarness {
             ? http.Response(
                 jsonEncode({
                   'user': {
-                    'id': 'user-1',
+                    'id': testUserId,
                     'name': 'Jos',
                     'email': 'jos@example.test',
                     'username': 'jos',
@@ -245,6 +245,7 @@ class TestHarness {
     );
   }
 
+  String testUserId = 'user-1';
   final tokens = MemoryTokenStore();
   final users = MemoryUserCache();
   final drafts = MemoryDraftStore();

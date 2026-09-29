@@ -328,7 +328,11 @@ class _FriendsList extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 42),
             child: Text(
-              filter.trim().isEmpty ? 'No friends yet' : 'No friends found',
+              filter.trim().isEmpty
+                  ? 'No friends yet'
+                  : hasMore
+                  ? 'No matches in loaded friends. Load more to keep searching.'
+                  : 'No friends found',
               style: DayliText.sans(
                 context,
                 size: DayliTextSize.sm,
@@ -471,49 +475,25 @@ class _FriendRow extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => _PersonRow(
-      person: friend,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (constraints.maxWidth < 480)
-            IconButton(
-              tooltip: 'Message ${friend.displayName}',
-              onPressed: () => context.go(
-                '/messages/new/${Uri.encodeComponent(friend.username)}',
-              ),
-              icon: const Icon(Icons.mail_outline, size: 19),
-              style: IconButton.styleFrom(
-                minimumSize: const Size(38, 38),
-                maximumSize: const Size(38, 38),
-                padding: EdgeInsets.zero,
-                side: BorderSide(
-                  color: DayliColors.of(
-                    context,
-                  ).foreground.withValues(alpha: 0.15),
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            )
-          else
-            _SoftAction(
-              label: 'Message',
-              muted: true,
-              onPressed: () => context.go(
-                '/messages/new/${Uri.encodeComponent(friend.username)}',
-              ),
-            ),
-          const SizedBox(width: 7),
-          _RelationshipBadge(
-            name: friend.displayName,
-            enabled: !busy,
-            onRemove: onRemove,
+  Widget build(BuildContext context) => _PersonRow(
+    person: friend,
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SoftAction(
+          label: 'Message',
+          muted: true,
+          onPressed: () => context.go(
+            '/messages/new/${Uri.encodeComponent(friend.username)}',
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 7),
+        _FriendActions(
+          name: friend.displayName,
+          enabled: !busy,
+          onRemove: onRemove,
+        ),
+      ],
     ),
   );
 }
@@ -587,7 +567,7 @@ class _PersonRow extends StatelessWidget {
           InkWell(
             borderRadius: BorderRadius.circular(13),
             onTap: () =>
-                context.go('/people/${Uri.encodeComponent(person.username)}'),
+                context.go('/u/${Uri.encodeComponent(person.username)}'),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -612,7 +592,7 @@ class _PersonRow extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: () =>
-                  context.go('/people/${Uri.encodeComponent(person.username)}'),
+                  context.go('/u/${Uri.encodeComponent(person.username)}'),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -649,8 +629,8 @@ class _PersonRow extends StatelessWidget {
   }
 }
 
-class _RelationshipBadge extends StatelessWidget {
-  const _RelationshipBadge({
+class _FriendActions extends StatelessWidget {
+  const _FriendActions({
     required this.name,
     required this.enabled,
     required this.onRemove,
@@ -661,60 +641,36 @@ class _RelationshipBadge extends StatelessWidget {
   final VoidCallback onRemove;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: 'Friend actions for $name',
+    child: PopupMenuButton<String>(
+      key: Key('friends.actions.$name'),
+      enabled: enabled,
+      tooltip: 'Friend actions',
+      onSelected: (value) {
+        if (value == 'remove') onRemove();
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 'remove', child: Text('Remove friend')),
+      ],
+      child: Container(
+        width: 32,
+        height: 36,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: DayliColors.of(context).backgroundAccent,
-          borderRadius: BorderRadius.circular(17),
-        ),
-        child: Text(
-          'friends',
-          style: DayliText.serif(
-            context,
-            size: DayliTextSize.base,
-            weight: FontWeight.w600,
-            color: DayliColors.of(context).foregroundAccent,
+          border: Border.all(
+            color: DayliColors.of(context).foreground.withValues(alpha: 0.15),
           ),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(
+          Icons.more_horiz,
+          size: 21,
+          color: DayliColors.of(context).foregroundSecondary,
         ),
       ),
-      const SizedBox(width: 6),
-      Semantics(
-        button: true,
-        label: 'Friend actions for $name',
-        child: PopupMenuButton<String>(
-          key: Key('friends.actions.$name'),
-          enabled: enabled,
-          tooltip: 'Friend actions',
-          onSelected: (value) {
-            if (value == 'remove') onRemove();
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'remove', child: Text('Remove friend')),
-          ],
-          child: Container(
-            width: 32,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: DayliColors.of(
-                  context,
-                ).foreground.withValues(alpha: 0.15),
-              ),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(
-              Icons.more_horiz,
-              size: 21,
-              color: DayliColors.of(context).foregroundSecondary,
-            ),
-          ),
-        ),
-      ),
-    ],
+    ),
   );
 }
 

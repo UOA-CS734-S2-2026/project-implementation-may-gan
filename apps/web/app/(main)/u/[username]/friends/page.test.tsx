@@ -53,22 +53,31 @@ describe("friends page", () => {
     expect(api.loadFriends).toHaveBeenCalledTimes(1);
   });
 
+  it("does not claim there are no matches while more friend pages remain", async () => {
+    const actor = userEvent.setup();
+    setup(page([card("ada", "Ada Lovelace")], true, "next-page"));
+    render(<FriendsPage />);
+    await screen.findByText("Ada Lovelace");
+    await actor.type(screen.getByRole("textbox", { name: "Search friends" }), "not-loaded");
+    expect(screen.getByText("No matches in loaded friends. Load more to keep searching.")).toBeInTheDocument();
+    expect(screen.queryByText("No friends found")).toBeNull();
+    expect(screen.getByRole("button", { name: "load more" })).toBeInTheDocument();
+  });
+
   it("links each friend to their profile and the friend-only message draft", async () => {
     setup(page([card("ada", "Ada Lovelace")]));
     render(<FriendsPage />);
-    expect(await screen.findByRole("link", { name: /^Ada Lovelace/ })).toHaveAttribute("href", "/ada");
+    expect(await screen.findByRole("link", { name: /^Ada Lovelace/ })).toHaveAttribute("href", "/u/ada");
     expect(screen.getByRole("link", { name: "Message Ada Lovelace" })).toHaveAttribute("href", "/messages/new/ada");
-    expect(screen.getAllByText("friends")).toHaveLength(2);
+    expect(screen.getAllByText("friends")).toHaveLength(1);
   });
 
-  it("keeps the relationship badge informational and offers removal from a separate menu", async () => {
+  it("offers removal through a separate actions menu without a redundant friends badge", async () => {
     const actor = userEvent.setup();
     setup(page([card("ada", "Ada Lovelace")]));
     render(<FriendsPage />);
     await screen.findByText("Ada Lovelace");
-    const badge = screen.getByText("friends", { selector: "span" });
-    expect(badge.tagName).toBe("SPAN");
-    await actor.click(badge);
+    expect(screen.queryByText("friends", { selector: "span" })).toBeNull();
     expect(api.removeFriend).not.toHaveBeenCalled();
     await actor.click(screen.getByLabelText("Friend actions for Ada Lovelace"));
     await actor.click(screen.getByRole("button", { name: "Remove friend" }));

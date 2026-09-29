@@ -26,6 +26,25 @@ class DelayedProfileFriendsClient extends FakeFriendsClient {
       calls++ == 0 ? first.future : second.future;
 }
 
+class DraftLookupController extends MessagingController {
+  DraftLookupController(super.client);
+
+  @override
+  Future<ApiResult<String?>> findDirect(String recipientId) async =>
+      const ApiSuccess(null);
+}
+
+class RetryDraftLookupController extends MessagingController {
+  RetryDraftLookupController() : super(FakeMessagingClient());
+  var calls = 0;
+
+  @override
+  Future<ApiResult<String?>> findDirect(String recipientId) async =>
+      calls++ == 0
+      ? const ApiError(ServiceUnavailable())
+      : const ApiSuccess(null);
+}
+
 class DelayedInboxMessagingClient extends FakeMessagingClient {
   Completer<ApiResult<List<MessagingConversation>>>? deferredInbox;
 
@@ -262,6 +281,149 @@ void main() {
     expect(find.text('Ada Private'), findsNothing);
     expect(find.text('This profile is unavailable.'), findsOneWidget);
     expect(find.byKey(const Key('messages.send')), findsNothing);
+  });
+
+  testWidgets(
+    'hides a completed draft profile while the next actor lookup waits',
+    (tester) async {
+      final friends = DelayedProfileFriendsClient();
+      final harness = TestHarness(friends: friends);
+      await harness.session.signIn(
+        email: 'test@example.test',
+        password: 'correct-password',
+      );
+      final controller = DraftLookupController(FakeMessagingClient());
+      await tester.pumpWidget(
+        AppScope(
+          services: AppServices(
+            session: harness.session,
+            postingDays: harness.postingDays,
+            friends: friends,
+            drafts: harness.drafts,
+            submitter: harness.submitter,
+            messaging: controller,
+          ),
+          child: const MaterialApp(home: NewMessageScreen(username: 'ada')),
+        ),
+      );
+      friends.first.complete(
+        const ApiSuccess(
+          FriendCard(
+            id: 'stale',
+            username: 'ada',
+            displayName: 'Ada Private',
+            relationship: 'none',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Ada Private'), findsOneWidget);
+      harness.testUserId = 'new-account';
+      await harness.session.signIn(
+        email: 'another@example.test',
+        password: 'correct-password',
+      );
+      await tester.pump();
+      expect(harness.session.user?.id, 'new-account');
+      expect(find.text('Ada Private'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      friends.second.complete(const ApiError(ServiceUnavailable()));
+      await tester.pumpAndSettle();
+      expect(find.text('This profile is unavailable.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('retries a failed direct-pair lookup before composing', (
+    tester,
+  ) async {
+    final friends = DelayedProfileFriendsClient();
+    final harness = TestHarness(friends: friends);
+    await harness.session.signIn(
+      email: 'test@example.test',
+      password: 'correct-password',
+    );
+    final controller = RetryDraftLookupController();
+    await tester.pumpWidget(
+      AppScope(
+        services: AppServices(
+          session: harness.session,
+          postingDays: harness.postingDays,
+          friends: friends,
+          drafts: harness.drafts,
+          submitter: harness.submitter,
+          messaging: controller,
+        ),
+        child: const MaterialApp(home: NewMessageScreen(username: 'ada')),
+      ),
+    );
+    friends.first.complete(
+      const ApiSuccess(
+        FriendCard(
+          id: 'recipient',
+          username: 'ada',
+          displayName: 'Ada',
+          relationship: 'friends',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Conversation lookup is unavailable.'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.text('Retry lookup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ada'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(controller.calls, 2);
+  });
+
+  testWidgets('shows send failure and retains the retry ID', (tester) async {
+    final friends = DelayedProfileFriendsClient();
+    final harness = TestHarness(friends: friends);
+    await harness.session.signIn(
+      email: 'test@example.test',
+      password: 'correct-password',
+    );
+    final client = FakeMessagingClient()
+      ..directResults.addAll([
+        const ApiError(ServiceUnavailable()),
+        const ApiError(ServiceUnavailable()),
+      ]);
+    final controller = DraftLookupController(client);
+    await tester.pumpWidget(
+      AppScope(
+        services: AppServices(
+          session: harness.session,
+          postingDays: harness.postingDays,
+          friends: friends,
+          drafts: harness.drafts,
+          submitter: harness.submitter,
+          messaging: controller,
+        ),
+        child: const MaterialApp(home: NewMessageScreen(username: 'ada')),
+      ),
+    );
+    friends.first.complete(
+      const ApiSuccess(
+        FriendCard(
+          id: 'recipient',
+          username: 'ada',
+          displayName: 'Ada',
+          relationship: 'friends',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Hello');
+    await tester.tap(find.text('Send'));
+    await tester.pumpAndSettle();
+    expect(find.text('Message could not be sent. Try again.'), findsOneWidget);
+    await tester.tap(find.text('Send'));
+    await tester.pumpAndSettle();
+    final attempts = client.calls
+        .where((call) => call.startsWith('direct:'))
+        .toList();
+    expect(attempts, hasLength(2));
+    expect(attempts[0], attempts[1]);
   });
 
   testWidgets('renders reply composition and sends with its parent ID', (
