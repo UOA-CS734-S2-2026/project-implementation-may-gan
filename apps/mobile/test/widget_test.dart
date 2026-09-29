@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/app/app.dart';
@@ -441,5 +443,78 @@ void main() {
 
     expect(harness.drafts.drafts['user-1']!.rating, 1);
     expect(find.text('1/10', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('locks the composer while a post is sending', (tester) async {
+    final harness = TestHarness();
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    final list = find
+        .descendant(
+          of: find.byType(ComposerScreen),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    final slider = find.byKey(const Key('composer.rating'));
+    await tester.scrollUntilVisible(slider, 100, scrollable: list);
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    await tester.drag(slider, const Offset(300, 0));
+    final answer = find.byKey(const Key('composer.reflectiveAnswer'));
+    await tester.scrollUntilVisible(answer, 100, scrollable: list);
+    await tester.enterText(answer, 'Sent as typed');
+    final friends = find.byKey(const Key('composer.audience.friends'));
+    await tester.scrollUntilVisible(friends, 100, scrollable: list);
+    await tester.pumpAndSettle();
+    await tester.tap(friends);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    harness.submitter.hold = Completer();
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pump();
+    expect(find.text('Posting…'), findsOneWidget);
+
+    TextField field() => tester.widget<TextField>(answer);
+    await tester.scrollUntilVisible(answer, -100, scrollable: list);
+    expect(field().readOnly, isTrue);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('composer.audience.solo')),
+      100,
+      scrollable: list,
+    );
+    await tester.tap(
+      find.byKey(const Key('composer.audience.solo')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+
+    harness.submitter.hold!.complete(
+      const SubmissionFailed(NetworkUnavailable()),
+    );
+    await tester.pumpAndSettle();
+
+    final sent = harness.submitter.submitted.single;
+    expect(sent.reflectiveAnswer, 'Sent as typed');
+    expect(sent.audience, PostAudience.friends);
+    expect(harness.drafts.drafts['user-1']!.audience, PostAudience.friends);
+    await tester.scrollUntilVisible(answer, -100, scrollable: list);
+    expect(field().readOnly, isFalse);
   });
 }

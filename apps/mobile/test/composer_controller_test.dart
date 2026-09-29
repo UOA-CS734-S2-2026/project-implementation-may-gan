@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/compose/composer_controller.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
@@ -342,6 +344,103 @@ void main() {
       expect(days.calls, 2);
       expect(composer.phase, ComposerPhase.missedDeadline);
       expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      composer.dispose();
+    });
+  });
+
+  test(
+    'ignores edits while a post is sending, then keeps what was sent',
+    () async {
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      submitter.hold = Completer();
+      final sending = composer.submit();
+      await Future<void>.delayed(Duration.zero);
+      expect(composer.submitting, isTrue);
+
+      composer.update(
+        reflectiveAnswer: 'Typed while sending',
+        rating: () => 2,
+        audience: PostAudience.solo,
+      );
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      expect(composer.draft!.rating, 7);
+      expect(composer.draft!.audience, PostAudience.friends);
+
+      submitter.hold!.complete(
+        const SubmissionAccepted(postId: 'post-1', replayed: false),
+      );
+      await sending;
+      expect(submitter.submitted.single.reflectiveAnswer, contains('harbour'));
+      expect(composer.phase, ComposerPhase.posted);
+    },
+  );
+
+  test('allows edits again when a post fails to send', () async {
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    submitter.hold = Completer();
+    final sending = composer.submit();
+    await Future<void>.delayed(Duration.zero);
+    submitter.hold!.complete(const SubmissionFailed(NetworkUnavailable()));
+    await sending;
+
+    expect(composer.submitting, isFalse);
+    composer.update(reflectiveAnswer: 'Edited after the failure');
+    expect(composer.draft!.reflectiveAnswer, 'Edited after the failure');
+  });
+
+  test('rechecks the day after a send that spanned the deadline fails', () {
+    fakeAsync((async) {
+      final composer = controller();
+      composer.load();
+      async.flushMicrotasks();
+      fill(composer);
+      async.flushMicrotasks();
+
+      submitter.hold = Completer();
+      composer.submit();
+      async.flushMicrotasks();
+      expect(composer.submitting, isTrue);
+
+      // The deadline (12:00Z, server time 03:00Z) passes mid-request.
+      days.result = ApiSuccess(
+        postingDay(localDate: '2026-09-26', promptId: 'prompt-09-26'),
+      );
+      async.elapse(const Duration(hours: 9, minutes: 1));
+      expect(days.calls, 1);
+
+      submitter.hold!.complete(const SubmissionFailed(NetworkUnavailable()));
+      async.flushMicrotasks();
+
+      expect(days.calls, 2);
+      expect(composer.phase, ComposerPhase.missedDeadline);
+      expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+      composer.dispose();
+    });
+  });
+
+  test('does not recheck the day when the spanning send is accepted', () {
+    fakeAsync((async) {
+      final composer = controller();
+      composer.load();
+      async.flushMicrotasks();
+      fill(composer);
+      async.flushMicrotasks();
+
+      submitter.hold = Completer();
+      composer.submit();
+      async.flushMicrotasks();
+      async.elapse(const Duration(hours: 9, minutes: 1));
+      submitter.hold!.complete(
+        const SubmissionAccepted(postId: 'post-1', replayed: false),
+      );
+      async.flushMicrotasks();
+
+      expect(days.calls, 1);
+      expect(composer.phase, ComposerPhase.posted);
       composer.dispose();
     });
   });

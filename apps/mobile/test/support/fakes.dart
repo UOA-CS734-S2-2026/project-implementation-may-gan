@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
@@ -149,10 +150,14 @@ class FakeSubmitter implements DailyPostSubmitter {
   SubmissionResult result;
   final submitted = <DailyPostDraft>[];
 
+  /// When set, submissions stay in flight until this completes.
+  Completer<SubmissionResult>? hold;
+
   @override
   Future<SubmissionResult> submit(DailyPostDraft draft) async {
     submitted.add(draft);
-    return result;
+    final pending = hold;
+    return pending == null ? result : pending.future;
   }
 }
 
