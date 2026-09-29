@@ -1,11 +1,11 @@
 # Backend architecture
 
-Status: backend action boundaries are implemented. See the [current architecture](dayli/architecture.md), [refactor implementation plan](implementation/backend-refactor.md), [boundary inventory](implementation/backend-action-boundaries-inventory.md), and [messaging handoff](implementation/messaging-implementation-handoff.md).
+Status: backend action boundaries are implemented. See the [boundary inventory](implementation/backend-action-boundaries-inventory.md) for the route baseline and the [messaging handoff](implementation/messaging-implementation-handoff.md) for messaging behavior and deployment gates.
 
 ## Decisions
 
-- Organize by feature, then action. Messaging contains related message and conversation actions within one ownership boundary.
-- Prefix filenames with the action name for fuzzy finding, editor tabs, traces, and search results.
+- Organize messaging as domain, then subfeature, then action: `messaging/<subfeature>/<action>/`. The current subfeatures are `messages`, `conversations`, `push`, and `realtime`.
+- Prefix action files and tests with the action name for fuzzy finding, editor tabs, traces, and search results.
 - Keep contracts, HTTP adapters, operation logic, persistence, and tests beside their action.
 - Use services and repositories where they have real responsibilities. Do not generate pass-through layers for every endpoint.
 - Share specific policies, transactional operations, and technical adapters. Do not create generic base repositories or a large catch-all feature service.
@@ -19,11 +19,13 @@ The repository already separates responsibilities, even though it does not use t
 
 ```text
 HTTP request
-  -> route.ts                       HTTP/controller responsibilities
-  -> service.ts                     Application operation and business rules
-  -> repository.ts/postgres-store.ts SQL, transaction and persistence concerns
+  -> <action>.route.ts              HTTP/controller responsibilities
+  -> optional <action>.service.ts   Application operation and business rules
+  -> <action>.repository.ts         SQL, transaction and persistence concerns
   -> PostgreSQL
 ```
+
+A simple authorized read may go from its route to a focused repository. Add a service only when it owns rules or coordination.
 
 Examples are `apps/api/src/features/posts/create-post/`, `posting-days/get-current-posting-day/`, and `media/reserve-upload/`. Relationships now has action-owned routes and services over narrowly shared transaction and policy modules. Auth is a Better Auth integration, not an application CRUD service to duplicate.
 
@@ -33,11 +35,13 @@ Most protected handlers currently resolve the session explicitly. `apps/api/src/
 
 ## Registration and import boundaries
 
-Each feature registrar is the only feature-root implementation file. It registers action route functions and shared middleware, but does not contain handler or persistence logic. An action route is the HTTP adapter for one method and path. Its service, repository, contract, and focused route test stay in the action directory when they are action-owned. Feature-shared modules contain narrowly named policies, projections, contracts, and transaction capabilities that are intentionally used by more than one action.
+Each feature registrar is the only feature-root implementation file. It registers action routes and shared middleware, but does not contain handler or persistence logic. An action route is the HTTP adapter for one method and path. Its service, repository, contract, and focused route test stay in the action directory when they are action-owned.
 
-`apps/api/src/features` and API test support under `apps/api/test` are checked by `scripts/check-api-boundaries.mjs`, which runs as part of the root `pnpm lint` command. An action may import its own action files, same-feature `shared/` modules, `src/http`, `src/infrastructure`, and approved workspace packages. It may not import a sibling action or another feature's internals. Test support may import feature-shared modules, but may not aggregate action internals. Cross-action test composition goes through the application composition root. The check covers relative imports, re-exports, dynamic imports, type-only imports, and CommonJS `require` calls. This repository has no TypeScript path aliases, so non-relative specifiers are treated as external boundaries; a future alias must add resolver support and a fixture before use. Workspace package specifiers beginning with `@dayli/` are treated as approved package boundaries. Better Auth provider integration, permissions, and system Hyperdrive compatibility entrypoints are explicit exceptions documented by their feature locations.
+Messaging has three levels of shared ownership. `messaging/shared/` is domain shared. `<subfeature>/shared/` belongs only to that subfeature. Action files live in `<subfeature>/<action>/`. A messaging action may import its own action, its own subfeature shared modules, domain shared modules, `src/http`, `src/infrastructure`, and approved workspace packages. It cannot import another action, including an action with the same name in another subfeature, or another subfeature's shared modules. Subfeature shared modules may import only their own shared modules and domain shared modules. Domain shared modules may import domain shared modules only. Action route tests retain the existing narrow registrar type import where they need the registrar dependency interface.
 
-## Target file tree
+`messaging.routes.ts` remains the feature registrar. It may register action route functions and use approved domain shared types. It cannot become a second service or repository. `apps/api/src/features` and API test support under `apps/api/test` are checked by `scripts/check-api-boundaries.mjs`, which runs as part of root `pnpm lint`. Test support may import shared modules, but not action internals. Messaging test support may import domain shared modules only. Boundary fixtures use virtual feature paths and enforce the same rules for imports, type-only imports, re-exports, dynamic imports, and CommonJS `require` calls. Cross-action test composition goes through the application composition root. This repository has no TypeScript path aliases, so non-relative specifiers are treated as external boundaries. A future alias must add resolver support and a fixture before use. Workspace package specifiers beginning with `@dayli/` are approved package boundaries. Better Auth provider integration, permissions, and system Hyperdrive compatibility entrypoints remain explicit exceptions.
+
+## Current file tree
 
 ```text
 apps/api/src/
@@ -50,7 +54,6 @@ apps/api/src/
       require-session.test.ts               Credential and outage behavior
       cors.ts                               Existing trusted-origin/CORS handling
       cors.test.ts                          Cross-origin request tests
-      require-role.ts                       Future only, when real role-protected actions exist
     authenticated-actor.ts                  Server-verified identity type
     api-error.ts                            Existing HTTP error mapping helpers
   features/
@@ -81,14 +84,14 @@ apps/api/src/
         unregister-device/
         shared/                             Device store, service and route dependencies
       shared/
-        conversation-access.ts              Membership/block/request authorization helpers
+        append-conversation-change.ts      Shared change-record write helper
+        conversation-access.ts              Membership, block, and request authorization
         conversation-types.ts               Conversation operations and transaction capabilities
-        conversation.repository.ts           Shared conversation persistence and reads
-        message-projection.ts               Safe canonical DTO/reply/tombstone projection
-        message-store.ts                    Shared message write transaction interface
-        message.contract.ts                Shared message schemas
+        conversation-projection.ts          Safe conversation DTO projection
+        message-projection.ts               Safe canonical message/reply/tombstone projection
+        message.contract.ts                 Shared message schemas
     posts/
-      create-post/                          Existing posts/create action, renamed in refactor
+      create-post/                          Action-owned route, service, and repository
     posting-days/
       get-current-posting-day/
     media/
@@ -107,7 +110,9 @@ apps/api/src/
       remove-friendship/
       block-user/
       unblock-user/
-      shared/                               Pair policy/snapshot and mutation primitives
+      list-friends/
+      search-users/
+      shared/                               Pair policy, snapshots, and mutation primitives
     permissions/                            Existing shared authorization module, not an HTTP slice
     auth/                                   Better Auth provider integration, intentional exception
     system/
@@ -129,7 +134,7 @@ apps/api/src/
       fcm.ts                                Worker-compatible Google OAuth and FCM HTTP v1
 ```
 
-This is an ownership map, not a requirement to create empty files. Existing auth assets, compatibility entrypoints, and provider-specific handlers may remain grouped when splitting them would fight the provider lifecycle. File and folder changes do not imply URL changes. For example, an `accept-friend-request` action can preserve its existing route path.
+This tree describes the current ownership layout, not a requirement to create empty files. It omits colocated `__tests__/` directories and individual module files. Auth assets, compatibility entrypoints, and provider-specific handlers remain grouped where splitting them would fight the provider lifecycle. File and folder names do not change URLs. For example, `accept-friend-request` keeps its existing route path.
 
 ## Responsibilities and dependencies
 
@@ -147,7 +152,7 @@ For a simple read, a route may call an authorized query directly. Do not add a s
 
 ### Repository
 
-Keep action-specific queries beside the action. Repositories map rows, implement database constraints/locks, and expose meaningful persistence operations rather than a generic CRUD framework. They may use Drizzle directly internally. Do not create an interface for every Drizzle method or pretend changing database providers is free.
+Keep action-specific queries beside the action. Repositories map rows, implement database constraints and locks, and expose meaningful persistence operations rather than a generic CRUD framework. They may use Drizzle directly internally. Do not create a large shared repository, an interface for every Drizzle method, or a claim that changing database providers is free.
 
 An operation that coordinates multiple writes owns the transaction boundary explicitly. Business predicates that can race with other writes must use reads/locks within that transaction. Checking a block before opening a transaction and blindly inserting afterward is not safe decoupling.
 
@@ -190,9 +195,9 @@ const route = createRoute({
 
 Return 401 for missing/invalid/expired credentials, 503 for unavailable authentication infrastructure, and 403 for a forbidden action or 404 where existence must remain private. Preserve trusted-origin/CSRF protection on cookie mutations; CORS alone is not authorization. Keep private responses no-store, including errors.
 
-Authentication establishes who acts. Optional role checks establish coarse access to an operation. Resource authorization establishes whether this actor may act on this conversation/message now. Membership, sender ownership, blocks, deadlines, and request state belong in the operation's policy/transaction, not only middleware. Every protected action must test unauthenticated denial and prove its service is not invoked.
+Authentication establishes who acts. Roles and subscriptions are future coarse gates for access to an operation. Resource authorization establishes whether this actor may act on this conversation or message now. Membership, sender ownership, blocks, deadlines, and request state belong in the operation's policy and transaction, not only middleware. The transaction must make resource checks that race with writes. Every protected action must test unauthenticated denial and prove its service is not invoked.
 
-Do not build RBAC solely because a nullable role column exists. A future admin feature needs approved roles, server-owned assignment, revocation/freshness, and tests. Do not add an implicit admin override for message privacy.
+Do not build RBAC or subscription gates solely because a nullable role column exists. A future protected feature needs approved roles or entitlements, server-owned assignment, revocation and freshness behavior, and tests. Do not add an implicit admin override for message privacy.
 
 ## Tests and tools
 
@@ -207,7 +212,7 @@ Do not build RBAC solely because a nullable role column exists. A future admin f
 | Flutter state/widgets | Existing `flutter_test`, fake transports and clocks |
 | FCM/APNs delivery | Mock HTTP provider tests plus physical-device release evidence |
 
-Use `<action>.route.test.ts`, `<action>.service.test.ts`, and `<action>.repository.integration.test.ts` where those modules exist. Test pure policy helpers beside the shared policy. Name tests after the behavior/module instead of ambiguous `test.ts`.
+Place action tests in `<subfeature>/<action>/__tests__/`. Use `<action>.route.test.ts`, `<action>.service.test.ts`, and `<action>.repository.integration.test.ts` where those modules exist. Test pure policy helpers beside the shared policy. Put reusable API fixtures in `apps/api/test/support/` and boundary-only virtual-path fixtures in `apps/api/test/boundaries/`. Name tests after the action and behavior, never ambiguous `test.ts`.
 
 Do not mock Drizzle's chained query builder. Unit tests prove rules; real-Postgres tests prove SQL, locks and rollback. Test boundary wiring with focused integration cases rather than repeating every policy permutation in every layer. Update discovery/configuration before renaming tests so the new integration suffix never silently stops running or runs without its database gate.
 
@@ -215,6 +220,10 @@ Do not mock Drizzle's chained query builder. Unit tests prove rules; real-Postgr
 
 Cloudflare-specific code remains in `apps/api`; no new Cloudflare workspace package or separate socket deployment. `cloudflare:workers` is a runtime module. Wrangler, Worker types, and Cloudflare test tooling already live in the API package. DO bindings/migrations and retry cron belong in API Wrangler configs, while SQL migrations belong in `packages/db/migrations`.
 
-REST owns commands and authorized state. Postgres owns history/read state/change records/outbox. Immediately after commit, delivery adapters notify both affected participant users, including the actor's other devices. WebSockets carry small invalidations; clients fetch fresh authorized data. Scheduled retries repair delivery failures. No periodic client polling. The web implementation uses a user-remounted QueryClient and user-ID keys, with action-owned TanStack hooks under `apps/web/features/messaging`. The provider cancels and clears private cache state on account changes. It applies canonical projections to every loaded history page before advancing a durable change cursor, then invalidates dependent conversation, inbox, and unread projections. Push targets eligible peer devices through FCM/APNs and requires owner configuration and device proof. Images remain blocked on R2 integration; groups remain blocked on policy.
+REST owns commands and authorized state. Postgres owns history, read state, change records, and the outbox. Immediately after commit, delivery adapters notify both affected participant users, including the actor's other devices. WebSockets carry small invalidations; clients fetch fresh authorized data. Scheduled retries repair delivery failures. No periodic client polling.
+
+`realtime/issue-ticket/` owns the JSON ticket action. Its service coordinates ticket creation and its repository persists and atomically consumes ticket hashes in Postgres. `realtime/connect/` is action-local because it only validates a WebSocket upgrade, consumes an injected ticket, verifies the active session, and forwards the upgrade to the user's Durable Object. It has no JSON resource or SQL operation of its own, so it has no `connect.repository.ts`.
+
+The web implementation uses a user-remounted QueryClient and user-ID keys, with action-owned TanStack hooks under `apps/web/features/messaging`. The provider cancels and clears private cache state on account changes. It applies canonical projections to every loaded history page before advancing a durable change cursor, then invalidates dependent conversation, inbox, and unread projections. Push targets eligible peer devices through FCM/APNs and requires owner configuration and device proof. Images remain blocked on R2 integration; groups remain blocked on policy.
 
 For endpoint contracts and messaging-specific data rules, use the [messaging handoff](implementation/messaging-implementation-handoff.md). This architecture document governs organization and boundaries, not changes to those approved product rules.

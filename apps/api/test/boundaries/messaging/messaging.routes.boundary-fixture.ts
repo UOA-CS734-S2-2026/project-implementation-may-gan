@@ -1,1 +1,2 @@
-export { registerSendMessageRoute } from "../../../src/features/messaging/messages/send-message/send-message.route";
+export { sendMessageRouteFixture } from "./messages/send-message/send-message.route.boundary-fixture";
+export type { DomainSharedFixture } from "./shared/domain-shared.boundary-fixture";

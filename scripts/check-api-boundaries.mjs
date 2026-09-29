@@ -66,6 +66,15 @@ function featureSourceInfo(path, value) {
       isRegistrar: virtualName === `${feature}.routes.ts`,
     };
   }
+  if (feature === "messaging") {
+    if (rest[0] === "shared") {
+      return { path, feature, fileName: virtualName, isTest, kind: "domain-shared", subfeature: undefined, action: undefined, isRegistrar: false };
+    }
+    if (groupingDirectories.has(rest[0]) && rest[1] === "shared") {
+      return { path, feature, fileName: virtualName, isTest, kind: "subfeature-shared", subfeature: rest[0], action: undefined, isRegistrar: false };
+    }
+    return { path, feature, fileName: virtualName, isTest, kind: "action", subfeature: rest[0], action: rest[1], isRegistrar: false };
+  }
   if (rest.includes("shared")) {
     return { path, feature, fileName: virtualName, isTest, kind: "shared", action: undefined, isRegistrar: false };
   }
@@ -166,25 +175,53 @@ function isWorkspaceImport(specifier) {
 }
 
 function describe(info) {
-  return `${normalized(relative(repositoryRoot, info.path))} (${info.kind}${info.action ? `/${info.action}` : ""})`;
+  const identity = info.action
+    ? `/${info.subfeature ? `${info.subfeature}/` : ""}${info.action}`
+    : info.subfeature ? `/${info.subfeature}` : "";
+  return `${normalized(relative(repositoryRoot, info.path))} (${info.kind}${identity})`;
 }
 
 function allowedBoundary(source, target, specifier) {
   if (isWorkspaceImport(specifier) || !specifier.startsWith(".")) return true;
   if (!target) return true;
-  if (isOutsideFeatureImport(target) || isApprovedAdapter(target)) {
-    const targetValue = normalized(relative(repositoryRoot, target));
+  const targetInfo = sourceInfo(target);
+  const targetValue = normalized(relative(repositoryRoot, target));
+  const isBoundaryVirtualTarget = targetValue.startsWith("apps/api/test/boundaries/") && targetInfo?.feature;
+  if (!isBoundaryVirtualTarget && (isOutsideFeatureImport(target) || isApprovedAdapter(target))) {
     if (targetValue === "apps/api/src/app.ts" || targetValue === "apps/api/src/index.ts" || isApiTestFile(target)) return source.isTest;
     return true;
   }
 
-  const targetInfo = sourceInfo(target);
   if (!targetInfo) return true;
-  if (source.kind === "test-support") return targetInfo.kind === "shared";
+  if (source.kind === "test-support") {
+    return targetInfo.feature === "messaging"
+      ? targetInfo.kind === "domain-shared"
+      : targetInfo.kind === "shared";
+  }
   if (source.feature === "auth" || source.feature === "permissions") return true;
 
   if (source.feature !== targetInfo.feature) {
     return source.isTest && targetInfo.feature === "auth";
+  }
+
+  if (source.feature === "messaging") {
+    if (source.kind === "root" && source.isRegistrar) {
+      return targetInfo.kind === "action" && targetInfo.fileName.endsWith(".route.ts")
+        || targetInfo.kind === "domain-shared";
+    }
+    if (source.kind === "domain-shared") return targetInfo.kind === "domain-shared";
+    if (source.kind === "subfeature-shared") {
+      if (targetInfo.kind === "domain-shared") return true;
+      if (targetInfo.kind === "subfeature-shared" && targetInfo.subfeature === source.subfeature) return true;
+      return source.isTest && targetInfo.kind === "root" && targetInfo.isRegistrar;
+    }
+    if (source.kind === "action") {
+      if (targetInfo.kind === "domain-shared") return true;
+      if (targetInfo.kind === "subfeature-shared" && targetInfo.subfeature === source.subfeature) return true;
+      if (targetInfo.kind === "action" && targetInfo.subfeature === source.subfeature && targetInfo.action === source.action) return true;
+      return source.isTest && targetInfo.kind === "root" && targetInfo.isRegistrar;
+    }
+    return false;
   }
 
   if (source.kind === "root" && source.isRegistrar) {
@@ -237,7 +274,12 @@ async function runFixtureChecks(errors) {
   const fixturePaths = fixtureNames.map((name) => resolve(fixtureDirectory, name));
   fixturePaths.push(
     resolve(apiTestRoot, "boundaries/messaging/messaging.routes.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/messages/shared/messages-shared-action.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/messages/shared/messages-shared-own.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/messaging/shared/domain-shared-owner.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/messaging/shared/messaging.repository.integration.test.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/test-support/messaging-domain-shared.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/test-support/messaging-subfeature-shared.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/test-support/relationships-service.boundary-fixture.ts"),
   );
   const before = errors.length;
@@ -252,8 +294,17 @@ async function runFixtureChecks(errors) {
     "send-message.shared.boundary-fixture.ts",
     "send-message.app.test.boundary-fixture.ts",
     "send-message.workspace.boundary-fixture.ts",
+    "send-message.cross-subfeature-shared.boundary-fixture.ts",
+    "send-message.same-name-action.boundary-fixture.ts",
+    "send-message.own-subfeature-shared.boundary-fixture.ts",
+    "send-message.domain-shared.boundary-fixture.ts",
     "messaging.routes.boundary-fixture.ts",
+    "messages-shared-action.boundary-fixture.ts",
+    "messages-shared-own.boundary-fixture.ts",
+    "domain-shared-owner.boundary-fixture.ts",
     "messaging.repository.integration.test.boundary-fixture.ts",
+    "messaging-domain-shared.boundary-fixture.ts",
+    "messaging-subfeature-shared.boundary-fixture.ts",
     "relationships-service.boundary-fixture.ts",
   ];
   const errorsByFile = new Map(expected.map((name) => [name, fixtureErrors.filter((error) => error.includes(name))]));
@@ -261,7 +312,12 @@ async function runFixtureChecks(errors) {
     "send-message.shared.boundary-fixture.ts",
     "send-message.app.test.boundary-fixture.ts",
     "send-message.workspace.boundary-fixture.ts",
+    "send-message.own-subfeature-shared.boundary-fixture.ts",
+    "send-message.domain-shared.boundary-fixture.ts",
     "messaging.routes.boundary-fixture.ts",
+    "messages-shared-own.boundary-fixture.ts",
+    "domain-shared-owner.boundary-fixture.ts",
+    "messaging-domain-shared.boundary-fixture.ts",
   ]);
   for (const name of expected) {
     const failed = errorsByFile.get(name) ?? [];
