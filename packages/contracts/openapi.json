@@ -1407,6 +1407,247 @@
         }
       }
     },
+    "/api/v1/account/deletion": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.deletionStatus",
+        "responses": {
+          "200": {
+            "description": "Current account-deletion state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "pending_deletion",
+                        "purging",
+                        "purge_failed"
+                      ]
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "cancelUntil": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "purgeDueAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "generation"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "503": {
+            "description": "Lifecycle service unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/deletion/request": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.requestDeletion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grant": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "grant"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pending deletion request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "pending_deletion",
+                        "purging",
+                        "purge_failed"
+                      ]
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "cancelUntil": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "purgeDueAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "restrictedSession": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "generation",
+                    "restrictedSession"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable or requests disabled."
+          },
+          "503": {
+            "description": "Lifecycle service unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/deletion/cancel": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.cancelDeletion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "grant": {
+                    "type": "string",
+                    "minLength": 32,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "grant"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deletion cancellation accepted. A new ordinary sign-in is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "pending_deletion",
+                        "purging",
+                        "purge_failed"
+                      ]
+                    },
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "cancelUntil": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "purgeDueAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "reauthenticationRequired": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "generation",
+                    "reauthenticationRequired"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable or cancellation window closed."
+          },
+          "503": {
+            "description": "Lifecycle service unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/legal/terms/current/content": {
       "get": {
         "tags": [

@@ -150,7 +150,7 @@ import { issueAccountManagementGrant } from "./features/account-policy/shared/ac
 import type { ResolveSession } from "./http/middleware/require-session";
 import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
 import { registerAccountLifecycleRoutes, type AccountLifecycleRouteDependencies } from "./features/account-lifecycle/account-lifecycle.routes";
-import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/account-lifecycle.repository";
+import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/shared/account-lifecycle.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };

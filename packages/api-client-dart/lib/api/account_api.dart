@@ -16,6 +16,115 @@ class AccountApi {
 
   final ApiClient apiClient;
 
+  /// Performs an HTTP 'POST /api/v1/account/deletion/cancel' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [AccountRequestDeletionRequest] accountRequestDeletionRequest:
+  Future<Response> accountCancelDeletionWithHttpInfo({
+    AccountRequestDeletionRequest? accountRequestDeletionRequest,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/deletion/cancel';
+
+    // ignore: prefer_final_locals
+    Object? postBody = accountRequestDeletionRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [AccountRequestDeletionRequest] accountRequestDeletionRequest:
+  Future<AccountCancelDeletion200Response?> accountCancelDeletion({
+    AccountRequestDeletionRequest? accountRequestDeletionRequest,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountCancelDeletionWithHttpInfo(
+      accountRequestDeletionRequest: accountRequestDeletionRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'AccountCancelDeletion200Response',
+      ) as AccountCancelDeletion200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'GET /api/v1/account/deletion' operation and returns the [Response].
+  Future<Response> accountDeletionStatusWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/deletion';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  Future<AccountDeletionStatus200Response?> accountDeletionStatus({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountDeletionStatusWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'AccountDeletionStatus200Response',
+      ) as AccountDeletionStatus200Response;
+    }
+    return null;
+  }
+
   /// Performs an HTTP 'POST /api/v1/account/reauthenticate/google/begin' operation and returns the [Response].
   /// Parameters:
   ///
@@ -190,6 +299,65 @@ class AccountApi {
         await _decodeBodyBytes(response),
         'AccountGoogleProofComplete200Response',
       ) as AccountGoogleProofComplete200Response;
+    }
+    return null;
+  }
+
+  /// Performs an HTTP 'POST /api/v1/account/deletion/request' operation and returns the [Response].
+  /// Parameters:
+  ///
+  /// * [AccountRequestDeletionRequest] accountRequestDeletionRequest:
+  Future<Response> accountRequestDeletionWithHttpInfo({
+    AccountRequestDeletionRequest? accountRequestDeletionRequest,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/deletion/request';
+
+    // ignore: prefer_final_locals
+    Object? postBody = accountRequestDeletionRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Parameters:
+  ///
+  /// * [AccountRequestDeletionRequest] accountRequestDeletionRequest:
+  Future<AccountRequestDeletion200Response?> accountRequestDeletion({
+    AccountRequestDeletionRequest? accountRequestDeletionRequest,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountRequestDeletionWithHttpInfo(
+      accountRequestDeletionRequest: accountRequestDeletionRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'AccountRequestDeletion200Response',
+      ) as AccountRequestDeletion200Response;
     }
     return null;
   }

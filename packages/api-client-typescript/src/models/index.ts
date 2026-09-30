@@ -1,9 +1,13 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccountCancelDeletion200Response';
+export * from './AccountDeletionStatus200Response';
 export * from './AccountGoogleProofBegin200Response';
 export * from './AccountGoogleProofBeginRequest';
 export * from './AccountGoogleProofComplete200Response';
 export * from './AccountGoogleProofCompleteRequest';
+export * from './AccountRequestDeletion200Response';
+export * from './AccountRequestDeletionRequest';
 export * from './ApiError';
 export * from './ApiErrorCode';
 export * from './ApiErrorError';

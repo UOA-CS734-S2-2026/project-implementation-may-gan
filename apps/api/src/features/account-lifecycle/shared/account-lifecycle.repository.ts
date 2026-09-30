@@ -1,7 +1,11 @@
 import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
-import type { VerifiedManagementSession } from "../account-policy/shared/account-management-grants";
+import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
+
+export interface VerifiedManagementSession {
+  userId: string;
+  sessionId: string;
+}
 
 export type AccountLifecycleView =
   | { state: "active"; generation: number }
