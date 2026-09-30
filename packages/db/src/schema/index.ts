@@ -148,21 +148,29 @@ export const posts = pgTable("posts", {
   check("posts_release_after_acceptance_check", sql`${table.releasedAt} > ${table.acceptedAt}`),
 ]);
 
-/** Rows in this table represent accepted attachments only; upload reservation,
- * validation, authorization, and cleanup belong to the later media issues.
+/** Rows in this table represent accepted attachments only; download
+ * authorization and cleanup belong to the later media issues.
  * postId and id ownership are immutable at the database level because revisions
  * retain historical media IDs in JSON metadata. Removal is represented by
- * detachedAt; post_media rows must never be physically deleted. */
+ * detachedAt; post_media rows must never be physically deleted.
+ *
+ * reservationId names the validated upload whose object holds the bytes; legacy
+ * imports have none. Each upload attaches at most once, even after detaching,
+ * and RESTRICT stops reservation cleanup from deleting one a post still uses. */
 export const postMedia = pgTable("post_media", {
   id: text("id").primaryKey(),
   postId: text("post_id").notNull().references(() => posts.id),
   attachmentOrder: integer("attachment_order").notNull(),
+  reservationId: text("reservation_id").references(() => mediaReservation.id, { onDelete: "restrict" }),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }).defaultNow().notNull(),
   detachedAt: timestamp("detached_at", { withTimezone: true }),
 }, (table) => [
   uniqueIndex("post_media_active_post_order_unique")
     .on(table.postId, table.attachmentOrder)
     .where(sql`${table.detachedAt} is null`),
+  uniqueIndex("post_media_reservation_unique")
+    .on(table.reservationId)
+    .where(sql`${table.reservationId} is not null`),
   check("post_media_attachment_order_check", sql`${table.attachmentOrder} >= 0`),
 ]);
 

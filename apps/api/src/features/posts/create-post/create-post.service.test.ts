@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createAucklandDayService } from "@dayli/domain";
-import { createMemoryDailyPostStore } from "./create-post.memory-store";
+import { createMemoryDailyPostStore, type MemoryReservation } from "./create-post.memory-store";
 import {
   CreateDailyPostError,
   createDailyPostService,
@@ -153,5 +153,173 @@ describe("request fingerprint", () => {
     ]) {
       expect(await fingerprintDailyPostRequest({ ...input, ...change })).not.toBe(base);
     }
+  });
+});
+
+describe("request fingerprint compatibility", () => {
+  it("keeps the version 1 fingerprint for a post without attachments", async () => {
+    // Computed with the fingerprint code on main before attachments existed,
+    // so a retry that spans the deploy still matches its stored outcome.
+    const v1 = "c46cf96599d1e90ba33b8a0b948f1092f9dbbe70bc55c9666d0468f8d53e0474";
+    expect(await fingerprintDailyPostRequest(input)).toBe(v1);
+    expect(await fingerprintDailyPostRequest({ ...input, attachments: [] })).toBe(v1);
+  });
+
+  it("includes attachments and their order", async () => {
+    const base = await fingerprintDailyPostRequest(input);
+    const ab = await fingerprintDailyPostRequest({ ...input, attachments: ["r-a", "r-b"] });
+    const ba = await fingerprintDailyPostRequest({ ...input, attachments: ["r-b", "r-a"] });
+    expect(ab).not.toBe(base);
+    expect(ab).not.toBe(ba);
+  });
+});
+
+describe("attaching uploads", () => {
+  const now = "2026-09-25T03:00:00.000Z";
+  const mb = 1024 * 1024;
+
+  function withUploads(uploads: Array<Partial<MemoryReservation> & { id: string }>) {
+    const setup = serviceAt(now);
+    for (const upload of uploads) {
+      setup.memory.reservations.push({
+        ownerId: "author-1",
+        status: "validated",
+        contentType: "image/jpeg",
+        byteSize: mb,
+        expiresAt: new Date("2026-09-25T03:15:00.000Z"),
+        ...upload,
+      });
+    }
+    return setup;
+  }
+
+  it("links validated photos to the post in the order sent", async () => {
+    const { service, memory } = withUploads([{ id: "r-a" }, { id: "r-b", contentType: "image/png" }]);
+    const result = await service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-b", "r-a"] });
+
+    expect(result.post.media).toEqual([
+      { id: expect.any(String), contentType: "image/png", order: 0 },
+      { id: expect.any(String), contentType: "image/jpeg", order: 1 },
+    ]);
+    expect(memory.posts[0]?.media.map((media) => media.reservationId)).toEqual(["r-b", "r-a"]);
+  });
+
+  it("accepts a single video, and up to 25 MB in total", async () => {
+    const video = withUploads([{ id: "r-v", contentType: "video/mp4", byteSize: 10 * mb }]);
+    await expect(video.service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-v"] }))
+      .resolves.toMatchObject({ post: { media: [{ contentType: "video/mp4" }] } });
+
+    const full = withUploads([
+      { id: "r-a", byteSize: 10 * mb },
+      { id: "r-b", byteSize: 10 * mb },
+      { id: "r-c", byteSize: 5 * mb },
+    ]);
+    await expect(full.service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a", "r-b", "r-c"] }))
+      .resolves.toMatchObject({ replayed: false });
+  });
+
+  it("rejects a mix, too many, duplicates, or more than 25 MB", async () => {
+    const cases: Array<{ uploads: Parameters<typeof withUploads>[0]; attachments: string[] }> = [
+      { uploads: [{ id: "r-a" }, { id: "r-v", contentType: "video/mp4" }], attachments: ["r-a", "r-v"] },
+      {
+        uploads: [{ id: "r-v", contentType: "video/mp4" }, { id: "r-w", contentType: "video/quicktime" }],
+        attachments: ["r-v", "r-w"],
+      },
+      {
+        uploads: [{ id: "r-a" }, { id: "r-b" }, { id: "r-c" }, { id: "r-d" }],
+        attachments: ["r-a", "r-b", "r-c", "r-d"],
+      },
+      { uploads: [{ id: "r-a" }], attachments: ["r-a", "r-a"] },
+      {
+        uploads: [{ id: "r-a", byteSize: 10 * mb }, { id: "r-b", byteSize: 10 * mb }, { id: "r-c", byteSize: 5 * mb + 1 }],
+        attachments: ["r-a", "r-b", "r-c"],
+      },
+    ];
+    for (const { uploads, attachments } of cases) {
+      const { service, memory } = withUploads(uploads);
+      await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments }))
+        .rejects.toMatchObject({ reason: "MEDIA_NOT_ALLOWED" });
+      expect(memory.posts).toHaveLength(0);
+    }
+  });
+
+  it("asks the client to wait for an upload that is still pending", async () => {
+    const { service, memory } = withUploads([{ id: "r-a" }, { id: "r-b", status: "pending" }]);
+    await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a", "r-b"] }))
+      .rejects.toMatchObject({ reason: "MEDIA_NOT_READY" });
+    expect(memory.posts).toHaveLength(0);
+  });
+
+  it("gives the same answer for every upload that can't be used", async () => {
+    const errors: CreateDailyPostError[] = [];
+    const cases: Array<Parameters<typeof withUploads>[0]> = [
+      [],
+      [{ id: "r-a", ownerId: "author-2" }],
+      [{ id: "r-a", status: "failed" }],
+      [{ id: "r-a", status: "pending", expiresAt: new Date(now) }],
+    ];
+    for (const uploads of cases) {
+      const { service } = withUploads(uploads);
+      errors.push(await service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a"] })
+        .then(() => { throw new Error("expected a rejection"); }, (error: CreateDailyPostError) => error));
+    }
+    expect(new Set(errors.map((error) => `${error.reason}:${error.message}`)))
+      .toEqual(new Set([`MEDIA_UNAVAILABLE:${errors[0]?.message}`]));
+  });
+
+  it("won't wait on a pending upload when another can never be used", async () => {
+    const { service } = withUploads([{ id: "r-a", status: "pending" }, { id: "r-b", status: "failed" }]);
+    await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a", "r-b"] }))
+      .rejects.toMatchObject({ reason: "MEDIA_UNAVAILABLE" });
+  });
+
+  it("never attaches an upload to a second post", async () => {
+    let clock = new Date("2026-09-25T03:00:00.000Z");
+    const setup = serviceAt(() => clock);
+    setup.memory.reservations.push({
+      id: "r-a",
+      ownerId: "author-1",
+      status: "validated",
+      contentType: "image/jpeg",
+      byteSize: mb,
+      expiresAt: new Date("2026-09-25T03:15:00.000Z"),
+    });
+    await setup.service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a"] });
+
+    clock = new Date("2026-09-26T03:00:00.000Z");
+    await expect(setup.service.createDailyPost("author-1", "key-2", {
+      ...input,
+      localDate: "2026-09-26",
+      promptId: "prompt-09-26",
+      attachments: ["r-a"],
+    })).rejects.toMatchObject({ reason: "MEDIA_UNAVAILABLE" });
+  });
+
+  it("replays attachments, and treats changed attachments as a different request", async () => {
+    const { service, memory } = withUploads([{ id: "r-a" }, { id: "r-b" }]);
+    const first = await service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a"] });
+
+    const retry = await service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-a"] });
+    expect(retry).toEqual({ post: first.post, replayed: true });
+    expect(retry.post.media).toHaveLength(1);
+
+    await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-b"] }))
+      .rejects.toMatchObject({ reason: "IDEMPOTENCY_KEY_REUSED" });
+    expect(memory.posts).toHaveLength(1);
+  });
+
+  it("decides the posting day before looking at uploads", async () => {
+    const { service } = withUploads([]);
+    await expect(service.createDailyPost("author-1", "key-1", {
+      ...input,
+      localDate: "2026-09-24",
+      attachments: ["r-missing"],
+    })).rejects.toMatchObject({ reason: "POSTING_DAY_CLOSED" });
+  });
+
+  it("keeps a text-only post unchanged", async () => {
+    const { service } = withUploads([]);
+    const result = await service.createDailyPost("author-1", "key-1", input);
+    expect(result.post.media).toEqual([]);
   });
 });

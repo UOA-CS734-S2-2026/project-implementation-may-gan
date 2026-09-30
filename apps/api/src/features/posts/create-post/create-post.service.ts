@@ -1,4 +1,5 @@
 import type { AucklandDayService, ClockLike } from "@dayli/domain";
+import { MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "../../media/shared/media-reservation-policy";
 
 export type DailyPostAudience = "solo" | "friends";
 
@@ -11,6 +12,15 @@ export interface CreateDailyPostInput {
   rating: number;
   audience: DailyPostAudience;
   tomorrowNote?: string;
+  /** Validated media reservation IDs, in display order. */
+  attachments?: readonly string[];
+}
+
+/** One attachment of a stored post, in display order. */
+export interface StoredPostMedia {
+  id: string;
+  contentType: string;
+  order: number;
 }
 
 export interface StoredDailyPost {
@@ -25,6 +35,7 @@ export interface StoredDailyPost {
   acceptedAt: Date;
   releasedAt: Date;
   tomorrowNoteAvailableOn: string | null;
+  media: StoredPostMedia[];
 }
 
 export interface NewDailyPost {
@@ -39,8 +50,20 @@ export interface NewDailyPost {
   acceptedAt: Date;
   releasedAt: Date;
   tomorrowNote: { id: string; note: string; availableOn: string } | null;
+  media: Array<{ id: string; reservationId: string; order: number }>;
   idempotencyKey: string;
   requestFingerprint: string;
+}
+
+/** A reservation owned by the author, locked for the rest of the transaction. */
+export interface AttachableMedia {
+  reservationId: string;
+  status: "pending" | "validated" | "failed";
+  contentType: string;
+  byteSize: number;
+  expiresAt: Date;
+  /** True when a post already uses this upload, detached or not. */
+  linked: boolean;
 }
 
 export interface StoredIdempotentOutcome {
@@ -58,9 +81,16 @@ export interface DailyPostTransaction {
   hasPostForDay(authorId: string, localDate: string): Promise<boolean>;
   findActivePrompt(localDate: string): Promise<{ id: string; text: string } | null>;
   /**
-   * Insert the post, its optional tomorrow note, and the idempotency record
-   * atomically. Must throw CreateDailyPostError("ALREADY_POSTED") when the
-   * author/day uniqueness constraint rejects the insert.
+   * Lock the author's own reservations among [reservationIds] until the
+   * transaction ends, so cleanup can't delete one while it is being attached.
+   * Reservations that don't exist or belong to someone else are left out.
+   */
+  lockAttachableMedia(authorId: string, reservationIds: readonly string[]): Promise<AttachableMedia[]>;
+  /**
+   * Insert the post, its optional tomorrow note, its media links, and the
+   * idempotency record atomically. Must throw CreateDailyPostError
+   * ("ALREADY_POSTED") when the author/day uniqueness constraint rejects the
+   * insert, and ("MEDIA_UNAVAILABLE") when an upload is already linked.
    */
   insertPost(post: NewDailyPost): Promise<StoredDailyPost>;
 }
@@ -75,7 +105,10 @@ export type CreateDailyPostErrorReason =
   | "PROMPT_CHANGED"
   | "ALREADY_POSTED"
   | "IDEMPOTENCY_KEY_REUSED"
-  | "PROMPT_UNAVAILABLE";
+  | "PROMPT_UNAVAILABLE"
+  | "MEDIA_NOT_READY"
+  | "MEDIA_UNAVAILABLE"
+  | "MEDIA_NOT_ALLOWED";
 
 const messages: Record<CreateDailyPostErrorReason, string> = {
   POSTING_DAY_CLOSED: "The posting day for this draft has ended.",
@@ -84,6 +117,11 @@ const messages: Record<CreateDailyPostErrorReason, string> = {
   ALREADY_POSTED: "A post already exists for this posting day.",
   IDEMPOTENCY_KEY_REUSED: "This idempotency key was already used for a different request.",
   PROMPT_UNAVAILABLE: "The daily prompt is temporarily unavailable.",
+  MEDIA_NOT_READY: "An attachment is still being uploaded.",
+  // One message for missing, someone else's, rejected, expired, and already
+  // used uploads, so a response never reveals another user's reservation.
+  MEDIA_UNAVAILABLE: "An attachment can't be used. Upload it again.",
+  MEDIA_NOT_ALLOWED: "A post can have up to 3 photos or 1 video, up to 25 MB in total.",
 };
 
 export class CreateDailyPostError extends Error {
@@ -125,10 +163,13 @@ function readNow(clock: ClockLike): Date {
  * A stable digest of every field that defines the submission. Array order is
  * fixed, and absent optional text is encoded as null, so an omitted field and
  * an explicit null cannot be distinguished by a retry.
+ *
+ * A post without attachments keeps the version 1 encoding, so a retry of a
+ * request stored before attachments existed still matches its fingerprint.
+ * Attachments switch to version 2, which appends their IDs in order.
  */
 export async function fingerprintDailyPostRequest(input: CreateDailyPostInput): Promise<string> {
-  const canonical = JSON.stringify([
-    1,
+  const fields = [
     input.localDate,
     input.promptId,
     input.reflectiveAnswer,
@@ -136,9 +177,52 @@ export async function fingerprintDailyPostRequest(input: CreateDailyPostInput): 
     input.rating,
     input.audience,
     input.tomorrowNote ?? null,
-  ]);
+  ];
+  const attachments = input.attachments ?? [];
+  const canonical = JSON.stringify(
+    attachments.length === 0 ? [1, ...fields] : [2, ...fields, [...attachments]],
+  );
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Check the author's locked reservations for [reservationIds] and return the
+ * rows to link, in order. Pending uploads can still finish; anything else that
+ * isn't a validated, unused upload of the author's must be uploaded again.
+ */
+function checkAttachments(
+  reservationIds: readonly string[],
+  available: AttachableMedia[],
+  now: Date,
+): Array<{ reservationId: string }> {
+  if (reservationIds.length > MAX_POST_PHOTOS || new Set(reservationIds).size !== reservationIds.length) {
+    throw new CreateDailyPostError("MEDIA_NOT_ALLOWED");
+  }
+  const byId = new Map(available.map((media) => [media.reservationId, media]));
+  const ordered = reservationIds.map((id) => byId.get(id));
+
+  // Report "still uploading" only when every attachment is otherwise usable,
+  // so the client never waits on an upload that can't succeed.
+  let waiting = false;
+  for (const media of ordered) {
+    if (!media || media.linked || media.status === "failed") throw new CreateDailyPostError("MEDIA_UNAVAILABLE");
+    if (media.status === "pending") {
+      if (media.expiresAt.getTime() <= now.getTime()) throw new CreateDailyPostError("MEDIA_UNAVAILABLE");
+      waiting = true;
+    }
+  }
+  if (waiting) throw new CreateDailyPostError("MEDIA_NOT_READY");
+
+  const usable = ordered as AttachableMedia[];
+  const videos = usable.filter((media) => media.contentType.startsWith("video/")).length;
+  const photos = usable.filter((media) => media.contentType.startsWith("image/")).length;
+  const composition = videos === 0 ? photos <= MAX_POST_PHOTOS : videos === 1 && photos === 0;
+  const totalBytes = usable.reduce((sum, media) => sum + media.byteSize, 0);
+  if (videos + photos !== usable.length || !composition || totalBytes > MAX_POST_MEDIA_BYTES) {
+    throw new CreateDailyPostError("MEDIA_NOT_ALLOWED");
+  }
+  return usable.map((media) => ({ reservationId: media.reservationId }));
 }
 
 export function createDailyPostService(dependencies: CreateDailyPostServiceDependencies): CreateDailyPostService {
@@ -174,6 +258,15 @@ export function createDailyPostService(dependencies: CreateDailyPostServiceDepen
         if (!prompt) throw new CreateDailyPostError("PROMPT_UNAVAILABLE");
         if (prompt.id !== input.promptId) throw new CreateDailyPostError("PROMPT_CHANGED");
 
+        const reservationIds = input.attachments ?? [];
+        const attachments = reservationIds.length === 0
+          ? []
+          : checkAttachments(
+            reservationIds,
+            await transaction.lockAttachableMedia(authorId, reservationIds),
+            acceptedAt,
+          );
+
         const nextDay = dependencies.dayService.forInstant(day.nextMidnightUtc).localDate;
         const post = await transaction.insertPost({
           id: generateId(),
@@ -189,6 +282,7 @@ export function createDailyPostService(dependencies: CreateDailyPostServiceDepen
           tomorrowNote: input.tomorrowNote === undefined
             ? null
             : { id: generateId(), note: input.tomorrowNote, availableOn: nextDay },
+          media: attachments.map(({ reservationId }, order) => ({ id: generateId(), reservationId, order })),
           idempotencyKey,
           requestFingerprint,
         });

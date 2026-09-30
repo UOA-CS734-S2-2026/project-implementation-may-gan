@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import {
   classifyPostgresConstraintError,
   createHyperdriveDatabase,
@@ -14,6 +14,7 @@ import {
   type DailyPostStore,
   type DailyPostTransaction,
   type StoredDailyPost,
+  type StoredPostMedia,
 } from "./create-post.service";
 
 type Queryable = Pick<DayliDatabase, "select" | "insert">;
@@ -23,7 +24,7 @@ function authorLockKey(authorId: string): string {
   return `posts:author:${authorId}`;
 }
 
-function toStoredPost(row: {
+function toStoredPost(media: StoredPostMedia[], row: {
   id: string;
   authorId: string;
   localDate: string;
@@ -49,7 +50,22 @@ function toStoredPost(row: {
     acceptedAt: row.acceptedAt,
     releasedAt: row.releasedAt,
     tomorrowNoteAvailableOn: row.tomorrowNoteAvailableOn,
+    media,
   };
+}
+
+/** The post's attached uploads in display order; detached and legacy rows are left out. */
+async function readPostMedia(queryable: Queryable, postId: string): Promise<StoredPostMedia[]> {
+  return queryable
+    .select({
+      id: schema.postMedia.id,
+      contentType: schema.mediaReservation.contentType,
+      order: schema.postMedia.attachmentOrder,
+    })
+    .from(schema.postMedia)
+    .innerJoin(schema.mediaReservation, eq(schema.mediaReservation.id, schema.postMedia.reservationId))
+    .where(and(eq(schema.postMedia.postId, postId), isNull(schema.postMedia.detachedAt)))
+    .orderBy(asc(schema.postMedia.attachmentOrder));
 }
 
 async function readPost(queryable: Queryable, postId: string): Promise<StoredDailyPost | null> {
@@ -73,7 +89,7 @@ async function readPost(queryable: Queryable, postId: string): Promise<StoredDai
     .leftJoin(schema.tomorrowNotes, eq(schema.tomorrowNotes.postId, schema.posts.id))
     .where(eq(schema.posts.id, postId))
     .limit(1);
-  return row ? toStoredPost(row) : null;
+  return row ? toStoredPost(await readPostMedia(queryable, postId), row) : null;
 }
 
 function createTransaction(queryable: Queryable): DailyPostTransaction {
@@ -112,6 +128,30 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
       return prompt ? { id: prompt.id, text: prompt.text } : null;
     },
 
+    async lockAttachableMedia(authorId, reservationIds) {
+      const reservations = await queryable
+        .select({
+          reservationId: schema.mediaReservation.id,
+          status: schema.mediaReservation.status,
+          contentType: schema.mediaReservation.contentType,
+          byteSize: schema.mediaReservation.byteSize,
+          expiresAt: schema.mediaReservation.expiresAt,
+        })
+        .from(schema.mediaReservation)
+        .where(and(
+          inArray(schema.mediaReservation.id, [...reservationIds]),
+          eq(schema.mediaReservation.ownerId, authorId),
+        ))
+        .for("update");
+      if (reservations.length === 0) return [];
+      const linked = await queryable
+        .select({ reservationId: schema.postMedia.reservationId })
+        .from(schema.postMedia)
+        .where(inArray(schema.postMedia.reservationId, reservations.map((row) => row.reservationId)));
+      const linkedIds = new Set(linked.map((row) => row.reservationId));
+      return reservations.map((row) => ({ ...row, linked: linkedIds.has(row.reservationId) }));
+    },
+
     async insertPost(post) {
       try {
         await queryable.insert(schema.posts).values({
@@ -138,6 +178,21 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
           note: post.tomorrowNote.note,
           availableOn: post.tomorrowNote.availableOn,
         });
+      }
+      if (post.media.length > 0) {
+        try {
+          await queryable.insert(schema.postMedia).values(post.media.map((media) => ({
+            id: media.id,
+            postId: post.id,
+            attachmentOrder: media.order,
+            reservationId: media.reservationId,
+          })));
+        } catch (error) {
+          // The service checked every upload under the row lock, so this is a
+          // backstop: an upload attaches to at most one post.
+          if (classifyPostgresConstraintError(error) === "unique") throw new CreateDailyPostError("MEDIA_UNAVAILABLE");
+          throw error;
+        }
       }
       await queryable.insert(schema.postIdempotencyKeys).values({
         authorId: post.authorId,
