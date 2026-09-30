@@ -15,14 +15,14 @@ const suite = enabled ? describe : describe.skip;
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 6 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 8 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
   const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[4]!}, 'active', now()), (${users[4]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[5]!}, 'active', now()), (${users[5]!}, ${users[0]!}, 'active', now())`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[4]!}, 'active', now()), (${users[4]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[5]!}, 'active', now()), (${users[5]!}, ${users[0]!}, 'active', now()), (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
   });
 
   afterAll(async () => {
@@ -118,14 +118,14 @@ suite("send message Postgres repository", () => {
   });
 
   it("allocates Number.MAX_SAFE_INTEGER without changing the public sequence string", async () => {
-    const created = await direct.create(users[0]!, {
-      recipientId: users[1]!,
+    const created = await direct.create(users[6]!, {
+      recipientId: users[7]!,
       clientMessageId: crypto.randomUUID(),
       text: "first",
     });
     await database.client`update public.conversations set last_message_sequence = 9007199254740990::bigint where id = ${created.conversation.id}`;
 
-    const result = await send.send(users[0]!, created.conversation.id, {
+    const result = await send.send(users[6]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
       text: "maximum safe sequence",
     });

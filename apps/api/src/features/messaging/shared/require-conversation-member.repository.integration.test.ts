@@ -108,11 +108,11 @@ suite("require conversation member Postgres query", () => {
 
   it("fails closed for every overflowing sequence column within a locked transaction", async () => {
     const conversation = await direct.create(users[0]!, {
-      recipientId: users[1]!,
+      recipientId: users[2]!,
       clientMessageId: crypto.randomUUID(),
       text: "overflow",
     });
-    const memberId = users[1]!;
+    const memberId = users[2]!;
     const overflow = "9007199254740993";
     await database.db.execute(sql`
       update public.conversations
