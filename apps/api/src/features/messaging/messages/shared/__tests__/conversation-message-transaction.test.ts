@@ -14,7 +14,7 @@ describe("withLockedConversationMessageTransaction", () => {
           ? [{ user_low_id: "amy", user_high_id: "zoe" }]
           : [];
       },
-    } as unknown as Pick<DayliDatabase, "execute">;
+    } as unknown as DayliDatabase;
 
     await withLockedConversationMessageTransaction(transaction, "conversation-1", async (received) => {
       expect(received).toBe(transaction);

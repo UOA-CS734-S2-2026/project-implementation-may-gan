@@ -8,7 +8,7 @@ import type {
 import type { StoredMessage } from "../../shared/messaging-types";
 
 type Row = Record<string, unknown>;
-type Queryable = Pick<DayliDatabase, "execute">;
+type Queryable = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
 const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
 const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 const date = (value: unknown) => new Date(String(value));

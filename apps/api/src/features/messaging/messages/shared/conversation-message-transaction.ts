@@ -1,6 +1,6 @@
 import { lockRelationshipPair, sql, type DayliDatabase } from "@dayli/db";
 
-type ConversationMessageTransaction = Pick<DayliDatabase, "execute">;
+type ConversationMessageTransaction = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
 type RelationshipPair = { user_low_id: string; user_high_id: string };
 
 const rows = <T>(value: unknown) => [...value as Iterable<T>];

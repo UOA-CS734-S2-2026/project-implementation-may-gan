@@ -1,7 +1,7 @@
 import { sql, type DayliDatabase } from "@dayli/db";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
-export type MessageWriteQueryable = Pick<DayliDatabase, "execute">;
+export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
 type Row = Record<string, unknown>;
 const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
 const number = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
