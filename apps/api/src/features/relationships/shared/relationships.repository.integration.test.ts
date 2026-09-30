@@ -23,7 +23,7 @@ suite("Postgres relationship persistence", () => {
   const directStore = createPostgresRelationshipsStore(database.db);
   const concurrentStore = createPostgresRelationshipsStore(concurrentDatabase.db);
   const service = createRelationshipsService(store, { now: () => new Date("2026-09-22T00:00:00.000Z") });
-  const users = Array.from({ length: 25 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 30 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.client`
@@ -302,6 +302,40 @@ suite("Postgres relationship persistence", () => {
       where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
     `;
     expect(remainingBlock?.count).toBe(0);
+  });
+
+  it("serializes an accept and block race without leaving an active relationship", async () => {
+    const sender = users[25]!;
+    const recipient = users[26]!;
+    const sent = await service.sendRequest(sender, recipient);
+
+    const [, block] = await Promise.allSettled([
+      service.acceptRequest(recipient, sent.outgoingRequest!.id),
+      service.block(recipient, sender),
+    ]);
+
+    expect(block).toMatchObject({ status: "fulfilled", value: { status: "blocked" } });
+    const [state] = await database.client`
+      select
+        (select count(*) from public.friend_requests where status = 'pending' and sender_id = ${sender} and recipient_id = ${recipient})::int as pending,
+        (select count(*) from public.friendships where state = 'active' and ((user_id = ${sender} and friend_id = ${recipient}) or (user_id = ${recipient} and friend_id = ${sender})))::int as active,
+        (select count(*) from public.relationship_blocks where blocker_id = ${recipient} and blocked_id = ${sender} and unblocked_at is null)::int as blocks
+    `;
+    expect(state).toEqual({ pending: 0, active: 0, blocks: 1 });
+  });
+
+  it("does not let another actor unblock a relationship block", async () => {
+    const blocker = users[27]!;
+    const blocked = users[28]!;
+    const stranger = users[29]!;
+    await service.block(blocker, blocked);
+
+    await expect(service.unblock(stranger, blocked)).resolves.toMatchObject({ status: "none" });
+    const [activeBlock] = await database.client`
+      select count(*)::int as count from public.relationship_blocks
+      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
+    `;
+    expect(activeBlock?.count).toBe(1);
   });
 
   it("conceals requests from a wrong actor and blocks relationship reads in either direction", async () => {
