@@ -45,7 +45,7 @@ export interface RealtimeTicket { ticket: string; webSocketUrl: string; expiresA
 export interface MessagingChange { changeSequence: string; kind: string; messageId: string | null; memberId: string | null; }
 export interface MessagingChangePage extends MessagingPage<MessagingChange> { highWatermark: string; nextChangeSequence: string | null; }
 export interface MessagingUnread { inboxCount: number; requestCount: number; }
-export type MessagingFailure = "unauthenticated" | "network" | "unavailable" | "invalid" | "conflict";
+export type MessagingFailure = "unauthenticated" | "network" | "unavailable" | "notFound" | "invalid" | "conflict";
 export type MessagingResult<T> = { ok: true; value: T } | { ok: false; failure: MessagingFailure; message: string };
 
 function api(): MessagingApi | null {
@@ -59,7 +59,7 @@ async function generated<T>(run: (client: MessagingApi) => Promise<T>): Promise<
     return { ok: true, value: await run(client) };
   } catch (error) {
     if (error instanceof ResponseError) {
-      const failure: MessagingFailure = error.response.status === 401 ? "unauthenticated" : error.response.status === 409 ? "conflict" : error.response.status === 422 ? "invalid" : "unavailable";
+      const failure: MessagingFailure = error.response.status === 401 ? "unauthenticated" : error.response.status === 404 ? "notFound" : error.response.status === 409 ? "conflict" : error.response.status === 422 ? "invalid" : "unavailable";
       const body = await error.response.json().catch(() => undefined) as { error?: { message?: string } } | undefined;
       return { ok: false, failure, message: body?.error?.message ?? "Messages could not be updated." };
     }
@@ -72,6 +72,7 @@ export const messagingApi = {
   inbox: (folder: "inbox" | "requests", cursor?: string) => generated((client) => client.listConversations({ folder, cursor }).then((value) => ({ items: value.items as unknown as MessagingConversation[], nextCursor: value.nextCursor ?? null, hasMore: Boolean(value.nextCursor) }))),
   unread: () => generated((client) => client.getMessagingUnread().then((value) => value as unknown as MessagingUnread)),
   direct: (recipientId: string, clientMessageId: string, text: string) => generated((client) => client.createDirectConversation({ createDirectConversationRequest: { recipientId, clientMessageId, text } }).then((value) => ({ conversation: value.conversation as unknown as MessagingConversation, message: value.message as unknown as MessagingMessage }))),
+  findDirect: (recipientId: string) => generated((client) => client.findDirectConversation({ recipientId }).then((value) => value as { conversationId: string })),
   conversation: (conversationId: string) => generated((client) => client.getConversation({ conversationId }).then((value) => value as unknown as MessagingConversation)),
   resolveRequest: (conversationId: string, decision: "accept" | "decline") => generated((client) => client.resolveMessageRequest({ conversationId, resolveMessageRequestRequest: { decision } }).then((value) => value as unknown as MessagingConversation)),
   realtimeTicket: () => generated((client) => client.createRealtimeTicket({ requestBody: {} }).then((value) => value as unknown as RealtimeTicket)),

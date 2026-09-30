@@ -7,15 +7,18 @@ import {
   type PendingRequestDirection,
   type PendingRequestPage,
   type RelationshipStatus,
+  type RelationshipUserCard,
   type RelationshipUserPage,
 } from "./relationship-service";
 import type { ResolveSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 
 export interface RelationshipsService {
   getStatus(actorId: string, subjectId: string): Promise<RelationshipStatus>;
   listPendingRequests(actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage>;
   listFriends(actorId: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
   searchUsers(actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage>;
+  getProfileByUsername(actorId: string, username: string): Promise<RelationshipUserCard>;
   sendRequest(actorId: string, recipientId: string): Promise<RelationshipStatus>;
   acceptRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
   declineRequest(actorId: string, requestId: string): Promise<RelationshipStatus>;
@@ -30,6 +33,7 @@ export interface RelationshipsRouteDependencies {
   resolveSession: ResolveSession;
   /** Denies discovery and relationship mutations until the actor has a public handle. */
   hasUsername?: (userId: string) => Promise<boolean>;
+  rateLimiter?: ActorRateLimiter;
 }
 
 export const relationshipSecurity: Array<Record<string, string[]>> = [

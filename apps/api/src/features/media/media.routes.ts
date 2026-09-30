@@ -18,8 +18,8 @@ export function registerMediaReservationRoutes(
   // Preserve unavailable-mode behavior. A missing runtime returns its documented
   // 503 rather than attempting session resolution in the DB-free default app.
   if (dependencies.runtime && dependencies.resolveSession) {
-    app.use("/api/v1/media-reservations/*", createRequireSession(dependencies.resolveSession));
-    app.use("/api/v1/media-reservations", createRequireSession(dependencies.resolveSession));
+    app.use("/api/v1/media-reservations/*", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+    app.use("/api/v1/media-reservations", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   }
   registerReserveUploadRoute(app, dependencies);
   registerGetReservationRoute(app, dependencies);

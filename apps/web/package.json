@@ -7,6 +7,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "check:vinext": "vinext check",
     "dev:vinext": "vite dev --port 3001",
@@ -40,6 +41,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.60.2",
     "@cloudflare/workers-types": "5.20260925.1",
+    "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "4.2.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.2",

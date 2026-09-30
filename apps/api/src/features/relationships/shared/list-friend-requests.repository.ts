@@ -1,5 +1,19 @@
+import { and, asc, eq, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { schema, type DayliDatabase } from "@dayli/db";
 import { RelationshipStoreError, type PendingRequestPage, type PendingRequestDirection, type StoredPendingRequest } from "./relationship-service";
-import { relationshipRows, sql, type RelationshipQueryable, type RelationshipRow } from "./relationship-postgres";
+import type { RelationshipQueryable } from "./relationship-postgres";
+
+type PendingRequestRow = {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  createdAt: Date;
+  cursorCreatedAt: string;
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+};
 
 function cursorValue(cursor: string | undefined): { createdAt: string; id: string } | undefined {
   if (!cursor) return undefined;
@@ -20,46 +34,69 @@ function nextCursor(createdAt: string, id: string): string {
   return btoa(JSON.stringify({ createdAt, id })).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function requestFromRow(row: RelationshipRow, actorId: string): StoredPendingRequest {
+function requestFromRow(row: PendingRequestRow, actorId: string): StoredPendingRequest {
   return {
-    id: String(row.id),
-    senderId: String(row.sender_id),
-    recipientId: String(row.recipient_id),
-    createdAt: new Date(String(row.created_at)).toISOString(),
+    id: row.id,
+    senderId: row.senderId,
+    recipientId: row.recipientId,
+    createdAt: row.createdAt.toISOString(),
     user: {
-      id: String(row.user_id),
-      username: String(row.username),
-      displayName: String(row.display_name),
-      relationship: row.sender_id === actorId ? "outgoing_pending" : "incoming_pending",
+      id: row.userId,
+      username: row.username!,
+      displayName: row.displayName!,
+      relationship: row.senderId === actorId ? "outgoing_pending" : "incoming_pending",
     },
   };
 }
 
 export async function listPendingRequestRows(queryable: RelationshipQueryable, actorId: string, direction: PendingRequestDirection, limit: number, cursor?: string): Promise<PendingRequestPage> {
+  // The shared transaction interface predates builder reads; callers provide DayliDatabase transactions.
+  const database = queryable as unknown as Pick<DayliDatabase, "select">;
+  const { friendRequests, relationshipBlocks, user } = schema;
+  const other = alias(user, "other");
   const after = cursorValue(cursor);
-  const directionSql = direction === "incoming" ? sql`and request.recipient_id = ${actorId}` : direction === "outgoing" ? sql`and request.sender_id = ${actorId}` : sql`and (request.sender_id = ${actorId} or request.recipient_id = ${actorId})`;
-  const cursorSql = after ? sql`and (request.created_at, request.id) > (${after.createdAt}::timestamptz, ${after.id})` : sql``;
-  const result = relationshipRows<RelationshipRow>(await queryable.execute(sql`
-    select request.id, request.sender_id, request.recipient_id, request.created_at,
-      to_char(request.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as cursor_created_at,
-      other.id as user_id, other.username, coalesce(other.display_username, other.username) as display_name
-    from public.friend_requests request
-    join public."user" other on other.id = case when request.sender_id = ${actorId} then request.recipient_id else request.sender_id end
-    where request.status = 'pending' ${directionSql} ${cursorSql}
-      and other.username is not null
-      and (coalesce(other.banned, false) = false or (other.ban_expires is not null and other.ban_expires <= now()))
-      and not exists (
-        select 1 from public.relationship_blocks block where block.unblocked_at is null
-          and ((block.blocker_id = ${actorId} and block.blocked_id = other.id) or (block.blocker_id = other.id and block.blocked_id = ${actorId}))
-      )
-    order by request.created_at asc, request.id asc limit ${limit + 1}
-  `));
-  const hasMore = result.length > limit;
-  const items = result.slice(0, limit).map((row) => requestFromRow(row, actorId));
-  const last = result[Math.min(result.length, limit) - 1];
+  const directionCondition = direction === "incoming"
+    ? eq(friendRequests.recipientId, actorId)
+    : direction === "outgoing"
+    ? eq(friendRequests.senderId, actorId)
+    : or(eq(friendRequests.senderId, actorId), eq(friendRequests.recipientId, actorId));
+  const rows: PendingRequestRow[] = await database
+    .select({
+      id: friendRequests.id,
+      senderId: friendRequests.senderId,
+      recipientId: friendRequests.recipientId,
+      createdAt: friendRequests.createdAt,
+      cursorCreatedAt: sql<string>`to_char(${friendRequests.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+      userId: other.id,
+      username: other.username,
+      displayName: sql<string>`coalesce(${other.displayUsername}, ${other.username})`,
+    })
+    .from(friendRequests)
+    .innerJoin(other, eq(other.id, sql<string>`case when ${friendRequests.senderId} = ${actorId} then ${friendRequests.recipientId} else ${friendRequests.senderId} end`))
+    .where(and(
+      eq(friendRequests.status, "pending"),
+      directionCondition,
+      after ? sql`(${friendRequests.createdAt}, ${friendRequests.id}) > (${after.createdAt}::timestamptz, ${after.id})` : undefined,
+      isNotNull(other.username),
+      sql`(coalesce(${other.banned}, false) = false or (${other.banExpires} is not null and ${other.banExpires} <= now()))`,
+      notExists(
+        database.select({ one: sql`1` }).from(relationshipBlocks).where(and(
+          isNull(relationshipBlocks.unblockedAt),
+          or(
+            and(eq(relationshipBlocks.blockerId, actorId), eq(relationshipBlocks.blockedId, other.id)),
+            and(eq(relationshipBlocks.blockerId, other.id), eq(relationshipBlocks.blockedId, actorId)),
+          ),
+        )),
+      ),
+    ))
+    .orderBy(asc(friendRequests.createdAt), asc(friendRequests.id))
+    .limit(limit + 1);
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit).map((row) => requestFromRow(row, actorId));
+  const last = rows[Math.min(rows.length, limit) - 1];
   return {
     items,
     hasMore,
-    nextCursor: hasMore && last ? nextCursor(String(last.cursor_created_at), String(last.id)) : null,
+    nextCursor: hasMore && last ? nextCursor(last.cursorCreatedAt, last.id) : null,
   };
 }

@@ -6,6 +6,7 @@ import { registerBlockUserRoute } from "./block-user/block-user.route";
 import { registerCancelFriendRequestRoute } from "./cancel-friend-request/cancel-friend-request.route";
 import { registerDeclineFriendRequestRoute } from "./decline-friend-request/decline-friend-request.route";
 import { registerGetRelationshipRoute } from "./get-relationship/get-relationship.route";
+import { registerGetProfileRoute } from "./get-profile/get-profile.route";
 import { registerListFriendRequestsRoute } from "./list-friend-requests/list-friend-requests.route";
 import { registerListFriendsRoute } from "./list-friends/list-friends.route";
 import { registerSearchUsersRoute } from "./search-users/search-users.route";
@@ -39,7 +40,7 @@ export function registerRelationshipsRoutes(
       context.header("Cache-Control", "no-store");
     }
   });
-  app.use("/api/v1/relationships/*", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/relationships/*", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.use("/api/v1/relationships/*", async (context, next) => {
     if (dependencies.hasUsername && !await dependencies.hasUsername(context.get("actor").userId)) {
       return context.json({ error: { code: "FORBIDDEN", message: "Choose a username before using friends.", requestId: `req_${crypto.randomUUID()}` } }, 403);
@@ -50,6 +51,7 @@ export function registerRelationshipsRoutes(
   registerListFriendRequestsRoute(app, dependencies);
   registerListFriendsRoute(app, dependencies);
   registerSearchUsersRoute(app, dependencies);
+  registerGetProfileRoute(app, dependencies);
   registerGetRelationshipRoute(app, dependencies);
   registerSendFriendRequestRoute(app, dependencies);
   registerAcceptFriendRequestRoute(app, dependencies);

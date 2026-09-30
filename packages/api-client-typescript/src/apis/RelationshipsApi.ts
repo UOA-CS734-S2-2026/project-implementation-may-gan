@@ -24,6 +24,11 @@ import {
     PendingRequestPageToJSON,
 } from '../models/PendingRequestPage';
 import {
+    type RelationshipProfile,
+    RelationshipProfileFromJSON,
+    RelationshipProfileToJSON,
+} from '../models/RelationshipProfile';
+import {
     type RelationshipStatus,
     RelationshipStatusFromJSON,
     RelationshipStatusToJSON,
@@ -65,6 +70,13 @@ export interface RelationshipsDeclineRequestRequest {
      *
      */
     requestId: string;
+}
+
+export interface RelationshipsGetProfileByUsernameRequest {
+    /**
+     *
+     */
+    username: string;
 }
 
 export interface RelationshipsGetStatusRequest {
@@ -350,6 +362,61 @@ export class RelationshipsApi extends runtime.BaseAPI {
      */
     async relationshipsDeclineRequest(requestParameters: RelationshipsDeclineRequestRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelationshipStatus> {
         const response = await this.relationshipsDeclineRequestRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for relationshipsGetProfileByUsername without sending the request
+     */
+    async relationshipsGetProfileByUsernameRequestOpts(requestParameters: RelationshipsGetProfileByUsernameRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling relationshipsGetProfileByUsername().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/relationships/profiles/{username}`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns only ID, username, chosen public display name, and actor relationship state. Unknown and blocked usernames are both not found.
+     * Read a minimal social profile by username
+     */
+    async relationshipsGetProfileByUsernameRaw(requestParameters: RelationshipsGetProfileByUsernameRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RelationshipProfile>> {
+        const requestOptions = await this.relationshipsGetProfileByUsernameRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RelationshipProfileFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns only ID, username, chosen public display name, and actor relationship state. Unknown and blocked usernames are both not found.
+     * Read a minimal social profile by username
+     */
+    async relationshipsGetProfileByUsername(requestParameters: RelationshipsGetProfileByUsernameRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RelationshipProfile> {
+        const response = await this.relationshipsGetProfileByUsernameRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

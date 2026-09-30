@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   registerBetterAuthCompatibilityRoutes,
   registerPostgresBetterAuthRoutes,
+  registerStrictAuthCors,
 } from "./features/auth/route";
 import {
   createPostgresBetterAuth,
@@ -23,6 +24,7 @@ import { createHyperdriveRelationshipsStore } from "./features/relationships/sha
 import type { RelationshipsService } from "./features/relationships/shared/relationship-route";
 import type { RelationshipStore } from "./features/relationships/shared/relationship-service";
 import { getRelationship } from "./features/relationships/get-relationship/get-relationship.service";
+import { getProfileByUsername } from "./features/relationships/get-profile/get-profile.service";
 import { listFriendRequests } from "./features/relationships/list-friend-requests/list-friend-requests.service";
 import { listFriends } from "./features/relationships/list-friends/list-friends.service";
 import { searchUsers } from "./features/relationships/search-users/search-users.service";
@@ -40,7 +42,8 @@ import {
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
-import { sql, type DayliDatabase } from "@dayli/db";
+import { schema, type DayliDatabase } from "@dayli/db";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
@@ -52,6 +55,11 @@ import { createHyperdriveDailyPostStore } from "./features/posts/create-post/cre
 import { registerSystemRoutes } from "./features/system/system.routes";
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
+import {
+  createActorRateLimiter,
+  createIngressRateLimitMiddleware,
+  type ApiRateLimitDependencies,
+} from "./http/middleware/rate-limit";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
@@ -88,6 +96,10 @@ import {
   createHyperdriveGetConversationRepository,
   createPostgresGetConversationRepository,
 } from "./features/messaging/conversations/get-conversation/get-conversation.repository";
+import {
+  createHyperdriveGetDirectConversationRepository,
+  createPostgresGetDirectConversationRepository,
+} from "./features/messaging/conversations/get-direct-conversation/get-direct-conversation.repository";
 import {
   createHyperdriveGetMessageRepository,
   createPostgresGetMessageRepository,
@@ -149,6 +161,8 @@ export interface AppDependencies {
   usernameProfile?: UsernameProfileRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
+  /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
+  rateLimiting?: ApiRateLimitDependencies;
 }
 
 export function createApp({
@@ -165,6 +179,7 @@ export function createApp({
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
   trustedOrigins = [],
+  rateLimiting,
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
     defaultHook: (result, context) => {
@@ -186,6 +201,13 @@ export function createApp({
 
   // Middleware must precede the routes it wraps.
   if (trustedOrigins.length > 0) registerApplicationCors(api, trustedOrigins);
+  const authOrigins = auth?.trustedOrigins ?? trustedOrigins;
+  if (authOrigins.length > 0) registerStrictAuthCors(api, authOrigins);
+  if (rateLimiting) {
+    api.use("/api/v1/*", createIngressRateLimitMiddleware(rateLimiting));
+    api.use("/api/auth/*", createIngressRateLimitMiddleware(rateLimiting));
+  }
+  const rateLimiter = rateLimiting ? createActorRateLimiter(rateLimiting) : undefined;
   if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
 
   api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
@@ -200,21 +222,22 @@ export function createApp({
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
   registerSystemRoutes(api);
-  registerMediaReservationRoutes(api, media);
-  registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
+  registerMediaReservationRoutes(api, { ...media, rateLimiter });
+  registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
-    create: posts ?? { resolveSession: async () => null },
-    feed: feed ?? { resolveSession: async () => null },
-    detail: postDetail ?? { resolveSession: async () => null },
+    create: { ...(posts ?? { resolveSession: async () => null }), rateLimiter },
+    feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
+    detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
   });
-  registerRelationshipsRoutes(api, relationships);
+  registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
     ...messaging,
     realtimeTicket,
     pushDevices,
     realtimeConnect,
+    rateLimiter,
   });
-  registerUsernameProfileRoutes(api, usernameProfile);
+  registerUsernameProfileRoutes(api, { ...usernameProfile, rateLimiter });
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -285,6 +308,19 @@ export function createAppForEnv(env: ApiEnv) {
     pushDevices,
     usernameProfile,
     trustedOrigins: configuration?.trustedOrigins,
+    rateLimiting: {
+      environmentScope: env.API_RATE_LIMIT_SCOPE,
+      bindings: {
+        ingress: env.API_INGRESS_RATE_LIMIT,
+        read: env.API_READ_RATE_LIMIT,
+        write: env.API_WRITE_RATE_LIMIT,
+        message: env.API_MESSAGE_RATE_LIMIT,
+        media: env.API_MEDIA_RATE_LIMIT,
+        realtime: env.API_REALTIME_RATE_LIMIT,
+        directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
+      },
+      onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
+    },
   });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env, env.USER_REALTIME ? {
@@ -310,6 +346,7 @@ const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     listPendingRequests: async () => { throw new Error("Relationship storage is unavailable."); },
     listFriends: async () => { throw new Error("Relationship storage is unavailable."); },
     searchUsers: async () => { throw new Error("Relationship storage is unavailable."); },
+    getProfileByUsername: async () => { throw new Error("Relationship storage is unavailable."); },
     sendRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     acceptRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     declineRequest: async () => { throw new Error("Relationship storage is unavailable."); },
@@ -362,6 +399,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     listConversationChanges: createPostgresListConversationChangesRepository(database),
     listConversations: createPostgresListConversationsRepository(database),
     getConversation: createPostgresGetConversationRepository(database),
+    findDirectConversation: createPostgresGetDirectConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
     send: createSendMessageService({ store, now: options.now }),
@@ -379,6 +417,7 @@ export function createRelationshipsService(store: RelationshipStore, options: { 
     listPendingRequests: (actorId, direction, limit, cursor) => listFriendRequests(dependencies, actorId, direction, limit, cursor),
     listFriends: (actorId, limit, cursor) => listFriends(dependencies, actorId, limit, cursor),
     searchUsers: (actorId, query, limit, cursor) => searchUsers(dependencies, actorId, query, limit, cursor),
+    getProfileByUsername: (actorId, username) => getProfileByUsername(dependencies, actorId, username),
     sendRequest: (actorId, recipientId) => sendFriendRequest(dependencies, actorId, recipientId),
     acceptRequest: (actorId, requestId) => acceptFriendRequest(dependencies, actorId, requestId),
     declineRequest: (actorId, requestId) => declineFriendRequest(dependencies, actorId, requestId),
@@ -420,9 +459,15 @@ function createVerifiedRealtimeSessionResolver(configuration: RuntimeConfigurati
 
 function resolveRealtimeSessionById(configuration: RuntimeConfiguration, sessionId: string): Promise<VerifiedRealtimeSession | null> {
   return withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
-    const result = await database.execute(sql`select id, user_id, expires_at from public.session where id = ${sessionId} and expires_at > now() limit 1`);
-    const [row] = [...result as Iterable<{ id: unknown; user_id: unknown; expires_at: unknown }>];
-    return row ? { sessionId: String(row.id), userId: String(row.user_id), expiresAt: new Date(String(row.expires_at)) } : null;
+    const [row] = await database
+      .select({ id: schema.session.id, userId: schema.session.userId, expiresAt: schema.session.expiresAt })
+      .from(schema.session)
+      .where(and(
+        eq(schema.session.id, sessionId),
+        gt(schema.session.expiresAt, sql`now()`),
+      ))
+      .limit(1);
+    return row ? { sessionId: row.id, userId: row.userId, expiresAt: row.expiresAt } : null;
   });
 }
 
@@ -452,6 +497,7 @@ function createMessagingDependencies(
     listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),
     listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),
     getConversation: createHyperdriveGetConversationRepository(configuration.hyperdrive),
+    findDirectConversation: createHyperdriveGetDirectConversationRepository(configuration.hyperdrive),
     getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),
     dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,

@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { apiErrorResponse } from "../../../http/api-error";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import {
   apiErrorSchema,
   createMediaReservationRequestSchema,
@@ -27,7 +28,7 @@ const reserveUploadRoute = createRoute({
     },
     401: { description: "No valid session.", content: { "application/json": { schema: apiErrorSchema } } },
     422: { description: "The request body is invalid.", content: { "application/json": { schema: apiErrorSchema } } },
-    429: { description: "Too many pending reservations for this owner.", content: { "application/json": { schema: apiErrorSchema } } },
+    429: { ...rateLimitErrorResponse, description: "Too many pending reservations for this owner, or too many requests." },
     503: { description: "Media reservations are not currently configured.", content: { "application/json": { schema: apiErrorSchema } } },
   },
 });

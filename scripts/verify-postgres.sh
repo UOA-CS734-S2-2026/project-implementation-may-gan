@@ -9,10 +9,18 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/packages/db/docker-compose.yml"
 compose_project="${VERIFY_POSTGRES_PROJECT:-dayli-verify-postgres-$$}"
 postgres_port="${VERIFY_POSTGRES_PORT:-5433}"
+export POSTGRES_PORT="$postgres_port"
+export LOCAL_TEST_POSTGRES_PORT="$postgres_port"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-verify-postgres.XXXXXX")"
 main_database="dayli_test"
 relationship_database="dayli_relationship_test"
 messaging_database="dayli_messaging_test"
+advisory_lock_database="dayli_advisory_lock_ci_test"
+
+# The test Compose file and integration guards read these values when a verifier
+# needs an isolated port.
+export POSTGRES_PORT="$postgres_port"
+export VERIFY_POSTGRES_PORT="$postgres_port"
 
 cleanup() {
   local status=$?
@@ -78,6 +86,8 @@ echo 'Provisioning isolated relationship test database'
 provision_isolated_database "$relationship_database"
 echo 'Provisioning isolated messaging test database'
 provision_isolated_database "$messaging_database"
+echo 'Provisioning isolated advisory-lock test database'
+provision_isolated_database "$advisory_lock_database"
 
 # Future suites may request additional disposable databases without sharing a
 # volume or credential with development. Comma-separated names only.
@@ -97,12 +107,15 @@ export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
 export RELATIONSHIP_TEST_DATABASE_URL="$(migrator_url "$relationship_database")"
 export MESSAGING_TEST_DATABASE_URL="$(migrator_url "$messaging_database")"
 export MESSAGING_DELIVERY_TEST_DATABASE_URL="$MESSAGING_TEST_DATABASE_URL"
+export ADVISORY_LOCK_TEST_DATABASE_URL="$(app_url "$advisory_lock_database")"
+export ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL="$(migrator_url "$advisory_lock_database")"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
 pnpm db:check
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate
@@ -112,6 +125,7 @@ pnpm db:verify
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate

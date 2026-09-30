@@ -40,7 +40,8 @@ describe("application CORS", () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get("access-control-allow-origin")).toBe(origin);
-    expect(response.headers.get("access-control-expose-headers")).toBe("idempotent-replayed");
+    expect(response.headers.get("access-control-expose-headers")).toContain("idempotent-replayed");
+    expect(response.headers.get("access-control-expose-headers")).toContain("retry-after");
     expect(response.headers.get("vary")).toContain("Origin");
   });
 

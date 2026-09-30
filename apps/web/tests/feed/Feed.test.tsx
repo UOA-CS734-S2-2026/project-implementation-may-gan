@@ -73,8 +73,23 @@ describe("Feed", () => {
     expect(screen.queryByText("Low tide.")).toBeNull();
     expect(screen.queryByRole("button", { name: /see more/i })).toBeNull();
 
-    expect(screen.getByRole("link", { name: /open friend 1's dayli/i }).getAttribute("href")).toBe("/friend_1/1");
-    expect(screen.getByRole("link", { name: /@friend_1/ }).getAttribute("href")).toBe("/friend_1");
+    expect(screen.getByRole("link", { name: /open friend 1's dayli/i }).getAttribute("href")).toBe("/u/friend_1/1");
+    expect(screen.getByRole("link", { name: /@friend_1/ }).getAttribute("href")).toBe("/u/friend_1");
+  });
+
+  it("keeps an app-route username on the profile and post routes", async () => {
+    page.mockResolvedValue({
+      ok: true,
+      value: {
+        items: [{ ...post("2", "A dayli."), author: { id: "author-2", username: "messages", displayName: "Friend 2" } }],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+
+    render(<Feed />);
+    expect((await screen.findByRole("link", { name: /open friend 2's dayli/i })).getAttribute("href")).toBe("/u/messages/2");
+    expect(screen.getByRole("link", { name: /@messages/ }).getAttribute("href")).toBe("/u/messages");
   });
 
   it("shows an empty state when friends have no released posts", async () => {

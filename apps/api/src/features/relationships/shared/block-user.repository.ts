@@ -1,11 +1,34 @@
+import { schema } from "@dayli/db";
+import { and, eq, or } from "drizzle-orm";
 import type { StoredRelationshipSnapshot } from "./relationship-service";
-import { sql, type RelationshipPostgresContext } from "./relationship-postgres";
+import type { RelationshipPostgresContext } from "./relationship-postgres";
 
 export async function blockRelationshipPair(context: RelationshipPostgresContext, input: { blockerId: string; blockedId: string; blockedAt: string }): Promise<StoredRelationshipSnapshot> {
   await context.lockPair(input.blockerId, input.blockedId);
   await context.requireTarget(input.blockerId, input.blockedId);
-  await context.queryable.execute(sql`update public.friend_requests set status = 'cancelled', resolved_at = ${input.blockedAt}::timestamptz where status = 'pending' and ((sender_id = ${input.blockerId} and recipient_id = ${input.blockedId}) or (sender_id = ${input.blockedId} and recipient_id = ${input.blockerId}))`);
-  await context.queryable.execute(sql`update public.friendships set state = 'ended', state_changed_at = ${input.blockedAt}::timestamptz where (user_id = ${input.blockerId} and friend_id = ${input.blockedId}) or (user_id = ${input.blockedId} and friend_id = ${input.blockerId})`);
-  await context.queryable.execute(sql`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at, unblocked_at) values (${input.blockerId}, ${input.blockedId}, ${input.blockedAt}::timestamptz, null) on conflict (blocker_id, blocked_id) do update set blocked_at = excluded.blocked_at, unblocked_at = null`);
+  const blockedAt = new Date(input.blockedAt);
+  const requestPair = or(
+    and(eq(schema.friendRequests.senderId, input.blockerId), eq(schema.friendRequests.recipientId, input.blockedId)),
+    and(eq(schema.friendRequests.senderId, input.blockedId), eq(schema.friendRequests.recipientId, input.blockerId)),
+  );
+  const friendshipPair = or(
+    and(eq(schema.friendships.userId, input.blockerId), eq(schema.friendships.friendId, input.blockedId)),
+    and(eq(schema.friendships.userId, input.blockedId), eq(schema.friendships.friendId, input.blockerId)),
+  );
+  await context.queryable
+    .update(schema.friendRequests)
+    .set({ status: "cancelled", resolvedAt: blockedAt })
+    .where(and(eq(schema.friendRequests.status, "pending"), requestPair));
+  await context.queryable
+    .update(schema.friendships)
+    .set({ state: "ended", stateChangedAt: blockedAt })
+    .where(friendshipPair);
+  await context.queryable
+    .insert(schema.relationshipBlocks)
+    .values({ blockerId: input.blockerId, blockedId: input.blockedId, blockedAt, unblockedAt: null })
+    .onConflictDoUpdate({
+      target: [schema.relationshipBlocks.blockerId, schema.relationshipBlocks.blockedId],
+      set: { blockedAt, unblockedAt: null },
+    });
   return context.snapshot(input.blockerId, input.blockedId);
 }

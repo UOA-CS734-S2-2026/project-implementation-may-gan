@@ -1,9 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { createRequireSession } from "../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../http/middleware/rate-limit";
 import { createRequireUsername, type HasUsername } from "../../http/middleware/require-username";
 import { registerCreateDirectConversationRoute, type CreateDirectConversationRouteDependencies } from "./conversations/create-direct-conversation/create-direct-conversation.route";
 import { registerGetConversationRoute, type GetConversationRouteDependencies } from "./conversations/get-conversation/get-conversation.route";
+import { registerGetDirectConversationRoute, type GetDirectConversationRouteDependencies } from "./conversations/get-direct-conversation/get-direct-conversation.route";
 import { registerGetMessageRoute, type GetMessageRouteDependencies } from "./messages/get-message/get-message.route";
 import { registerGetMessagingUnreadRoute, type GetMessagingUnreadRouteDependencies } from "./conversations/get-messaging-unread/get-messaging-unread.route";
 import { registerListConversationChangesRoute, type ListConversationChangesRouteDependencies } from "./conversations/list-conversation-changes/list-conversation-changes.route";
@@ -37,6 +39,7 @@ export interface MessagingRouteDependencies extends
   RemoveReactionRouteDependencies,
   CreateDirectConversationRouteDependencies,
   GetConversationRouteDependencies,
+  GetDirectConversationRouteDependencies,
   GetMessagingUnreadRouteDependencies,
   ListConversationChangesRouteDependencies,
   GetMessageRouteDependencies,
@@ -50,6 +53,7 @@ export interface MessagingRouteDependencies extends
   realtimeTicket?: RealtimeTicketRouteDependencies;
   pushDevices?: RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
   realtimeConnect?: RealtimeConnectRouteDependencies;
+  rateLimiter?: ActorRateLimiter;
 }
 
 export function registerMessagingRoutes(
@@ -57,14 +61,14 @@ export function registerMessagingRoutes(
   dependencies: MessagingRouteDependencies,
 ) {
   for (const path of ["/api/v1/conversations", "/api/v1/conversations/*", "/api/v1/messaging/*"]) {
-    app.use(path, createRequireSession(dependencies.resolveSession));
+    app.use(path, createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
     app.use(path, createRequireUsername(dependencies.hasUsername));
   }
   if (dependencies.realtimeTicket) {
-    app.use("/api/v1/realtime/tickets", createRequireSession(dependencies.realtimeTicket.resolveSession));
+    app.use("/api/v1/realtime/tickets", createRequireSession(dependencies.realtimeTicket.resolveSession, dependencies.rateLimiter));
   }
   if (dependencies.pushDevices) {
-    app.use("/api/v1/push/devices/*", createRequireSession(dependencies.pushDevices.resolveSession));
+    app.use("/api/v1/push/devices/*", createRequireSession(dependencies.pushDevices.resolveSession, dependencies.rateLimiter));
   }
 
   registerSendMessageRoute(app, dependencies);
@@ -74,6 +78,7 @@ export function registerMessagingRoutes(
   registerRemoveReactionRoute(app, dependencies);
 
   registerCreateDirectConversationRoute(app, dependencies);
+  registerGetDirectConversationRoute(app, dependencies);
   registerListConversationsRoute(app, dependencies);
   registerGetConversationRoute(app, dependencies);
   registerGetMessagingUnreadRoute(app, dependencies);
@@ -88,5 +93,5 @@ export function registerMessagingRoutes(
     registerRegisterDeviceRoute(app, dependencies.pushDevices);
     registerUnregisterDeviceRoute(app, dependencies.pushDevices);
   }
-  if (dependencies.realtimeConnect) registerConnectRealtimeRoute(app, dependencies.realtimeConnect);
+  if (dependencies.realtimeConnect) registerConnectRealtimeRoute(app, { ...dependencies.realtimeConnect, rateLimiter: dependencies.rateLimiter });
 }

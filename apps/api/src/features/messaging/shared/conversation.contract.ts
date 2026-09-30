@@ -1,9 +1,12 @@
 import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import { messageSchema } from "./message.contract";
 
 const sequence = z.string().regex(/^\d+$/).openapi({ example: "42" });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
+export const directPairParamsSchema = z.object({ recipientId: opaqueIdSchema });
+export const directPairLookupSchema = z.object({ conversationId: opaqueIdSchema }).openapi("DirectPairLookup");
 const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
 export const directConversationBodySchema = z.object({ recipientId: opaqueIdSchema, clientMessageId: opaqueIdSchema, text: messageTextSchema }).strict();
 export const conversationFolderSchema = z.object({ folder: z.enum(["inbox", "requests"]).default("inbox"), cursor: z.string().min(1).optional(), limit: z.coerce.number().int().min(1).max(100).default(30) });
@@ -32,4 +35,4 @@ export const unreadSchema = z.object({ inboxCount: z.number().int().min(0), requ
 export const messageListSchema = z.object({ items: z.array(messageSchema), nextCursor: sequence.nullable(), hasMore: z.boolean() });
 export const changesSchema = z.object({ items: z.array(z.object({ changeSequence: sequence, kind: z.string(), messageId: opaqueIdSchema.nullable(), memberId: opaqueIdSchema.nullable(), createdAt: utcTimestampSchema })), nextChangeSequence: sequence.nullable(), hasMore: z.boolean(), highWatermark: sequence });
 export const readSchema = z.object({ lastReadSequence: sequence, receiptSequence: sequence, unreadCount: z.number().int().min(0) });
-export const messagingReadErrors = { 401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } }, 403: { description: "The action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } }, 404: { description: "The conversation was not found.", content: { "application/json": { schema: apiErrorSchema } } }, 409: { description: "The action conflicts with current state.", content: { "application/json": { schema: apiErrorSchema } } }, 422: { description: "The request contains invalid values.", content: { "application/json": { schema: apiErrorSchema } } }, 503: { description: "Messaging is temporarily unavailable.", content: { "application/json": { schema: apiErrorSchema } } } } as const;
+export const messagingReadErrors = { 401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } }, 403: { description: "The action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } }, 404: { description: "The conversation was not found.", content: { "application/json": { schema: apiErrorSchema } } }, 409: { description: "The action conflicts with current state.", content: { "application/json": { schema: apiErrorSchema } } }, 422: { description: "The request contains invalid values.", content: { "application/json": { schema: apiErrorSchema } } }, 429: rateLimitErrorResponse, 503: { description: "Messaging is temporarily unavailable.", content: { "application/json": { schema: apiErrorSchema } } } } as const;

@@ -1,35 +1,62 @@
 import { createDayliDatabase } from "@dayli/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createAppForEnv } from "../../app";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp, createAppForEnv } from "../../app";
+import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./route";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
 const hasTestDatabaseConfig = Boolean(migratorUrl && appUrl);
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const origin = "https://api.example.test";
 const trustedOrigins = "https://api.example.test,https://web.example.test";
 const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
+const allowRateLimit = { limit: async () => ({ success: true }) };
+const rateLimitBindings = {
+  API_RATE_LIMIT_SCOPE: "test",
+  API_INGRESS_RATE_LIMIT: allowRateLimit,
+  API_READ_RATE_LIMIT: allowRateLimit,
+  API_WRITE_RATE_LIMIT: allowRateLimit,
+  API_MESSAGE_RATE_LIMIT: allowRateLimit,
+  API_MEDIA_RATE_LIMIT: allowRateLimit,
+  API_REALTIME_RATE_LIMIT: allowRateLimit,
+  API_DIRECT_PUSH_RATE_LIMIT: allowRateLimit,
+};
 
 function requireLocalTestUrl(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required for PostgreSQL auth integration tests.`);
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error(`${name} must target localhost:5433/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }
 
-function createProductionApp() {
-  return createAppForEnv({
+function productionAuthEnvironment() {
+  return {
     HYPERDRIVE: { connectionString: requireLocalTestUrl(appUrl, "TEST_APP_DATABASE_URL") },
     BETTER_AUTH_SECRET: secret,
     BETTER_AUTH_BASE_URL: origin,
     BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
-  });
+    ...rateLimitBindings,
+  };
+}
+
+function createProductionApp() {
+  return createAppForEnv(productionAuthEnvironment());
+}
+
+function createProductionAuthApp(revocations: SessionRevocationHook) {
+  const api = createApp();
+  if (!registerPostgresBetterAuthRoutes(api, productionAuthEnvironment(), revocations)) {
+    throw new Error("Test Better Auth configuration is invalid.");
+  }
+  return api;
 }
 
 function request(path: string, init: RequestInit = {}, requestOrigin = origin) {
   const headers = new Headers(init.headers);
   headers.set("origin", requestOrigin);
+  if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", "198.51.100.9");
   return new Request(`${origin}${path}`, { ...init, headers });
 }
 
@@ -147,6 +174,39 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(expired.json()).resolves.toBeNull();
   });
 
+  it("notifies Worker revocation for every session before Better Auth removes them", async () => {
+    const revokeSessions = vi.fn(async () => undefined);
+    const app = createProductionAuthApp({ revokeSessions });
+    const firstToken = nativeToken(await signUp(app));
+    const secondToken = nativeToken(await signIn(app));
+
+    const firstSession = await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${firstToken}` },
+    }));
+    const first = await firstSession.json() as { user: { id: string }; session: { id: string } };
+    const secondSession = await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${secondToken}` },
+    }));
+    const second = await secondSession.json() as { session: { id: string } };
+
+    const revoked = await app.fetch(request("/api/auth/revoke-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${secondToken}` },
+    }));
+
+    expect(revoked.status).toBe(200);
+    expect(revokeSessions).toHaveBeenCalledWith(first.user.id, expect.arrayContaining([
+      first.session.id,
+      second.session.id,
+    ]));
+    await expect((await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${firstToken}` },
+    }))).json()).resolves.toBeNull();
+    await expect((await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${secondToken}` },
+    }))).json()).resolves.toBeNull();
+  });
+
   it("atomically admits only one case-insensitive concurrent username claim", async () => {
     const bodies = ["first", "second"].map((name) => request("/api/auth/sign-up/email", {
       method: "POST",
@@ -186,6 +246,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       BETTER_AUTH_SECRET: "too-short",
       BETTER_AUTH_BASE_URL: origin,
       BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
+      ...rateLimitBindings,
     });
     expect((await unconfigured.fetch(request("/api/auth/get-session"))).status).toBe(404);
   });

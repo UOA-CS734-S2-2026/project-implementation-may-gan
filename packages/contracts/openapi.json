@@ -798,6 +798,32 @@
           "hasMore"
         ]
       },
+      "RelationshipProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/RelationshipState"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "relationship"
+        ],
+        "description": "Authenticated, actor-scoped profile projection. Blocked and unknown usernames both return 404."
+      },
       "RelationshipStatus": {
         "type": "object",
         "properties": {
@@ -986,6 +1012,17 @@
           "editedAt",
           "unsentAt",
           "reactions"
+        ]
+      },
+      "DirectPairLookup": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          }
+        },
+        "required": [
+          "conversationId"
         ]
       },
       "Conversation": {
@@ -1255,7 +1292,16 @@
             }
           },
           "429": {
-            "description": "Too many pending reservations for this owner.",
+            "description": "Too many pending reservations for this owner, or too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1396,6 +1442,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Media reservations are not currently configured, or R2 is temporarily unavailable.",
             "content": {
@@ -1437,6 +1502,25 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1552,6 +1636,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Post storage is temporarily unavailable.",
             "content": {
@@ -1629,6 +1732,25 @@
           },
           "422": {
             "description": "The query contains invalid values, including an unrecognised cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1716,6 +1838,25 @@
           },
           "422": {
             "description": "The post ID is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1853,7 +1994,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -1969,7 +2119,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2103,7 +2262,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2252,7 +2420,148 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authentication or relationship storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An unexpected server error occurred.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships/profiles/{username}": {
+      "get": {
+        "tags": [
+          "Relationships"
+        ],
+        "operationId": "relationships.getProfileByUsername",
+        "summary": "Read a minimal social profile by username",
+        "description": "Returns only ID, username, chosen public display name, and actor relationship state. Unknown and blocked usernames are both not found.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Minimal privacy-safe profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationshipProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The relationship operation is not permitted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The relationship or request was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The relationship is in a conflicting state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2371,7 +2680,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2490,7 +2808,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2609,7 +2936,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2728,7 +3064,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2847,7 +3192,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -2966,7 +3320,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3083,7 +3446,16 @@
             }
           },
           "429": {
-            "description": "The request-send limit has been exceeded.",
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3230,6 +3602,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3387,6 +3778,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -3519,6 +3929,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -3623,6 +4052,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -3719,6 +4167,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3860,6 +4327,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -3956,6 +4442,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4183,6 +4688,142 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Messaging is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/direct/{recipientId}": {
+      "get": {
+        "tags": [
+          "Messaging"
+        ],
+        "operationId": "findDirectConversation",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "recipientId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized existing direct thread ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectPairLookup"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The action is not permitted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The conversation was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The action conflicts with current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -4322,6 +4963,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -4412,6 +5072,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4514,6 +5193,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4635,6 +5333,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4775,6 +5492,25 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4970,6 +5706,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Messaging is temporarily unavailable.",
             "content": {
@@ -5043,6 +5798,25 @@
           },
           "403": {
             "description": "Username setup is required."
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "503": {
             "description": "Realtime is unavailable."
@@ -5118,6 +5892,25 @@
           },
           "403": {
             "description": "Username setup is required."
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "503": {
             "description": "Push registration unavailable."
@@ -5211,6 +6004,25 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Profile storage is unavailable.",
             "content": {
@@ -5271,6 +6083,25 @@
           },
           "409": {
             "description": "The username is already claimed or this account has completed setup.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {

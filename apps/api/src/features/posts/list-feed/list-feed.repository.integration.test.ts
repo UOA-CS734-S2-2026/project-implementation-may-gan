@@ -5,11 +5,12 @@ import { createPostgresFeedRepository, InvalidFeedCursorError } from "./list-fee
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
 const enabled = Boolean(migratorUrl && appUrl && process.env.POSTS_POSTGRES_TEST === "1");
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 
 function requireLocalTestUrl(value: string): string {
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error("Feed tests must target localhost:5433/dayli_test.");
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`Feed tests must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }

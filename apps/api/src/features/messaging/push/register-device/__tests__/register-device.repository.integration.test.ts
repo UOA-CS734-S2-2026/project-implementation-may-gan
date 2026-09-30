@@ -17,6 +17,7 @@ suite("register device Postgres repository", () => {
     alice: `register-device-alice-${crypto.randomUUID()}`,
     bob: `register-device-bob-${crypto.randomUUID()}`,
     aliceSession: `register-device-alice-session-${crypto.randomUUID()}`,
+    aliceSessionTwo: `register-device-alice-session-${crypto.randomUUID()}`,
     bobSession: `register-device-bob-session-${crypto.randomUUID()}`,
   };
   const store = createPostgresRegisterDeviceStore(database.db);
@@ -44,7 +45,7 @@ suite("register device Postgres repository", () => {
   beforeAll(async () => {
     const createdAt = new Date().toISOString();
     await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
-    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${ids.aliceSession}, ${expiresAt}, ${`token-${ids.alice}`}, ${createdAt}, ${createdAt}, ${ids.alice}), (${ids.bobSession}, ${expiresAt}, ${`token-${ids.bob}`}, ${createdAt}, ${createdAt}, ${ids.bob})`;
+    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${ids.aliceSession}, ${expiresAt}, ${`token-${ids.alice}`}, ${createdAt}, ${createdAt}, ${ids.alice}), (${ids.aliceSessionTwo}, ${expiresAt}, ${`token-${ids.alice}-two`}, ${createdAt}, ${createdAt}, ${ids.alice}), (${ids.bobSession}, ${expiresAt}, ${`token-${ids.bob}`}, ${createdAt}, ${createdAt}, ${ids.bob})`;
   });
 
   afterAll(async () => {
@@ -84,6 +85,54 @@ suite("register device Postgres repository", () => {
       token_ciphertext: expect.stringContaining("ciphertext-register-device-bob-device-"),
       token_key_version: "test",
     }]);
+  });
+
+  it("atomically upserts one installation during concurrent session registrations", async () => {
+    const firstDatabase = createDayliDatabase(connectionString!);
+    const secondDatabase = createDayliDatabase(connectionString!);
+    const firstStore = createPostgresRegisterDeviceStore(firstDatabase.db);
+    const secondStore = createPostgresRegisterDeviceStore(secondDatabase.db);
+    const installationId = `concurrent-installation-${crypto.randomUUID()}`;
+    const firstDevice = device({
+      id: `register-device-concurrent-first-${crypto.randomUUID()}`,
+      userId: ids.alice,
+      sessionId: ids.aliceSession,
+      installationId,
+      tokenHash: tokenHash("d"),
+    });
+    const secondDevice = device({
+      id: `register-device-concurrent-second-${crypto.randomUUID()}`,
+      userId: ids.alice,
+      sessionId: ids.aliceSessionTwo,
+      installationId,
+      tokenHash: tokenHash("e"),
+    });
+
+    try {
+      await Promise.all([
+        firstStore.register(firstDevice),
+        secondStore.register(secondDevice),
+      ]);
+    } finally {
+      await Promise.all([firstDatabase.close(), secondDatabase.close()]);
+    }
+
+    const rows = await database.client`select session_id, token_hash, token, token_ciphertext from public.push_devices where user_id = ${ids.alice} and installation_id = ${installationId}`;
+    expect(rows).toHaveLength(1);
+    expect([
+      {
+        session_id: firstDevice.sessionId,
+        token_hash: firstDevice.tokenHash,
+        token: firstDevice.tokenCiphertext,
+        token_ciphertext: firstDevice.tokenCiphertext,
+      },
+      {
+        session_id: secondDevice.sessionId,
+        token_hash: secondDevice.tokenHash,
+        token: secondDevice.tokenCiphertext,
+        token_ciphertext: secondDevice.tokenCiphertext,
+      },
+    ]).toContainEqual(rows[0]);
   });
 
   it("rejects stale and banned sessions before they can rotate a token", async () => {

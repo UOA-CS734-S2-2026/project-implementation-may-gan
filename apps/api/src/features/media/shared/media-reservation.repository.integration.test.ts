@@ -7,6 +7,7 @@ import { MAX_PENDING_RESERVATIONS_PER_OWNER } from "../shared/media-reservation-
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
 const hasTestDatabaseConfig = Boolean(migratorUrl && appUrl);
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const origin = "https://api.example.test";
 const trustedOrigins = "https://api.example.test,https://web.example.test";
 const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
@@ -19,12 +20,23 @@ const r2Bindings = {
   R2_ACCESS_KEY_ID: "test-access-key-id",
   R2_SECRET_ACCESS_KEY: "test-secret-access-key",
 };
+const allowRateLimit = { limit: async () => ({ success: true }) };
+const rateLimitBindings = {
+  API_RATE_LIMIT_SCOPE: "test",
+  API_INGRESS_RATE_LIMIT: allowRateLimit,
+  API_READ_RATE_LIMIT: allowRateLimit,
+  API_WRITE_RATE_LIMIT: allowRateLimit,
+  API_MESSAGE_RATE_LIMIT: allowRateLimit,
+  API_MEDIA_RATE_LIMIT: allowRateLimit,
+  API_REALTIME_RATE_LIMIT: allowRateLimit,
+  API_DIRECT_PUSH_RATE_LIMIT: allowRateLimit,
+};
 
 function requireLocalTestUrl(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required for PostgreSQL media reservation integration tests.`);
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error(`${name} must target localhost:5433/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }
@@ -36,12 +48,14 @@ function createProductionApp() {
     BETTER_AUTH_BASE_URL: origin,
     BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
     ...r2Bindings,
+    ...rateLimitBindings,
   });
 }
 
 function request(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("origin", origin);
+  if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", "203.0.113.1");
   return new Request(`${origin}${path}`, { ...init, headers });
 }
 
@@ -203,6 +217,7 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
       BETTER_AUTH_SECRET: secret,
       BETTER_AUTH_BASE_URL: origin,
       BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
+      ...rateLimitBindings,
     });
     const token = await signUp(unconfigured, "unconfigured@example.test");
     expect((await reserve(unconfigured, token)).status).toBe(503);

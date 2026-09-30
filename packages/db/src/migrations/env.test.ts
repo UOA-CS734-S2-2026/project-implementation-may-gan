@@ -8,6 +8,19 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
+  it("accepts the configured disposable local test port", () => {
+    const previous = process.env.LOCAL_TEST_POSTGRES_PORT;
+    process.env.LOCAL_TEST_POSTGRES_PORT = "15433";
+    try {
+      expect(() =>
+        validateMigrationConnectionString("postgresql://migrator:migrator@localhost:15433/dayli_test", "local"),
+      ).not.toThrow();
+    } finally {
+      if (previous === undefined) delete process.env.LOCAL_TEST_POSTGRES_PORT;
+      else process.env.LOCAL_TEST_POSTGRES_PORT = previous;
+    }
+  });
+
   it("accepts the isolated local relationship test database", () => {
     expect(() =>
       validateMigrationConnectionString(
@@ -23,16 +36,22 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
+  it("accepts the isolated advisory-lock test database", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_advisory_lock_ci_test", "local"),
+    ).not.toThrow();
+  });
+
   it("rejects local databases that are not explicitly designated test databases", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_relationship_test_copy", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, or dayli_messaging_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, or dayli_advisory_lock_ci_test.");
   });
 
   it("rejects local databases on another port", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, or dayli_messaging_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, or dayli_advisory_lock_ci_test.");
   });
 
   it("accepts only the dedicated development database", () => {
