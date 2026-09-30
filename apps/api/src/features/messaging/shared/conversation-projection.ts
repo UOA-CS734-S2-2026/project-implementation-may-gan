@@ -1,16 +1,24 @@
 import type { DayliDatabase } from "@dayli/db";
-import { projectLegacyMessageDto, type MessageProjectionRow } from "./message-projection";
+import { projectLegacyMessageDto, projectMessageDto, type MessageProjectionRow } from "./message-projection";
+import { requireSafeSequenceBigInt, requireSafeSequenceText } from "./safe-sequence";
 
 type Row = Record<string, unknown>;
+type ConversationProjectionRow = Row & { latestMessage?: MessageProjectionRow | null };
 type LegacyMessageProjectionRow = Omit<MessageProjectionRow, "sequence" | "version"> & {
   sequence: string;
   version: string;
 };
 const date = (value: unknown) => new Date(String(value));
 
+function sequenceText(sequence: unknown): string {
+  return typeof sequence === "number"
+    ? requireSafeSequenceBigInt(sequence).toString()
+    : requireSafeSequenceText(sequence);
+}
+
 /**
- * Temporary adapter for legacy snake_case, text-mode conversation message
- * selections. Remove after conversation queries use messageProjectionSelection.
+ * Temporary adapter for resolve-message-request's legacy snake_case,
+ * text-mode conversation message selection. Remove when that query migrates.
  */
 function legacyMessageProjectionRow(row: Row): LegacyMessageProjectionRow {
   return {
@@ -32,10 +40,12 @@ function legacyMessageProjectionRow(row: Row): LegacyMessageProjectionRow {
 /** Projects the conversation fields shared by conversation reads and mutation responses. */
 export async function projectConversationDto(
   database: DayliDatabase,
-  row: Row,
+  row: ConversationProjectionRow,
   actorId: string,
 ) {
-  const latest = row.message_id
+  const latest = row.latestMessage
+    ? await projectMessageDto(database, row.latestMessage, actorId)
+    : row.message_id
     ? await projectLegacyMessageDto(database, legacyMessageProjectionRow(row), actorId)
     : null;
   const blocked = row.blocked === true;
@@ -48,10 +58,10 @@ export async function projectConversationDto(
     requestState: row.request_state,
     latestMessage: latest,
     unreadCount: Number(row.unread_count ?? 0),
-    lastMessageSequence: String(row.last_message_sequence),
-    lastChangeSequence: String(row.last_change_sequence),
-    lastReadSequence: String(row.last_read_sequence),
-    receiptSequence: String(row.receipt_sequence),
+    lastMessageSequence: sequenceText(row.last_message_sequence),
+    lastChangeSequence: sequenceText(row.last_change_sequence),
+    lastReadSequence: sequenceText(row.last_read_sequence),
+    receiptSequence: sequenceText(row.receipt_sequence),
     capabilities: {
       canSend: row.request_state === "active" && !blocked,
       canResolveRequest: row.request_state === "pending" && String(row.initiator_id) !== actorId && !blocked,

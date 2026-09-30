@@ -1,21 +1,26 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresGetConversationRepository } from "../get-conversation.repository";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
-const enabled = Boolean(connectionString);
-const target = connectionString ? new URL(connectionString) : undefined;
-if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+if (!connectionString) throw new Error("MESSAGING_TEST_DATABASE_URL is required for get conversation integration tests.");
+const target = new URL(connectionString);
+if (target.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
-const suite = enabled ? describe : describe.skip;
 
-suite("get conversation Postgres repository", () => {
+describe("get conversation Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 4 }, (_, index) => `get-conversation-${crypto.randomUUID()}-${index}`);
-  const { direct, send } = createMessagingPersistenceServices(database.db);
+  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetConversationRepository(database.db);
+  const builderQueries: string[] = [];
+  const observedRepository = createPostgresGetConversationRepository(drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  }));
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -71,8 +76,8 @@ suite("get conversation Postgres repository", () => {
       capabilities: { canSend: false, canResolveRequest: true },
     });
 
-    const sequence = "9007199254740993";
-    const lastReadSequence = "9007199254740992";
+    const sequence = "9007199254740991";
+    const lastReadSequence = "9007199254740990";
     await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
     await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${active.conversation.id}`;
     await database.client`
@@ -81,13 +86,43 @@ suite("get conversation Postgres repository", () => {
       where conversation_id = ${active.conversation.id} and user_id = ${users[0]!}
     `;
 
-    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
-      latestMessage: { id: reply.message.id, sequence, senderId: users[1], text: "latest message" },
+    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now())`;
+    builderQueries.length = 0;
+    await expect(observedRepository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
+      latestMessage: {
+        id: reply.message.id,
+        sequence,
+        version: 1,
+        senderId: users[1],
+        text: "latest message",
+        reactions: [{ reaction: "love", count: 2, reactedByActor: true }],
+      },
       unreadCount: 1,
       lastMessageSequence: sequence,
       lastReadSequence,
       receiptSequence: lastReadSequence,
     });
+    expect(builderQueries).toHaveLength(5);
+    const latestQuery = builderQueries.find((query) => query.includes('order by "messages"."sequence" desc'));
+    const unreadQuery = builderQueries.find((query) => query.includes('count(*)'));
+    expect(latestQuery).toBeDefined();
+    expect(latestQuery).not.toContain('::text');
+    expect(unreadQuery).toBeDefined();
+    expect(unreadQuery).not.toContain('::int');
+    expect(unreadQuery).not.toContain('::bigint');
+
+    await unsend.unsend(users[1]!, active.conversation.id, reply.message.id);
+    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
+      latestMessage: { id: reply.message.id, text: null, unsentAt: expect.any(String), reactions: [] },
+    });
+    const blank = await direct.create(users[0]!, {
+      recipientId: users[3]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "blank latest message",
+    });
+    await database.client`delete from public.messages where id = ${blank.message.id}`;
+    await database.client`update public.conversations set last_message_sequence = 0, last_change_sequence = 0 where id = ${blank.conversation.id}`;
+    await expect(repository.get(users[0]!, blank.conversation.id)).resolves.toMatchObject({ latestMessage: null });
 
     await database.client`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
@@ -97,5 +132,19 @@ suite("get conversation Postgres repository", () => {
       id: active.conversation.id,
       capabilities: { canSend: false, canResolveRequest: false },
     });
+
+    await database.client`update public.conversations set last_message_sequence = 9007199254740993 where id = ${active.conversation.id}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint, last_change_sequence = 9007199254740993 where id = ${active.conversation.id}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversations set last_change_sequence = 2 where id = ${active.conversation.id}`;
+    await database.client`update public.conversation_members set last_read_sequence = 9007199254740993, receipt_sequence = 9007199254740993 where conversation_id = ${active.conversation.id} and user_id = ${users[0]!}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversation_members set last_read_sequence = ${lastReadSequence}::bigint, receipt_sequence = ${lastReadSequence}::bigint where conversation_id = ${active.conversation.id} and user_id = ${users[0]!}`;
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
+    await database.client`update public.messages set version = 9007199254740993 where id = ${reply.message.id}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database message version must be a positive safe integer.");
   });
 });

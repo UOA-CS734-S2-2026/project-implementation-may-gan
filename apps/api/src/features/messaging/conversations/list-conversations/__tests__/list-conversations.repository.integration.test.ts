@@ -1,21 +1,26 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresListConversationsRepository } from "../list-conversations.repository";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
-const enabled = Boolean(connectionString);
-const target = connectionString ? new URL(connectionString) : undefined;
-if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+if (!connectionString) throw new Error("MESSAGING_TEST_DATABASE_URL is required for list conversations integration tests.");
+const target = new URL(connectionString);
+if (target.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
-const suite = enabled ? describe : describe.skip;
 
-suite("list conversations Postgres repository", () => {
+describe("list conversations Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 8 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
-  const { direct, send } = createMessagingPersistenceServices(database.db);
+  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListConversationsRepository(database.db);
+  const builderQueries: string[] = [];
+  const observedRepository = createPostgresListConversationsRepository(drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  }));
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -64,8 +69,8 @@ suite("list conversations Postgres repository", () => {
       text: "outgoing request",
     });
 
-    const sequence = "9007199254740993";
-    const lastReadSequence = "9007199254740992";
+    const sequence = "9007199254740991";
+    const lastReadSequence = "9007199254740990";
     await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
     await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${activeWithUnread.conversation.id}`;
     await database.client`
@@ -77,8 +82,19 @@ suite("list conversations Postgres repository", () => {
     await database.client`update public.conversations set last_activity_at = ${"2026-09-28T06:00:00.000002Z"}::timestamptz where id = ${activeWithoutUnread.conversation.id} or id = ${activeWithSameActivity.conversation.id}`;
 
     const tiedIds = [activeWithoutUnread.conversation.id, activeWithSameActivity.conversation.id].sort().reverse();
-    const first = await repository.list(users[0]!, "inbox", undefined, 1);
-    const second = await repository.list(users[0]!, "inbox", first.nextCursor ?? undefined, 1);
+    builderQueries.length = 0;
+    const first = await observedRepository.list(users[0]!, "inbox", undefined, 1);
+    expect(builderQueries).toHaveLength(2);
+    const listQuery = builderQueries[0]!;
+    expect(listQuery).toContain("left join lateral");
+    expect(listQuery).toContain("to_char");
+    expect(listQuery).not.toContain('::text');
+    expect(listQuery).not.toContain('::bigint');
+    expect(listQuery).toContain('count(*)::int');
+    builderQueries.length = 0;
+    const second = await observedRepository.list(users[0]!, "inbox", first.nextCursor ?? undefined, 1);
+    expect(builderQueries).toHaveLength(2);
+    expect(builderQueries[0]).toContain('("conversations"."last_activity_at", "conversations"."id") < ($');
     const third = await repository.list(users[0]!, "inbox", second.nextCursor ?? undefined, 1);
     const [firstCursorActivity, firstCursorId] = JSON.parse(atob(first.nextCursor!)) as [string, string];
     const [secondCursorActivity, secondCursorId] = JSON.parse(atob(second.nextCursor!)) as [string, string];
@@ -126,6 +142,31 @@ suite("list conversations Postgres repository", () => {
     await expect(repository.list(users[7]!, "inbox", undefined, 10)).resolves.toEqual({ items: [], nextCursor: null });
     await expect(repository.list(users[7]!, "requests", undefined, 10)).resolves.toEqual({ items: [], nextCursor: null });
 
+    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now())`;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({
+        id: activeWithUnread.conversation.id,
+        latestMessage: expect.objectContaining({ version: 1, reactions: [{ reaction: "love", count: 2, reactedByActor: true }] }),
+      })]),
+    });
+    await unsend.unsend(users[1]!, activeWithUnread.conversation.id, reply.message.id);
+    await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({
+        id: activeWithUnread.conversation.id,
+        latestMessage: expect.objectContaining({ text: null, unsentAt: expect.any(String), reactions: [] }),
+      })]),
+    });
+    const blank = await direct.create(users[5]!, {
+      recipientId: users[0]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "blank latest message",
+    });
+    await database.client`delete from public.messages where id = ${blank.message.id}`;
+    await database.client`update public.conversations set last_message_sequence = 0, last_change_sequence = 0 where id = ${blank.conversation.id}`;
+    await expect(repository.list(users[0]!, "requests", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({ id: blank.conversation.id, latestMessage: null })]),
+    });
+
     await database.client`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
       values (${users[0]!}, ${users[1]!}, now())
@@ -138,14 +179,29 @@ suite("list conversations Postgres repository", () => {
     }));
   });
 
-  it("rejects overflowing legacy latest-message versions", async () => {
+  it("fails closed for overflowing native conversation and latest-message values", async () => {
     const created = await direct.create(users[0]!, {
       recipientId: users[2]!,
       clientMessageId: crypto.randomUUID(),
-      text: "overflowing conversation latest version",
+      text: "overflowing conversation latest values",
     });
-    await database.client`update public.messages set version = 9007199254740993 where id = ${created.message.id}`;
 
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${created.message.id}`;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.messages set sequence = ${created.message.sequence}::bigint where id = ${created.message.id}`;
+    await database.client`update public.conversations set last_message_sequence = 9007199254740993 where id = ${created.conversation.id}`;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversations set last_message_sequence = ${created.message.sequence}::bigint, last_change_sequence = 9007199254740993 where id = ${created.conversation.id}`;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversations set last_change_sequence = 0 where id = ${created.conversation.id}`;
+    await database.client`update public.conversation_members set last_read_sequence = 9007199254740993 where conversation_id = ${created.conversation.id} and user_id = ${users[0]!}`;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    await database.client`update public.conversation_members set last_read_sequence = 0 where conversation_id = ${created.conversation.id} and user_id = ${users[0]!}`;
+    await database.client`update public.messages set version = 9007199254740993 where id = ${created.message.id}`;
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
   });

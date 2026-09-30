@@ -1,9 +1,8 @@
 import { and, desc, eq, exists, isNull, ne, or, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { projectConversationDto } from "../../shared/conversation-projection";
+import { messageProjectionSelection } from "../../shared/message-projection";
 import { MessagingError } from "../../shared/messaging-error";
-
-type Row = Record<string, unknown>;
 
 export interface ListConversationsRepository {
   list(
@@ -65,20 +64,7 @@ export function createPostgresListConversationsRepository(
           and ${messages.unsentAt} is null
       )`;
       const latestMessage = database
-        .select({
-          message_id: messages.id,
-          message_conversation_id: messages.conversationId,
-          message_sequence: sql<string>`${messages.sequence}::text`.as("message_sequence"),
-          message_sender_id: messages.senderId,
-          message_client_message_id: messages.clientMessageId,
-          message_request_fingerprint: messages.requestFingerprint,
-          message_body: messages.body,
-          message_reply_to_message_id: messages.replyToMessageId,
-          message_version: sql<string>`${messages.version}::text`.as("message_version"),
-          message_created_at: messages.createdAt,
-          message_edited_at: messages.editedAt,
-          message_unsent_at: messages.unsentAt,
-        })
+        .select(messageProjectionSelection)
         .from(messages)
         .where(eq(messages.conversationId, conversations.id))
         .orderBy(desc(messages.sequence))
@@ -91,28 +77,30 @@ export function createPostgresListConversationsRepository(
           user_high_id: conversations.userHighId,
           initiator_id: conversations.initiatorId,
           request_state: conversations.requestState,
-          last_message_sequence: sql<string>`${conversations.lastMessageSequence}::text`,
-          last_change_sequence: sql<string>`${conversations.lastChangeSequence}::text`,
+          last_message_sequence: conversations.lastMessageSequence,
+          last_change_sequence: conversations.lastChangeSequence,
           updated_at: conversations.updatedAt,
           cursor_activity: sql<string>`to_char(${conversations.lastActivityAt}, 'YYYY-MM-DD"T"HH24:MI:SS.USOF')`,
-          last_read_sequence: sql<string>`${conversationMembers.lastReadSequence}::text`,
-          receipt_sequence: sql<string>`${conversationMembers.receiptSequence}::text`,
+          last_read_sequence: conversationMembers.lastReadSequence,
+          receipt_sequence: conversationMembers.receiptSequence,
           peer_id: user.id,
           peer_name: sql<string | null>`coalesce(${user.displayUsername}, ${user.username})`,
           blocked,
           unread_count: unreadCount,
-          message_id: latestMessage.message_id,
-          message_conversation_id: latestMessage.message_conversation_id,
-          message_sequence: latestMessage.message_sequence,
-          message_sender_id: latestMessage.message_sender_id,
-          message_client_message_id: latestMessage.message_client_message_id,
-          message_request_fingerprint: latestMessage.message_request_fingerprint,
-          message_body: latestMessage.message_body,
-          message_reply_to_message_id: latestMessage.message_reply_to_message_id,
-          message_version: latestMessage.message_version,
-          message_created_at: latestMessage.message_created_at,
-          message_edited_at: latestMessage.message_edited_at,
-          message_unsent_at: latestMessage.message_unsent_at,
+          latestMessage: {
+            id: latestMessage.id,
+            conversationId: latestMessage.conversationId,
+            sequence: latestMessage.sequence,
+            senderId: latestMessage.senderId,
+            clientMessageId: latestMessage.clientMessageId,
+            requestFingerprint: latestMessage.requestFingerprint,
+            body: latestMessage.body,
+            replyToMessageId: latestMessage.replyToMessageId,
+            version: latestMessage.version,
+            createdAt: latestMessage.createdAt,
+            editedAt: latestMessage.editedAt,
+            unsentAt: latestMessage.unsentAt,
+          },
         })
         .from(conversations)
         .innerJoin(
@@ -138,7 +126,7 @@ export function createPostgresListConversationsRepository(
         .limit(limit + 1);
       const page = result.slice(0, limit);
       return {
-        items: await Promise.all(page.map((item) => projectConversationDto(database, item as Row, actorId))),
+        items: await Promise.all(page.map((item) => projectConversationDto(database, item, actorId))),
         nextCursor: result.length > limit ? cursorEncode(page.at(-1)!) : null,
       };
     },
