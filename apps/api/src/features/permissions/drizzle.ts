@@ -1,4 +1,4 @@
-import { and, desc, eq, lte, not, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lte, not, or, sql } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
@@ -27,43 +27,79 @@ export interface VisiblePostPage {
   offset?: number;
 }
 
-function activeFriendship(authorId: typeof schema.posts.authorId, viewerId: string) {
+type Queryable = Pick<DayliDatabase, "select">;
+
+function activeFriendship(
+  database: Queryable,
+  authorId: typeof schema.posts.authorId,
+  viewerId: string,
+) {
   // #73 persists an active friendship in both directions. Requiring both rows
   // avoids treating a stale or partially-written directional projection as a
   // grant.
-  const authorToViewer = sql`exists (
-    select 1 from ${schema.friendships}
-      where ${schema.friendships.userId} = ${authorId}
-        and ${schema.friendships.friendId} = ${viewerId}
-        and ${schema.friendships.state} = 'active'
-  )`;
-  const viewerToAuthor = sql`exists (
-    select 1 from ${schema.friendships}
-      where ${schema.friendships.userId} = ${viewerId}
-        and ${schema.friendships.friendId} = ${authorId}
-        and ${schema.friendships.state} = 'active'
-  )`;
+  const authorToViewer = exists(
+    database
+      .select({ friendId: schema.friendships.friendId })
+      .from(schema.friendships)
+      .where(and(
+        eq(schema.friendships.userId, authorId),
+        eq(schema.friendships.friendId, viewerId),
+        eq(schema.friendships.state, "active"),
+      )),
+  );
+  const viewerToAuthor = exists(
+    database
+      .select({ friendId: schema.friendships.friendId })
+      .from(schema.friendships)
+      .where(and(
+        eq(schema.friendships.userId, viewerId),
+        eq(schema.friendships.friendId, authorId),
+        eq(schema.friendships.state, "active"),
+      )),
+  );
   return and(authorToViewer, viewerToAuthor);
 }
 
-function activeBlock(authorId: typeof schema.posts.authorId, viewerId: string) {
-  return sql`exists (
-    select 1 from ${schema.relationshipBlocks}
-      where ${schema.relationshipBlocks.unblockedAt} is null
-        and ((${schema.relationshipBlocks.blockerId} = ${authorId}
-          and ${schema.relationshipBlocks.blockedId} = ${viewerId})
-          or (${schema.relationshipBlocks.blockerId} = ${viewerId}
-          and ${schema.relationshipBlocks.blockedId} = ${authorId}))
-  )`;
+function activeBlock(
+  database: Queryable,
+  authorId: typeof schema.posts.authorId,
+  viewerId: string,
+) {
+  return exists(
+    database
+      .select({ blockerId: schema.relationshipBlocks.blockerId })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        isNull(schema.relationshipBlocks.unblockedAt),
+        or(
+          and(
+            eq(schema.relationshipBlocks.blockerId, authorId),
+            eq(schema.relationshipBlocks.blockedId, viewerId),
+          ),
+          and(
+            eq(schema.relationshipBlocks.blockerId, viewerId),
+            eq(schema.relationshipBlocks.blockedId, authorId),
+          ),
+        ),
+      )),
+  );
 }
 
-function attachedMedia(postId: typeof schema.posts.id, mediaId?: string) {
-  return sql`exists (
-    select 1 from ${schema.postMedia}
-      where ${schema.postMedia.postId} = ${postId}
-        and ${schema.postMedia.detachedAt} is null
-        and ${schema.postMedia.id} = ${mediaId}
-  )`;
+function attachedMedia(
+  database: Queryable,
+  postId: typeof schema.posts.id,
+  mediaId: string,
+) {
+  return exists(
+    database
+      .select({ id: schema.postMedia.id })
+      .from(schema.postMedia)
+      .where(and(
+        eq(schema.postMedia.postId, postId),
+        isNull(schema.postMedia.detachedAt),
+        eq(schema.postMedia.id, mediaId),
+      )),
+  );
 }
 
 /**
@@ -73,7 +109,10 @@ function attachedMedia(postId: typeof schema.posts.id, mediaId?: string) {
  * Correlated EXISTS clauses deliberately keep relationship rows from
  * multiplying posts in a list result.
  */
-export function buildDrizzlePostVisibilityFilter(input: DrizzlePostVisibilityInput) {
+export function buildDrizzlePostVisibilityFilter(
+  database: Queryable,
+  input: DrizzlePostVisibilityInput,
+) {
   const { posts, user } = schema;
   const viewerId = input.viewer.userId ?? null;
   const owner = viewerId === null ? sql`false` : eq(posts.authorId, viewerId);
@@ -82,8 +121,8 @@ export function buildDrizzlePostVisibilityFilter(input: DrizzlePostVisibilityInp
     ? sql`false`
     : and(
       eq(posts.audience, "friends"),
-      activeFriendship(posts.authorId, viewerId),
-      not(activeBlock(posts.authorId, viewerId)),
+      activeFriendship(database, posts.authorId, viewerId),
+      not(activeBlock(database, posts.authorId, viewerId)),
     );
 
   const grant = input.validatedPublicLinkGrant;
@@ -100,9 +139,9 @@ export function buildDrizzlePostVisibilityFilter(input: DrizzlePostVisibilityInp
     : or(owner, and(released, or(friends, publicLink)));
   const notBlocked = viewerId === null
     ? sql`true`
-    : not(activeBlock(posts.authorId, viewerId));
+    : not(activeBlock(database, posts.authorId, viewerId));
   const media = input.action === "media"
-    ? attachedMedia(posts.id, input.mediaId)
+    ? attachedMedia(database, posts.id, input.mediaId)
     : sql`true`;
 
   return and(media, notBlocked, access);
@@ -120,7 +159,7 @@ export async function listVisiblePosts(
     .select({ post: schema.posts })
     .from(schema.posts)
     .innerJoin(schema.user, eq(schema.posts.authorId, schema.user.id))
-    .where(buildDrizzlePostVisibilityFilter(input))
+    .where(buildDrizzlePostVisibilityFilter(database, input))
     .orderBy(desc(schema.posts.localDate), desc(schema.posts.id))
     .limit(limit)
     .offset(offset);
@@ -136,7 +175,7 @@ export async function findVisiblePost(
     .select({ post: schema.posts })
     .from(schema.posts)
     .innerJoin(schema.user, eq(schema.posts.authorId, schema.user.id))
-    .where(and(eq(schema.posts.id, postId), buildDrizzlePostVisibilityFilter(input)))
+    .where(and(eq(schema.posts.id, postId), buildDrizzlePostVisibilityFilter(database, input)))
     .limit(1);
   return row?.post ?? null;
 }
@@ -154,7 +193,7 @@ export async function findVisiblePostRevision(
     .innerJoin(schema.user, eq(schema.posts.authorId, schema.user.id))
     .where(and(
       eq(schema.postRevisions.id, revisionId),
-      buildDrizzlePostVisibilityFilter({ ...input, action: "revision" }),
+      buildDrizzlePostVisibilityFilter(database, { ...input, action: "revision" }),
     ))
     .limit(1);
   return row ?? null;
@@ -193,7 +232,7 @@ export async function findVisiblePostMedia(
     .where(and(
       eq(schema.postMedia.postId, postId),
       eq(schema.postMedia.id, mediaId),
-      buildDrizzlePostVisibilityFilter({ ...input, action: "media", mediaId }),
+      buildDrizzlePostVisibilityFilter(database, { ...input, action: "media", mediaId }),
     ))
     .limit(1);
   return row ?? null;

@@ -45,7 +45,7 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))
         .where(and(
           eq(posts.id, postId),
-          buildDrizzlePostVisibilityFilter({ viewer: { userId: viewerId }, now, action: "detail" }),
+          buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "detail" }),
           isNotNull(user.username),
         ))
         .limit(1);

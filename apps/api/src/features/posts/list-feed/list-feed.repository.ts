@@ -91,7 +91,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
         .innerJoin(user, eq(posts.authorId, user.id))
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))
         .where(and(
-          buildDrizzlePostVisibilityFilter({ viewer: { userId: viewerId }, now, action: "list" }),
+          buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "list" }),
           // The owner branch of the shared predicate is for profiles; the feed
           // is friends only, which also keeps solo posts out.
           ne(posts.authorId, viewerId),
