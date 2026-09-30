@@ -28,6 +28,7 @@ export class MessagingRealtime {
   private ready = false;
   private buffered: ConversationChangedEvent[] = [];
   private seen = new Set<string>();
+  private processing = new Set<string>();
 
   constructor(private readonly input: {
     issueTicket(): Promise<{ ok: true; value: RealtimeTicket } | { ok: false }>;
@@ -40,7 +41,7 @@ export class MessagingRealtime {
   async start(): Promise<void> { this.stopped = false; await this.connect(); }
   async resume(): Promise<void> { if (!this.stopped && !this.socket) await this.connect(); }
   stop(): void {
-    this.stopped = true; this.ready = false; this.buffered = []; this.seen.clear();
+    this.stopped = true; this.ready = false; this.buffered = []; this.seen.clear(); this.processing.clear();
     if (this.retry) clearTimeout(this.retry); this.retry = null;
     this.socket?.close(); this.socket = null;
   }
@@ -68,20 +69,29 @@ export class MessagingRealtime {
       this.ready = true; this.attempt = 0;
       void this.drain();
     } else if (event.type === "conversation.changed" && typeof event.eventId === "string" && typeof event.conversationId === "string" && /^\d+$/.test(event.changeSequence)) {
-      if (this.ready) void this.handle(event); else this.buffered.push(event);
+      if (this.ready) void this.handle(event).catch(() => this.disconnected(this.socket)); else this.buffered.push(event);
     } else this.disconnected(this.socket);
   }
 
   private async drain(): Promise<void> {
-    await this.input.onReady();
-    const buffered = this.buffered; this.buffered = [];
-    for (const event of buffered) await this.handle(event);
+    try {
+      await this.input.onReady();
+      const buffered = this.buffered; this.buffered = [];
+      for (const event of buffered) await this.handle(event);
+    } catch {
+      this.disconnected(this.socket);
+    }
   }
   private async handle(event: ConversationChangedEvent): Promise<void> {
-    if (this.seen.has(event.eventId)) return;
-    this.seen.add(event.eventId);
-    if (this.seen.size > 512) this.seen.delete(this.seen.values().next().value as string);
-    await this.input.onChange(event);
+    if (this.seen.has(event.eventId) || this.processing.has(event.eventId)) return;
+    this.processing.add(event.eventId);
+    try {
+      await this.input.onChange(event);
+      this.seen.add(event.eventId);
+      if (this.seen.size > 512) this.seen.delete(this.seen.values().next().value as string);
+    } finally {
+      this.processing.delete(event.eventId);
+    }
   }
   private disconnected(socket: RealtimeSocket | null): void {
     if (socket && this.socket !== socket) return;

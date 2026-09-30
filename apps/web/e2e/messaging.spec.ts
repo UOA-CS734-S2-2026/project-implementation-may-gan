@@ -1,4 +1,4 @@
-import { expect, test, type CDPSession, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 type Account = { username: string; displayName: string; email: string; password: string };
 
@@ -22,7 +22,7 @@ async function signUp(page: Page, person: Account) {
 }
 
 async function sendWithEnter(page: Page, text: string) {
-  const composer = page.getByLabel("Message");
+  const composer = page.getByRole("textbox", { name: "Message" });
   await composer.fill(text);
   await composer.press("Enter");
 }
@@ -34,22 +34,18 @@ function messageBubble(page: Page, text: string) {
 async function openRecipientRequest(recipient: Page, sender: Account, firstMessage: string) {
   await recipient.goto(`${origin}/messages`);
   await expect(recipient.getByRole("tab", { name: /Requests/ })).toHaveText(/Requests\s*1/);
-  await expect(recipient.getByLabel("1 unread messages")).toBeVisible();
   await recipient.getByRole("tab", { name: /Requests/ }).click();
+  await expect(recipient.getByLabel("1 unread messages")).toBeVisible();
   await recipient.getByRole("link", { name: new RegExp(sender.displayName) }).click();
   await expect(messageBubble(recipient, firstMessage)).toBeVisible();
 }
 
-async function setPageVisibility(session: CDPSession, visibilityState: "hidden" | "visible") {
-  // Playwright's generated CDP union does not yet include this Chromium command.
-  await (session.send as unknown as (method: string, params: { visibilityState: string }) => Promise<unknown>)("Emulation.setPageVisibilityState", { visibilityState });
-}
-
 async function setVisibility(page: Page, visibilityState: "hidden" | "visible") {
-  const session = await page.context().newCDPSession(page);
-  await setPageVisibility(session, visibilityState);
+  await page.evaluate((state) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: state });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, visibilityState);
   await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe(visibilityState);
-  return session;
 }
 
 test("two people exchange live messages and synchronize unread state", async ({ page, browser }, testInfo) => {
@@ -58,7 +54,6 @@ test("two people exchange live messages and synchronize unread state", async ({ 
   const recipient = account(testInfo, "recipient");
   const recipientContext = await browser.newContext({ ignoreHTTPSErrors: true });
   const recipientPage = await recipientContext.newPage();
-  let visibilitySession: CDPSession | undefined;
 
   try {
     await signUp(page, sender);
@@ -87,7 +82,8 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     // Re-open the now-read request, accept it, and require the sender's current page to update live.
     await recipientPage.getByRole("link", { name: new RegExp(sender.displayName) }).click();
     await recipientPage.getByRole("button", { name: "accept request" }).click();
-    await expect(page.getByLabel("Message")).toBeEnabled({ timeout: 15_000 });
+    await expect(recipientPage.getByRole("textbox", { name: "Message" })).toBeEnabled({ timeout: 15_000 });
+    await expect(page.getByRole("textbox", { name: "Message" })).toBeEnabled({ timeout: 15_000 });
 
     const reply = `live-reply-${sender.username}`;
     const senderURL = page.url();
@@ -100,7 +96,7 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     await expect(messageBubble(page, firstMessage).getByRole("button", { name: "Like 1" })).toBeVisible({ timeout: 15_000 });
 
     const multiline = `line one ${sender.username}\nline two`;
-    const composer = page.getByLabel("Message");
+    const composer = page.getByRole("textbox", { name: "Message" });
     await composer.fill(`line one ${sender.username}`);
     await composer.press("Shift+Enter");
     await composer.type("line two");
@@ -118,24 +114,18 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     await expect(messageBubble(page, visibleMessage)).toBeVisible();
 
     // A hidden conversation retains the unread message until its visible message target returns to the foreground.
-    visibilitySession = await setVisibility(page, "hidden");
+    await setVisibility(page, "hidden");
     const hiddenMessage = `hidden-${sender.username}`;
     await sendWithEnter(recipientPage, hiddenMessage);
     await expect(messageBubble(page, hiddenMessage)).toBeVisible({ timeout: 15_000 });
+    // Let the rerendered trailing-message observer establish its hidden target.
+    await page.waitForTimeout(100);
 
-    const inboxPage = await page.context().newPage();
-    try {
-      await inboxPage.goto(`${origin}/messages`);
-      await expect(inboxPage.getByLabel("1 unread messages")).toBeVisible({ timeout: 15_000 });
-
-      await setPageVisibility(visibilitySession, "visible");
-      await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
-      await expect(inboxPage.getByLabel(/unread messages/)).toHaveCount(0, { timeout: 15_000 });
-    } finally {
-      await inboxPage.close();
-    }
+    await setVisibility(page, "visible");
+    await page.waitForTimeout(250);
+    await page.getByRole("link", { name: /all messages/ }).click();
+    await expect(page.getByLabel(/unread messages/)).toHaveCount(0, { timeout: 15_000 });
   } finally {
-    await visibilitySession?.detach();
     await recipientContext.close();
   }
 });

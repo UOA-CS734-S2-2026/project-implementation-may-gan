@@ -79,7 +79,7 @@ function MessagingProviderContent({ children }: { children: React.ReactNode }) {
     };
     const reconcile = (event: ConversationChangedEvent) => {
       const previous = reconciliation.current.get(event.conversationId) ?? Promise.resolve();
-      const next = previous.catch(() => undefined).then(() => applyChanges(event)).catch(() => undefined);
+      const next = previous.catch(() => undefined).then(() => applyChanges(event));
       reconciliation.current.set(event.conversationId, next);
       return next;
     };
@@ -93,7 +93,14 @@ function MessagingProviderContent({ children }: { children: React.ReactNode }) {
       onChange: reconcile,
     });
     void refreshUnread(); void realtime.start();
-    const foreground = () => { if (document.visibilityState === "visible") void realtime.resume(); };
+    const foreground = () => {
+      if (document.visibilityState !== "visible") return;
+      // A mobile browser can retain a nominally open socket while backgrounded
+      // and miss a frame. Reconcile active projections on foreground, then
+      // resume if the transport was closed.
+      void queryClient.refetchQueries({ queryKey: messagingKeys.root(user.id), type: "active" });
+      void realtime.resume();
+    };
     document.addEventListener("visibilitychange", foreground);
     return () => { active = false; document.removeEventListener("visibilitychange", foreground); realtime.stop(); };
   }, [isPending, queryClient, refreshUnread, user?.id]);

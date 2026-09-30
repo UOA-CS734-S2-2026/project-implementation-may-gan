@@ -1,11 +1,10 @@
 import { createHyperdriveDatabase, schema, sql, type HyperdriveBinding } from "@dayli/db";
 import { and, eq, exists, gt, isNull, or } from "drizzle-orm";
-import type { ConversationChangedEvent } from "@dayli/contracts";
 import type { OutboxJob } from "../jobs/outbox-store";
 import { bodyFreeRealtimeEvent } from "../jobs/dispatch-outbox";
 
-interface UserRealtimeRpc {
-  publish(event: ConversationChangedEvent): Promise<void>;
+interface UserRealtimeStub {
+  fetch(request: Request): Promise<Response>;
   revokeSession(sessionId: string): Promise<void>;
 }
 
@@ -15,13 +14,22 @@ export function createDurableObjectRealtimePublisher(
   hyperdrive: HyperdriveBinding,
   authorize: (job: OutboxJob) => Promise<boolean> = (job) => canPublishCurrentChange(hyperdrive, job),
 ) {
-  const stubFor = (userId: string) => namespace.get(namespace.idFromName(userId)) as unknown as UserRealtimeRpc;
+  const stubFor = (userId: string) => namespace.get(namespace.idFromName(userId)) as unknown as UserRealtimeStub;
   return {
     async deliver(job: OutboxJob, options?: { signal: AbortSignal }) {
       if (options?.signal.aborted) return { ok: false as const, retryable: true, category: "transient" as const };
       if (job.channel !== "realtime") return { ok: false as const, retryable: false, category: "provider_rejected" as const };
       if (!await authorize(job) || options?.signal.aborted) return options?.signal.aborted ? { ok: false as const, retryable: true, category: "transient" as const } : { ok: true as const };
-      await stubFor(job.recipientId).publish(bodyFreeRealtimeEvent(job));
+      // Use the Durable Object's private fetch interface rather than RPC. This
+      // keeps delivery compatible with the WebSocket-hibernation runtime and
+      // lets a non-success response remain retryable in the outbox.
+      const response = await stubFor(job.recipientId).fetch(new Request("https://user-realtime.internal/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bodyFreeRealtimeEvent(job)),
+        signal: options?.signal,
+      }));
+      if (!response.ok) throw new Error("Realtime publish failed.");
       return { ok: true as const };
     },
     revokeSession(userId: string, sessionId: string) {
