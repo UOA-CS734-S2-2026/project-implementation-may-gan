@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresListMessagesRepository } from "../list-messages.repository";
@@ -16,6 +17,11 @@ suite("list messages Postgres repository", () => {
   const users = Array.from({ length: 4 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
   const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListMessagesRepository(database.db);
+  const builderQueries: string[] = [];
+  const observedRepository = createPostgresListMessagesRepository(drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  }));
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -48,15 +54,18 @@ suite("list messages Postgres repository", () => {
     const fourth = await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
     await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
     await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
-    await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
+    await database.client`update public.messages set sequence = 9007199254740991 where id = ${fourth.message.id}`;
 
-    await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.list(users[3]!, initial.conversation.id, "not-a-cursor", undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740992", 2)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
 
-    await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).resolves.toMatchObject({
-      items: [{ sequence: "3" }, { sequence: "9007199254740993" }],
-      nextCursor: "9007199254740993",
+    builderQueries.length = 0;
+    await expect(observedRepository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).resolves.toMatchObject({
+      items: [{ sequence: "3" }, { sequence: "9007199254740991" }],
+      nextCursor: "9007199254740991",
       hasMore: true,
     });
+    expect(builderQueries).toHaveLength(4);
     const pageForSender = await repository.list(users[0]!, initial.conversation.id, "3", undefined, 2);
     expect(pageForSender).toMatchObject({
       items: [
@@ -81,8 +90,8 @@ suite("list messages Postgres repository", () => {
       nextCursor: "3",
       hasMore: true,
     });
-    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740992", 2)).resolves.toMatchObject({
-      items: [{ sequence: "9007199254740993" }],
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740990", 2)).resolves.toMatchObject({
+      items: [{ sequence: "9007199254740991" }],
       nextCursor: null,
       hasMore: false,
     });
@@ -124,5 +133,8 @@ suite("list messages Postgres repository", () => {
       ],
     });
     await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).rejects.toThrow(RangeError);
   });
 });

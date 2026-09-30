@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresGetMessageRepository } from "../get-message.repository";
@@ -16,6 +17,11 @@ suite("get message Postgres repository", () => {
   const users = Array.from({ length: 4 }, (_, index) => `get-message-${crypto.randomUUID()}-${index}`);
   const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetMessageRepository(database.db);
+  const builderQueries: string[] = [];
+  const observedRepository = createPostgresGetMessageRepository(drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  }));
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -46,15 +52,17 @@ suite("get message Postgres repository", () => {
     });
     await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
     await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
-    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
+    await database.client`update public.messages set sequence = 9007199254740991 where id = ${reply.message.id}`;
 
     await expect(repository.get(users[3]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.get(users[0]!, initial.conversation.id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    const messageForSender = await repository.get(users[0]!, initial.conversation.id, reply.message.id);
+    builderQueries.length = 0;
+    const messageForSender = await observedRepository.get(users[0]!, initial.conversation.id, reply.message.id);
+    expect(builderQueries).toHaveLength(4);
     expect(messageForSender).toMatchObject({
       id: reply.message.id,
-      sequence: "9007199254740993",
+      sequence: "9007199254740991",
       replyToMessageId: initial.message.id,
       replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
     });
@@ -85,5 +93,8 @@ suite("get message Postgres repository", () => {
       reactions: [],
     });
     await expect(repository.get(users[3]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
+    await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).rejects.toThrow(RangeError);
   });
 });
