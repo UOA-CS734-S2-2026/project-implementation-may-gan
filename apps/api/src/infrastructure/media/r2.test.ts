@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createPresignedDownloadUrl,
   createPresignedUploadUrl,
   headR2Object,
   R2ReadInfrastructureError,
@@ -75,6 +76,36 @@ describe("createPresignedUploadUrl", () => {
     const smallSignature = new URL(small.url).searchParams.get("X-Amz-Signature");
     const largeSignature = new URL(large.url).searchParams.get("X-Amz-Signature");
     expect(smallSignature).not.toEqual(largeSignature);
+  });
+});
+
+describe("createPresignedDownloadUrl", () => {
+  const now = new Date("2026-09-09T12:00:00.000Z");
+
+  it("builds a GET URL for one object that expires with its reported time", async () => {
+    const download = await createPresignedDownloadUrl(configuration, {
+      objectKey: "media/user_alice/media_abc123",
+      expiresInSeconds: 300,
+      now,
+    });
+
+    const url = new URL(download.url);
+    expect(url.hostname).toBe(`${configuration.accountId}.r2.cloudflarestorage.com`);
+    expect(url.pathname).toBe(`/${configuration.bucketName}/media/user_alice/media_abc123`);
+    expect(url.searchParams.get("X-Amz-Algorithm")).toBe("AWS4-HMAC-SHA256");
+    expect(url.searchParams.get("X-Amz-Expires")).toBe("300");
+    expect(url.searchParams.get("X-Amz-Date")).toBe("20260909T120000Z");
+    expect(url.searchParams.get("X-Amz-SignedHeaders")).toBe("host");
+    expect(url.searchParams.get("X-Amz-Signature")).toBeTruthy();
+    expect(download.expiresAt).toEqual(new Date("2026-09-09T12:05:00.000Z"));
+    expect(download.url).not.toContain(configuration.secretAccessKey);
+  });
+
+  it("signs each object separately", async () => {
+    const sign = (objectKey: string) => createPresignedDownloadUrl(configuration, { objectKey, expiresInSeconds: 300, now });
+    const first = new URL((await sign("media/user_alice/a")).url).searchParams.get("X-Amz-Signature");
+    const second = new URL((await sign("media/user_alice/b")).url).searchParams.get("X-Amz-Signature");
+    expect(first).not.toEqual(second);
   });
 });
 

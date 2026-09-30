@@ -47,6 +47,7 @@ export * from './PostAudience';
 export * from './PostDetail';
 export * from './PostDetailAuthor';
 export * from './PostDetailPrompt';
+export * from './PostMedia';
 export * from './RegisterPushDeviceRequest';
 export * from './RelationshipProfile';
 export * from './RelationshipState';

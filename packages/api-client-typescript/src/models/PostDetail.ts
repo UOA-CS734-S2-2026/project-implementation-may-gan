@@ -13,6 +13,13 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
+import type { PostMedia } from './PostMedia';
+import {
+    PostMediaFromJSON,
+    PostMediaFromJSONTyped,
+    PostMediaToJSON,
+    PostMediaToJSONTyped,
+} from './PostMedia';
 import type { PostDetailPrompt } from './PostDetailPrompt';
 import {
     PostDetailPromptFromJSON,
@@ -29,7 +36,7 @@ import {
 } from './PostDetailAuthor';
 
 /**
- * One post the caller may read. Tomorrow notes and media are not part of this projection.
+ * One post the caller may read. Tomorrow notes are not part of this projection.
  * @export
  * @interface PostDetail
  */
@@ -82,6 +89,10 @@ export interface PostDetail {
      *
      */
     viewerIsAuthor: boolean;
+    /**
+     * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
+     */
+    media: Array<PostMedia>;
 }
 
 
@@ -111,6 +122,7 @@ export function instanceOfPostDetail(value: object): value is PostDetail {
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
     if (!('viewerIsAuthor' in value) || value['viewerIsAuthor'] === undefined) return false;
+    if (!('media' in value) || value['media'] === undefined) return false;
     return true;
 }
 
@@ -136,6 +148,7 @@ export function PostDetailFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'edited': json['edited'],
         'viewerIsAuthor': json['viewerIsAuthor'],
+        'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
     };
 }
 
@@ -162,5 +175,6 @@ export function PostDetailToJSONTyped(value?: PostDetail | null, ignoreDiscrimin
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'edited': value['edited'],
         'viewerIsAuthor': value['viewerIsAuthor'],
+        'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
     };
 }

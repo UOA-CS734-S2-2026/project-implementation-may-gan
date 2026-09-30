@@ -3,6 +3,7 @@ import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
+import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "./get-post.contract";
 import type { PostDetailRepository } from "./get-post.repository";
 
@@ -10,6 +11,8 @@ export interface GetPostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a request-supplied user. */
   resolveSession: ResolveSession;
   repository?: PostDetailRepository;
+  /** Absent when media storage isn't configured; media URLs are then null. */
+  signMediaDownload?: SignMediaDownload;
   now?: () => Date;
   rateLimiter?: ActorRateLimiter;
 }
@@ -47,7 +50,8 @@ export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, depe
     try {
       const post = await dependencies.repository.findPost(context.get("actor").userId, postId, now);
       if (!post) return apiErrorResponse(context, 404, "NOT_FOUND", "The post was not found.");
-      return context.json(post, 200);
+      const media = await signPostMedia(post.media, dependencies.signMediaDownload, now);
+      return context.json({ ...post, media }, 200);
     } catch (error) {
       // Never forward SQL or private content to the client.
       console.error("dayli post read failed", error instanceof Error ? error.name : "unknown");

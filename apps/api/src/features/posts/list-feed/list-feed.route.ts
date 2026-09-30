@@ -3,6 +3,7 @@ import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
+import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { feedPageSchema, feedQuerySchema, listFeedErrorResponses } from "./list-feed.contract";
 import { InvalidFeedCursorError, type FeedRepository } from "./list-feed.repository";
 
@@ -10,6 +11,8 @@ export interface ListFeedRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a query-supplied user. */
   resolveSession: ResolveSession;
   repository?: FeedRepository;
+  /** Absent when media storage isn't configured; media URLs are then null. */
+  signMediaDownload?: SignMediaDownload;
   now?: () => Date;
   rateLimiter?: ActorRateLimiter;
 }
@@ -46,7 +49,11 @@ export function registerListFeedRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dep
     const now = dependencies.now?.() ?? new Date();
     try {
       const page = await dependencies.repository.listFeed(context.get("actor").userId, now, limit, cursor);
-      return context.json(page, 200);
+      const items = await Promise.all(page.items.map(async (item) => ({
+        ...item,
+        media: await signPostMedia(item.media, dependencies.signMediaDownload, now),
+      })));
+      return context.json({ ...page, items }, 200);
     } catch (error) {
       if (error instanceof InvalidFeedCursorError) {
         return apiErrorResponse(context, 422, "VALIDATION_FAILED", "The request contains invalid values.", { field: "cursor" });

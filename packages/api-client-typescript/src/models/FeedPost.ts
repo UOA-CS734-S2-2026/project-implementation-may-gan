@@ -13,6 +13,13 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
+import type { PostMedia } from './PostMedia';
+import {
+    PostMediaFromJSON,
+    PostMediaFromJSONTyped,
+    PostMediaToJSON,
+    PostMediaToJSONTyped,
+} from './PostMedia';
 import type { FeedPostAuthor } from './FeedPostAuthor';
 import {
     FeedPostAuthorFromJSON,
@@ -29,7 +36,7 @@ import {
 } from './FeedPostPrompt';
 
 /**
- * A released post from an active friend. Tomorrow notes and media are not part of the feed projection.
+ * A released post from an active friend. Tomorrow notes are not part of the feed projection.
  * @export
  * @interface FeedPost
  */
@@ -78,6 +85,10 @@ export interface FeedPost {
      * True when the author has edited the post since it was accepted.
      */
     edited: boolean;
+    /**
+     * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
+     */
+    media: Array<PostMedia>;
 }
 
 
@@ -107,6 +118,7 @@ export function instanceOfFeedPost(value: object): value is FeedPost {
     if (!('acceptedAt' in value) || value['acceptedAt'] === undefined) return false;
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
+    if (!('media' in value) || value['media'] === undefined) return false;
     return true;
 }
 
@@ -131,6 +143,7 @@ export function FeedPostFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'acceptedAt': (json['acceptedAt'] == null ? json['acceptedAt'] : parseDateTime(json['acceptedAt'])),
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'edited': json['edited'],
+        'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
     };
 }
 
@@ -156,5 +169,6 @@ export function FeedPostToJSONTyped(value?: FeedPost | null, ignoreDiscriminator
         'acceptedAt': value['acceptedAt'] == null ? value['acceptedAt'] : serializeDateTime(value['acceptedAt']),
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'edited': value['edited'],
+        'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
     };
 }
