@@ -1,4 +1,5 @@
-import { createHyperdriveDatabase, lockRelationshipPair, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import type {
   DirectConversation,
@@ -7,58 +8,158 @@ import type {
 } from "../../shared/conversation-types";
 import type { StoredMessage } from "../../shared/messaging-types";
 
-type Row = Record<string, unknown>;
-type Queryable = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
-const date = (value: unknown) => new Date(String(value));
+type Queryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
-function storedMessage(row: Row): StoredMessage {
-  return { id: String(row.id), conversationId: String(row.conversation_id), sequence: bigint(row.sequence), senderId: String(row.sender_id), clientMessageId: String(row.client_message_id), requestFingerprint: String(row.request_fingerprint), body: row.body === null ? null : String(row.body), replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id), version: Number(row.version), createdAt: date(row.created_at), editedAt: row.edited_at ? date(row.edited_at) : null, unsentAt: row.unsent_at ? date(row.unsent_at) : null, reactions: [] };
+type MessageRow = {
+  id: string;
+  conversationId: string;
+  sequence: string;
+  senderId: string;
+  clientMessageId: string;
+  requestFingerprint: string;
+  body: string | null;
+  replyToMessageId: string | null;
+  version: string;
+  createdAt: Date;
+  editedAt: Date | null;
+  unsentAt: Date | null;
+};
+
+const messageSelection = {
+  id: schema.messages.id,
+  conversationId: schema.messages.conversationId,
+  sequence: sql<string>`${schema.messages.sequence}::text`,
+  senderId: schema.messages.senderId,
+  clientMessageId: schema.messages.clientMessageId,
+  requestFingerprint: schema.messages.requestFingerprint,
+  body: schema.messages.body,
+  replyToMessageId: schema.messages.replyToMessageId,
+  version: sql<string>`${schema.messages.version}::text`,
+  createdAt: schema.messages.createdAt,
+  editedAt: schema.messages.editedAt,
+  unsentAt: schema.messages.unsentAt,
+};
+
+function storedMessage(row: MessageRow): StoredMessage {
+  return {
+    ...row,
+    sequence: BigInt(row.sequence),
+    version: Number(row.version),
+    reactions: [],
+  };
 }
 
-function direct(row: Row, actorId: string): DirectConversation {
-  const low = String(row.user_low_id);
-  const high = String(row.user_high_id);
-  return { id: String(row.id), peerId: low === actorId ? high : low, requestState: row.request_state as DirectConversation["requestState"] };
+function relationshipPairKey(leftUserId: string, rightUserId: string): string {
+  return [leftUserId, rightUserId]
+    .sort()
+    .map((value) => `${value.length}:${value}`)
+    .join(":");
 }
 
 class PostgresDirectTransaction implements DirectConversationTransaction {
   constructor(private readonly queryable: Queryable, private readonly actorId: string) {}
 
   async isPairBlocked(actorId: string, recipientId: string): Promise<boolean> {
-    const [row] = rows<{ blocked: boolean }>(await this.queryable.execute(sql`select exists(select 1 from public.relationship_blocks where unblocked_at is null and ((blocker_id = ${actorId} and blocked_id = ${recipientId}) or (blocker_id = ${recipientId} and blocked_id = ${actorId}))) as blocked`));
-    return row?.blocked === true;
+    const [row] = await this.queryable
+      .select({ blockerId: schema.relationshipBlocks.blockerId })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        isNull(schema.relationshipBlocks.unblockedAt),
+        or(
+          and(
+            eq(schema.relationshipBlocks.blockerId, actorId),
+            eq(schema.relationshipBlocks.blockedId, recipientId),
+          ),
+          and(
+            eq(schema.relationshipBlocks.blockerId, recipientId),
+            eq(schema.relationshipBlocks.blockedId, actorId),
+          ),
+        ),
+      ))
+      .limit(1);
+    return Boolean(row);
   }
 
   async findDirectConversation(actorId: string, recipientId: string): Promise<DirectConversation | null> {
-    const [row] = rows<Row>(await this.queryable.execute(sql`select * from public.conversations where user_low_id = least(${actorId}, ${recipientId}) and user_high_id = greatest(${actorId}, ${recipientId}) for update`));
-    return row ? direct(row, actorId) : null;
+    const low = actorId < recipientId ? actorId : recipientId;
+    const high = actorId < recipientId ? recipientId : actorId;
+    const [row] = await this.queryable
+      .select({
+        id: schema.conversations.id,
+        userLowId: schema.conversations.userLowId,
+        userHighId: schema.conversations.userHighId,
+        requestState: schema.conversations.requestState,
+      })
+      .from(schema.conversations)
+      .where(and(
+        eq(schema.conversations.userLowId, low),
+        eq(schema.conversations.userHighId, high),
+      ))
+      .limit(1)
+      .for("update");
+    if (!row) return null;
+    return {
+      id: row.id,
+      peerId: row.userLowId === actorId ? row.userHighId : row.userLowId,
+      requestState: row.requestState,
+    };
   }
 
   async recipientExists(recipientId: string): Promise<boolean> {
-    const [row] = rows<Row>(await this.queryable.execute(sql`select id from public.user where id = ${recipientId}`));
+    const [row] = await this.queryable
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.id, recipientId))
+      .limit(1);
     return Boolean(row);
   }
 
   async hasActiveFriendship(actorId: string, recipientId: string): Promise<boolean> {
-    const [row] = rows<{ active: boolean }>(await this.queryable.execute(sql`select exists(select 1 from public.friendships where user_id = ${actorId} and friend_id = ${recipientId} and state = 'active') as active`));
-    return row?.active === true;
+    const [row] = await this.queryable
+      .select({ userId: schema.friendships.userId })
+      .from(schema.friendships)
+      .where(and(
+        eq(schema.friendships.userId, actorId),
+        eq(schema.friendships.friendId, recipientId),
+        eq(schema.friendships.state, "active"),
+      ))
+      .limit(1);
+    return Boolean(row);
   }
 
   async findIdempotentMessage(senderId: string, clientMessageId: string) {
-    const [row] = rows<Row>(await this.queryable.execute(sql`select m.*, c.id as direct_conversation_id, c.user_low_id, c.user_high_id, c.request_state from public.messages m join public.conversations c on c.id = m.conversation_id where m.sender_id = ${senderId} and m.client_message_id = ${clientMessageId}`));
+    const [row] = await this.queryable
+      .select({
+        ...messageSelection,
+        directConversationId: schema.conversations.id,
+        userLowId: schema.conversations.userLowId,
+        userHighId: schema.conversations.userHighId,
+        requestState: schema.conversations.requestState,
+      })
+      .from(schema.messages)
+      .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messages.conversationId))
+      .where(and(
+        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.clientMessageId, clientMessageId),
+      ))
+      .limit(1);
     if (!row) return null;
-    const low = String(row.user_low_id);
     return {
-      requestFingerprint: String(row.request_fingerprint),
-      conversation: { id: String(row.direct_conversation_id), peerId: low === senderId ? String(row.user_high_id) : low, requestState: row.request_state as DirectConversation["requestState"] },
+      requestFingerprint: row.requestFingerprint,
+      conversation: {
+        id: row.directConversationId,
+        peerId: row.userLowId === senderId ? row.userHighId : row.userLowId,
+        requestState: row.requestState,
+      },
       message: storedMessage(row),
     };
   }
 
   async activateConversation(conversation: DirectConversation, now: Date): Promise<DirectConversation> {
-    await this.queryable.execute(sql`update public.conversations set request_state = 'active', updated_at = ${now.toISOString()}::timestamptz where id = ${conversation.id}`);
+    await this.queryable
+      .update(schema.conversations)
+      .set({ requestState: "active", updatedAt: now })
+      .where(eq(schema.conversations.id, conversation.id));
     await appendConversationChange(this.queryable, conversation.id, "request.active", null, null, now);
     return { ...conversation, requestState: "active" };
   }
@@ -66,25 +167,93 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   async createConversationWithMessage(input: Parameters<DirectConversationTransaction["createConversationWithMessage"]>[0]) {
     const low = input.initiatorId < input.recipientId ? input.initiatorId : input.recipientId;
     const high = input.initiatorId < input.recipientId ? input.recipientId : input.initiatorId;
-    await this.queryable.execute(sql`insert into public.conversations (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${input.conversationId}, 'direct', ${low}, ${high}, ${input.initiatorId}, ${input.requestState}, 1, 0, ${input.createdAt.toISOString()}::timestamptz, ${input.createdAt.toISOString()}::timestamptz, ${input.createdAt.toISOString()}::timestamptz)`);
-    await this.queryable.execute(sql`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${input.conversationId}, ${input.initiatorId}, 0, 0, ${input.createdAt.toISOString()}::timestamptz, ${input.createdAt.toISOString()}::timestamptz), (${input.conversationId}, ${input.recipientId}, 0, 0, ${input.createdAt.toISOString()}::timestamptz, ${input.createdAt.toISOString()}::timestamptz)`);
-    const [messageRow] = rows<Row>(await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at) values (${input.messageId}, ${input.conversationId}, 1, ${input.initiatorId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, 1, ${input.createdAt.toISOString()}::timestamptz) returning *`));
+    await this.queryable.insert(schema.conversations).values({
+      id: input.conversationId,
+      kind: "direct",
+      userLowId: low,
+      userHighId: high,
+      initiatorId: input.initiatorId,
+      requestState: input.requestState,
+      lastMessageSequence: 1,
+      lastChangeSequence: 0,
+      lastActivityAt: input.createdAt,
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
+    });
+    await this.queryable.insert(schema.conversationMembers).values([
+      {
+        conversationId: input.conversationId,
+        userId: input.initiatorId,
+        lastReadSequence: 0,
+        receiptSequence: 0,
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+      },
+      {
+        conversationId: input.conversationId,
+        userId: input.recipientId,
+        lastReadSequence: 0,
+        receiptSequence: 0,
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+      },
+    ]);
+    const [message] = await this.queryable
+      .insert(schema.messages)
+      .values({
+        id: input.messageId,
+        conversationId: input.conversationId,
+        sequence: 1,
+        senderId: input.initiatorId,
+        clientMessageId: input.clientMessageId,
+        requestFingerprint: input.requestFingerprint,
+        body: input.text,
+        version: 1,
+        createdAt: input.createdAt,
+      })
+      .returning(messageSelection);
     await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, input.createdAt);
-    return { conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState }, message: storedMessage(messageRow!) };
+    return {
+      conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState },
+      message: storedMessage(message!),
+    };
   }
 
   async appendExistingMessage(input: Parameters<DirectConversationTransaction["appendExistingMessage"]>[0]): Promise<StoredMessage> {
-    const [allocated] = rows<{ sequence: unknown }>(await this.queryable.execute(sql`update public.conversations set last_message_sequence = last_message_sequence + 1, last_activity_at = ${input.createdAt.toISOString()}::timestamptz, updated_at = ${input.createdAt.toISOString()}::timestamptz where id = ${input.conversation.id} returning last_message_sequence as sequence`));
-    const [row] = rows<Row>(await this.queryable.execute(sql`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at) values (${input.messageId}, ${input.conversation.id}, ${allocated!.sequence}::bigint, ${input.senderId}, ${input.clientMessageId}, ${input.requestFingerprint}, ${input.text}, 1, ${input.createdAt.toISOString()}::timestamptz) returning *`));
+    const [allocated] = await this.queryable
+      .update(schema.conversations)
+      .set({
+        lastMessageSequence: sql`${schema.conversations.lastMessageSequence} + 1`,
+        lastActivityAt: input.createdAt,
+        updatedAt: input.createdAt,
+      })
+      .where(eq(schema.conversations.id, input.conversation.id))
+      .returning({ sequence: sql<string>`${schema.conversations.lastMessageSequence}::text` });
+    const [message] = await this.queryable
+      .insert(schema.messages)
+      .values({
+        id: input.messageId,
+        conversationId: input.conversation.id,
+        sequence: sql`${allocated!.sequence}::bigint`,
+        senderId: input.senderId,
+        clientMessageId: input.clientMessageId,
+        requestFingerprint: input.requestFingerprint,
+        body: input.text,
+        version: 1,
+        createdAt: input.createdAt,
+      })
+      .returning(messageSelection);
     await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, input.createdAt);
-    return storedMessage(row!);
+    return storedMessage(message!);
   }
 }
 
 export function createPostgresDirectConversationStore(database: DayliDatabase): DirectConversationStore {
   return {
     withDirectTransaction: (actorId, recipientId, action) => database.transaction(async (tx) => {
-      await lockRelationshipPair(tx, actorId, recipientId);
+      await tx
+        .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(actorId, recipientId)}, 734))` })
+        .from(sql`(values (1)) as lock_source`);
       return action(new PostgresDirectTransaction(tx, actorId));
     }),
   };

@@ -72,6 +72,26 @@ suite("create direct conversation Postgres repository", () => {
     expect(outbox?.count).toBe(2);
   });
 
+  it("preserves message sequence precision above Number.MAX_SAFE_INTEGER", async () => {
+    const created = await direct.create(users[6]!, {
+      recipientId: users[7]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "first",
+    });
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
+    await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
+
+    const appended = await direct.create(users[6]!, {
+      recipientId: users[7]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "precise",
+    });
+
+    expect(appended.message.sequence).toBe("9007199254740993");
+    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${appended.message.id}`;
+    expect(message?.sequence).toBe("9007199254740993");
+  });
+
   it("rejects creation after either-direction blocks", async () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[5]!}, ${users[4]!}, now())`;
     await expect(direct.create(users[4]!, { recipientId: users[5]!, clientMessageId: crypto.randomUUID(), text: "blocked" })).rejects.toMatchObject({ code: "BLOCKED" });
