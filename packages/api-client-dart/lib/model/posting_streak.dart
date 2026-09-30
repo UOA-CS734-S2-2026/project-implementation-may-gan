@@ -62,9 +62,9 @@ class PostingStreak {
     final json = <String, dynamic>{};
     json[r'current'] = this.current;
     json[r'longest'] = this.longest;
-    json[r'lastPostDate'] = _dateFormatter.format(this.lastPostDate);
+    json[r'lastPostDate'] = this.lastPostDate;
     json[r'postedToday'] = this.postedToday;
-    json[r'asOf'] = _dateFormatter.format(this.asOf);
+    json[r'asOf'] = this.asOf;
     return json;
   }
 
@@ -122,9 +122,9 @@ class PostingStreak {
       return PostingStreak(
         current: mapValueOfType<int>(json, r'current')!,
         longest: mapValueOfType<int>(json, r'longest')!,
-        lastPostDate: mapDateTime(json, r'lastPostDate', r'')!,
+        lastPostDate: mapValueOfType<String>(json, r'lastPostDate')!,
         postedToday: mapValueOfType<bool>(json, r'postedToday')!,
-        asOf: mapDateTime(json, r'asOf', r'')!,
+        asOf: mapValueOfType<String>(json, r'asOf')!,
       );
     }
     return null;

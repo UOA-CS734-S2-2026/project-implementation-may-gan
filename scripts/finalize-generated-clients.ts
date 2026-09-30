@@ -80,22 +80,26 @@ async function normalizeTextFiles(directory: string): Promise<void> {
   );
 }
 
-async function normalizeDartDateOnlyModel(path: string, field: string): Promise<void> {
-  const source = await readFile(path, "utf8");
-  const normalized = source
-    .replace(
-      `json[r'${field}'] = _dateFormatter.format(this.${field});`,
-      `json[r'${field}'] = this.${field};`,
-    )
-    .replace(
-      `${field}: mapDateTime(json, r'${field}', r'')!,`,
-      `${field}: mapValueOfType<String>(json, r'${field}')!,`,
-    );
+async function normalizeDartDateOnlyModel(path: string, ...fields: string[]): Promise<void> {
+  // One read and write per model, so several fields in one file never race.
+  let source = await readFile(path, "utf8");
+  for (const field of fields) {
+    const normalized = source
+      .replace(
+        `json[r'${field}'] = _dateFormatter.format(this.${field});`,
+        `json[r'${field}'] = this.${field};`,
+      )
+      .replace(
+        `${field}: mapDateTime(json, r'${field}', r'')!,`,
+        `${field}: mapValueOfType<String>(json, r'${field}')!,`,
+      );
 
-  if (normalized === source) {
-    throw new Error(`Could not normalize Dart date-only field ${field} in ${path}`);
+    if (normalized === source) {
+      throw new Error(`Could not normalize Dart date-only field ${field} in ${path}`);
+    }
+    source = normalized;
   }
-  await writeFile(path, normalized);
+  await writeFile(path, source);
 }
 
 async function finalizeGeneratedClients() {
@@ -157,6 +161,11 @@ async function finalizeGeneratedClients() {
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/profile_post.dart",
       "localDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/posting_streak.dart",
+      "lastPostDate",
+      "asOf",
     ),
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/test_response.dart",
