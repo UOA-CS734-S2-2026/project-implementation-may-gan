@@ -63,6 +63,7 @@ src/models/PostDetail.ts
 src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
+src/models/PostingStreak.ts
 src/models/ProfileDetails.ts
 src/models/ProfileOwnerSettings.ts
 src/models/ProfilePost.ts

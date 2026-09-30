@@ -87,6 +87,7 @@ part 'model/post_detail.dart';
 part 'model/post_detail_author.dart';
 part 'model/post_detail_prompt.dart';
 part 'model/post_media.dart';
+part 'model/posting_streak.dart';
 part 'model/profile_details.dart';
 part 'model/profile_owner_settings.dart';
 part 'model/profile_post.dart';

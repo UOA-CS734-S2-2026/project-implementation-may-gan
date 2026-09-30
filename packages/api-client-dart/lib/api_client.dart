@@ -308,6 +308,8 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
+        case 'PostingStreak':
+          return PostingStreak.fromJson(value);
         case 'ProfileDetails':
           return ProfileDetails.fromJson(value);
         case 'ProfileOwnerSettings':

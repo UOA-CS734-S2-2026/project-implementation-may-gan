@@ -51,6 +51,7 @@ export * from './PostDetail';
 export * from './PostDetailAuthor';
 export * from './PostDetailPrompt';
 export * from './PostMedia';
+export * from './PostingStreak';
 export * from './ProfileDetails';
 export * from './ProfileOwnerSettings';
 export * from './ProfilePost';

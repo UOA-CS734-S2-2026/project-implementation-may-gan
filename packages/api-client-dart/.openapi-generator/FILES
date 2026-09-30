@@ -71,6 +71,7 @@ lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
+lib/model/posting_streak.dart
 lib/model/profile_details.dart
 lib/model/profile_owner_settings.dart
 lib/model/profile_post.dart
