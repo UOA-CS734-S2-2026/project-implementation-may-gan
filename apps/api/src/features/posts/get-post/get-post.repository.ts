@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
@@ -33,7 +33,12 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
           audience: posts.audience,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
-          edited: sql<boolean>`exists (select 1 from ${postRevisions} where ${postRevisions.postId} = ${posts.id})`,
+          edited: exists(
+            database
+              .select({ revisionId: postRevisions.id })
+              .from(postRevisions)
+              .where(eq(postRevisions.postId, posts.id)),
+          ).mapWith(Boolean),
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))
