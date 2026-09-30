@@ -67,7 +67,7 @@ export async function findProfileByUsername(queryable: RelationshipQueryable, ac
       matchingHandleIsUnique,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
       notExists(
-        queryable.select({ one: sql`1` }).from(relationshipBlocks).where(and(
+        queryable.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),
           or(
             and(eq(relationshipBlocks.blockerId, actorId), eq(relationshipBlocks.blockedId, candidate.id)),
