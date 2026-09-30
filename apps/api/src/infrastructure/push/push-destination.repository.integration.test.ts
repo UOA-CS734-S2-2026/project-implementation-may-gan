@@ -66,36 +66,54 @@ suite("Postgres push destination authorization", () => {
     const sender = { send: vi.fn(async () => ({ ok: true as const })) };
     const deliver = createPushOutboxHandler({ destinations: resolver, sender });
 
+    await database.db.execute(sql`update public."user" set banned = false, ban_expires = null where id = ${ids.bob}`);
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({ token: "bob-token" }), undefined);
 
+    await database.db.execute(sql`update public."user" set banned = null where id = ${ids.bob}`);
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(2);
+
+    await database.db.execute(sql`update public."user" set banned = true, ban_expires = now() - interval '5 minutes' where id = ${ids.bob}`);
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(3);
+
+    await database.db.execute(sql`update public."user" set banned = true, ban_expires = now() + interval '5 minutes' where id = ${ids.bob}`);
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(3);
+
     await database.db.execute(sql`update public."user" set banned = true, ban_expires = null where id = ${ids.bob}`);
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
-    await database.db.execute(sql`update public."user" set banned = false where id = ${ids.bob}`);
+    expect(sender.send).toHaveBeenCalledTimes(3);
+    await database.db.execute(sql`update public."user" set banned = false, ban_expires = null where id = ${ids.bob}`);
 
     await database.db.execute(sql`delete from public.conversation_members where conversation_id = ${ids.conversation} and user_id = ${ids.bob}`);
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(3);
     await database.db.execute(sql`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.bob}, 0, 0, ${now}, ${now})`);
 
     await database.db.execute(sql`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.alice}, ${ids.bob}, ${now})`);
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(3);
     await database.db.execute(sql`delete from public.relationship_blocks where blocker_id = ${ids.alice} and blocked_id = ${ids.bob}`);
+
+    await database.db.execute(sql`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.bob}, ${ids.alice}, now())`);
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(3);
+    await database.db.execute(sql`delete from public.relationship_blocks where blocker_id = ${ids.bob} and blocked_id = ${ids.alice}`);
 
     await resolver.invalidate(ids.bobDevice);
     await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(3);
 
     await database.db.execute(sql`delete from public.session where id = ${ids.aliceSession}`);
     await expect(devices.register({ id: `late-${crypto.randomUUID()}`, userId: ids.alice, sessionId: ids.aliceSession, installationId: "late-installation", platform: "ios", tokenCiphertext: "late-token", tokenKeyVersion: "test", tokenHash: tokenHash("c"), optedIn: true, now: new Date() })).rejects.toBeInstanceOf(PushSessionInactiveError);
     await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(3);
 
     await database.db.execute(sql`delete from public."user" where id = ${ids.alice}`);
     await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(1);
+    expect(sender.send).toHaveBeenCalledTimes(3);
   });
 });
