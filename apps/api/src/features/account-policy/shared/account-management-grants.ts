@@ -39,11 +39,16 @@ export async function issueAccountManagementGrant(
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const token = base64Url(bytes);
+  const lifecycle = await database.select({ generation: schema.accountLifecycles.generation })
+    .from(schema.accountLifecycles)
+    .where(eq(schema.accountLifecycles.userId, session.userId))
+    .limit(1);
   await database.insert(schema.accountManagementGrants).values({
     tokenDigest: await digest(token),
     userId: session.userId,
     sessionId: session.sessionId,
     action,
+    lifecycleGeneration: lifecycle[0]?.generation ?? 0,
     expiresAt,
   });
   return { token, expiresAt };
@@ -69,6 +74,7 @@ export async function consumeAccountManagementGrant(
       eq(schema.session.userId, session.userId),
       gt(schema.session.expiresAt, sql`now()`),
     )));
+  const currentGeneration = sql<number>`coalesce((select generation from public.account_lifecycles where user_id = ${session.userId}), 0)`;
   const rows = await database.update(schema.accountManagementGrants)
     .set({ consumedAt: sql`now()` })
     .where(and(
@@ -76,6 +82,7 @@ export async function consumeAccountManagementGrant(
       eq(schema.accountManagementGrants.userId, session.userId),
       eq(schema.accountManagementGrants.sessionId, session.sessionId),
       eq(schema.accountManagementGrants.action, action),
+      eq(schema.accountManagementGrants.lifecycleGeneration, currentGeneration),
       isNull(schema.accountManagementGrants.consumedAt),
       gt(schema.accountManagementGrants.expiresAt, sql`now()`),
       liveSession,

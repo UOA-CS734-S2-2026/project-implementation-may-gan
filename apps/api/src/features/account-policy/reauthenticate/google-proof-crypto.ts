@@ -14,6 +14,15 @@ async function key(encoded: string, usage: KeyUsage[]): Promise<CryptoKey> {
 async function digest(value: string): Promise<string> { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", source(bytes(value))))].map((byte) => byte.toString(16).padStart(2, "0")).join(""); }
 
 export interface GoogleProofKey { version: string; material: string; }
+export interface GoogleProofCryptoConfiguration { encryption: GoogleProofKey; subjectHmac: GoogleProofKey; }
+
+/** Bind separately purposed server keys and reject accidental key reuse. */
+export function createGoogleProofCryptoConfiguration(configuration: GoogleProofCryptoConfiguration): GoogleProofCryptoConfiguration {
+  if (!configuration.encryption.version.trim() || !configuration.subjectHmac.version.trim()) throw new TypeError("Google proof key versions are required.");
+  if (configuration.encryption.material === configuration.subjectHmac.material) throw new TypeError("Google proof encryption and subject HMAC keys must differ.");
+  return configuration;
+}
+
 function aad(intent: { stateDigest: string; userId: string; sessionId: string; action: string; lifecycleGeneration: number }): Uint8Array {
   return bytes([intent.stateDigest, intent.userId, intent.sessionId, intent.action, String(intent.lifecycleGeneration)].join("\u0000"));
 }

@@ -1,0 +1,6 @@
+reason: The preceding immutable migration already permits terminal proof rows to clear PKCE material; generated history records redundant drops.
+affected_data_and_clients: No client reads verifier ciphertext or key version.
+rollout_sequence: Apply before runtime proof writes.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Keep terminal verifier material nullable in later additive migrations.
+reviewer: Database and privacy reviewers required.

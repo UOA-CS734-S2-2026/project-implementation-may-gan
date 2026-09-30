@@ -16,6 +16,7 @@ export const accountGoogleReauthenticationIntents = pgTable("account_google_reau
   status: text("status").notNull().default("pending"),
   callbackClaimedAt: timestamp("callback_claimed_at", { withTimezone: true }),
   callbackLeaseExpiresAt: timestamp("callback_lease_expires_at", { withTimezone: true }),
+  callbackClaimDigest: text("callback_claim_digest"),
   proofSubjectDigest: text("proof_subject_digest"),
   proofSubjectKeyVersion: text("proof_subject_key_version"),
   proofedAt: timestamp("proofed_at", { withTimezone: true }),
@@ -32,4 +33,5 @@ export const accountGoogleReauthenticationIntents = pgTable("account_google_reau
   check("account_google_reauth_intents_consumed_check", sql`${table.consumedAt} is null or ${table.consumedAt} <= ${table.expiresAt}`),
   check("account_google_reauth_intents_status_check", sql`${table.status} in ('pending', 'claimed', 'proofed', 'consumed', 'failed')`),
   check("account_google_reauth_intents_proof_digest_check", sql`${table.proofSubjectDigest} is null or ${table.proofSubjectDigest} ~ '^[0-9a-f]{64}$'`),
+  check("account_google_reauth_intents_claim_digest_check", sql`${table.callbackClaimDigest} is null or ${table.callbackClaimDigest} ~ '^[0-9a-f]{64}$'`),
 ]);

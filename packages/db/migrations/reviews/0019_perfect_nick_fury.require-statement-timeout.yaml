@@ -1,0 +1,6 @@
+reason: Backfill and constraint validation must not run without a bounded statement timeout.
+affected_data_and_clients: Draft Google proof runtime only.
+rollout_sequence: Apply with a five-minute statement timeout.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Investigate and retry through the migration runner if the timeout is exceeded.
+reviewer: Database and privacy reviewers required.

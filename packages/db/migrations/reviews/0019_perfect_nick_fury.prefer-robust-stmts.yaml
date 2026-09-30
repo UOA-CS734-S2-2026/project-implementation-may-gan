@@ -1,0 +1,6 @@
+reason: PostgreSQL migrations are serialized and transactional in the protected migration runner.
+affected_data_and_clients: Draft Google proof runtime only.
+rollout_sequence: Run through the protected migration runner, never manually piecemeal.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Re-run only through the migration runner after correcting an environmental failure.
+reviewer: Database and privacy reviewers required.

@@ -134,6 +134,13 @@
       "when": 1790751413721,
       "tag": "0018_handy_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790752639119,
+      "tag": "0019_perfect_nick_fury",
+      "breakpoints": true
     }
   ]
 }

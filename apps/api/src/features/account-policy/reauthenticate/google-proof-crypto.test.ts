@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decryptGoogleProofVerifier, digestGoogleProofSubject, encryptGoogleProofVerifier } from "./google-proof-crypto";
+import { createGoogleProofCryptoConfiguration, decryptGoogleProofVerifier, digestGoogleProofSubject, encryptGoogleProofVerifier } from "./google-proof-crypto";
 
 const key = { version: "v1", material: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY" };
 const verifier = "a".repeat(43);
@@ -17,6 +17,10 @@ describe("Google proof cryptography", () => {
     await expect(decryptGoogleProofVerifier(`${ciphertext}x`, intent, key)).resolves.toBeNull();
     await expect(decryptGoogleProofVerifier(ciphertext, intent, { ...key, material: "YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk" })).resolves.toBeNull();
     await expect(decryptGoogleProofVerifier(ciphertext, { ...intent, sessionId: "other" }, key)).resolves.toBeNull();
+  });
+  it("rejects configuration that reuses encryption material for subject HMAC", () => {
+    expect(() => createGoogleProofCryptoConfiguration({ encryption: key, subjectHmac: key })).toThrow("must differ");
+    expect(createGoogleProofCryptoConfiguration({ encryption: key, subjectHmac: { ...key, version: "subject-v1", material: "YWJjZGVmMDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODk" } })).toBeTruthy();
   });
   it("uses separate stable HMAC subject digests", async () => {
     const first = await digestGoogleProofSubject("subject", key);

@@ -108,6 +108,7 @@ export const accountManagementGrants = pgTable("account_management_grants", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   sessionId: text("session_id").notNull().references(() => session.id, { onDelete: "cascade" }),
   action: accountManagementGrantAction("action").notNull(),
+  lifecycleGeneration: bigint("lifecycle_generation", { mode: "number" }).notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -117,6 +118,7 @@ export const accountManagementGrants = pgTable("account_management_grants", {
   check("account_management_grants_digest_check", sql`${table.tokenDigest} ~ '^[0-9a-f]{64}$'`),
   check("account_management_grants_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
   check("account_management_grants_consumed_check", sql`${table.consumedAt} is null or ${table.consumedAt} <= ${table.expiresAt}`),
+  check("account_management_grants_generation_check", sql`${table.lifecycleGeneration} >= 0`),
 ]);
 
 /**

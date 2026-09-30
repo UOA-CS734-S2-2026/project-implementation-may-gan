@@ -99,6 +99,45 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     }
   });
 
+  it("upgrades a populated 0017 Google proof intent row to a terminal 0018 row", async () => {
+    const migration = await readFile(repoPath("packages/db/migrations/0018_handy_shard.sql"), "utf8");
+    const table = `google_reauth_0017_upgrade_${crypto.randomUUID().replaceAll("-", "")}`;
+    const upgrade = migration
+      .replaceAll("account_google_reauthentication_intents", table)
+      .replaceAll("Account Google reauthentication intents", "Google reauthentication upgrade fixture");
+    await migrator.begin(async (tx) => {
+      await tx.unsafe(`
+        create table public.${table} (
+          state_digest text primary key not null,
+          nonce_digest text not null,
+          user_id text not null,
+          session_id text not null,
+          action public.account_management_grant_action not null,
+          lifecycle_generation bigint not null,
+          expires_at timestamp with time zone not null,
+          consumed_at timestamp with time zone,
+          created_at timestamp with time zone not null default now(),
+          constraint ${table}_state_digest_check check (state_digest ~ '^[0-9a-f]{64}$'),
+          constraint ${table}_nonce_digest_check check (nonce_digest ~ '^[0-9a-f]{64}$'),
+          constraint ${table}_generation_check check (lifecycle_generation >= 0),
+          constraint ${table}_expiry_check check (expires_at > created_at),
+          constraint ${table}_consumed_check check (consumed_at is null or consumed_at <= expires_at)
+        )
+      `);
+      await tx.unsafe(`
+        insert into public.${table}
+          (state_digest, nonce_digest, user_id, session_id, action, lifecycle_generation, expires_at)
+        values ('${"a".repeat(64)}', '${"b".repeat(64)}', 'legacy-user', 'legacy-session', 'request_deletion', 0, now() + interval '10 minutes')
+      `);
+      await tx.unsafe(upgrade);
+      const rows = await tx.unsafe(`
+        select status, failed_at is not null as failed, verifier_ciphertext, verifier_key_version
+        from public.${table}
+      `);
+      expect(rows).toEqual([{ status: "failed", failed: true, verifier_ciphertext: null, verifier_key_version: null }]);
+    });
+  });
+
   it("applies the test-only fixture table and grants app DML", async () => {
     const fixtureSql = await readFile(repoPath("packages/db/test/fixtures/migrations/0001_create_fixture_table.sql"), "utf8");
     await migrator.unsafe(fixtureSql);
