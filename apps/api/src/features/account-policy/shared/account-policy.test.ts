@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
 import { accountCapabilityForRequest } from "./account-policy.middleware";
-import { allowsAccountCapability, resolveAccountPolicy } from "./account-policy";
+import { allowsAccountCapability, allowsManagementGrantAction, resolveAccountPolicy } from "./account-policy";
 import { accountManagementGrantLifetimeMs, resolveAccountManagementGrantExpiry } from "./account-management-grants";
 
 describe("account policy", () => {
@@ -28,6 +28,22 @@ describe("account policy", () => {
     const policy = resolveAccountPolicy({ lifecycleState: "purging", temporarilyRestricted: true });
     expect(policy.restriction).toBe("purging");
     expect(allowsAccountCapability(policy, "export")).toBe(false);
+  });
+
+  it("only permits lifecycle actions matching the current restriction", () => {
+    const cases: Array<[Parameters<typeof allowsManagementGrantAction>[0], "request_deletion" | "cancel_deletion", boolean]> = [
+      ["active", "request_deletion", true],
+      ["active", "cancel_deletion", false],
+      ["pending_deletion", "request_deletion", false],
+      ["pending_deletion", "cancel_deletion", true],
+      ["purging", "request_deletion", false],
+      ["purging", "cancel_deletion", false],
+      ["purge_failed", "request_deletion", false],
+      ["purge_failed", "cancel_deletion", false],
+    ];
+    for (const [restriction, action, allowed] of cases) {
+      expect(allowsManagementGrantAction(restriction, action)).toBe(allowed);
+    }
   });
 
   it("derives an exact bounded ten-minute grant lifetime from a valid server instant", () => {
@@ -86,6 +102,7 @@ describe("account policy", () => {
       },
       accountReauthentication: {
         trustedOrigins: ["https://app.example.test"],
+        authorizeAction: async () => true,
         verifyPassword: async () => ({ userId: "pending-user", sessionId: "session-a" }),
         issueGrant: async () => ({ token: "opaque-grant", expiresAt: new Date("2026-10-01T00:00:00.000Z") }),
       },
@@ -106,6 +123,31 @@ describe("account policy", () => {
     expect(attacker.status).toBe(403);
   });
 
+  it("does not invoke verification or issuance when policy rejects the requested action", async () => {
+    const calls = { verify: 0, issue: 0 };
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => ({ userId: "purging-user" }),
+        policies: { resolve: async () => resolveAccountPolicy({ lifecycleState: "purging" }) },
+      },
+      accountReauthentication: {
+        trustedOrigins: [],
+        authorizeAction: async () => false,
+        verifyPassword: async () => { calls.verify += 1; return { userId: "purging-user", sessionId: "session-a" }; },
+        issueGrant: async () => { calls.issue += 1; return { token: "must-not-issue", expiresAt: new Date() }; },
+      },
+    });
+    for (const action of ["request_deletion", "cancel_deletion"]) {
+      const response = await api.request("https://api.example.test/api/v1/account/reauthenticate/password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, password: "correct-password" }),
+      });
+      expect(response.status).toBe(403);
+    }
+    expect(calls).toEqual({ verify: 0, issue: 0 });
+  });
+
   it("rejects a verified credential for another account without revealing the mismatch", async () => {
     const api = createApp({
       accountPolicy: {
@@ -114,6 +156,7 @@ describe("account policy", () => {
       },
       accountReauthentication: {
         trustedOrigins: [],
+        authorizeAction: async () => true,
         verifyPassword: async () => ({ userId: "other-user", sessionId: "session-b" }),
         issueGrant: async () => ({ token: "must-not-issue", expiresAt: new Date() }),
       },

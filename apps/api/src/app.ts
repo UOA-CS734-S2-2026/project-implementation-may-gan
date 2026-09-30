@@ -139,7 +139,7 @@ import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } 
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
-import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
+import { allowsAccountCapability, allowsManagementGrantAction } from "./features/account-policy/shared/account-policy";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerAccountReauthenticationRoutes, type AccountReauthenticationDependencies } from "./features/account-policy/reauthenticate/account-reauthentication.route";
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
@@ -553,6 +553,10 @@ function createPushDeviceDependencies(
 function createAccountReauthenticationDependencies(configuration: RuntimeConfiguration): AccountReauthenticationDependencies {
   return {
     trustedOrigins: configuration.trustedOrigins,
+    authorizeAction: async (userId, action) => {
+      const policy = await createHyperdriveAccountPolicyResolver(configuration.hyperdrive).resolve(userId);
+      return allowsManagementGrantAction(policy.restriction, action);
+    },
     verifyPassword: async (request, password) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({
         baseURL: configuration.baseURL,

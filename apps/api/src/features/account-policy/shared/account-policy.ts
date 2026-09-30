@@ -58,3 +58,9 @@ export function resolveAccountPolicy(state: Partial<AccountPolicyState> | undefi
 export function allowsAccountCapability(policy: AccountPolicy, capability: AccountCapability): boolean {
   return policy.allowed.has(capability);
 }
+
+/** Grants are useful only for the lifecycle transition currently permitted. */
+export function allowsManagementGrantAction(restriction: AccountRestriction, action: "request_deletion" | "cancel_deletion"): boolean {
+  if (action === "cancel_deletion") return restriction === "pending_deletion";
+  return ["active", "terms_blocked", "age_declaration_blocked", "underage_restricted"].includes(restriction);
+}

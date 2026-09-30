@@ -5,6 +5,7 @@ import type { AccountManagementGrantAction, VerifiedManagementSession } from "..
 
 export interface AccountReauthenticationDependencies {
   trustedOrigins: readonly string[];
+  authorizeAction(userId: string, action: AccountManagementGrantAction): Promise<boolean>;
   verifyPassword(request: Request, password: string): Promise<VerifiedManagementSession | null>;
   issueGrant(session: VerifiedManagementSession, action: AccountManagementGrantAction): Promise<{ token: string; expiresAt: Date }>;
 }
@@ -37,6 +38,9 @@ export function registerAccountReauthenticationRoutes(
       return apiErrorResponse(context, 403, "FORBIDDEN", "Account reauthentication is unavailable.");
     }
     try {
+      if (!await dependencies.authorizeAction(actor.userId, input.action)) {
+        return apiErrorResponse(context, 403, "FORBIDDEN", "Account reauthentication is unavailable.");
+      }
       const session = await dependencies.verifyPassword(context.req.raw, input.password);
       if (!session || session.userId !== actor.userId) return apiErrorResponse(context, 403, "FORBIDDEN", "Account reauthentication is unavailable.");
       const grant = await dependencies.issueGrant(session, input.action);

@@ -161,6 +161,52 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(expired.json()).resolves.toBeNull();
   });
 
+  it("issues password management grants only for current real Better Auth cookie and bearer sessions", async () => {
+    const app = createProductionApp();
+    const signedUp = await signUp(app, "reauth@example.test");
+    const bearer = nativeToken(signedUp);
+    const cookie = signedUp.headers.get("set-cookie")?.split(";", 1)[0];
+    expect(cookie).toBeTruthy();
+
+    const browserGrant = await app.fetch(request("/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: cookie! },
+      body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
+    }));
+    expect(browserGrant.status).toBe(200);
+    await expect(browserGrant.json()).resolves.toMatchObject({ grant: expect.any(String) });
+    expect(browserGrant.headers.get("cache-control")).toContain("no-store");
+
+    const nativeGrant = await app.fetch(new Request(`${origin}/api/v1/account/reauthenticate/password`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
+    }));
+    expect(nativeGrant.status).toBe(200);
+
+    const wrongPassword = await app.fetch(request("/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ action: "request_deletion", password: "wrong-password" }),
+    }));
+    expect(wrongPassword.status).toBe(403);
+
+    const maliciousOrigin = await app.fetch(request("/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
+    }, "https://attacker.example.test"));
+    expect(maliciousOrigin.status).toBe(403);
+
+    await migrator.client`update public.session set expires_at = now() - interval '1 second' where token = ${bearer}`;
+    const expired = await app.fetch(new Request(`${origin}/api/v1/account/reauthenticate/password`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
+    }));
+    expect(expired.status).toBe(401);
+  });
+
   it("notifies Worker revocation for every session before Better Auth removes them", async () => {
     const revokeSessions = vi.fn(async () => undefined);
     const app = createProductionAuthApp({ revokeSessions });
