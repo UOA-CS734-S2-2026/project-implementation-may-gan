@@ -4,7 +4,7 @@ This slice adds the server-side policy boundary for #159. It does not add accoun
 
 ## Enforced now
 
-`createAppForEnv` installs account-policy middleware before every `/api/v1/*` route. Every path is restrictive by default. The only public exceptions are health, OpenAPI, and contract-test endpoints. A newly registered API path is an ordinary capability unless it is explicitly classified as a restricted account-management path.
+`createAppForEnv` installs account-policy middleware before every `/api/v1/*` route. Every path is restrictive by default. The only public exceptions are exact `GET` health, OpenAPI, and contract-test routes. The restricted management entries are exact method and normalized-path matches. A lookalike, suffix, trailing-slash variant, or wrong method is an ordinary capability unless a reviewed route adds it to the allowlist.
 
 The middleware resolves the Better Auth cookie or bearer session on the server, reads a content-free account-policy projection, and returns `403 FORBIDDEN` with a stable `details.restriction` value before ordinary feature middleware or repositories run. Resolver failures return `503`, never an allow decision. It applies to media, posts, relationships, messaging, realtime tickets, push-device routes, profile setup, and future `/api/v1` paths without changing those feature repositories.
 
@@ -16,7 +16,7 @@ Terms and age gates activate only when an effective Terms version has reached it
 
 ## Management grants
 
-`account-management-grants.ts` provides the database primitive for the later reauthentication route. It creates a 256-bit opaque token and stores only its SHA-256 digest. Consumption atomically binds the digest to the original user, session, action, unconsumed state, grant expiry, and a still-live Better Auth session. Replayed, expired, revoked-session, and account-confused grants return the same false result.
+`account-management-grants.ts` provides the database primitive for reauthentication routes. It creates a 256-bit opaque token, derives a fixed 10-minute expiry from the server-issued instant, and stores only its SHA-256 digest. Callers cannot choose an expiry. Consumption atomically binds the digest to the original user, session, action, unconsumed state, grant expiry, and a still-live Better Auth session. Replayed, expired, revoked-session, and account-confused grants return the same false result.
 
 `POST /api/v1/account/reauthenticate/password` now verifies the current cookie or bearer session through Better Auth's supported `/verify-password` handler. It requires an exact trusted browser origin when an Origin header is present, compares the verified Better Auth user to the current policy actor, and returns only a short-lived opaque grant in a no-store response. It accepts no asserted user ID. Normal sign-in has no lifecycle mutation and cannot cancel pending deletion.\n\nGoogle reauthentication is not implemented. It needs a server-owned browser continuation with Better Auth's OAuth state handling, plus a native flow that validates provider proof through Better Auth and compares the resulting linked provider subject to the active account. Do not accept a raw Google ID token or email claim at an account-management endpoint.
 

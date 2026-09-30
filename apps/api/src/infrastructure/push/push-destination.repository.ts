@@ -4,8 +4,14 @@ import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
 
+export type PushRecipientAuthorizer = (userId: string) => Promise<boolean>;
+
 /** Rechecks registration, current session, membership and blocks immediately before FCM. */
-export function createPostgresPushDestinationResolver(database: DayliDatabase, protector: PushTokenProtector): PushDestinationResolver {
+export function createPostgresPushDestinationResolver(
+  database: DayliDatabase,
+  protector: PushTokenProtector,
+  authorizeRecipient: PushRecipientAuthorizer = async () => true,
+): PushDestinationResolver {
   return {
     async resolve(job: OutboxJob) {
       if (!job.deviceRegistrationId) return null;
@@ -13,6 +19,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         .select({
           tokenCiphertext: schema.pushDevices.tokenCiphertext,
           tokenKeyVersion: schema.pushDevices.tokenKeyVersion,
+          userId: schema.pushDevices.userId,
         })
         .from(schema.pushDevices)
         .innerJoin(schema.session, and(
@@ -47,6 +54,11 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         ))
         .limit(1);
       if (!row || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
+      try {
+        if (!await authorizeRecipient(row.userId)) return null;
+      } catch {
+        return null;
+      }
       const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
       return token ? { token, valid: true } : null;
     },
@@ -59,16 +71,20 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
   };
 }
 
-export function createHyperdrivePushDestinationResolver(hyperdrive: HyperdriveBinding, protector: PushTokenProtector): PushDestinationResolver {
+export function createHyperdrivePushDestinationResolver(
+  hyperdrive: HyperdriveBinding,
+  protector: PushTokenProtector,
+  authorizeRecipient: PushRecipientAuthorizer = async () => true,
+): PushDestinationResolver {
   return {
     async resolve(job) {
       const client = createHyperdriveDatabase(hyperdrive);
-      try { return await createPostgresPushDestinationResolver(client.db, protector).resolve(job); }
+      try { return await createPostgresPushDestinationResolver(client.db, protector, authorizeRecipient).resolve(job); }
       finally { await client.close(); }
     },
     async invalidate(id) {
       const client = createHyperdriveDatabase(hyperdrive);
-      try { await createPostgresPushDestinationResolver(client.db, protector).invalidate(id); }
+      try { await createPostgresPushDestinationResolver(client.db, protector, authorizeRecipient).invalidate(id); }
       finally { await client.close(); }
     },
   };

@@ -13,16 +13,23 @@ export interface AccountPolicyResolver {
  * listed here, which makes a newly registered API route restrictive until its
  * capability has been reviewed.
  */
-export const publicApiPaths = new Set(["/api/v1/health", "/api/v1/openapi.json", "/api/v1/test-contracts"]);
+const publicApiRoutes = new Set(["GET /api/v1/health", "GET /api/v1/openapi.json", "GET /api/v1/test-contracts"]);
+const managementApiRoutes = new Map<string, AccountCapability>([
+  ["GET /api/v1/account/status", "policy_read"],
+  ["GET /api/v1/account/policy", "policy_read"],
+  ["POST /api/v1/account/reauthenticate/password", "policy_read"],
+]);
 
-export function accountCapabilityForPath(pathname: string): AccountCapability | undefined {
-  if (publicApiPaths.has(pathname)) return undefined;
-  if (pathname === "/api/v1/account/status" || pathname === "/api/v1/account/policy" || pathname.startsWith("/api/v1/account/reauthenticate/")) return "policy_read";
-  if (pathname.startsWith("/api/v1/account/cancel-deletion")) return "cancel_deletion_verification";
-  if (pathname.startsWith("/api/v1/account/exports")) return "export";
-  if (pathname.startsWith("/api/v1/account/appeal")) return "appeal";
-  if (pathname.startsWith("/api/v1/account/request-deletion")) return "request_deletion";
-  return "ordinary";
+/**
+ * This is an exact method and normalized-path allowlist, not a prefix matcher.
+ * A lookalike or an unregistered route therefore remains ordinary and is denied
+ * for a restricted account before feature code runs.
+ */
+export function accountCapabilityForRequest(request: Request): AccountCapability | undefined {
+  const url = new URL(request.url);
+  const key = `${request.method.toUpperCase()} ${url.pathname}`;
+  if (publicApiRoutes.has(key)) return undefined;
+  return managementApiRoutes.get(key) ?? "ordinary";
 }
 
 function privateRestriction(context: Parameters<MiddlewareHandler<AuthenticatedApiEnv>>[0], policy: AccountPolicy) {
@@ -45,7 +52,7 @@ export function createAccountPolicyMiddleware(
   policies: AccountPolicyResolver,
 ): MiddlewareHandler<AuthenticatedApiEnv> {
   return async (context, next) => {
-    const capability = accountCapabilityForPath(new URL(context.req.raw.url).pathname);
+    const capability = accountCapabilityForRequest(context.req.raw);
     if (!capability) return next();
     context.header("Cache-Control", "no-store");
 

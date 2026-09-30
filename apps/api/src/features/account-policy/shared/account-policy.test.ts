@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
-import { accountCapabilityForPath } from "./account-policy.middleware";
+import { accountCapabilityForRequest } from "./account-policy.middleware";
 import { allowsAccountCapability, resolveAccountPolicy } from "./account-policy";
+import { accountManagementGrantLifetimeMs, resolveAccountManagementGrantExpiry } from "./account-management-grants";
 
 describe("account policy", () => {
   it("treats a missing additive lifecycle record as active", () => {
@@ -29,10 +30,25 @@ describe("account policy", () => {
     expect(allowsAccountCapability(policy, "export")).toBe(false);
   });
 
-  it("treats every new API path as ordinary unless it is explicitly public or restricted management", () => {
-    expect(accountCapabilityForPath("/api/v1/health")).toBeUndefined();
-    expect(accountCapabilityForPath("/api/v1/account/status")).toBe("policy_read");
-    expect(accountCapabilityForPath("/api/v1/new-feature")).toBe("ordinary");
+  it("derives an exact bounded ten-minute grant lifetime from a valid server instant", () => {
+    const issuedAt = new Date("2026-10-01T00:00:00.000Z");
+    expect(resolveAccountManagementGrantExpiry(issuedAt).getTime()).toBe(issuedAt.getTime() + accountManagementGrantLifetimeMs);
+    expect(() => resolveAccountManagementGrantExpiry(new Date("invalid"))).toThrow(TypeError);
+  });
+
+  it("uses an exact method and path allowlist for public and management routes", () => {
+    const classify = (method: string, path: string) => accountCapabilityForRequest(new Request(`https://api.example.test${path}`, { method }));
+    expect(classify("GET", "/api/v1/health")).toBeUndefined();
+    expect(classify("POST", "/api/v1/health")).toBe("ordinary");
+    expect(classify("GET", "/api/v1/account/status")).toBe("policy_read");
+    expect(classify("POST", "/api/v1/account/status")).toBe("ordinary");
+    expect(classify("POST", "/api/v1/account/reauthenticate/password")).toBe("policy_read");
+    expect(classify("GET", "/api/v1/account/reauthenticate/password")).toBe("ordinary");
+    expect(classify("POST", "/api/v1/account/reauthenticate/password/extra")).toBe("ordinary");
+    expect(classify("POST", "/api/v1/account/exports-preview")).toBe("ordinary");
+    expect(classify("POST", "/api/v1/account/request-deletion-extra")).toBe("ordinary");
+    expect(classify("GET", "/api/v1/account/status/")).toBe("ordinary");
+    expect(classify("GET", "/api/v1/new-feature")).toBe("ordinary");
   });
 
   it("returns a machine-readable restricted response before ordinary feature routes", async () => {

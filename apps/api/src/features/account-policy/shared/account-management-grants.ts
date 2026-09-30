@@ -2,6 +2,7 @@ import { and, eq, exists, gt, isNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 
 export type AccountManagementGrantAction = "request_deletion" | "cancel_deletion";
+export const accountManagementGrantLifetimeMs = 10 * 60 * 1000;
 
 export interface VerifiedManagementSession {
   userId: string;
@@ -19,14 +20,22 @@ async function digest(value: string): Promise<string> {
   return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** Derive the fixed short lifetime on the server. Callers cannot choose it. */
+export function resolveAccountManagementGrantExpiry(issuedAt: Date): Date {
+  if (!(issuedAt instanceof Date) || !Number.isFinite(issuedAt.getTime())) {
+    throw new TypeError("issuedAt must be a valid Date.");
+  }
+  return new Date(issuedAt.getTime() + accountManagementGrantLifetimeMs);
+}
+
 /** Create an opaque single-use grant. Only its SHA-256 digest enters PostgreSQL. */
 export async function issueAccountManagementGrant(
   database: DayliDatabase,
   session: VerifiedManagementSession,
   action: AccountManagementGrantAction,
-  expiresAt: Date,
-): Promise<string> {
-  if (!Number.isFinite(expiresAt.getTime())) throw new TypeError("expiresAt must be a valid Date.");
+  issuedAt = new Date(),
+): Promise<{ token: string; expiresAt: Date }> {
+  const expiresAt = resolveAccountManagementGrantExpiry(issuedAt);
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   const token = base64Url(bytes);
@@ -37,7 +46,7 @@ export async function issueAccountManagementGrant(
     action,
     expiresAt,
   });
-  return token;
+  return { token, expiresAt };
 }
 
 /**

@@ -139,6 +139,7 @@ import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } 
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
+import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerAccountReauthenticationRoutes, type AccountReauthenticationDependencies } from "./features/account-policy/reauthenticate/account-reauthentication.route";
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
@@ -501,6 +502,13 @@ function createRealtimeDependencies(
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
 ): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
   const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
+  const policies = createHyperdriveAccountPolicyResolver(configuration.hyperdrive);
+  const resolveDeliveryEligibleSession = async (request: Request) => {
+    const session = await resolveRealtimeSession(request);
+    if (!session) return null;
+    try { return allowsAccountCapability(await policies.resolve(session.userId), "ordinary") ? session : null; }
+    catch { return null; }
+  };
   const tickets = {
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
     consume: async (ticket: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).consume(ticket)),
@@ -509,12 +517,17 @@ function createRealtimeDependencies(
   webSocketUrl.protocol = webSocketUrl.protocol === "https:" ? "wss:" : "ws:";
   const connect: RealtimeConnectRouteDependencies = {
     tickets,
-    resolveActiveSession: async (sessionId) => resolveRealtimeSessionById(configuration, sessionId),
+    resolveActiveSession: async (sessionId) => {
+      const session = await resolveRealtimeSessionById(configuration, sessionId);
+      if (!session) return null;
+      try { return allowsAccountCapability(await policies.resolve(session.userId), "ordinary") ? session : null; }
+      catch { return null; }
+    },
     userRealtime: env.USER_REALTIME!,
     trustedOrigins: configuration.trustedOrigins,
     hasUsername,
   };
-  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession: resolveDeliveryEligibleSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
 }
 
 function createPushDeviceDependencies(
@@ -565,9 +578,7 @@ function createAccountReauthenticationDependencies(configuration: RuntimeConfigu
       return verified.ok ? { userId, sessionId } : null;
     }),
     issueGrant: (session, action) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      const token = await issueAccountManagementGrant(database, session, action, expiresAt);
-      return { token, expiresAt };
+      return issueAccountManagementGrant(database, session, action);
     }),
   };
 }
