@@ -138,6 +138,81 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
     });
   });
 
+  it("upgrades populated 0018 proofed and consumed intents through 0019", async () => {
+    const table = `google_reauth_0018_upgrade_${crypto.randomUUID().replaceAll("-", "")}`;
+    const constraintPrefix = `g${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}_`;
+    const stateConstraint = `${constraintPrefix}state_check`;
+    const migration0018 = (await readFile(repoPath("packages/db/migrations/0018_handy_shard.sql"), "utf8"))
+      .replaceAll("account_google_reauthentication_intents", table)
+      .replaceAll("account_google_reauth_intents_", constraintPrefix);
+    const migration0019 = (await readFile(repoPath("packages/db/migrations/0019_perfect_nick_fury.sql"), "utf8"))
+      .replaceAll("account_google_reauthentication_intents", table)
+      .replaceAll("account_google_reauth_intents_", constraintPrefix)
+      .split("--> statement-breakpoint")
+      .filter((statement) => !statement.includes("account_management_grants"))
+      .join(";");
+
+    await migrator.begin(async (tx) => {
+      await tx.unsafe(`
+        create table public.${table} (
+          state_digest text primary key not null,
+          nonce_digest text not null,
+          user_id text not null,
+          session_id text not null,
+          action public.account_management_grant_action not null,
+          lifecycle_generation bigint not null,
+          expires_at timestamp with time zone not null,
+          consumed_at timestamp with time zone,
+          created_at timestamp with time zone not null default now(),
+          constraint ${table}_state_digest_check check (state_digest ~ '^[0-9a-f]{64}$'),
+          constraint ${table}_nonce_digest_check check (nonce_digest ~ '^[0-9a-f]{64}$'),
+          constraint ${table}_generation_check check (lifecycle_generation >= 0),
+          constraint ${table}_expiry_check check (expires_at > created_at),
+          constraint ${table}_consumed_check check (consumed_at is null or consumed_at <= expires_at)
+        )
+      `);
+      await tx.unsafe(migration0018);
+      await tx.unsafe(`
+        insert into public.${table} (
+          state_digest, nonce_digest, user_id, session_id, action, lifecycle_generation,
+          expires_at, status, callback_claimed_at, callback_lease_expires_at,
+          proof_subject_digest, proof_subject_key_version, proofed_at, consumed_at
+        ) values
+          ('${"c".repeat(64)}', '${"d".repeat(64)}', 'proofed-user', 'proofed-session', 'request_deletion', 0,
+           now() + interval '10 minutes', 'proofed', now(), now() + interval '1 minute',
+           '${"e".repeat(64)}', 'subject-v1', now(), null),
+          ('${"f".repeat(64)}', '${"0".repeat(64)}', 'consumed-user', 'consumed-session', 'request_deletion', 0,
+           now() + interval '10 minutes', 'consumed', now(), now() + interval '1 minute',
+           '${"1".repeat(64)}', 'subject-v1', now(), now())
+      `);
+      await tx.unsafe(migration0019);
+      const rows = await tx.unsafe(`
+        select status, callback_claimed_at, callback_lease_expires_at, callback_claim_digest,
+               proof_subject_digest, proof_subject_key_version, proofed_at, consumed_at
+        from public.${table}
+        where state_digest in ('${"c".repeat(64)}', '${"f".repeat(64)}')
+        order by status
+      `);
+      expect(rows).toEqual([
+        {
+          status: "consumed", callback_claimed_at: null, callback_lease_expires_at: null,
+          callback_claim_digest: null, proof_subject_digest: "1".repeat(64),
+          proof_subject_key_version: "subject-v1", proofed_at: expect.any(Date), consumed_at: expect.any(Date),
+        },
+        {
+          status: "proofed", callback_claimed_at: null, callback_lease_expires_at: null,
+          callback_claim_digest: null, proof_subject_digest: "e".repeat(64),
+          proof_subject_key_version: "subject-v1", proofed_at: expect.any(Date), consumed_at: null,
+        },
+      ]);
+      const constraints = await tx.unsafe(`
+        select convalidated from pg_constraint
+        where conrelid = 'public.${table}'::regclass and conname = '${stateConstraint}'
+      `);
+      expect(constraints).toEqual([{ convalidated: true }]);
+    });
+  });
+
   it("applies the test-only fixture table and grants app DML", async () => {
     const fixtureSql = await readFile(repoPath("packages/db/test/fixtures/migrations/0001_create_fixture_table.sql"), "utf8");
     await migrator.unsafe(fixtureSql);

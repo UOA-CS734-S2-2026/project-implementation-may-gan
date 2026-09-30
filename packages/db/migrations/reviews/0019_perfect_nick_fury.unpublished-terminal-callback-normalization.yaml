@@ -1,0 +1,6 @@
+reason: This unpublished draft migration strengthens terminal proof state invariants. Existing valid proofed and consumed rows can retain callback lease metadata that 0019 now forbids.
+affected_data_and_clients: Draft Google proof runtime only. Proofed subject evidence and consumed receipt timestamps remain intact.
+rollout_sequence: Clear callback claim metadata from proofed and consumed rows before validating the stricter state constraint. This file and migration 0019 must become immutable once applied outside disposable review fixtures.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: After publication, use a new additive migration for any further correction. Do not rewrite 0019.
+reviewer: Database and privacy reviewers required.

@@ -98,16 +98,17 @@ if (required && !configured) throw new Error("TEST_DATABASE_URL and TEST_APP_DAT
     const intent = await input(actor);
     const store = createGoogleProofIntentStore(app.db, cryptoKeys);
     expect(await store.create(intent)).toBe(true);
-    const claims = await Promise.all([store.claim(intent.stateDigest), store.claim(intent.stateDigest)]);
-    expect(claims.filter(Boolean)).toHaveLength(1);
-    const claim = claims.find(Boolean)!;
-    expect(await store.recordVerifiedProof(intent.stateDigest, actor, claim.claimToken, actor.subject)).toBe(true);
-
     const secondApp = createDayliDatabase(requireLocal(appUrl, "TEST_APP_DATABASE_URL"));
+    const secondStore = createGoogleProofIntentStore(secondApp.db, cryptoKeys);
     try {
+      const claims = await Promise.all([store.claim(intent.stateDigest), secondStore.claim(intent.stateDigest)]);
+      expect(claims.filter(Boolean)).toHaveLength(1);
+      const claim = claims.find(Boolean)!;
+      expect(await store.recordVerifiedProof(intent.stateDigest, actor, claim.claimToken, actor.subject)).toBe(true);
+
       const results = await Promise.all([
         store.complete(intent.stateDigest, actor, "request_deletion"),
-        createGoogleProofIntentStore(secondApp.db, cryptoKeys).complete(intent.stateDigest, actor, "request_deletion"),
+        secondStore.complete(intent.stateDigest, actor, "request_deletion"),
       ]);
       expect(results.filter(Boolean)).toHaveLength(1);
       const grants = await migrator.db.select().from(schema.accountManagementGrants).where(eq(schema.accountManagementGrants.userId, actor.userId));

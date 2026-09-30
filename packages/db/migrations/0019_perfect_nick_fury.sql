@@ -19,6 +19,13 @@ SET status = 'failed', failed_at = coalesce(failed_at, now()), consumed_at = nul
     callback_claim_digest = null, proof_subject_digest = null,
     proof_subject_key_version = null, proofed_at = null
 WHERE status = 'claimed';--> statement-breakpoint
+-- 0018 permitted these terminal rows to retain callback lease metadata. Keep
+-- their valid proof evidence and consumed receipt, but remove that obsolete
+-- in-flight callback material before validating the stricter terminal states.
+UPDATE "account_google_reauthentication_intents"
+SET callback_claimed_at = null, callback_lease_expires_at = null,
+    callback_claim_digest = null
+WHERE status IN ('proofed', 'consumed');--> statement-breakpoint
 ALTER TABLE "account_google_reauthentication_intents"
   ADD CONSTRAINT "account_google_reauth_intents_claim_digest_check" CHECK ("account_google_reauthentication_intents"."callback_claim_digest" is null or "account_google_reauthentication_intents"."callback_claim_digest" ~ '^[0-9a-f]{64}$') NOT VALID,
   ADD CONSTRAINT "account_google_reauth_intents_state_check" CHECK (
