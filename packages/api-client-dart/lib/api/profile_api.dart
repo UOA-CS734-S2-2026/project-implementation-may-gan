@@ -274,6 +274,131 @@ class ProfileApi {
     return null;
   }
 
+  /// Remove your profile photo
+  ///
+  /// Removes the profile photo. Profiles then show the first letter of the name.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> profileRemoveAvatarWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/profile/avatar';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'DELETE',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Remove your profile photo
+  ///
+  /// Removes the profile photo. Profiles then show the first letter of the name.
+  Future<ProfileDetails?> profileRemoveAvatar({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await profileRemoveAvatarWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ProfileDetails',
+      ) as ProfileDetails;
+    }
+    return null;
+  }
+
+  /// Set your profile photo
+  ///
+  /// Uses one of your validated JPEG, PNG, or WebP uploads as your profile photo, replacing any previous one. Upload it first through the media reservation flow.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [SetAvatarRequest] setAvatarRequest (required):
+  Future<Response> profileSetAvatarWithHttpInfo(
+    SetAvatarRequest setAvatarRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/profile/avatar';
+
+    // ignore: prefer_final_locals
+    Object? postBody = setAvatarRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PUT',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Set your profile photo
+  ///
+  /// Uses one of your validated JPEG, PNG, or WebP uploads as your profile photo, replacing any previous one. Upload it first through the media reservation flow.
+  ///
+  /// Parameters:
+  ///
+  /// * [SetAvatarRequest] setAvatarRequest (required):
+  Future<ProfileDetails?> profileSetAvatar(
+    SetAvatarRequest setAvatarRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await profileSetAvatarWithHttpInfo(
+      setAvatarRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ProfileDetails',
+      ) as ProfileDetails;
+    }
+    return null;
+  }
+
   /// Update your profile
   ///
   /// Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.

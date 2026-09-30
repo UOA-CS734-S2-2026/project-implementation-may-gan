@@ -1477,6 +1477,12 @@
             "type": "string",
             "nullable": true
           },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden."
+          },
           "streak": {
             "$ref": "#/components/schemas/PostingStreak"
           },
@@ -1493,6 +1499,7 @@
           "displayName",
           "detailsVisible",
           "bio",
+          "avatarUrl",
           "streak",
           "stats",
           "owner"
@@ -1617,6 +1624,24 @@
             "$ref": "#/components/schemas/ProfileVisibility"
           }
         }
+      },
+      "SetAvatarRequest": {
+        "type": "object",
+        "properties": {
+          "reservationId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              {
+                "description": "A validated upload from `POST /api/v1/media-reservations` of a JPEG, PNG, or WebP image."
+              }
+            ]
+          }
+        },
+        "required": [
+          "reservationId"
+        ]
       }
     },
     "parameters": {}
@@ -7095,6 +7120,192 @@
           },
           "422": {
             "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Profile storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/avatar": {
+      "put": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.setAvatar",
+        "summary": "Set your profile photo",
+        "description": "Uses one of your validated JPEG, PNG, or WebP uploads as your profile photo, replacing any previous one. Upload it first through the media reservation flow.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAvatarRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The profile with its new photo, as its owner sees it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The upload does not exist or is not yours. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The upload has not been validated (`details.reason = \"notReady\"`), is not a JPEG, PNG, or WebP image (`\"notImage\"`), or the account has no username yet (`\"needsUsername\"`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Profile storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.removeAvatar",
+        "summary": "Remove your profile photo",
+        "description": "Removes the profile photo. Profiles then show the first letter of the name.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The profile without a photo, as its owner sees it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The account has not chosen a username yet.",
             "content": {
               "application/json": {
                 "schema": {

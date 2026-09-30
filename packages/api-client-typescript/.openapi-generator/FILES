@@ -81,6 +81,7 @@ src/models/RelationshipUserPage.ts
 src/models/ResolveMessageRequestRequest.ts
 src/models/SendMessageRequest.ts
 src/models/SendRelationshipRequest.ts
+src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/UpdateProfileRequest.ts

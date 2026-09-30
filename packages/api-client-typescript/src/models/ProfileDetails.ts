@@ -62,6 +62,10 @@ export interface ProfileDetails {
      */
     bio: string;
     /**
+     * A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.
+     */
+    avatarUrl: string;
+    /**
      *
      */
     streak: PostingStreak;
@@ -84,6 +88,7 @@ export function instanceOfProfileDetails(value: object): value is ProfileDetails
     if (!('displayName' in value) || value['displayName'] === undefined) return false;
     if (!('detailsVisible' in value) || value['detailsVisible'] === undefined) return false;
     if (!('bio' in value) || value['bio'] === undefined) return false;
+    if (!('avatarUrl' in value) || value['avatarUrl'] === undefined) return false;
     if (!('streak' in value) || value['streak'] === undefined) return false;
     if (!('stats' in value) || value['stats'] === undefined) return false;
     if (!('owner' in value) || value['owner'] === undefined) return false;
@@ -105,6 +110,7 @@ export function ProfileDetailsFromJSONTyped(json: any, ignoreDiscriminator: bool
         'displayName': json['displayName'],
         'detailsVisible': json['detailsVisible'],
         'bio': json['bio'],
+        'avatarUrl': json['avatarUrl'],
         'streak': PostingStreakFromJSON(json['streak']),
         'stats': ProfileStatsFromJSON(json['stats']),
         'owner': ProfileOwnerSettingsFromJSON(json['owner']),
@@ -127,6 +133,7 @@ export function ProfileDetailsToJSONTyped(value?: ProfileDetails | null, ignoreD
         'displayName': value['displayName'],
         'detailsVisible': value['detailsVisible'],
         'bio': value['bio'],
+        'avatarUrl': value['avatarUrl'],
         'streak': PostingStreakToJSON(value['streak']),
         'stats': ProfileStatsToJSON(value['stats']),
         'owner': ProfileOwnerSettingsToJSON(value['owner']),

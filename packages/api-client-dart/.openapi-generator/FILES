@@ -89,6 +89,7 @@ lib/model/relationship_user_page.dart
 lib/model/resolve_message_request_request.dart
 lib/model/send_message_request.dart
 lib/model/send_relationship_request.dart
+lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/update_profile_request.dart

@@ -344,6 +344,8 @@ class ApiClient {
           return SendMessageRequest.fromJson(value);
         case 'SendRelationshipRequest':
           return SendRelationshipRequest.fromJson(value);
+        case 'SetAvatarRequest':
+          return SetAvatarRequest.fromJson(value);
         case 'SetMessageReactionRequest':
           return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':

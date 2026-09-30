@@ -69,6 +69,7 @@ export * from './RelationshipUserPage';
 export * from './ResolveMessageRequestRequest';
 export * from './SendMessageRequest';
 export * from './SendRelationshipRequest';
+export * from './SetAvatarRequest';
 export * from './SetMessageReactionRequest';
 export * from './TestResponse';
 export * from './UpdateProfileRequest';
