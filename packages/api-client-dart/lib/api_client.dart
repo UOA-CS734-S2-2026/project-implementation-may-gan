@@ -210,6 +210,10 @@ class ApiClient {
           return ApiErrorCodeTypeTransformer().decode(value);
         case 'ApiErrorError':
           return ApiErrorError.fromJson(value);
+        case 'ChangeUsernameRequest':
+          return ChangeUsernameRequest.fromJson(value);
+        case 'ChangeUsernameResponse':
+          return ChangeUsernameResponse.fromJson(value);
         case 'Conversation':
           return Conversation.fromJson(value);
         case 'ConversationCapabilities':
@@ -304,6 +308,10 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
+        case 'ProfileDetails':
+          return ProfileDetails.fromJson(value);
+        case 'ProfileOwnerSettings':
+          return ProfileOwnerSettings.fromJson(value);
         case 'ProfilePost':
           return ProfilePost.fromJson(value);
         case 'ProfilePostAuthor':
@@ -312,6 +320,8 @@ class ApiClient {
           return ProfilePostPrompt.fromJson(value);
         case 'ProfilePostsPage':
           return ProfilePostsPage.fromJson(value);
+        case 'ProfileVisibility':
+          return ProfileVisibilityTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
         case 'RelationshipProfile':
@@ -334,6 +344,8 @@ class ApiClient {
           return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
+        case 'UpdateProfileRequest':
+          return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':
           return UsernameProfile.fromJson(value);
         case 'UsernameSetupRequest':

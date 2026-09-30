@@ -19,6 +19,26 @@ import {
     ApiErrorToJSON,
 } from '../models/ApiError';
 import {
+    type ChangeUsernameRequest,
+    ChangeUsernameRequestFromJSON,
+    ChangeUsernameRequestToJSON,
+} from '../models/ChangeUsernameRequest';
+import {
+    type ChangeUsernameResponse,
+    ChangeUsernameResponseFromJSON,
+    ChangeUsernameResponseToJSON,
+} from '../models/ChangeUsernameResponse';
+import {
+    type ProfileDetails,
+    ProfileDetailsFromJSON,
+    ProfileDetailsToJSON,
+} from '../models/ProfileDetails';
+import {
+    type UpdateProfileRequest,
+    UpdateProfileRequestFromJSON,
+    UpdateProfileRequestToJSON,
+} from '../models/UpdateProfileRequest';
+import {
     type UsernameProfile,
     UsernameProfileFromJSON,
     UsernameProfileToJSON,
@@ -29,6 +49,13 @@ import {
     UsernameSetupRequestToJSON,
 } from '../models/UsernameSetupRequest';
 
+export interface ProfileChangeUsernameRequest {
+    /**
+     *
+     */
+    changeUsernameRequest: ChangeUsernameRequest;
+}
+
 export interface ProfileClaimInitialUsernameRequest {
     /**
      *
@@ -36,10 +63,81 @@ export interface ProfileClaimInitialUsernameRequest {
     usernameSetupRequest: UsernameSetupRequest;
 }
 
+export interface ProfileGetDetailsRequest {
+    /**
+     *
+     */
+    username: string;
+}
+
+export interface ProfileUpdateRequest {
+    /**
+     *
+     */
+    updateProfileRequest: UpdateProfileRequest;
+}
+
 /**
  *
  */
 export class ProfileApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for profileChangeUsername without sending the request
+     */
+    async profileChangeUsernameRequestOpts(requestParameters: ProfileChangeUsernameRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['changeUsernameRequest'] == null) {
+            throw new runtime.RequiredError(
+                'changeUsernameRequest',
+                'Required parameter "changeUsernameRequest" was null or undefined when calling profileChangeUsername().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profile/username`;
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: ChangeUsernameRequestToJSON(requestParameters['changeUsernameRequest']),
+        };
+    }
+
+    /**
+     * Changes an established username. It can change at most once every 30 days. The previous handle stays reserved for this account for 30 days, and profile links to it resolve to the new one. Choosing the current handle again changes nothing.
+     * Change your username
+     */
+    async profileChangeUsernameRaw(requestParameters: ProfileChangeUsernameRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ChangeUsernameResponse>> {
+        const requestOptions = await this.profileChangeUsernameRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ChangeUsernameResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Changes an established username. It can change at most once every 30 days. The previous handle stays reserved for this account for 30 days, and profile links to it resolve to the new one. Choosing the current handle again changes nothing.
+     * Change your username
+     */
+    async profileChangeUsername(requestParameters: ProfileChangeUsernameRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ChangeUsernameResponse> {
+        const response = await this.profileChangeUsernameRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for profileClaimInitialUsername without sending the request
@@ -99,6 +197,61 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for profileGetDetails without sending the request
+     */
+    async profileGetDetailsRequestOpts(requestParameters: ProfileGetDetailsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling profileGetDetails().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profiles/{username}`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Read a profile\'s details
+     */
+    async profileGetDetailsRaw(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+        const requestOptions = await this.profileGetDetailsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Read a profile\'s details
+     */
+    async profileGetDetails(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+        const response = await this.profileGetDetailsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for profileGetUsername without sending the request
      */
     async profileGetUsernameRequestOpts(): Promise<runtime.RequestOpts> {
@@ -140,6 +293,63 @@ export class ProfileApi extends runtime.BaseAPI {
      */
     async profileGetUsername(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsernameProfile> {
         const response = await this.profileGetUsernameRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for profileUpdate without sending the request
+     */
+    async profileUpdateRequestOpts(requestParameters: ProfileUpdateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['updateProfileRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updateProfileRequest',
+                'Required parameter "updateProfileRequest" was null or undefined when calling profileUpdate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profile`;
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdateProfileRequestToJSON(requestParameters['updateProfileRequest']),
+        };
+    }
+
+    /**
+     * Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+     * Update your profile
+     */
+    async profileUpdateRaw(requestParameters: ProfileUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+        const requestOptions = await this.profileUpdateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+    }
+
+    /**
+     * Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+     * Update your profile
+     */
+    async profileUpdate(requestParameters: ProfileUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+        const response = await this.profileUpdateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

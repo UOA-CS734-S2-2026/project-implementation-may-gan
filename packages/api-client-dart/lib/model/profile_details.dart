@@ -1,0 +1,201 @@
+//
+// AUTO-GENERATED FILE, DO NOT MODIFY!
+//
+// @dart=2.18
+
+// ignore_for_file: unused_element, unused_import
+// ignore_for_file: always_put_required_named_parameters_first
+// ignore_for_file: constant_identifier_names
+// ignore_for_file: lines_longer_than_80_chars
+
+part of openapi.api;
+
+class ProfileDetails {
+  /// Returns a new [ProfileDetails] instance.
+  ProfileDetails({
+    required this.id,
+    required this.username,
+    required this.displayName,
+    required this.detailsVisible,
+    required this.bio,
+    required this.owner,
+  });
+
+  final String id;
+
+  /// The current handle. It differs from the requested one when that was a handle the owner has since changed.
+  final String username;
+
+  final String displayName;
+
+  /// False when the account is private and the caller is not an active friend. The bio is then null.
+  final bool detailsVisible;
+
+  final String bio;
+
+  final ProfileOwnerSettings owner;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProfileDetails &&
+          other.id == id &&
+          other.username == username &&
+          other.displayName == displayName &&
+          other.detailsVisible == detailsVisible &&
+          other.bio == bio &&
+          other.owner == owner;
+
+  @override
+  int get hashCode =>
+      // ignore: unnecessary_parenthesis
+      (id.hashCode) +
+      (username.hashCode) +
+      (displayName.hashCode) +
+      (detailsVisible.hashCode) +
+      (bio.hashCode) +
+      (owner.hashCode);
+
+  @override
+  String toString() =>
+      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, owner=$owner]';
+
+  Map<String, dynamic> toJson() {
+    final json = <String, dynamic>{};
+    json[r'id'] = this.id;
+    json[r'username'] = this.username;
+    json[r'displayName'] = this.displayName;
+    json[r'detailsVisible'] = this.detailsVisible;
+    json[r'bio'] = this.bio;
+    json[r'owner'] = this.owner;
+    return json;
+  }
+
+  /// Clones this instance of [ProfileDetails] and returns a new one where some of the
+  /// properties have changed.
+  ProfileDetails copyWith({
+    String? id,
+    String? username,
+    String? displayName,
+    bool? detailsVisible,
+    String? bio,
+    ProfileOwnerSettings? owner,
+  }) =>
+      ProfileDetails(
+        id: id ?? this.id,
+        username: username ?? this.username,
+        displayName: displayName ?? this.displayName,
+        detailsVisible: detailsVisible ?? this.detailsVisible,
+        bio: bio ?? this.bio,
+        owner: owner ?? this.owner,
+      );
+
+  /// Returns a new [ProfileDetails] instance and imports its values from
+  /// [value] if it's a [Map], null otherwise.
+  // ignore: prefer_constructors_over_static_methods
+  static ProfileDetails? fromJson(dynamic value) {
+    if (value is Map) {
+      final json = value.cast<String, dynamic>();
+
+      // Ensure that the map contains the required keys.
+      // Note 1: the values aren't checked for validity beyond being non-null.
+      // Note 2: this code is stripped in release mode!
+      assert(() {
+        assert(json.containsKey(r'id'),
+            'Required key "ProfileDetails[id]" is missing from JSON.');
+        assert(json[r'id'] != null,
+            'Required key "ProfileDetails[id]" has a null value in JSON.');
+        assert(json.containsKey(r'username'),
+            'Required key "ProfileDetails[username]" is missing from JSON.');
+        assert(json[r'username'] != null,
+            'Required key "ProfileDetails[username]" has a null value in JSON.');
+        assert(json.containsKey(r'displayName'),
+            'Required key "ProfileDetails[displayName]" is missing from JSON.');
+        assert(json[r'displayName'] != null,
+            'Required key "ProfileDetails[displayName]" has a null value in JSON.');
+        assert(json.containsKey(r'detailsVisible'),
+            'Required key "ProfileDetails[detailsVisible]" is missing from JSON.');
+        assert(json[r'detailsVisible'] != null,
+            'Required key "ProfileDetails[detailsVisible]" has a null value in JSON.');
+        assert(json.containsKey(r'bio'),
+            'Required key "ProfileDetails[bio]" is missing from JSON.');
+        assert(json[r'bio'] != null,
+            'Required key "ProfileDetails[bio]" has a null value in JSON.');
+        assert(json.containsKey(r'owner'),
+            'Required key "ProfileDetails[owner]" is missing from JSON.');
+        assert(json[r'owner'] != null,
+            'Required key "ProfileDetails[owner]" has a null value in JSON.');
+        return true;
+      }());
+
+      return ProfileDetails(
+        id: mapValueOfType<String>(json, r'id')!,
+        username: mapValueOfType<String>(json, r'username')!,
+        displayName: mapValueOfType<String>(json, r'displayName')!,
+        detailsVisible: mapValueOfType<bool>(json, r'detailsVisible')!,
+        bio: mapValueOfType<String>(json, r'bio')!,
+        owner: ProfileOwnerSettings.fromJson(json[r'owner'])!,
+      );
+    }
+    return null;
+  }
+
+  static List<ProfileDetails> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
+    final result = <ProfileDetails>[];
+    if (json is List && json.isNotEmpty) {
+      for (final row in json) {
+        final value = ProfileDetails.fromJson(row);
+        if (value != null) {
+          result.add(value);
+        }
+      }
+    }
+    return result.toList(growable: growable);
+  }
+
+  static Map<String, ProfileDetails> mapFromJson(dynamic json) {
+    final map = <String, ProfileDetails>{};
+    if (json is Map && json.isNotEmpty) {
+      json = json.cast<String, dynamic>(); // ignore: parameter_assignments
+      for (final entry in json.entries) {
+        final value = ProfileDetails.fromJson(entry.value);
+        if (value != null) {
+          map[entry.key] = value;
+        }
+      }
+    }
+    return map;
+  }
+
+  // maps a json object with a list of ProfileDetails-objects as value to a dart map
+  static Map<String, List<ProfileDetails>> mapListFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
+    final map = <String, List<ProfileDetails>>{};
+    if (json is Map && json.isNotEmpty) {
+      // ignore: parameter_assignments
+      json = json.cast<String, dynamic>();
+      for (final entry in json.entries) {
+        map[entry.key] = ProfileDetails.listFromJson(
+          entry.value,
+          growable: growable,
+        );
+      }
+    }
+    return map;
+  }
+
+  /// The list of required keys that must be present in a JSON.
+  static const requiredKeys = <String>{
+    'id',
+    'username',
+    'displayName',
+    'detailsVisible',
+    'bio',
+    'owner',
+  };
+}
