@@ -37,9 +37,9 @@ suite("Postgres realtime publisher authorization", () => {
   async function insertChange(input: { sequence: number; senderId?: string; memberId?: string }): Promise<void> {
     const messageId = input.senderId ? `realtime-publisher-message-${crypto.randomUUID()}` : null;
     if (messageId) {
-      await database.client`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, created_at) values (${messageId}, ${ids.conversation}, ${input.sequence}, ${input.senderId!}, ${`client-${messageId}`}, ${`fingerprint-${messageId}`}, 'body', ${createdAt})`;
+      await database.client`insert into public.messages (id, conversation_id, sequence, sender_participant_id, client_message_id, request_fingerprint, body, created_at) values (${messageId}, ${ids.conversation}, ${input.sequence}, ${input.senderId!}, ${`client-${messageId}`}, ${`fingerprint-${messageId}`}, 'body', ${createdAt})`;
     }
-    await database.client`insert into public.conversation_changes (conversation_id, change_sequence, kind, message_id, member_id, created_at) values (${ids.conversation}, ${input.sequence}, 'realtime.test', ${messageId}, ${input.memberId ?? null}, ${createdAt})`;
+    await database.client`insert into public.conversation_changes (conversation_id, change_sequence, kind, message_id, member_participant_id, created_at) values (${ids.conversation}, ${input.sequence}, 'realtime.test', ${messageId}, ${input.memberId ?? null}, ${createdAt})`;
   }
 
   async function insertLeasedJob(input: { recipientId: string; changeSequence: number; leaseToken?: string; leaseExpiresAt?: Date }): Promise<OutboxJob> {
@@ -52,8 +52,8 @@ suite("Postgres realtime publisher authorization", () => {
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
-    await database.client`insert into public.conversations (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${ids.conversation}, 'direct', ${ids.alice}, ${ids.bob}, ${ids.alice}, 'active', 0, 0, ${createdAt}, ${createdAt}, ${createdAt})`;
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${ids.conversation}, 'direct', ${ids.alice}, ${ids.bob}, ${ids.alice}, 'active', 0, 0, ${createdAt}, ${createdAt}, ${createdAt})`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
   });
 
   afterEach(async () => {
@@ -61,7 +61,7 @@ suite("Postgres realtime publisher authorization", () => {
     await database.client`delete from public.messaging_outbox where conversation_id = ${ids.conversation}`;
     await database.client`delete from public.conversation_changes where conversation_id = ${ids.conversation}`;
     await database.client`delete from public.messages where conversation_id = ${ids.conversation}`;
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt}) on conflict (conversation_id, user_id) do nothing`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt}) on conflict (conversation_id, participant_id) do nothing`;
   });
 
   afterAll(async () => {
@@ -103,7 +103,7 @@ suite("Postgres realtime publisher authorization", () => {
   it("rejects a recipient whose membership was removed", async () => {
     await insertChange({ sequence: 1, senderId: ids.alice });
     const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
-    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and user_id = ${ids.bob}`;
+    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and participant_id = ${ids.bob}`;
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
   });

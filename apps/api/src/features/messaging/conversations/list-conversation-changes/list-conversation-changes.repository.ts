@@ -1,9 +1,6 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, asc, eq } from "drizzle-orm";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { requireConversationMember } from "../../shared/require-conversation-member";
-
-type Row = Record<string, unknown>;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
-const date = (value: unknown) => new Date(String(value));
 
 export interface ListConversationChangesRepository {
   list(
@@ -31,23 +28,31 @@ export function createPostgresListConversationChangesRepository(
   return {
     async list(actorId, conversationId, afterChangeSequence, limit) {
       const conversation = await requireConversationMember(database, actorId, conversationId);
-      const result = rows<Row>(await database.execute(sql`
-        select * from public.conversation_changes
-        where conversation_id = ${conversationId}
-          and change_sequence > ${afterChangeSequence ?? "0"}::bigint
-        order by change_sequence asc
-        limit ${limit + 1}
-      `));
+      const result = await database
+        .select({
+          changeSequence: sql<string>`${schema.conversationChanges.changeSequence}::text`,
+          kind: schema.conversationChanges.kind,
+          messageId: schema.conversationChanges.messageId,
+          memberId: schema.conversationChanges.memberParticipantId,
+          createdAt: schema.conversationChanges.createdAt,
+        })
+        .from(schema.conversationChanges)
+        .where(and(
+          eq(schema.conversationChanges.conversationId, conversationId),
+          sql`${schema.conversationChanges.changeSequence} > ${afterChangeSequence ?? "0"}::bigint`,
+        ))
+        .orderBy(asc(schema.conversationChanges.changeSequence))
+        .limit(limit + 1);
       const page = result.slice(0, limit);
       return {
         items: page.map((item) => ({
-          changeSequence: String(item.change_sequence),
-          kind: String(item.kind),
-          messageId: item.message_id ? String(item.message_id) : null,
-          memberId: item.member_participant_id ? String(item.member_participant_id) : null,
-          createdAt: date(item.created_at).toISOString(),
+          changeSequence: item.changeSequence,
+          kind: item.kind,
+          messageId: item.messageId,
+          memberId: item.memberId,
+          createdAt: item.createdAt.toISOString(),
         })),
-        nextChangeSequence: result.length > limit ? String(page.at(-1)!.change_sequence) : null,
+        nextChangeSequence: result.length > limit ? page.at(-1)!.changeSequence : null,
         hasMore: result.length > limit,
         highWatermark: String(conversation.last_change_sequence),
       };

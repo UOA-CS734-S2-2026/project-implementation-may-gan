@@ -1,11 +1,26 @@
-import { createHyperdriveDatabase, lockRelationshipPair, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { MessagingError } from "../../shared/messaging-error";
 import { requireConversationMember } from "../../shared/require-conversation-member";
 
 type Row = Record<string, unknown>;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
+
+type MessageLookup = {
+  id: string;
+  conversationId: string;
+  sequence: string;
+  senderId: string;
+  clientMessageId: string;
+  requestFingerprint: string;
+  body: string | null;
+  replyToMessageId: string | null;
+  version: string;
+  createdAt: Date;
+  editedAt: Date | null;
+  unsentAt: Date | null;
+};
 
 export interface ResolveMessageRequestRepository {
   resolve(
@@ -15,46 +30,87 @@ export interface ResolveMessageRequestRepository {
   ): Promise<unknown>;
 }
 
+function relationshipPairKey(leftUserId: string, rightUserId: string): string {
+  return [leftUserId, rightUserId]
+    .sort()
+    .map((value) => `${value.length}:${value}`)
+    .join(":");
+}
+
+async function lockRelationshipPair(
+  database: Pick<DayliDatabase, "select">,
+  leftUserId: string,
+  rightUserId: string,
+): Promise<void> {
+  const locks = await database
+    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(leftUserId, rightUserId)}, 734))` })
+    .from(sql`(values (1)) as lock_source`);
+  if (locks.length !== 1) throw new Error("Relationship pair lock did not return exactly one row.");
+}
+
+function messageProjection(message: MessageLookup): Row {
+  return {
+    message_id: message.id,
+    message_conversation_id: message.conversationId,
+    message_sequence: message.sequence,
+    message_sender_id: message.senderId,
+    message_client_message_id: message.clientMessageId,
+    message_request_fingerprint: message.requestFingerprint,
+    message_body: message.body,
+    message_reply_to_message_id: message.replyToMessageId,
+    message_version: message.version,
+    message_created_at: message.createdAt,
+    message_edited_at: message.editedAt,
+    message_unsent_at: message.unsentAt,
+  };
+}
+
 async function conversationAfterResolution(
   database: DayliDatabase,
   actorId: string,
   conversationId: string,
 ) {
   const row = await requireConversationMember(database, actorId, conversationId);
-  const peer = String(row.participant_low_id) === actorId ? String(row.participant_high_id) : String(row.participant_low_id);
-  const [participant] = rows<Row>(await database.execute(sql`
-    select participant.id, participant.state, coalesce(profile.display_username, profile.username) as name
-    from public.messaging_participants participant
-    left join public."user" profile on profile.id = participant.user_id and participant.state = 'active'
-    where participant.id = ${peer}
-  `));
-  const [latest] = rows<Row>(await database.execute(sql`
-    select * from public.messages where conversation_id = ${conversationId} order by sequence desc limit 1
-  `));
-  const unread = rows<{ count: number }>(await database.execute(sql`
-    select count(*)::int as count from public.messages
-    where conversation_id = ${conversationId} and sender_participant_id <> ${actorId}
-      and sequence > ${row.last_read_sequence}::bigint and unsent_at is null
-  `))[0]?.count ?? 0;
+  const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
+  const [user] = await database
+    .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
+    .from(schema.user)
+    .where(eq(schema.user.id, peer))
+    .limit(1);
+  const [latest] = await database
+    .select({
+      id: schema.messages.id,
+      conversationId: schema.messages.conversationId,
+      sequence: sql<string>`${schema.messages.sequence}::text`,
+      senderId: schema.messages.senderParticipantId,
+      clientMessageId: schema.messages.clientMessageId,
+      requestFingerprint: schema.messages.requestFingerprint,
+      body: schema.messages.body,
+      replyToMessageId: schema.messages.replyToMessageId,
+      version: sql<string>`${schema.messages.version}::text`,
+      createdAt: schema.messages.createdAt,
+      editedAt: schema.messages.editedAt,
+      unsentAt: schema.messages.unsentAt,
+    })
+    .from(schema.messages)
+    .where(eq(schema.messages.conversationId, conversationId))
+    .orderBy(desc(schema.messages.sequence))
+    .limit(1);
+  const [unread] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.messages)
+    .where(and(
+      eq(schema.messages.conversationId, conversationId),
+      ne(schema.messages.senderParticipantId, actorId),
+      sql`${schema.messages.sequence} > ${String(row.last_read_sequence)}::bigint`,
+      isNull(schema.messages.unsentAt),
+    ));
   return projectConversationDto(database, {
     ...row,
     peer_id: peer,
-    peer_name: participant?.state === "deleted" ? "Deleted account" : participant?.name,
-    unread_count: unread,
-    ...(latest ? {
-      message_id: latest.id,
-      message_conversation_id: latest.conversation_id,
-      message_sequence: latest.sequence,
-      message_sender_participant_id: latest.sender_participant_id,
-      message_client_message_id: latest.client_message_id,
-      message_request_fingerprint: latest.request_fingerprint,
-      message_body: latest.body,
-      message_reply_to_message_id: latest.reply_to_message_id,
-      message_version: latest.version,
-      message_created_at: latest.created_at,
-      message_edited_at: latest.edited_at,
-      message_unsent_at: latest.unsent_at,
-    } : {}),
+    peer_name: user?.name,
+    unread_count: unread?.count ?? 0,
+    ...(latest ? messageProjection(latest) : {}),
   }, actorId);
 }
 
@@ -64,21 +120,28 @@ export function createPostgresResolveMessageRequestRepository(
   return {
     async resolve(actorId, conversationId, decision) {
       await database.transaction(async (tx) => {
-        const [pair] = rows<Row>(await tx.execute(sql`
-          select participant_low_id, participant_high_id from public.conversations where id = ${conversationId}
-        `));
+        const [pair] = await tx
+          .select({
+            participantLowId: schema.conversations.participantLowId,
+            participantHighId: schema.conversations.participantHighId,
+          })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.id, conversationId))
+          .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
-        await lockRelationshipPair(tx, String(pair.participant_low_id), String(pair.participant_high_id));
+        await lockRelationshipPair(tx, pair.participantLowId, pair.participantHighId);
+
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         if (row.blocked === true) throw new MessagingError("BLOCKED");
         const state = decision === "accept" ? "active" : "declined";
-        if (String(row.initiator_participant_id) === actorId) throw new MessagingError("FORBIDDEN");
+        if (String(row.initiator_id) === actorId) throw new MessagingError("FORBIDDEN");
         if (row.request_state === state) return;
         if (row.request_state !== "pending") throw new MessagingError("FORBIDDEN");
-        await tx.execute(sql`
-          update public.conversations set request_state = ${state}, updated_at = now()
-          where id = ${conversationId}
-        `);
+
+        await tx
+          .update(schema.conversations)
+          .set({ requestState: state, updatedAt: sql`now()` })
+          .where(eq(schema.conversations.id, conversationId));
         await appendConversationChange(tx, conversationId, `request.${state}`, null, actorId, new Date());
       });
       return conversationAfterResolution(database, actorId, conversationId);

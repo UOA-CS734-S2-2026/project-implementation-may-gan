@@ -13,8 +13,8 @@ const suite = enabled ? describe : describe.skip;
 
 suite("list messages Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 3 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
-  const { direct, send, set: setReaction } = createMessagingPersistenceServices(database.db);
+  const users = Array.from({ length: 4 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
+  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListMessagesRepository(database.db);
 
   beforeAll(async () => {
@@ -45,36 +45,84 @@ suite("list messages Postgres repository", () => {
       replyToMessageId: initial.message.id,
     });
     await send.send(users[0]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third message" });
-    await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
-    await setReaction.set(users[0]!, initial.conversation.id, reply.message.id, "love");
+    const fourth = await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
+    await database.client`insert into public.message_reactions (message_id, participant_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
 
-    await expect(repository.list(users[2]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).resolves.toMatchObject({
-      items: [{ sequence: "3" }, { sequence: "4" }],
-      nextCursor: "4",
+      items: [{ sequence: "3" }, { sequence: "9007199254740993" }],
+      nextCursor: "9007199254740993",
       hasMore: true,
     });
-    await expect(repository.list(users[0]!, initial.conversation.id, "3", undefined, 2)).resolves.toMatchObject({
+    const pageForSender = await repository.list(users[0]!, initial.conversation.id, "3", undefined, 2);
+    expect(pageForSender).toMatchObject({
       items: [
         { sequence: "1" },
         {
           sequence: "2",
           replyToMessageId: initial.message.id,
           replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
-          reactions: [{ reaction: "love", count: 1, reactedByActor: true }],
         },
       ],
       nextCursor: null,
       hasMore: false,
     });
+    const reactionsForSender = pageForSender.items[1]!.reactions;
+    expect(reactionsForSender).toHaveLength(2);
+    expect(reactionsForSender).toEqual(expect.arrayContaining([
+      { reaction: "love", count: 2, reactedByActor: true },
+      { reaction: "laugh", count: 1, reactedByActor: false },
+    ]));
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
       items: [{ sequence: "2" }, { sequence: "3" }],
       nextCursor: "3",
       hasMore: true,
     });
-    await expect(repository.list(users[1]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
-      items: [{ sequence: "2", reactions: [{ reaction: "love", count: 1, reactedByActor: false }] }, { sequence: "3" }],
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740992", 2)).resolves.toMatchObject({
+      items: [{ sequence: "9007199254740993" }],
+      nextCursor: null,
+      hasMore: false,
     });
+    await expect(repository.list(users[1]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
+      items: [{ sequence: "2", reactions: expect.arrayContaining(reactionsForSender) }, { sequence: "3" }],
+    });
+    const pageForThirdMember = await repository.list(users[2]!, initial.conversation.id, undefined, "1", 2);
+    expect(pageForThirdMember).toMatchObject({ items: [{ sequence: "2" }, { sequence: "3" }] });
+    const reactionsForThirdMember = pageForThirdMember.items[0]!.reactions;
+    expect(reactionsForThirdMember).toHaveLength(2);
+    expect(reactionsForThirdMember).toEqual(expect.arrayContaining([
+      { reaction: "love", count: 2, reactedByActor: false },
+      { reaction: "laugh", count: 1, reactedByActor: true },
+    ]));
+
+    await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);
+    await expect(repository.list(users[1]!, initial.conversation.id, "3", undefined, 10)).resolves.toMatchObject({
+      items: [
+        { sequence: "1", text: null, reactions: [] },
+        {
+          sequence: "2",
+          text: "reply message",
+          replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+          reactions: expect.arrayContaining(reactionsForSender),
+        },
+      ],
+    });
+
+    await unsend.unsend(users[1]!, initial.conversation.id, reply.message.id);
+    await expect(repository.list(users[0]!, initial.conversation.id, "3", undefined, 10)).resolves.toMatchObject({
+      items: [
+        { sequence: "1", text: null, reactions: [] },
+        {
+          sequence: "2",
+          text: null,
+          replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+          reactions: [],
+        },
+      ],
+    });
+    await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

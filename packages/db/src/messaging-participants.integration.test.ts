@@ -2,19 +2,20 @@ import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const enabled = Boolean(migratorUrl);
 
 function requireLocalUrl(value: string | undefined): string {
   if (!value) throw new Error("TEST_DATABASE_URL is required for messaging participant integration tests.");
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test" || url.username !== "migrator") {
-    throw new Error("TEST_DATABASE_URL must target migrator@localhost:5433/dayli_test.");
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test" || url.username !== "migrator") {
+    throw new Error(`TEST_DATABASE_URL must target migrator@localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }
 
 (enabled ? describe : describe.skip)("messaging participant retention", () => {
-  const database = postgres(requireLocalUrl(migratorUrl ?? "postgresql://migrator:migrator@localhost:5433/dayli_test"), { max: 1, prepare: false, onnotice: () => undefined });
+  const database = postgres(requireLocalUrl(migratorUrl ?? `postgresql://migrator:migrator@localhost:${testPostgresPort}/dayli_test`), { max: 1, prepare: false, onnotice: () => undefined });
   const users: string[] = [];
   const conversations: string[] = [];
 

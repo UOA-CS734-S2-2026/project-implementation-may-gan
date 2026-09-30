@@ -70,5 +70,32 @@ suite("get conversation Postgres repository", () => {
       unreadCount: 1,
       capabilities: { canSend: false, canResolveRequest: true },
     });
+
+    const sequence = "9007199254740993";
+    const lastReadSequence = "9007199254740992";
+    await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
+    await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${active.conversation.id}`;
+    await database.client`
+      update public.conversation_members
+      set last_read_sequence = ${lastReadSequence}::bigint, receipt_sequence = ${lastReadSequence}::bigint
+      where conversation_id = ${active.conversation.id} and participant_id = ${users[0]!}
+    `;
+
+    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
+      latestMessage: { id: reply.message.id, sequence, senderId: users[1], text: "latest message" },
+      unreadCount: 1,
+      lastMessageSequence: sequence,
+      lastReadSequence,
+      receiptSequence: lastReadSequence,
+    });
+
+    await database.client`
+      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${users[0]!}, ${users[1]!}, now())
+    `;
+    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
+      id: active.conversation.id,
+      capabilities: { canSend: false, canResolveRequest: false },
+    });
   });
 });

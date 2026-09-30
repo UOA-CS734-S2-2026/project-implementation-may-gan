@@ -1,11 +1,8 @@
-import { createHyperdriveDatabase, lockRelationshipPair, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { MessagingError } from "../../shared/messaging-error";
 import { requireConversationMember } from "../../shared/require-conversation-member";
-
-type Row = Record<string, unknown>;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 
 export interface MarkConversationReadRepository {
   markRead(
@@ -15,23 +12,81 @@ export interface MarkConversationReadRepository {
   ): Promise<{ lastReadSequence: string; receiptSequence: string; unreadCount: number }>;
 }
 
+function relationshipPairKey(leftUserId: string, rightUserId: string): string {
+  return [leftUserId, rightUserId]
+    .sort()
+    .map((value) => `${value.length}:${value}`)
+    .join(":");
+}
+
+async function lockRelationshipPair(
+  database: Pick<DayliDatabase, "select">,
+  leftUserId: string,
+  rightUserId: string,
+): Promise<void> {
+  const locks = await database
+    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(leftUserId, rightUserId)}, 734))` })
+    .from(sql`(values (1)) as lock_source`);
+  if (locks.length !== 1) throw new Error("Relationship pair lock did not return exactly one row.");
+}
+
 export function createPostgresMarkConversationReadRepository(
   database: DayliDatabase,
 ): MarkConversationReadRepository {
   return {
     async markRead(actorId, conversationId, through) {
       return database.transaction(async (tx) => {
-        const [pair] = rows<Row>(await tx.execute(sql`select participant_low_id, participant_high_id from public.conversations where id = ${conversationId}`));
+        const [pair] = await tx
+          .select({
+            participantLowId: schema.conversations.participantLowId,
+            participantHighId: schema.conversations.participantHighId,
+          })
+          .from(schema.conversations)
+          .where(eq(schema.conversations.id, conversationId))
+          .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
-        await lockRelationshipPair(tx, String(pair.participant_low_id), String(pair.participant_high_id));
+        await lockRelationshipPair(tx, pair.participantLowId, pair.participantHighId);
+
         const row = await requireConversationMember(tx, actorId, conversationId, true);
-        const max = bigint(row.last_message_sequence);
-        const target = bigint(through) > max ? max : bigint(through);
-        const allowedReceipt = row.request_state === "active" && row.blocked !== true && row.peer_deleted !== true;
-        const [updated] = rows<Row>(await tx.execute(sql`update public.conversation_members set last_read_sequence = greatest(last_read_sequence, ${target}::bigint), receipt_sequence = ${allowedReceipt ? sql`greatest(receipt_sequence, ${target}::bigint)` : sql`receipt_sequence`}, updated_at = now() where conversation_id = ${conversationId} and participant_id = ${actorId} returning last_read_sequence, receipt_sequence`));
-        if (allowedReceipt) await appendConversationChange(tx, conversationId, "read.updated", null, actorId, new Date());
-        const [unread] = rows<{ count: number }>(await tx.execute(sql`select count(*)::int as count from public.messages where conversation_id = ${conversationId} and sender_participant_id <> ${actorId} and sequence > ${updated!.last_read_sequence}::bigint and unsent_at is null`));
-        return { lastReadSequence: String(updated!.last_read_sequence), receiptSequence: String(updated!.receipt_sequence), unreadCount: unread?.count ?? 0 };
+        const max = BigInt(String(row.last_message_sequence));
+        const target = BigInt(through) > max ? max : BigInt(through);
+        const allowedReceipt = row.request_state === "active" && row.blocked !== true;
+        const [updated] = await tx
+          .update(schema.conversationMembers)
+          .set({
+            lastReadSequence: sql`greatest(${schema.conversationMembers.lastReadSequence}, ${target.toString()}::bigint)`,
+            receiptSequence: allowedReceipt
+              ? sql`greatest(${schema.conversationMembers.receiptSequence}, ${target.toString()}::bigint)`
+              : schema.conversationMembers.receiptSequence,
+            updatedAt: sql`now()`,
+          })
+          .where(and(
+            eq(schema.conversationMembers.conversationId, conversationId),
+            eq(schema.conversationMembers.participantId, actorId),
+          ))
+          .returning({
+            lastReadSequence: sql<string>`${schema.conversationMembers.lastReadSequence}::text`,
+            receiptSequence: sql<string>`${schema.conversationMembers.receiptSequence}::text`,
+          });
+        if (!updated) throw new MessagingError("NOT_FOUND");
+
+        if (allowedReceipt) {
+          await appendConversationChange(tx, conversationId, "read.updated", null, actorId, new Date());
+        }
+        const [unread] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.messages)
+          .where(and(
+            eq(schema.messages.conversationId, conversationId),
+            ne(schema.messages.senderParticipantId, actorId),
+            sql`${schema.messages.sequence} > ${updated.lastReadSequence}::bigint`,
+            isNull(schema.messages.unsentAt),
+          ));
+        return {
+          lastReadSequence: updated.lastReadSequence,
+          receiptSequence: updated.receiptSequence,
+          unreadCount: unread?.count ?? 0,
+        };
       });
     },
   };

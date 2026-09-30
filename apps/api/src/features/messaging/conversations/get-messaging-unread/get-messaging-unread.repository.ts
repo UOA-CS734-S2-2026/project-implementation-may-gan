@@ -1,7 +1,5 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-
-type Row = Record<string, unknown>;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
+import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
+import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 
 export interface GetMessagingUnreadRepository {
   get(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
@@ -12,16 +10,24 @@ export function createPostgresGetMessagingUnreadRepository(
 ): GetMessagingUnreadRepository {
   return {
     async get(actorId) {
-      const result = rows<{ inbox: number; requests: number }>(await database.execute(sql`
-        select count(*) filter (where c.request_state = 'active')::int as inbox,
-          count(*) filter (where c.request_state = 'pending' and c.initiator_participant_id <> ${actorId})::int as requests
-        from public.conversation_members m
-        join public.messaging_participants actor on actor.id = m.participant_id and actor.user_id = ${actorId} and actor.state = 'active'
-        join public.conversations c on c.id = m.conversation_id
-        join public.messages x on x.conversation_id = c.id and x.sender_participant_id <> actor.id
-          and x.sequence > m.last_read_sequence and x.unsent_at is null
-      `));
-      return { inboxCount: result[0]?.inbox ?? 0, requestCount: result[0]?.requests ?? 0 };
+      const [result] = await database
+        .select({
+          inbox: sql<number>`count(*) filter (where ${schema.conversations.requestState} = 'active')::int`,
+          requests: sql<number>`count(*) filter (where ${schema.conversations.requestState} = 'pending' and ${schema.conversations.initiatorParticipantId} <> ${actorId})::int`,
+        })
+        .from(schema.conversationMembers)
+        .innerJoin(
+          schema.conversations,
+          eq(schema.conversations.id, schema.conversationMembers.conversationId),
+        )
+        .innerJoin(schema.messages, and(
+          eq(schema.messages.conversationId, schema.conversations.id),
+          ne(schema.messages.senderParticipantId, actorId),
+          gt(schema.messages.sequence, schema.conversationMembers.lastReadSequence),
+          isNull(schema.messages.unsentAt),
+        ))
+        .where(eq(schema.conversationMembers.participantId, actorId));
+      return { inboxCount: result?.inbox ?? 0, requestCount: result?.requests ?? 0 };
     },
   };
 }

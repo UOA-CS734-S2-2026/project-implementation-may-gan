@@ -14,7 +14,7 @@ export async function projectConversationDto(
     id: row.message_id,
     conversation_id: row.message_conversation_id,
     sequence: row.message_sequence,
-    sender_participant_id: row.message_sender_participant_id,
+    sender_id: row.message_sender_id,
     client_message_id: row.message_client_message_id,
     request_fingerprint: row.message_request_fingerprint,
     body: row.message_body,
@@ -28,8 +28,8 @@ export async function projectConversationDto(
   return {
     id: String(row.id),
     peer: {
-      id: String(row.peer_id ?? (String(row.participant_low_id) === actorId ? row.participant_high_id : row.participant_low_id)),
-      name: typeof row.peer_name === "string" ? row.peer_name : null,
+      id: String(row.peer_id ?? (String(row.user_low_id) === actorId ? row.user_high_id : row.user_low_id)),
+      name: typeof row.peer_name === "string" ? row.peer_name : row.peer_deleted === true ? "Deleted account" : null,
     },
     requestState: row.request_state,
     latestMessage: latest,
@@ -40,7 +40,7 @@ export async function projectConversationDto(
     receiptSequence: String(row.receipt_sequence),
     capabilities: {
       canSend: row.request_state === "active" && !blocked,
-      canResolveRequest: row.request_state === "pending" && String(row.initiator_participant_id) !== actorId && !blocked,
+      canResolveRequest: row.request_state === "pending" && String(row.initiator_id) !== actorId && !blocked,
     },
     updatedAt: date(row.updated_at).toISOString(),
   };

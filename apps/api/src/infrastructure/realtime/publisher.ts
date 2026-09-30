@@ -1,4 +1,5 @@
-import { createHyperdriveDatabase, sql, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, schema, sql, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, exists, gt, isNull, or } from "drizzle-orm";
 import type { ConversationChangedEvent } from "@dayli/contracts";
 import type { OutboxJob } from "../jobs/outbox-store";
 import { bodyFreeRealtimeEvent } from "../jobs/dispatch-outbox";
@@ -37,26 +38,60 @@ export function createDurableObjectRealtimePublisher(
 export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job: OutboxJob): Promise<boolean> {
   const database = createHyperdriveDatabase(hyperdrive);
   try {
-    const result = await database.db.execute(sql`
-      select c.participant_low_id, c.participant_high_id, change.kind, message.sender_participant_id, change.member_participant_id,
-        exists(select 1 from public.conversation_members member join public.messaging_participants recipient on recipient.id = member.participant_id and recipient.user_id = ${job.recipientId} and recipient.state = 'active' where member.conversation_id = c.id) as recipient_member,
-        exists(select 1 from public.relationship_blocks block where block.unblocked_at is null and
-          ((block.blocker_id = c.participant_low_id and block.blocked_id = c.participant_high_id) or (block.blocker_id = c.participant_high_id and block.blocked_id = c.participant_low_id))) as blocked
-      from public.messaging_outbox outbox
-      join public.conversations c on c.id = outbox.conversation_id
-      join public.conversation_changes change on change.conversation_id = outbox.conversation_id and change.change_sequence = outbox.change_sequence
-      left join public.messages message on message.id = change.message_id
-      where outbox.id = ${job.id} and outbox.recipient_id = ${job.recipientId}
-        and outbox.status = 'leased' and outbox.lease_token = ${job.leaseToken}
-        and outbox.lease_expires_at > now()
-      limit 1
-    `);
-    const [row] = [...result as Iterable<Record<string, unknown>>];
-    if (!row || row.recipient_member !== true) return false;
-    if (row.blocked !== true) return true;
+    const recipientMember = exists(
+      database.db
+        .select({ one: sql<number>`1` })
+        .from(schema.conversationMembers)
+        .where(and(
+          eq(schema.conversationMembers.conversationId, schema.conversations.id),
+          eq(schema.conversationMembers.participantId, job.recipientId),
+        )),
+    );
+    const blocked = exists(
+      database.db
+        .select({ one: sql<number>`1` })
+        .from(schema.relationshipBlocks)
+        .where(and(
+          isNull(schema.relationshipBlocks.unblockedAt),
+          or(
+            and(
+              eq(schema.relationshipBlocks.blockerId, schema.conversations.participantLowId),
+              eq(schema.relationshipBlocks.blockedId, schema.conversations.participantHighId),
+            ),
+            and(
+              eq(schema.relationshipBlocks.blockerId, schema.conversations.participantHighId),
+              eq(schema.relationshipBlocks.blockedId, schema.conversations.participantLowId),
+            ),
+          ),
+        )),
+    );
+    const [row] = await database.db
+      .select({
+        senderId: schema.messages.senderParticipantId,
+        memberId: schema.conversationChanges.memberParticipantId,
+        recipientMember,
+        blocked,
+      })
+      .from(schema.messagingOutbox)
+      .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messagingOutbox.conversationId))
+      .innerJoin(schema.conversationChanges, and(
+        eq(schema.conversationChanges.conversationId, schema.messagingOutbox.conversationId),
+        eq(schema.conversationChanges.changeSequence, schema.messagingOutbox.changeSequence),
+      ))
+      .leftJoin(schema.messages, eq(schema.messages.id, schema.conversationChanges.messageId))
+      .where(and(
+        eq(schema.messagingOutbox.id, job.id),
+        eq(schema.messagingOutbox.recipientId, job.recipientId),
+        eq(schema.messagingOutbox.status, "leased"),
+        eq(schema.messagingOutbox.leaseToken, job.leaseToken),
+        gt(schema.messagingOutbox.leaseExpiresAt, sql`now()`),
+      ))
+      .limit(1);
+    if (!row || !row.recipientMember) return false;
+    if (!row.blocked) return true;
     // Private actor invalidations do not expose new peer activity. The actor is
     // derived from the persisted change, never from an outbox caller.
-    const actorId = typeof row.sender_participant_id === "string" ? row.sender_participant_id : typeof row.member_participant_id === "string" ? row.member_participant_id : null;
+    const actorId = row.senderId ?? row.memberId;
     return actorId === job.recipientId;
   } finally {
     await database.close();

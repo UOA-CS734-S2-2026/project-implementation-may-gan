@@ -1,9 +1,9 @@
-import { sql, type DayliDatabase } from "@dayli/db";
+import { and, eq } from "drizzle-orm";
+import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { MessagingError } from "./messaging-error";
 
 type Row = Record<string, unknown>;
-type Queryable = Pick<DayliDatabase, "execute">;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
+type Queryable = Pick<DayliDatabase, "select">;
 
 /** Requires actor membership while keeping private conversations indistinguishable from absent ones. */
 export async function requireConversationMember(
@@ -12,15 +12,47 @@ export async function requireConversationMember(
   conversationId: string,
   lock = false,
 ): Promise<Row> {
-  const [row] = rows<Row>(await queryable.execute(sql`
-    select c.*, m.last_read_sequence, m.receipt_sequence,
-      exists(select 1 from public.relationship_blocks b where b.unblocked_at is null and ((b.blocker_id = c.participant_low_id and b.blocked_id = c.participant_high_id) or (b.blocker_id = c.participant_high_id and b.blocked_id = c.participant_low_id))) as blocked,
-      exists(select 1 from public.messaging_participants peer where peer.id in (c.participant_low_id, c.participant_high_id) and peer.state <> 'active') as peer_deleted
-    from public.conversations c
-    join public.conversation_members m on m.conversation_id = c.id
-    join public.messaging_participants actor on actor.id = m.participant_id and actor.user_id = ${actorId} and actor.state = 'active'
-    where c.id = ${conversationId} ${lock ? sql`for update of c, m` : sql``}
-  `));
+  const blocked = sql<boolean>`exists(
+    select 1
+    from ${schema.relationshipBlocks}
+    where ${schema.relationshipBlocks.unblockedAt} is null
+      and (
+        (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantLowId}
+          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantHighId})
+        or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantHighId}
+          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantLowId})
+      )
+  )`;
+  const query = queryable
+    .select({
+      id: schema.conversations.id,
+      kind: schema.conversations.kind,
+      user_low_id: schema.conversations.participantLowId,
+      user_high_id: schema.conversations.participantHighId,
+      initiator_id: schema.conversations.initiatorParticipantId,
+      request_state: schema.conversations.requestState,
+      last_message_sequence: sql<string>`${schema.conversations.lastMessageSequence}::text`,
+      last_change_sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
+      last_activity_at: schema.conversations.lastActivityAt,
+      created_at: schema.conversations.createdAt,
+      updated_at: schema.conversations.updatedAt,
+      last_read_sequence: sql<string>`${schema.conversationMembers.lastReadSequence}::text`,
+      receipt_sequence: sql<string>`${schema.conversationMembers.receiptSequence}::text`,
+      blocked,
+    })
+    .from(schema.conversations)
+    .innerJoin(
+      schema.conversationMembers,
+      and(
+        eq(schema.conversationMembers.conversationId, schema.conversations.id),
+        eq(schema.conversationMembers.participantId, actorId),
+      ),
+    )
+    .where(eq(schema.conversations.id, conversationId))
+    .limit(1);
+  const [row] = lock
+    ? await query.for("update", { of: [schema.conversations, schema.conversationMembers] })
+    : await query;
   if (!row) throw new MessagingError("NOT_FOUND");
   return row;
 }

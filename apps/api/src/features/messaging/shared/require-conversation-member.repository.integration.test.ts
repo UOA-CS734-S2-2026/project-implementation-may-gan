@@ -58,7 +58,7 @@ suite("require conversation member Postgres query", () => {
     await database.db.execute(sql`
       update public.conversation_members
       set last_read_sequence = ${memberSequence}::bigint, receipt_sequence = ${memberSequence}::bigint
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+      where conversation_id = ${conversation.conversation.id} and participant_id = ${memberId}
     `);
 
     let releaseLock: (() => void) | undefined;
@@ -82,7 +82,7 @@ suite("require conversation member Postgres query", () => {
         await tx.execute(sql`
           update public.conversation_members
           set last_read_sequence = last_read_sequence
-          where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+          where conversation_id = ${conversation.conversation.id} and participant_id = ${memberId}
         `);
       })).rejects.toMatchObject({ cause: { code: "55P03" } });
       await expect(concurrentDatabase.db.transaction(async (tx) => {
