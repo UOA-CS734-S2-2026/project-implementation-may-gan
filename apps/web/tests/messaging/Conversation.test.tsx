@@ -32,7 +32,7 @@ beforeEach(() => {
   api.unsend.mockResolvedValue({ ok: true, value: message({ text: null, unsentAt: new Date().toISOString(), version: 2 }) });
   api.react.mockResolvedValue({ ok: true, value: message({ reactions: [{ reaction: "like", count: 1, reactedByActor: true }] }) });
   api.removeReaction.mockResolvedValue({ ok: true, value: message() });
-  api.markRead.mockResolvedValue({ ok: true, value: { lastReadSequence: "2", receiptSequence: "2", unreadCount: 0 } });
+  api.markRead.mockImplementation(async (_conversationId: string, throughSequence: string) => ({ ok: true, value: { lastReadSequence: throughSequence, receiptSequence: throughSequence, unreadCount: 0 } }));
   api.resolveRequest.mockResolvedValue({ ok: true, value: conversation() });
   api.inbox.mockResolvedValue({ ok: true, value: { items: [], nextCursor: null, hasMore: false } });
   api.direct.mockResolvedValue({ ok: true, value: { conversation: conversation(), message: message() } });
@@ -167,11 +167,67 @@ describe("messaging screens", () => {
     expect(screen.queryByText("Old private thread")).toBeNull();
   });
 
-  it("marks visible incoming messages read without a polling loop", async () => {
+  it("marks unread messages read when the conversation initially becomes visible", async () => {
     class Observer { observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} constructor(private callback: (items: Array<{ isIntersecting: boolean }>) => void) {} }
     vi.stubGlobal("IntersectionObserver", Observer);
-    render(<Conversation conversationId="c1" />); await screen.findByText("parent");
-    await waitFor(() => expect(api.markRead).toHaveBeenCalledWith("c1", "2"));
-    vi.unstubAllGlobals();
+    try {
+      render(<Conversation conversationId="c1" />); await screen.findByText("parent");
+      await waitFor(() => expect(api.markRead).toHaveBeenCalledWith("c1", "2"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("marks later incoming messages while the read target remains visible", async () => {
+    class Observer { observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} constructor(private callback: (items: Array<{ isIntersecting: boolean }>) => void) {} }
+    vi.stubGlobal("IntersectionObserver", Observer);
+    try {
+      const view = render(<Conversation conversationId="c1" />); await screen.findByText("parent");
+      await waitFor(() => expect(api.markRead).toHaveBeenCalledWith("c1", "2"));
+      changes = [{ changeSequence: "4", kind: "message.created", messageId: "m4", memberId: null }]; live.revision = 1;
+      api.message.mockResolvedValueOnce({ ok: true, value: message({ id: "m4", sequence: "4", senderId: "them", text: "new incoming" }) });
+      view.rerender(<Conversation conversationId="c1" />);
+      await screen.findByText("new incoming");
+      await waitFor(() => expect(api.markRead).toHaveBeenLastCalledWith("c1", "4"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not mark messages while hidden, then queues the latest visible sequence after foregrounding", async () => {
+    class Observer { observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} constructor(private callback: (items: Array<{ isIntersecting: boolean }>) => void) {} }
+    const originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    vi.stubGlobal("IntersectionObserver", Observer);
+    try {
+      render(<Conversation conversationId="c1" />); await screen.findByText("parent");
+      expect(api.markRead).not.toHaveBeenCalled();
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+      document.dispatchEvent(new Event("visibilitychange"));
+      await waitFor(() => expect(api.markRead).toHaveBeenCalledWith("c1", "2"));
+    } finally {
+      if (originalVisibility) Object.defineProperty(document, "visibilityState", originalVisibility); else delete (document as { visibilityState?: string }).visibilityState;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("serializes read receipts so a newer visible message cannot be lost behind an in-flight receipt", async () => {
+    class Observer { observe() { this.callback([{ isIntersecting: true }]); } disconnect() {} constructor(private callback: (items: Array<{ isIntersecting: boolean }>) => void) {} }
+    let resolveInitialRead: ((value: { ok: true; value: { lastReadSequence: string; receiptSequence: string; unreadCount: number } }) => void) | undefined;
+    api.markRead.mockImplementationOnce(() => new Promise((resolve) => { resolveInitialRead = resolve; })).mockResolvedValueOnce({ ok: true, value: { lastReadSequence: "4", receiptSequence: "4", unreadCount: 0 } });
+    vi.stubGlobal("IntersectionObserver", Observer);
+    try {
+      const view = render(<Conversation conversationId="c1" />); await screen.findByText("parent");
+      await waitFor(() => expect(api.markRead).toHaveBeenCalledWith("c1", "2"));
+      changes = [{ changeSequence: "4", kind: "message.created", messageId: "m4", memberId: null }]; live.revision = 1;
+      api.message.mockResolvedValueOnce({ ok: true, value: message({ id: "m4", sequence: "4", senderId: "them", text: "new incoming" }) });
+      view.rerender(<Conversation conversationId="c1" />);
+      await screen.findByText("new incoming");
+      expect(api.markRead).toHaveBeenCalledTimes(1);
+      resolveInitialRead?.({ ok: true, value: { lastReadSequence: "2", receiptSequence: "2", unreadCount: 0 } });
+      await waitFor(() => expect(api.markRead).toHaveBeenLastCalledWith("c1", "4"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

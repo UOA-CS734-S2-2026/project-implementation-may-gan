@@ -46,20 +46,30 @@ function ConversationBody({ conversationId }: { conversationId: string }) {
   const removeReaction = useRemoveReactionMutation(conversationId);
   const resolveRequest = useResolveRequestMutation(conversationId);
   const markRead = useMarkReadMutation(conversationId);
+  const { mutateAsync: markReadAsync } = markRead;
   const conversation = conversationQuery.data;
   const messages = flattenMessagePages(history.data);
+  const incoming = [...messages].reverse().find((message) => message.senderId !== user?.id && !message.delivery);
+  const incomingId = incoming?.id;
+  const incomingSequence = incoming?.sequence;
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<MessagingMessage | null>(null);
   const [editing, setEditing] = useState<MessagingMessage | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [now, setNow] = useState(0);
+  const [readRetry, setReadRetry] = useState(0);
   const readThrough = useRef("0");
+  const pendingReadThrough = useRef("0");
+  const readInFlight = useRef(false);
   const readTarget = useRef<HTMLDivElement | null>(null);
+  const readTargetVisible = useRef(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const composing = useRef(false);
 
   useEffect(() => {
-    if (conversation) readThrough.current = conversation.lastReadSequence;
+    if (!conversation || BigInt(conversation.lastReadSequence) <= BigInt(readThrough.current)) return;
+    readThrough.current = conversation.lastReadSequence;
+    if (BigInt(pendingReadThrough.current) < BigInt(readThrough.current)) pendingReadThrough.current = readThrough.current;
   }, [conversation]);
 
   useEffect(() => {
@@ -78,16 +88,41 @@ function ConversationBody({ conversationId }: { conversationId: string }) {
 
   useEffect(() => {
     const target = readTarget.current;
-    if (!target || !conversation || typeof IntersectionObserver === "undefined") return;
+    if (!target || !conversation || typeof IntersectionObserver === "undefined") {
+      readTargetVisible.current = false;
+      return;
+    }
+    const markVisibleIncomingRead = () => {
+      if (document.visibilityState !== "visible" || !incomingSequence || BigInt(incomingSequence) <= BigInt(readThrough.current)) return;
+      if (BigInt(incomingSequence) > BigInt(pendingReadThrough.current)) pendingReadThrough.current = incomingSequence;
+      if (readInFlight.current) return;
+      const throughSequence = pendingReadThrough.current;
+      if (BigInt(throughSequence) <= BigInt(readThrough.current)) return;
+      readInFlight.current = true;
+      void markReadAsync(throughSequence).then((receipt) => {
+        if (BigInt(receipt.lastReadSequence) > BigInt(readThrough.current)) readThrough.current = receipt.lastReadSequence;
+        readInFlight.current = false;
+        // Only drain a sequence that arrived while this request was in flight. A stale receipt must not spin retries without a later visibility signal.
+        if (document.visibilityState === "visible" && BigInt(pendingReadThrough.current) > BigInt(throughSequence)) setReadRetry((attempt) => attempt + 1);
+      }, () => {
+        readInFlight.current = false;
+      });
+    };
     const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting) || document.visibilityState !== "visible") return;
-      const incoming = [...messages].reverse().find((message) => message.senderId !== user?.id && !message.delivery);
-      if (!incoming || BigInt(incoming.sequence) <= BigInt(readThrough.current)) return;
-      markRead.mutate(incoming.sequence, { onSuccess: (receipt) => { readThrough.current = receipt.lastReadSequence; } });
+      readTargetVisible.current = entries.some((entry) => entry.isIntersecting);
+      if (readTargetVisible.current) markVisibleIncomingRead();
     }, { threshold: 0.6 });
+    const foreground = () => {
+      if (document.visibilityState === "visible" && readTargetVisible.current) markVisibleIncomingRead();
+    };
     observer.observe(target);
-    return () => observer.disconnect();
-  }, [conversation, markRead, messages, user?.id]);
+    document.addEventListener("visibilitychange", foreground);
+    if (readRetry && readTargetVisible.current) markVisibleIncomingRead();
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", foreground);
+    };
+  }, [conversation, incomingId, incomingSequence, markReadAsync, readRetry]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -143,7 +178,6 @@ function ConversationBody({ conversationId }: { conversationId: string }) {
   const mutationError = errorMessage(send.error, edit.error, unsend.error, setReaction.error, removeReaction.error, resolveRequest.error, markRead.error);
   const canInteract = Boolean(conversation?.capabilities.canSend && conversation.requestState === "active");
   const canUnsend = Boolean(conversation && conversation.requestState !== "active" ? true : conversation?.capabilities.canSend);
-  const incoming = [...messages].reverse().find((message) => message.senderId !== user?.id && !message.delivery);
 
   return <section className="mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-10 md:px-12">
     <header className="border-b border-foreground/10 pb-5">
