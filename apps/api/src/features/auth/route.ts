@@ -273,6 +273,9 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
         trustedOrigins: configuration.trustedOrigins,
         database,
         google: configuration.google,
+        googleProfileFlow: request.method === "POST" && ["/api/auth/sign-in/social", "/api/auth/link-social"].includes(new URL(request.url).pathname)
+          ? "native"
+          : "browser",
         resend: configuration.resend,
       });
       const revoke = isSessionRevocationRequest(request) && revocations
