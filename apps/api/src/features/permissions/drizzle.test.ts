@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { schema } from "@dayli/db";
 import { buildDrizzlePostVisibilityFilter } from "./drizzle";
+
+const database = drizzle.mock({ schema });
 
 const sqlQuery = (fragment: ReturnType<typeof buildDrizzlePostVisibilityFilter>) => {
   if (!fragment) throw new Error("expected a Drizzle SQL predicate");
@@ -12,20 +16,22 @@ const sqlText = (fragment: ReturnType<typeof buildDrizzlePostVisibilityFilter>) 
 
 describe("concrete PostgreSQL permission filter", () => {
   it("uses paired active friendships and both-direction active blocks", () => {
-    const text = sqlText(buildDrizzlePostVisibilityFilter({
+    const fragment = buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: "viewer-1" },
       now: new Date("2026-09-22T00:00:00Z"),
-    }));
+    });
+    const text = sqlText(fragment);
 
-    expect(text).toContain('"friendships"');
+    expect(text).toContain('select "friend_id" from "friendships"');
     expect(text.match(/"friendships"/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(text).toContain("state" + '" = \'active\'');
-    expect(text).toContain('"relationship_blocks"');
+    expect(text).toContain('"state" = $');
+    expect(sqlQuery(fragment).params).toContain("active");
+    expect(text).toContain('select "blocker_id" from "relationship_blocks"');
     expect(text).toContain('"unblocked_at" is null');
   });
 
   it("binds an active public grant to one post and requires a public profile", () => {
-    const fragment = buildDrizzlePostVisibilityFilter({
+    const fragment = buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: null },
       now: new Date("2026-09-22T00:00:00Z"),
       validatedPublicLinkGrant: { postId: "post-1", active: true },
@@ -38,20 +44,21 @@ describe("concrete PostgreSQL permission filter", () => {
   });
 
   it("requires a currently attached media row", () => {
-    const query = sqlQuery(buildDrizzlePostVisibilityFilter({
+    const query = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: "alice" },
       now: new Date("2026-09-22T00:00:00Z"),
       action: "media",
       mediaId: "media-1",
     }));
 
+    expect(query.sql).toContain('select "id" from "post_media"');
     expect(query.sql).toContain('"post_media"."detached_at" is null');
     expect(query.sql).toContain('"post_media"."id" = $');
     expect(query.params).toContain("media-1");
   });
 
   it("keeps export owner-only", () => {
-    const query = sqlQuery(buildDrizzlePostVisibilityFilter({
+    const query = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: "viewer-1" },
       now: new Date("2026-09-22T00:00:00Z"),
       action: "export",

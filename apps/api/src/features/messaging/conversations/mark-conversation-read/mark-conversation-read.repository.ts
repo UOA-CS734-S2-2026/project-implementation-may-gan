@@ -1,8 +1,9 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, count, eq, gt, isNull, ne } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { MessagingError } from "../../shared/messaging-error";
 import { requireConversationMember } from "../../shared/require-conversation-member";
+import { parseSequenceCursor, requireSafeSequenceBigInt, toSafeSequenceNumber } from "../../shared/safe-sequence";
 
 export interface MarkConversationReadRepository {
   markRead(
@@ -48,16 +49,13 @@ export function createPostgresMarkConversationReadRepository(
         await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);
-        const max = BigInt(String(row.last_message_sequence));
-        const target = BigInt(through) > max ? max : BigInt(through);
+        const target = Math.min(parseSequenceCursor(through), row.last_message_sequence);
         const allowedReceipt = row.request_state === "active" && row.blocked !== true;
         const [updated] = await tx
           .update(schema.conversationMembers)
           .set({
-            lastReadSequence: sql`greatest(${schema.conversationMembers.lastReadSequence}, ${target.toString()}::bigint)`,
-            receiptSequence: allowedReceipt
-              ? sql`greatest(${schema.conversationMembers.receiptSequence}, ${target.toString()}::bigint)`
-              : schema.conversationMembers.receiptSequence,
+            lastReadSequence: sql`greatest(${schema.conversationMembers.lastReadSequence}, ${target})`,
+            receiptSequence: sql`greatest(${schema.conversationMembers.receiptSequence}, ${allowedReceipt ? target : 0})`,
             updatedAt: sql`now()`,
           })
           .where(and(
@@ -65,26 +63,28 @@ export function createPostgresMarkConversationReadRepository(
             eq(schema.conversationMembers.userId, actorId),
           ))
           .returning({
-            lastReadSequence: sql<string>`${schema.conversationMembers.lastReadSequence}::text`,
-            receiptSequence: sql<string>`${schema.conversationMembers.receiptSequence}::text`,
+            lastReadSequence: schema.conversationMembers.lastReadSequence,
+            receiptSequence: schema.conversationMembers.receiptSequence,
           });
         if (!updated) throw new MessagingError("NOT_FOUND");
 
+        const lastReadSequence = toSafeSequenceNumber(requireSafeSequenceBigInt(updated.lastReadSequence));
+        const receiptSequence = toSafeSequenceNumber(requireSafeSequenceBigInt(updated.receiptSequence));
         if (allowedReceipt) {
           await appendConversationChange(tx, conversationId, "read.updated", null, actorId, new Date());
         }
         const [unread] = await tx
-          .select({ count: sql<number>`count(*)::int` })
+          .select({ count: count() })
           .from(schema.messages)
           .where(and(
             eq(schema.messages.conversationId, conversationId),
             ne(schema.messages.senderId, actorId),
-            sql`${schema.messages.sequence} > ${updated.lastReadSequence}::bigint`,
+            gt(schema.messages.sequence, lastReadSequence),
             isNull(schema.messages.unsentAt),
           ));
         return {
-          lastReadSequence: updated.lastReadSequence,
-          receiptSequence: updated.receiptSequence,
+          lastReadSequence: String(lastReadSequence),
+          receiptSequence: String(receiptSequence),
           unreadCount: unread?.count ?? 0,
         };
       });

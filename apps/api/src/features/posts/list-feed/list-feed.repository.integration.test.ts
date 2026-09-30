@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresFeedRepository, InvalidFeedCursorError } from "./list-feed.repository";
 
@@ -41,29 +42,37 @@ function requireLocalTestUrl(value: string): string {
   async function insertPost(key: string, authorId: string, localDate: string, options: { audience?: "solo" | "friends"; released?: boolean } = {}) {
     const acceptedAt = `${localDate}T03:00:00.000Z`;
     const releasedAt = options.released === false ? "2026-09-26T12:00:00.000Z" : `${localDate}T12:00:00.000Z`;
-    await migrator.client`
-      insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
-      values (${id(key)}, ${authorId}, ${localDate}, ${`prompt-${localDate.slice(5)}`}, ${`Answer ${key}`}, 7,
-        ${options.audience ?? "friends"}, ${acceptedAt}, ${releasedAt})
-    `;
+    await migrator.db.insert(schema.posts).values({
+      id: id(key),
+      authorId,
+      localDate,
+      promptId: `prompt-${localDate.slice(5)}`,
+      reflectiveAnswer: `Answer ${key}`,
+      rating: 7,
+      audience: options.audience ?? "friends",
+      acceptedAt: new Date(acceptedAt),
+      releasedAt: new Date(releasedAt),
+    });
   }
 
   /** The database requires both directional rows, with the same state, in one statement. */
   async function befriend(a: string, b: string, state: "active" | "ended" = "active") {
-    const changedAt = now.toISOString();
-    await migrator.client`
-      insert into public.friendships (user_id, friend_id, state, state_changed_at)
-      values (${a}, ${b}, ${state}, ${changedAt}), (${b}, ${a}, ${state}, ${changedAt})
-    `;
+    await migrator.db.insert(schema.friendships).values([
+      { userId: a, friendId: b, state, stateChangedAt: now },
+      { userId: b, friendId: a, state, stateChangedAt: now },
+    ]);
   }
 
   beforeAll(async () => {
     for (const [key, userId] of Object.entries(users)) {
       const username = key === "noUsername" ? null : `f${run}${key.toLowerCase()}`.slice(0, 30);
-      await migrator.client`
-        insert into public."user" (id, name, email, username, display_username)
-        values (${userId}, ${key}, ${`${userId}@example.test`}, ${username}, ${key === "friendA" ? "Friend A" : null})
-      `;
+      await migrator.db.insert(schema.user).values({
+        id: userId,
+        name: key,
+        email: `${userId}@example.test`,
+        username,
+        displayUsername: key === "friendA" ? "Friend A" : null,
+      });
     }
 
     await befriend(users.viewer, users.friendA);
@@ -72,10 +81,10 @@ function requireLocalTestUrl(value: string): string {
     await befriend(users.viewer, users.blocker);
     await befriend(users.viewer, users.noUsername);
     await befriend(users.viewer, users.ended, "ended");
-    await migrator.client`
-      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
-      values (${users.viewer}, ${users.blocked}, ${now.toISOString()}), (${users.blocker}, ${users.viewer}, ${now.toISOString()})
-    `;
+    await migrator.db.insert(schema.relationshipBlocks).values([
+      { blockerId: users.viewer, blockedId: users.blocked, blockedAt: now },
+      { blockerId: users.blocker, blockedId: users.viewer, blockedAt: now },
+    ]);
 
     // Visible: friends posts released before the friendship's state changed are
     // still part of the shared history.
@@ -93,20 +102,28 @@ function requireLocalTestUrl(value: string): string {
     await insertPost("blocker-25", users.blocker, "2026-09-25");
     await insertPost("no-username-25", users.noUsername, "2026-09-25");
 
-    await migrator.client`
-      insert into public.post_revisions (id, post_id, revision_number, previous_reflective_answer, previous_rating,
-        previous_audience, previous_prompt_id, previous_attachment_refs)
-      values (${id("rev-1")}, ${id("b-24")}, 1, 'Before the edit', 6, 'friends', 'prompt-09-24', '[]'::jsonb)
-    `;
+    await migrator.db.insert(schema.postRevisions).values({
+      id: id("rev-1"),
+      postId: id("b-24"),
+      revisionNumber: 1,
+      previousReflectiveAnswer: "Before the edit",
+      previousRating: 6,
+      previousAudience: "friends",
+      previousPromptId: "prompt-09-24",
+      previousAttachmentRefs: [],
+    });
   });
 
   afterAll(async () => {
     try {
-      await migrator.client`delete from public.post_revisions where post_id in (select id from public.posts where author_id = any(${userIds}::text[]))`;
-      await migrator.client`delete from public.posts where author_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public.relationship_blocks where blocker_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public.friendships where user_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public."user" where id = any(${userIds}::text[])`;
+      await migrator.db.delete(schema.postRevisions).where(inArray(
+        schema.postRevisions.postId,
+        migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(inArray(schema.posts.authorId, userIds)),
+      ));
+      await migrator.db.delete(schema.posts).where(inArray(schema.posts.authorId, userIds));
+      await migrator.db.delete(schema.relationshipBlocks).where(inArray(schema.relationshipBlocks.blockerId, userIds));
+      await migrator.db.delete(schema.friendships).where(inArray(schema.friendships.userId, userIds));
+      await migrator.db.delete(schema.user).where(inArray(schema.user.id, userIds));
     } finally {
       await Promise.all([app.close(), migrator.close()]);
     }

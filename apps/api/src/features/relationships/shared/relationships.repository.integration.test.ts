@@ -1,4 +1,5 @@
-import { createDayliDatabase, sql } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRelationshipsService } from "../../../app";
 import { createHyperdriveRelationshipsStore, createPostgresRelationshipsStore } from "./relationships.repository";
@@ -26,10 +27,11 @@ suite("Postgres relationship persistence", () => {
   const users = Array.from({ length: 30 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
-    await database.client`
-      insert into public."user" (id, name, email)
-      select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)
-    `;
+    await database.db.insert(schema.user).values(users.map((id) => ({
+      id,
+      name: id,
+      email: `${id}@example.test`,
+    })));
   });
 
   afterAll(async () => {
@@ -37,10 +39,19 @@ suite("Postgres relationship persistence", () => {
       // Relationship foreign keys intentionally use NO ACTION. Remove child
       // projections before deleting fixture users, then always close the
       // request-scoped database even if cleanup reports a failure.
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await concurrentDatabase.close();
       await database.close();
@@ -55,39 +66,48 @@ suite("Postgres relationship persistence", () => {
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
-    const [row] = await database.client`
-      select count(*)::int as count from public.friend_requests
-      where status = 'pending' and ((sender_id = ${users[0]!} and recipient_id = ${users[1]!})
-        or (sender_id = ${users[1]!} and recipient_id = ${users[0]!}))
-    `;
+    const [row] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.friendRequests)
+      .where(and(
+        eq(schema.friendRequests.status, "pending"),
+        or(
+          and(eq(schema.friendRequests.senderId, users[0]!), eq(schema.friendRequests.recipientId, users[1]!)),
+          and(eq(schema.friendRequests.senderId, users[1]!), eq(schema.friendRequests.recipientId, users[0]!)),
+        ),
+      ));
     expect(row?.count).toBe(1);
   });
 
   it("persists paired friendship rows and block cleanup atomically", async () => {
     // Either reverse send may have won the previous race, so accept as
     // whichever fixture user actually received the surviving request.
-    const [pending] = await database.client`
-      select id, recipient_id from public.friend_requests
-      where status = 'pending' and ((sender_id = ${users[0]!} and recipient_id = ${users[1]!})
-        or (sender_id = ${users[1]!} and recipient_id = ${users[0]!}))
-    `;
-    const status = await service.acceptRequest(pending!.recipient_id as string, pending!.id as string);
+    const [pending] = await database.db.select({
+      id: schema.friendRequests.id,
+      recipientId: schema.friendRequests.recipientId,
+    }).from(schema.friendRequests).where(and(
+      eq(schema.friendRequests.status, "pending"),
+      or(
+        and(eq(schema.friendRequests.senderId, users[0]!), eq(schema.friendRequests.recipientId, users[1]!)),
+        and(eq(schema.friendRequests.senderId, users[1]!), eq(schema.friendRequests.recipientId, users[0]!)),
+      ),
+    ));
+    const status = await service.acceptRequest(pending!.recipientId, pending!.id);
     expect(status.status).toBe("friends");
 
-    const [friendshipRows] = await database.client`
-      select count(*)::int as count from public.friendships
-      where (user_id = ${users[0]!} and friend_id = ${users[1]!})
-         or (user_id = ${users[1]!} and friend_id = ${users[0]!})
-    `;
+    const [friendshipRows] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.friendships)
+      .where(or(
+        and(eq(schema.friendships.userId, users[0]!), eq(schema.friendships.friendId, users[1]!)),
+        and(eq(schema.friendships.userId, users[1]!), eq(schema.friendships.friendId, users[0]!)),
+      ));
     expect(friendshipRows?.count).toBe(2);
 
     await service.block(users[0]!, users[1]!);
-    const [afterBlock] = await database.client`
-      select
-        (select count(*) from public.friend_requests where status = 'pending' and (sender_id = any(${users.slice(0, 2)}::text[]) or recipient_id = any(${users.slice(0, 2)}::text[])))::int as pending,
-        (select count(*) from public.friendships where state = 'active' and user_id = any(${users.slice(0, 2)}::text[]) and friend_id = any(${users.slice(0, 2)}::text[]))::int as active,
-        (select count(*) from public.relationship_blocks where blocker_id = ${users[0]!} and blocked_id = ${users[1]!} and unblocked_at is null)::int as blocks
-    `;
+    const [afterBlock] = await database.db.select({
+      pending: sql<number>`(select count(*) from ${schema.friendRequests} where ${schema.friendRequests.status} = 'pending' and (${schema.friendRequests.senderId} in (${users[0]!}, ${users[1]!}) or ${schema.friendRequests.recipientId} in (${users[0]!}, ${users[1]!})))::int`,
+      active: sql<number>`(select count(*) from ${schema.friendships} where ${schema.friendships.state} = 'active' and ${schema.friendships.userId} in (${users[0]!}, ${users[1]!}) and ${schema.friendships.friendId} in (${users[0]!}, ${users[1]!}))::int`,
+      blocks: sql<number>`(select count(*) from ${schema.relationshipBlocks} where ${schema.relationshipBlocks.blockerId} = ${users[0]!} and ${schema.relationshipBlocks.blockedId} = ${users[1]!} and ${schema.relationshipBlocks.unblockedAt} is null)::int`,
+    }).from(sql`(values (1)) as query_source`);
     expect(afterBlock).toEqual({ pending: 0, active: 0, blocks: 1 });
   });
 
@@ -97,19 +117,13 @@ suite("Postgres relationship persistence", () => {
     const blockedUser = users[5]!;
     const bannedUser = users[3]!;
     const wildcardDecoy = users[2]!;
-    await database.client`
-      update public."user" set username = case id
-        when ${privateUser} then 'bobby_private'
-        when ${blockedUser} then 'bobby_blocked'
-        when ${bannedUser} then 'bobby_banned'
-        when ${wildcardDecoy} then 'bobbywild'
-      end,
-      display_username = case id when ${privateUser} then 'Bobby' else 'Hidden person' end,
-      profile_visibility = case when id = ${privateUser} then 'private'::profile_visibility else profile_visibility end,
-      banned = case when id = ${bannedUser} then true else banned end
-      where id = any(${[privateUser, blockedUser, bannedUser, wildcardDecoy]}::text[])
-    `;
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${actor}, ${blockedUser}, now())`;
+    await database.db.update(schema.user).set({
+      username: sql`case ${schema.user.id} when ${privateUser} then 'bobby_private' when ${blockedUser} then 'bobby_blocked' when ${bannedUser} then 'bobby_banned' when ${wildcardDecoy} then 'bobbywild' end`,
+      displayUsername: sql`case ${schema.user.id} when ${privateUser} then 'Bobby' else 'Hidden person' end`,
+      profileVisibility: sql`case when ${schema.user.id} = ${privateUser} then 'private'::profile_visibility else ${schema.user.profileVisibility} end`,
+      banned: sql`case when ${schema.user.id} = ${bannedUser} then true else ${schema.user.banned} end`,
+    }).where(inArray(schema.user.id, [privateUser, blockedUser, bannedUser, wildcardDecoy]));
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: actor, blockedId: blockedUser, blockedAt: new Date() });
 
     const page = await service.searchUsers(actor, 'bob', 20);
 
@@ -126,12 +140,11 @@ suite("Postgres relationship persistence", () => {
   it("returns private minimal profiles but hides them after blocks in either direction", async () => {
     const actor = users[8]!;
     const target = users[9]!;
-    await database.client`
-      update public."user"
-      set username = 'private_profile_target', display_username = 'Private Profile',
-          profile_visibility = 'private'::profile_visibility
-      where id = ${target}
-    `;
+    await database.db.update(schema.user).set({
+      username: "private_profile_target",
+      displayUsername: "Private Profile",
+      profileVisibility: "private",
+    }).where(eq(schema.user.id, target));
 
     await expect(service.getProfileByUsername(actor, "PRIVATE_PROFILE_TARGET")).resolves.toEqual({
       id: target,
@@ -140,34 +153,35 @@ suite("Postgres relationship persistence", () => {
       relationship: "none",
     });
 
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${target}, ${actor}, now())`;
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: target, blockedId: actor, blockedAt: new Date() });
     await expect(service.getProfileByUsername(actor, "private_profile_target")).rejects.toMatchObject({ code: "NOT_FOUND" });
-    await database.client`update public.relationship_blocks set unblocked_at = now() where blocker_id = ${target} and blocked_id = ${actor}`;
+    await database.db.update(schema.relationshipBlocks).set({ unblockedAt: new Date() }).where(and(
+      eq(schema.relationshipBlocks.blockerId, target),
+      eq(schema.relationshipBlocks.blockedId, actor),
+    ));
 
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${actor}, ${target}, now())`;
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: actor, blockedId: target, blockedAt: new Date() });
     await expect(service.getProfileByUsername(actor, "private_profile_target")).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("never projects a provider-owned name and retains an explicit public name", async () => {
     const actor = users[7]!;
     const providerUser = users[8]!;
-    await database.client`
-      update public."user"
-      set username = case id when ${actor} then 'projection_actor' else 'provider_handle' end,
-          name = case id when ${actor} then 'Actor Provider Name' else 'Google Provider Name' end,
-          display_username = null
-      where id = any(${[actor, providerUser]}::text[])
-    `;
-    await database.client`
-      insert into public.friendships (user_id, friend_id, state, state_changed_at)
-      values (${actor}, ${providerUser}, 'active', now()), (${providerUser}, ${actor}, 'active', now())
-    `;
+    await database.db.update(schema.user).set({
+      username: sql`case ${schema.user.id} when ${actor} then 'projection_actor' else 'provider_handle' end`,
+      name: sql`case ${schema.user.id} when ${actor} then 'Actor Provider Name' else 'Google Provider Name' end`,
+      displayUsername: null,
+    }).where(inArray(schema.user.id, [actor, providerUser]));
+    await database.db.insert(schema.friendships).values([
+      { userId: actor, friendId: providerUser, state: "active", stateChangedAt: new Date() },
+      { userId: providerUser, friendId: actor, state: "active", stateChangedAt: new Date() },
+    ]);
 
     await expect(service.listFriends(actor, 20)).resolves.toMatchObject({
       items: [expect.objectContaining({ id: providerUser, username: 'provider_handle', displayName: 'provider_handle' })],
     });
 
-    await database.client`update public."user" set display_username = 'Chosen Public Name' where id = ${providerUser}`;
+    await database.db.update(schema.user).set({ displayUsername: "Chosen Public Name" }).where(eq(schema.user.id, providerUser));
     await expect(service.listFriends(actor, 20)).resolves.toMatchObject({
       items: [expect.objectContaining({ id: providerUser, displayName: 'Chosen Public Name' })],
     });
@@ -177,15 +191,13 @@ suite("Postgres relationship persistence", () => {
     const actor = users[6]!;
     const first = users[0]!;
     const second = users[1]!;
-    await database.client`
-      update public."user" set username = case id when ${first} then 'request_first' when ${second} then 'request_second' end
-      where id = any(${[first, second]}::text[])
-    `;
-    await database.client`
-      insert into public.friend_requests (id, sender_id, recipient_id, status, created_at)
-      values ('request-page-1', ${actor}, ${first}, 'pending', '2026-09-22T00:00:00.000001Z'),
-             ('request-page-2', ${actor}, ${second}, 'pending', '2026-09-22T00:00:00.000002Z')
-    `;
+    await database.db.update(schema.user).set({
+      username: sql`case ${schema.user.id} when ${first} then 'request_first' when ${second} then 'request_second' end`,
+    }).where(inArray(schema.user.id, [first, second]));
+    await database.db.insert(schema.friendRequests).values([
+      { id: "request-page-1", senderId: actor, recipientId: first, status: "pending", createdAt: sql`'2026-09-22T00:00:00.000001Z'::timestamptz` },
+      { id: "request-page-2", senderId: actor, recipientId: second, status: "pending", createdAt: sql`'2026-09-22T00:00:00.000002Z'::timestamptz` },
+    ]);
 
     const firstPage = await service.listPendingRequests(actor, 'outgoing', 1);
     const secondPage = await service.listPendingRequests(actor, 'outgoing', 1, firstPage.nextCursor ?? undefined);
@@ -201,24 +213,15 @@ suite("Postgres relationship persistence", () => {
     const first = users[10]!;
     const second = users[11]!;
     const blocked = users[12]!;
-    await database.client`
-      update public."user" set username = case id
-        when ${first} then 'request_cursor_first'
-        when ${second} then 'request_cursor_second'
-        when ${blocked} then 'request_cursor_blocked'
-      end
-      where id = any(${[first, second, blocked]}::text[])
-    `;
-    await database.client`
-      insert into public.friend_requests (id, sender_id, recipient_id, status, created_at)
-      values ('request-cursor-a', ${actor}, ${first}, 'pending', '2026-09-22T00:00:00.000001Z'),
-             ('request-cursor-b', ${actor}, ${second}, 'pending', '2026-09-22T00:00:00.000001Z'),
-             ('request-cursor-blocked', ${actor}, ${blocked}, 'pending', '2026-09-22T00:00:00.000001Z')
-    `;
-    await database.client`
-      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
-      values (${actor}, ${blocked}, now())
-    `;
+    await database.db.update(schema.user).set({
+      username: sql`case ${schema.user.id} when ${first} then 'request_cursor_first' when ${second} then 'request_cursor_second' when ${blocked} then 'request_cursor_blocked' end`,
+    }).where(inArray(schema.user.id, [first, second, blocked]));
+    await database.db.insert(schema.friendRequests).values([
+      { id: "request-cursor-a", senderId: actor, recipientId: first, status: "pending", createdAt: sql`'2026-09-22T00:00:00.000001Z'::timestamptz` },
+      { id: "request-cursor-b", senderId: actor, recipientId: second, status: "pending", createdAt: sql`'2026-09-22T00:00:00.000001Z'::timestamptz` },
+      { id: "request-cursor-blocked", senderId: actor, recipientId: blocked, status: "pending", createdAt: sql`'2026-09-22T00:00:00.000001Z'::timestamptz` },
+    ]);
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: actor, blockedId: blocked, blockedAt: new Date() });
 
     const firstPage = await service.listPendingRequests(actor, 'outgoing', 1);
     const secondPage = await service.listPendingRequests(actor, 'outgoing', 1, firstPage.nextCursor ?? undefined);
@@ -235,27 +238,22 @@ suite("Postgres relationship persistence", () => {
     const second = users[15]!;
     const blocked = users[16]!;
     const banned = users[17]!;
-    await database.client`
-      update public."user" set username = case id
-        when ${first} then 'friend_cursor_a'
-        when ${second} then 'friend_cursor_b'
-        when ${blocked} then 'blocked_friend'
-        when ${banned} then 'banned_friend'
-      end,
-      banned = id = ${banned}
-      where id = any(${[first, second, blocked, banned]}::text[])
-    `;
-    await database.client`
-      insert into public.friendships (user_id, friend_id, state, state_changed_at)
-      values (${actor}, ${first}, 'active', now()), (${first}, ${actor}, 'active', now()),
-             (${actor}, ${second}, 'active', now()), (${second}, ${actor}, 'active', now()),
-             (${actor}, ${blocked}, 'active', now()), (${blocked}, ${actor}, 'active', now()),
-             (${actor}, ${banned}, 'active', now()), (${banned}, ${actor}, 'active', now())
-    `;
-    await database.client`
-      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
-      values (${actor}, ${blocked}, now())
-    `;
+    await database.db.update(schema.user).set({
+      username: sql`case ${schema.user.id} when ${first} then 'friend_cursor_a' when ${second} then 'friend_cursor_b' when ${blocked} then 'blocked_friend' when ${banned} then 'banned_friend' end`,
+      banned: sql`${schema.user.id} = ${banned}`,
+    }).where(inArray(schema.user.id, [first, second, blocked, banned]));
+    const stateChangedAt = new Date();
+    await database.db.insert(schema.friendships).values([
+      { userId: actor, friendId: first, state: "active", stateChangedAt },
+      { userId: first, friendId: actor, state: "active", stateChangedAt },
+      { userId: actor, friendId: second, state: "active", stateChangedAt },
+      { userId: second, friendId: actor, state: "active", stateChangedAt },
+      { userId: actor, friendId: blocked, state: "active", stateChangedAt },
+      { userId: blocked, friendId: actor, state: "active", stateChangedAt },
+      { userId: actor, friendId: banned, state: "active", stateChangedAt },
+      { userId: banned, friendId: actor, state: "active", stateChangedAt },
+    ]);
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: actor, blockedId: blocked, blockedAt: new Date() });
 
     const firstPage = await service.listFriends(actor, 1);
     const secondPage = await service.listFriends(actor, 1, firstPage.nextCursor ?? undefined);
@@ -300,11 +298,12 @@ suite("Postgres relationship persistence", () => {
       recipientId: sender,
       createdAt: "2026-09-22T00:00:00.000Z",
     }))).resolves.toMatchObject({ requests: { outgoing: { senderId: recipient, recipientId: sender } } });
-    const [requests] = await database.client`
-      select count(*)::int as count from public.friend_requests
-      where (sender_id = ${sender} and recipient_id = ${recipient})
-         or (sender_id = ${recipient} and recipient_id = ${sender})
-    `;
+    const [requests] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.friendRequests)
+      .where(or(
+        and(eq(schema.friendRequests.senderId, sender), eq(schema.friendRequests.recipientId, recipient)),
+        and(eq(schema.friendRequests.senderId, recipient), eq(schema.friendRequests.recipientId, sender)),
+      ));
     expect(requests?.count).toBe(1);
   });
 
@@ -314,18 +313,24 @@ suite("Postgres relationship persistence", () => {
 
     await expect(service.block(blocker, blocked)).resolves.toMatchObject({ status: "blocked" });
     await expect(service.block(blocker, blocked)).resolves.toMatchObject({ status: "blocked" });
-    const [activeBlock] = await database.client`
-      select count(*)::int as count from public.relationship_blocks
-      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
-    `;
+    const [activeBlock] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        eq(schema.relationshipBlocks.blockerId, blocker),
+        eq(schema.relationshipBlocks.blockedId, blocked),
+        isNull(schema.relationshipBlocks.unblockedAt),
+      ));
     expect(activeBlock?.count).toBe(1);
 
     await expect(service.unblock(blocker, blocked)).resolves.toMatchObject({ status: "none" });
     await expect(service.unblock(blocker, blocked)).resolves.toMatchObject({ status: "none" });
-    const [remainingBlock] = await database.client`
-      select count(*)::int as count from public.relationship_blocks
-      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
-    `;
+    const [remainingBlock] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        eq(schema.relationshipBlocks.blockerId, blocker),
+        eq(schema.relationshipBlocks.blockedId, blocked),
+        isNull(schema.relationshipBlocks.unblockedAt),
+      ));
     expect(remainingBlock?.count).toBe(0);
   });
 
@@ -340,12 +345,11 @@ suite("Postgres relationship persistence", () => {
     ]);
 
     expect(block).toMatchObject({ status: "fulfilled", value: { status: "blocked" } });
-    const [state] = await database.client`
-      select
-        (select count(*) from public.friend_requests where status = 'pending' and sender_id = ${sender} and recipient_id = ${recipient})::int as pending,
-        (select count(*) from public.friendships where state = 'active' and ((user_id = ${sender} and friend_id = ${recipient}) or (user_id = ${recipient} and friend_id = ${sender})))::int as active,
-        (select count(*) from public.relationship_blocks where blocker_id = ${recipient} and blocked_id = ${sender} and unblocked_at is null)::int as blocks
-    `;
+    const [state] = await database.db.select({
+      pending: sql<number>`(select count(*) from ${schema.friendRequests} where ${schema.friendRequests.status} = 'pending' and ${schema.friendRequests.senderId} = ${sender} and ${schema.friendRequests.recipientId} = ${recipient})::int`,
+      active: sql<number>`(select count(*) from ${schema.friendships} where ${schema.friendships.state} = 'active' and ((${schema.friendships.userId} = ${sender} and ${schema.friendships.friendId} = ${recipient}) or (${schema.friendships.userId} = ${recipient} and ${schema.friendships.friendId} = ${sender})))::int`,
+      blocks: sql<number>`(select count(*) from ${schema.relationshipBlocks} where ${schema.relationshipBlocks.blockerId} = ${recipient} and ${schema.relationshipBlocks.blockedId} = ${sender} and ${schema.relationshipBlocks.unblockedAt} is null)::int`,
+    }).from(sql`(values (1)) as query_source`);
     expect(state).toEqual({ pending: 0, active: 0, blocks: 1 });
   });
 
@@ -356,10 +360,13 @@ suite("Postgres relationship persistence", () => {
     await service.block(blocker, blocked);
 
     await expect(service.unblock(stranger, blocked)).resolves.toMatchObject({ status: "none" });
-    const [activeBlock] = await database.client`
-      select count(*)::int as count from public.relationship_blocks
-      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
-    `;
+    const [activeBlock] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        eq(schema.relationshipBlocks.blockerId, blocker),
+        eq(schema.relationshipBlocks.blockedId, blocked),
+        isNull(schema.relationshipBlocks.unblockedAt),
+      ));
     expect(activeBlock?.count).toBe(1);
   });
 
@@ -370,9 +377,9 @@ suite("Postgres relationship persistence", () => {
     const sent = await service.sendRequest(sender, recipient);
 
     await expect(service.acceptRequest(stranger, sent.outgoingRequest!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
-    const [pending] = await database.client`
-      select status from public.friend_requests where id = ${sent.outgoingRequest!.id}
-    `;
+    const [pending] = await database.db.select({ status: schema.friendRequests.status })
+      .from(schema.friendRequests)
+      .where(eq(schema.friendRequests.id, sent.outgoingRequest!.id));
     expect(pending?.status).toBe("pending");
 
     await service.block(recipient, sender);
@@ -387,13 +394,16 @@ suite("Postgres relationship persistence", () => {
     // Reproduce pre-migration case collisions without weakening the live rule.
     // The table lock stays held until the trigger is re-enabled and committed,
     // so other test connections cannot write while the trigger is disabled.
-    await database.client.begin(async (tx) => {
-      await tx`alter table public."user" disable trigger enforce_case_insensitive_username`;
-      await tx`update public."user" set username = case id when ${first} then 'Collision' when ${second} then 'collision' when ${actor} then 'profile_actor' end where id = any(${[actor, first, second]}::text[])`;
-      await tx`alter table public."user" enable trigger enforce_case_insensitive_username`;
+    await database.db.transaction(async (transaction) => {
+      // DDL is required to reproduce legacy collisions while the lock prevents concurrent writes.
+      await transaction.execute(sql`alter table public."user" disable trigger enforce_case_insensitive_username`);
+      await transaction.update(schema.user).set({
+        username: sql`case ${schema.user.id} when ${first} then 'Collision' when ${second} then 'collision' when ${actor} then 'profile_actor' end`,
+      }).where(inArray(schema.user.id, [actor, first, second]));
+      await transaction.execute(sql`alter table public."user" enable trigger enforce_case_insensitive_username`);
     });
     await expect(service.getProfileByUsername(actor, 'COLLISION')).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await database.client`update public."user" set username = null where id = ${second}`;
+    await database.db.update(schema.user).set({ username: null }).where(eq(schema.user.id, second));
     await expect(service.getProfileByUsername(actor, 'collision')).resolves.toEqual({ id: first, username: 'Collision', displayName: 'Collision', relationship: 'none' });
   });
 
@@ -411,11 +421,12 @@ suite("Postgres relationship persistence", () => {
     await expect(service.sendRequest(users[2]!, users[3]!)).rejects.toMatchObject({ code: "RATE_LIMITED" });
     await expect(service.sendRequest(users[2]!, users[4]!)).resolves.toMatchObject({ status: "outgoing_pending" });
 
-    const [history] = await database.client`
-      select count(*)::int as count
-      from public.friend_requests
-      where sender_id = ${users[2]!} and recipient_id = ${users[3]!}
-    `;
+    const [history] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.friendRequests)
+      .where(and(
+        eq(schema.friendRequests.senderId, users[2]!),
+        eq(schema.friendRequests.recipientId, users[3]!),
+      ));
     expect(history?.count).toBe(5);
   });
 });

@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { RelationshipStoreError, type RelationshipUserCard, type RelationshipUserPage } from "./relationship-service";
@@ -107,7 +107,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
     case
       when ${exists(
         queryable
-          .select({ one: sql`1` })
+          .select({ userId: mine.userId })
           .from(mine)
           .innerJoin(reciprocal, and(
             eq(reciprocal.userId, mine.friendId),
@@ -121,14 +121,14 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
           )),
       )} then 'friends'
       when ${exists(
-        queryable.select({ one: sql`1` }).from(friendRequests).where(and(
+        queryable.select({ id: friendRequests.id }).from(friendRequests).where(and(
           eq(friendRequests.status, "pending"),
           eq(friendRequests.senderId, actorId),
           eq(friendRequests.recipientId, candidate.id),
         )),
       )} then 'outgoing_pending'
       when ${exists(
-        queryable.select({ one: sql`1` }).from(friendRequests).where(and(
+        queryable.select({ id: friendRequests.id }).from(friendRequests).where(and(
           eq(friendRequests.status, "pending"),
           eq(friendRequests.senderId, candidate.id),
           eq(friendRequests.recipientId, actorId),
@@ -147,12 +147,12 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
     })
     .from(candidate)
     .where(and(
-      sql`${candidate.id} <> ${actorId}`,
+      ne(candidate.id, actorId),
       isNotNull(candidate.username),
       sql`lower(${candidate.username}) like lower(${prefix}) || '%' escape E'\\\\'`,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
       notExists(
-        queryable.select({ one: sql`1` }).from(relationshipBlocks).where(and(
+        queryable.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),
           or(
             and(eq(relationshipBlocks.blockerId, actorId), eq(relationshipBlocks.blockedId, candidate.id)),

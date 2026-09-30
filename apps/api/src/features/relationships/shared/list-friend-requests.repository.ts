@@ -80,7 +80,7 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
       isNotNull(other.username),
       sql`(coalesce(${other.banned}, false) = false or (${other.banExpires} is not null and ${other.banExpires} <= now()))`,
       notExists(
-        database.select({ one: sql`1` }).from(relationshipBlocks).where(and(
+        database.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),
           or(
             and(eq(relationshipBlocks.blockerId, actorId), eq(relationshipBlocks.blockedId, other.id)),

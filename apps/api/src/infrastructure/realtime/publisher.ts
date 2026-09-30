@@ -48,7 +48,7 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
   try {
     const recipientMember = exists(
       database.db
-        .select({ one: sql<number>`1` })
+        .select({ conversationId: schema.conversationMembers.conversationId })
         .from(schema.conversationMembers)
         .where(and(
           eq(schema.conversationMembers.conversationId, schema.conversations.id),
@@ -57,7 +57,7 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
     );
     const blocked = exists(
       database.db
-        .select({ one: sql<number>`1` })
+        .select({ blockerId: schema.relationshipBlocks.blockerId })
         .from(schema.relationshipBlocks)
         .where(and(
           isNull(schema.relationshipBlocks.unblockedAt),

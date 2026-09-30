@@ -1,35 +1,10 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, count, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
+import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
-type Row = Record<string, unknown>;
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
-const safeInteger = (value: unknown, field: string): number => {
-  const parsed = bigint(value);
-  if (parsed > BigInt(Number.MAX_SAFE_INTEGER) || parsed < BigInt(Number.MIN_SAFE_INTEGER)) {
-    throw new RangeError(`${field} exceeds the JavaScript safe integer range.`);
-  }
-  return Number(parsed);
-};
-
-export function mapStoredMessage(row: Row): StoredMessage {
-  return {
-    id: String(row.id),
-    conversationId: String(row.conversation_id),
-    sequence: bigint(row.sequence),
-    senderId: String(row.sender_id),
-    clientMessageId: String(row.client_message_id),
-    requestFingerprint: String(row.request_fingerprint),
-    body: row.body === null ? null : String(row.body),
-    replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id),
-    version: safeInteger(row.version, "Message version"),
-    createdAt: new Date(String(row.created_at)),
-    editedAt: row.edited_at ? new Date(String(row.edited_at)) : null,
-    unsentAt: row.unsent_at ? new Date(String(row.unsent_at)) : null,
-    reactions: [],
-  };
-}
 
 export async function getAccess(queryable: MessageWriteQueryable, actorId: string, conversationId: string): Promise<ConversationAccess> {
   const member = exists(queryable
@@ -60,8 +35,8 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
       user_low_id: schema.conversations.userLowId,
       user_high_id: schema.conversations.userHighId,
       request_state: schema.conversations.requestState,
-      member: sql<boolean>`${member}`,
-      blocked: sql<boolean>`${blocked}`,
+      member: member.mapWith(Boolean),
+      blocked: blocked.mapWith(Boolean),
     })
     .from(schema.conversations)
     .where(eq(schema.conversations.id, conversationId))
@@ -79,20 +54,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
 
 export async function findMessage(queryable: MessageWriteQueryable, actorId: string, conversationId: string, messageId: string): Promise<StoredMessage | null> {
   const [row] = await queryable
-    .select({
-      id: schema.messages.id,
-      conversation_id: schema.messages.conversationId,
-      sequence: sql<string>`${schema.messages.sequence}::text`,
-      sender_id: schema.messages.senderId,
-      client_message_id: schema.messages.clientMessageId,
-      request_fingerprint: schema.messages.requestFingerprint,
-      body: schema.messages.body,
-      reply_to_message_id: schema.messages.replyToMessageId,
-      version: sql<string>`${schema.messages.version}::text`,
-      created_at: schema.messages.createdAt,
-      edited_at: schema.messages.editedAt,
-      unsent_at: schema.messages.unsentAt,
-    })
+    .select(messageProjectionSelection)
     .from(schema.messages)
     .where(and(
       eq(schema.messages.conversationId, conversationId),
@@ -100,12 +62,11 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
     ))
     .limit(1);
   if (!row) return null;
-
-  const stored = mapStoredMessage(row);
+  const stored = toStoredMessage(row);
   const reactionRows = await queryable
     .select({
       reaction: schema.messageReactions.reaction,
-      count: sql<number>`count(*)::int`,
+      count: count(),
       reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
     })
     .from(schema.messageReactions)
@@ -129,13 +90,14 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     })
     .where(eq(schema.conversations.id, input.conversationId))
     .returning({
-      sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
+      sequence: schema.conversations.lastChangeSequence,
       userLowId: schema.conversations.userLowId,
       userHighId: schema.conversations.userHighId,
     });
   if (!change) throw new Error("Conversation disappeared during change append.");
 
-  const changeSequence = sql`${change.sequence}::bigint`;
+  requireSafeSequenceBigInt(change.sequence);
+  const changeSequence = change.sequence;
   await queryable.insert(schema.conversationChanges).values({
     conversationId: input.conversationId,
     changeSequence,

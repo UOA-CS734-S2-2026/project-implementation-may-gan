@@ -1,4 +1,6 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { and, count, eq, inArray, or } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresMarkConversationReadRepository } from "../mark-conversation-read.repository";
@@ -6,7 +8,7 @@ import { createPostgresMarkConversationReadRepository } from "../mark-conversati
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
 const target = connectionString ? new URL(connectionString) : undefined;
-if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+if (enabled && target?.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
 const suite = enabled ? describe : describe.skip;
@@ -14,22 +16,55 @@ const suite = enabled ? describe : describe.skip;
 suite("mark conversation read Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 10 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 14 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
+  const {
+    conversationChanges,
+    conversationMembers,
+    conversations,
+    friendRequests,
+    friendships,
+    messages,
+    messagingOutbox,
+    relationshipBlocks,
+    user,
+  } = schema;
   const { direct, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresMarkConversationReadRepository(database.db);
   const concurrentRepository = createPostgresMarkConversationReadRepository(concurrentDatabase.db);
+  const builderQueries: string[] = [];
+  // postgres-js is retained only as Drizzle's transport so this test can observe repository SQL.
+  const observedRepository = createPostgresMarkConversationReadRepository(drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  }));
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[2]!}, ${users[3]!}, 'active', now()), (${users[3]!}, ${users[2]!}, 'active', now()), (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now()), (${users[8]!}, ${users[9]!}, 'active', now()), (${users[9]!}, ${users[8]!}, 'active', now())`;
+    await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(friendships).values([
+      [0, 1], [1, 0], [2, 3], [3, 2], [6, 7], [7, 6], [8, 9], [9, 8], [10, 11], [11, 10], [12, 13], [13, 12],
+    ].map(([userIndex, friendIndex]) => ({
+      userId: users[userIndex!]!,
+      friendId: users[friendIndex!]!,
+      state: "active" as const,
+      stateChangedAt: sql`now()`,
+    })));
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.user where id = any(${users}::text[])`;
+      await database.db.delete(relationshipBlocks).where(or(
+        inArray(relationshipBlocks.blockerId, users),
+        inArray(relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(friendships).where(or(
+        inArray(friendships.userId, users),
+        inArray(friendships.friendId, users),
+      ));
+      await database.db.delete(friendRequests).where(or(
+        inArray(friendRequests.senderId, users),
+        inArray(friendRequests.recipientId, users),
+      ));
+      await database.db.delete(user).where(inArray(user.id, users));
     } finally {
       await concurrentDatabase.close();
       await database.close();
@@ -45,47 +80,59 @@ suite("mark conversation read Postgres repository", () => {
     await send.send(users[0]!, conversation.conversation.id, { clientMessageId: crypto.randomUUID(), text: "second" });
     await send.send(users[0]!, conversation.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third" });
 
-    await expect(repository.markRead(users[1]!, conversation.conversation.id, "99")).resolves.toEqual({
+    builderQueries.length = 0;
+    await expect(observedRepository.markRead(users[1]!, conversation.conversation.id, "99")).resolves.toEqual({
       lastReadSequence: "3",
       receiptSequence: "3",
       unreadCount: 0,
     });
+    const memberUpdate = builderQueries.find((query) => query.startsWith('update "conversation_members"'));
+    const unreadQuery = builderQueries.find((query) => query.includes('count(*)') && query.includes('from "messages"'));
+    expect(memberUpdate).toContain("greatest(");
+    expect(memberUpdate?.match(/greatest\(/g)).toHaveLength(2);
+    expect(memberUpdate).toContain("now()");
+    expect(memberUpdate).not.toContain("::bigint");
+    expect(memberUpdate).not.toContain("::text");
+    expect(unreadQuery).toContain("count(*)");
+    expect(unreadQuery).not.toContain("::bigint");
     await expect(repository.markRead(users[1]!, conversation.conversation.id, "1")).resolves.toEqual({
       lastReadSequence: "3",
       receiptSequence: "3",
       unreadCount: 0,
     });
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversation.conversation.id} and kind = 'read.updated'`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversation.conversation.id}`;
-    expect(changes?.count).toBe(2);
-    expect(outbox?.count).toBe(10);
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(and(
+      eq(conversationChanges.conversationId, conversation.conversation.id),
+      eq(conversationChanges.kind, "read.updated"),
+    ));
+    const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, conversation.conversation.id));
+    expect(changeCount?.count).toBe(2);
+    expect(outboxCount?.count).toBe(10);
   });
 
-  it("caps high bigint reads and keeps each member cursor independent on stale retries", async () => {
+  it("accepts MAX_SAFE_INTEGER and fails closed for oversized input and database state", async () => {
     const conversation = await direct.create(users[8]!, {
       recipientId: users[9]!,
       clientMessageId: crypto.randomUUID(),
       text: "high sequence",
     });
-    const highSequence = "9007199254740993";
-    await database.client`update public.messages set sequence = ${highSequence}::bigint where conversation_id = ${conversation.conversation.id}`;
-    await database.client`update public.conversations set last_message_sequence = ${highSequence}::bigint where id = ${conversation.conversation.id}`;
+    const maximumSafeSequence = "9007199254740991";
+    await database.db.update(messages).set({ sequence: Number(maximumSafeSequence) }).where(eq(messages.conversationId, conversation.conversation.id));
+    await database.db.update(conversations).set({ lastMessageSequence: Number(maximumSafeSequence) }).where(eq(conversations.id, conversation.conversation.id));
 
-    await expect(repository.markRead(users[9]!, conversation.conversation.id, "9007199254740994")).resolves.toEqual({
-      lastReadSequence: highSequence,
-      receiptSequence: highSequence,
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, maximumSafeSequence)).resolves.toEqual({
+      lastReadSequence: maximumSafeSequence,
+      receiptSequence: maximumSafeSequence,
       unreadCount: 0,
     });
-    await expect(repository.markRead(users[8]!, conversation.conversation.id, "1")).resolves.toEqual({
-      lastReadSequence: "1",
-      receiptSequence: "1",
-      unreadCount: 0,
-    });
-    await expect(repository.markRead(users[9]!, conversation.conversation.id, "1")).resolves.toEqual({
-      lastReadSequence: highSequence,
-      receiptSequence: highSequence,
-      unreadCount: 0,
-    });
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, "9007199254740992"))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
+    await expect(repository.markRead(users[9]!, crypto.randomUUID(), "9007199254740992"))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // bigint(mode: number) would round this value; keep the bounded expression in the typed update.
+    await database.db.update(conversations).set({ lastMessageSequence: sql`9007199254740993::bigint` }).where(eq(conversations.id, conversation.conversation.id));
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, "1"))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
   });
 
   it("keeps pending and blocked reads private while advancing only the local cursor", async () => {
@@ -105,7 +152,11 @@ suite("mark conversation read Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "blocked",
     });
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[2]!}, ${users[3]!}, now())`;
+    await database.db.insert(relationshipBlocks).values({
+      blockerId: users[2]!,
+      blockedId: users[3]!,
+      blockedAt: sql`now()`,
+    });
     await expect(repository.markRead(users[3]!, blocked.conversation.id, "1")).resolves.toEqual({
       lastReadSequence: "1",
       receiptSequence: "0",
@@ -113,11 +164,85 @@ suite("mark conversation read Postgres repository", () => {
     });
 
     for (const conversationId of [pending.conversation.id, blocked.conversation.id]) {
-      const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversationId}`;
-      const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversationId}`;
-      expect(changes?.count).toBe(1);
-      expect(outbox?.count).toBe(2);
+      const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, conversationId));
+      const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, conversationId));
+      expect(changeCount?.count).toBe(1);
+      expect(outboxCount?.count).toBe(2);
     }
+  });
+
+  it("fails closed when the database returns an oversized cursor", async () => {
+    const conversation = await direct.create(users[10]!, {
+      recipientId: users[11]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflow cursor",
+    });
+    // Trigger DDL has no Drizzle builder equivalent, so execute it through parameterized Drizzle SQL.
+    await database.db.execute(sql`
+      create function public.mark_read_overflow_result() returns trigger language plpgsql as $$
+      begin
+        new.last_read_sequence := 9007199254740993;
+        new.receipt_sequence := 9007199254740993;
+        return new;
+      end;
+      $$
+    `);
+    await database.db.execute(sql`
+      create trigger mark_read_overflow_result
+      before update on public.conversation_members
+      for each row execute function public.mark_read_overflow_result()
+    `);
+
+    try {
+      await expect(repository.markRead(users[11]!, conversation.conversation.id, "1"))
+        .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    } finally {
+      // Trigger DDL has no Drizzle builder equivalent, so execute it through parameterized Drizzle SQL.
+      await database.db.execute(sql`drop trigger mark_read_overflow_result on public.conversation_members`);
+      await database.db.execute(sql`drop function public.mark_read_overflow_result()`);
+    }
+
+    const [member] = await database.db.select({
+      lastReadSequence: conversationMembers.lastReadSequence,
+      receiptSequence: conversationMembers.receiptSequence,
+    }).from(conversationMembers).where(and(
+      eq(conversationMembers.conversationId, conversation.conversation.id),
+      eq(conversationMembers.userId, users[11]!),
+    ));
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(and(
+      eq(conversationChanges.conversationId, conversation.conversation.id),
+      eq(conversationChanges.kind, "read.updated"),
+    ));
+    expect(member).toMatchObject({ lastReadSequence: 0, receiptSequence: 0 });
+    expect(changeCount?.count).toBe(0);
+  });
+
+  it("rolls back the local cursor when a read change would exceed MAX_SAFE_INTEGER", async () => {
+    const conversation = await direct.create(users[12]!, {
+      recipientId: users[13]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflow change",
+    });
+    await database.db.update(conversations).set({ lastChangeSequence: Number.MAX_SAFE_INTEGER }).where(eq(conversations.id, conversation.conversation.id));
+
+    await expect(repository.markRead(users[13]!, conversation.conversation.id, "1"))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+
+    const [member] = await database.db.select({
+      lastReadSequence: conversationMembers.lastReadSequence,
+      receiptSequence: conversationMembers.receiptSequence,
+    }).from(conversationMembers).where(and(
+      eq(conversationMembers.conversationId, conversation.conversation.id),
+      eq(conversationMembers.userId, users[13]!),
+    ));
+    const [stored] = await database.db.select({ lastChangeSequence: conversations.lastChangeSequence }).from(conversations).where(eq(conversations.id, conversation.conversation.id));
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(and(
+      eq(conversationChanges.conversationId, conversation.conversation.id),
+      eq(conversationChanges.kind, "read.updated"),
+    ));
+    expect(member).toMatchObject({ lastReadSequence: 0, receiptSequence: 0 });
+    expect(String(stored?.lastChangeSequence)).toBe("9007199254740991");
+    expect(changeCount?.count).toBe(0);
   });
 
   it("serializes concurrent read cursors without regressing the receipt", async () => {
@@ -137,7 +262,13 @@ suite("mark conversation read Postgres repository", () => {
       expect.objectContaining({ lastReadSequence: "3", receiptSequence: "3", unreadCount: 0 }),
     ]));
     expect(results.every((result) => BigInt(result.receiptSequence) <= BigInt(result.lastReadSequence))).toBe(true);
-    const [member] = await database.client`select last_read_sequence, receipt_sequence from public.conversation_members where conversation_id = ${conversation.conversation.id} and user_id = ${users[7]!}`;
-    expect(member).toMatchObject({ last_read_sequence: "3", receipt_sequence: "3" });
+    const [member] = await database.db.select({
+      lastReadSequence: conversationMembers.lastReadSequence,
+      receiptSequence: conversationMembers.receiptSequence,
+    }).from(conversationMembers).where(and(
+      eq(conversationMembers.conversationId, conversation.conversation.id),
+      eq(conversationMembers.userId, users[7]!),
+    ));
+    expect(member).toMatchObject({ lastReadSequence: 3, receiptSequence: 3 });
   });
 });

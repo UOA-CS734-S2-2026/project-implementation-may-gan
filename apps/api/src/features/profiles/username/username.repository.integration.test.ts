@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresUsernameProfileStore } from "./username.repository";
 
@@ -33,21 +34,19 @@ suite("username profile Postgres repository", () => {
   };
 
   beforeAll(async () => {
-    await database.client`
-      insert into public."user" (id, name, email, username, display_username, updated_at)
-      values
-        (${users.actor}, 'Actor', ${`${users.actor}@example.test`}, null, null, '2000-01-01T00:00:00Z'),
-        (${users.peer}, 'Peer', ${`${users.peer}@example.test`}, ${handles.peer}, 'Peer public name', now()),
-        (${users.takenAttempt}, 'Taken attempt', ${`${users.takenAttempt}@example.test`}, null, null, now()),
-        (${users.setup}, 'Set up', ${`${users.setup}@example.test`}, ${handles.setup}, 'Set up public name', now()),
-        (${users.raceFirst}, 'Race first', ${`${users.raceFirst}@example.test`}, null, null, now()),
-        (${users.raceSecond}, 'Race second', ${`${users.raceSecond}@example.test`}, null, null, now())
-    `;
+    await database.db.insert(schema.user).values([
+      { id: users.actor, name: "Actor", email: `${users.actor}@example.test`, updatedAt: new Date("2000-01-01T00:00:00Z") },
+      { id: users.peer, name: "Peer", email: `${users.peer}@example.test`, username: handles.peer, displayUsername: "Peer public name" },
+      { id: users.takenAttempt, name: "Taken attempt", email: `${users.takenAttempt}@example.test` },
+      { id: users.setup, name: "Set up", email: `${users.setup}@example.test`, username: handles.setup, displayUsername: "Set up public name" },
+      { id: users.raceFirst, name: "Race first", email: `${users.raceFirst}@example.test` },
+      { id: users.raceSecond, name: "Race second", email: `${users.raceSecond}@example.test` },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = any(${Object.values(users)}::text[])`;
+      await database.db.delete(schema.user).where(inArray(schema.user.id, Object.values(users)));
     } finally {
       await Promise.all([database.close(), contender.close()]);
     }
@@ -80,9 +79,11 @@ suite("username profile Postgres repository", () => {
       publicName: "Peer public name",
       needsUsernameSetup: false,
     });
-    const [row] = await database.client`select updated_at from public."user" where id = ${users.actor}`;
-    expect(typeof row?.updated_at).toBe("string");
-    expect(Date.parse(String(row?.updated_at))).toBeGreaterThan(new Date("2020-01-01T00:00:00Z").getTime());
+    const [row] = await database.db.select({ updatedAt: sql<string>`${schema.user.updatedAt}` })
+      .from(schema.user)
+      .where(eq(schema.user.id, users.actor));
+    expect(typeof row?.updatedAt).toBe("string");
+    expect(Date.parse(String(row?.updatedAt))).toBeGreaterThan(new Date("2020-01-01T00:00:00Z").getTime());
   });
 
   it("maps the username trigger's case-insensitive unique violation to taken", async () => {
@@ -126,11 +127,10 @@ suite("username profile Postgres repository", () => {
     ]);
 
     expect(results.sort()).toEqual(["claimed", "taken"]);
-    const rows = await database.client`
-      select id, username from public."user"
-      where id = any(${[users.raceFirst, users.raceSecond]}::text[])
-      order by id
-    `;
+    const rows = await database.db.select({ id: schema.user.id, username: schema.user.username })
+      .from(schema.user)
+      .where(inArray(schema.user.id, [users.raceFirst, users.raceSecond]))
+      .orderBy(schema.user.id);
     expect(rows.filter((row) => row.username === handles.race)).toHaveLength(1);
   });
 });

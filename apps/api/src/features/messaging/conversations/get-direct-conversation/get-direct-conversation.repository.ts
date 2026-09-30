@@ -16,7 +16,7 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
           id: conversations.id,
           blocked: exists(
             database
-              .select({ one: sql`1` })
+              .select({ blockerId: relationshipBlocks.blockerId })
               .from(relationshipBlocks)
               .where(and(
                 isNull(relationshipBlocks.unblockedAt),

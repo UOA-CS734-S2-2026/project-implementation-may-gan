@@ -1,5 +1,5 @@
 import { aucklandDateSchema } from "@dayli/contracts";
-import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
@@ -80,13 +80,18 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           rating: posts.rating,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
-          edited: sql<boolean>`exists (select 1 from ${postRevisions} where ${postRevisions.postId} = ${posts.id})`,
+          edited: exists(
+            database
+              .select({ revisionId: postRevisions.id })
+              .from(postRevisions)
+              .where(eq(postRevisions.postId, posts.id)),
+          ).mapWith(Boolean),
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))
         .where(and(
-          buildDrizzlePostVisibilityFilter({ viewer: { userId: viewerId }, now, action: "list" }),
+          buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "list" }),
           // The owner branch of the shared predicate is for profiles; the feed
           // is friends only, which also keeps solo posts out.
           ne(posts.authorId, viewerId),

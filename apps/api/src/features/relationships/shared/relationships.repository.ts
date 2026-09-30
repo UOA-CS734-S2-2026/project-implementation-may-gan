@@ -144,7 +144,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     };
     const activeBlock = async (left: string, right: string) => {
       const result = await database
-        .select({ one: sql<number>`1` })
+        .select({ blockerId: relationshipBlocks.blockerId })
         .from(relationshipBlocks)
         .where(and(isNull(relationshipBlocks.unblockedAt), pairCondition(left, right)))
         .limit(1);

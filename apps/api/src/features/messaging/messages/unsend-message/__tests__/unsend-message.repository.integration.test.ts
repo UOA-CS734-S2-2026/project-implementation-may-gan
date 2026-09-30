@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 
@@ -16,16 +17,31 @@ suite("unsend message Postgres repository", () => {
   const { direct, set: setReaction, unsend } = createMessagingPersistenceServices(database.db);
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[3]!}, 'active', now()), (${users[3]!}, ${users[0]!}, 'active', now())`;
+    const now = new Date();
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: now },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: now },
+      { userId: users[0]!, friendId: users[3]!, state: "active", stateChangedAt: now },
+      { userId: users[3]!, friendId: users[0]!, state: "active", stateChangedAt: now },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }
@@ -40,28 +56,97 @@ suite("unsend message Postgres repository", () => {
     await setReaction.set(users[1]!, created.conversation.id, created.message.id, "love");
 
     await expect(unsend.unsend(users[1]!, created.conversation.id, created.message.id)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    const [preservedReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${created.message.id}`;
+    const [preservedReaction] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messageReactions)
+      .where(eq(schema.messageReactions.messageId, created.message.id));
     expect(preservedReaction?.count).toBe(1);
 
     await expect(unsend.unsend(users[0]!, created.conversation.id, created.message.id)).resolves.toMatchObject({
       replayed: false,
       message: { text: null, reactions: [] },
     });
-    const [tombstone] = await database.client`select body, unsent_at from public.messages where id = ${created.message.id}`;
-    const [reactions] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${created.message.id}`;
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id} and kind = 'message.unsent'`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const [tombstone] = await database.db.select({
+      body: schema.messages.body,
+      unsentAt: schema.messages.unsentAt,
+    }).from(schema.messages).where(eq(schema.messages.id, created.message.id));
+    const [reactions] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messageReactions)
+      .where(eq(schema.messageReactions.messageId, created.message.id));
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(and(eq(schema.conversationChanges.conversationId, created.conversation.id), eq(schema.conversationChanges.kind, "message.unsent")));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(and(eq(schema.messagingOutbox.conversationId, created.conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(tombstone?.body).toBeNull();
-    expect(tombstone?.unsent_at).not.toBeNull();
+    expect(tombstone?.unsentAt).not.toBeNull();
     expect(reactions?.count).toBe(0);
     expect(changes?.count).toBe(1);
     expect(outbox?.count).toBe(6);
 
     await expect(unsend.unsend(users[0]!, created.conversation.id, created.message.id)).resolves.toMatchObject({ replayed: true });
-    const [replayedChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id} and kind = 'message.unsent'`;
-    const [replayedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const [replayedChanges] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(and(eq(schema.conversationChanges.conversationId, created.conversation.id), eq(schema.conversationChanges.kind, "message.unsent")));
+    const [replayedOutbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(and(eq(schema.messagingOutbox.conversationId, created.conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(replayedChanges?.count).toBe(1);
     expect(replayedOutbox?.count).toBe(6);
+  });
+
+  it("accepts Number.MAX_SAFE_INTEGER and rolls back an unsafe version before deleting reactions or appending changes", async () => {
+    const maximumSafe = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "maximum safe version",
+    });
+    await setReaction.set(users[1]!, maximumSafe.conversation.id, maximumSafe.message.id, "love");
+    await database.db.update(schema.messages)
+      .set({ version: sql`${Number.MAX_SAFE_INTEGER - 1}::bigint` })
+      .where(eq(schema.messages.id, maximumSafe.message.id));
+
+    await expect(unsend.unsend(users[0]!, maximumSafe.conversation.id, maximumSafe.message.id)).resolves.toMatchObject({
+      replayed: false,
+      message: { version: Number.MAX_SAFE_INTEGER, text: null, reactions: [] },
+    });
+
+    const overflow = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "unsafe version",
+    });
+    await setReaction.set(users[1]!, overflow.conversation.id, overflow.message.id, "love");
+    await database.db.update(schema.messages)
+      .set({ version: sql`${Number.MAX_SAFE_INTEGER}::bigint` })
+      .where(eq(schema.messages.id, overflow.message.id));
+    const [beforeChanges] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(eq(schema.conversationChanges.conversationId, overflow.conversation.id));
+    const [beforeOutbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(eq(schema.messagingOutbox.conversationId, overflow.conversation.id));
+
+    await expect(unsend.unsend(users[0]!, overflow.conversation.id, overflow.message.id)).rejects.toThrow(RangeError);
+
+    const [message] = await database.db.select({
+      body: schema.messages.body,
+      unsentAt: schema.messages.unsentAt,
+      version: sql<string>`${schema.messages.version}::text`,
+    }).from(schema.messages).where(eq(schema.messages.id, overflow.message.id));
+    const [reactions] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messageReactions)
+      .where(eq(schema.messageReactions.messageId, overflow.message.id));
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(eq(schema.conversationChanges.conversationId, overflow.conversation.id));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(eq(schema.messagingOutbox.conversationId, overflow.conversation.id));
+    expect(message).toMatchObject({ body: "unsafe version", unsentAt: null, version: String(Number.MAX_SAFE_INTEGER) });
+    expect(reactions?.count).toBe(1);
+    expect(changes?.count).toBe(beforeChanges?.count);
+    expect(outbox?.count).toBe(beforeOutbox?.count);
   });
 
   it("allows a pending initiator but rejects a blocked sender without a mutation", async () => {
@@ -77,12 +162,23 @@ suite("unsend message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "blocked message",
     });
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[3]!}, ${users[0]!}, now())`;
+    await database.db.insert(schema.relationshipBlocks).values({
+      blockerId: users[3]!,
+      blockedId: users[0]!,
+      blockedAt: new Date(),
+    });
     await expect(unsend.unsend(users[0]!, blocked.conversation.id, blocked.message.id)).rejects.toMatchObject({ code: "BLOCKED" });
-    const [message] = await database.client`select body, unsent_at from public.messages where id = ${blocked.message.id}`;
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${blocked.conversation.id} and kind = 'message.unsent'`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${blocked.conversation.id} and channel = 'realtime'`;
-    expect(message).toMatchObject({ body: "blocked message", unsent_at: null });
+    const [message] = await database.db.select({
+      body: schema.messages.body,
+      unsentAt: schema.messages.unsentAt,
+    }).from(schema.messages).where(eq(schema.messages.id, blocked.message.id));
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(and(eq(schema.conversationChanges.conversationId, blocked.conversation.id), eq(schema.conversationChanges.kind, "message.unsent")));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(and(eq(schema.messagingOutbox.conversationId, blocked.conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
+    expect(message).toMatchObject({ body: "blocked message", unsentAt: null });
     expect(changes?.count).toBe(0);
     expect(outbox?.count).toBe(2);
   });

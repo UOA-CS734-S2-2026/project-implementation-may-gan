@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { eq } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
@@ -125,20 +126,20 @@ function complete(app: ReturnType<typeof createProductionApp>, token: string, id
   ));
 
   beforeAll(async () => {
-    await migrator.client.unsafe('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
-    await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade');
+    await migrator.db.execute(sql.raw('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade'));
+    await migrator.db.execute(sql.raw('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade'));
     const authMigration = await readFile(new URL("../../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
     const rateLimitMigration = await readFile(new URL("../../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
     const mediaReservationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0003_add_media_reservation.sql", import.meta.url), "utf8");
     const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0009_add_media_reservation_validation.sql", import.meta.url), "utf8");
-    await migrator.client.unsafe(authMigration);
-    await migrator.client.unsafe(rateLimitMigration);
-    await migrator.client.unsafe(mediaReservationMigration);
-    await migrator.client.unsafe(mediaValidationMigration);
+    await migrator.db.execute(sql.raw(authMigration));
+    await migrator.db.execute(sql.raw(rateLimitMigration));
+    await migrator.db.execute(sql.raw(mediaReservationMigration));
+    await migrator.db.execute(sql.raw(mediaValidationMigration));
   });
 
   beforeEach(async () => {
-    await migrator.client.unsafe('truncate table public.media_reservation, public.account, public.session, public.verification, public."user" cascade');
+    await migrator.db.execute(sql.raw('truncate table public.media_reservation, public.account, public.session, public.verification, public."user" cascade'));
   });
 
   afterAll(async () => {
@@ -151,16 +152,26 @@ function complete(app: ReturnType<typeof createProductionApp>, token: string, id
     const token = await signUp(app, "validated-owner@example.test");
 
     const created = await reserve(app, token, { contentType: "image/jpeg", byteSize: validJpegBytes.byteLength });
-    const [beforeRow] = await migrator.client`select owner_id, object_key from public.media_reservation where id = ${created.id}`;
-    objects.set(beforeRow!.object_key as string, validJpegBytes);
+    const [beforeRow] = await migrator.db
+      .select({ ownerId: schema.mediaReservation.ownerId, objectKey: schema.mediaReservation.objectKey })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
+    objects.set(beforeRow!.objectKey, validJpegBytes);
 
     const response = await complete(app, token, created.id);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ status: "validated" });
 
-    const [row] = await migrator.client`select status, failure_reason, validated_at from public.media_reservation where id = ${created.id}`;
-    expect(row).toMatchObject({ status: "validated", failure_reason: null });
-    expect(row!.validated_at).not.toBeNull();
+    const [row] = await migrator.db
+      .select({
+        status: schema.mediaReservation.status,
+        failureReason: schema.mediaReservation.failureReason,
+        validatedAt: schema.mediaReservation.validatedAt,
+      })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
+    expect(row).toMatchObject({ status: "validated", failureReason: null });
+    expect(row!.validatedAt).not.toBeNull();
   });
 
   it("persists a failed outcome with its reason on a real row", async () => {
@@ -169,16 +180,26 @@ function complete(app: ReturnType<typeof createProductionApp>, token: string, id
     const token = await signUp(app, "failed-owner@example.test");
 
     const created = await reserve(app, token, { contentType: "image/jpeg", byteSize: validJpegBytes.byteLength });
-    const [beforeRow] = await migrator.client`select owner_id, object_key from public.media_reservation where id = ${created.id}`;
-    objects.set(beforeRow!.object_key as string, new Uint8Array([1, 2, 3])); // wrong bytes, wrong size
+    const [beforeRow] = await migrator.db
+      .select({ ownerId: schema.mediaReservation.ownerId, objectKey: schema.mediaReservation.objectKey })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
+    objects.set(beforeRow!.objectKey, new Uint8Array([1, 2, 3])); // wrong bytes, wrong size
 
     const response = await complete(app, token, created.id);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ status: "failed", failureReason: "byte_size_mismatch" });
 
-    const [row] = await migrator.client`select status, failure_reason, validated_at from public.media_reservation where id = ${created.id}`;
-    expect(row).toMatchObject({ status: "failed", failure_reason: "byte_size_mismatch" });
-    expect(row!.validated_at).not.toBeNull();
+    const [row] = await migrator.db
+      .select({
+        status: schema.mediaReservation.status,
+        failureReason: schema.mediaReservation.failureReason,
+        validatedAt: schema.mediaReservation.validatedAt,
+      })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
+    expect(row).toMatchObject({ status: "failed", failureReason: "byte_size_mismatch" });
+    expect(row!.validatedAt).not.toBeNull();
   });
 
   it("serialises concurrent completion attempts into one consistent final outcome", async () => {
@@ -187,8 +208,11 @@ function complete(app: ReturnType<typeof createProductionApp>, token: string, id
     const token = await signUp(app, "concurrent-complete-owner@example.test");
 
     const created = await reserve(app, token, { contentType: "image/jpeg", byteSize: validJpegBytes.byteLength });
-    const [beforeRow] = await migrator.client`select object_key from public.media_reservation where id = ${created.id}`;
-    objects.set(beforeRow!.object_key as string, validJpegBytes);
+    const [beforeRow] = await migrator.db
+      .select({ objectKey: schema.mediaReservation.objectKey })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
+    objects.set(beforeRow!.objectKey, validJpegBytes);
 
     const responses = await Promise.all(
       Array.from({ length: 10 }, () => complete(app, token, created.id)),
@@ -197,9 +221,16 @@ function complete(app: ReturnType<typeof createProductionApp>, token: string, id
     const bodies = await Promise.all(responses.map((response) => response.json() as Promise<ReservationJson>));
     for (const body of bodies) expect(body.status).toBe("validated");
 
-    const rows = await migrator.client`select status, failure_reason, validated_at from public.media_reservation where id = ${created.id}`;
+    const rows = await migrator.db
+      .select({
+        status: schema.mediaReservation.status,
+        failureReason: schema.mediaReservation.failureReason,
+        validatedAt: schema.mediaReservation.validatedAt,
+      })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, created.id));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ status: "validated", failure_reason: null });
-    expect(rows[0]!.validated_at).not.toBeNull();
+    expect(rows[0]).toMatchObject({ status: "validated", failureReason: null });
+    expect(rows[0]!.validatedAt).not.toBeNull();
   });
 });

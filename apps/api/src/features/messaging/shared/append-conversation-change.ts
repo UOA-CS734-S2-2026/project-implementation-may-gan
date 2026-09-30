@@ -20,13 +20,16 @@ export async function appendConversationChange(
     })
     .where(eq(schema.conversations.id, conversationId))
     .returning({
-      sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
+      sequence: schema.conversations.lastChangeSequence,
       userLowId: schema.conversations.userLowId,
       userHighId: schema.conversations.userHighId,
     });
   if (!change) throw new Error("Conversation disappeared during change append.");
 
-  const changeSequence = sql`${change.sequence}::bigint`;
+  const changeSequence = change.sequence;
+  if (!Number.isSafeInteger(changeSequence) || changeSequence < 0) {
+    throw new RangeError("Database sequence must be a safe nonnegative integer.");
+  }
   await queryable.insert(schema.conversationChanges).values({
     conversationId,
     changeSequence,

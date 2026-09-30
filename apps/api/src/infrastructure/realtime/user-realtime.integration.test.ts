@@ -1,4 +1,5 @@
-import { createDayliDatabase, sql } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { UserRealtime } from "./user-realtime";
 
@@ -19,26 +20,29 @@ suite("UserRealtime session authorization", () => {
     activeSession: `realtime-active-session-${crypto.randomUUID()}`,
     expiredSession: `realtime-expired-session-${crypto.randomUUID()}`,
   };
-  const createdAt = new Date().toISOString();
-  const activeExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-  const expiredExpiry = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const createdAt = new Date();
+  const activeExpiry = new Date(Date.now() + 60 * 60 * 1000);
+  const expiredExpiry = new Date(Date.now() - 60 * 60 * 1000);
   const realtime = new UserRealtime({} as DurableObjectState, {
     HYPERDRIVE: { connectionString: connectionString ?? "postgresql://invalid/realtime_tests" },
   });
   const sessionIsActive = (realtime as unknown as RealtimeWithSessionCheck).sessionIsActive.bind(realtime);
 
-  function attachment(sessionId: string, expiresAt = activeExpiry, userId = ids.user): Attachment {
+  function attachment(sessionId: string, expiresAt = activeExpiry.toISOString(), userId = ids.user): Attachment {
     return { userId, sessionId, expiresAt, version: 1 };
   }
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) values (${ids.user}, ${ids.user}, ${ids.user + "@example.test"})`;
-    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${ids.activeSession}, ${activeExpiry}, ${`token-${ids.activeSession}`}, ${createdAt}, ${createdAt}, ${ids.user}), (${ids.expiredSession}, ${expiredExpiry}, ${`token-${ids.expiredSession}`}, ${createdAt}, ${createdAt}, ${ids.user})`;
+    await database.db.insert(schema.user).values({ id: ids.user, name: ids.user, email: `${ids.user}@example.test` });
+    await database.db.insert(schema.session).values([
+      { id: ids.activeSession, expiresAt: activeExpiry, token: `token-${ids.activeSession}`, createdAt, updatedAt: createdAt, userId: ids.user },
+      { id: ids.expiredSession, expiresAt: expiredExpiry, token: `token-${ids.expiredSession}`, createdAt, updatedAt: createdAt, userId: ids.user },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = ${ids.user}`;
+      await database.db.delete(schema.user).where(eq(schema.user.id, ids.user));
     } finally {
       await database.close();
     }
@@ -46,11 +50,11 @@ suite("UserRealtime session authorization", () => {
 
   it("requires a matching unexpired session and rejects an expired attachment or revoked session", async () => {
     await expect(sessionIsActive(attachment(ids.activeSession))).resolves.toBe(true);
-    await expect(sessionIsActive(attachment(ids.activeSession, expiredExpiry))).resolves.toBe(false);
-    await expect(sessionIsActive(attachment(ids.activeSession, activeExpiry, `other-${ids.user}`))).resolves.toBe(false);
-    await expect(sessionIsActive(attachment(ids.expiredSession, activeExpiry))).resolves.toBe(false);
+    await expect(sessionIsActive(attachment(ids.activeSession, expiredExpiry.toISOString()))).resolves.toBe(false);
+    await expect(sessionIsActive(attachment(ids.activeSession, activeExpiry.toISOString(), `other-${ids.user}`))).resolves.toBe(false);
+    await expect(sessionIsActive(attachment(ids.expiredSession, activeExpiry.toISOString()))).resolves.toBe(false);
 
-    await database.db.execute(sql`delete from public.session where id = ${ids.activeSession}`);
+    await database.db.delete(schema.session).where(eq(schema.session.id, ids.activeSession));
     await expect(sessionIsActive(attachment(ids.activeSession))).resolves.toBe(false);
   });
 });

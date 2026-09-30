@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresPostDetailRepository } from "./get-post.repository";
 
@@ -33,53 +34,71 @@ function requireLocalTestUrl(value: string): string {
   const repo = () => createPostgresPostDetailRepository(app.db);
 
   async function insertPost(key: string, localDate: string, audience: "solo" | "friends", released: boolean) {
-    await migrator.client`
-      insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at)
-      values (${id(key)}, ${users.author}, ${localDate}, ${`prompt-${localDate.slice(5)}`}, ${`Answer ${key}`}, 'Sunset', 8,
-        ${audience}, ${`${localDate}T03:00:00.000Z`}, ${released ? `${localDate}T12:00:00.000Z` : "2026-09-26T12:00:00.000Z"})
-    `;
+    await migrator.db.insert(schema.posts).values({
+      id: id(key),
+      authorId: users.author,
+      localDate,
+      promptId: `prompt-${localDate.slice(5)}`,
+      reflectiveAnswer: `Answer ${key}`,
+      caption: "Sunset",
+      rating: 8,
+      audience,
+      acceptedAt: new Date(`${localDate}T03:00:00.000Z`),
+      releasedAt: new Date(released ? `${localDate}T12:00:00.000Z` : "2026-09-26T12:00:00.000Z"),
+    });
   }
 
   async function befriend(other: string, state: "active" | "ended") {
-    const changedAt = now.toISOString();
-    await migrator.client`
-      insert into public.friendships (user_id, friend_id, state, state_changed_at)
-      values (${users.author}, ${other}, ${state}, ${changedAt}), (${other}, ${users.author}, ${state}, ${changedAt})
-    `;
+    await migrator.db.insert(schema.friendships).values([
+      { userId: users.author, friendId: other, state, stateChangedAt: now },
+      { userId: other, friendId: users.author, state, stateChangedAt: now },
+    ]);
   }
 
   beforeAll(async () => {
     for (const [key, userId] of Object.entries(users)) {
-      await migrator.client`
-        insert into public."user" (id, name, email, username, display_username)
-        values (${userId}, ${key}, ${`${userId}@example.test`}, ${`d${run}${key}`.slice(0, 30)}, ${key === "author" ? "The Author" : null})
-      `;
+      await migrator.db.insert(schema.user).values({
+        id: userId,
+        name: key,
+        email: `${userId}@example.test`,
+        username: `d${run}${key}`.slice(0, 30),
+        displayUsername: key === "author" ? "The Author" : null,
+      });
     }
     await befriend(users.friend, "active");
     await befriend(users.blocked, "active");
     await befriend(users.ended, "ended");
-    await migrator.client`
-      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
-      values (${users.author}, ${users.blocked}, ${now.toISOString()})
-    `;
+    await migrator.db.insert(schema.relationshipBlocks).values({
+      blockerId: users.author,
+      blockedId: users.blocked,
+      blockedAt: now,
+    });
 
     await insertPost("released", "2026-09-24", "friends", true);
     await insertPost("solo", "2026-09-23", "solo", true);
     await insertPost("unreleased", "2026-09-26", "friends", false);
-    await migrator.client`
-      insert into public.post_revisions (id, post_id, revision_number, previous_reflective_answer, previous_rating,
-        previous_audience, previous_prompt_id, previous_attachment_refs)
-      values (${id("rev-1")}, ${id("released")}, 1, 'Before the edit', 6, 'friends', 'prompt-09-24', '[]'::jsonb)
-    `;
+    await migrator.db.insert(schema.postRevisions).values({
+      id: id("rev-1"),
+      postId: id("released"),
+      revisionNumber: 1,
+      previousReflectiveAnswer: "Before the edit",
+      previousRating: 6,
+      previousAudience: "friends",
+      previousPromptId: "prompt-09-24",
+      previousAttachmentRefs: [],
+    });
   });
 
   afterAll(async () => {
     try {
-      await migrator.client`delete from public.post_revisions where post_id in (select id from public.posts where author_id = any(${userIds}::text[]))`;
-      await migrator.client`delete from public.posts where author_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public.relationship_blocks where blocker_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public.friendships where user_id = any(${userIds}::text[])`;
-      await migrator.client`delete from public."user" where id = any(${userIds}::text[])`;
+      await migrator.db.delete(schema.postRevisions).where(inArray(
+        schema.postRevisions.postId,
+        migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(inArray(schema.posts.authorId, userIds)),
+      ));
+      await migrator.db.delete(schema.posts).where(inArray(schema.posts.authorId, userIds));
+      await migrator.db.delete(schema.relationshipBlocks).where(inArray(schema.relationshipBlocks.blockerId, userIds));
+      await migrator.db.delete(schema.friendships).where(inArray(schema.friendships.userId, userIds));
+      await migrator.db.delete(schema.user).where(inArray(schema.user.id, userIds));
     } finally {
       await Promise.all([app.close(), migrator.close()]);
     }

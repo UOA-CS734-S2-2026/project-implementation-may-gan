@@ -1,26 +1,48 @@
-import { and, eq } from "drizzle-orm";
-import { schema, sql, type DayliDatabase } from "@dayli/db";
+import { and, count, eq, sql } from "drizzle-orm";
+import { schema, type DayliDatabase } from "@dayli/db";
+import { requireSafeMessageVersion, requireSafeSequenceBigInt } from "./safe-sequence";
 import type { MessageDto, StoredMessage } from "./messaging-types";
 
-type Row = Record<string, unknown>;
 type Queryable = Pick<DayliDatabase, "select">;
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
-const date = (value: unknown) => new Date(String(value));
 
-function storedMessage(row: Row): StoredMessage {
+/** Native number-mode row returned by Drizzle message reads. */
+export type MessageProjectionRow = {
+  id: string;
+  conversationId: string;
+  sequence: number;
+  senderId: string;
+  clientMessageId: string;
+  requestFingerprint: string;
+  body: string | null;
+  replyToMessageId: string | null;
+  version: number;
+  createdAt: Date;
+  editedAt: Date | null;
+  unsentAt: Date | null;
+};
+
+/** Shared native selection for message DTO reads and reply lookups. */
+export const messageProjectionSelection = {
+  id: schema.messages.id,
+  conversationId: schema.messages.conversationId,
+  sequence: schema.messages.sequence,
+  senderId: schema.messages.senderId,
+  clientMessageId: schema.messages.clientMessageId,
+  requestFingerprint: schema.messages.requestFingerprint,
+  body: schema.messages.body,
+  replyToMessageId: schema.messages.replyToMessageId,
+  version: schema.messages.version,
+  createdAt: schema.messages.createdAt,
+  editedAt: schema.messages.editedAt,
+  unsentAt: schema.messages.unsentAt,
+};
+
+/** Validates and converts a native Drizzle message row to the internal model. */
+export function toStoredMessage(row: MessageProjectionRow): StoredMessage {
   return {
-    id: String(row.id),
-    conversationId: String(row.conversation_id),
-    sequence: bigint(row.sequence),
-    senderId: String(row.sender_id),
-    clientMessageId: String(row.client_message_id),
-    requestFingerprint: String(row.request_fingerprint),
-    body: row.body === null ? null : String(row.body),
-    replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id),
-    version: Number(row.version),
-    createdAt: date(row.created_at),
-    editedAt: row.edited_at ? date(row.edited_at) : null,
-    unsentAt: row.unsent_at ? date(row.unsent_at) : null,
+    ...row,
+    sequence: requireSafeSequenceBigInt(row.sequence),
+    version: requireSafeMessageVersion(row.version),
     reactions: [],
   };
 }
@@ -55,29 +77,14 @@ export function toMessageDto(message: StoredMessage, parent?: StoredMessage | nu
   };
 }
 
-/** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
-export async function projectMessageDto(
+async function projectStoredMessageDto(
   queryable: Queryable,
-  row: Row,
+  message: StoredMessage,
   actorId: string,
 ): Promise<MessageDto> {
-  const message = storedMessage(row);
   const parent = message.replyToMessageId
     ? (await queryable
-      .select({
-        id: schema.messages.id,
-        conversation_id: schema.messages.conversationId,
-        sequence: sql<string>`${schema.messages.sequence}::text`,
-        sender_id: schema.messages.senderId,
-        client_message_id: schema.messages.clientMessageId,
-        request_fingerprint: schema.messages.requestFingerprint,
-        body: schema.messages.body,
-        reply_to_message_id: schema.messages.replyToMessageId,
-        version: sql<string>`${schema.messages.version}::text`,
-        created_at: schema.messages.createdAt,
-        edited_at: schema.messages.editedAt,
-        unsent_at: schema.messages.unsentAt,
-      })
+      .select(messageProjectionSelection)
       .from(schema.messages)
       .where(and(
         eq(schema.messages.id, message.replyToMessageId),
@@ -88,7 +95,7 @@ export async function projectMessageDto(
   const reactions = await queryable
     .select({
       reaction: schema.messageReactions.reaction,
-      count: sql<number>`count(*)::int`,
+      count: count(),
       reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
     })
     .from(schema.messageReactions)
@@ -96,8 +103,17 @@ export async function projectMessageDto(
     .groupBy(schema.messageReactions.reaction);
   message.reactions = reactions.map((item) => ({
     reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
-    count: Number(item.count),
+    count: item.count,
     reactedByActor: item.reacted,
   }));
-  return toMessageDto(message, parent ? storedMessage(parent) : null);
+  return toMessageDto(message, parent ? toStoredMessage(parent) : null);
+}
+
+/** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
+export async function projectMessageDto(
+  queryable: Queryable,
+  row: MessageProjectionRow,
+  actorId: string,
+): Promise<MessageDto> {
+  return projectStoredMessageDto(queryable, toStoredMessage(row), actorId);
 }

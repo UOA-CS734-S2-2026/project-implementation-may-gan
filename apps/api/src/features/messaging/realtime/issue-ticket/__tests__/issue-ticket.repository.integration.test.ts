@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresRealtimeTicketStore } from "../issue-ticket.repository";
 
@@ -20,12 +21,12 @@ suite("realtime ticket Postgres repository", () => {
   const secondStore = createPostgresRealtimeTicketStore(secondConsumer.db);
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) values (${userId}, ${userId}, ${userId + "@example.test"})`;
+    await database.db.insert(schema.user).values({ id: userId, name: userId, email: `${userId}@example.test` });
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = ${userId}`;
+      await database.db.delete(schema.user).where(eq(schema.user.id, userId));
     } finally {
       await Promise.all([database.close(), firstConsumer.close(), secondConsumer.close()]);
     }
