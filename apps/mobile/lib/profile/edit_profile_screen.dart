@@ -9,6 +9,25 @@ import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 
 const bioMaxLength = 160;
+const aboutMaxLength = 100;
+const mbtiTypes = [
+  'INTJ',
+  'INTP',
+  'INFJ',
+  'INFP',
+  'ISTJ',
+  'ISFJ',
+  'ISTP',
+  'ISFP',
+  'ENTJ',
+  'ENTP',
+  'ENFJ',
+  'ENFP',
+  'ESTJ',
+  'ESFJ',
+  'ESTP',
+  'ESFP',
+];
 const publicNameMaxLength = 80;
 final _handlePattern = RegExp(r'^[a-z0-9][a-z0-9_]{2,29}$');
 
@@ -24,6 +43,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _name = TextEditingController();
   final _bio = TextEditingController();
   final _username = TextEditingController();
+  final _whatIDo = TextEditingController();
+  final _listeningTo = TextEditingController();
+  String _mbti = '';
   ProfileDetails? _profile;
   ApiFailure? _loadFailure;
   bool _loading = true;
@@ -45,6 +67,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _name.dispose();
     _bio.dispose();
     _username.dispose();
+    _whatIDo.dispose();
+    _listeningTo.dispose();
     super.dispose();
   }
 
@@ -78,6 +102,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ? ''
         : profile.displayName;
     _bio.text = profile.bio ?? '';
+    _mbti = profile.mbti ?? '';
+    _whatIDo.text = profile.whatIDo ?? '';
+    _listeningTo.text = profile.listeningTo ?? '';
     _username.text = profile.username;
   }
 
@@ -93,9 +120,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _saving = true;
       _profileNotice = null;
     });
-    final result = await AppScope.of(
-      context,
-    ).profiles.update(publicName: _name.text.trim(), bio: _bio.text.trim());
+    final result = await AppScope.of(context).profiles.update(
+      publicName: _name.text.trim(),
+      bio: _bio.text.trim(),
+      mbti: _mbti,
+      whatIDo: _whatIDo.text.trim(),
+      listeningTo: _listeningTo.text.trim(),
+    );
     if (!mounted) return;
     setState(() {
       _saving = false;
@@ -253,6 +284,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           textCapitalization: TextCapitalization.sentences,
           onChanged: (_) => setState(() {}),
         ),
+        const SizedBox(height: 16),
+        Text(
+          'MBTI',
+          style: DayliText.sans(
+            context,
+            size: DayliTextSize.sm,
+            weight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          key: const Key('editProfile.mbti'),
+          initialValue: _mbti,
+          items: [
+            const DropdownMenuItem(value: '', child: Text('—')),
+            for (final type in mbtiTypes)
+              DropdownMenuItem(value: type, child: Text(type)),
+          ],
+          onChanged: (value) => setState(() => _mbti = value ?? ''),
+        ),
+        const SizedBox(height: 16),
+        DayliFormInput(
+          label: 'What I do',
+          fieldKey: const Key('editProfile.whatIDo'),
+          controller: _whatIDo,
+          error: _whatIDo.text.length > aboutMaxLength
+              ? 'Keep it to $aboutMaxLength characters.'
+              : null,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 16),
+        DayliFormInput(
+          label: "What I'm listening to",
+          fieldKey: const Key('editProfile.listeningTo'),
+          controller: _listeningTo,
+          error: _listeningTo.text.length > aboutMaxLength
+              ? 'Keep it to $aboutMaxLength characters.'
+              : null,
+          onChanged: (_) => setState(() {}),
+        ),
         const SizedBox(height: 12),
         if (_profileNotice != null) ...[
           Text(
@@ -270,6 +341,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           onPressed:
               _saving ||
                   _bio.text.length > bioMaxLength ||
+                  _whatIDo.text.length > aboutMaxLength ||
+                  _listeningTo.text.length > aboutMaxLength ||
                   _name.text.length > publicNameMaxLength
               ? null
               : _saveProfile,

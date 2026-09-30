@@ -621,6 +621,8 @@ class FakeProfileClient implements ProfileClient {
   final Map<String, ProfileDetails> profiles;
   final requested = <String>[];
   final updates = <({String? bio, String? publicName, bool? isPrivate})>[];
+  final aboutUpdates =
+      <({String? mbti, String? whatIDo, String? listeningTo})>[];
   final usernameChanges = <String>[];
   ApiResult<String>? changeResult;
 
@@ -646,8 +648,12 @@ class FakeProfileClient implements ProfileClient {
     String? bio,
     String? publicName,
     bool? isPrivate,
+    String? mbti,
+    String? whatIDo,
+    String? listeningTo,
   }) async {
     updates.add((bio: bio, publicName: publicName, isPrivate: isPrivate));
+    aboutUpdates.add((mbti: mbti, whatIDo: whatIDo, listeningTo: listeningTo));
     final current = _profile('jos');
     final updated = ProfileDetails(
       id: current.id,
@@ -660,6 +666,13 @@ class FakeProfileClient implements ProfileClient {
       detailsVisible: true,
       bio: bio == null ? current.bio : (bio.isEmpty ? null : bio),
       isOwner: true,
+      mbti: mbti == null ? current.mbti : (mbti.isEmpty ? null : mbti),
+      whatIDo: whatIDo == null
+          ? current.whatIDo
+          : (whatIDo.isEmpty ? null : whatIDo),
+      listeningTo: listeningTo == null
+          ? current.listeningTo
+          : (listeningTo.isEmpty ? null : listeningTo),
       isPrivate: isPrivate ?? current.isPrivate,
       usernameChangeAvailableAt: current.usernameChangeAvailableAt,
     );

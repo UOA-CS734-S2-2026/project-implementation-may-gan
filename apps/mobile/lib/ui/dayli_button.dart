@@ -5,7 +5,8 @@ import '../app/theme.dart';
 
 enum ButtonWeight { primary, secondary }
 
-enum ButtonColor { accent, foreground }
+/// `background` is white with a border, as web's secondary background button.
+enum ButtonColor { accent, foreground, background }
 
 enum ButtonSize { sm, md, lg }
 
@@ -63,6 +64,7 @@ class DayliButton extends StatelessWidget {
         colors.backgroundTertiary,
         colors.foreground,
       ),
+      (_, ButtonColor.background) => (colors.card, colors.foreground),
     };
     final (textSize, padding) = switch (size) {
       ButtonSize.sm => (
@@ -114,7 +116,12 @@ class DayliButton extends StatelessWidget {
       opacity: onPressed == null ? 0.6 : 1,
       child: Material(
         color: background,
-        borderRadius: BorderRadius.circular(12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: color == ButtonColor.background
+              ? BorderSide(color: colors.foregroundTertiary)
+              : BorderSide.none,
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onPressed,

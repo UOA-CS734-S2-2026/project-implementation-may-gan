@@ -15,6 +15,14 @@ A profile has a public name, a username, a bio, a visibility setting, and the [a
 
 Unknown, banned, and blocked (either direction) handles are all `404`, matching the relationship card at `GET /api/v1/relationships/profiles/{username}`. The owner also gets `owner.profileVisibility` and `owner.usernameChangeAvailableAt`. Posts are friends only whatever the visibility; public visibility only affects [shared links](product-decisions.md#shared-links).
 
+## About cards
+
+`mbti` (one of the 16 types), `whatIDo`, and `listeningTo` (100 characters each) come back under the same rule as the bio, and `PATCH /api/v1/profile` sets them; null or blank clears one. They use the legacy `user` columns, so imported values carry over; a stored MBTI outside the 16 types reads as unset. Both clients show them as the original web app's rose, sky, and emerald cards, with a dash for anything unset.
+
+## Profile actions
+
+On someone else's profile, the friend button reads "add friend", "accept request", "requested" (tap to cancel), or "friends". "friends" asks for confirmation before removing, as the original web app did. "message" is a white, bordered button with a chat icon. The owner sees "Edit profile" instead.
+
 ## Streaks
 
 The details also carry `streak`, shown under the same rule as the bio (null whenever the bio is hidden). `calculatePostingStreak` in `packages/domain` derives it from the Auckland days with an accepted post, following the rules proposed in #69:
