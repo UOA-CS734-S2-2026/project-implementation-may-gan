@@ -45,14 +45,15 @@ suite("list messages Postgres repository", () => {
       replyToMessageId: initial.message.id,
     });
     await send.send(users[0]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third message" });
-    await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
+    const fourth = await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
     await setReaction.set(users[0]!, initial.conversation.id, reply.message.id, "love");
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
 
     await expect(repository.list(users[2]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).resolves.toMatchObject({
-      items: [{ sequence: "3" }, { sequence: "4" }],
-      nextCursor: "4",
+      items: [{ sequence: "3" }, { sequence: "9007199254740993" }],
+      nextCursor: "9007199254740993",
       hasMore: true,
     });
     await expect(repository.list(users[0]!, initial.conversation.id, "3", undefined, 2)).resolves.toMatchObject({
@@ -72,6 +73,11 @@ suite("list messages Postgres repository", () => {
       items: [{ sequence: "2" }, { sequence: "3" }],
       nextCursor: "3",
       hasMore: true,
+    });
+    await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740992", 2)).resolves.toMatchObject({
+      items: [{ sequence: "9007199254740993" }],
+      nextCursor: null,
+      hasMore: false,
     });
     await expect(repository.list(users[1]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
       items: [{ sequence: "2", reactions: [{ reaction: "love", count: 1, reactedByActor: false }] }, { sequence: "3" }],
