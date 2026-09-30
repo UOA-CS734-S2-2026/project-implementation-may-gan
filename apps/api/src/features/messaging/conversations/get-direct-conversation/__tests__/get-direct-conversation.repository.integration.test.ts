@@ -49,4 +49,12 @@ suite("actor-owned direct pair lookup Postgres persistence", () => {
     await expect(repository.find(users[0]!, users[1]!)).rejects.toMatchObject({ code: "BLOCKED" });
     await expect(repository.find(users[1]!, users[0]!)).rejects.toMatchObject({ code: "BLOCKED" });
   });
+
+  it("requires an actor-owned membership while retaining counterpart-order lookup", async () => {
+    const created = await direct.create(users[6]!, { recipientId: users[7]!, clientMessageId: crypto.randomUUID(), text: "membership" });
+    await database.client`delete from public.conversation_members where conversation_id = ${created.conversation.id} and user_id = ${users[6]!}`;
+
+    await expect(repository.find(users[6]!, users[7]!)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.find(users[7]!, users[6]!)).resolves.toEqual({ conversationId: created.conversation.id });
+  });
 });

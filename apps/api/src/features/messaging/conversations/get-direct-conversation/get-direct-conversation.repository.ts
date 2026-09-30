@@ -1,32 +1,43 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
+import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { MessagingError } from "../../shared/messaging-error";
 
 export interface GetDirectConversationRepository {
   find(actorId: string, recipientId: string): Promise<{ conversationId: string }>;
 }
 
-type PairRow = { id: string; blocked: boolean };
-
 /** Only the authenticated conversation member may discover this pair's thread. */
 export function createPostgresGetDirectConversationRepository(database: DayliDatabase): GetDirectConversationRepository {
+  const { conversationMembers, conversations, relationshipBlocks } = schema;
   return {
     async find(actorId, recipientId) {
-      const [pair] = [...await database.execute(sql`
-        select c.id, exists(
-          select 1 from public.relationship_blocks b
-          where b.unblocked_at is null
-            and ((b.blocker_id = c.user_low_id and b.blocked_id = c.user_high_id)
-              or (b.blocker_id = c.user_high_id and b.blocked_id = c.user_low_id))
-        ) as blocked
-        from public.conversations c
-        join public.conversation_members mine on mine.conversation_id = c.id and mine.user_id = ${actorId}
-        where c.user_low_id = least(${actorId}, ${recipientId})
-          and c.user_high_id = greatest(${actorId}, ${recipientId})
-        limit 1
-      `) as Iterable<PairRow>];
+      const [lowId, highId] = actorId < recipientId ? [actorId, recipientId] : [recipientId, actorId];
+      const [pair] = await database
+        .select({
+          id: conversations.id,
+          blocked: exists(
+            database
+              .select({ one: sql`1` })
+              .from(relationshipBlocks)
+              .where(and(
+                isNull(relationshipBlocks.unblockedAt),
+                or(
+                  and(eq(relationshipBlocks.blockerId, conversations.userLowId), eq(relationshipBlocks.blockedId, conversations.userHighId)),
+                  and(eq(relationshipBlocks.blockerId, conversations.userHighId), eq(relationshipBlocks.blockedId, conversations.userLowId)),
+                ),
+              )),
+          ),
+        })
+        .from(conversations)
+        .innerJoin(conversationMembers, and(
+          eq(conversationMembers.conversationId, conversations.id),
+          eq(conversationMembers.userId, actorId),
+        ))
+        .where(and(eq(conversations.userLowId, lowId), eq(conversations.userHighId, highId)))
+        .limit(1);
       if (!pair) throw new MessagingError("NOT_FOUND");
-      if (pair.blocked === true) throw new MessagingError("BLOCKED");
-      return { conversationId: String(pair.id) };
+      if (pair.blocked) throw new MessagingError("BLOCKED");
+      return { conversationId: pair.id };
     },
   };
 }

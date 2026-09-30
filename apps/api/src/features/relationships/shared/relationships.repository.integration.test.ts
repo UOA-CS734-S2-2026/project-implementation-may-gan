@@ -123,6 +123,31 @@ suite("Postgres relationship persistence", () => {
     await expect(service.searchUsers(actor, 'bob', 20)).rejects.toMatchObject({ code: 'RATE_LIMITED' });
   });
 
+  it("returns private minimal profiles but hides them after blocks in either direction", async () => {
+    const actor = users[8]!;
+    const target = users[9]!;
+    await database.client`
+      update public."user"
+      set username = 'private_profile_target', display_username = 'Private Profile',
+          profile_visibility = 'private'::profile_visibility
+      where id = ${target}
+    `;
+
+    await expect(service.getProfileByUsername(actor, "PRIVATE_PROFILE_TARGET")).resolves.toEqual({
+      id: target,
+      username: "private_profile_target",
+      displayName: "Private Profile",
+      relationship: "none",
+    });
+
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${target}, ${actor}, now())`;
+    await expect(service.getProfileByUsername(actor, "private_profile_target")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await database.client`update public.relationship_blocks set unblocked_at = now() where blocker_id = ${target} and blocked_id = ${actor}`;
+
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${actor}, ${target}, now())`;
+    await expect(service.getProfileByUsername(actor, "private_profile_target")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   it("never projects a provider-owned name and retains an explicit public name", async () => {
     const actor = users[7]!;
     const providerUser = users[8]!;
