@@ -5,13 +5,14 @@ import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresListConversationsRepository } from "../list-conversations.repository";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
-if (!connectionString) throw new Error("MESSAGING_TEST_DATABASE_URL is required for list conversations integration tests.");
-const target = new URL(connectionString);
-if (target.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+const enabled = Boolean(connectionString);
+const target = connectionString ? new URL(connectionString) : undefined;
+if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
+const suite = enabled ? describe : describe.skip;
 
-describe("list conversations Postgres repository", () => {
+suite("list conversations Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 8 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
   const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
