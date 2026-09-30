@@ -1,7 +1,17 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendPeerChange, findMessage, getAccess } from "../message-write-primitives";
 
+const {
+  conversationChanges,
+  conversationMembers,
+  conversations,
+  messageReactions,
+  messages,
+  messagingOutbox,
+  user,
+} = schema;
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -20,12 +30,12 @@ suite("message write primitive builders", () => {
   ];
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
+    await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(user).where(inArray(user.id, users));
     } finally {
       await Promise.all([database.close(), contender.close()]);
     }
@@ -35,11 +45,39 @@ suite("message write primitive builders", () => {
     const conversationId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
     const now = new Date("2026-09-30T00:00:00.000Z");
-    await database.client`delete from public.conversations where user_low_id = ${users[0]!} and user_high_id = ${users[1]!}`;
-    await database.client`insert into public.conversations (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', ${Number.MAX_SAFE_INTEGER}, ${Number.MAX_SAFE_INTEGER - 1}, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${conversationId}, ${users[0]!}, 0, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz), (${conversationId}, ${users[1]!}, 0, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
-    await database.client`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, ${Number.MAX_SAFE_INTEGER}, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', 1, ${now.toISOString()}::timestamptz)`;
-    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${messageId}, ${users[0]!}, 'like', ${now.toISOString()}::timestamptz), (${messageId}, ${users[1]!}, 'like', ${now.toISOString()}::timestamptz)`;
+    await database.db.delete(conversations).where(and(eq(conversations.userLowId, users[0]!), eq(conversations.userHighId, users[1]!)));
+    await database.db.insert(conversations).values({
+      id: conversationId,
+      kind: "direct",
+      userLowId: users[0]!,
+      userHighId: users[1]!,
+      initiatorId: users[0]!,
+      requestState: "active",
+      lastMessageSequence: Number.MAX_SAFE_INTEGER,
+      lastChangeSequence: Number.MAX_SAFE_INTEGER - 1,
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await database.db.insert(conversationMembers).values([
+      { conversationId, userId: users[0]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+      { conversationId, userId: users[1]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+    ]);
+    await database.db.insert(messages).values({
+      id: messageId,
+      conversationId,
+      sequence: Number.MAX_SAFE_INTEGER,
+      senderId: users[0]!,
+      clientMessageId: crypto.randomUUID(),
+      requestFingerprint: crypto.randomUUID(),
+      body: "message",
+      version: 1,
+      createdAt: now,
+    });
+    await database.db.insert(messageReactions).values([
+      { messageId, userId: users[0]!, reaction: "like", createdAt: now },
+      { messageId, userId: users[1]!, reaction: "like", createdAt: now },
+    ]);
     return { conversationId, messageId };
   }
 
@@ -70,23 +108,23 @@ suite("message write primitive builders", () => {
     });
 
     await database.db.transaction((transaction) => appendPeerChange(transaction, { conversationId, messageId, kind: "message.created" }));
-    const [change] = await database.client`select change_sequence from public.conversation_changes where conversation_id = ${conversationId}`;
-    const outbox = [...await database.client`select change_sequence from public.messaging_outbox where conversation_id = ${conversationId}`];
-    expect(String(change?.change_sequence)).toBe(String(Number.MAX_SAFE_INTEGER));
-    expect(outbox.map((row) => String(row.change_sequence))).toEqual([String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER)]);
+    const [change] = await database.db.select({ changeSequence: conversationChanges.changeSequence }).from(conversationChanges).where(eq(conversationChanges.conversationId, conversationId));
+    const outbox = await database.db.select({ changeSequence: messagingOutbox.changeSequence }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, conversationId));
+    expect(String(change?.changeSequence)).toBe(String(Number.MAX_SAFE_INTEGER));
+    expect(outbox.map((row) => String(row.changeSequence))).toEqual([String(Number.MAX_SAFE_INTEGER), String(Number.MAX_SAFE_INTEGER)]);
 
     await expect(database.db.transaction((transaction) => appendPeerChange(transaction, { conversationId, messageId, kind: "message.created" }))).rejects.toThrow(RangeError);
-    const [conversation] = await database.client`select last_change_sequence from public.conversations where id = ${conversationId}`;
-    const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversationId}`;
-    const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversationId}`;
-    expect(String(conversation?.last_change_sequence)).toBe(String(Number.MAX_SAFE_INTEGER));
+    const [conversation] = await database.db.select({ lastChangeSequence: conversations.lastChangeSequence }).from(conversations).where(eq(conversations.id, conversationId));
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, conversationId));
+    const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, conversationId));
+    expect(String(conversation?.lastChangeSequence)).toBe(String(Number.MAX_SAFE_INTEGER));
     expect(changeCount?.count).toBe(1);
     expect(outboxCount?.count).toBe(2);
   });
 
   it("fails closed when a message read has an unsafe sequence", async () => {
     const { conversationId, messageId } = await createConversation();
-    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${messageId}`;
+    await database.db.update(messages).set({ sequence: sql`9007199254740992::bigint` }).where(eq(messages.id, messageId));
 
     await expect(findMessage(database.db, users[0]!, conversationId, messageId)).rejects.toThrow(RangeError);
   });

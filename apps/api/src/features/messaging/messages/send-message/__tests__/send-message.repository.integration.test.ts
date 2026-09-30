@@ -1,9 +1,20 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresMessageWriteStore } from "../send-message.repository";
 import { createSendMessageService } from "../send-message.service";
 
+const {
+  conversationChanges,
+  conversations,
+  friendRequests,
+  friendships,
+  messages,
+  messagingOutbox,
+  relationshipBlocks,
+  user,
+} = schema;
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -21,16 +32,25 @@ suite("send message Postgres repository", () => {
   const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[4]!}, 'active', now()), (${users[4]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[5]!}, 'active', now()), (${users[5]!}, ${users[0]!}, 'active', now()), (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
+    await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[0]!, friendId: users[4]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[4]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[0]!, friendId: users[5]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[5]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[6]!, friendId: users[7]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[7]!, friendId: users[6]!, state: "active", stateChangedAt: new Date() },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(relationshipBlocks).where(or(inArray(relationshipBlocks.blockerId, users), inArray(relationshipBlocks.blockedId, users)));
+      await database.db.delete(friendships).where(or(inArray(friendships.userId, users), inArray(friendships.friendId, users)));
+      await database.db.delete(friendRequests).where(or(inArray(friendRequests.senderId, users), inArray(friendRequests.recipientId, users)));
+      await database.db.delete(user).where(inArray(user.id, users));
     } finally {
       await Promise.all([database.close(), contender.close()]);
     }
@@ -78,14 +98,14 @@ suite("send message Postgres repository", () => {
       replyToMessageId: created.message.id,
     })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
 
-    const [stored] = await database.client`select sequence, reply_to_message_id from public.messages where id = ${first.message.id}`;
-    const changes = [...await database.client`select change_sequence, kind, message_id from public.conversation_changes where conversation_id = ${created.conversation.id} order by change_sequence`];
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const [stored] = await database.db.select({ sequence: messages.sequence, replyToMessageId: messages.replyToMessageId }).from(messages).where(eq(messages.id, first.message.id));
+    const changes = await database.db.select({ changeSequence: conversationChanges.changeSequence, kind: conversationChanges.kind, messageId: conversationChanges.messageId }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id)).orderBy(asc(conversationChanges.changeSequence));
+    const [outbox] = await database.db.select({ count: count() }).from(messagingOutbox).where(and(eq(messagingOutbox.conversationId, created.conversation.id), eq(messagingOutbox.channel, "realtime")));
     expect(String(stored?.sequence)).toBe("2");
-    expect(stored?.reply_to_message_id).toBe(created.message.id);
+    expect(stored?.replyToMessageId).toBe(created.message.id);
     expect(changes).toMatchObject([
-      { change_sequence: "1", kind: "message.created", message_id: created.message.id },
-      { change_sequence: "2", kind: "message.created", message_id: first.message.id },
+      { changeSequence: 1, kind: "message.created", messageId: created.message.id },
+      { changeSequence: 2, kind: "message.created", messageId: first.message.id },
     ]);
     expect(outbox?.count).toBe(4);
   });
@@ -97,8 +117,8 @@ suite("send message Postgres repository", () => {
       text: "first",
     });
 
-    const [beforeChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [beforeOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const [beforeChanges] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [beforeOutbox] = await database.db.select({ count: count() }).from(messagingOutbox).where(and(eq(messagingOutbox.conversationId, created.conversation.id), eq(messagingOutbox.channel, "realtime")));
     const results = await Promise.all([
       send.send(users[0]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "from first client" }),
       contenderSend.send(users[1]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "from second client" }),
@@ -107,12 +127,12 @@ suite("send message Postgres repository", () => {
     const initialSequence = BigInt(created.message.sequence);
     const expectedSequences = [(initialSequence + 1n).toString(), (initialSequence + 2n).toString()];
     expect(results.map((result) => result.message.sequence).sort()).toEqual(expectedSequences);
-    const messages = [...await database.client`select sequence::text as sequence from public.messages where id in (${results[0].message.id}, ${results[1].message.id}) order by sequence`];
-    const changes = [...await database.client`select change_sequence::text as sequence from public.conversation_changes where message_id in (${results[0].message.id}, ${results[1].message.id}) order by change_sequence`];
-    const [afterChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
-    expect(messages.map((message) => message.sequence)).toEqual(expectedSequences);
-    expect(changes.map((change) => change.sequence)).toEqual(expectedSequences);
+    const storedMessages = await database.db.select({ sequence: messages.sequence }).from(messages).where(inArray(messages.id, [results[0].message.id, results[1].message.id])).orderBy(asc(messages.sequence));
+    const changes = await database.db.select({ sequence: conversationChanges.changeSequence }).from(conversationChanges).where(inArray(conversationChanges.messageId, [results[0].message.id, results[1].message.id])).orderBy(asc(conversationChanges.changeSequence));
+    const [afterChanges] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [outbox] = await database.db.select({ count: count() }).from(messagingOutbox).where(and(eq(messagingOutbox.conversationId, created.conversation.id), eq(messagingOutbox.channel, "realtime")));
+    expect(storedMessages.map((message) => String(message.sequence))).toEqual(expectedSequences);
+    expect(changes.map((change) => String(change.sequence))).toEqual(expectedSequences);
     expect(afterChanges?.count).toBe((beforeChanges?.count ?? 0) + 2);
     expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
   });
@@ -123,14 +143,14 @@ suite("send message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "first",
     });
-    await database.client`update public.conversations set last_message_sequence = 9007199254740990::bigint where id = ${created.conversation.id}`;
+    await database.db.update(conversations).set({ lastMessageSequence: sql`9007199254740990::bigint` }).where(eq(conversations.id, created.conversation.id));
 
     const result = await send.send(users[6]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
       text: "maximum safe sequence",
     });
 
-    const [stored] = await database.client`select sequence::text as sequence from public.messages where id = ${result.message.id}`;
+    const [stored] = await database.db.select({ sequence: sql<string>`${messages.sequence}::text` }).from(messages).where(eq(messages.id, result.message.id));
     expect(result).toMatchObject({ replayed: false, message: { sequence: "9007199254740991" } });
     expect(stored?.sequence).toBe("9007199254740991");
   });
@@ -141,20 +161,20 @@ suite("send message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "first",
     });
-    const [beforeMessageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
-    const [beforeChangeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [beforeOutboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
-    await database.client`update public.conversations set last_message_sequence = 9007199254740991::bigint where id = ${created.conversation.id}`;
+    const [beforeMessageCount] = await database.db.select({ count: count() }).from(messages).where(eq(messages.conversationId, created.conversation.id));
+    const [beforeChangeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [beforeOutboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
+    await database.db.update(conversations).set({ lastMessageSequence: sql`9007199254740991::bigint` }).where(eq(conversations.id, created.conversation.id));
 
     await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
       text: "unsafe",
     })).rejects.toThrow(RangeError);
 
-    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
-    const [messageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
-    const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    const [conversation] = await database.db.select({ sequence: sql<string>`${conversations.lastMessageSequence}::text` }).from(conversations).where(eq(conversations.id, created.conversation.id));
+    const [messageCount] = await database.db.select({ count: count() }).from(messages).where(eq(messages.conversationId, created.conversation.id));
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
     expect(conversation?.sequence).toBe("9007199254740991");
     expect(messageCount?.count).toBe(beforeMessageCount?.count);
     expect(changeCount?.count).toBe(beforeChangeCount?.count);
@@ -168,19 +188,19 @@ suite("send message Postgres repository", () => {
       clientMessageId,
       text: "first",
     });
-    const [beforeChangeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [beforeOutboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
-    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${created.message.id}`;
+    const [beforeChangeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [beforeOutboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
+    await database.db.update(messages).set({ sequence: sql`9007199254740992::bigint` }).where(eq(messages.id, created.message.id));
 
     await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId,
       text: "first",
     })).rejects.toThrow(RangeError);
 
-    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
-    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${created.message.id}`;
-    const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
-    const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    const [conversation] = await database.db.select({ sequence: sql<string>`${conversations.lastMessageSequence}::text` }).from(conversations).where(eq(conversations.id, created.conversation.id));
+    const [message] = await database.db.select({ sequence: sql<string>`${messages.sequence}::text` }).from(messages).where(eq(messages.id, created.message.id));
+    const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
+    const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
     expect(conversation?.sequence).toBe("1");
     expect(message?.sequence).toBe("9007199254740992");
     expect(changeCount?.count).toBe(beforeChangeCount?.count);
@@ -203,18 +223,18 @@ suite("send message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "blocked first",
     });
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[4]!}, ${users[0]!}, now())`;
+    await database.db.insert(relationshipBlocks).values({ blockerId: users[4]!, blockedId: users[0]!, blockedAt: new Date() });
     await expect(send.send(users[0]!, blocked.conversation.id, {
       clientMessageId: crypto.randomUUID(),
       text: "blocked second",
     })).rejects.toMatchObject({ code: "BLOCKED" });
 
-    const [pendingMessages] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${pending.conversation.id}`;
-    const [pendingChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${pending.conversation.id}`;
-    const [pendingOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${pending.conversation.id}`;
-    const [blockedMessages] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${blocked.conversation.id}`;
-    const [blockedChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${blocked.conversation.id}`;
-    const [blockedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${blocked.conversation.id}`;
+    const [pendingMessages] = await database.db.select({ count: count() }).from(messages).where(eq(messages.conversationId, pending.conversation.id));
+    const [pendingChanges] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, pending.conversation.id));
+    const [pendingOutbox] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, pending.conversation.id));
+    const [blockedMessages] = await database.db.select({ count: count() }).from(messages).where(eq(messages.conversationId, blocked.conversation.id));
+    const [blockedChanges] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, blocked.conversation.id));
+    const [blockedOutbox] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, blocked.conversation.id));
     expect({ messages: pendingMessages?.count, changes: pendingChanges?.count, outbox: pendingOutbox?.count }).toEqual({ messages: 1, changes: 1, outbox: 2 });
     expect({ messages: blockedMessages?.count, changes: blockedChanges?.count, outbox: blockedOutbox?.count }).toEqual({ messages: 1, changes: 1, outbox: 2 });
   });
