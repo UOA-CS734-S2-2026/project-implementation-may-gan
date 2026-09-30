@@ -36,7 +36,7 @@ For a private account, a link grants no access. A viewer must sign in and be an 
 
 ## Media and supported devices
 
-A post accepts up to three attachments in any mix of photos and videos. Each attachment is limited to 10 MB, the post total is limited to 25 MB, and each video is limited to 15 seconds. Clients compress media before upload. Keep the schema capable of supporting a higher attachment count later.
+A post accepts up to three photos, or one video. Photos and a video are not mixed in one post, matching the WDCC design (decided for #22). Each attachment is limited to 10 MB after compression, the post total is limited to 25 MB, and each video is limited to 15 seconds. Clients compress media before upload and remove location metadata. Keep the schema capable of supporting a higher attachment count later.
 
 The initial release supports iOS 16 and newer and Android 10, API 29, and newer. Features unavailable on a supported device need a documented fallback.
 

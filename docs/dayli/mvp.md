@@ -13,7 +13,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 | Feature | Scope and fallback |
 | --- | --- |
 | Unlock push and closing nudge | Opt-in generic reminders, quiet hours, stale-nudge rejection. Feed access never depends on push arrival. |
-| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. |
+| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. Not built yet: the Flutter composer picks from the gallery and compresses before upload. |
 | Weather | Permission-based coarse location/provider snapshot; omit or select place manually. |
 | Music | Supported OS/provider title and artist; manual selection when unavailable. No universal cross-app access. |
 | Ambient sound | Explicit one-second recording with preview/removal. Never silent capture. |
@@ -37,6 +37,6 @@ Public accounts can create opaque, unlisted links to released non-solo posts. An
 
 Siri/App Intents and supported Android App Actions open today's composer, optionally prefilling a validated rating. Require unlock and submission confirmation. Use launcher/deep-link fallback where voice support is unavailable; do not claim identical phrases work everywhere.
 
-Start with up to three mixed photo or video attachments. Limit each attachment to 10 MB, each post to 25 MB total, and each video to 15 seconds after client compression. Support iOS 16 and newer and Android 10/API 29 and newer. Permission denial must not block text-only posting.
+Start with up to three photos or one video, not mixed. Limit each attachment to 10 MB, each post to 25 MB total, and each video to 15 seconds after client compression. Support iOS 16 and newer and Android 10/API 29 and newer. Permission denial must not block text-only posting.
 
 [Apple native APIs](https://developer.apple.com/documentation/) · [Android screenshot limits](https://developer.android.com/about/versions/14/features/screenshot-detection) · [Android App Actions](https://developer.android.com/develop/devices/assistant/overview)
