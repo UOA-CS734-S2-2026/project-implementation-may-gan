@@ -105,7 +105,9 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _profile = _load());
+    setState(() {
+      _profile = _load();
+    });
     await Future.wait([?_profile, ?_posts?.refresh()]);
   }
 
