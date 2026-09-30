@@ -246,6 +246,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       const rows = await migrator`select has_table_privilege('app', ${`public.${table}`}, 'SELECT') as "select", has_table_privilege('app', ${`public.${table}`}, 'INSERT') as "insert", has_table_privilege('app', ${`public.${table}`}, 'UPDATE') as "update", has_table_privilege('app', ${`public.${table}`}, 'DELETE') as "delete", has_table_privilege('lifecycle_worker', ${`public.${table}`}, 'SELECT') as worker_select`;
       expect(rows[0]).toEqual({ select: permissions[0], insert: permissions[1], update: permissions[2], delete: permissions[3], worker_select: false });
     }
+    await expect(app`delete from public.account_google_reauthentication_intents where false`).rejects.toMatchObject({ code: "42501" });
+    for (const statement of [
+      lifecycleWorker`select * from public.account_google_reauthentication_intents`,
+      lifecycleWorker`insert into public.account_google_reauthentication_intents default values`,
+      lifecycleWorker`update public.account_google_reauthentication_intents set consumed_at = now() where false`,
+      lifecycleWorker`delete from public.account_google_reauthentication_intents where false`,
+    ]) await expect(statement).rejects.toMatchObject({ code: "42501" });
     const functions = await migrator`select coalesce(bool_or((entry).grantee = 0 and (entry).privilege_type = 'EXECUTE'), false) as public_execute, has_function_privilege('app', 'public.account_policy_underage_restricted(text)', 'EXECUTE') as app_execute, has_function_privilege('lifecycle_worker', 'public.account_policy_underage_restricted(text)', 'EXECUTE') as worker_execute from pg_proc cross join lateral aclexplode(proacl) entry where oid = 'public.account_policy_underage_restricted(text)'::regprocedure`; 
     expect(functions[0]).toEqual({ public_execute: false, app_execute: true, worker_execute: false });
   });
