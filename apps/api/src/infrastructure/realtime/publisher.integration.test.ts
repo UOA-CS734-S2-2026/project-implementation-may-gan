@@ -1,7 +1,8 @@
 import { createDayliDatabase } from "@dayli/db";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { OutboxJob } from "../jobs/outbox-store";
-import { canPublishCurrentChange } from "./publisher";
+import { canPublishCurrentChange, createDurableObjectRealtimePublisher } from "./publisher";
+import { createRealtimeDeliveryAuthorizer } from "../jobs/messaging-delivery-runtime";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -113,5 +114,43 @@ suite("Postgres realtime publisher authorization", () => {
     const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, { ...recipient, recipientId: ids.alice })).resolves.toBe(false);
+  });
+
+  it("composes leased-outbox authorization with recipient policy before publishing", async () => {
+    const published = vi.fn(async () => undefined);
+    const namespace = { idFromName: (userId: string) => userId, get: () => ({ publish: published, revokeSession: async () => undefined }) } as unknown as DurableObjectNamespace;
+    const hyperdrive = { connectionString: connectionString! };
+    const ordinaryPolicy = { resolve: async () => ({ restriction: "active" as const, allowed: new Set(["ordinary" as const]) }) };
+    const publisher = createDurableObjectRealtimePublisher(namespace, hyperdrive, createRealtimeDeliveryAuthorizer(hyperdrive, ordinaryPolicy));
+
+    await insertChange({ sequence: 2, senderId: ids.alice });
+    const blocked = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 2 });
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.alice}, ${ids.bob}, ${createdAt})`;
+    await publisher.deliver(blocked);
+    expect(published).not.toHaveBeenCalled();
+    await database.client`delete from public.relationship_blocks where blocker_id = ${ids.alice} and blocked_id = ${ids.bob}`;
+
+    await insertChange({ sequence: 3, senderId: ids.alice });
+    const removedMember = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 3 });
+    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and user_id = ${ids.bob}`;
+    await publisher.deliver(removedMember);
+    expect(published).not.toHaveBeenCalled();
+    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
+
+    await insertChange({ sequence: 4, senderId: ids.alice });
+    const stale = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 4, leaseExpiresAt: new Date(Date.now() - 1_000) });
+    await publisher.deliver(stale);
+    expect(published).not.toHaveBeenCalled();
+
+    await insertChange({ sequence: 5, senderId: ids.alice });
+    const policyFailure = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 5 });
+    const failingPublisher = createDurableObjectRealtimePublisher(namespace, hyperdrive, createRealtimeDeliveryAuthorizer(hyperdrive, { resolve: async () => { throw new Error("unavailable"); } }));
+    await failingPublisher.deliver(policyFailure);
+    expect(published).not.toHaveBeenCalled();
+
+    await insertChange({ sequence: 6, senderId: ids.alice });
+    const authorized = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 6 });
+    await expect(publisher.deliver(authorized)).resolves.toEqual({ ok: true });
+    expect(published).toHaveBeenCalledTimes(1);
   });
 });

@@ -198,10 +198,27 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     }, "https://attacker.example.test"));
     expect(maliciousOrigin.status).toBe(403);
 
+    const revoke = await app.fetch(request("/api/auth/revoke-sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${bearer}` },
+    }));
+    expect(revoke.status).toBe(200);
+    const revoked = await app.fetch(new Request(`${origin}/api/v1/account/reauthenticate/password`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
+    }));
+    expect(revoked.status).toBe(401);
+
+    const renewed = nativeToken(await app.fetch(request("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "reauth@example.test", password: "not-a-real-password" }),
+    })));
     await migrator.client`update public.session set expires_at = now() - interval '1 second'`;
     const expired = await app.fetch(new Request(`${origin}/api/v1/account/reauthenticate/password`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${renewed}` },
       body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
     }));
     expect(expired.status).toBe(401);

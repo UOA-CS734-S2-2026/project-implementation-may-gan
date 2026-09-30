@@ -1,5 +1,5 @@
 import type { HyperdriveBinding } from "@dayli/db";
-import { createDurableObjectRealtimePublisher } from "../realtime/publisher";
+import { canPublishCurrentChange, createDurableObjectRealtimePublisher } from "../realtime/publisher";
 import { createFcmHttpV1Sender, type FcmServiceAccount } from "../push/fcm";
 import { createHyperdrivePushDestinationResolver } from "../push/push-destination.repository";
 import { createPushOutboxHandler } from "../push/push-dispatcher";
@@ -19,16 +19,24 @@ export interface MessagingDeliveryBindings {
 }
 
 /** Builds independent realtime and push handlers. Missing FCM config never blocks realtime jobs. */
-export function createMessagingDeliveryDispatcher(env: MessagingDeliveryBindings) {
-  const policies = createHyperdriveAccountPolicyResolver(env.HYPERDRIVE);
-  const mayReceiveDelivery = async (userId: string) => {
-    try { return allowsAccountCapability(await policies.resolve(userId), "ordinary"); }
+export function createRealtimeDeliveryAuthorizer(
+  hyperdrive: HyperdriveBinding,
+  policies = createHyperdriveAccountPolicyResolver(hyperdrive),
+) {
+  return async (job: import("./outbox-store").OutboxJob): Promise<boolean> => {
+    if (!await canPublishCurrentChange(hyperdrive, job)) return false;
+    try { return allowsAccountCapability(await policies.resolve(job.recipientId), "ordinary"); }
     catch { return false; }
   };
-  const realtime = createDurableObjectRealtimePublisher(env.USER_REALTIME, env.HYPERDRIVE, async (job) => {
-    if (!await mayReceiveDelivery(job.recipientId)) return false;
-    return true;
-  });
+}
+
+export function createMessagingDeliveryDispatcher(env: MessagingDeliveryBindings) {
+  const authorizeRealtime = createRealtimeDeliveryAuthorizer(env.HYPERDRIVE);
+  const mayReceiveDelivery = async (userId: string) => {
+    try { return allowsAccountCapability(await createHyperdriveAccountPolicyResolver(env.HYPERDRIVE).resolve(userId), "ordinary"); }
+    catch { return false; }
+  };
+  const realtime = createDurableObjectRealtimePublisher(env.USER_REALTIME, env.HYPERDRIVE, authorizeRealtime);
   // One dispatcher owns one FCM sender, preserving its short-lived OAuth cache
   // across the bounded batch rather than minting a JWT for every device.
   const pushHandler = configuredPushHandlerOnce(env, mayReceiveDelivery);
