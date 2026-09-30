@@ -85,7 +85,11 @@ function MessagingProviderContent({ children }: { children: React.ReactNode }) {
     };
     const realtime = new MessagingRealtime({
       issueTicket: messagingApi.realtimeTicket,
-      onReady: async () => { await refreshUnread(); if (active) setRevision((value) => value + 1); },
+      // A reconnect can miss a committed socket event. Re-read every mounted messaging projection from its durable REST source before accepting new live events.
+      onReady: async () => {
+        await queryClient.refetchQueries({ queryKey: messagingKeys.root(user.id), type: "active" });
+        if (active) setRevision((value) => value + 1);
+      },
       onChange: reconcile,
     });
     void refreshUnread(); void realtime.start();

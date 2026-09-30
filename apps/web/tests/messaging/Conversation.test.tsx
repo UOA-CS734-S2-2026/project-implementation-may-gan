@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,12 +50,34 @@ describe("messaging screens", () => {
     await actor.click(within(screen.getByTestId("message-m1")).getByRole("button", { name: "edit" }));
     await actor.clear(screen.getByLabelText("Message")); await actor.type(screen.getByLabelText("Message"), "changed"); await actor.click(screen.getByRole("button", { name: "save" }));
     await waitFor(() => expect(api.edit).toHaveBeenCalledWith("c1", "m1", "changed", 1));
-    await actor.click(within(screen.getByTestId("message-m1")).getByLabelText("Add reaction"));
-    await actor.click(within(screen.getByTestId("message-m1")).getByRole("button", { name: "React Like" }));
+    const bubble = within(screen.getByTestId("message-m1"));
+    const addReaction = bubble.getByLabelText("Add reaction");
+    await actor.click(addReaction);
+    expect(addReaction).toHaveAttribute("aria-expanded", "true");
+    await actor.click(bubble.getByRole("button", { name: "React Like" }));
     await waitFor(() => expect(api.react).toHaveBeenCalledWith("c1", "m1", "like"));
+    expect(addReaction).toHaveAttribute("aria-expanded", "false");
     await actor.click(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" }));
     await waitFor(() => expect(api.unsend).toHaveBeenCalledWith("c1", "m1"));
     expect(await screen.findByText("This message was unsent.")).toBeTruthy();
+  });
+
+  it("sends on Enter, preserves Shift+Enter, and does not submit IME composition", async () => {
+    const actor = userEvent.setup();
+    render(<Conversation conversationId="c1" />);
+    await screen.findByText("hello");
+    const composer = screen.getByLabelText("Message");
+    await actor.type(composer, "first");
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(api.send).toHaveBeenCalledWith("c1", expect.any(String), "first", undefined));
+    await actor.type(composer, "second");
+    await actor.keyboard("{Shift>}{Enter}{/Shift}");
+    expect((composer as HTMLTextAreaElement).value).toBe("second\n");
+    expect(api.send).toHaveBeenCalledTimes(1);
+    fireEvent.compositionStart(composer);
+    fireEvent.keyDown(composer, { key: "Enter", isComposing: true });
+    fireEvent.compositionEnd(composer);
+    expect(api.send).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a failed message and retries its exact immutable client ID", async () => {
