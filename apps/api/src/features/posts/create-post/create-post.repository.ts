@@ -157,7 +157,9 @@ export function createPostgresDailyPostStore(database: DayliDatabase): DailyPost
   return {
     withAuthorTransaction(authorId, operation) {
       return database.transaction(async (tx) => {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))`);
+        await tx
+          .select({ locked: sql`pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))` })
+          .from(sql`(values (1)) as lock_source`);
         return operation(createTransaction(tx));
       });
     },
