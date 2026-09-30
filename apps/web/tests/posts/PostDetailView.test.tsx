@@ -116,7 +116,7 @@ describe("PostDetailView", () => {
       expect(screen.getByAltText("Ana's photo 2 of 2")).toBeTruthy();
     });
 
-    it("autoplays a video muted, with controls to unmute", async () => {
+    it("autoplays and loops a video muted, with controls to unmute", async () => {
       const video = { ...photo("m-1", 0), contentType: "video/mp4" };
       get.mockResolvedValue({ ok: true, value: detail({ media: [video] }) });
       render(<PostDetailView username="ana_walks" postId="post-1" />);
@@ -125,6 +125,7 @@ describe("PostDetailView", () => {
       expect(player.tagName).toBe("VIDEO");
       expect(player.hasAttribute("controls")).toBe(true);
       expect(player.hasAttribute("autoplay")).toBe(true);
+      expect(player.hasAttribute("loop")).toBe(true);
       // Browsers only allow autoplay without sound.
       expect((player as HTMLVideoElement).muted).toBe(true);
       expect(player.hasAttribute("playsinline")).toBe(true);

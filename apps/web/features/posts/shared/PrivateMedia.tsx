@@ -77,8 +77,9 @@ export function PrivateImage({ postId, media, alt, sizes }: {
 
 /**
  * A private video for the post page. It starts playing on its own, muted,
- * because browsers block autoplay with sound; the controls let the viewer
- * unmute. The feed never renders this: it shows a still tile instead.
+ * because browsers block autoplay with sound, and loops, since clips are at
+ * most 15 seconds; the controls let the viewer unmute or pause. The feed
+ * never renders this: it shows a still tile instead.
  */
 export function PrivateVideo({ postId, media, label }: {
   postId: string;
@@ -94,6 +95,7 @@ export function PrivateVideo({ postId, media, label }: {
       className="absolute inset-0 h-full w-full bg-black object-contain"
       autoPlay
       muted
+      loop
       controls
       playsInline
       onError={onError}
