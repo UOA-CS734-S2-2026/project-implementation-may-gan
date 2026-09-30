@@ -1974,6 +1974,292 @@
         }
       }
     },
+    "/api/v1/account/export": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.requestDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Existing or newly queued export.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "requested",
+                        "building",
+                        "ready",
+                        "failed",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "readyAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "downloadable": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "requestedAt",
+                    "readyAt",
+                    "expiresAt",
+                    "downloadable"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "403": {
+            "description": "Account cannot export."
+          },
+          "409": {
+            "description": "Export unavailable."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.getDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current export, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "export": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "requested",
+                            "building",
+                            "ready",
+                            "failed",
+                            "cancelled",
+                            "expired"
+                          ]
+                        },
+                        "requestedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "readyAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "downloadable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "requestedAt",
+                        "readyAt",
+                        "expiresAt",
+                        "downloadable"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "export"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.cancelDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queued export cancelled when it has not published an archive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "export": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "requested",
+                            "building",
+                            "ready",
+                            "failed",
+                            "cancelled",
+                            "expired"
+                          ]
+                        },
+                        "requestedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "readyAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "downloadable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "requestedAt",
+                        "readyAt",
+                        "expiresAt",
+                        "downloadable"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "export"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/export/download": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.downloadDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated archive bytes.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "403": {
+            "description": "Export is not ready or has expired."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/media-reservations": {
       "post": {
         "tags": [

@@ -29,6 +29,10 @@ const managementApiRoutes = new Map<string, AccountCapability>([
   ["POST /api/v1/account/reauthenticate/google/begin", "policy_read"],
   ["POST /api/v1/account/reauthenticate/google/complete", "policy_read"],
   ["POST /api/v1/account/legal/acceptance", "policy_read"],
+  ["GET /api/v1/account/export", "export"],
+  ["POST /api/v1/account/export", "export"],
+  ["DELETE /api/v1/account/export", "export"],
+  ["GET /api/v1/account/export/download", "export"],
 ]);
 
 /**

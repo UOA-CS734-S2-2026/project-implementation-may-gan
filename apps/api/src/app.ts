@@ -52,7 +52,7 @@ import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createR2Reader, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
@@ -149,6 +149,8 @@ import { createGoogleProofIntentStore } from "./features/account-policy/reauthen
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
 import type { ResolveSession } from "./http/middleware/require-session";
 import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
+import { registerDataExportRoutes, type DataExportRouteDependencies } from "./features/data-export/data-export.routes";
+import { createR2ExportArchiveReader } from "./features/data-export/shared/export-archive-reader";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -170,6 +172,7 @@ export interface AppDependencies {
   accountReauthentication?: AccountReauthenticationDependencies;
   googleProof?: GoogleProofRouteDependencies;
   legal?: LegalRouteDependencies;
+  dataExport?: DataExportRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -191,6 +194,7 @@ export function createApp({
   accountReauthentication,
   googleProof,
   legal,
+  dataExport = unavailableDataExport,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -232,6 +236,7 @@ export function createApp({
   registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerGoogleProofRoutes(api, googleProof);
   registerLegalRoutes(api, legal ?? { trustedOrigins });
+  registerDataExportRoutes(api, dataExport);
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerPostsRoutes(api, {
@@ -298,6 +303,12 @@ export function createAppForEnv(env: ApiEnv) {
     trustedOrigins: configuration.trustedOrigins,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies LegalRouteDependencies : undefined;
+  const dataExport = configuration && r2Runtime ? {
+    resolveSession: createSessionResolver(configuration),
+    trustedOrigins: configuration.trustedOrigins,
+    archiveReader: createR2ExportArchiveReader(createR2Reader(r2Runtime)),
+    withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
+  } satisfies DataExportRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -330,6 +341,7 @@ export function createAppForEnv(env: ApiEnv) {
     accountReauthentication,
     googleProof,
     legal,
+    dataExport,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
@@ -342,6 +354,7 @@ export function createAppForEnv(env: ApiEnv) {
   return api;
 }
 
+const unavailableDataExport: DataExportRouteDependencies = { resolveSession: async () => null };
 const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {

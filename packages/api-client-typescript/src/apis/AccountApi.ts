@@ -14,6 +14,11 @@
 
 import * as runtime from '../runtime';
 import {
+    type AccountGetDataExport200Response,
+    AccountGetDataExport200ResponseFromJSON,
+    AccountGetDataExport200ResponseToJSON,
+} from '../models/AccountGetDataExport200Response';
+import {
     type AccountGoogleProofBegin200Response,
     AccountGoogleProofBegin200ResponseFromJSON,
     AccountGoogleProofBegin200ResponseToJSON,
@@ -33,6 +38,11 @@ import {
     AccountGoogleProofCompleteRequestFromJSON,
     AccountGoogleProofCompleteRequestToJSON,
 } from '../models/AccountGoogleProofCompleteRequest';
+import {
+    type AccountRequestDataExport202Response,
+    AccountRequestDataExport202ResponseFromJSON,
+    AccountRequestDataExport202ResponseToJSON,
+} from '../models/AccountRequestDataExport202Response';
 
 export interface AccountGoogleProofBeginOperationRequest {
     /**
@@ -63,6 +73,135 @@ export interface AccountGoogleProofCompleteOperationRequest {
  *
  */
 export class AccountApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for accountCancelDataExport without sending the request
+     */
+    async accountCancelDataExportRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export`;
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async accountCancelDataExportRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountGetDataExport200Response>> {
+        const requestOptions = await this.accountCancelDataExportRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountGetDataExport200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountCancelDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountGetDataExport200Response> {
+        const response = await this.accountCancelDataExportRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountDownloadDataExport without sending the request
+     */
+    async accountDownloadDataExportRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export/download`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async accountDownloadDataExportRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.accountDownloadDataExportRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     */
+    async accountDownloadDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.accountDownloadDataExportRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountGetDataExport without sending the request
+     */
+    async accountGetDataExportRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async accountGetDataExportRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountGetDataExport200Response>> {
+        const requestOptions = await this.accountGetDataExportRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountGetDataExport200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountGetDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountGetDataExport200Response> {
+        const response = await this.accountGetDataExportRaw(initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for accountGoogleProofBegin without sending the request
@@ -186,6 +325,49 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountGoogleProofComplete(requestParameters: AccountGoogleProofCompleteOperationRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountGoogleProofComplete200Response> {
         const response = await this.accountGoogleProofCompleteRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountRequestDataExport without sending the request
+     */
+    async accountRequestDataExportRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async accountRequestDataExportRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountRequestDataExport202Response>> {
+        const requestOptions = await this.accountRequestDataExportRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountRequestDataExport202ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountRequestDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountRequestDataExport202Response> {
+        const response = await this.accountRequestDataExportRaw(initOverrides);
         return await response.value();
     }
 
