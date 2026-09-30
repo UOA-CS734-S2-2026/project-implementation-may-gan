@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +18,7 @@ vi.mock("@/features/messaging/create-conversation/use-create-conversation-mutati
 const person = { id: "recipient", username: "ada", displayName: "Ada", relationship: "none" };
 function renderDraft() { return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><NewMessage username="ada" /></QueryClientProvider>); }
 
-beforeEach(() => { vi.clearAllMocks(); actorId = "actor-a"; loadSocialProfile.mockResolvedValue({ ok: true, value: person }); findDirect.mockResolvedValue({ ok: false, failure: "notFound", message: "missing" }); });
+beforeEach(() => { vi.clearAllMocks(); actorId = "actor-a"; loadSocialProfile.mockResolvedValue({ ok: true, value: person }); findDirect.mockResolvedValue({ ok: false, failure: "notFound", message: "missing" }); mutateAsync.mockResolvedValue({ conversation: { id: "created" } }); });
 
 describe("NewMessagePage", () => {
   it("shows an unavailable profile instead of an indefinitely pending lookup", async () => {
@@ -33,6 +33,18 @@ describe("NewMessagePage", () => {
     renderDraft();
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/messages/existing"));
     expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("renders an empty normal chat and sends on Enter without treating it as a special first-message form", async () => {
+    const user = userEvent.setup();
+    renderDraft();
+    expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
+    expect(screen.queryByText("private note to")).toBeNull();
+    const composer = screen.getByLabelText("Message");
+    expect(composer).toHaveAttribute("rows", "1");
+    await user.type(composer, "Hello");
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ recipientId: "recipient", text: "Hello" })));
   });
 
   it("uses a stable create id for a missing thread retry", async () => {
