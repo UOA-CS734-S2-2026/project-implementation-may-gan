@@ -61,4 +61,53 @@ describe("account policy", () => {
       allowed: ["cancel_deletion_verification", "export", "lifecycle_status", "policy_read", "signout"],
     });
   });
+
+  it("issues a password-verified grant only for the current account and trusted origin", async () => {
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => ({ userId: "pending-user" }),
+        policies: { resolve: async () => resolveAccountPolicy({ lifecycleState: "pending_deletion" }) },
+      },
+      accountReauthentication: {
+        trustedOrigins: ["https://app.example.test"],
+        verifyPassword: async () => ({ userId: "pending-user", sessionId: "session-a" }),
+        issueGrant: async () => ({ token: "opaque-grant", expiresAt: new Date("2026-10-01T00:00:00.000Z") }),
+      },
+    });
+    const response = await api.request("https://api.example.test/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://app.example.test" },
+      body: JSON.stringify({ action: "cancel_deletion", password: "correct-password" }),
+    });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ grant: "opaque-grant" });
+
+    const attacker = await api.request("https://api.example.test/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "https://attacker.example.test" },
+      body: JSON.stringify({ action: "cancel_deletion", password: "correct-password" }),
+    });
+    expect(attacker.status).toBe(403);
+  });
+
+  it("rejects a verified credential for another account without revealing the mismatch", async () => {
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => ({ userId: "pending-user" }),
+        policies: { resolve: async () => resolveAccountPolicy({ lifecycleState: "pending_deletion" }) },
+      },
+      accountReauthentication: {
+        trustedOrigins: [],
+        verifyPassword: async () => ({ userId: "other-user", sessionId: "session-b" }),
+        issueGrant: async () => ({ token: "must-not-issue", expiresAt: new Date() }),
+      },
+    });
+    const response = await api.request("https://api.example.test/api/v1/account/reauthenticate/password", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "request_deletion", password: "correct-password" }),
+    });
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
 });

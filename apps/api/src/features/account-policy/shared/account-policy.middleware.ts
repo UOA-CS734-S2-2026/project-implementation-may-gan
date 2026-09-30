@@ -17,7 +17,7 @@ export const publicApiPaths = new Set(["/api/v1/health", "/api/v1/openapi.json",
 
 export function accountCapabilityForPath(pathname: string): AccountCapability | undefined {
   if (publicApiPaths.has(pathname)) return undefined;
-  if (pathname === "/api/v1/account/status" || pathname === "/api/v1/account/policy") return "policy_read";
+  if (pathname === "/api/v1/account/status" || pathname === "/api/v1/account/policy" || pathname.startsWith("/api/v1/account/reauthenticate/")) return "policy_read";
   if (pathname.startsWith("/api/v1/account/cancel-deletion")) return "cancel_deletion_verification";
   if (pathname.startsWith("/api/v1/account/exports")) return "export";
   if (pathname.startsWith("/api/v1/account/appeal")) return "appeal";

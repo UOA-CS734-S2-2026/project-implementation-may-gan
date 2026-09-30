@@ -18,7 +18,7 @@ Terms and age gates activate only when an effective Terms version has reached it
 
 `account-management-grants.ts` provides the database primitive for the later reauthentication route. It creates a 256-bit opaque token and stores only its SHA-256 digest. Consumption atomically binds the digest to the original user, session, action, unconsumed state, grant expiry, and a still-live Better Auth session. Replayed, expired, revoked-session, and account-confused grants return the same false result.
 
-No endpoint issues a grant yet. #159 still needs the reviewed password and Google proof flows. The route must obtain the current server-verified Better Auth session, preserve CSRF and origin checks, and never accept a raw Google ID token as a substitute for that proof. Normal sign-in has no lifecycle mutation and cannot cancel pending deletion.
+`POST /api/v1/account/reauthenticate/password` now verifies the current cookie or bearer session through Better Auth's supported `/verify-password` handler. It requires an exact trusted browser origin when an Origin header is present, compares the verified Better Auth user to the current policy actor, and returns only a short-lived opaque grant in a no-store response. It accepts no asserted user ID. Normal sign-in has no lifecycle mutation and cannot cancel pending deletion.\n\nGoogle reauthentication is not implemented. It needs a server-owned browser continuation with Better Auth's OAuth state handling, plus a native flow that validates provider proof through Better Auth and compares the resulting linked provider subject to the active account. Do not accept a raw Google ID token or email claim at an account-management endpoint.
 
 ## Remaining integration work
 

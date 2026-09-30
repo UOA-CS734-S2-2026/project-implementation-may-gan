@@ -140,6 +140,8 @@ import { createPostgresUsernameProfileStore } from "./features/profiles/username
 import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import { registerAccountReauthenticationRoutes, type AccountReauthenticationDependencies } from "./features/account-policy/reauthenticate/account-reauthentication.route";
+import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
 import type { ResolveSession } from "./http/middleware/require-session";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
@@ -159,6 +161,7 @@ export interface AppDependencies {
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
+  accountReauthentication?: AccountReauthenticationDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -177,6 +180,7 @@ export function createApp({
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
   accountPolicy,
+  accountReauthentication,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -215,6 +219,7 @@ export function createApp({
   if (accountPolicy?.policies) api.use("/api/v1/*", createAccountPolicyMiddleware(accountPolicy.resolveSession, accountPolicy.policies));
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
+  registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerPostsRoutes(api, {
@@ -275,6 +280,7 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
+  const accountReauthentication = configuration ? createAccountReauthenticationDependencies(configuration) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -304,6 +310,7 @@ export function createAppForEnv(env: ApiEnv) {
     pushDevices,
     usernameProfile,
     accountPolicy,
+    accountReauthentication,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
@@ -527,6 +534,41 @@ function createPushDeviceDependencies(
     unregister: {
       unregister: (actorId, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUnregisterDeviceRepository(database).unregister(actorId, installationId)),
     },
+  };
+}
+
+function createAccountReauthenticationDependencies(configuration: RuntimeConfiguration): AccountReauthenticationDependencies {
+  return {
+    trustedOrigins: configuration.trustedOrigins,
+    verifyPassword: async (request, password) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const auth = createPostgresBetterAuth({
+        baseURL: configuration.baseURL,
+        secret: configuration.secret,
+        trustedOrigins: configuration.trustedOrigins,
+        database,
+        google: configuration.google,
+        resend: configuration.resend,
+      });
+      const current = await auth.api.getSession({ headers: request.headers }) as { user?: { id?: string }; session?: { id?: string; expiresAt?: Date | string } } | null;
+      const userId = current?.user?.id;
+      const sessionId = current?.session?.id;
+      const expiresAt = current?.session?.expiresAt ? new Date(current.session.expiresAt) : undefined;
+      if (!userId || !sessionId || !expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date()) return null;
+      const headers = new Headers(request.headers);
+      headers.set("content-type", "application/json");
+      headers.delete("content-length");
+      const verified = await auth.handler(new Request(new URL("/api/auth/verify-password", configuration.baseURL), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password }),
+      }));
+      return verified.ok ? { userId, sessionId } : null;
+    }),
+    issueGrant: (session, action) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      const token = await issueAccountManagementGrant(database, session, action, expiresAt);
+      return { token, expiresAt };
+    }),
   };
 }
 
