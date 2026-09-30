@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import React, { useMemo } from "react";
+import { isVideo, PrivateImage, type PrivateMediaItem } from "@/features/posts/shared/PrivateMedia";
 
 type PostCardProps = {
   postId: string;
@@ -11,13 +12,10 @@ type PostCardProps = {
   userImage?: string | null;
   prompt?: string;
   promptResponse: string;
-  mediaUrl?: string | null;
+  /** The post's first attachment, shown on the card. */
+  media?: PrivateMediaItem | null;
   createdAt: Date | string;
 };
-
-export const isVideoMediaUrl = (mediaUrl: string) =>
-  /\/video\//i.test(mediaUrl) ||
-  /\.(mp4|mov|webm|m4v)(?:$|[?#])/i.test(mediaUrl);
 
 const getRotation = (str: string) => {
   let hash = 0;
@@ -40,10 +38,9 @@ export function PostCard({
   userImage,
   prompt,
   promptResponse,
-  mediaUrl,
+  media,
   createdAt,
 }: PostCardProps) {
-  const postImageUrl = mediaUrl?.trim() || null;
   const NZ_TIME_ZONE = "Pacific/Auckland";
   const time = new Intl.DateTimeFormat("en-NZ", {
     timeZone: NZ_TIME_ZONE,
@@ -57,7 +54,6 @@ export function PostCard({
     month: "2-digit",
     year: "2-digit",
   }).format(new Date(createdAt));
-  const isVideo = postImageUrl ? isVideoMediaUrl(postImageUrl) : false;
   const rotation = useMemo(() => getRotation(postId), [postId]);
 
   return (
@@ -73,26 +69,22 @@ export function PostCard({
         className="absolute inset-0 z-0"
       />
       <div className="m-5 mb-0 shrink-0">
-        {postImageUrl ? (
+        {media ? (
           <div className="relative aspect-square w-full overflow-hidden bg-background-secondary">
-            {isVideo ? (
-              <video
-                src={postImageUrl}
-                className="absolute inset-0 h-full w-full object-cover"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-              />
+            {isVideo(media) ? (
+              // Videos play in the post itself; the feed never autoplays them.
+              <div className="absolute inset-0 grid place-items-center bg-foreground text-white">
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="h-14 w-14" fill="currentColor">
+                  <path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86A1 1 0 0 0 8 5.14Z" />
+                </svg>
+                <span className="sr-only">Video</span>
+              </div>
             ) : (
-              <Image
-                src={postImageUrl}
-                alt={`${username}'s post`}
-                fill
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 100vw"
-                className="object-cover"
-                unoptimized
+              <PrivateImage
+                postId={postId}
+                media={media}
+                alt={`${displayName}'s photo`}
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
               />
             )}
           </div>

@@ -10,6 +10,7 @@ const replace = vi.fn();
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
 vi.mock("@/features/feed/shared/feed.api", () => ({ feedApi: { page: vi.fn() } }));
+vi.mock("@/features/posts/shared/posts.api", () => ({ postsApi: { media: vi.fn() } }));
 
 const page = feedApi.page as unknown as ReturnType<typeof vi.fn>;
 
@@ -19,7 +20,7 @@ function render(ui: Parameters<typeof rtlRender>[0]) {
   return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-function post(id: string, answer: string) {
+function post(id: string, answer: string, media: unknown[] = []) {
   return {
     id,
     author: { id: `author-${id}`, username: `friend_${id}`, displayName: `Friend ${id}` },
@@ -32,6 +33,7 @@ function post(id: string, answer: string) {
     acceptedAt: "2026-09-25T03:00:00.000Z",
     releasedAt: "2026-09-25T12:00:00.000Z",
     edited: false,
+    media,
   };
 }
 
@@ -129,5 +131,24 @@ describe("Feed", () => {
     page.mockResolvedValueOnce({ ok: true, value: { items: [], nextCursor: null, hasMore: false } });
     view.rerender(<Feed />);
     await waitFor(() => expect(screen.queryByText("Private to me.")).toBeNull());
+  });
+
+  it("shows a card's first photo, and a play tile rather than autoplaying a video", async () => {
+    const photo = { id: "m-1", contentType: "image/jpeg", order: 0, url: "https://storage.example.test/a?sig=1", expiresAt: "2026-09-26T03:05:00.000Z" };
+    const video = { id: "m-2", contentType: "video/mp4", order: 0, url: "https://storage.example.test/v?sig=1", expiresAt: "2026-09-26T03:05:00.000Z" };
+    page.mockResolvedValue({
+      ok: true,
+      value: {
+        items: [post("1", "With a photo", [photo]), post("2", "With a video", [video]), post("3", "Just words")],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+    const view = render(<Feed />);
+
+    const image = await screen.findByAltText("Friend 1's photo");
+    expect(image.getAttribute("src")).toBe("https://storage.example.test/a?sig=1");
+    expect(screen.getByText("Video")).toBeTruthy();
+    expect(view.container.querySelector("video")).toBeNull();
   });
 });

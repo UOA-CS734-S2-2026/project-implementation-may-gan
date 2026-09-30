@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // The generated REST client is a TypeScript workspace package consumed from source.
   transpilePackages: ["@dayli/api-client"],
   images: {
+    // Private post media (R2) is deliberately absent: the optimizer would fetch
+    // and cache it on the server. It is rendered unoptimized instead; see
+    // features/posts/shared/PrivateMedia.tsx.
     remotePatterns: [
       {
         protocol: "https",

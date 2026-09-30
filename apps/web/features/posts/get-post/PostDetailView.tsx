@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/core/Button";
 import type { PostDetail } from "@/features/posts/shared/posts.api";
+import { isVideo, PrivateImage, PrivateVideo } from "@/features/posts/shared/PrivateMedia";
 import { PostApiError } from "@/features/posts/shared/query-result";
 import { usePostQuery } from "./use-post-query";
 
@@ -27,6 +28,35 @@ function postedAt(post: PostDetail) {
     hour12: true,
   }).format(new Date(post.acceptedAt));
   return `${date}, ${time}`;
+}
+
+const photoColumns = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3"] as const;
+
+/** One video, or up to three photos, each loaded from a private, expiring URL. */
+function PostMedia({ post }: { post: PostDetail }) {
+  if (post.media.length === 0) return null;
+  const [first] = post.media;
+  if (first && isVideo(first)) {
+    return (
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+        <PrivateVideo postId={post.id} media={first} label={`${post.author.displayName}'s video`} />
+      </div>
+    );
+  }
+  return (
+    <div className={`grid gap-2 ${photoColumns[Math.min(post.media.length, 3)]}`}>
+      {post.media.map((media, index) => (
+        <div key={media.id} className="relative aspect-square overflow-hidden rounded-xl bg-background-secondary">
+          <PrivateImage
+            postId={post.id}
+            media={media}
+            alt={`${post.author.displayName}'s photo ${index + 1} of ${post.media.length}`}
+            sizes="(max-width: 768px) 100vw, 672px"
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
@@ -115,6 +145,8 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         {post.edited && " · Edited"}
         {post.viewerIsAuthor && (post.audience === "solo" ? " · Only you" : " · Friends")}
       </p>
+
+      <PostMedia post={post} />
 
       <section className="space-y-2">
         <h1 className="text-sm font-medium text-foreground-tertiary">{post.prompt.text}</h1>
