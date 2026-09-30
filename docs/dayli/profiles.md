@@ -28,6 +28,14 @@ The details also carry `stats`: `posts` (accepted posts, solo ones included, sin
 
 Both clients show these in the original web app's stats tile: Posts, Friends, and the current streak as an orange "Day streak". The owner's friend count opens their friends list. "Loved" returns with likes (#79). The longest streak and `postedToday` are in the API but not shown yet. Web refreshes profiles after a post is accepted; Flutter reads the profile again each time it opens. Flutter does not yet cache the last confirmed streak for offline display (#70).
 
+## Photos
+
+A profile photo is a JPEG, PNG, or WebP image uploaded through the [media reservation](media-reservations.md) flow: reserve, `PUT` to R2 with the signed headers, then `/complete`. `PUT /api/v1/profile/avatar` with the validated `reservationId` makes it the photo, replacing any earlier one, and `DELETE /api/v1/profile/avatar` removes it. An upload that is someone else's or missing is `404`; one that has not passed validation, or is not one of those image types, is `409`. The link lives in `profile_avatars` (migration `0015_profile_avatars`), one row per account.
+
+`avatarUrl` in the profile details is a presigned R2 `GET` link that expires after 10 minutes, signed only for a viewer who may see the bio. Without R2 configuration it is always null and the photo routes are unavailable, so local development shows initials. Provider photos, such as a Google account picture, are never used. The previous object is left in storage when a photo is replaced or removed; abandoned-upload cleanup (#163) must not delete an object still linked from `profile_avatars`.
+
+Web uploads from **Settings**. Flutter shows the photo but does not upload one yet; it will reuse the media upload client from #170 once that merges.
+
 ## Editing
 
 `PATCH /api/v1/profile` changes any of `bio` (160 characters), `publicName` (80 characters), and `profileVisibility`. Fields left out are unchanged, and null or blank text clears a field. Better Auth's generic `/update-user` still refuses `username` and `displayUsername`, so these dedicated routes are the only way to change them.
