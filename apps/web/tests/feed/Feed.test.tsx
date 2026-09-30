@@ -43,6 +43,25 @@ beforeEach(() => {
 });
 
 describe("Feed", () => {
+  it("starts again from the new day when a page is loaded after midnight", async () => {
+    const actor = userEvent.setup();
+    page
+      .mockResolvedValueOnce({ ok: true, value: { items: [post("1", "Walked to the harbour.")], nextCursor: "c1", hasMore: true, feedDate: "2026-09-25" } })
+      .mockResolvedValueOnce({ ok: false, failure: "dayChanged" })
+      .mockResolvedValueOnce({ ok: true, value: { items: [post("2", "Baked bread.")], nextCursor: null, hasMore: false, feedDate: "2026-09-26" } });
+
+    render(<Feed />);
+    expect(await screen.findByText("Walked to the harbour.")).toBeTruthy();
+
+    await actor.click(screen.getByRole("button", { name: "Load more" }));
+
+    expect(await screen.findByText("Baked bread.")).toBeTruthy();
+    expect(screen.queryByText("Walked to the harbour.")).toBeNull();
+    expect(page).toHaveBeenNthCalledWith(2, "c1");
+    expect(page).toHaveBeenNthCalledWith(3, undefined);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("shows friends' posts and loads the next page with the cursor", async () => {
     const actor = userEvent.setup();
     page
