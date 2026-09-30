@@ -1,0 +1,6 @@
+reason: The index belongs to the new empty intent table and is created in the protected transaction.
+affected_data_and_clients: No populated table index changes.
+rollout_sequence: Apply before runtime code.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Create later populated-table indexes concurrently.
+reviewer: Database and privacy reviewers required.

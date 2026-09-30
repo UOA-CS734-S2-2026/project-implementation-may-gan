@@ -43,8 +43,10 @@ import {
   termsAcceptances,
 } from "./legal";
 import { user } from "./users";
+import { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export { profileVisibility, tier, user } from "./users";
+export { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -361,6 +363,7 @@ export {
 
 export const schema = {
   account,
+  accountGoogleReauthenticationIntents,
   accountLifecycles,
   accountManagementGrants,
   accountPurgeReceipts,

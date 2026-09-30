@@ -120,6 +120,13 @@
       "when": 1790748640225,
       "tag": "0016_slimy_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790750487091,
+      "tag": "0017_rainy_the_anarchist",
+      "breakpoints": true
     }
   ]
 }

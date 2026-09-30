@@ -1,0 +1,6 @@
+reason: The new table is empty and its checks must be valid before OAuth continuation writes.
+affected_data_and_clients: No existing rows change.
+rollout_sequence: Apply before runtime code.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Use a forward migration for later changes.
+reviewer: Database and privacy reviewers required.

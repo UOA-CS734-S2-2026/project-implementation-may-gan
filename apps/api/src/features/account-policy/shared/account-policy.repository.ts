@@ -13,7 +13,7 @@ import type { AccountPolicyResolver } from "./account-policy.middleware";
  * deployed request path. Until then, this reader does not invent that signal.
  */
 export async function readAccountPolicy(database: DayliDatabase, userId: string): Promise<AccountPolicy> {
-  const [lifecycle, effectiveTerms, declaration] = await Promise.all([
+  const [lifecycle, effectiveTerms, declaration, restriction] = await Promise.all([
     database.select({ state: schema.accountLifecycles.state })
       .from(schema.accountLifecycles)
       .where(eq(schema.accountLifecycles.userId, userId))
@@ -30,6 +30,10 @@ export async function readAccountPolicy(database: DayliDatabase, userId: string)
     database.select({ userId: schema.ageDeclarations.userId })
       .from(schema.ageDeclarations)
       .where(eq(schema.ageDeclarations.userId, userId))
+      .limit(1),
+    database.select({ restricted: sql<boolean>`public.account_policy_underage_restricted(${userId})` })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
       .limit(1),
   ]);
   const state = lifecycle[0]?.state ?? "active";
@@ -49,6 +53,7 @@ export async function readAccountPolicy(database: DayliDatabase, userId: string)
     termsAccepted: acceptance.length === 1,
     ageDeclarationRequired: Boolean(termsId),
     ageDeclared: declaration.length === 1,
+    temporarilyRestricted: restriction[0]?.restricted === true,
   });
 }
 
