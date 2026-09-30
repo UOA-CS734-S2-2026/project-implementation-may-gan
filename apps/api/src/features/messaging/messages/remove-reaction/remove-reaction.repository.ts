@@ -30,7 +30,7 @@ class PostgresRemoveReactionTransaction implements RemoveReactionTransaction {
   }
 
   async removeReaction(messageId: string, actorId: string): Promise<StoredMessage> {
-    await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and user_id = ${actorId}`);
+    await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and participant_id = ${actorId}`);
     const current = await this.findMessage(this.conversationId, messageId);
     if (!current) throw new Error("Message disappeared during reaction.");
     return current;

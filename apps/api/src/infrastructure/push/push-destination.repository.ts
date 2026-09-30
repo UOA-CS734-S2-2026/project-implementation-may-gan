@@ -16,13 +16,14 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         from public.push_devices d
         join public.session s on s.id = d.session_id and s.user_id = d.user_id and s.expires_at > now()
         join public."user" u on u.id = d.user_id and (coalesce(u.banned, false) = false or (u.ban_expires is not null and u.ban_expires <= now()))
-        join public.conversation_members member on member.conversation_id = ${job.conversationId} and member.user_id = d.user_id
+        join public.conversation_members member on member.conversation_id = ${job.conversationId}
+        join public.messaging_participants recipient on recipient.id = member.participant_id and recipient.user_id = d.user_id and recipient.state = 'active'
         join public.conversations c on c.id = ${job.conversationId}
         where d.id = ${job.deviceRegistrationId} and d.user_id = ${job.recipientId}
           and d.opted_in and d.invalidated_at is null
           and not exists (
             select 1 from public.relationship_blocks b where b.unblocked_at is null and
-              ((b.blocker_id = c.user_low_id and b.blocked_id = c.user_high_id) or (b.blocker_id = c.user_high_id and b.blocked_id = c.user_low_id))
+              ((b.blocker_id = c.participant_low_id and b.blocked_id = c.participant_high_id) or (b.blocker_id = c.participant_high_id and b.blocked_id = c.participant_low_id))
           )
         limit 1
       `));

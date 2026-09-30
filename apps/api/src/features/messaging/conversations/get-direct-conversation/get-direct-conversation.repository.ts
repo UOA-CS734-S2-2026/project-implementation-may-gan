@@ -15,13 +15,13 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
         select c.id, exists(
           select 1 from public.relationship_blocks b
           where b.unblocked_at is null
-            and ((b.blocker_id = c.user_low_id and b.blocked_id = c.user_high_id)
-              or (b.blocker_id = c.user_high_id and b.blocked_id = c.user_low_id))
+            and ((b.blocker_id = c.participant_low_id and b.blocked_id = c.participant_high_id)
+              or (b.blocker_id = c.participant_high_id and b.blocked_id = c.participant_low_id))
         ) as blocked
         from public.conversations c
-        join public.conversation_members mine on mine.conversation_id = c.id and mine.user_id = ${actorId}
-        where c.user_low_id = least(${actorId}, ${recipientId})
-          and c.user_high_id = greatest(${actorId}, ${recipientId})
+        join public.conversation_members mine on mine.conversation_id = c.id and mine.participant_id = ${actorId}
+        where c.participant_low_id = least(${actorId}, ${recipientId})
+          and c.participant_high_id = greatest(${actorId}, ${recipientId})
         limit 1
       `) as Iterable<PairRow>];
       if (!pair) throw new MessagingError("NOT_FOUND");

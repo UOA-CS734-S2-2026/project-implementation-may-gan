@@ -38,10 +38,10 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
   const database = createHyperdriveDatabase(hyperdrive);
   try {
     const result = await database.db.execute(sql`
-      select c.user_low_id, c.user_high_id, change.kind, message.sender_id, change.member_id,
-        exists(select 1 from public.conversation_members member where member.conversation_id = c.id and member.user_id = ${job.recipientId}) as recipient_member,
+      select c.participant_low_id, c.participant_high_id, change.kind, message.sender_participant_id, change.member_participant_id,
+        exists(select 1 from public.conversation_members member join public.messaging_participants recipient on recipient.id = member.participant_id and recipient.user_id = ${job.recipientId} and recipient.state = 'active' where member.conversation_id = c.id) as recipient_member,
         exists(select 1 from public.relationship_blocks block where block.unblocked_at is null and
-          ((block.blocker_id = c.user_low_id and block.blocked_id = c.user_high_id) or (block.blocker_id = c.user_high_id and block.blocked_id = c.user_low_id))) as blocked
+          ((block.blocker_id = c.participant_low_id and block.blocked_id = c.participant_high_id) or (block.blocker_id = c.participant_high_id and block.blocked_id = c.participant_low_id))) as blocked
       from public.messaging_outbox outbox
       join public.conversations c on c.id = outbox.conversation_id
       join public.conversation_changes change on change.conversation_id = outbox.conversation_id and change.change_sequence = outbox.change_sequence
@@ -56,7 +56,7 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
     if (row.blocked !== true) return true;
     // Private actor invalidations do not expose new peer activity. The actor is
     // derived from the persisted change, never from an outbox caller.
-    const actorId = typeof row.sender_id === "string" ? row.sender_id : typeof row.member_id === "string" ? row.member_id : null;
+    const actorId = typeof row.sender_participant_id === "string" ? row.sender_participant_id : typeof row.member_participant_id === "string" ? row.member_participant_id : null;
     return actorId === job.recipientId;
   } finally {
     await database.close();

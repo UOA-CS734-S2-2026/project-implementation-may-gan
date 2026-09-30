@@ -44,7 +44,7 @@ export function createPostgresListConversationChangesRepository(
           changeSequence: String(item.change_sequence),
           kind: String(item.kind),
           messageId: item.message_id ? String(item.message_id) : null,
-          memberId: item.member_id ? String(item.member_id) : null,
+          memberId: item.member_participant_id ? String(item.member_participant_id) : null,
           createdAt: date(item.created_at).toISOString(),
         })),
         nextChangeSequence: result.length > limit ? String(page.at(-1)!.change_sequence) : null,

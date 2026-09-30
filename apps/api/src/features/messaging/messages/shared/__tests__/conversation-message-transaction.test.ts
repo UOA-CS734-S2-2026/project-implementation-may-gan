@@ -11,7 +11,7 @@ describe("withLockedConversationMessageTransaction", () => {
         queries.push(query);
         events.push(queries.length === 1 ? "pair lookup" : "relationship pair lock");
         return queries.length === 1
-          ? [{ user_low_id: "amy", user_high_id: "zoe" }]
+          ? [{ participant_low_id: "amy", participant_high_id: "zoe" }]
           : [];
       },
     } as unknown as Pick<DayliDatabase, "execute">;

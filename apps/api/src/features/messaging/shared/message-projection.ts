@@ -12,7 +12,7 @@ function storedMessage(row: Row): StoredMessage {
     id: String(row.id),
     conversationId: String(row.conversation_id),
     sequence: bigint(row.sequence),
-    senderId: String(row.sender_id),
+    senderId: String(row.sender_participant_id),
     clientMessageId: String(row.client_message_id),
     requestFingerprint: String(row.request_fingerprint),
     body: row.body === null ? null : String(row.body),
@@ -66,7 +66,7 @@ export async function projectMessageDto(
     ? rows<Row>(await queryable.execute(sql`select * from public.messages where id = ${message.replyToMessageId} and conversation_id = ${message.conversationId}`))[0]
     : undefined;
   const reactions = rows<{ reaction: string; count: number | string; reacted: boolean }>(await queryable.execute(sql`
-    select reaction, count(*)::int as count, bool_or(user_id = ${actorId}) as reacted
+    select reaction, count(*)::int as count, bool_or(participant_id = ${actorId}) as reacted
     from public.message_reactions where message_id = ${message.id} group by reaction
   `));
   message.reactions = reactions.map((item) => ({

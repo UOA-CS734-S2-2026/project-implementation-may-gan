@@ -21,28 +21,31 @@ async function conversationAfterResolution(
   conversationId: string,
 ) {
   const row = await requireConversationMember(database, actorId, conversationId);
-  const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
-  const [user] = rows<Row>(await database.execute(sql`
-    select id, coalesce(display_username, username) as name from public.user where id = ${peer}
+  const peer = String(row.participant_low_id) === actorId ? String(row.participant_high_id) : String(row.participant_low_id);
+  const [participant] = rows<Row>(await database.execute(sql`
+    select participant.id, participant.state, coalesce(profile.display_username, profile.username) as name
+    from public.messaging_participants participant
+    left join public."user" profile on profile.id = participant.user_id and participant.state = 'active'
+    where participant.id = ${peer}
   `));
   const [latest] = rows<Row>(await database.execute(sql`
     select * from public.messages where conversation_id = ${conversationId} order by sequence desc limit 1
   `));
   const unread = rows<{ count: number }>(await database.execute(sql`
     select count(*)::int as count from public.messages
-    where conversation_id = ${conversationId} and sender_id <> ${actorId}
+    where conversation_id = ${conversationId} and sender_participant_id <> ${actorId}
       and sequence > ${row.last_read_sequence}::bigint and unsent_at is null
   `))[0]?.count ?? 0;
   return projectConversationDto(database, {
     ...row,
     peer_id: peer,
-    peer_name: user?.name,
+    peer_name: participant?.state === "deleted" ? "Deleted account" : participant?.name,
     unread_count: unread,
     ...(latest ? {
       message_id: latest.id,
       message_conversation_id: latest.conversation_id,
       message_sequence: latest.sequence,
-      message_sender_id: latest.sender_id,
+      message_sender_participant_id: latest.sender_participant_id,
       message_client_message_id: latest.client_message_id,
       message_request_fingerprint: latest.request_fingerprint,
       message_body: latest.body,
@@ -62,14 +65,14 @@ export function createPostgresResolveMessageRequestRepository(
     async resolve(actorId, conversationId, decision) {
       await database.transaction(async (tx) => {
         const [pair] = rows<Row>(await tx.execute(sql`
-          select user_low_id, user_high_id from public.conversations where id = ${conversationId}
+          select participant_low_id, participant_high_id from public.conversations where id = ${conversationId}
         `));
         if (!pair) throw new MessagingError("NOT_FOUND");
-        await lockRelationshipPair(tx, String(pair.user_low_id), String(pair.user_high_id));
+        await lockRelationshipPair(tx, String(pair.participant_low_id), String(pair.participant_high_id));
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         if (row.blocked === true) throw new MessagingError("BLOCKED");
         const state = decision === "accept" ? "active" : "declined";
-        if (String(row.initiator_id) === actorId) throw new MessagingError("FORBIDDEN");
+        if (String(row.initiator_participant_id) === actorId) throw new MessagingError("FORBIDDEN");
         if (row.request_state === state) return;
         if (row.request_state !== "pending") throw new MessagingError("FORBIDDEN");
         await tx.execute(sql`

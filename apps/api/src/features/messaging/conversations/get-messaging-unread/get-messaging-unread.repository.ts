@@ -14,12 +14,12 @@ export function createPostgresGetMessagingUnreadRepository(
     async get(actorId) {
       const result = rows<{ inbox: number; requests: number }>(await database.execute(sql`
         select count(*) filter (where c.request_state = 'active')::int as inbox,
-          count(*) filter (where c.request_state = 'pending' and c.initiator_id <> ${actorId})::int as requests
+          count(*) filter (where c.request_state = 'pending' and c.initiator_participant_id <> ${actorId})::int as requests
         from public.conversation_members m
+        join public.messaging_participants actor on actor.id = m.participant_id and actor.user_id = ${actorId} and actor.state = 'active'
         join public.conversations c on c.id = m.conversation_id
-        join public.messages x on x.conversation_id = c.id and x.sender_id <> ${actorId}
+        join public.messages x on x.conversation_id = c.id and x.sender_participant_id <> actor.id
           and x.sequence > m.last_read_sequence and x.unsent_at is null
-        where m.user_id = ${actorId}
       `));
       return { inboxCount: result[0]?.inbox ?? 0, requestCount: result[0]?.requests ?? 0 };
     },

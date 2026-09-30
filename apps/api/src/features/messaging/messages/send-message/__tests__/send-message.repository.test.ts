@@ -12,7 +12,7 @@ describe("createHyperdriveMessageWriteStore", () => {
     const callbackError = new Error("action failed");
     const transaction = {
       execute: vi.fn()
-        .mockResolvedValueOnce([{ user_low_id: "amy", user_high_id: "zoe" }])
+        .mockResolvedValueOnce([{ participant_low_id: "amy", participant_high_id: "zoe" }])
         .mockResolvedValueOnce([]),
     };
     const database = {
