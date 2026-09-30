@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dayli_mobile/api/feed_client.dart';
@@ -17,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:http/http.dart' as http;
 
 const _apiOrigin = String.fromEnvironment('DAYLI_E2E_API_BASE_URL');
 const _developmentCa = String.fromEnvironment(developmentCaDefine);
@@ -90,9 +92,11 @@ void main() {
       await tester.tap(find.byKey(const Key('shell.profile')));
       await _waitFor(tester, find.text('settings'));
       await tester.ensureVisible(find.byKey(const Key('settings.signOut')));
+      final firstBearer = await _verifiedBearer(tokens);
       await tester.tap(find.byKey(const Key('settings.signOut')));
       await _waitFor(tester, find.byKey(const Key('landing.sign-in')));
       expect(await tokens.readPendingRevocation(), isNull);
+      expect(await _serverRecognizesBearer(firstBearer), isFalse);
 
       await tester.tap(find.byKey(const Key('legal.openTerms')));
       await _waitFor(tester, find.text('Terms of Service'));
@@ -127,12 +131,52 @@ void main() {
       await tester.tap(find.byKey(const Key('shell.profile')));
       await _waitFor(tester, find.text('settings'));
       await tester.ensureVisible(find.byKey(const Key('settings.signOut')));
+      final secondBearer = await _verifiedBearer(tokens);
       await tester.tap(find.byKey(const Key('settings.signOut')));
       await _waitFor(tester, find.byKey(const Key('landing.sign-in')));
+      expect(await _serverRecognizesBearer(secondBearer), isFalse);
 
       await _clearSession(tokens, users);
     },
   );
+}
+
+Future<String> _verifiedBearer(ProtectedSessionTokenStore tokens) async {
+  final bearer = await tokens.read();
+  if (bearer == null || bearer.isEmpty) {
+    throw TestFailure('Expected a stored bearer before sign-out.');
+  }
+  expect(await _serverRecognizesBearer(bearer), isTrue);
+  return bearer;
+}
+
+Future<bool> _serverRecognizesBearer(String bearer) async {
+  final client = http.Client();
+  try {
+    final response = await client.get(
+      Uri.parse('$_apiOrigin/api/auth/get-session'),
+      headers: {'Authorization': 'Bearer $bearer'},
+    );
+    if (response.statusCode == 401) return false;
+    if (response.statusCode != 200) {
+      throw TestFailure(
+        'Unexpected session-check status: ${response.statusCode}.',
+      );
+    }
+    final Object? body;
+    try {
+      body = jsonDecode(response.body);
+    } on FormatException {
+      throw TestFailure('Session check did not return valid JSON.');
+    }
+    if (body == null) return false;
+    if (body is Map && body['session'] is Map && body['user'] is Map) {
+      return true;
+    }
+    throw TestFailure('Unexpected session-check response shape.');
+  } finally {
+    client.close();
+  }
 }
 
 Future<void> _tapLegalBack(WidgetTester tester, String documentId) async {
