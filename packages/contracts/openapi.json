@@ -528,12 +528,23 @@
           },
           "hasMore": {
             "type": "boolean"
+          },
+          "feedDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the page shows: yesterday, released at the most recent midnight."
+              }
+            ]
           }
         },
         "required": [
           "items",
           "nextCursor",
-          "hasMore"
+          "hasMore",
+          "feedDate"
         ]
       },
       "FeedPost": {
@@ -1834,6 +1845,16 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The cursor is from an earlier feed day, for example a page loaded before midnight (`details.reason = \"feedDayChanged\"`, with the current `details.feedDate`). Start again without a cursor.",
             "content": {
               "application/json": {
                 "schema": {

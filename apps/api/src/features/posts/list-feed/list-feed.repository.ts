@@ -23,6 +23,17 @@ export class InvalidFeedCursorError extends Error {
   }
 }
 
+/**
+ * A cursor from an earlier feed day, such as a page loaded before midnight.
+ * Continuing it would show nothing, so the client must start again.
+ */
+export class StaleFeedCursorError extends Error {
+  constructor(readonly feedDate: string) {
+    super("The feed has moved on to a new day.");
+    this.name = "StaleFeedCursorError";
+  }
+}
+
 interface FeedCursor {
   localDate: string;
   id: string;
@@ -80,6 +91,9 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
     async listFeed(viewerId, now, limit, rawCursor) {
       const cursor = decodeCursor(rawCursor);
       const yesterday = previousDay(getAucklandDay(() => now).localDate);
+      // Every post in the feed is from one day, so a cursor from another day
+      // was issued before the most recent midnight.
+      if (cursor && cursor.localDate !== yesterday) throw new StaleFeedCursorError(yesterday);
       const rows = await database
         .select({
           id: posts.id,
@@ -139,6 +153,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           edited: row.edited,
           media: media.get(row.id) ?? [],
         })),
+        feedDate: yesterday,
         hasMore,
         nextCursor: hasMore && last ? encodeCursor({ localDate: last.localDate, id: last.id }) : null,
       };

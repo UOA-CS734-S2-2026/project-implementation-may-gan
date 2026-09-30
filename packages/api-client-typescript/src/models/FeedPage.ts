@@ -39,6 +39,10 @@ export interface FeedPage {
      *
      */
     hasMore: boolean;
+    /**
+     * The Auckland day the page shows: yesterday, released at the most recent midnight.
+     */
+    feedDate: string;
 }
 
 /**
@@ -48,6 +52,7 @@ export function instanceOfFeedPage(value: object): value is FeedPage {
     if (!('items' in value) || value['items'] === undefined) return false;
     if (!('nextCursor' in value) || value['nextCursor'] === undefined) return false;
     if (!('hasMore' in value) || value['hasMore'] === undefined) return false;
+    if (!('feedDate' in value) || value['feedDate'] === undefined) return false;
     return true;
 }
 
@@ -64,6 +69,7 @@ export function FeedPageFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'items': ((json['items'] as Array<any>).map(FeedPostFromJSON)),
         'nextCursor': json['nextCursor'],
         'hasMore': json['hasMore'],
+        'feedDate': json['feedDate'],
     };
 }
 
@@ -81,5 +87,6 @@ export function FeedPageToJSONTyped(value?: FeedPage | null, ignoreDiscriminator
         'items': ((value['items'] as Array<any>).map(FeedPostToJSON)),
         'nextCursor': value['nextCursor'],
         'hasMore': value['hasMore'],
+        'feedDate': value['feedDate'],
     };
 }

@@ -1,7 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPostgresFeedRepository, InvalidFeedCursorError } from "./list-feed.repository";
+import { createPostgresFeedRepository, InvalidFeedCursorError, StaleFeedCursorError } from "./list-feed.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -138,7 +138,7 @@ function requireLocalTestUrl(value: string): string {
     const page = await feed().listFeed(users.viewer, now, 20);
 
     expect(page.items.map((post) => post.id)).toEqual([id("c-25"), id("b-25"), id("a-25")]);
-    expect(page).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(page).toMatchObject({ hasMore: false, nextCursor: null, feedDate: "2026-09-25" });
   });
 
   it("projects the author, prompt, and edited marker", async () => {
@@ -178,6 +178,18 @@ function requireLocalTestUrl(value: string): string {
 
     const afterMidnight = await feed().listFeed(users.viewer, new Date("2026-09-26T12:00:00.000Z"), 20);
     expect(afterMidnight.items.map((post) => post.id)).toEqual([id("b-26-unreleased")]);
+  });
+
+  it("rejects a cursor carried across midnight instead of returning an empty page", async () => {
+    const beforeMidnight = await feed().listFeed(users.viewer, new Date("2026-09-26T10:59:59.999Z"), 2);
+    expect(beforeMidnight.hasMore).toBe(true);
+
+    // Daylight saving starts on the 27th, so that midnight is 12:00 UTC.
+    const afterMidnight = new Date("2026-09-26T12:00:00.000Z");
+    await expect(feed().listFeed(users.viewer, afterMidnight, 2, beforeMidnight.nextCursor!))
+      .rejects.toMatchObject({ name: "StaleFeedCursorError", feedDate: "2026-09-26" });
+    await expect(feed().listFeed(users.viewer, afterMidnight, 2, beforeMidnight.nextCursor!))
+      .rejects.toBeInstanceOf(StaleFeedCursorError);
   });
 
   it("never shows a friend's feed to the stranger", async () => {
