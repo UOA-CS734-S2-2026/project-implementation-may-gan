@@ -5,7 +5,9 @@ import 'package:dayli_api_client/api.dart' as generated;
 import 'package:http/http.dart' as http;
 
 import 'api_failure.dart';
+import 'feed_client.dart' show FeedPost;
 import 'post_media.dart';
+import 'post_page.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
 /// One post the signed-in user may read.
@@ -101,16 +103,77 @@ class PostDetail {
   }
 }
 
+/// A post on a profile. Only the author sees their solo and unreleased posts.
+class ProfilePost extends FeedPost {
+  const ProfilePost({
+    required super.id,
+    required super.authorId,
+    required super.username,
+    required super.displayName,
+    required super.localDate,
+    required super.promptText,
+    required super.reflectiveAnswer,
+    required super.caption,
+    required super.rating,
+    required super.acceptedAt,
+    required super.edited,
+    super.media,
+    required this.audience,
+    required this.released,
+  });
+
+  /// `solo` or `friends`.
+  final String audience;
+
+  /// False only on your own profile, before the post's day is released.
+  final bool released;
+
+  static ProfilePost? tryParse(Object? json) {
+    final post = FeedPost.tryParse(json);
+    if (post == null || json is! Map<String, Object?>) return null;
+    final audience = json['audience'];
+    final released = json['released'];
+    if ((audience != 'solo' && audience != 'friends') || released is! bool) {
+      return null;
+    }
+    return ProfilePost(
+      id: post.id,
+      authorId: post.authorId,
+      username: post.username,
+      displayName: post.displayName,
+      localDate: post.localDate,
+      promptText: post.promptText,
+      reflectiveAnswer: post.reflectiveAnswer,
+      caption: post.caption,
+      rating: post.rating,
+      acceptedAt: post.acceptedAt,
+      edited: post.edited,
+      media: post.media,
+      audience: audience! as String,
+      released: released,
+    );
+  }
+}
+
+typedef ProfilePostsPage = PostPage<ProfilePost>;
+
 abstract interface class PostClient {
   Future<ApiResult<PostDetail>> get(String postId);
+
+  /// [NotFound] when the profile is unknown or blocked. A profile whose posts
+  /// you may not read is an empty page.
+  Future<ApiResult<ProfilePostsPage>> profilePage(
+    String username, {
+    String? cursor,
+  });
 
   /// A fresh download URL for one attachment whose earlier URL expired.
   Future<ApiResult<PostMedia>> media(String postId, String mediaId);
 }
 
-/// Reads `GET /api/v1/posts/{postId}` with the stored Better Auth bearer
-/// session. The body is decoded here because the generated `PostDetail`
-/// treats the nullable `caption` as required.
+/// Reads posts and profile posts with the stored Better Auth bearer session.
+/// Bodies are decoded here because the generated models treat the nullable
+/// `caption` as required.
 class GeneratedPostClient implements PostClient {
   GeneratedPostClient({
     required String baseUrl,
@@ -163,6 +226,54 @@ class GeneratedPostClient implements PostClient {
     return post == null
         ? const ApiError(ServiceUnavailable())
         : ApiSuccess(post);
+  }
+
+  @override
+  Future<ApiResult<ProfilePostsPage>> profilePage(
+    String username, {
+    String? cursor,
+  }) async {
+    final token = await _bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final client = generated.ApiClient(
+      basePath: _baseUrl,
+      authentication: auth,
+    );
+    if (_httpClient != null) client.client = _httpClient;
+
+    final http.Response response;
+    try {
+      response = await generated.PostsApi(
+        client,
+      ).postsListProfilePostsWithHttpInfo(username, cursor: cursor);
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+
+    final status = response.statusCode;
+    // Unknown and blocked profiles are both 404; a malformed handle could
+    // never name one.
+    if (status == HttpStatus.notFound ||
+        (status == HttpStatus.unprocessableEntity && cursor == null)) {
+      return const ApiError(NotFound());
+    }
+    if (status != HttpStatus.ok) {
+      return ApiError(failureForStatus(status, null));
+    }
+    final Object? json;
+    try {
+      json = jsonDecode(response.body);
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    }
+    final page = PostPage.tryParse(json, ProfilePost.tryParse);
+    return page == null
+        ? const ApiError(ServiceUnavailable())
+        : ApiSuccess(page);
   }
 
   @override

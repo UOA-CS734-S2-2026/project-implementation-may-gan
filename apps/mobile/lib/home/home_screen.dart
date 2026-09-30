@@ -5,14 +5,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
-import '../api/feed_client.dart';
 import '../api/posting_day_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../compose/deadline_countdown.dart';
-import '../posts/private_media.dart';
+import '../posts/post_preview_card.dart';
 import '../ui/dayli_button.dart';
-import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 import 'feed_controller.dart';
 
@@ -431,7 +429,11 @@ class _FeedSection extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         for (final post in feed.posts) ...[
-          _FeedPostCard(key: Key('home.feed.post.${post.id}'), post: post),
+          PostPreviewCard(
+            key: Key('home.feed.post.${post.id}'),
+            post: post,
+            keyPrefix: 'home.feed',
+          ),
           const SizedBox(height: 16),
         ],
         if (feed.moreFailure != null) ...[
@@ -454,156 +456,6 @@ class _FeedSection extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _FeedPostCard extends StatelessWidget {
-  const _FeedPostCard({super.key, required this.post});
-
-  final FeedPost post;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = DayliColors.of(context);
-    final initial = post.displayName.isEmpty
-        ? '?'
-        : post.displayName.characters.first.toUpperCase();
-    final card = DayliCard(
-      padding: const EdgeInsets.all(18),
-      radius: 18,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: colors.backgroundAccent,
-                child: Text(
-                  initial,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    weight: FontWeight.w600,
-                    color: colors.foregroundAccent,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post.displayName,
-                      overflow: TextOverflow.ellipsis,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.sm,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      '@${post.username}',
-                      overflow: TextOverflow.ellipsis,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        color: colors.foregroundSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '${shortDayLabel(post.localDate)} · ${post.rating}/10',
-                style: DayliText.sans(
-                  context,
-                  size: DayliTextSize.xs,
-                  color: colors.foregroundSecondary,
-                ),
-              ),
-            ],
-          ),
-          if (post.media.firstOrNull case final media?) ...[
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: media.isVideo
-                    // Videos play on the post itself, never in the feed.
-                    ? Semantics(
-                        key: Key('home.feed.video.${post.id}'),
-                        label: 'Video',
-                        excludeSemantics: true,
-                        child: ColoredBox(
-                          color: colors.foreground,
-                          child: const Icon(
-                            Icons.play_circle_outline_rounded,
-                            size: 48,
-                            color: Colors.white,
-                          ),
-                        ),
-                      )
-                    : PrivateImage(
-                        key: Key('home.feed.photo.${post.id}'),
-                        postId: post.id,
-                        media: media,
-                        semanticLabel: "${post.displayName}'s photo",
-                      ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          Text(
-            post.promptText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: DayliText.sans(
-              context,
-              size: DayliTextSize.xs,
-              weight: FontWeight.w500,
-              color: colors.foregroundTertiary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          // Whole lines only; the full answer and word dump are on the post.
-          Text(
-            post.reflectiveAnswer,
-            key: Key('home.feed.answer.${post.id}'),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: DayliText.serif(
-              context,
-              size: DayliTextSize.lg,
-              weight: FontWeight.w500,
-              tracking: DayliTracking.tight,
-            ),
-          ),
-          if (post.edited) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Edited',
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.xs,
-                color: colors.foregroundTertiary,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-    return Semantics(
-      button: true,
-      label: 'Open ${post.displayName}\'s dayli',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => context.push('/posts/${post.id}'),
-        child: card,
-      ),
     );
   }
 }
