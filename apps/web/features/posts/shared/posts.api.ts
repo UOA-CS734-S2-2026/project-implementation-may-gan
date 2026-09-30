@@ -1,7 +1,7 @@
-import { FetchError, PostsApi, ResponseError, type PostDetail } from "@dayli/api-client";
+import { FetchError, PostsApi, ResponseError, type PostDetail, type PostMedia } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { PostDetail };
+export type { PostDetail, PostMedia };
 
 export type PostFailure = "unauthenticated" | "notFound" | "network" | "unavailable";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
@@ -25,6 +25,17 @@ export const postsApi = {
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
       return { ok: true, value: await new PostsApi(configuration).postsGet({ postId }) };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error) };
+    }
+  },
+
+  /** A fresh download URL for one attachment whose earlier URL expired. */
+  async media(postId: string, mediaId: string): Promise<PostResult<PostMedia>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      return { ok: true, value: await new PostsApi(configuration).postsGetMedia({ postId, mediaId }) };
     } catch (error) {
       return { ok: false, failure: await toFailure(error) };
     }
