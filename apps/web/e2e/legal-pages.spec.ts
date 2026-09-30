@@ -44,19 +44,26 @@ test("legal pages preserve a draft auth form and stay public after session loss"
 });
 
 test("a signed-in person can read the draft policies from Settings without a redirect", async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name === "mobile-chromium", "The disposable API rate-limit fixture permits three registrations per run.");
   const suffix = testInfo.project.name.replace(/[^a-z0-9]/gi, "").toLowerCase();
-  const username = `legale2e${suffix}`;
+  const username = `e2e${suffix}`;
   const email = `${username}@example.test`;
   const password = "e2e-password-123";
 
-  await page.goto("/sign-up");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Public name (optional)").fill(`Legal ${suffix}`);
+  await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Let's go" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  try {
+    await expect(page).toHaveURL(/\/home$/, { timeout: 3_000 });
+  } catch {
+    await page.goto("/sign-up");
+    await page.getByLabel("Username").fill(username);
+    await page.getByLabel("Public name (optional)").fill(`E2E ${suffix}`);
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(password);
+    await page.getByRole("button", { name: "Let's go" }).click();
+    await expect(page).toHaveURL(/\/home$/);
+  }
 
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();

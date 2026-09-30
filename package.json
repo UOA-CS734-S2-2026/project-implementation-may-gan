@@ -12,6 +12,7 @@
     "legal:check": "node scripts/sync-legal-content.mjs --check",
     "legal:publish:check": "node scripts/sync-legal-content.mjs --publish",
     "legal:release:check": "pnpm legal:check && pnpm legal:publish:check",
+    "legal:workflow:check": "node --test scripts/legal-release-gates.test.mjs",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "generate:client:typescript": "openapi-generator-cli generate -i packages/contracts/openapi.json -g typescript-fetch -o packages/api-client-typescript --type-mappings date=string --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=npmName=@dayli/api-client,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true",
     "generate:client:dart": "openapi-generator-cli generate -i packages/contracts/openapi.json -g dart -o packages/api-client-dart --type-mappings date=String --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=pubName=dayli_api_client,pubVersion=0.1.0,useEnumExtension=true,useFinalProperties=true",
@@ -38,7 +39,7 @@
     "dev:web:https": "bash scripts/local-auth.sh web",
     "lint": "node scripts/check-api-boundaries.mjs && node scripts/check-api-drizzle-queries.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
-    "test:e2e:web": "bash scripts/test-web-e2e.sh",
+    "test:e2e:web": "bash scripts/test-web-e2e.sh --project=desktop-chromium && bash scripts/test-web-e2e.sh --project=mobile-chromium",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:local": "bash scripts/verify-local.sh",
     "verify:local:full": "VERIFY_LOCAL_FULL=1 bash scripts/verify-local.sh"

@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
 
-# Runs browser journeys against local HTTPS services and a disposable PostgreSQL
-# Compose project. It does not use developer, staging, or production credentials.
+# Runs the Android legal journey against a disposable local Better Auth Worker
+# and PostgreSQL fixture. It uses the operator-installed mkcert development CA
+# and an adb loopback reverse. It never contacts staging or production.
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/packages/db/docker-compose.yml"
-compose_project="dayli-web-e2e-${$}-${RANDOM}"
-temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e.XXXXXX")"
-certificate="$temporary_dir/localhost.pem"
-key="$temporary_dir/localhost-key.pem"
+compose_project="dayli-mobile-legal-e2e-${$}-${RANDOM}"
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-mobile-legal-e2e.XXXXXX")"
 api_log="$temporary_dir/api.log"
-web_log="$temporary_dir/web.log"
 api_pid=""
-web_pid=""
+reverse_created=false
+
+device_id="${1:-emulator-5554}"
+adb_bin="${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}/platform-tools/adb"
+certificate="${XDG_STATE_HOME:-$HOME/.local/state}/dayli/mkcert/localhost.pem"
+key="${XDG_STATE_HOME:-$HOME/.local/state}/dayli/mkcert/localhost-key.pem"
 
 find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
@@ -21,9 +24,7 @@ find_free_port() {
 
 postgres_port="$(find_free_port)"
 api_port="$(find_free_port)"
-web_port="$(find_free_port)"
 api_origin="https://localhost:${api_port}"
-web_origin="https://localhost:${web_port}"
 export POSTGRES_PORT="$postgres_port"
 
 stop_process_tree() {
@@ -41,15 +42,14 @@ stop_process_tree() {
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  for pid in "$web_pid" "$api_pid"; do
-    stop_process_tree "$pid"
-  done
+  if [[ "$reverse_created" == true ]]; then
+    "$adb_bin" -s "$device_id" reverse --remove "tcp:${api_port}" >/dev/null 2>&1 || true
+  fi
+  stop_process_tree "$api_pid"
   docker compose -p "$compose_project" -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
   if [[ "$status" -ne 0 ]]; then
     echo 'API log:' >&2
     [[ -f "$api_log" ]] && tail -n 100 "$api_log" >&2 || true
-    echo 'Web log:' >&2
-    [[ -f "$web_log" ]] && tail -n 100 "$web_log" >&2 || true
   fi
   rm -rf "$temporary_dir"
   exit "$status"
@@ -59,7 +59,7 @@ trap cleanup EXIT INT TERM
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    echo "Web E2E tests require $1." >&2
+    echo "Android legal E2E requires $1." >&2
     exit 1
   fi
 }
@@ -67,16 +67,15 @@ require_command() {
 wait_for_url() {
   local url="$1"
   local pid="$2"
-  local name="$3"
   local attempts=0
   until curl --fail --silent --insecure "$url" >/dev/null; do
     if ! kill -0 "$pid" >/dev/null 2>&1; then
-      echo "$name stopped before it became ready." >&2
+      echo "API stopped before it became ready." >&2
       return 1
     fi
     attempts=$((attempts + 1))
     if [[ "$attempts" -ge 120 ]]; then
-      echo "$name did not become ready at $url." >&2
+      echo "API did not become ready at $url." >&2
       return 1
     fi
     sleep 0.5
@@ -85,15 +84,23 @@ wait_for_url() {
 
 require_command curl
 require_command docker
+require_command flutter
+require_command mkcert
+require_command node
 require_command openssl
 require_command pnpm
-require_command node
+[[ -x "$adb_bin" ]] || { echo "Android legal E2E requires adb at $adb_bin." >&2; exit 1; }
+[[ -r "$certificate" && -r "$key" ]] || {
+  echo 'The existing local mkcert localhost certificate is required. Run the documented local HTTPS setup first.' >&2
+  exit 1
+}
+root_ca="$(mkcert -CAROOT)/rootCA.pem"
+[[ -r "$root_ca" ]] || { echo 'The mkcert rootCA.pem is required.' >&2; exit 1; }
+openssl verify -CAfile "$root_ca" "$certificate" >/dev/null
+"$adb_bin" -s "$device_id" get-state | grep -qx device
+
 docker compose version >/dev/null
 docker info >/dev/null
-
-openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
-  -keyout "$key" -out "$certificate" -subj '/CN=localhost' \
-  -addext 'subjectAltName=DNS:localhost' >/dev/null 2>&1
 
 cd "$repo_root"
 echo 'Starting disposable PostgreSQL fixture'
@@ -117,21 +124,19 @@ echo 'Starting isolated local API'
       --persist-to "$temporary_dir/wrangler" --log-level warn \
       --var 'BETTER_AUTH_SECRET:e2e-only-secret-that-is-at-least-32-characters' \
       --var "BETTER_AUTH_BASE_URL:${api_origin}" \
-      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin},${web_origin}"
+      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin}"
 ) >"$api_log" 2>&1 &
 api_pid=$!
-wait_for_url "${api_origin}/api/v1/health" "$api_pid" 'API'
+wait_for_url "${api_origin}/api/v1/health" "$api_pid"
 
-echo 'Starting local web application'
+"$adb_bin" -s "$device_id" reverse "tcp:${api_port}" "tcp:${api_port}"
+reverse_created=true
+
+echo 'Running Android Better Auth and legal journey'
+ca_base64="$(base64 < "$root_ca" | tr -d '\n')"
 (
-  exec env \
-    NEXT_PUBLIC_API_BASE_URL="$api_origin" \
-    NEXT_TELEMETRY_DISABLED=1 \
-    pnpm --filter @dayli/web exec next dev --webpack --hostname localhost --port "$web_port" \
-      --experimental-https --experimental-https-key "$key" --experimental-https-cert "$certificate"
-) >"$web_log" 2>&1 &
-web_pid=$!
-wait_for_url "$web_origin" "$web_pid" 'Web application'
-
-echo 'Running Playwright browser journeys'
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"
+  cd "$repo_root/apps/mobile"
+  flutter test integration_test/legal_backend_integration_test.dart -d "$device_id" \
+    --dart-define="DAYLI_E2E_API_BASE_URL=${api_origin}" \
+    --dart-define="DAYLI_DEV_CA_PEM_B64=${ca_base64}"
+)

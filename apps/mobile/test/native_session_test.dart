@@ -271,7 +271,12 @@ void main() {
     'clears the protected token only after Better Auth confirms logout',
     () async {
       final tokenStore = MemorySessionTokenStore()..value = 'worker-token';
-      final client = MockClient((request) async => http.Response('', 200));
+      final client = MockClient((request) async {
+        expect(request.headers['content-type'], 'application/json');
+        expect(request.headers['authorization'], 'Bearer worker-token');
+        expect(request.body, '{}');
+        return http.Response('', 200);
+      });
       final session = BetterAuthNativeSession(
         baseUrl: 'https://api.example.test',
         tokenStore: tokenStore,

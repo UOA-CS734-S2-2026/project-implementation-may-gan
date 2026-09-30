@@ -292,7 +292,11 @@ class BetterAuthNativeSession {
     if (token == null) return;
     final response = await _client.post(
       _uri('/api/auth/sign-out'),
-      headers: {'authorization': 'Bearer $token'},
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $token',
+      },
+      body: '{}',
     );
     if (response.statusCode >= 400) {
       throw AuthenticationFailure('sign-out', response.statusCode);
@@ -308,7 +312,11 @@ class BetterAuthNativeSession {
 
     final response = await _client.post(
       _uri('/api/auth/sign-out'),
-      headers: {'authorization': 'Bearer $token'},
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $token',
+      },
+      body: '{}',
     );
     if (response.statusCode >= 400) {
       throw AuthenticationFailure('sign-out', response.statusCode);

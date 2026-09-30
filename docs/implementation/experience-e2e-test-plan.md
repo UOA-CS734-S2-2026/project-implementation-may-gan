@@ -16,7 +16,7 @@ The first web slice proves that a new person can use the real local app stack:
 
 Settings has no link in the current web navigation, so the test opens its URL directly. It still checks access through the page and does not inject a session.
 
-`apps/web/playwright.config.ts` runs this journey in desktop Chromium and Pixel 7 Chromium projects. `scripts/test-web-e2e.sh` starts a self-signed HTTPS API Worker, the HTTPS Next development server, and a new PostgreSQL Compose project. It migrates that database before Playwright starts, then removes the containers, volume, Worker state, certificate, and logs when it exits.
+`apps/web/playwright.config.ts` runs this journey in desktop Chromium and Pixel 7 Chromium projects. `pnpm test:e2e:web` invokes `scripts/test-web-e2e.sh` once per browser project, giving each project a separate self-signed HTTPS API Worker, HTTPS Next development server, and new PostgreSQL Compose project. This keeps the real Better Auth rate limit intact while each project uses its own disposable synthetic account. Each invocation migrates its database before Playwright starts, then removes its containers, volume, Worker state, certificate, and logs when it exits.
 
 The script only uses the local `postgres:18` fixture in `packages/db/docker-compose.yml`, its `migrator` and restricted `app` roles, and a test-only Better Auth secret. It has no staging URL, deployment, secret, or production database path. The GitHub Actions `Web E2E` job installs Chromium and runs the same script.
 
@@ -42,16 +42,20 @@ pnpm --filter @dayli/web exec playwright install chromium
 pnpm test:e2e:web
 ```
 
-`apps/mobile/integration_test/legal_navigation_integration_test.dart` is a native legal-reading journey. It constructs the real router, `SessionController`, protected token and identity stores, generated API clients, and bundled assets. It intentionally points at an unused loopback origin, clears the protected session first, and never changes machine networking. It proves legal content is available without a network request or active session, and that a real app instance preserves an unsubmitted sign-in email after returning from Privacy. It does not prove a real Better Auth sign-in, Terms acceptance, deletion, export, Google sign-in, or lifecycle policy. Those need the separate isolated backend described below.
+`apps/mobile/integration_test/legal_navigation_integration_test.dart` is an offline native legal-reading journey. It constructs the real router, `SessionController`, protected token and identity stores, generated API clients, and bundled assets. It intentionally points at an unused loopback origin, clears the protected session first, and never changes machine networking. It proves legal content is available without a network request or active session, and that a real app instance preserves an unsubmitted sign-in email after returning from Privacy.
 
-Run the native legal journey on a booted Android emulator or iOS simulator:
+`scripts/test-mobile-legal-e2e.sh` adds the separate Android live-backend journey. It starts an isolated PostgreSQL fixture and Better Auth Worker, maps only the random local Worker port through `adb reverse`, and supplies the existing mkcert root only to the debug test process. `apps/mobile/integration_test/legal_backend_integration_test.dart` uses real `AppServices`, router, storage, generated clients, and Better Auth to create an email/password account, restore its session after an app restart, open both policies from Settings, sign out, read a public policy, preserve an unsubmitted sign-in form through Privacy, and sign in again. It does not mock session state or API authorization. Realtime is excluded because it needs a dedicated WebSocket fixture.
+
+Run the offline journey on a booted Android emulator or iOS simulator, or the live journey on the Android emulator with the documented local HTTPS prerequisites:
 
 ```bash
 cd apps/mobile
 flutter test integration_test/legal_navigation_integration_test.dart -d <device-id>
+cd ../..
+scripts/test-mobile-legal-e2e.sh emulator-5554
 ```
 
-An Android emulator and iOS simulator are still required release evidence. A macOS desktop run can catch a native plugin or router regression, but it is not a substitute for either target.
+The live journey does not prove Terms acceptance, deletion, export, Google sign-in, provider delivery, realtime, or lifecycle policy. Android emulator evidence is available. An iOS simulator is still required release evidence. A macOS desktop run can catch a native plugin or router regression, but it is not a substitute for either target.
 
 ## Web follow-up
 
@@ -75,8 +79,8 @@ The legal-reading native integration journey is described above. `apps/mobile/in
 Build native experience coverage in these steps:
 
 1. Keep fake-backed integration tests for launch, landing, auth navigation, composer drafts, and route recovery. Run them on Android and iOS simulators or emulators.
-2. Provide an owner-approved disposable API Worker, PostgreSQL database, and synthetic accounts. Configure emulator and simulator HTTPS trust for that test origin. The fixture must create or reset accounts without production credentials.
-3. Add a real email sign-in journey that verifies a protected endpoint after the app stores its bearer session. Cover first-launch state, sign-out, and account isolation on both Android and iOS.
+2. Extend the Android disposable Worker and PostgreSQL fixture to iOS after full Xcode, a Simulator runtime, and simulator CA trust are available. The fixture must continue to create or reset accounts without production credentials.
+3. Extend the existing real Android email journey to iOS and add a dedicated protected-endpoint assertion and account-isolation coverage. Cover first-launch state and sign-out on both Android and iOS.
 4. Add two-account friend, dayli, and messaging journeys. Test background and foreground recovery separately because the operating systems suspend apps differently.
 5. Verify notifications on physical Android and iOS devices. FCM and APNs permissions, token rotation, and notification taps need device evidence that a simulator cannot provide.
 
