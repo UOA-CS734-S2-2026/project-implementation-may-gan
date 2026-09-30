@@ -120,6 +120,13 @@
       "when": 1790819170116,
       "tag": "0016_username_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790819294112,
+      "tag": "0017_profile_avatars",
+      "breakpoints": true
     }
   ]
 }

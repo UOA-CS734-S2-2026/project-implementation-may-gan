@@ -21,6 +21,9 @@ export const profileDetailsSchema = z
       description: "False when the account is private and the caller is not an active friend. The bio is then null.",
     }),
     bio: z.string().nullable(),
+    avatarUrl: z.url().nullable().openapi({
+      description: "A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.",
+    }),
     streak: z.object({
       current: z.number().int().nonnegative().openapi({
         description: "Consecutive Auckland days with an accepted post, ending today, or yesterday while today is still open.",

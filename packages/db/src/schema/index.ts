@@ -298,6 +298,16 @@ export const mediaReservation = pgTable("media_reservation", {
   `),
 ]);
 
+/**
+ * A profile photo: one validated upload per account. The row goes when the
+ * owner removes the photo; the object itself is left for upload cleanup.
+ */
+export const profileAvatars = pgTable("profile_avatars", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  reservationId: text("reservation_id").notNull().unique().references(() => mediaReservation.id, { onDelete: "cascade" }),
+  setAt: timestamp("set_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export { dailyPrompts } from "./daily-prompts";
 export {
   conversationChanges,
@@ -343,6 +353,7 @@ export const schema = {
   postMedia,
   postRevisions,
   posts,
+  profileAvatars,
   rateLimit,
   relationshipBlocks,
   relationshipSearchQuota,
