@@ -1,8 +1,10 @@
 import { apiErrorSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { usernameSchema } from "../shared/profile-details.contract";
 
-export const usernameSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores.").openapi({ example: "alexa_park" });
+export { usernameSchema };
+
 const publicNameSchema = z.string().trim().max(80).optional().openapi({ example: "Alexa" });
 
 export const usernameSetupRequestSchema = z.object({

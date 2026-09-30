@@ -147,7 +147,14 @@ import { createPostgresUnregisterDeviceRepository } from "./features/messaging/p
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
-import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
+import type { UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
+import { registerProfilesRoutes } from "./features/profiles/profiles.routes";
+import type { GetProfileDetailsRouteDependencies } from "./features/profiles/get-profile-details/get-profile-details.route";
+import { createHyperdriveProfileDetailsRepository } from "./features/profiles/get-profile-details/get-profile-details.repository";
+import type { UpdateProfileRouteDependencies } from "./features/profiles/update-profile/update-profile.route";
+import { createHyperdriveUpdateProfileRepository } from "./features/profiles/update-profile/update-profile.repository";
+import type { ChangeUsernameRouteDependencies } from "./features/profiles/change-username/change-username.route";
+import { createHyperdriveChangeUsernameRepository } from "./features/profiles/change-username/change-username.repository";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
@@ -167,6 +174,9 @@ export interface AppDependencies {
   realtimeConnect?: RealtimeConnectRouteDependencies;
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
+  profileDetails?: GetProfileDetailsRouteDependencies;
+  profileUpdate?: UpdateProfileRouteDependencies;
+  usernameChange?: ChangeUsernameRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -188,6 +198,9 @@ export function createApp({
   realtimeConnect = {},
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
+  profileDetails,
+  profileUpdate,
+  usernameChange,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -249,7 +262,12 @@ export function createApp({
     realtimeConnect,
     rateLimiter,
   });
-  registerUsernameProfileRoutes(api, { ...usernameProfile, rateLimiter });
+  registerProfilesRoutes(api, {
+    username: { ...usernameProfile, rateLimiter },
+    details: { ...(profileDetails ?? { resolveSession: async () => null }), rateLimiter },
+    update: { ...(profileUpdate ?? { resolveSession: async () => null }), rateLimiter },
+    changeUsername: { ...(usernameChange ?? { resolveSession: async () => null }), rateLimiter },
+  });
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -304,6 +322,18 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
+  const profileDetails = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive),
+  } satisfies GetProfileDetailsRouteDependencies : undefined;
+  const profileUpdate = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveUpdateProfileRepository(configuration.hyperdrive),
+  } satisfies UpdateProfileRouteDependencies : undefined;
+  const usernameChange = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveChangeUsernameRepository(configuration.hyperdrive),
+  } satisfies ChangeUsernameRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -334,6 +364,9 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeConnect: realtime?.connect,
     pushDevices,
     usernameProfile,
+    profileDetails,
+    profileUpdate,
+    usernameChange,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
