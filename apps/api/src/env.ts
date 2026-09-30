@@ -45,4 +45,6 @@ export interface ApiEnv {
   API_MEDIA_RATE_LIMIT?: RateLimitBinding;
   API_REALTIME_RATE_LIMIT?: RateLimitBinding;
   API_DIRECT_PUSH_RATE_LIMIT?: RateLimitBinding;
+  /** Explicit opt-in only. Missing or any other value keeps new deletion requests disabled. */
+  ACCOUNT_DELETION_REQUESTS_ENABLED?: "enabled";
 }

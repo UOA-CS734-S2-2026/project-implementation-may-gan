@@ -33,6 +33,9 @@ const managementApiRoutes = new Map<string, AccountCapability>([
   ["POST /api/v1/account/export", "export"],
   ["DELETE /api/v1/account/export", "export"],
   ["GET /api/v1/account/export/download", "export"],
+  ["GET /api/v1/account/deletion", "lifecycle_status"],
+  ["POST /api/v1/account/deletion/request", "request_deletion"],
+  ["POST /api/v1/account/deletion/cancel", "cancel_deletion_verification"],
 ]);
 
 /**

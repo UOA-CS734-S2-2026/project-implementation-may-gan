@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, exists, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
@@ -55,6 +55,18 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
         ),
       ),
     )));
+  const peerPendingDeletion = exists(queryable
+    .select({ one: sql`1` })
+    .from(schema.messagingParticipants)
+    .innerJoin(schema.accountLifecycles, and(
+      eq(schema.accountLifecycles.userId, schema.messagingParticipants.userId),
+      eq(schema.accountLifecycles.state, "pending_deletion"),
+    ))
+    .where(and(
+      eq(schema.messagingParticipants.state, "active"),
+      sql`${schema.messagingParticipants.id} in (${schema.conversations.participantLowId}, ${schema.conversations.participantHighId})`,
+      ne(schema.messagingParticipants.id, actorId),
+    )));
   const [row] = await queryable
     .select({
       user_low_id: schema.conversations.participantLowId,
@@ -62,6 +74,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
       request_state: schema.conversations.requestState,
       member: sql<boolean>`${member}`,
       blocked: sql<boolean>`${blocked}`,
+      peer_pending_deletion: sql<boolean>`${peerPendingDeletion}`,
     })
     .from(schema.conversations)
     .where(eq(schema.conversations.id, conversationId))
@@ -73,7 +86,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
     peerId: row.user_low_id === actorId ? row.user_high_id : row.user_low_id,
     requestState: row.request_state,
     isMember: row.member,
-    peerActivityBlocked: row.blocked,
+    peerActivityBlocked: row.blocked || row.peer_pending_deletion,
   };
 }
 

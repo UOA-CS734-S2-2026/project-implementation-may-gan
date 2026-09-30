@@ -151,6 +151,10 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
       isNotNull(candidate.username),
       sql`lower(${candidate.username}) like lower(${prefix}) || '%' escape E'\\\\'`,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
+      notExists(queryable.select({ one: sql`1` }).from(schema.accountLifecycles).where(and(
+        eq(schema.accountLifecycles.userId, candidate.id),
+        eq(schema.accountLifecycles.state, "pending_deletion"),
+      ))),
       notExists(
         queryable.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),

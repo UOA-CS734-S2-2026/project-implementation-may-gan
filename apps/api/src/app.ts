@@ -157,6 +157,8 @@ import type { ResolveSession } from "./http/middleware/require-session";
 import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
 import { registerDataExportRoutes, type DataExportRouteDependencies } from "./features/data-export/data-export.routes";
 import { createR2ExportArchiveReader } from "./features/data-export/shared/export-archive-reader";
+import { registerAccountLifecycleRoutes, type AccountLifecycleRouteDependencies } from "./features/account-lifecycle/account-lifecycle.routes";
+import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/account-lifecycle.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -179,6 +181,7 @@ export interface AppDependencies {
   googleProof?: GoogleProofRouteDependencies;
   legal?: LegalRouteDependencies;
   dataExport?: DataExportRouteDependencies;
+  accountLifecycle?: AccountLifecycleRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -203,6 +206,7 @@ export function createApp({
   googleProof,
   legal,
   dataExport = unavailableDataExport,
+  accountLifecycle,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -251,6 +255,7 @@ export function createApp({
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerGoogleProofRoutes(api, googleProof);
+  registerAccountLifecycleRoutes(api, accountLifecycle);
   registerLegalRoutes(api, legal ?? { trustedOrigins });
   registerDataExportRoutes(api, dataExport);
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
@@ -329,6 +334,7 @@ export function createAppForEnv(env: ApiEnv) {
     archiveReader: r2Runtime ? createR2ExportArchiveReader(createR2Reader(r2Runtime)) : undefined,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies DataExportRouteDependencies : undefined;
+  const accountLifecycle = configuration ? createAccountLifecycleDependencies(configuration, env) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -375,6 +381,7 @@ export function createAppForEnv(env: ApiEnv) {
     googleProof,
     legal,
     dataExport,
+    accountLifecycle,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting,
   });
@@ -671,6 +678,18 @@ function createGoogleProofDependencies(configuration: RuntimeConfiguration, env:
       fail: (stateDigest, claim) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).fail(stateDigest, claim)),
     },
     verifyIdToken,
+  };
+}
+
+function createAccountLifecycleDependencies(configuration: RuntimeConfiguration, env: ApiEnv): AccountLifecycleRouteDependencies {
+  return {
+    requestsEnabled: env.ACCOUNT_DELETION_REQUESTS_ENABLED === "enabled",
+    resolveSession: createVerifiedRealtimeSessionResolver(configuration),
+    repository: createHyperdriveAccountLifecycleRepository(configuration.hyperdrive),
+    revokeRealtimeSessions: env.USER_REALTIME ? async (userId, sessionIds) => {
+      const publisher = createDurableObjectRealtimePublisher(env.USER_REALTIME!, configuration.hyperdrive);
+      await Promise.all(sessionIds.map((sessionId) => publisher.revokeSession(userId, sessionId)));
+    } : undefined,
   };
 }
 

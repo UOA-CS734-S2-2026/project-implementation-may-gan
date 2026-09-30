@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 import { bindBrowserRegistrationIntent, readCurrentTerms } from "../legal/shared/legal.repository";
 
 const corsMethods = ["GET", "POST"];
-const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
+const corsHeaders = ["authorization", "content-type", "idempotency-key", "x-dayli-registration-intent", "x-dayli-registration-binding"];
 
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
