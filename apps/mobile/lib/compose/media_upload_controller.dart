@@ -19,7 +19,9 @@ enum _Outcome {
   /// Something transient went wrong. Wait, then try again.
   retryLater,
 
-  /// The session expired. Wait for [MediaUploadController.retryNow].
+  /// The session expired and has been handed to the sign-out flow. Retrying
+  /// with the same session would only fail again, so wait for
+  /// [MediaUploadController.retryNow].
   waitForSignIn,
 }
 
@@ -36,6 +38,7 @@ class MediaUploadController extends ChangeNotifier {
     required this._composer,
     required this._compressor,
     required this._client,
+    required this._onUnauthenticated,
     this.retryBase = const Duration(seconds: 2),
     this.retryMax = const Duration(minutes: 1),
   });
@@ -47,6 +50,10 @@ class MediaUploadController extends ChangeNotifier {
   final ComposerController _composer;
   final MediaCompressor _compressor;
   final MediaUploadClient _client;
+
+  /// Hands an expired session to the app's sign-out flow, as the composer
+  /// does when a submission gets a 401.
+  final VoidCallback _onUnauthenticated;
 
   /// Tickets exist only in memory: their URLs are short-lived credentials.
   final _tickets = <String, MediaUploadTicket>{};
@@ -133,6 +140,7 @@ class MediaUploadController extends ChangeNotifier {
         }
         if (outcome == _Outcome.waitForSignIn) {
           _waitingForSignIn = true;
+          _onUnauthenticated();
         } else {
           _scheduleRetry();
         }

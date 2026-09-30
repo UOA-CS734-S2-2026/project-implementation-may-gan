@@ -54,6 +54,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         composer: _controller!,
         compressor: services.mediaCompressor,
         client: uploads,
+        onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
     _controller!.load();
