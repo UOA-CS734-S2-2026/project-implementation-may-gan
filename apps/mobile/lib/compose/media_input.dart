@@ -25,9 +25,7 @@ class MediaInput extends StatelessWidget {
   final ValueChanged<int> onRemove;
   final String? error;
 
-  bool get _canAdd =>
-      attachments.length < DailyPostLimits.photosMax &&
-      !attachments.any((attachment) => attachment.mediaType == 'video');
+  bool get _canAdd => canAddAttachment(attachments);
 
   @override
   Widget build(BuildContext context) {
