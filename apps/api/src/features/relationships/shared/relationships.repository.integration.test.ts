@@ -20,7 +20,7 @@ suite("Postgres relationship persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/relationship_tests");
   const store = createHyperdriveRelationshipsStore({ connectionString: connectionString ?? "" });
   const service = createRelationshipsService(store, { now: () => new Date("2026-09-22T00:00:00.000Z") });
-  const users = Array.from({ length: 9 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 18 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.client`
@@ -164,6 +164,76 @@ suite("Postgres relationship persistence", () => {
     expect(firstPage.items.map((item) => item.id)).toEqual(['request-page-1']);
     expect(firstPage.hasMore).toBe(true);
     expect(secondPage.items.map((item) => item.id)).toEqual(['request-page-2']);
+    expect(secondPage.hasMore).toBe(false);
+  });
+
+  it("keeps request cursor microseconds and ID tie-breaks while excluding blocked identities", async () => {
+    const actor = users[9]!;
+    const first = users[10]!;
+    const second = users[11]!;
+    const blocked = users[12]!;
+    await database.client`
+      update public."user" set username = case id
+        when ${first} then 'request_cursor_first'
+        when ${second} then 'request_cursor_second'
+        when ${blocked} then 'request_cursor_blocked'
+      end
+      where id = any(${[first, second, blocked]}::text[])
+    `;
+    await database.client`
+      insert into public.friend_requests (id, sender_id, recipient_id, status, created_at)
+      values ('request-cursor-a', ${actor}, ${first}, 'pending', '2026-09-22T00:00:00.000001Z'),
+             ('request-cursor-b', ${actor}, ${second}, 'pending', '2026-09-22T00:00:00.000001Z'),
+             ('request-cursor-blocked', ${actor}, ${blocked}, 'pending', '2026-09-22T00:00:00.000001Z')
+    `;
+    await database.client`
+      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${actor}, ${blocked}, now())
+    `;
+
+    const firstPage = await service.listPendingRequests(actor, 'outgoing', 1);
+    const secondPage = await service.listPendingRequests(actor, 'outgoing', 1, firstPage.nextCursor ?? undefined);
+
+    expect(firstPage.items.map((item) => item.id)).toEqual(['request-cursor-a']);
+    expect(firstPage.hasMore).toBe(true);
+    expect(secondPage.items.map((item) => item.id)).toEqual(['request-cursor-b']);
+    expect(secondPage.hasMore).toBe(false);
+  });
+
+  it("paginates reciprocal friends while excluding blocked and banned accounts", async () => {
+    const actor = users[13]!;
+    const first = users[14]!;
+    const second = users[15]!;
+    const blocked = users[16]!;
+    const banned = users[17]!;
+    await database.client`
+      update public."user" set username = case id
+        when ${first} then 'friend_cursor_a'
+        when ${second} then 'friend_cursor_b'
+        when ${blocked} then 'blocked_friend'
+        when ${banned} then 'banned_friend'
+      end,
+      banned = id = ${banned}
+      where id = any(${[first, second, blocked, banned]}::text[])
+    `;
+    await database.client`
+      insert into public.friendships (user_id, friend_id, state, state_changed_at)
+      values (${actor}, ${first}, 'active', now()), (${first}, ${actor}, 'active', now()),
+             (${actor}, ${second}, 'active', now()), (${second}, ${actor}, 'active', now()),
+             (${actor}, ${blocked}, 'active', now()), (${blocked}, ${actor}, 'active', now()),
+             (${actor}, ${banned}, 'active', now()), (${banned}, ${actor}, 'active', now())
+    `;
+    await database.client`
+      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${actor}, ${blocked}, now())
+    `;
+
+    const firstPage = await service.listFriends(actor, 1);
+    const secondPage = await service.listFriends(actor, 1, firstPage.nextCursor ?? undefined);
+
+    expect(firstPage.items.map((item) => item.id)).toEqual([first]);
+    expect(firstPage.hasMore).toBe(true);
+    expect(secondPage.items.map((item) => item.id)).toEqual([second]);
     expect(secondPage.hasMore).toBe(false);
   });
 
