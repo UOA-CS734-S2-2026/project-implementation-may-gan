@@ -24,9 +24,19 @@ describe("application CORS", () => {
     expect(response.headers.get("access-control-allow-headers")).toContain("idempotency-key");
   });
 
+  it("allows a trusted origin to preflight credentialed PUT messaging mutations", async () => {
+    const response = await app().request("/api/v1/conversations/conversation-1/read", {
+      method: "OPTIONS",
+      headers: { origin, "access-control-request-method": "PUT", "access-control-request-headers": "content-type" },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-methods")).toContain("PUT");
+  });
+
   it.each([
     ["an untrusted origin", { origin: "https://evil.test", "access-control-request-method": "POST" }],
-    ["an unlisted method", { origin, "access-control-request-method": "PUT" }],
+    ["an unlisted method", { origin, "access-control-request-method": "TRACE" }],
     ["an unlisted header", { origin, "access-control-request-method": "POST", "access-control-request-headers": "x-user-id" }],
   ])("rejects a preflight from %s", async (_name, headers) => {
     const response = await app().request("/api/v1/posts", { method: "OPTIONS", headers });
@@ -42,6 +52,17 @@ describe("application CORS", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe(origin);
     expect(response.headers.get("access-control-expose-headers")).toContain("idempotent-replayed");
     expect(response.headers.get("access-control-expose-headers")).toContain("retry-after");
+    expect(response.headers.get("vary")).toContain("Origin");
+  });
+
+  it("adds CORS headers when a route returns an immutable redirect response", async () => {
+    const api = app();
+    api.get("/api/v1/cors-redirect", () => Response.redirect("https://example.test/next"));
+
+    const response = await api.request("/api/v1/cors-redirect", { headers: { origin }, redirect: "manual" });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("access-control-allow-origin")).toBe(origin);
     expect(response.headers.get("vary")).toContain("Origin");
   });
 
