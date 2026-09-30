@@ -26,6 +26,12 @@ Foreground updates use hibernating WebSockets with small change notifications an
 
 The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented.
 
+## Profiles
+
+A profile shows the owner every post they have written, including solo posts and today's post before release, labelled so the owner can tell who sees each one. An active friend sees released `friends` posts only. Anyone else sees the name, username, bio, and streak but no posts, whether the account is public or private. Blocking in either direction hides the whole profile.
+
+The bio and streak are visible to any signed-in user when the account is public, and only to active friends when it is private. The owner always sees their own. The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
+
 ## Shared links
 
 Shared links do not create account grants.

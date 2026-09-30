@@ -95,6 +95,8 @@ apps/api/src/
       create-post/                          Action-owned route, service, and repository
       list-feed/                            Route and repository over the shared visibility filter
       get-post/                             Detail route and repository over the same filter
+      list-profile-posts/                   One profile's posts over the same filter
+      shared/                               Page cursor and edited-marker expressions
     posting-days/
       get-current-posting-day/
     media/

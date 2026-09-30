@@ -63,14 +63,14 @@ The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue
 Only the data layer is missing features:
 
 - Feed cards show the first photo, or a still tile for a video. The post screen shows every photo and plays a video muted and looping (#24). Likes and comments arrive with #79/#80.
-- Friends, my days, and messages are placeholders until their APIs land.
+- My days is your own profile: every dayli you have posted, labelled when it is solo or not released yet. See [profile archive](../../docs/dayli/profile-archive.md).
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
 - Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media is compressed and uploaded in the background (#22), and the post links the validated uploads. Feed cards and post detail can't show it until downloads are authorised (#24). Photos are not cropped.
 
 ## Structure
 
 - `lib/app/`: configuration, the debug-only development CA check, theme (WDCC's default colour tokens, type scale, and shadows with Spectral and Epilogue), `go_router` routes with a session redirect, and the fresh-install guard.
-- `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/settings/`, `lib/placeholders/`: the screens and shared components.
+- `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/profile/`, `lib/settings/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
 - `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily post creation](../../docs/dayli/daily-posts.md) for how each server response is handled.
