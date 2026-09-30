@@ -1,5 +1,5 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lte, notExists, or } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
@@ -22,7 +22,11 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         ))
         .innerJoin(schema.user, and(
           eq(schema.user.id, schema.pushDevices.userId),
-          sql`(coalesce(${schema.user.banned}, false) = false or (${schema.user.banExpires} is not null and ${schema.user.banExpires} <= now()))`,
+          or(
+            eq(schema.user.banned, false),
+            isNull(schema.user.banned),
+            and(isNotNull(schema.user.banExpires), lte(schema.user.banExpires, sql`now()`)),
+          ),
         ))
         .innerJoin(schema.conversationMembers, and(
           eq(schema.conversationMembers.conversationId, job.conversationId),
@@ -34,16 +38,21 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           eq(schema.pushDevices.userId, job.recipientId),
           eq(schema.pushDevices.optedIn, true),
           isNull(schema.pushDevices.invalidatedAt),
-          sql`not exists (
-            select 1 from ${schema.relationshipBlocks}
-            where ${schema.relationshipBlocks.unblockedAt} is null
-              and (
-                (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userLowId}
-                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userHighId})
-                or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userHighId}
-                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userLowId})
-              )
-          )`,
+          notExists(
+            database.select({ blockerId: schema.relationshipBlocks.blockerId }).from(schema.relationshipBlocks).where(and(
+              isNull(schema.relationshipBlocks.unblockedAt),
+              or(
+                and(
+                  eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
+                  eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
+                ),
+                and(
+                  eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
+                  eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
+                ),
+              ),
+            )),
+          ),
         ))
         .limit(1);
       if (!row || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
