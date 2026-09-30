@@ -207,7 +207,17 @@ function collectExecuteAliases(sourceFile, databaseTypes) {
       const value = index === 0 && transaction || parameter.type && isDayliDatabaseType(parameter.type, databaseTypes)
         ? database
         : none;
-      for (const name of bindingNames(parameter.name)) scope.bindings.set(name, value);
+      if (ts.isIdentifier(parameter.name)) {
+        scope.bindings.set(parameter.name.text, value);
+      } else if (ts.isObjectBindingPattern(parameter.name)) {
+        for (const element of parameter.name.elements) {
+          for (const name of bindingNames(element.name)) {
+            scope.bindings.set(name, value === database && bindingElementUsesExecute(element) ? executeAlias : none);
+          }
+        }
+      } else {
+        for (const name of bindingNames(parameter.name)) scope.bindings.set(name, none);
+      }
     }
     if (node.body) visit(node.body, scope);
   }
@@ -320,7 +330,9 @@ async function verifyFixtures() {
     ["positive/database-diagnostic.ts", "packages/db/src/diagnostics/database-diagnostic.ts", 0],
     ["positive/builder-sql-fragment.ts", "apps/api/src/features/example/builder-sql-fragment.ts", 0],
     ["positive/unrelated-execute-alias.ts", "apps/api/src/features/example/unrelated-execute-alias.ts", 0],
+    ["positive/unrelated-destructure.ts", "apps/api/src/features/example/unrelated-destructure.ts", 0],
     ["positive/scoped-execute-alias.ts", "apps/api/src/features/example/scoped-execute-alias.ts", 0],
+    ["positive/destructure-shadowing.ts", "apps/api/src/features/example/destructure-shadowing.ts", 0],
     ["negative/feature.ts", "apps/api/src/features/example/feature.ts", 1],
     ["negative/infrastructure.ts", "apps/api/src/infrastructure/example/infrastructure.ts", 1],
     ["negative/app.ts", "apps/api/src/app.ts", 1],
@@ -329,8 +341,10 @@ async function verifyFixtures() {
     ["negative/type-only.ts", "apps/api/src/features/example/type-only.ts", 1],
     ["negative/alias.ts", "apps/api/src/features/example/alias.ts", 1],
     ["negative/destructure.ts", "apps/api/src/features/example/destructure.ts", 1],
+    ["negative/function-destructure.ts", "apps/api/src/features/example/function-destructure.ts", 1],
     ["negative/bind.ts", "apps/api/src/features/example/bind.ts", 1],
     ["negative/transaction-alias.ts", "apps/api/src/features/example/transaction-alias.ts", 1],
+    ["negative/transaction-destructure.ts", "apps/api/src/features/example/transaction-destructure.ts", 1],
   ];
   const errors = [];
   for (const [fixture, virtualPath, expectedCount] of fixtures) {
