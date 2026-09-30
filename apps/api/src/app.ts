@@ -2,6 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import {
   registerBetterAuthCompatibilityRoutes,
   registerPostgresBetterAuthRoutes,
+  registerStrictAuthCors,
 } from "./features/auth/route";
 import {
   createPostgresBetterAuth,
@@ -54,6 +55,11 @@ import { createHyperdriveDailyPostStore } from "./features/posts/create-post/cre
 import { registerSystemRoutes } from "./features/system/system.routes";
 import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
+import {
+  createActorRateLimiter,
+  createIngressRateLimitMiddleware,
+  type ApiRateLimitDependencies,
+} from "./http/middleware/rate-limit";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
@@ -172,6 +178,8 @@ export interface AppDependencies {
   legal?: LegalRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
+  /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
+  rateLimiting?: ApiRateLimitDependencies;
 }
 
 export function createApp({
@@ -192,6 +200,7 @@ export function createApp({
   googleProof,
   legal,
   trustedOrigins = [],
+  rateLimiting,
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
     defaultHook: (result, context) => {
@@ -213,6 +222,13 @@ export function createApp({
 
   // Middleware must precede the routes it wraps.
   if (trustedOrigins.length > 0) registerApplicationCors(api, trustedOrigins);
+  const authOrigins = auth?.trustedOrigins ?? trustedOrigins;
+  if (authOrigins.length > 0) registerStrictAuthCors(api, authOrigins);
+  if (rateLimiting) {
+    api.use("/api/v1/*", createIngressRateLimitMiddleware(rateLimiting));
+    api.use("/api/auth/*", createIngressRateLimitMiddleware(rateLimiting));
+  }
+  const rateLimiter = rateLimiting ? createActorRateLimiter(rateLimiting) : undefined;
   if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
 
   api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
@@ -232,21 +248,22 @@ export function createApp({
   registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerGoogleProofRoutes(api, googleProof);
   registerLegalRoutes(api, legal ?? { trustedOrigins });
-  registerMediaReservationRoutes(api, media);
-  registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
+  registerMediaReservationRoutes(api, { ...media, rateLimiter });
+  registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
-    create: posts ?? { resolveSession: async () => null },
-    feed: feed ?? { resolveSession: async () => null },
-    detail: postDetail ?? { resolveSession: async () => null },
+    create: { ...(posts ?? { resolveSession: async () => null }), rateLimiter },
+    feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
+    detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
   });
-  registerRelationshipsRoutes(api, relationships);
+  registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
     ...messaging,
     realtimeTicket,
     pushDevices,
     realtimeConnect,
+    rateLimiter,
   });
-  registerUsernameProfileRoutes(api, usernameProfile);
+  registerUsernameProfileRoutes(api, { ...usernameProfile, rateLimiter });
 
   api.doc("/api/v1/openapi.json", {
     openapi: "3.1.0",
@@ -331,6 +348,19 @@ export function createAppForEnv(env: ApiEnv) {
     googleProof,
     legal,
     trustedOrigins: configuration?.trustedOrigins,
+    rateLimiting: {
+      environmentScope: env.API_RATE_LIMIT_SCOPE,
+      bindings: {
+        ingress: env.API_INGRESS_RATE_LIMIT,
+        read: env.API_READ_RATE_LIMIT,
+        write: env.API_WRITE_RATE_LIMIT,
+        message: env.API_MESSAGE_RATE_LIMIT,
+        media: env.API_MEDIA_RATE_LIMIT,
+        realtime: env.API_REALTIME_RATE_LIMIT,
+        directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
+      },
+      onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
+    },
   });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env, env.USER_REALTIME ? {

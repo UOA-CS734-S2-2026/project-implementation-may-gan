@@ -1,7 +1,12 @@
 name: Deploy staging web
 
-# Manual only. The reviewed staging environment is restricted to main.
+# Deploy the exact main commit after CI succeeds. Manual deployment remains available
+# only from main.
 on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -12,31 +17,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  require-main:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Reject non-main dispatch
-        env:
-          REF: ${{ github.ref }}
-        run: |
-          if [[ "$REF" != refs/heads/main ]]; then
-            echo 'Staging web deployment requires a manual dispatch from main.' >&2
-            exit 1
-          fi
-
   deploy:
-    needs: require-main
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
     environment: staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Require approved legal content before staging publication
+        run: pnpm legal:release:check
       - name: Validate staging web target and origins
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

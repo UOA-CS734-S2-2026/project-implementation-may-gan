@@ -26,14 +26,23 @@ api_origin="https://localhost:${api_port}"
 web_origin="https://localhost:${web_port}"
 export POSTGRES_PORT="$postgres_port"
 
+stop_process_tree() {
+  local pid="$1"
+  local child
+
+  [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1 || return 0
+  while IFS= read -r child; do
+    stop_process_tree "$child"
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+  kill "$pid" >/dev/null 2>&1 || true
+  wait "$pid" >/dev/null 2>&1 || true
+}
+
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
   for pid in "$web_pid" "$api_pid"; do
-    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
-      kill "$pid" >/dev/null 2>&1 || true
-      wait "$pid" >/dev/null 2>&1 || true
-    fi
+    stop_process_tree "$pid"
   done
   docker compose -p "$compose_project" -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
   if [[ "$status" -ne 0 ]]; then
@@ -125,4 +134,4 @@ web_pid=$!
 wait_for_url "$web_origin" "$web_pid" 'Web application'
 
 echo 'Running Playwright browser journeys'
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web test:e2e
+E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"

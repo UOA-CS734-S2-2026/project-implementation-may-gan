@@ -7,6 +7,7 @@ import {
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
 export const feedQuerySchema = cursorPaginationQuerySchema.openapi("FeedQuery");
 
@@ -48,6 +49,7 @@ export const listFeedErrorResponses = {
     description: "The query contains invalid values, including an unrecognised cursor.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
+  429: rateLimitErrorResponse,
   503: {
     description: "The feed is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },

@@ -29,6 +29,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Check draft legal content parity
+        run: pnpm legal:check
+      - name: Check legal publishing workflow gates
+        run: pnpm legal:workflow:check
       - name: Lint
         run: pnpm lint
       - name: Generate Next.js route types

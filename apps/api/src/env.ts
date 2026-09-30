@@ -1,4 +1,5 @@
 import type { HyperdriveBinding } from "@dayli/db";
+import type { RateLimitBinding } from "./http/middleware/rate-limit";
 
 /** Runtime bindings required before PostgreSQL-backed Better Auth is mounted. */
 export interface ApiEnv {
@@ -28,4 +29,14 @@ export interface ApiEnv {
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */
   PUSH_TOKEN_ENCRYPTION_KEY?: string;
+  /** Public environment scope used to keep native rate-limit keys separate. */
+  API_RATE_LIMIT_SCOPE?: string;
+  /** Native Cloudflare rate-limit bindings. Missing bindings fail API rate limiting closed. */
+  API_INGRESS_RATE_LIMIT?: RateLimitBinding;
+  API_READ_RATE_LIMIT?: RateLimitBinding;
+  API_WRITE_RATE_LIMIT?: RateLimitBinding;
+  API_MESSAGE_RATE_LIMIT?: RateLimitBinding;
+  API_MEDIA_RATE_LIMIT?: RateLimitBinding;
+  API_REALTIME_RATE_LIMIT?: RateLimitBinding;
+  API_DIRECT_PUSH_RATE_LIMIT?: RateLimitBinding;
 }

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../legal/legal_links.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/google_sign_in_button.dart';
@@ -47,9 +48,8 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _validate() {
     final errors = <String, String>{};
     if (_signUp) {
-      if (!RegExp(
-        r'^[a-z0-9][a-z0-9_]{2,29}$',
-      ).hasMatch(_username.text.trim().toLowerCase())) {
+      if (!RegExp(r'^[a-z0-9][a-z0-9_]{2,29}$')
+          .hasMatch(_username.text.trim().toLowerCase())) {
         errors['username'] =
             'Use 3-30 lowercase letters, numbers, or underscores.';
       }
@@ -168,16 +168,11 @@ class _AuthScreenState extends State<AuthScreen> {
             tracking: DayliTracking.tighter,
           ).copyWith(height: 1.15),
         ),
-        const SizedBox(height: 6),
-        Text(
-          _signUp
-              ? 'One post, every day. It only takes a minute.'
-              : "Sign in to post today's dayli.",
-          style: DayliText.sans(context, color: colors.foregroundSecondary),
-        ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 4),
+        const LegalLinks(notice: false),
+        const SizedBox(height: 12),
         GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
         DayliDivider(
           label: 'or',
           thickness: 1,

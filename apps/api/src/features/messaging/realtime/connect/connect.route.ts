@@ -16,6 +16,7 @@ export function registerConnectRealtimeRoute(app: OpenAPIHono<AuthenticatedApiEn
       userRealtime: dependencies.userRealtime,
       trustedOrigins: dependencies.trustedOrigins,
       hasUsername: dependencies.hasUsername,
+      rateLimiter: dependencies.rateLimiter,
     });
   });
 }
