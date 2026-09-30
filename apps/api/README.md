@@ -24,7 +24,7 @@ The staging owner reports that the restricted roles passed [bootstrap verificati
 2. In **Workers & Pages** > **Hyperdrive**, create a configuration for the restricted `app` role in that staging database. Disable query caching, then run `packages/db/admin/bootstrap-staging-probe.sql` once as `migrator`. Keep its ID out of Git.
 3. Create the exact `dayli-api-staging` Worker in the intended staging account. The protected workflow refuses a missing target rather than creating a default Worker.
 4. Configure the protected GitHub `staging` Environment and run the manual workflow from `main`. It generates ignored `wrangler.staging.jsonc` and `wrangler.hyperdrive-test.jsonc`, synchronizes the reviewed Worker secret allowlist, and never puts secrets in `vars`, JSON configuration, or Git. Follow [the staging deployment guide](../../docs/implementation/staging-deployment.md).
-5. The generated API configuration declares `HYPERDRIVE`, `USER_REALTIME`, its SQLite migration, and the retry cron. The generated test configuration has only the private service binding, so it cannot run scheduled work against staging data.
+5. The generated API configuration declares `HYPERDRIVE`, the native API rate-limit bindings, `USER_REALTIME`, its SQLite migration, and the retry cron. The generated test configuration has only the private service binding, so it cannot run scheduled work against staging data.
 
 ### Reproduce locally
 

@@ -2,6 +2,7 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { feedPageSchema, feedQuerySchema, listFeedErrorResponses } from "./list-feed.contract";
 import { InvalidFeedCursorError, type FeedRepository } from "./list-feed.repository";
 
@@ -10,6 +11,7 @@ export interface ListFeedRouteDependencies {
   resolveSession: ResolveSession;
   repository?: FeedRepository;
   now?: () => Date;
+  rateLimiter?: ActorRateLimiter;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -33,7 +35,7 @@ const listFeedRoute = createRoute({
 });
 
 export function registerListFeedRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: ListFeedRouteDependencies) {
-  app.use("/api/v1/feed", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/feed", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(listFeedRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {

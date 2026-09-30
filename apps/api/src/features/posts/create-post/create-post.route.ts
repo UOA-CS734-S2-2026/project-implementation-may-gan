@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { ResolveSession } from "../../../http/middleware/require-session";
 import { createRequireSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import {
   createDailyPostErrorResponses,
   createDailyPostRequestSchema,
@@ -17,6 +18,7 @@ export interface CreateDailyPostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a body-supplied user. */
   resolveSession: ResolveSession;
   service?: CreateDailyPostService;
+  rateLimiter?: ActorRateLimiter;
 }
 
 const security: Array<Record<string, string[]>> = [
@@ -72,7 +74,7 @@ function unavailable(context: Context) {
 }
 
 export function registerCreateDailyPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: CreateDailyPostRouteDependencies) {
-  app.use("/api/v1/posts", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/posts", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(createDailyPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
 

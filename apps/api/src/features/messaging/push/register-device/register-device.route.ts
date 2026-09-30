@@ -1,4 +1,5 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../../http/rate-limit-contract";
 import { apiErrorResponse } from "../../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { usernameSetupStatus } from "../../../../http/middleware/require-username";
@@ -30,6 +31,7 @@ const route = createRoute({
     204: { description: "Device registration updated." },
     401: { description: "Unauthenticated." },
     403: { description: "Username setup is required." },
+    429: rateLimitErrorResponse,
     503: { description: "Push registration unavailable." },
   },
 });

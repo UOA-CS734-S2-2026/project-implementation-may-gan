@@ -15,7 +15,7 @@ GitHub staging variables and secrets
   -> Worker runtime bindings
 ```
 
-The generated `apps/api/wrangler.staging.jsonc` has public variables only. It includes `HYPERDRIVE`, `USER_REALTIME`, the `UserRealtime` SQLite migration, and the one-minute retry cron. The Durable Object migration is a Worker migration. It is separate from PostgreSQL migrations, which must run through the reviewed database migration process before code needs their schema.
+The generated `apps/api/wrangler.staging.jsonc` has public variables only. It includes `HYPERDRIVE`, the native rate-limit bindings, `API_RATE_LIMIT_SCOPE=staging`, `USER_REALTIME`, the `UserRealtime` SQLite migration, and the one-minute retry cron. The bindings and their separate read, write, message, media, realtime, and direct/push thresholds are versioned in source and generated with the staging Worker configuration. The scope prefixes keys so staging, local, and production never share an actor or ingress bucket. The Durable Object migration is a Worker migration. It is separate from PostgreSQL migrations, which must run through the reviewed database migration process before code needs their schema.
 
 The generated Hyperdrive proof configuration exposes only the remote `HyperdriveIntegrationEntrypoint`. It has no cron, Durable Object binding, or migration. It cannot start scheduled delivery work against shared staging data.
 

@@ -3,12 +3,14 @@ import type { Context } from "hono";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { apiErrorResponse } from "../../../http/api-error";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { usernameErrorResponses, usernameProfileSchema, usernameSetupRequestSchema } from "./username.contract";
 import type { UsernameProfileStore } from "./username.repository";
 
 export interface UsernameProfileRouteDependencies {
   resolveSession: ResolveSession;
   store?: UsernameProfileStore;
+  rateLimiter?: ActorRateLimiter;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -32,7 +34,7 @@ function unavailable(context: Context) {
 }
 
 export function registerUsernameProfileRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: UsernameProfileRouteDependencies) {
-  app.use(path, createRequireSession(dependencies.resolveSession));
+  app.use(path, createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getUsernameProfileRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.store) return unavailable(context);

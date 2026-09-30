@@ -5,6 +5,7 @@ import {
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
 export const postIdParamsSchema = z.object({
   postId: opaqueIdSchema.openapi({ param: { name: "postId", in: "path" }, example: "post-1" }),
@@ -49,6 +50,7 @@ export const getPostErrorResponses = {
     description: "The post ID is invalid.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
+  429: rateLimitErrorResponse,
   503: {
     description: "Post storage is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },

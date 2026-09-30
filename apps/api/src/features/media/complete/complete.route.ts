@@ -1,5 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import { R2ReadInfrastructureError } from "../../../infrastructure/media/r2";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import type { MediaReservationRouteDependencies } from "../shared/media-reservation-route-dependencies";
@@ -32,6 +33,7 @@ const completeReservationRoute = createRoute({
       description: "The reservation's TTL expired before it was ever completed.",
       content: { "application/json": { schema: apiErrorSchema } },
     },
+    429: rateLimitErrorResponse,
     503: {
       description: "Media reservations are not currently configured, or R2 is temporarily unavailable.",
       content: { "application/json": { schema: apiErrorSchema } },
