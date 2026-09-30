@@ -14,7 +14,7 @@ const suite = enabled ? describe : describe.skip;
 suite("list messages Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 3 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
-  const { direct, send, set: setReaction } = createMessagingPersistenceServices(database.db);
+  const { direct, send, set: setReaction, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListMessagesRepository(database.db);
 
   beforeAll(async () => {
@@ -81,6 +81,32 @@ suite("list messages Postgres repository", () => {
     });
     await expect(repository.list(users[1]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
       items: [{ sequence: "2", reactions: [{ reaction: "love", count: 1, reactedByActor: false }] }, { sequence: "3" }],
+    });
+
+    await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);
+    await expect(repository.list(users[1]!, initial.conversation.id, "3", undefined, 10)).resolves.toMatchObject({
+      items: [
+        { sequence: "1", text: null, reactions: [] },
+        {
+          sequence: "2",
+          text: "reply message",
+          replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+          reactions: [{ reaction: "love", count: 1, reactedByActor: false }],
+        },
+      ],
+    });
+
+    await unsend.unsend(users[1]!, initial.conversation.id, reply.message.id);
+    await expect(repository.list(users[0]!, initial.conversation.id, "3", undefined, 10)).resolves.toMatchObject({
+      items: [
+        { sequence: "1", text: null, reactions: [] },
+        {
+          sequence: "2",
+          text: null,
+          replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+          reactions: [],
+        },
+      ],
     });
   });
 });

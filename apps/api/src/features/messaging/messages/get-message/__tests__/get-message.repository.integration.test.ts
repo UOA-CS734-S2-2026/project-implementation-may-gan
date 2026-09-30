@@ -14,7 +14,7 @@ const suite = enabled ? describe : describe.skip;
 suite("get message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 3 }, (_, index) => `get-message-${crypto.randomUUID()}-${index}`);
-  const { direct, send, set: setReaction } = createMessagingPersistenceServices(database.db);
+  const { direct, send, set: setReaction, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetMessageRepository(database.db);
 
   beforeAll(async () => {
@@ -59,6 +59,20 @@ suite("get message Postgres repository", () => {
     });
     await expect(repository.get(users[1]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
       reactions: [{ reaction: "love", count: 1, reactedByActor: false }],
+    });
+
+    await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);
+    await expect(repository.get(users[1]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
+      text: "reply message",
+      replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+      reactions: [{ reaction: "love", count: 1, reactedByActor: false }],
+    });
+
+    await unsend.unsend(users[1]!, initial.conversation.id, reply.message.id);
+    await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
+      text: null,
+      replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+      reactions: [],
     });
   });
 });

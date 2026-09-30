@@ -1,9 +1,9 @@
-import { sql, type DayliDatabase } from "@dayli/db";
+import { and, eq } from "drizzle-orm";
+import { schema, sql, type DayliDatabase } from "@dayli/db";
 import type { MessageDto, StoredMessage } from "./messaging-types";
 
 type Row = Record<string, unknown>;
-type Queryable = Pick<DayliDatabase, "execute">;
-const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
+type Queryable = Pick<DayliDatabase, "select">;
 const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 const date = (value: unknown) => new Date(String(value));
 
@@ -63,12 +63,37 @@ export async function projectMessageDto(
 ): Promise<MessageDto> {
   const message = storedMessage(row);
   const parent = message.replyToMessageId
-    ? rows<Row>(await queryable.execute(sql`select * from public.messages where id = ${message.replyToMessageId} and conversation_id = ${message.conversationId}`))[0]
+    ? (await queryable
+      .select({
+        id: schema.messages.id,
+        conversation_id: schema.messages.conversationId,
+        sequence: sql<string>`${schema.messages.sequence}::text`,
+        sender_id: schema.messages.senderId,
+        client_message_id: schema.messages.clientMessageId,
+        request_fingerprint: schema.messages.requestFingerprint,
+        body: schema.messages.body,
+        reply_to_message_id: schema.messages.replyToMessageId,
+        version: sql<string>`${schema.messages.version}::text`,
+        created_at: schema.messages.createdAt,
+        edited_at: schema.messages.editedAt,
+        unsent_at: schema.messages.unsentAt,
+      })
+      .from(schema.messages)
+      .where(and(
+        eq(schema.messages.id, message.replyToMessageId),
+        eq(schema.messages.conversationId, message.conversationId),
+      ))
+      .limit(1))[0]
     : undefined;
-  const reactions = rows<{ reaction: string; count: number | string; reacted: boolean }>(await queryable.execute(sql`
-    select reaction, count(*)::int as count, bool_or(user_id = ${actorId}) as reacted
-    from public.message_reactions where message_id = ${message.id} group by reaction
-  `));
+  const reactions = await queryable
+    .select({
+      reaction: schema.messageReactions.reaction,
+      count: sql<number>`count(*)::int`,
+      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
+    })
+    .from(schema.messageReactions)
+    .where(eq(schema.messageReactions.messageId, message.id))
+    .groupBy(schema.messageReactions.reaction);
   message.reactions = reactions.map((item) => ({
     reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
     count: Number(item.count),
