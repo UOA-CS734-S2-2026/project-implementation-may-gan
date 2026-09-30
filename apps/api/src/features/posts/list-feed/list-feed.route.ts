@@ -5,7 +5,8 @@ import { createRequireSession, type ResolveSession } from "../../../http/middlew
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { feedPageSchema, feedQuerySchema, listFeedErrorResponses } from "./list-feed.contract";
-import { InvalidFeedCursorError, StaleFeedCursorError, type FeedRepository } from "./list-feed.repository";
+import { InvalidPostCursorError } from "../shared/post-page-cursor";
+import { StaleFeedCursorError, type FeedRepository } from "./list-feed.repository";
 
 export interface ListFeedRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a query-supplied user. */
@@ -62,7 +63,7 @@ export function registerListFeedRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dep
       if (error instanceof StaleFeedCursorError) {
         return apiErrorResponse(context, 409, "CONFLICT", "The feed has moved on to a new day.", { reason: "feedDayChanged", feedDate: error.feedDate });
       }
-      if (error instanceof InvalidFeedCursorError) {
+      if (error instanceof InvalidPostCursorError) {
         return apiErrorResponse(context, 422, "VALIDATION_FAILED", "The request contains invalid values.", { field: "cursor" });
       }
       // Never forward SQL or private content to the client.

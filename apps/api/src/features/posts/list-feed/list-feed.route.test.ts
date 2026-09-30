@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import { InvalidFeedCursorError, StaleFeedCursorError, type FeedPostRecord, type FeedRepository } from "./list-feed.repository";
+import { InvalidPostCursorError } from "../shared/post-page-cursor";
+import { StaleFeedCursorError, type FeedPostRecord, type FeedRepository } from "./list-feed.repository";
 import type { ListFeedRouteDependencies } from "./list-feed.route";
 
 const fixedNow = new Date("2026-09-26T03:00:00.000Z");
@@ -87,7 +88,7 @@ describe("GET /api/v1/feed", () => {
 
   it("rejects a cursor the repository cannot read", async () => {
     const response = await get(dependencies({
-      listFeed: async () => { throw new InvalidFeedCursorError(); },
+      listFeed: async () => { throw new InvalidPostCursorError(); },
     }), "?cursor=not-a-cursor");
 
     expect(response.status).toBe(422);

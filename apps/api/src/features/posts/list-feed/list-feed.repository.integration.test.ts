@@ -1,7 +1,8 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPostgresFeedRepository, InvalidFeedCursorError, StaleFeedCursorError } from "./list-feed.repository";
+import { InvalidPostCursorError } from "../shared/post-page-cursor";
+import { createPostgresFeedRepository, StaleFeedCursorError } from "./list-feed.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -199,8 +200,8 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("rejects an unreadable cursor", async () => {
-    await expect(feed().listFeed(users.viewer, now, 20, "not-a-cursor")).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    await expect(feed().listFeed(users.viewer, now, 20, "not-a-cursor")).rejects.toBeInstanceOf(InvalidPostCursorError);
     const impossibleDate = btoa(JSON.stringify(["2026-99-99", id("b-25")])).replaceAll("=", "");
-    await expect(feed().listFeed(users.viewer, now, 20, impossibleDate)).rejects.toBeInstanceOf(InvalidFeedCursorError);
+    await expect(feed().listFeed(users.viewer, now, 20, impossibleDate)).rejects.toBeInstanceOf(InvalidPostCursorError);
   });
 });
