@@ -45,12 +45,14 @@ suite("get message Postgres repository", () => {
       replyToMessageId: initial.message.id,
     });
     await setReaction.set(users[0]!, initial.conversation.id, reply.message.id, "love");
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
 
     await expect(repository.get(users[2]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.get(users[0]!, initial.conversation.id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
 
     await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
       id: reply.message.id,
+      sequence: "9007199254740993",
       replyToMessageId: initial.message.id,
       replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
       reactions: [{ reaction: "love", count: 1, reactedByActor: true }],
