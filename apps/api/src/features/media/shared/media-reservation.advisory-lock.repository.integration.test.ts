@@ -10,7 +10,8 @@ function disposableDatabaseUrl(value: string | undefined, name: string): string 
   const url = new URL(value);
   if (
     !/^\/dayli_advisory_lock_[a-z0-9_]+_test$/.test(url.pathname)
-    || (url.port === "5433" && (url.hostname !== "localhost" || url.pathname !== "/dayli_advisory_lock_ci_test"))
+    || url.hostname !== "localhost"
+    || (url.port === "5433" && url.pathname !== "/dayli_advisory_lock_ci_test")
   ) {
     throw new Error(`${name} must target an isolated advisory-lock test database, never dayli_test or a development database.`);
   }
