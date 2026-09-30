@@ -401,7 +401,7 @@ class ProfileApi {
 
   /// Update your profile
   ///
-  /// Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+  /// Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -438,7 +438,7 @@ class ProfileApi {
 
   /// Update your profile
   ///
-  /// Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+  /// Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
   ///
   /// Parameters:
   ///

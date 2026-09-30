@@ -2,7 +2,11 @@ import { and, count, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExis
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
-import type { ProfileDetails } from "./profile-details.contract";
+import { mbtiTypes, type ProfileDetails } from "./profile-details.contract";
+
+function isMbti(value: string | null): value is (typeof mbtiTypes)[number] {
+  return (mbtiTypes as readonly (string | null)[]).includes(value);
+}
 
 /** Signs a short-lived link to a stored object the caller may see. */
 export type AvatarSigner = (objectKey: string) => Promise<string>;
@@ -116,6 +120,9 @@ export async function findProfileDetails(
     username: user.username,
     displayUsername: user.displayUsername,
     bio: user.bio,
+    mbti: user.mbti,
+    whatIDo: user.whatIDo,
+    listeningTo: user.listeningTo,
     profileVisibility: user.profileVisibility,
     usernameChangedAt: user.usernameChangedAt,
     friends: activeFriends(database, viewerId, user.id),
@@ -155,6 +162,10 @@ export async function findProfileDetails(
     displayName: row.displayUsername ?? row.username,
     detailsVisible,
     bio: detailsVisible ? row.bio : null,
+    // Legacy rows may hold a value outside the 16 types; show those as unset.
+    mbti: detailsVisible && isMbti(row.mbti) ? row.mbti : null,
+    whatIDo: detailsVisible ? row.whatIDo : null,
+    listeningTo: detailsVisible ? row.listeningTo : null,
     avatarUrl,
     streak: activity?.streak ?? null,
     stats: activity ? { posts: activity.posts, friends: friends ?? 0 } : null,

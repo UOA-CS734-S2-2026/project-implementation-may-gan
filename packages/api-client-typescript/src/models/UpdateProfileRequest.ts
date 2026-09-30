@@ -39,8 +39,44 @@ export interface UpdateProfileRequest {
      *
      */
     profileVisibility?: ProfileVisibility;
+    /**
+     * One of the 16 types. Null or blank clears it.
+     */
+    mbti?: UpdateProfileRequestMbtiEnum | null;
+    /**
+     *
+     */
+    whatIDo?: string;
+    /**
+     *
+     */
+    listeningTo?: string;
 }
 
+
+/**
+ * @export
+ */
+export const UpdateProfileRequestMbtiEnum = {
+    Intj: 'INTJ',
+    Intp: 'INTP',
+    Entj: 'ENTJ',
+    Entp: 'ENTP',
+    Infj: 'INFJ',
+    Infp: 'INFP',
+    Enfj: 'ENFJ',
+    Enfp: 'ENFP',
+    Istj: 'ISTJ',
+    Isfj: 'ISFJ',
+    Estj: 'ESTJ',
+    Esfj: 'ESFJ',
+    Istp: 'ISTP',
+    Isfp: 'ISFP',
+    Estp: 'ESTP',
+    Esfp: 'ESFP',
+    Empty: '',
+} as const;
+export type UpdateProfileRequestMbtiEnum = typeof UpdateProfileRequestMbtiEnum[keyof typeof UpdateProfileRequestMbtiEnum];
 
 
 /**
@@ -63,6 +99,9 @@ export function UpdateProfileRequestFromJSONTyped(json: any, ignoreDiscriminator
         'bio': json['bio'] == null ? undefined : json['bio'],
         'publicName': json['publicName'] == null ? undefined : json['publicName'],
         'profileVisibility': json['profileVisibility'] == null ? undefined : ProfileVisibilityFromJSON(json['profileVisibility']),
+        'mbti': json['mbti'] === undefined ? undefined : json['mbti'] === null ? null : json['mbti'],
+        'whatIDo': json['whatIDo'] == null ? undefined : json['whatIDo'],
+        'listeningTo': json['listeningTo'] == null ? undefined : json['listeningTo'],
     };
 }
 
@@ -80,5 +119,8 @@ export function UpdateProfileRequestToJSONTyped(value?: UpdateProfileRequest | n
         'bio': value['bio'],
         'publicName': value['publicName'],
         'profileVisibility': ProfileVisibilityToJSON(value['profileVisibility']),
+        'mbti': value['mbti'],
+        'whatIDo': value['whatIDo'],
+        'listeningTo': value['listeningTo'],
     };
 }

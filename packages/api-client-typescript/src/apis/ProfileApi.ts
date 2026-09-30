@@ -450,7 +450,7 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
-     * Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+     * Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
      * Update your profile
      */
     async profileUpdateRaw(requestParameters: ProfileUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
@@ -461,7 +461,7 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
-     * Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
+     * Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.
      * Update your profile
      */
     async profileUpdate(requestParameters: ProfileUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {

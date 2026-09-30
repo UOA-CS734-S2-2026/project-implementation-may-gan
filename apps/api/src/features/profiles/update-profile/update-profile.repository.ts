@@ -25,6 +25,9 @@ export function createPostgresUpdateProfileRepository(database: DayliDatabase, s
           ...(input.bio !== undefined ? { bio: input.bio } : {}),
           ...(input.publicName !== undefined ? { displayUsername: input.publicName } : {}),
           ...(input.profileVisibility !== undefined ? { profileVisibility: input.profileVisibility } : {}),
+          ...(input.mbti !== undefined ? { mbti: input.mbti } : {}),
+          ...(input.whatIDo !== undefined ? { whatIDo: input.whatIDo } : {}),
+          ...(input.listeningTo !== undefined ? { listeningTo: input.listeningTo } : {}),
           updatedAt: now,
         })
         .where(eq(user.id, userId))

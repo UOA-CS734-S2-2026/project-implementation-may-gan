@@ -55,6 +55,7 @@ lib/model/list_conversations200_response.dart
 lib/model/list_messages200_response.dart
 lib/model/mark_conversation_read200_response.dart
 lib/model/mark_conversation_read_request.dart
+lib/model/mbti.dart
 lib/model/media_content_type.dart
 lib/model/media_reservation.dart
 lib/model/media_reservation_status.dart

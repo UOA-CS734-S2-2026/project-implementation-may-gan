@@ -35,6 +35,7 @@ export * from './ListConversations200Response';
 export * from './ListMessages200Response';
 export * from './MarkConversationRead200Response';
 export * from './MarkConversationReadRequest';
+export * from './Mbti';
 export * from './MediaContentType';
 export * from './MediaReservation';
 export * from './MediaReservationStatus';

@@ -16,6 +16,9 @@ class UpdateProfileRequest {
     this.bio,
     this.publicName,
     this.profileVisibility,
+    this.mbti,
+    this.whatIDo,
+    this.listeningTo,
   });
 
   ///
@@ -43,24 +46,49 @@ class UpdateProfileRequest {
   ///
   final ProfileVisibility? profileVisibility;
 
+  /// One of the 16 types. Null or blank clears it.
+  final UpdateProfileRequestMbtiEnum? mbti;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final String? whatIDo;
+
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final String? listeningTo;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is UpdateProfileRequest &&
           other.bio == bio &&
           other.publicName == publicName &&
-          other.profileVisibility == profileVisibility;
+          other.profileVisibility == profileVisibility &&
+          other.mbti == mbti &&
+          other.whatIDo == whatIDo &&
+          other.listeningTo == listeningTo;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
       (bio == null ? 0 : bio!.hashCode) +
       (publicName == null ? 0 : publicName!.hashCode) +
-      (profileVisibility == null ? 0 : profileVisibility!.hashCode);
+      (profileVisibility == null ? 0 : profileVisibility!.hashCode) +
+      (mbti == null ? 0 : mbti!.hashCode) +
+      (whatIDo == null ? 0 : whatIDo!.hashCode) +
+      (listeningTo == null ? 0 : listeningTo!.hashCode);
 
   @override
   String toString() =>
-      'UpdateProfileRequest[bio=$bio, publicName=$publicName, profileVisibility=$profileVisibility]';
+      'UpdateProfileRequest[bio=$bio, publicName=$publicName, profileVisibility=$profileVisibility, mbti=$mbti, whatIDo=$whatIDo, listeningTo=$listeningTo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -79,6 +107,21 @@ class UpdateProfileRequest {
     } else {
       json[r'profileVisibility'] = null;
     }
+    if (this.mbti != null) {
+      json[r'mbti'] = this.mbti;
+    } else {
+      json[r'mbti'] = null;
+    }
+    if (this.whatIDo != null) {
+      json[r'whatIDo'] = this.whatIDo;
+    } else {
+      json[r'whatIDo'] = null;
+    }
+    if (this.listeningTo != null) {
+      json[r'listeningTo'] = this.listeningTo;
+    } else {
+      json[r'listeningTo'] = null;
+    }
     return json;
   }
 
@@ -88,11 +131,18 @@ class UpdateProfileRequest {
     String? bio,
     String? publicName,
     ProfileVisibility? profileVisibility,
+    UpdateProfileRequestMbtiEnum? mbti,
+    bool mbtiSetToNull = false,
+    String? whatIDo,
+    String? listeningTo,
   }) =>
       UpdateProfileRequest(
         bio: bio ?? this.bio,
         publicName: publicName ?? this.publicName,
         profileVisibility: profileVisibility ?? this.profileVisibility,
+        mbti: mbtiSetToNull ? null : mbti ?? this.mbti,
+        whatIDo: whatIDo ?? this.whatIDo,
+        listeningTo: listeningTo ?? this.listeningTo,
       );
 
   /// Returns a new [UpdateProfileRequest] instance and imports its values from
@@ -114,6 +164,9 @@ class UpdateProfileRequest {
         publicName: mapValueOfType<String>(json, r'publicName'),
         profileVisibility:
             ProfileVisibility.fromJson(json[r'profileVisibility']),
+        mbti: UpdateProfileRequestMbtiEnum.fromJson(json[r'mbti']),
+        whatIDo: mapValueOfType<String>(json, r'whatIDo'),
+        listeningTo: mapValueOfType<String>(json, r'listeningTo'),
       );
     }
     return null;
@@ -170,4 +223,133 @@ class UpdateProfileRequest {
 
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{};
+}
+
+/// One of the 16 types. Null or blank clears it.
+enum UpdateProfileRequestMbtiEnum {
+  INTJ._(r'INTJ'),
+  INTP._(r'INTP'),
+  ENTJ._(r'ENTJ'),
+  ENTP._(r'ENTP'),
+  INFJ._(r'INFJ'),
+  INFP._(r'INFP'),
+  ENFJ._(r'ENFJ'),
+  ENFP._(r'ENFP'),
+  ISTJ._(r'ISTJ'),
+  ISFJ._(r'ISFJ'),
+  ESTJ._(r'ESTJ'),
+  ESFJ._(r'ESFJ'),
+  ISTP._(r'ISTP'),
+  ISFP._(r'ISFP'),
+  ESTP._(r'ESTP'),
+  ESFP._(r'ESFP'),
+  empty._(r''),
+  ;
+
+  /// Instantiate a new enum with the provided value.
+  const UpdateProfileRequestMbtiEnum._(this._value);
+
+  /// The underlying value of this enum member.
+  final String _value;
+
+  @override
+  String toString() => _value;
+
+  /// Encodes this enum as a value suitable for JSON.
+  String toJson() => _value;
+
+  /// Returns the instance of [UpdateProfileRequestMbtiEnum] that was successfully decoded
+  /// from the passed [value] on success, null otherwise.
+  static UpdateProfileRequestMbtiEnum? fromJson(dynamic value) =>
+      UpdateProfileRequestMbtiEnumTypeTransformer().decode(value);
+
+  /// Returns a [List] containing instances of [UpdateProfileRequestMbtiEnum]
+  /// that were successfully decoded from the passed [JSON][json].
+  static List<UpdateProfileRequestMbtiEnum> listFromJson(
+    dynamic json, {
+    bool growable = false,
+  }) {
+    final result = <UpdateProfileRequestMbtiEnum>[];
+    if (json is List && json.isNotEmpty) {
+      for (final row in json) {
+        final value = UpdateProfileRequestMbtiEnum.fromJson(row);
+        if (value != null) {
+          result.add(value);
+        }
+      }
+    }
+    return result.toList(growable: growable);
+  }
+}
+
+/// Transformation class that can [encode] an instance of [UpdateProfileRequestMbtiEnum] to String,
+/// and [decode] dynamic data back to [UpdateProfileRequestMbtiEnum].
+class UpdateProfileRequestMbtiEnumTypeTransformer {
+  factory UpdateProfileRequestMbtiEnumTypeTransformer() =>
+      _instance ??= const UpdateProfileRequestMbtiEnumTypeTransformer._();
+
+  const UpdateProfileRequestMbtiEnumTypeTransformer._();
+
+  String encode(UpdateProfileRequestMbtiEnum data) => data._value;
+
+  /// Returns the instance of [UpdateProfileRequestMbtiEnum] that was successfully decoded
+  /// from the passed [data] value on success, null otherwise.
+  ///
+  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
+  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
+  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
+  ///
+  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
+  /// and users are still using an old app with the old code.
+  UpdateProfileRequestMbtiEnum? decode(dynamic data, {bool allowNull = true}) {
+    if (data is UpdateProfileRequestMbtiEnum) {
+      return data;
+    }
+    if (data != null) {
+      switch (data) {
+        case r'INTJ':
+          return UpdateProfileRequestMbtiEnum.INTJ;
+        case r'INTP':
+          return UpdateProfileRequestMbtiEnum.INTP;
+        case r'ENTJ':
+          return UpdateProfileRequestMbtiEnum.ENTJ;
+        case r'ENTP':
+          return UpdateProfileRequestMbtiEnum.ENTP;
+        case r'INFJ':
+          return UpdateProfileRequestMbtiEnum.INFJ;
+        case r'INFP':
+          return UpdateProfileRequestMbtiEnum.INFP;
+        case r'ENFJ':
+          return UpdateProfileRequestMbtiEnum.ENFJ;
+        case r'ENFP':
+          return UpdateProfileRequestMbtiEnum.ENFP;
+        case r'ISTJ':
+          return UpdateProfileRequestMbtiEnum.ISTJ;
+        case r'ISFJ':
+          return UpdateProfileRequestMbtiEnum.ISFJ;
+        case r'ESTJ':
+          return UpdateProfileRequestMbtiEnum.ESTJ;
+        case r'ESFJ':
+          return UpdateProfileRequestMbtiEnum.ESFJ;
+        case r'ISTP':
+          return UpdateProfileRequestMbtiEnum.ISTP;
+        case r'ISFP':
+          return UpdateProfileRequestMbtiEnum.ISFP;
+        case r'ESTP':
+          return UpdateProfileRequestMbtiEnum.ESTP;
+        case r'ESFP':
+          return UpdateProfileRequestMbtiEnum.ESFP;
+        case r'':
+          return UpdateProfileRequestMbtiEnum.empty;
+        default:
+          if (!allowNull) {
+            throw ArgumentError('Unknown enum value to decode: $data');
+          }
+      }
+    }
+    return null;
+  }
+
+  /// The singleton instance of this transformer.
+  static UpdateProfileRequestMbtiEnumTypeTransformer? _instance;
 }

@@ -11,6 +11,9 @@ const profile: ProfileDetails = {
   displayName: "Me",
   detailsVisible: true,
   bio: "New bio",
+  mbti: null,
+  whatIDo: null,
+  listeningTo: null,
   avatarUrl: null,
   streak: null,
   stats: null,
@@ -57,10 +60,19 @@ describe("PATCH /api/v1/profile", () => {
     ["a bio over 160 characters", { bio: "x".repeat(161) }],
     ["a public name over 80 characters", { publicName: "x".repeat(81) }],
     ["an unknown visibility", { profileVisibility: "friends" }],
+    ["an unknown MBTI type", { mbti: "ABCD" }],
+    ["a 'what I do' over 100 characters", { whatIDo: "x".repeat(101) }],
   ])("rejects %s", async (_name, body) => {
     const updateProfile = vi.fn();
     expect((await patch(dependencies(updateProfile), body)).status).toBe(422);
     expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it("saves the about fields, clearing a blank MBTI", async () => {
+    const updateProfile = vi.fn<UpdateProfileRepository["updateProfile"]>(async () => ({ kind: "updated", profile }));
+    await patch(dependencies(updateProfile), { mbti: "", whatIDo: " Nursing ", listeningTo: "Laufey" });
+
+    expect(updateProfile).toHaveBeenCalledWith("user-me", { mbti: null, whatIDo: "Nursing", listeningTo: "Laufey" }, fixedNow);
   });
 
   it("asks for a username first", async () => {

@@ -34,6 +34,13 @@ import {
     PostingStreakToJSON,
     PostingStreakToJSONTyped,
 } from './PostingStreak';
+import type { Mbti } from './Mbti';
+import {
+    MbtiFromJSON,
+    MbtiFromJSONTyped,
+    MbtiToJSON,
+    MbtiToJSONTyped,
+} from './Mbti';
 
 /**
  *
@@ -62,6 +69,18 @@ export interface ProfileDetails {
      */
     bio: string;
     /**
+     *
+     */
+    mbti: Mbti;
+    /**
+     * Null when unset or when the bio is hidden.
+     */
+    whatIDo: string;
+    /**
+     * Null when unset or when the bio is hidden.
+     */
+    listeningTo: string;
+    /**
      * A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.
      */
     avatarUrl: string;
@@ -79,6 +98,8 @@ export interface ProfileDetails {
     owner: ProfileOwnerSettings;
 }
 
+
+
 /**
  * Check if a given object implements the ProfileDetails interface.
  */
@@ -88,6 +109,9 @@ export function instanceOfProfileDetails(value: object): value is ProfileDetails
     if (!('displayName' in value) || value['displayName'] === undefined) return false;
     if (!('detailsVisible' in value) || value['detailsVisible'] === undefined) return false;
     if (!('bio' in value) || value['bio'] === undefined) return false;
+    if (!('mbti' in value) || value['mbti'] === undefined) return false;
+    if (!('whatIDo' in value) || value['whatIDo'] === undefined) return false;
+    if (!('listeningTo' in value) || value['listeningTo'] === undefined) return false;
     if (!('avatarUrl' in value) || value['avatarUrl'] === undefined) return false;
     if (!('streak' in value) || value['streak'] === undefined) return false;
     if (!('stats' in value) || value['stats'] === undefined) return false;
@@ -110,6 +134,9 @@ export function ProfileDetailsFromJSONTyped(json: any, ignoreDiscriminator: bool
         'displayName': json['displayName'],
         'detailsVisible': json['detailsVisible'],
         'bio': json['bio'],
+        'mbti': MbtiFromJSON(json['mbti']),
+        'whatIDo': json['whatIDo'],
+        'listeningTo': json['listeningTo'],
         'avatarUrl': json['avatarUrl'],
         'streak': PostingStreakFromJSON(json['streak']),
         'stats': ProfileStatsFromJSON(json['stats']),
@@ -133,6 +160,9 @@ export function ProfileDetailsToJSONTyped(value?: ProfileDetails | null, ignoreD
         'displayName': value['displayName'],
         'detailsVisible': value['detailsVisible'],
         'bio': value['bio'],
+        'mbti': MbtiToJSON(value['mbti']),
+        'whatIDo': value['whatIDo'],
+        'listeningTo': value['listeningTo'],
         'avatarUrl': value['avatarUrl'],
         'streak': PostingStreakToJSON(value['streak']),
         'stats': ProfileStatsToJSON(value['stats']),
