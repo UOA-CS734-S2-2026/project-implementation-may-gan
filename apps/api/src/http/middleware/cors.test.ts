@@ -34,6 +34,17 @@ describe("application CORS", () => {
     expect(response.headers.get("access-control-allow-methods")).toContain("PUT");
   });
 
+  it("allows a trusted origin to preflight a username change", async () => {
+    const response = await app().request("/api/v1/profile/username", {
+      method: "OPTIONS",
+      headers: { origin, "access-control-request-method": "PUT", "access-control-request-headers": "content-type" },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(response.headers.get("access-control-allow-methods")).toContain("PUT");
+  });
+
   it.each([
     ["an untrusted origin", { origin: "https://evil.test", "access-control-request-method": "POST" }],
     ["an unlisted method", { origin, "access-control-request-method": "TRACE" }],
