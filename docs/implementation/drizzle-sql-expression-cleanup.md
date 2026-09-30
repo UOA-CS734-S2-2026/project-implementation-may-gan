@@ -1,6 +1,6 @@
 # Drizzle SQL-expression cleanup
 
-Status: inventory and implementation plan for a new PR stacked on #171. This is separate from the media reservation dependency proposal. Do not merge either PR automatically.
+Status: inventory and implementation plan for a new PR based on main after #171 merged. This is separate from the media reservation dependency proposal. Do not merge this PR automatically.
 
 ## Goal
 
