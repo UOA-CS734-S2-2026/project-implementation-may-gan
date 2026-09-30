@@ -17,7 +17,7 @@ suite("create direct conversation Postgres repository", () => {
   const mixedCasePrefix = `create-direct-conversation-${crypto.randomUUID()}-`;
   const mixedCaseUsers = [`${mixedCasePrefix}a`, `${mixedCasePrefix}B`] as const;
   const users = [
-    ...Array.from({ length: 8 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
+    ...Array.from({ length: 10 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
     ...mixedCaseUsers,
   ];
   const builderQueries: string[] = [];
@@ -125,24 +125,71 @@ suite("create direct conversation Postgres repository", () => {
     ))).toBe(true);
   });
 
-  it("preserves message sequence precision above Number.MAX_SAFE_INTEGER", async () => {
+  it("accepts MAX_SAFE_INTEGER and rolls back a MAX_SAFE_INTEGER + 1 append", async () => {
     const created = await direct.create(users[6]!, {
       recipientId: users[7]!,
       clientMessageId: crypto.randomUUID(),
       text: "first",
     });
+    expect(created.message.sequence).toBe("1");
     await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
-    await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
+    await database.client`update public.conversations set last_message_sequence = ${Number.MAX_SAFE_INTEGER - 1}::bigint where id = ${created.conversation.id}`;
 
     const appended = await direct.create(users[6]!, {
       recipientId: users[7]!,
       clientMessageId: crypto.randomUUID(),
-      text: "precise",
+      text: "maximum safe",
     });
 
-    expect(appended.message.sequence).toBe("9007199254740993");
-    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${appended.message.id}`;
-    expect(message?.sequence).toBe("9007199254740993");
+    expect(appended.message.sequence).toBe(String(Number.MAX_SAFE_INTEGER));
+    const [maximumSafeMessage] = await database.client`select sequence::text as sequence from public.messages where id = ${appended.message.id}`;
+    expect(maximumSafeMessage?.sequence).toBe(String(Number.MAX_SAFE_INTEGER));
+
+    const [beforeMessages] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
+    const [beforeChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [beforeOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+
+    await expect(direct.create(users[6]!, {
+      recipientId: users[7]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflow",
+    })).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+
+    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
+    const [messages] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
+    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    expect(conversation?.sequence).toBe(String(Number.MAX_SAFE_INTEGER));
+    expect(messages?.count).toBe(beforeMessages?.count);
+    expect(changes?.count).toBe(beforeChanges?.count);
+    expect(outbox?.count).toBe(beforeOutbox?.count);
+  });
+
+  it("fails closed for an unsafe idempotent message row", async () => {
+    const clientMessageId = crypto.randomUUID();
+    const created = await direct.create(users[8]!, {
+      recipientId: users[9]!,
+      clientMessageId,
+      text: "unsafe replay",
+    });
+    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${created.message.id}`;
+    const [beforeChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [beforeOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+
+    await expect(direct.create(users[8]!, {
+      recipientId: users[9]!,
+      clientMessageId,
+      text: "unsafe replay",
+    })).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+
+    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
+    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${created.message.id}`;
+    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    expect(conversation?.sequence).toBe("1");
+    expect(message?.sequence).toBe("9007199254740992");
+    expect(changes?.count).toBe(beforeChanges?.count);
+    expect(outbox?.count).toBe(beforeOutbox?.count);
   });
 
   it("rejects creation after either-direction blocks", async () => {
