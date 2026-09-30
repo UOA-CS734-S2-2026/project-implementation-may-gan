@@ -59,6 +59,7 @@ function createGoogleApp(database: CompatibilityDatabase = {
     baseURL: origin,
     secret,
     google: { clientIds, clientSecret: "worker-only-google-secret" },
+    googleProfileFlow: "native",
     database,
   }) });
 }

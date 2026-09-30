@@ -44,23 +44,24 @@ function createProductionGoogleApp() {
   });
 }
 
-async function signedGoogleToken(audience: string, subject: string, email: string) {
+async function signedGoogleToken(audience: string | string[], subject: string, email: string, claims: { azp?: string; expiresAt?: number | null; issuedAt?: number } = {}) {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const publicJwk = await exportJWK(publicKey);
   publicJwk.kid = `postgres-registration-google-key-${crypto.randomUUID()}`;
-  const token = await new SignJWT({
+  const jwt = new SignJWT({
     email,
+    azp: claims.azp,
     email_verified: true,
     name: "PostgreSQL Google User",
     picture: "https://images.example.test/google-avatar.png",
   })
     .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
-    .setIssuedAt()
+    .setIssuedAt(claims.issuedAt)
     .setIssuer("https://accounts.google.com")
     .setAudience(audience)
-    .setSubject(subject)
-    .setExpirationTime("5m")
-    .sign(privateKey);
+    .setSubject(subject);
+  if (claims.expiresAt !== null) jwt.setExpirationTime(claims.expiresAt ?? "5m");
+  const token = await jwt.sign(privateKey);
   return { publicJwk, token };
 }
 
@@ -447,7 +448,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const admitted = await app.fetch(request("/api/auth/sign-in/social", {
       method: "POST",
       headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.14", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
-      body: JSON.stringify({ provider: "google", idToken: { token } }),
+      body: JSON.stringify({ provider: "google", idToken: { token, accessToken: "native-access-token-fixture" } }),
     }));
     expect(admitted.status).toBe(200);
     const body = await admitted.json() as { user: { id: string } };
@@ -559,7 +560,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
     await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionGoogleApp();
-    const valid = await signedGoogleToken("web-client-id", `browser-valid-${crypto.randomUUID()}`, "browser-recovery@example.test");
+    const valid = await signedGoogleToken(["web-client-id", "ios-client-id"], `browser-valid-${crypto.randomUUID()}`, "browser-recovery@example.test", { azp: "web-client-id" });
     const invalidSignature = await signedGoogleToken("web-client-id", `browser-invalid-signature-${crypto.randomUUID()}`, "browser-invalid-signature@example.test");
     const invalidAudience = await signedGoogleToken("untrusted-client-id", `browser-invalid-audience-${crypto.randomUUID()}`, "browser-invalid-audience@example.test");
     let callbackToken = invalidSignature.token;
@@ -630,6 +631,30 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const staleCallback = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(firstStart.state)}&code=test-browser-code`, { headers: { origin, cookie: firstStart.cookie } }));
     expect(staleCallback.ok).toBe(false);
     await assertRejected(second, "browser-invalid-audience@example.test");
+
+    const now = Math.floor(Date.now() / 1000);
+    const rejectedClaims: Array<{ audience: string | string[]; azp?: string; expiresAt?: number | null; issuedAt?: number }> = [
+      { audience: "ios-client-id" },
+      { audience: "android-client-id" },
+      { audience: ["web-client-id", "ios-client-id"] },
+      { audience: ["web-client-id", "ios-client-id"], azp: "ios-client-id" },
+      { audience: ["web-client-id", "android-client-id"], azp: "android-client-id" },
+      { audience: ["web-client-id", "other-client-id"], azp: "other-client-id" },
+      { audience: "web-client-id", azp: "other-client-id" },
+      { audience: "web-client-id", expiresAt: null },
+      { audience: "web-client-id", issuedAt: now - 120, expiresAt: now - 60 },
+    ];
+    for (const [index, claims] of rejectedClaims.entries()) {
+      const email = `browser-rejected-claims-${index}@example.test`;
+      const fixture = await signedGoogleToken(claims.audience, `browser-claims-${crypto.randomUUID()}`, email, claims);
+      callbackToken = fixture.token;
+      callbackKeys = [fixture.publicJwk];
+      const proof = await issue();
+      const flow = await start(proof, `198.51.100.${40 + index}`);
+      const rejected = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(flow.state)}&code=test-browser-code`, { headers: { origin, cookie: flow.cookie } }));
+      expect(rejected.ok).toBe(false);
+      await assertRejected(proof, email);
+    }
 
     const recovery = await issue();
     const recoveryStart = await start(recovery, "198.51.100.34");

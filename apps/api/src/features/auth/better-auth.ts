@@ -29,6 +29,7 @@ interface BetterAuthOptions {
   trustedOrigins: string[];
   database: Parameters<typeof betterAuth>[0]["database"];
   google?: GoogleAuthConfiguration;
+  googleProfileFlow?: "native" | "browser";
   resend?: ResendConfiguration;
   rateLimitStorage?: "database" | "memory";
   rateLimitEnabled?: boolean;
@@ -38,7 +39,7 @@ interface BetterAuthOptions {
 const silentAuthLogger = { disabled: true };
 const usernamePattern = /^[a-z0-9][a-z0-9_]{2,29}$/;
 
-async function verifyGoogleBrowserIdToken(token: string, audience: readonly string[]) {
+async function verifyGoogleBrowserIdToken(token: string, webClientId: string) {
   try {
     const { alg, kid } = decodeProtectedHeader(token);
     if (alg !== "RS256" || !kid) return null;
@@ -51,9 +52,12 @@ async function verifyGoogleBrowserIdToken(token: string, audience: readonly stri
         const { payload } = await jwtVerify(token, publicKey, {
           algorithms: ["RS256"],
           issuer: ["https://accounts.google.com", "accounts.google.com"],
-          audience: [...audience],
+          audience: webClientId,
+          requiredClaims: ["iss", "aud", "sub", "iat", "exp"],
           maxTokenAge: "1h",
         });
+        if ((Array.isArray(payload.aud) || payload.azp !== undefined) && payload.azp !== webClientId) return null;
+        if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
         return payload;
       } catch {
         // A key rotation response may contain several candidates. Try each.
@@ -187,12 +191,12 @@ function createBetterAuth(options: BetterAuthOptions) {
         // user, matching the native ID-token boundary.
         async getUserInfo(tokens) {
           if (!tokens.idToken) return null;
-          // Better Auth verifies direct native ID-token sign-ins before this
-          // mapper. Browser code exchange supplies an access token and must
-          // verify its returned ID token before mapping a user.
-          const profile = tokens.accessToken
-            ? await verifyGoogleBrowserIdToken(tokens.idToken, options.google!.clientIds)
-            : decodeJwt(tokens.idToken);
+          // The server route selects the flow, never optional provider fields.
+          // Better Auth verifies native ID tokens before invoking this mapper.
+          // Browser callbacks always require the web client's signed token.
+          const profile = options.googleProfileFlow === "native"
+            ? decodeJwt(tokens.idToken)
+            : await verifyGoogleBrowserIdToken(tokens.idToken, options.google!.clientIds[0]);
           if (!profile || typeof profile.sub !== "string" || typeof profile.email !== "string" || typeof profile.email_verified !== "boolean") return null;
           return {
             user: {
@@ -248,6 +252,7 @@ export interface BetterAuthCompatibilityOptions {
   secret: string;
   database: MemoryDB;
   google?: GoogleAuthConfiguration;
+  googleProfileFlow?: "native" | "browser";
   resend?: ResendConfiguration;
   sessionExpiresIn?: number;
 }
@@ -258,6 +263,7 @@ export function createBetterAuthCompatibilitySlice({
   secret,
   database,
   google,
+  googleProfileFlow,
   resend,
   sessionExpiresIn,
 }: BetterAuthCompatibilityOptions) {
@@ -268,6 +274,7 @@ export function createBetterAuthCompatibilitySlice({
       secret,
       database: memoryAdapter(database),
       google,
+      googleProfileFlow,
       resend,
       rateLimitStorage: "memory",
       rateLimitEnabled: false,
