@@ -20,9 +20,9 @@ export interface AccountDeletionSchedule {
   readonly purgeDueAt: Date;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const CANCELLATION_WINDOW_DAYS = 7;
-const ACTIVE_SYSTEM_PURGE_WINDOW_DAYS = 14;
+const HOUR_MS = 60 * 60 * 1000;
+const CANCELLATION_WINDOW_HOURS = 168;
+const ACTIVE_SYSTEM_PURGE_WINDOW_HOURS = 336;
 
 function copyValidInstant(value: Date, name: string): Date {
   if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
@@ -39,8 +39,8 @@ export function createAccountDeletionSchedule(databaseNow: Date): AccountDeletio
   const requestedAt = copyValidInstant(databaseNow, "databaseNow");
   return {
     requestedAt,
-    cancelUntil: new Date(requestedAt.getTime() + CANCELLATION_WINDOW_DAYS * DAY_MS),
-    purgeDueAt: new Date(requestedAt.getTime() + ACTIVE_SYSTEM_PURGE_WINDOW_DAYS * DAY_MS),
+    cancelUntil: new Date(requestedAt.getTime() + CANCELLATION_WINDOW_HOURS * HOUR_MS),
+    purgeDueAt: new Date(requestedAt.getTime() + ACTIVE_SYSTEM_PURGE_WINDOW_HOURS * HOUR_MS),
   };
 }
 

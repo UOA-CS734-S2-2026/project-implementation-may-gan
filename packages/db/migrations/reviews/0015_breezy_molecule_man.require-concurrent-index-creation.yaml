@@ -1,0 +1,6 @@
+reason: The indexes belong to the new empty cleanup-task table and are created inside the protected migration transaction. Concurrent creation is unnecessary and unavailable in that transaction.
+affected_data_and_clients: No populated table index is rebuilt or locked by these statements.
+rollout_sequence: Apply through the protected migration workflow before cleanup-task writers exist.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Build later indexes concurrently in a separate reviewed migration if this table becomes populated.
+reviewer: Database and privacy reviewers required before hosted migration.

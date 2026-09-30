@@ -1,0 +1,6 @@
+reason: Cleanup attempt counts are operationally bounded. A 32-bit value cannot be exhausted under the intended bounded retry policy.
+affected_data_and_clients: Only the new private cleanup-task table uses this integer field.
+rollout_sequence: Apply before future cleanup orchestration is introduced.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a bigint column in a future migration if a reviewed retry policy requires it.
+reviewer: Database and privacy reviewers required before hosted migration.

@@ -115,9 +115,11 @@ Messaging also has a material structural prerequisite: #160 must decouple curren
 
 ## #158 additive implementation
 
-Migration `0014_dusty_ben_parker` adds `account_lifecycles`, account-management grants, export requests, minimal 30-day purge receipts, legal document versions, Terms acceptances, age declarations, registration intents, and content-free operator cases. It uses `TIMESTAMPTZ`, immutable token digests, exact 7-day, 14-day, 24-hour, and 30-day constraints, lifecycle generation, due-work indexes, and an active-export uniqueness index.
+Migration `0014_dusty_ben_parker` adds `account_lifecycles`, account-management grants, export requests, minimal 30-day purge receipts, legal document versions, Terms acceptances, age declarations, registration intents, and content-free operator cases. Follow-up migration `0015_breezy_molecule_man` changes the lifecycle and receipt constraints to absolute 168-hour, 336-hour, and 720-hour intervals, and adds durable private export-object cleanup tasks. Both use `TIMESTAMPTZ`, immutable token digests, lifecycle generation, due-work indexes, and an active-export uniqueness index.
 
-The migration reserves `lifecycle_worker` through the owner bootstrap script, confirms that the role exists before applying, revokes its direct table access, and removes direct `app` deletion of `user`. It also makes receipt and operator-case rows inaccessible to `app`. Local integration tests prove the constraints and these denials. No worker may claim, transition, or physically delete a lifecycle subject yet.
+An export request is the user-visible state, not a cleanup ledger. `ready` is the only state that may contain an archive key and snapshot cutoff. Terminal requests clear both fields. When an archive must be removed, an `expired`, `cancelled`, or `failed` request may reference a private cleanup task that retains only the opaque object key and retry state until the deletion succeeds, at which point the task is removed. The cleanup task has no user foreign key, so later removal of a terminal request cannot silently discard the pending object cleanup. No application or worker role has direct access to that table in this slice.
+
+The migrations reserve `lifecycle_worker` through the owner bootstrap script, confirm that the role exists before applying, revoke its direct table access, and remove direct `app` deletion of `user`. They also make receipt, operator-case, and export-cleanup rows inaccessible to `app`. Local integration tests prove the constraints, non-UTC DST boundaries, and these denials. No worker may claim, transition, or physically delete a lifecycle subject yet.
 
 The existing immutable-post triggers still name `migrator`. Replacing that bypass requires reviewed, claim-bound procedures and must land with the post and messaging dependency work. Do not grant `lifecycle_worker` direct deletion merely to replace the role name.
 
@@ -125,12 +127,12 @@ The existing immutable-post triggers still name `migrator`. Replacing that bypas
 
 | Area | Current automated evidence | Required next automated evidence | Status |
 | --- | --- | --- | --- |
-| Exact account boundaries | Domain tests plus local PostgreSQL checks enforce seven days, fourteen days, equality, invalid instants, and disabled fallback | PostgreSQL `now()` boundary, concurrent cancel and claim, generation fence, lease retry | Partial foundation |
+| Exact account boundaries | Domain tests plus local PostgreSQL checks enforce absolute 168-hour, 336-hour, 24-hour, and 720-hour boundaries across a non-UTC DST transition, equality, invalid instants, and disabled fallback | PostgreSQL `now()` boundary, concurrent cancel and claim, generation fence, lease retry | Partial foundation |
 | Execution disablement | Domain parser defaults missing and invalid values to `disabled`; no handler or binding exists | Worker environment parser and no-handler dispatch test | Partial foundation |
 | Account access restriction | None | Route inventory and capabilities tests over every HTTP, socket, push, and projection path | Not started |
 | Least privilege | Local lifecycle integration proves `app` cannot delete `user`, and `lifecycle_worker` cannot select lifecycle rows or delete `user` | Claim-bound, reviewed lifecycle procedures after #160 and #163 dependencies | Partial foundation |
 | Messaging retention | Existing messaging tests cover active identities | Surviving recipient, `Deleted account`, no profile lookup, final-participant cleanup, reply-preview exclusion | Blocked on #160 |
-| Export | None | Owned-data inclusion, secret and received-text canaries, 24-hour expiry, pending-deletion access, purge race | Blocked on #159 and #160 |
+| Export | Local schema tests fence one active generation, require a 24-hour absolute ready interval, separate terminal request fields from durable cleanup retries, and deny app cleanup-task access | Owned-data inclusion, secret and received-text canaries, pending-deletion access, purge race | Blocked on #159 and #160 |
 | Post Trash and object cleanup | Existing media and post tests cover reservations and immutable history | Visibility, exact restore boundary, account-deletion dominance, zero-live-reference object check | Blocked on #158 and account policy |
 | Legal acceptance | Existing auth tests cover current sign-up paths | Intent consumption across email and Google, Terms versions, age declaration, existing-user gates | Blocked on #158 and Better Auth hook verification |
 | Provider and operations | No lifecycle provider evidence | Dated, sanitized configuration evidence and report-only synthetic runs | External evidence required |

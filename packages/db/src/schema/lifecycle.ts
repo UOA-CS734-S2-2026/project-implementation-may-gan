@@ -34,6 +34,13 @@ export const dataExportStatus = pgEnum("data_export_status", [
   "expired",
 ]);
 
+/** Cleanup succeeds by removing its task. Retry state remains durable until then. */
+export const dataExportObjectCleanupStatus = pgEnum("data_export_object_cleanup_status", [
+  "pending",
+  "deleting",
+  "failed",
+]);
+
 export const purgeReceiptOutcome = pgEnum("purge_receipt_outcome", ["completed"]);
 
 export const operatorCaseType = pgEnum("operator_case_type", ["underage_report"]);
@@ -79,18 +86,18 @@ export const accountLifecycles = pgTable("account_lifecycles", {
       ${table.purgeStartedAt} is null and ${table.lastErrorCategory} is null and ${table.nextAttemptAt} is null) or
     (${table.state} = 'pending_deletion' and
       ${table.requestId} is not null and ${table.idempotencyKeyDigest} is not null and
-      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '7 days' and
-      ${table.purgeDueAt} = ${table.requestedAt} + interval '14 days' and
+      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '168 hours' and
+      ${table.purgeDueAt} = ${table.requestedAt} + interval '336 hours' and
       ${table.purgeStartedAt} is null and ${table.lastErrorCategory} is null and ${table.nextAttemptAt} is null) or
     (${table.state} = 'purging' and
       ${table.requestId} is not null and ${table.idempotencyKeyDigest} is not null and
-      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '7 days' and
-      ${table.purgeDueAt} = ${table.requestedAt} + interval '14 days' and
+      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '168 hours' and
+      ${table.purgeDueAt} = ${table.requestedAt} + interval '336 hours' and
       ${table.purgeStartedAt} is not null and ${table.lastErrorCategory} is null and ${table.nextAttemptAt} is null) or
     (${table.state} = 'purge_failed' and
       ${table.requestId} is not null and ${table.idempotencyKeyDigest} is not null and
-      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '7 days' and
-      ${table.purgeDueAt} = ${table.requestedAt} + interval '14 days' and
+      ${table.requestedAt} is not null and ${table.cancelUntil} = ${table.requestedAt} + interval '168 hours' and
+      ${table.purgeDueAt} = ${table.requestedAt} + interval '336 hours' and
       ${table.purgeStartedAt} is not null and ${table.lastErrorCategory} is not null and ${table.nextAttemptAt} is not null)
   `),
 ]);
@@ -113,8 +120,41 @@ export const accountManagementGrants = pgTable("account_management_grants", {
 ]);
 
 /**
+ * A durable private-object cleanup retry. A task is deleted only after its R2
+ * object is gone. It intentionally has no user foreign key, so it remains
+ * actionable after a terminal export request is removed during later cleanup.
+ */
+export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_tasks", {
+  id: text("id").primaryKey(),
+  archiveObjectKey: text("archive_object_key").notNull(),
+  status: dataExportObjectCleanupStatus("status").notNull().default("pending"),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  failureCategory: text("failure_category"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("data_export_object_cleanup_tasks_due_idx").on(table.status, table.nextAttemptAt),
+  index("data_export_object_cleanup_tasks_lease_idx").on(table.status, table.leaseExpiresAt),
+  check("data_export_object_cleanup_tasks_id_check", sql`char_length(${table.id}) between 1 and 200`),
+  check("data_export_object_cleanup_tasks_archive_key_check", sql`char_length(${table.archiveObjectKey}) between 1 and 1024`),
+  check("data_export_object_cleanup_tasks_attempt_count_check", sql`${table.attemptCount} >= 0`),
+  check("data_export_object_cleanup_tasks_failure_category_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),
+  check("data_export_object_cleanup_tasks_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),
+  check("data_export_object_cleanup_tasks_state_check", sql`
+    (${table.status} = 'pending' and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.nextAttemptAt} is not null) or
+    (${table.status} = 'deleting' and ${table.failureCategory} is null and ${table.leaseToken} is not null and ${table.nextAttemptAt} is null) or
+    (${table.status} = 'failed' and ${table.failureCategory} is not null and ${table.leaseToken} is null and ${table.nextAttemptAt} is not null)
+  `),
+]);
+
+/**
  * An export request is fenced by the lifecycle generation captured at request
  * time. Archive object keys are personal data and must never enter logs.
+ * Terminal rows clear their archive and snapshot fields. If an archive needs
+ * deletion, archiveCleanupTaskId references the durable private cleanup task.
  */
 export const dataExportRequests = pgTable("data_export_requests", {
   id: text("id").primaryKey(),
@@ -126,6 +166,7 @@ export const dataExportRequests = pgTable("data_export_requests", {
   archiveObjectKey: text("archive_object_key"),
   readyAt: timestamp("ready_at", { withTimezone: true }),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  archiveCleanupTaskId: text("archive_cleanup_task_id").references(() => dataExportObjectCleanupTasks.id),
   leaseToken: text("lease_token"),
   leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
   failureCategory: text("failure_category"),
@@ -143,12 +184,18 @@ export const dataExportRequests = pgTable("data_export_requests", {
   check("data_export_requests_archive_key_check", sql`${table.archiveObjectKey} is null or char_length(${table.archiveObjectKey}) between 1 and 1024`),
   check("data_export_requests_failure_category_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),
   check("data_export_requests_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),
-  check("data_export_requests_ready_expiry_check", sql`
+  check("data_export_requests_state_check", sql`
     (${table.status} = 'ready' and ${table.snapshotCutoffAt} is not null and ${table.archiveObjectKey} is not null and
-      ${table.readyAt} is not null and ${table.expiresAt} = ${table.readyAt} + interval '24 hours' and ${table.failureCategory} is null) or
-    (${table.status} in ('requested', 'building') and ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is null) or
-    (${table.status} = 'failed' and ${table.failureCategory} is not null and ${table.readyAt} is null and ${table.expiresAt} is null) or
-    (${table.status} in ('cancelled', 'expired') and ${table.readyAt} is null and ${table.expiresAt} is null)
+      ${table.readyAt} is not null and ${table.expiresAt} = ${table.readyAt} + interval '24 hours' and
+      ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null) or
+    (${table.status} in ('requested', 'building') and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null) or
+    (${table.status} = 'failed' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is not null) or
+    (${table.status} = 'cancelled' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is null) or
+    (${table.status} = 'expired' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is not null and ${table.failureCategory} is null)
   `),
 ]);
 
@@ -170,7 +217,7 @@ export const accountPurgeReceipts = pgTable("account_purge_receipts", {
   check("account_purge_receipts_request_id_check", sql`char_length(${table.requestId}) between 1 and 200`),
   check("account_purge_receipts_subject_digest_check", sql`${table.subjectDigest} ~ '^[0-9a-f]{64}$'`),
   check("account_purge_receipts_completion_check", sql`${table.completedAt} >= ${table.requestedAt}`),
-  check("account_purge_receipts_expiry_check", sql`${table.expiresAt} = ${table.completedAt} + interval '30 days'`),
+  check("account_purge_receipts_expiry_check", sql`${table.expiresAt} = ${table.completedAt} + interval '720 hours'`),
   check("account_purge_receipts_stage_count_check", sql`${table.completedStageCount} between 0 and 20`),
 ]);
 
