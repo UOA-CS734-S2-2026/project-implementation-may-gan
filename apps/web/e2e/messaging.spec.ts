@@ -68,10 +68,6 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     const firstBubble = messageBubble(page, firstMessage);
     await expect(firstBubble).toBeVisible();
 
-    // A short message should fit its content instead of spanning the conversation column.
-    const bubbleWidths = await firstBubble.evaluate((bubble) => ({ bubble: bubble.getBoundingClientRect().width, parent: bubble.parentElement?.parentElement?.getBoundingClientRect().width ?? 0 }));
-    expect(bubbleWidths.bubble).toBeLessThan(bubbleWidths.parent * 0.65);
-
     await openRecipientRequest(recipientPage, sender, firstMessage);
     await expect(recipientPage.getByLabel("Messages visible")).toBeVisible();
     await recipientPage.getByRole("link", { name: /all messages/ }).click();
@@ -84,6 +80,19 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     await recipientPage.getByRole("button", { name: "accept request" }).click();
     await expect(recipientPage.getByRole("textbox", { name: "Message" })).toBeEnabled({ timeout: 15_000 });
     await expect(page.getByRole("textbox", { name: "Message" })).toBeEnabled({ timeout: 15_000 });
+
+    // A short bubble must fit its content, while a long one is capped at 84% of
+    // the message column. Together these fail if bubbles return to full width.
+    const longMessage = `A deliberately long message ${sender.username} `.repeat(12);
+    await sendWithEnter(page, longMessage);
+    const longBubble = messageBubble(page, longMessage);
+    await expect(longBubble).toBeVisible();
+    const [shortBubbleWidth, longBubbleWidth] = await Promise.all([firstBubble, longBubble].map((bubble) => bubble.evaluate((element) => ({
+      bubble: element.getBoundingClientRect().width,
+      messageColumn: element.parentElement?.parentElement?.getBoundingClientRect().width ?? 0,
+    }))));
+    expect(shortBubbleWidth.bubble).toBeLessThan(longBubbleWidth.bubble);
+    expect(longBubbleWidth.bubble).toBeLessThanOrEqual(longBubbleWidth.messageColumn * 0.84 + 1);
 
     const reply = `live-reply-${sender.username}`;
     const senderURL = page.url();
