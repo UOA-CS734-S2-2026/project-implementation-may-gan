@@ -132,10 +132,10 @@ suite("Postgres realtime publisher authorization", () => {
 
     await insertChange({ sequence: 3, senderId: ids.alice });
     const removedMember = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 3 });
-    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and user_id = ${ids.bob}`;
+    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and participant_id = ${ids.bob}`;
     await publisher.deliver(removedMember);
     expect(published).not.toHaveBeenCalled();
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
 
     await insertChange({ sequence: 4, senderId: ids.alice });
     const stale = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 4, leaseExpiresAt: new Date(Date.now() - 1_000) });
