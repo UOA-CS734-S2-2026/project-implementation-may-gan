@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FormInput } from "@/components/ui/FormInput";
@@ -109,6 +110,7 @@ export default function PostForm({
   postingDay,
   onPostingDayChanged,
 }: PostFormProps) {
+  const queryClient = useQueryClient();
   const router = useRouter();
   // One key per draft: every retry of this draft reuses it, so a lost
   // response can be retried without ever creating a second post.
@@ -149,6 +151,9 @@ export default function PostForm({
     );
 
     if (result.ok) {
+      // The new post changes the author's archive and streak.
+      void queryClient.invalidateQueries({ queryKey: ["profiles"] });
+      void queryClient.invalidateQueries({ queryKey: ["posts"] });
       router.push("/");
       return;
     }
