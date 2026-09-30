@@ -98,11 +98,11 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   });
 
   it("creates empty session and verification target tables", async () => {
-    const [[sessions], [verifications]] = await Promise.all([
-      migrator.db.select({ count: count() }).from(schema.session),
-      migrator.db.select({ count: count() }).from(schema.verification),
-    ]);
-    expect({ sessions: sessions!.count, verifications: verifications!.count }).toMatchObject({ sessions: 0, verifications: 0 });
+    const [row] = await migrator.db.select({
+      sessions: sql<number>`(select count(*) from ${schema.session})::int`,
+      verifications: sql<number>`(select count(*) from ${schema.verification})::int`,
+    }).from(sql`(values (1)) as query_source`);
+    expect(row).toMatchObject({ sessions: 0, verifications: 0 });
   });
 
   it("preserves stable text IDs, profile fields, and account record shape", async () => {

@@ -1,4 +1,4 @@
-import { createDayliDatabase, schema } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { count, eq, inArray } from "drizzle-orm";
 import { createAucklandDayService } from "@dayli/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -79,12 +79,12 @@ function requireLocalTestUrl(value: string): string {
       tomorrowNoteAvailableOn: "2026-09-26",
     });
 
-    const [[posts], [notes], [keys]] = await Promise.all([
-      migrator.db.select({ count: count() }).from(schema.posts).where(eq(schema.posts.authorId, users[0]!)),
-      migrator.db.select({ count: count() }).from(schema.tomorrowNotes).where(eq(schema.tomorrowNotes.authorId, users[0]!)),
-      migrator.db.select({ count: count() }).from(schema.postIdempotencyKeys).where(eq(schema.postIdempotencyKeys.authorId, users[0]!)),
-    ]);
-    expect({ posts: posts!.count, notes: notes!.count, keys: keys!.count }).toEqual({ posts: 1, notes: 1, keys: 1 });
+    const [row] = await migrator.db.select({
+      posts: sql<number>`(select count(*) from ${schema.posts} where ${schema.posts.authorId} = ${users[0]!})::int`,
+      notes: sql<number>`(select count(*) from ${schema.tomorrowNotes} where ${schema.tomorrowNotes.authorId} = ${users[0]!})::int`,
+      keys: sql<number>`(select count(*) from ${schema.postIdempotencyKeys} where ${schema.postIdempotencyKeys.authorId} = ${users[0]!})::int`,
+    }).from(sql`(values (1)) as query_source`);
+    expect(row).toEqual({ posts: 1, notes: 1, keys: 1 });
   });
 
   it("serialises concurrent submissions across connections into exactly one post", async () => {
@@ -124,10 +124,10 @@ function requireLocalTestUrl(value: string): string {
   it("rejects the wrong prompt and leaves no partial rows", async () => {
     await expect(service().createDailyPost(users[2]!, "key-1", { ...input, promptId: "prompt-09-24" }))
       .rejects.toMatchObject({ reason: "PROMPT_CHANGED" });
-    const [[posts], [keys]] = await Promise.all([
-      migrator.db.select({ count: count() }).from(schema.posts).where(eq(schema.posts.authorId, users[2]!)),
-      migrator.db.select({ count: count() }).from(schema.postIdempotencyKeys).where(eq(schema.postIdempotencyKeys.authorId, users[2]!)),
-    ]);
-    expect({ posts: posts!.count, keys: keys!.count }).toEqual({ posts: 0, keys: 0 });
+    const [row] = await migrator.db.select({
+      posts: sql<number>`(select count(*) from ${schema.posts} where ${schema.posts.authorId} = ${users[2]!})::int`,
+      keys: sql<number>`(select count(*) from ${schema.postIdempotencyKeys} where ${schema.postIdempotencyKeys.authorId} = ${users[2]!})::int`,
+    }).from(sql`(values (1)) as query_source`);
+    expect(row).toEqual({ posts: 0, keys: 0 });
   });
 });
