@@ -222,38 +222,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  const _GroupLabel('privacy'),
+                  const _GroupLabel('profile and privacy'),
                   _Group(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Private profile',
-                                    style: DayliText.sans(
-                                      context,
-                                      weight: FontWeight.w500,
+                      InkWell(
+                        key: const Key('settings.editProfile'),
+                        onTap: () => context.push('/profile/edit'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Edit profile',
+                                      style: DayliText.sans(
+                                        context,
+                                        weight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    'Available once profiles arrive.',
-                                    style: DayliText.sans(
-                                      context,
-                                      size: DayliTextSize.sm,
-                                      color: colors.foregroundTertiary,
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Public name, bio, username, and who sees them.',
+                                      style: DayliText.sans(
+                                        context,
+                                        size: DayliTextSize.sm,
+                                        color: colors.foregroundTertiary,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            // Disabled until the profile API can save it.
-                            const Switch(value: false, onChanged: null),
-                          ],
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: colors.foregroundTertiary,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],

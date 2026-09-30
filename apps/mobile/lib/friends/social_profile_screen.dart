@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
 import '../api/friends_client.dart';
+import '../api/profile_client.dart';
 import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
 import '../app/theme.dart';
@@ -12,14 +13,25 @@ import '../ui/surfaces.dart';
 
 /// Account-scoped, WDCC-inspired minimal profile. It never exposes provider data or invented profile fields.
 class SocialProfileScreen extends StatefulWidget {
-  const SocialProfileScreen({super.key, required this.username});
+  const SocialProfileScreen({
+    super.key,
+    required this.username,
+    this.followRenames = true,
+  });
   final String username;
+
+  /// Moves to `/u/<current handle>` when [username] is one its owner has
+  /// since changed. My days shows the signed-in user's own profile in place.
+  final bool followRenames;
   @override
   State<SocialProfileScreen> createState() => _SocialProfileScreenState();
 }
 
+/// The relationship card and the profile details, read together.
+typedef _LoadedProfile = (FriendCard, ProfileDetails);
+
 class _SocialProfileScreenState extends State<SocialProfileScreen> {
-  Future<ApiResult<FriendCard>>? _profile;
+  Future<ApiResult<_LoadedProfile>>? _profile;
   String? _accountId;
   String? _loadedUsername;
   SessionController? _session;
@@ -31,8 +43,38 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   ProfilePostsController? _posts;
   (String?, String)? _postsFor;
 
-  Future<ApiResult<FriendCard>> _load() =>
-      AppScope.of(context).friends.profile(widget.username);
+  /// Details first: they resolve a handle the owner has since changed, and the
+  /// relationship card is then read for the current one.
+  Future<ApiResult<_LoadedProfile>> _load() async {
+    final services = AppScope.of(context);
+    final details = await services.profiles.details(widget.username);
+    switch (details) {
+      case ApiError(:final failure):
+        return ApiError(failure);
+      case ApiSuccess(value: final profile):
+        final card = await services.friends.profile(profile.username);
+        return switch (card) {
+          ApiSuccess(value: final person) => ApiSuccess((person, profile)),
+          ApiError(:final failure) => ApiError(failure),
+        };
+    }
+  }
+
+  void _followRename(ProfileDetails profile) {
+    if (profile.username.toLowerCase() == widget.username.toLowerCase()) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Another device changed this account's handle.
+      if (profile.isOwner) {
+        AppScope.of(context).session.usernameChanged(profile.username);
+      }
+      if (widget.followRenames) {
+        context.go('/u/${Uri.encodeComponent(profile.username)}');
+      }
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -114,16 +156,17 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   @override
   Widget build(BuildContext context) {
     _syncActor();
-    return FutureBuilder<ApiResult<FriendCard>>(
+    return FutureBuilder<ApiResult<_LoadedProfile>>(
       key: ValueKey((_accountId, widget.username)),
       future: _profile,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.data case ApiSuccess<FriendCard>(value: final person)) {
+        if (snapshot.data case ApiSuccess(value: (final person, final info))) {
           _authorizedProfileId = person.id;
-          return _profileCard(context, person);
+          _followRename(info);
+          return _profileCard(context, person, info);
         }
         return Center(
           child: DayliCard(
@@ -167,7 +210,16 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     });
   }
 
-  Widget _profileCard(BuildContext context, FriendCard person) {
+  Future<void> _edit() async {
+    await context.push('/profile/edit');
+    if (mounted) await _refresh();
+  }
+
+  Widget _profileCard(
+    BuildContext context,
+    FriendCard person,
+    ProfileDetails info,
+  ) {
     final colors = DayliColors.of(context);
     final isMe = person.id == _session?.user?.id;
     final posts = _postsController(
@@ -221,7 +273,42 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     tracking: DayliTracking.tighter,
                   ),
                 ),
+                if (!info.detailsVisible) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    "${person.displayName}'s profile is private.",
+                    key: const Key('profile.private'),
+                    textAlign: TextAlign.center,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      color: colors.foregroundTertiary,
+                    ),
+                  ),
+                ] else if (info.bio case final bio?) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    bio,
+                    key: const Key('profile.bio'),
+                    textAlign: TextAlign.center,
+                    style: DayliText.serif(
+                      context,
+                      size: DayliTextSize.lg,
+                      tracking: DayliTracking.tight,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 22),
+                if (isMe)
+                  SizedBox(
+                    width: double.infinity,
+                    child: DayliButton(
+                      key: const Key('profile.edit'),
+                      label: 'edit profile',
+                      color: ButtonColor.foreground,
+                      onPressed: _edit,
+                    ),
+                  ),
                 if (!isMe &&
                     (person.relationship == 'none' ||
                         person.relationship == 'friends'))

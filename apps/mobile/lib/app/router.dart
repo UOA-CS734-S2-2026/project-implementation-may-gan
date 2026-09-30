@@ -12,6 +12,7 @@ import '../messaging/conversation_screen.dart';
 import '../messaging/messages_screen.dart';
 import '../messaging/new_message_screen.dart';
 import '../posts/post_detail_screen.dart';
+import '../profile/edit_profile_screen.dart';
 import '../profile/my_days_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
@@ -58,6 +59,10 @@ GoRouter buildRouter(SessionController session) => GoRouter(
     // Full-screen pages above the tabs.
     GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+    GoRoute(
+      path: '/profile/edit',
+      builder: (_, _) => const EditProfileScreen(),
+    ),
     GoRoute(
       path: '/posts/:id',
       builder: (_, state) =>

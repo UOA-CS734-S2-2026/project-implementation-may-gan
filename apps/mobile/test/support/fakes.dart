@@ -9,6 +9,7 @@ import 'package:dayli_mobile/api/post_media.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
+import 'package:dayli_mobile/api/profile_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
@@ -426,7 +427,9 @@ class TestHarness {
     FakeFeedClient? feed,
     FakePostClient? posts,
     this.uploadMedia = true,
+    FakeProfileClient? profiles,
   }) : friends = friends ?? FakeFriendsClient(),
+       profiles = profiles ?? FakeProfileClient(),
        feed = feed ?? FakeFeedClient(),
        posts = posts ?? FakePostClient(),
        postingDays = FakePostingDayClient(day ?? ApiSuccess(postingDay())),
@@ -496,6 +499,7 @@ class TestHarness {
   final FakePostingDayClient postingDays;
   final FakeFeedClient feed;
   final FakePostClient posts;
+  final FakeProfileClient profiles;
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
@@ -512,6 +516,7 @@ class TestHarness {
     feed: feed,
     posts: posts,
     friends: friends,
+    profiles: profiles,
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
@@ -606,3 +611,65 @@ PostMedia attachment(
   url: Uri.parse('https://storage.example.test/$id?sig=1'),
   expiresAt: DateTime.utc(2026, 9, 26, 3, 5),
 );
+
+/// Profiles by handle. An unknown handle gets a plain public profile, and
+/// `jos` (the signed-in test user) is the owner's own.
+class FakeProfileClient implements ProfileClient {
+  FakeProfileClient([Map<String, ProfileDetails>? profiles])
+    : profiles = profiles ?? {};
+
+  final Map<String, ProfileDetails> profiles;
+  final requested = <String>[];
+  final updates = <({String? bio, String? publicName, bool? isPrivate})>[];
+  final usernameChanges = <String>[];
+  ApiResult<String>? changeResult;
+
+  ProfileDetails _profile(String username) =>
+      profiles[username] ??
+      ProfileDetails(
+        id: 'user-$username',
+        username: username,
+        displayName: username,
+        detailsVisible: true,
+        bio: null,
+        isOwner: username == 'jos',
+      );
+
+  @override
+  Future<ApiResult<ProfileDetails>> details(String username) async {
+    requested.add(username);
+    return ApiSuccess(_profile(username));
+  }
+
+  @override
+  Future<ApiResult<ProfileDetails>> update({
+    String? bio,
+    String? publicName,
+    bool? isPrivate,
+  }) async {
+    updates.add((bio: bio, publicName: publicName, isPrivate: isPrivate));
+    final current = _profile('jos');
+    final updated = ProfileDetails(
+      id: current.id,
+      username: current.username,
+      displayName: publicName == null
+          ? current.displayName
+          : publicName.isEmpty
+          ? current.username
+          : publicName,
+      detailsVisible: true,
+      bio: bio == null ? current.bio : (bio.isEmpty ? null : bio),
+      isOwner: true,
+      isPrivate: isPrivate ?? current.isPrivate,
+      usernameChangeAvailableAt: current.usernameChangeAvailableAt,
+    );
+    profiles[current.username] = updated;
+    return ApiSuccess(updated);
+  }
+
+  @override
+  Future<ApiResult<String>> changeUsername(String username) async {
+    usernameChanges.add(username);
+    return changeResult ?? ApiSuccess(username);
+  }
+}

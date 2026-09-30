@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/feed_client.dart';
+import 'api/profile_client.dart';
 import 'api/post_client.dart';
 import 'api/friends_client.dart';
 import 'api/media_upload_client.dart';
@@ -128,6 +129,10 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         friends: GeneratedFriendsClient(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
+        profiles: GeneratedProfileClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),

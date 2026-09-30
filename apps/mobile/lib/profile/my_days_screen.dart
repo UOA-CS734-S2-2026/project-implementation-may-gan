@@ -23,7 +23,7 @@ class MyDaysScreen extends StatelessWidget {
             ),
           );
         }
-        return SocialProfileScreen(username: username);
+        return SocialProfileScreen(username: username, followRenames: false);
       },
     );
   }
