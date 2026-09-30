@@ -1,0 +1,27 @@
+# Central account policy foundation
+
+This slice adds the server-side policy boundary for #159. It does not add account deletion mutation, cleanup execution, provider changes, or a client-side authorization bypass.
+
+## Enforced now
+
+`createAppForEnv` installs account-policy middleware before every `/api/v1/*` route. Every path is restrictive by default. The only public exceptions are health, OpenAPI, and contract-test endpoints. A newly registered API path is an ordinary capability unless it is explicitly classified as a restricted account-management path.
+
+The middleware resolves the Better Auth cookie or bearer session on the server, reads a content-free account-policy projection, and returns `403 FORBIDDEN` with a stable `details.restriction` value before ordinary feature middleware or repositories run. Resolver failures return `503`, never an allow decision. It applies to media, posts, relationships, messaging, realtime tickets, push-device routes, profile setup, and future `/api/v1` paths without changing those feature repositories.
+
+`GET /api/v1/account/status` and `GET /api/v1/account/policy` are authenticated, no-store restricted-state reads. They contain only the restriction name and allowed capability names. They do not disclose deadlines, legal documents, operator cases, profile data, or another account's state.
+
+The policy treats users with no lifecycle record as active. A present lifecycle row is authoritative. `pending_deletion`, `purging`, and `purge_failed` take precedence over legal gates. Pending accounts can read their restricted status, verify cancellation, export, read policy state, and sign out. They cannot use ordinary private routes. Purging accounts cannot export because an export must be removed when purge starts.
+
+Terms and age gates activate only when an effective Terms version has reached its effective time. Draft and notice records cannot lock users out. Effective Terms require acceptance of that exact version. The age declaration remains separate and stores no birthday.
+
+## Management grants
+
+`account-management-grants.ts` provides the database primitive for the later reauthentication route. It creates a 256-bit opaque token and stores only its SHA-256 digest. Consumption atomically binds the digest to the original user, session, action, unconsumed state, grant expiry, and a still-live Better Auth session. Replayed, expired, revoked-session, and account-confused grants return the same false result.
+
+No endpoint issues a grant yet. #159 still needs the reviewed password and Google proof flows. The route must obtain the current server-verified Better Auth session, preserve CSRF and origin checks, and never accept a raw Google ID token as a substitute for that proof. Normal sign-in has no lifecycle mutation and cannot cancel pending deletion.
+
+## Remaining integration work
+
+`operator_cases` remains inaccessible to `app`, by design. The policy projection therefore does not yet read temporary underage restrictions. Add a narrowly scoped, reviewable database procedure or view that reveals only an actor's boolean restriction state before enabling the underage policy branch. Do not grant `app` direct operator-case access.
+
+Deletion request, cancellation, export, appeal, and legal-acceptance endpoints remain later slices. The declared capability classifications reserve their policy gates without creating a lifecycle executor. Realtime and push delivery must consume the same policy projection at dispatch time in a separate integration change. #160 remains required before physical user deletion.

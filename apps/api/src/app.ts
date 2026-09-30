@@ -137,8 +137,13 @@ import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messagi
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
+import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
+import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
+import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import type { ResolveSession } from "./http/middleware/require-session";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
+type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -153,6 +158,7 @@ export interface AppDependencies {
   realtimeConnect?: RealtimeConnectRouteDependencies;
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
+  accountPolicy?: AccountPolicyDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -170,6 +176,7 @@ export function createApp({
   realtimeConnect = {},
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
+  accountPolicy,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -205,7 +212,9 @@ export function createApp({
     name: "better-auth.session_token",
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
+  if (accountPolicy?.policies) api.use("/api/v1/*", createAccountPolicyMiddleware(accountPolicy.resolveSession, accountPolicy.policies));
   registerSystemRoutes(api);
+  registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerPostsRoutes(api, {
@@ -262,6 +271,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
+  const accountPolicy = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
+  } satisfies AccountPolicyDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -290,6 +303,7 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeConnect: realtime?.connect,
     pushDevices,
     usernameProfile,
+    accountPolicy,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
