@@ -45,6 +45,11 @@ export const legalDocumentVersions = pgTable("legal_document_versions", {
     (${table.status} = 'effective' and ${table.effectiveAt} is not null) or
     (${table.status} = 'superseded' and ${table.effectiveAt} is not null)
   `),
+  check("legal_document_versions_material_notice_check", sql`
+    not ${table.materialChange} or ${table.status} <> 'notice' or
+    ${table.urgentChangeReason} is not null or
+    ${table.effectiveAt} >= ${table.noticeStartsAt} + interval '30 days'
+  `),
   check("legal_document_versions_urgent_change_check", sql`
     ${table.urgentChangeReason} is null or
     (${table.materialChange} and ${table.noticeStartsAt} is not null and ${table.effectiveAt} is not null and ${table.noticeStartsAt} < ${table.effectiveAt})

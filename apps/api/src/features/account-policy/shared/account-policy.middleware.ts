@@ -13,13 +13,22 @@ export interface AccountPolicyResolver {
  * listed here, which makes a newly registered API route restrictive until its
  * capability has been reviewed.
  */
-const publicApiRoutes = new Set(["GET /api/v1/health", "GET /api/v1/openapi.json", "GET /api/v1/test-contracts", "GET /api/v1/account/reauthenticate/google/callback"]);
+const publicApiRoutes = new Set([
+  "GET /api/v1/health",
+  "GET /api/v1/openapi.json",
+  "GET /api/v1/test-contracts",
+  "GET /api/v1/account/reauthenticate/google/callback",
+  "GET /api/v1/legal/terms/current",
+  "GET /api/v1/legal/terms/notice",
+  "POST /api/v1/legal/registration-intents",
+]);
 const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/status", "policy_read"],
   ["GET /api/v1/account/policy", "policy_read"],
   ["POST /api/v1/account/reauthenticate/password", "policy_read"],
   ["POST /api/v1/account/reauthenticate/google/begin", "policy_read"],
   ["POST /api/v1/account/reauthenticate/google/complete", "policy_read"],
+  ["POST /api/v1/account/legal/acceptance", "policy_read"],
 ]);
 
 /**

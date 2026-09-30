@@ -201,6 +201,32 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
+  it("requires a 30-day material Terms notice unless an urgent reason is recorded", async () => {
+    const versionBase = Math.floor(Math.random() * 1_000_000_000) + 1;
+    const ordinaryId = `terms-short-notice-${crypto.randomUUID()}`;
+    const urgentId = `terms-urgent-notice-${crypto.randomUUID()}`;
+    const minorId = `terms-minor-notice-${crypto.randomUUID()}`;
+    legalVersions.push(ordinaryId, urgentId, minorId);
+    const startsAt = "2026-09-01T00:00:00.000Z";
+
+    await expect(migrator`
+      insert into public.legal_document_versions
+        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
+      values (${ordinaryId}, 'terms', ${versionBase}, ${"e".repeat(64)}, 'notice', true, ${startsAt}, '2026-09-30T23:59:59.000Z')
+    `).rejects.toMatchObject({ code: "23514" });
+
+    await migrator`
+      insert into public.legal_document_versions
+        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at, urgent_change_reason)
+      values (${urgentId}, 'terms', ${versionBase + 1}, ${"f".repeat(64)}, 'notice', true, ${startsAt}, '2026-09-02T00:00:00.000Z', 'Critical security correction')
+    `;
+    await migrator`
+      insert into public.legal_document_versions
+        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
+      values (${minorId}, 'terms', ${versionBase + 2}, ${"a".repeat(64)}, 'notice', false, ${startsAt}, '2026-09-02T00:00:00.000Z')
+    `;
+  });
+
   it("keeps export cleanup tasks private after reapplying role bootstrap", async () => {
     const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
     await migrator.unsafe(bootstrap);

@@ -1,0 +1,6 @@
+reason: The legal notice constraint operation must have a bounded statement timeout.
+affected_data_and_clients: No document is published and no client configuration changes during the migration.
+rollout_sequence: Apply with the five-minute statement timeout before any operator-controlled activation.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: Investigate and retry through the migration runner if the timeout is exceeded.
+reviewer: Database and privacy reviewers required.

@@ -53,12 +53,16 @@ function nativeToken(response: Response) {
   return token!;
 }
 
-async function signUp(app: ReturnType<typeof createProductionApp>, email = "postgres@example.test") {
-  return app.fetch(request("/api/auth/sign-up/email", {
+function signUpRequest(email: string, extraHeaders: HeadersInit = {}) {
+  return request("/api/auth/sign-up/email", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...extraHeaders },
     body: JSON.stringify({ name: "PostgreSQL User", username: `postgres_${email.replace(/[^a-z0-9]/gi, "_").toLowerCase()}`.slice(0, 30), email, password: "not-a-real-password" }),
-  }));
+  });
+}
+
+async function signUp(app: ReturnType<typeof createProductionApp>, email = "postgres@example.test") {
+  return app.fetch(signUpRequest(email));
 }
 
 async function signIn(app: ReturnType<typeof createProductionApp>) {
@@ -76,7 +80,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   ));
 
   beforeEach(async () => {
-    await migrator.client.unsafe('truncate table public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
+    await migrator.client.unsafe('truncate table public."rateLimit", public.account, public.session, public.verification, public."user", public.registration_intents, public.legal_document_versions cascade');
   });
 
   afterAll(async () => {
@@ -222,6 +226,44 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       body: JSON.stringify({ action: "request_deletion", password: "not-a-real-password" }),
     }));
     expect(expired.status).toBe(401);
+  });
+
+  it("requires a single-use server Terms and age intent before creating a password account", async () => {
+    const documentId = `terms-${crypto.randomUUID()}`;
+    const digest = "a".repeat(64);
+    await migrator.db.insert((await import("@dayli/db")).schema.legalDocumentVersions).values({
+      id: documentId,
+      kind: "terms",
+      version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: digest,
+      status: "effective",
+      effectiveAt: new Date(Date.now() - 1_000),
+    });
+    const app = createProductionApp();
+    const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ flow: "email", acceptTerms: true, declareAge16OrOlder: true }),
+    }));
+    expect(issued.status).toBe(201);
+    const proof = await issued.json() as { intent: string; flowBinding: string; terms: { id: string; contentDigest: string } };
+    expect(proof.terms).toMatchObject({ id: documentId, contentDigest: digest });
+
+    const rejected = await app.fetch(signUpRequest("missing-intent@example.test"));
+    expect(rejected.status).toBe(403);
+
+    const competing = ["first-intent@example.test", "second-intent@example.test"].map((email) => app.fetch(signUpRequest(email, {
+      "x-dayli-registration-intent": proof.intent,
+      "x-dayli-registration-binding": proof.flowBinding,
+    })));
+    const results = await Promise.all(competing);
+    expect(results.filter((response) => response.status === 200)).toHaveLength(1);
+    const [accepted] = results.filter((response) => response.status === 200);
+    const body = await accepted!.json() as { user: { id: string } };
+    const [termsAcceptance] = await migrator.client`select accepted_at from public.terms_acceptances where user_id = ${body.user.id} and terms_version_id = ${documentId}`;
+    const [ageDeclaration] = await migrator.client`select declaration_version from public.age_declarations where user_id = ${body.user.id}`;
+    expect(termsAcceptance?.accepted_at).toBeTruthy();
+    expect(ageDeclaration).toEqual({ declaration_version: "age-16-v1" });
   });
 
   it("notifies Worker revocation for every session before Better Auth removes them", async () => {

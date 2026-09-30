@@ -6,6 +6,7 @@ analysis_options.yaml
 git_push.sh
 lib/api.dart
 lib/api/account_api.dart
+lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
 lib/api/posting_days_api.dart
@@ -51,6 +52,15 @@ lib/model/feed_post_author.dart
 lib/model/feed_post_prompt.dart
 lib/model/get_messaging_unread200_response.dart
 lib/model/health_response.dart
+lib/model/legal_accept_current_terms200_response.dart
+lib/model/legal_accept_current_terms_request.dart
+lib/model/legal_get_current_terms200_response.dart
+lib/model/legal_get_current_terms200_response_terms.dart
+lib/model/legal_get_terms_notice200_response.dart
+lib/model/legal_get_terms_notice200_response_notice.dart
+lib/model/legal_issue_registration_intent201_response.dart
+lib/model/legal_issue_registration_intent201_response_terms.dart
+lib/model/legal_issue_registration_intent_request.dart
 lib/model/list_conversation_changes200_response.dart
 lib/model/list_conversation_changes200_response_items_inner.dart
 lib/model/list_conversations200_response.dart

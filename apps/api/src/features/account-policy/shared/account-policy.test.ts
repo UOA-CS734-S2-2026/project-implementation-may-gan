@@ -62,6 +62,11 @@ describe("account policy", () => {
     expect(classify("POST", "/api/v1/account/reauthenticate/google/begin")).toBe("policy_read");
     expect(classify("POST", "/api/v1/account/reauthenticate/google/complete")).toBe("policy_read");
     expect(classify("GET", "/api/v1/account/reauthenticate/google/callback")).toBeUndefined();
+    expect(classify("GET", "/api/v1/legal/terms/current")).toBeUndefined();
+    expect(classify("GET", "/api/v1/legal/terms/notice")).toBeUndefined();
+    expect(classify("POST", "/api/v1/legal/registration-intents")).toBeUndefined();
+    expect(classify("POST", "/api/v1/account/legal/acceptance")).toBe("policy_read");
+    expect(classify("GET", "/api/v1/legal/terms/current/extra")).toBe("ordinary");
     expect(classify("POST", "/api/v1/account/reauthenticate/google/callback")).toBe("ordinary");
     expect(classify("GET", "/api/v1/account/reauthenticate/password")).toBe("ordinary");
     expect(classify("POST", "/api/v1/account/reauthenticate/password/extra")).toBe("ordinary");

@@ -1,0 +1,6 @@
+reason: Trigger installation must have a bounded statement timeout.
+affected_data_and_clients: Current Terms enforcement activates only after an approved effective document exists.
+rollout_sequence: Apply with the five-minute statement timeout before any operator-controlled publication.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: Investigate and apply a later additive correction if the timeout is exceeded.
+reviewer: Database, authentication, and privacy reviewers required.

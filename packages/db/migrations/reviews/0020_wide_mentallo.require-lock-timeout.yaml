@@ -1,0 +1,6 @@
+reason: Adding the additive legal notice constraint briefly locks legal metadata.
+affected_data_and_clients: No document is published and no client configuration changes during the migration.
+rollout_sequence: Apply with the five-second lock timeout before any operator-controlled activation.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: Correct any constraint issue through a later additive migration.
+reviewer: Database and privacy reviewers required.

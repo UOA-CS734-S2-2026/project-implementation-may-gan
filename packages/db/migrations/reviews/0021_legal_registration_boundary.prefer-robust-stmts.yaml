@@ -1,0 +1,6 @@
+reason: The protected migration runner applies this trigger installation transactionally.
+affected_data_and_clients: Current Terms enforcement activates only after an approved effective document exists.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: If trigger installation fails, investigate and use a later additive migration.
+reviewer: Database, authentication, and privacy reviewers required.

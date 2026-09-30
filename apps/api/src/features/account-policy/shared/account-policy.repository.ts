@@ -3,6 +3,7 @@ import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { resolveAccountPolicy, type AccountPolicy, type AccountPolicyState } from "./account-policy";
 import type { AccountPolicyResolver } from "./account-policy.middleware";
+import { ageDeclarationVersion } from "@dayli/contracts";
 
 /**
  * Draft and notice documents do not activate a gate. This is intentionally a
@@ -29,7 +30,7 @@ export async function readAccountPolicy(database: DayliDatabase, userId: string)
       .limit(1),
     database.select({ userId: schema.ageDeclarations.userId })
       .from(schema.ageDeclarations)
-      .where(eq(schema.ageDeclarations.userId, userId))
+      .where(and(eq(schema.ageDeclarations.userId, userId), eq(schema.ageDeclarations.declarationVersion, ageDeclarationVersion)))
       .limit(1),
     database.select({ restricted: sql<boolean>`public.account_policy_underage_restricted(${userId})` })
       .from(schema.user)

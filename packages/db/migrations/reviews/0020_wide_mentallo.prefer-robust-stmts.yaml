@@ -1,0 +1,6 @@
+reason: The protected migration runner applies this small additive migration transactionally.
+affected_data_and_clients: No document is published and no client configuration changes during the migration.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: If validation fails, investigate and apply a later additive correction.
+reviewer: Database and privacy reviewers required.

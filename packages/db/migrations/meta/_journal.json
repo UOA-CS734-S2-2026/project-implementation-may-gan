@@ -141,6 +141,20 @@
       "when": 1790752639119,
       "tag": "0019_perfect_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790763393605,
+      "tag": "0020_wide_mentallo",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790764229000,
+      "tag": "0021_legal_registration_boundary",
+      "breakpoints": true
     }
   ]
 }

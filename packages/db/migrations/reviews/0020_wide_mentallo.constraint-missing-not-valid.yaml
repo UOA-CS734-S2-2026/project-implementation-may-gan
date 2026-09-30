@@ -1,0 +1,6 @@
+reason: The constraint is added not valid and validated separately to reduce the initial lock duration.
+affected_data_and_clients: No document is published and no client configuration changes during the migration.
+rollout_sequence: Apply the additive constraint, then validate it within the bounded statement timeout.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: Correct any invalid historical row through a later reviewed migration.
+reviewer: Database and privacy reviewers required.

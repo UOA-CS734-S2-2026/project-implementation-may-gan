@@ -148,6 +148,7 @@ import { createGoogleProofDigestVerifier } from "./features/account-policy/reaut
 import { createGoogleProofIntentStore } from "./features/account-policy/reauthenticate/google-proof-intents.repository";
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
 import type { ResolveSession } from "./http/middleware/require-session";
+import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -168,6 +169,7 @@ export interface AppDependencies {
   accountPolicy?: AccountPolicyDependencies;
   accountReauthentication?: AccountReauthenticationDependencies;
   googleProof?: GoogleProofRouteDependencies;
+  legal?: LegalRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -188,6 +190,7 @@ export function createApp({
   accountPolicy,
   accountReauthentication,
   googleProof,
+  legal,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -228,6 +231,7 @@ export function createApp({
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerGoogleProofRoutes(api, googleProof);
+  registerLegalRoutes(api, legal ?? { trustedOrigins });
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerPostsRoutes(api, {
@@ -290,6 +294,10 @@ export function createAppForEnv(env: ApiEnv) {
   } satisfies AccountPolicyDependencies : undefined;
   const accountReauthentication = configuration ? createAccountReauthenticationDependencies(configuration) : undefined;
   const googleProof = configuration ? createGoogleProofDependencies(configuration, env) : undefined;
+  const legal = configuration ? {
+    trustedOrigins: configuration.trustedOrigins,
+    withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
+  } satisfies LegalRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -321,6 +329,7 @@ export function createAppForEnv(env: ApiEnv) {
     accountPolicy,
     accountReauthentication,
     googleProof,
+    legal,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;

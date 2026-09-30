@@ -1407,6 +1407,415 @@
         }
       }
     },
+    "/api/v1/legal/terms/current": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getCurrentTerms",
+        "responses": {
+          "200": {
+            "description": "Current effective Terms, or null before publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/terms"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms/notice": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getTermsNotice",
+        "responses": {
+          "200": {
+            "description": "Current Terms notice, or null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notice": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "materialChange": {
+                          "type": "boolean"
+                        },
+                        "noticeStartsAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "urgentChangeReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/terms"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "materialChange",
+                        "noticeStartsAt",
+                        "effectiveAt",
+                        "urgentChangeReason",
+                        "documentUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "notice"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/registration-intents": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.issueRegistrationIntent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "google_native",
+                      "google_browser"
+                    ]
+                  },
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "declareAge16OrOlder": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "flow",
+                  "acceptTerms",
+                  "declareAge16OrOlder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Short-lived opaque registration proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intent": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "flowBinding": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "terms": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/terms"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "ageDeclarationVersion": {
+                      "type": "string",
+                      "enum": [
+                        "age-16-v1"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "intent",
+                    "flowBinding",
+                    "expiresAt",
+                    "terms",
+                    "ageDeclarationVersion"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terms are not published."
+          },
+          "422": {
+            "description": "Unchecked Terms or age declaration."
+          },
+          "503": {
+            "description": "Legal registration unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/legal/acceptance": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.acceptCurrentTerms",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "declareAge16OrOlder": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "termsVersionId": {
+                    "type": "string"
+                  },
+                  "contentDigest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "acceptTerms",
+                  "declareAge16OrOlder",
+                  "termsVersionId",
+                  "contentDigest"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current Terms acceptance recorded idempotently.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/terms"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "ageDeclarationVersion": {
+                      "type": "string",
+                      "enum": [
+                        "age-16-v1"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "ageDeclarationVersion"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "409": {
+            "description": "Terms changed or not published."
+          },
+          "422": {
+            "description": "Unchecked Terms or age declaration."
+          },
+          "503": {
+            "description": "Legal acceptance unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/media-reservations": {
       "post": {
         "tags": [
