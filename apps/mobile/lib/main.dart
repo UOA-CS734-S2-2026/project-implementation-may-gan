@@ -145,13 +145,10 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         mediaCompressor: mediaCompressor,
-        // Null keeps picked media on the device until posts can link it.
-        mediaUploads: config.mediaUploadsEnabled
-            ? GeneratedMediaUploadClient(
-                baseUrl: config.apiBaseUrl,
-                bearerToken: nativeSession.bearerToken,
-              )
-            : null,
+        mediaUploads: GeneratedMediaUploadClient(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
       ),
     ),
   );

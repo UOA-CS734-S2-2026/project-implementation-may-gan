@@ -437,7 +437,7 @@ class TestHarness {
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
 
-  /// False matches a build without `DAYLI_MEDIA_UPLOADS`.
+  /// False gives the app no upload client, so picked media stays on the device.
   final bool uploadMedia;
   late final SessionController session;
 
