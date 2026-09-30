@@ -1,6 +1,6 @@
 # Drizzle SQL-expression cleanup
 
-Status: draft PR #176 against main. The media reservation dependency proposal remains separate. Do not merge this PR automatically.
+Status: PR #176 against main. The media reservation dependency proposal remains separate. Do not merge this PR automatically.
 
 ## Goal
 
@@ -36,6 +36,12 @@ The counts classify tagged templates by their most obvious purpose, not by wheth
 3. Convert message, member, conversation, and change projections with safe-number validation. Keep atomic increments in the database. Retain the exact-string outbox job projection. Rework messaging high-sequence fixtures to test rejection rather than silent rounding.
 4. Review remaining fragments file by file. For each kept expression, record the PostgreSQL behavior it protects. Do not replace a correlated count or filtered aggregate with another round trip merely to remove `sql`.
 5. Compare generated SQL, run API unit and Worker tests, the full disposable PostgreSQL verifier, typecheck, lint, and generated-client checks. Confirm that public OpenAPI and clients remain unchanged. Review locks, permission decisions, pagination, and outbox effects before marking draft PR #176 ready.
+
+## Integration test fixtures
+
+The API integration tests also had 469 lines containing direct postgres-js `.client` tagged SQL or `.client.unsafe` calls. The follow-up in this PR converts those calls to Drizzle queries across 35 test files. This test count is separate from the 183-to-101 runtime expression inventory.
+
+Fixture inserts, updates, deletes, and assertions use typed builders. Bounded SQL expressions remain where PostgreSQL must supply exact overflowing bigint values, microsecond timestamps, advisory locks, session settings, or trigger and migration DDL. Assertions that count several tables still run as one database statement. The optional test-database guards remain in place.
 
 ## Remaining runtime SQL
 
