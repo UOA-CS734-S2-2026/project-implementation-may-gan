@@ -4,6 +4,7 @@ const googleIssuer = "https://accounts.google.com";
 const googleJwks = new URL("https://www.googleapis.com/oauth2/v3/certs");
 const maximumProofAgeMs = 10 * 60 * 1000;
 const clockToleranceSeconds = 5;
+const productionJwks = createRemoteJWKSet(googleJwks, { cooldownDuration: 30_000, timeoutDuration: 5_000 });
 
 export interface VerifiedGoogleProof { subject: string; authenticatedAt: Date; }
 export interface GoogleProofVerifierConfiguration { clientId: string; now?: () => Date; }
@@ -17,15 +18,19 @@ function validSubject(value: string): boolean { return /^[\x21-\x7e]{1,255}$/u.t
 /** Creates a server-owned verifier. Production never accepts provider URLs from a request. */
 export function createGoogleProofVerifier(configuration: GoogleProofVerifierConfiguration, dependencies: GoogleProofVerifierDependencies = {}) {
   if (!configuration.clientId.trim() || configuration.clientId.length > 512) throw new TypeError("Invalid Google client ID.");
-  const jwks = dependencies.jwks ?? createRemoteJWKSet(googleJwks, { cooldownDuration: 30_000, timeoutDuration: 5_000 });
+  const jwks = dependencies.jwks ?? productionJwks;
   return async (idToken: string, expectedNonce: string): Promise<VerifiedGoogleProof | null> => {
     if (idToken.length < 64 || idToken.length > 16_384 || expectedNonce.length < 32 || expectedNonce.length > 256 || expectedNonce.trim() !== expectedNonce) return null;
     try {
+      const currentDate = (configuration.now ?? (() => new Date()))();
+      const now = currentDate.getTime();
+      if (!Number.isFinite(now)) return null;
       const verified = await jwtVerify(idToken, jwks, {
         issuer: googleIssuer,
         audience: configuration.clientId,
         algorithms: ["RS256"],
         clockTolerance: clockToleranceSeconds,
+        currentDate,
         requiredClaims: ["exp", "iat", "sub", "nonce", "auth_time"],
       });
       const payload = verified.payload as Record<string, unknown>;
@@ -36,8 +41,7 @@ export function createGoogleProofVerifier(configuration: GoogleProofVerifierConf
       const authTime = payload.auth_time;
       const issuedAt = payload.iat;
       if (!subject || !validSubject(subject) || nonce !== expectedNonce || typeof issuedAt !== "number" || !Number.isSafeInteger(issuedAt) || typeof authTime !== "number" || !Number.isSafeInteger(authTime)) return null;
-      if (Array.isArray(audience) && azp !== configuration.clientId) return null;
-      const now = (configuration.now ?? (() => new Date()))().getTime();
+      if ((payload.azp !== undefined && azp !== configuration.clientId) || (Array.isArray(audience) && !azp)) return null;
       const authenticatedAt = authTime * 1000;
       const issuedAtMs = issuedAt * 1000;
       if (authenticatedAt > now + clockToleranceSeconds * 1000 || now - authenticatedAt > maximumProofAgeMs || issuedAtMs > now + clockToleranceSeconds * 1000 || issuedAtMs < authenticatedAt) return null;
