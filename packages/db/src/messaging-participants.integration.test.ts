@@ -5,6 +5,10 @@ const migratorUrl = process.env.TEST_DATABASE_URL;
 const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const enabled = Boolean(migratorUrl);
 
+if (process.env.REQUIRE_DB_TEST === "1" && !enabled) {
+  throw new Error("TEST_DATABASE_URL is required for messaging participant integration tests.");
+}
+
 function requireLocalUrl(value: string | undefined): string {
   if (!value) throw new Error("TEST_DATABASE_URL is required for messaging participant integration tests.");
   const url = new URL(value);
