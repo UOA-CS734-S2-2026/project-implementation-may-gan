@@ -125,4 +125,4 @@ web_pid=$!
 wait_for_url "$web_origin" "$web_pid" 'Web application'
 
 echo 'Running Playwright browser journeys'
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web test:e2e
+E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web test:e2e -- "$@"
