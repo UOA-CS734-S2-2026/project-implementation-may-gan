@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
@@ -45,6 +46,16 @@ describe("NewMessagePage", () => {
     await user.type(composer, "Hello");
     fireEvent.keyDown(composer, { key: "Enter" });
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ recipientId: "recipient", text: "Hello" })));
+  });
+
+  it("navigates after a successful send when Strict Mode rehearses the liveness effect", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><NewMessage username="ada" /></QueryClientProvider></StrictMode>);
+    await screen.findByText("Ada");
+    await user.type(screen.getByLabelText("Message"), "Hello");
+    await user.click(screen.getByRole("button", { name: "send" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/messages/created"));
   });
 
   it("uses a stable create id for a missing thread retry", async () => {

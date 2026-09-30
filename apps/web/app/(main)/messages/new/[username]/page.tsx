@@ -34,7 +34,12 @@ export function NewMessage({ username }: { username: string }) {
   const formRef = useRef<HTMLFormElement | null>(null);
   const composing = useRef(false);
   const actorId = user?.id ?? "anonymous";
-  useEffect(() => () => { active.current = false; }, []);
+  useEffect(() => {
+    // Strict Mode rehearses setup and cleanup in development. Reset the liveness
+    // flag during every setup so the rehearsal cannot suppress a real redirect.
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const direct = useCreateConversationMutation();
   const existing = useQuery({ queryKey: ["direct-pair", user?.id ?? "anonymous", profile.data?.id ?? ""], enabled: Boolean(profile.data?.id), retry: false, queryFn: async () => { const result = await messagingApi.findDirect(profile.data!.id); if (result.ok) return result.value; if (result.failure === "notFound") return null; throw new Error(result.message); } });
   useEffect(() => { if (existing.data?.conversationId) router.replace(`/messages/${existing.data.conversationId}`); }, [existing.data?.conversationId, router]);
