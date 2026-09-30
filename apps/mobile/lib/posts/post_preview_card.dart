@@ -14,6 +14,7 @@ class PostPreviewCard extends StatelessWidget {
     required this.post,
     required this.keyPrefix,
     this.label,
+    this.linkAuthor = true,
   });
 
   final FeedPost post;
@@ -23,6 +24,9 @@ class PostPreviewCard extends StatelessWidget {
 
   /// A short note for the author, such as who can see the post.
   final String? label;
+
+  /// Whether the author row opens their profile. Off on that profile itself.
+  final bool linkAuthor;
 
   @override
   Widget build(BuildContext context) {
@@ -38,43 +42,55 @@ class PostPreviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: colors.backgroundAccent,
-                child: Text(
-                  initial,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    weight: FontWeight.w600,
-                    color: colors.foregroundAccent,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      post.displayName,
-                      overflow: TextOverflow.ellipsis,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.sm,
-                        weight: FontWeight.w600,
+                child: _AuthorLink(
+                  key: Key('$keyPrefix.author.${post.id}'),
+                  username: post.username,
+                  displayName: post.displayName,
+                  enabled: linkAuthor,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: colors.backgroundAccent,
+                        child: Text(
+                          initial,
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            weight: FontWeight.w600,
+                            color: colors.foregroundAccent,
+                          ),
+                        ),
                       ),
-                    ),
-                    Text(
-                      '@${post.username}',
-                      overflow: TextOverflow.ellipsis,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        color: colors.foregroundSecondary,
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.displayName,
+                              overflow: TextOverflow.ellipsis,
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.sm,
+                                weight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '@${post.username}',
+                              overflow: TextOverflow.ellipsis,
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.xs,
+                                color: colors.foregroundSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Text(
@@ -165,6 +181,36 @@ class PostPreviewCard extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => context.push('/posts/${post.id}'),
         child: card,
+      ),
+    );
+  }
+}
+
+/// Opens the author's profile on its own tap, above the card's tap.
+class _AuthorLink extends StatelessWidget {
+  const _AuthorLink({
+    super.key,
+    required this.username,
+    required this.displayName,
+    required this.enabled,
+    required this.child,
+  });
+
+  final String username;
+  final String displayName;
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return Semantics(
+      button: true,
+      label: "Open $displayName's profile",
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push('/u/${Uri.encodeComponent(username)}'),
+        child: child,
       ),
     );
   }

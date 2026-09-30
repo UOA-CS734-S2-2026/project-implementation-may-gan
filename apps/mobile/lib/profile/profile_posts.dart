@@ -122,6 +122,7 @@ class ProfilePostsSection extends StatelessWidget {
             post: post,
             keyPrefix: 'profile.posts',
             label: _labelFor(post),
+            linkAuthor: false,
           ),
           const SizedBox(height: 16),
         ],

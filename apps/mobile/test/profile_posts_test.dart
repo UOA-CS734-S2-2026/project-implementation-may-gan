@@ -1,4 +1,5 @@
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/home/home_screen.dart';
@@ -213,5 +214,62 @@ void main() {
       find.text("Ada hasn't shared any daylies with you yet."),
       findsOneWidget,
     );
+  });
+
+  testWidgets('opens a friend\'s profile from their name on a feed card', (
+    tester,
+  ) async {
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(items: [feedPost('1')], nextCursor: null, hasMore: false),
+        ),
+      ]),
+      friends: ProfileFriendsClient({
+        'friend_1': const FriendCard(
+          id: 'author-1',
+          username: 'friend_1',
+          displayName: 'Friend 1',
+          relationship: 'friends',
+        ),
+      }),
+    );
+    await signIn(tester, harness);
+    await tester.ensureVisible(find.byKey(const Key('home.feed.author.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home.feed.author.1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('@friend_1'), findsOneWidget);
+    expect(harness.posts.requested, isEmpty);
+    expect(harness.posts.profileRequests.single.$1, 'friend_1');
+  });
+
+  testWidgets('opens the author\'s profile from a post', (tester) async {
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(items: [feedPost('1')], nextCursor: null, hasMore: false),
+        ),
+      ]),
+      friends: ProfileFriendsClient({
+        'friend_1': const FriendCard(
+          id: 'author-1',
+          username: 'friend_1',
+          displayName: 'Friend 1',
+          relationship: 'friends',
+        ),
+      }),
+      posts: FakePostClient([ApiSuccess(postDetail('1'))]),
+    );
+    await signIn(tester, harness);
+    await tester.ensureVisible(find.byKey(const Key('home.feed.post.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home.feed.post.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('post.author')));
+    await tester.pumpAndSettle();
+
+    expect(harness.posts.profileRequests.single.$1, 'friend_1');
   });
 }
