@@ -40,6 +40,10 @@ lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
 lib/model/direct_pair_lookup.dart
 lib/model/edit_message_request.dart
+lib/model/feed_page.dart
+lib/model/feed_post.dart
+lib/model/feed_post_author.dart
+lib/model/feed_post_prompt.dart
 lib/model/get_messaging_unread200_response.dart
 lib/model/health_response.dart
 lib/model/list_conversation_changes200_response.dart
@@ -59,6 +63,9 @@ lib/model/message_reply_preview.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
+lib/model/post_detail.dart
+lib/model/post_detail_author.dart
+lib/model/post_detail_prompt.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_profile.dart
 lib/model/relationship_state.dart

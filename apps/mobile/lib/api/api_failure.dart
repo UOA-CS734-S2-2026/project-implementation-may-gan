@@ -15,6 +15,11 @@ class ServiceUnavailable extends ApiFailure {
   const ServiceUnavailable();
 }
 
+/// Absent, or hidden from this user; the API does not say which.
+class NotFound extends ApiFailure {
+  const NotFound();
+}
+
 class InvalidRequest extends ApiFailure {
   const InvalidRequest(this.message);
 

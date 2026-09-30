@@ -39,7 +39,7 @@ Each feature registrar is the only feature-root implementation file. It register
 
 Messaging has three levels of shared ownership. `messaging/shared/` is domain shared. `<subfeature>/shared/` belongs only to that subfeature. Action files live in `<subfeature>/<action>/`. A messaging action may import its own action, its own subfeature shared modules, domain shared modules, `src/http`, `src/infrastructure`, and approved workspace packages. It cannot import another action, including an action with the same name in another subfeature, or another subfeature's shared modules. Subfeature shared modules may import only their own shared modules and domain shared modules. Domain shared modules may import domain shared modules only. Action route tests retain the existing narrow registrar type import where they need the registrar dependency interface.
 
-`messaging.routes.ts` remains the feature registrar. It may register action route functions and use approved domain shared types. It cannot become a second service or repository. `apps/api/src/features` and API test support under `apps/api/test` are checked by `scripts/check-api-boundaries.mjs`, which runs as part of root `pnpm lint`. Test support may import shared modules, but not action internals. Messaging test support may import domain shared modules only. Boundary fixtures use virtual feature paths and enforce the same rules for imports, type-only imports, re-exports, dynamic imports, and CommonJS `require` calls. Cross-action test composition goes through the application composition root. This repository has no TypeScript path aliases, so non-relative specifiers are treated as external boundaries. A future alias must add resolver support and a fixture before use. Workspace package specifiers beginning with `@dayli/` are approved package boundaries. Better Auth provider integration, permissions, and system Hyperdrive compatibility entrypoints remain explicit exceptions.
+`messaging.routes.ts` remains the feature registrar. It may register action route functions and use approved domain shared types. It cannot become a second service or repository. `apps/api/src/features` and API test support under `apps/api/test` are checked by `scripts/check-api-boundaries.mjs`, which runs as part of root `pnpm lint`. Test support may import shared modules, but not action internals. Messaging test support may import domain shared modules only. Boundary fixtures use virtual feature paths and enforce the same rules for imports, type-only imports, re-exports, dynamic imports, and CommonJS `require` calls. Cross-action test composition goes through the application composition root. This repository has no TypeScript path aliases, so non-relative specifiers are treated as external boundaries. A future alias must add resolver support and a fixture before use. Workspace package specifiers beginning with `@dayli/` are approved package boundaries. Better Auth provider integration, permissions, and system Hyperdrive compatibility entrypoints remain explicit exceptions. Any feature may import the permissions module through its `index.ts` entry point, but not its internal files, so post reads share one visibility predicate.
 
 ## Current file tree
 
@@ -91,7 +91,10 @@ apps/api/src/
         message-projection.ts               Safe canonical message/reply/tombstone projection
         message.contract.ts                 Shared message schemas
     posts/
+      posts.routes.ts                       Thin registration only
       create-post/                          Action-owned route, service, and repository
+      list-feed/                            Route and repository over the shared visibility filter
+      get-post/                             Detail route and repository over the same filter
     posting-days/
       get-current-posting-day/
     media/

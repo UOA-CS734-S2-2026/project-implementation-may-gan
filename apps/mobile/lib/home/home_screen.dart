@@ -5,16 +5,18 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
+import '../api/feed_client.dart';
 import '../api/posting_day_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../compose/deadline_countdown.dart';
 import '../ui/dayli_button.dart';
+import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
+import 'feed_controller.dart';
 
-/// Home: today's prompt with the time left to post, then yesterday's daylies.
-/// The released friends feed arrives with #19 (and #20 on mobile); until then
-/// the feed shows WDCC's empty-state messages.
+/// Home: today's prompt with the time left to post, then released daylies
+/// from friends, newest day first.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.random});
 
@@ -49,14 +51,28 @@ class _HomeScreenState extends State<HomeScreen> {
         HomeScreen.emptyMessages.length,
       )];
   ApiResult<PostingDay>? _day;
+  FeedController? _feed;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_day == null) _load();
+    if (_feed == null) {
+      _feed = FeedController(AppScope.of(context).feed);
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _feed?.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
+    await Future.wait([_loadDay(), _refreshFeed()]);
+  }
+
+  Future<void> _loadDay() async {
     final services = AppScope.of(context);
     final result = await services.postingDays.current();
     if (!mounted) return;
@@ -65,6 +81,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     setState(() => _day = result);
+  }
+
+  Future<void> _refreshFeed() => _handleFeedFailure(_feed!.refresh());
+
+  Future<void> _loadMoreFeed() => _handleFeedFailure(_feed!.loadMore());
+
+  Future<void> _handleFeedFailure(Future<ApiFailure?> request) async {
+    final session = AppScope.of(context).session;
+    if (await request is Unauthenticated && mounted) {
+      await session.sessionExpired();
+    }
   }
 
   Future<void> _compose() async {
@@ -107,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _TodayCard(day: _day, onCompose: _compose, onRetry: _load),
           const SizedBox(height: 36),
           Text(
-            "yesterday's daylies",
+            "friends' daylies",
             style: DayliText.serif(
               context,
               size: DayliTextSize.xl,
@@ -124,25 +151,14 @@ class _HomeScreenState extends State<HomeScreen> {
               color: colors.foregroundSecondary,
             ),
           ),
-          const SizedBox(height: 40),
-          Opacity(
-            opacity: 0.5,
-            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
-          ),
           const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              _emptyMessage,
-              key: const Key('home.empty'),
-              textAlign: TextAlign.center,
-              style: DayliText.serif(
-                context,
-                size: DayliTextSize.lg,
-                weight: FontWeight.w500,
-                tracking: DayliTracking.tight,
-                color: colors.foregroundSecondary,
-              ),
+          ListenableBuilder(
+            listenable: _feed!,
+            builder: (context, _) => _FeedSection(
+              feed: _feed!,
+              emptyMessage: _emptyMessage,
+              onRetry: _refreshFeed,
+              onLoadMore: _loadMoreFeed,
             ),
           ),
         ],
@@ -294,6 +310,248 @@ class _TodayCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       radius: 20,
       child: content,
+    );
+  }
+}
+
+class _FeedSection extends StatelessWidget {
+  const _FeedSection({
+    required this.feed,
+    required this.emptyMessage,
+    required this.onRetry,
+    required this.onLoadMore,
+  });
+
+  final FeedController feed;
+  final String emptyMessage;
+  final VoidCallback onRetry;
+  final VoidCallback onLoadMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    final muted = DayliText.sans(
+      context,
+      size: DayliTextSize.sm,
+      color: colors.foregroundSecondary,
+    );
+
+    if (!feed.loaded) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+
+    final failure = feed.failure;
+    if (feed.posts.isEmpty && failure != null) {
+      return Column(
+        children: [
+          Text(
+            failure is NetworkUnavailable
+                ? "You're offline, so your friends' daylies couldn't load."
+                : "Your friends' daylies couldn't be loaded.",
+            key: const Key('home.feed.error'),
+            textAlign: TextAlign.center,
+            style: muted,
+          ),
+          const SizedBox(height: 16),
+          DayliButton(
+            key: const Key('home.feed.retry'),
+            label: 'Try again',
+            color: ButtonColor.foreground,
+            height: 44,
+            onPressed: onRetry,
+          ),
+        ],
+      );
+    }
+
+    if (feed.posts.isEmpty) {
+      return Column(
+        children: [
+          const SizedBox(height: 20),
+          Opacity(
+            opacity: 0.5,
+            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
+          ),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              emptyMessage,
+              key: const Key('home.empty'),
+              textAlign: TextAlign.center,
+              style: DayliText.serif(
+                context,
+                size: DayliTextSize.lg,
+                weight: FontWeight.w500,
+                tracking: DayliTracking.tight,
+                color: colors.foregroundSecondary,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (failure != null) ...[
+          Text(
+            failure is NetworkUnavailable
+                ? "You're offline. These are the daylies you last loaded."
+                : "Couldn't refresh. These are the daylies you last loaded.",
+            key: const Key('home.feed.stale'),
+            style: muted,
+          ),
+          const SizedBox(height: 12),
+        ],
+        for (final post in feed.posts) ...[
+          _FeedPostCard(key: Key('home.feed.post.${post.id}'), post: post),
+          const SizedBox(height: 16),
+        ],
+        if (feed.moreFailure != null) ...[
+          Text(
+            "More daylies couldn't be loaded.",
+            key: const Key('home.feed.moreError'),
+            textAlign: TextAlign.center,
+            style: muted,
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (feed.hasMore)
+          Center(
+            child: DayliButton(
+              key: const Key('home.feed.more'),
+              label: feed.loadingMore ? 'Loading...' : 'Load more',
+              color: ButtonColor.foreground,
+              height: 44,
+              onPressed: feed.loadingMore ? null : onLoadMore,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FeedPostCard extends StatelessWidget {
+  const _FeedPostCard({super.key, required this.post});
+
+  final FeedPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    final initial = post.displayName.isEmpty
+        ? '?'
+        : post.displayName.characters.first.toUpperCase();
+    final card = DayliCard(
+      padding: const EdgeInsets.all(18),
+      radius: 18,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: colors.backgroundAccent,
+                child: Text(
+                  initial,
+                  style: DayliText.sans(
+                    context,
+                    size: DayliTextSize.sm,
+                    weight: FontWeight.w600,
+                    color: colors.foregroundAccent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.displayName,
+                      overflow: TextOverflow.ellipsis,
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.sm,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '@${post.username}',
+                      overflow: TextOverflow.ellipsis,
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.xs,
+                        color: colors.foregroundSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${shortDayLabel(post.localDate)} · ${post.rating}/10',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.xs,
+                  color: colors.foregroundSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            post.promptText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: DayliText.sans(
+              context,
+              size: DayliTextSize.xs,
+              weight: FontWeight.w500,
+              color: colors.foregroundTertiary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Whole lines only; the full answer and word dump are on the post.
+          Text(
+            post.reflectiveAnswer,
+            key: Key('home.feed.answer.${post.id}'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: DayliText.serif(
+              context,
+              size: DayliTextSize.lg,
+              weight: FontWeight.w500,
+              tracking: DayliTracking.tight,
+            ),
+          ),
+          if (post.edited) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Edited',
+              style: DayliText.sans(
+                context,
+                size: DayliTextSize.xs,
+                color: colors.foregroundTertiary,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: 'Open ${post.displayName}\'s dayli',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push('/posts/${post.id}'),
+        child: card,
+      ),
     );
   }
 }

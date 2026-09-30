@@ -202,6 +202,9 @@ function allowedBoundary(source, target, specifier) {
       : targetInfo.kind === "shared";
   }
   if (source.feature === "auth" || source.feature === "permissions") return true;
+  // Permissions is the shared, non-HTTP post authorization policy. Features may
+  // use its public entry point, never its internal modules.
+  if (targetInfo.feature === "permissions" && targetInfo.kind === "root" && targetInfo.fileName === "index.ts") return true;
 
   if (source.feature !== targetInfo.feature) {
     return source.isTest && targetInfo.feature === "auth";
@@ -289,6 +292,8 @@ async function runFixtureChecks(errors) {
     resolve(apiTestRoot, "boundaries/test-support/messaging-domain-shared.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/test-support/messaging-subfeature-shared.boundary-fixture.ts"),
     resolve(apiTestRoot, "boundaries/test-support/relationships-service.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/posts/list-feed/list-feed.permissions.boundary-fixture.ts"),
+    resolve(apiTestRoot, "boundaries/posts/list-feed/list-feed.permissions-internal.boundary-fixture.ts"),
   );
   const before = errors.length;
   for (const path of fixturePaths) await checkFile(path, errors);
@@ -316,6 +321,8 @@ async function runFixtureChecks(errors) {
     "messaging-domain-shared.boundary-fixture.ts",
     "messaging-subfeature-shared.boundary-fixture.ts",
     "relationships-service.boundary-fixture.ts",
+    "list-feed.permissions.boundary-fixture.ts",
+    "list-feed.permissions-internal.boundary-fixture.ts",
   ];
   const errorsByFile = new Map(expected.map((name) => [name, fixtureErrors.filter((error) => error.includes(name))]));
   const passingFixtures = new Set([
@@ -329,6 +336,7 @@ async function runFixtureChecks(errors) {
     "send-message.approved.boundary-fixture.ts",
     "domain-shared-owner.boundary-fixture.ts",
     "messaging-domain-shared.boundary-fixture.ts",
+    "list-feed.permissions.boundary-fixture.ts",
   ]);
   for (const name of expected) {
     const failed = errorsByFile.get(name) ?? [];

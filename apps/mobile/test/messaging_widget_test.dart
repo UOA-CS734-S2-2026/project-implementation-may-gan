@@ -143,6 +143,8 @@ void main() {
       services: AppServices(
         session: harness.session,
         postingDays: harness.postingDays,
+        feed: harness.feed,
+        posts: harness.posts,
         friends: harness.friends,
         drafts: harness.drafts,
         submitter: harness.submitter,
@@ -177,6 +179,8 @@ void main() {
       services: AppServices(
         session: harness.session,
         postingDays: harness.postingDays,
+        feed: harness.feed,
+        posts: harness.posts,
         friends: harness.friends,
         drafts: harness.drafts,
         submitter: harness.submitter,
@@ -283,6 +287,8 @@ void main() {
         services: AppServices(
           session: harness.session,
           postingDays: harness.postingDays,
+          feed: harness.feed,
+          posts: harness.posts,
           friends: friends,
           drafts: harness.drafts,
           submitter: harness.submitter,
@@ -325,6 +331,8 @@ void main() {
           services: AppServices(
             session: harness.session,
             postingDays: harness.postingDays,
+            feed: harness.feed,
+            posts: harness.posts,
             friends: friends,
             drafts: harness.drafts,
             submitter: harness.submitter,
@@ -375,6 +383,8 @@ void main() {
         services: AppServices(
           session: harness.session,
           postingDays: harness.postingDays,
+          feed: harness.feed,
+          posts: harness.posts,
           friends: friends,
           drafts: harness.drafts,
           submitter: harness.submitter,
@@ -422,6 +432,8 @@ void main() {
         services: AppServices(
           session: harness.session,
           postingDays: harness.postingDays,
+          feed: harness.feed,
+          posts: harness.posts,
           friends: friends,
           drafts: harness.drafts,
           submitter: harness.submitter,

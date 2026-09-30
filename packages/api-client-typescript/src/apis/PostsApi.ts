@@ -28,6 +28,16 @@ import {
     DailyPostFromJSON,
     DailyPostToJSON,
 } from '../models/DailyPost';
+import {
+    type FeedPage,
+    FeedPageFromJSON,
+    FeedPageToJSON,
+} from '../models/FeedPage';
+import {
+    type PostDetail,
+    PostDetailFromJSON,
+    PostDetailToJSON,
+} from '../models/PostDetail';
 
 export interface PostsCreateRequest {
     /**
@@ -38,6 +48,24 @@ export interface PostsCreateRequest {
      *
      */
     createDailyPostRequest: CreateDailyPostRequest;
+}
+
+export interface PostsGetRequest {
+    /**
+     *
+     */
+    postId: string;
+}
+
+export interface PostsListFeedRequest {
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
 }
 
 /**
@@ -110,6 +138,116 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsCreate(requestParameters: PostsCreateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<DailyPost> {
         const response = await this.postsCreateRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGet without sending the request
+     */
+    async postsGetRequestOpts(requestParameters: PostsGetRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGet().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Read one post
+     */
+    async postsGetRaw(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostDetail>> {
+        const requestOptions = await this.postsGetRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Read one post
+     */
+    async postsGet(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
+        const response = await this.postsGetRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListFeed without sending the request
+     */
+    async postsListFeedRequestOpts(requestParameters: PostsListFeedRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/feed`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List released posts from friends
+     */
+    async postsListFeedRaw(requestParameters: PostsListFeedRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FeedPage>> {
+        const requestOptions = await this.postsListFeedRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => FeedPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List released posts from friends
+     */
+    async postsListFeed(requestParameters: PostsListFeedRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FeedPage> {
+        const response = await this.postsListFeedRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -1,13 +1,15 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import React, { useMemo } from "react";
-import { Button } from "@/components/ui/core/Button";
 
 type PostCardProps = {
   postId: string;
   username: string;
   displayName: string;
   userImage?: string | null;
+  prompt?: string;
   promptResponse: string;
   mediaUrl?: string | null;
   createdAt: Date | string;
@@ -36,6 +38,7 @@ export function PostCard({
   username,
   displayName,
   userImage,
+  prompt,
   promptResponse,
   mediaUrl,
   createdAt,
@@ -58,11 +61,17 @@ export function PostCard({
   const rotation = useMemo(() => getRotation(postId), [postId]);
 
   return (
-    <div
-      className="flex flex-col rounded-sm bg-white shadow-md w-full min-w-75 aspect-4/6 overflow-hidden border-white
+    <article
+      className="relative flex flex-col h-full rounded-sm bg-white shadow-md w-full min-w-75 overflow-hidden border-white
       transition duration-500 hover:duration-300 hover:border hover:border-background-tertiary hover:z-1 hover:-translate-y-1 hover:-translate-x-1 hover:-rotate-2 hover:scale-[1.03] hover:shadow-xl"
       style={{ transform: `rotate(${rotation}deg)` }}
     >
+      {/* The whole card opens the post. The author link sits above it. */}
+      <Link
+        href={`/u/${encodeURIComponent(username)}/${encodeURIComponent(postId)}`}
+        aria-label={`Open ${displayName}'s dayli from ${date}`}
+        className="absolute inset-0 z-0"
+      />
       <div className="m-5 mb-0 shrink-0">
         {postImageUrl ? (
           <div className="relative aspect-square w-full overflow-hidden bg-background-secondary">
@@ -92,10 +101,10 @@ export function PostCard({
         )}
       </div>
 
-      <div className="flex flex-col flex-1 min-h-0 gap-3 p-4">
+      <div className="flex flex-col flex-1 gap-3 p-4">
         <Link
           href={`/u/${encodeURIComponent(username)}`}
-          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+          className="relative z-10 flex items-center gap-2 self-start hover:opacity-70 transition-opacity"
         >
           {userImage ? (
             <Image
@@ -120,23 +129,22 @@ export function PostCard({
           </div>
         </Link>
 
-        <p className="text-sm text-foreground line-clamp-2 overflow-hidden flex-1 min-h-0">
-          {promptResponse}
-        </p>
-
-        <div className="flex items-center justify-between">
-          <Button
-            href={`/u/${encodeURIComponent(username)}/${encodeURIComponent(postId)}`}
-            variant={{ color: "accent", size: "sm", weight: "secondary" }}
-            arrow
-          >
-            See more
-          </Button>
-          <span className="text-xs text-foreground-secondary">
-            {date} | {time}
-          </span>
+        <div className="flex flex-col gap-1">
+          {prompt && (
+            <p className="text-xs text-foreground-secondary line-clamp-1">
+              {prompt}
+            </p>
+          )}
+          {/* Clamped whole lines only; the full answer is on the post page. */}
+          <p className="text-sm text-foreground line-clamp-3">
+            {promptResponse}
+          </p>
         </div>
+
+        <p className="mt-auto text-right text-xs text-foreground-secondary">
+          {date} | {time}
+        </p>
       </div>
-    </div>
+    </article>
   );
 }

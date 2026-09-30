@@ -56,13 +56,13 @@ The app keeps the WDCC Dayli frontend's branding and lays it out for phones. Tha
 The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue text, the dotted paper, soft card shadows, arrow buttons, and lowercase page names. The layout follows mobile conventions instead of WDCC's desktop sidebar:
 
 - A bottom tab bar (daylies, friends, my days, messages) with a raised "new dayli" button in the middle, and a top bar with the logo and the profile button.
-- Home leads with today's prompt, the time left to post, and a full-width Post button, then yesterday's daylies.
+- Home leads with today's prompt, the time left to post, and a full-width Post button, then friends' released daylies, newest day first. Pull down to refresh; more load on demand.
 - The composer and settings open as full-screen pages with close and back buttons. The Post button stays above the keyboard.
 - Touch targets are at least 48dp, and inputs use 16px text with their labels above. The rating is a 1–10 slider that starts unset, so a rating is always chosen on purpose.
 
 Only the data layer is missing features:
 
-- The feed is empty until the released-feed API (#19, #20).
+- Feed cards and post detail show text only until media downloads (#24). Likes and comments arrive with #79/#80.
 - Friends, my days, and messages are placeholders until their APIs land.
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
 - Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media stays on the device with the draft until uploads land (#22), and photos are not cropped.

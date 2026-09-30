@@ -246,6 +246,14 @@ class ApiClient {
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
           return EditMessageRequest.fromJson(value);
+        case 'FeedPage':
+          return FeedPage.fromJson(value);
+        case 'FeedPost':
+          return FeedPost.fromJson(value);
+        case 'FeedPostAuthor':
+          return FeedPostAuthor.fromJson(value);
+        case 'FeedPostPrompt':
+          return FeedPostPrompt.fromJson(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
         case 'HealthResponse':
@@ -284,6 +292,12 @@ class ApiClient {
           return PendingRequestPage.fromJson(value);
         case 'PostAudience':
           return PostAudienceTypeTransformer().decode(value);
+        case 'PostDetail':
+          return PostDetail.fromJson(value);
+        case 'PostDetailAuthor':
+          return PostDetailAuthor.fromJson(value);
+        case 'PostDetailPrompt':
+          return PostDetailPrompt.fromJson(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
         case 'RelationshipProfile':
