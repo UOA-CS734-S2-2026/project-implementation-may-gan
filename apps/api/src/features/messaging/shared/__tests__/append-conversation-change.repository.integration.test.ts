@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendConversationChange } from "../append-conversation-change";
 
@@ -18,12 +19,12 @@ suite("conversation change builders", () => {
   ];
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }
@@ -33,9 +34,34 @@ suite("conversation change builders", () => {
     const conversationId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
     const now = new Date("2026-09-30T00:00:00.000Z");
-    await database.client`delete from public.conversations where user_low_id = ${users[0]!} and user_high_id = ${users[1]!}`;
-    await database.client`insert into public.conversations (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', 1, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
-    await database.client`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, 1, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', 1, ${now.toISOString()}::timestamptz)`;
+    await database.db.delete(schema.conversations).where(and(
+      eq(schema.conversations.userLowId, users[0]!),
+      eq(schema.conversations.userHighId, users[1]!),
+    ));
+    await database.db.insert(schema.conversations).values({
+      id: conversationId,
+      kind: "direct",
+      userLowId: users[0]!,
+      userHighId: users[1]!,
+      initiatorId: users[0]!,
+      requestState: "active",
+      lastMessageSequence: 1,
+      lastChangeSequence: 0,
+      lastActivityAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await database.db.insert(schema.messages).values({
+      id: messageId,
+      conversationId,
+      sequence: 1,
+      senderId: users[0]!,
+      clientMessageId: crypto.randomUUID(),
+      requestFingerprint: crypto.randomUUID(),
+      body: "message",
+      version: 1,
+      createdAt: now,
+    });
     return { conversationId, messageId, now };
   }
 
@@ -46,10 +72,16 @@ suite("conversation change builders", () => {
       transaction.rollback();
     })).rejects.toBeDefined();
 
-    const [conversation] = await database.client`select last_change_sequence from public.conversations where id = ${conversationId}`;
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversationId}`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversationId}`;
-    expect(String(conversation?.last_change_sequence)).toBe("0");
+    const [conversation] = await database.db.select({ lastChangeSequence: schema.conversations.lastChangeSequence })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, conversationId));
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(eq(schema.conversationChanges.conversationId, conversationId));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(eq(schema.messagingOutbox.conversationId, conversationId));
+    expect(String(conversation?.lastChangeSequence)).toBe("0");
     expect(changes?.count).toBe(0);
     expect(outbox?.count).toBe(0);
   });
@@ -57,27 +89,120 @@ suite("conversation change builders", () => {
   it("preserves safe change sequences and sends only eligible peer devices", async () => {
     const { conversationId, messageId, now } = await createConversation();
     const sessionId = crypto.randomUUID();
-    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${sessionId}, now() + interval '1 day', ${crypto.randomUUID()}, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${users[1]!})`;
+    await database.db.insert(schema.session).values({
+      id: sessionId,
+      expiresAt: new Date("2026-10-01T00:00:00.000Z"),
+      token: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+      userId: users[1]!,
+    });
     const validDeviceId = crypto.randomUUID();
     const secondValidDeviceId = crypto.randomUUID();
-    await database.client`
-      insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_ciphertext, token_key_version, token_hash, opted_in, registered_at, invalidated_at)
-      values
-        (${validDeviceId}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-valid', 'cipher-valid', 'v1', ${"a".repeat(64)}, true, ${now.toISOString()}::timestamptz, null),
-        (${secondValidDeviceId}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'android', 'token-valid-second', 'cipher-valid-second', 'v1', ${"b".repeat(64)}, true, ${now.toISOString()}::timestamptz, null),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-opted-out', 'cipher-opted-out', 'v1', ${"c".repeat(64)}, false, ${now.toISOString()}::timestamptz, null),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-invalidated', 'cipher-invalidated', 'v1', ${"d".repeat(64)}, true, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-missing-key', 'cipher-missing-key', null, ${"e".repeat(64)}, true, ${now.toISOString()}::timestamptz, null)
-    `;
-    await database.client`update public.conversations set last_change_sequence = 9007199254740990 where id = ${conversationId}`;
+    await database.db.insert(schema.pushDevices).values([
+      {
+        id: validDeviceId,
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "ios",
+        token: "token-valid",
+        tokenCiphertext: "cipher-valid",
+        tokenKeyVersion: "v1",
+        tokenHash: "a".repeat(64),
+        optedIn: true,
+        registeredAt: now,
+        invalidatedAt: null,
+      },
+      {
+        id: secondValidDeviceId,
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "android",
+        token: "token-valid-second",
+        tokenCiphertext: "cipher-valid-second",
+        tokenKeyVersion: "v1",
+        tokenHash: "b".repeat(64),
+        optedIn: true,
+        registeredAt: now,
+        invalidatedAt: null,
+      },
+      {
+        id: crypto.randomUUID(),
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "ios",
+        token: "token-opted-out",
+        tokenCiphertext: "cipher-opted-out",
+        tokenKeyVersion: "v1",
+        tokenHash: "c".repeat(64),
+        optedIn: false,
+        registeredAt: now,
+        invalidatedAt: null,
+      },
+      {
+        id: crypto.randomUUID(),
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "ios",
+        token: "token-invalidated",
+        tokenCiphertext: "cipher-invalidated",
+        tokenKeyVersion: "v1",
+        tokenHash: "d".repeat(64),
+        optedIn: true,
+        registeredAt: now,
+        invalidatedAt: now,
+      },
+      {
+        id: crypto.randomUUID(),
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "ios",
+        token: "token-missing-key",
+        tokenCiphertext: "cipher-missing-key",
+        tokenKeyVersion: null,
+        tokenHash: "e".repeat(64),
+        optedIn: true,
+        registeredAt: now,
+        invalidatedAt: null,
+      },
+    ]);
+    await database.db.update(schema.conversations)
+      .set({ lastChangeSequence: 9007199254740990 })
+      .where(eq(schema.conversations.id, conversationId));
 
     await database.db.transaction((transaction) =>
       appendConversationChange(transaction, conversationId, "message.created", messageId, null, now));
 
-    const [change] = await database.client`select change_sequence from public.conversation_changes where conversation_id = ${conversationId}`;
-    const realtime = [...await database.client`select recipient_id, event_id, change_sequence, available_at, created_at from public.messaging_outbox where conversation_id = ${conversationId} and channel = 'realtime' order by recipient_id`];
-    const push = [...await database.client`select recipient_id, event_id, change_sequence, device_registration_id, available_at, created_at from public.messaging_outbox where conversation_id = ${conversationId} and channel = 'push'`];
-    expect(String(change?.change_sequence)).toBe("9007199254740991");
+    const [change] = await database.db.select({ changeSequence: schema.conversationChanges.changeSequence })
+      .from(schema.conversationChanges)
+      .where(eq(schema.conversationChanges.conversationId, conversationId));
+    const realtime = await database.db.select({
+      recipient_id: schema.messagingOutbox.recipientId,
+      event_id: schema.messagingOutbox.eventId,
+      change_sequence: schema.messagingOutbox.changeSequence,
+      available_at: schema.messagingOutbox.availableAt,
+      created_at: schema.messagingOutbox.createdAt,
+    }).from(schema.messagingOutbox).where(and(
+      eq(schema.messagingOutbox.conversationId, conversationId),
+      eq(schema.messagingOutbox.channel, "realtime"),
+    )).orderBy(asc(schema.messagingOutbox.recipientId));
+    const push = await database.db.select({
+      recipient_id: schema.messagingOutbox.recipientId,
+      event_id: schema.messagingOutbox.eventId,
+      change_sequence: schema.messagingOutbox.changeSequence,
+      device_registration_id: schema.messagingOutbox.deviceRegistrationId,
+      available_at: schema.messagingOutbox.availableAt,
+      created_at: schema.messagingOutbox.createdAt,
+    }).from(schema.messagingOutbox).where(and(
+      eq(schema.messagingOutbox.conversationId, conversationId),
+      eq(schema.messagingOutbox.channel, "push"),
+    ));
+    expect(String(change?.changeSequence)).toBe("9007199254740991");
     expect(realtime).toHaveLength(2);
     expect(realtime.map((row) => String(row.change_sequence))).toEqual(["9007199254740991", "9007199254740991"]);
     expect(new Set(realtime.map((row) => row.event_id)).size).toBe(1);
@@ -94,18 +219,25 @@ suite("conversation change builders", () => {
 
   it("rejects an unsafe increment and rolls back every caller write", async () => {
     const { conversationId, messageId, now } = await createConversation();
-    await database.client`update public.conversations set last_change_sequence = 9007199254740991 where id = ${conversationId}`;
+    await database.db.update(schema.conversations)
+      .set({ lastChangeSequence: sql`9007199254740991::bigint` })
+      .where(eq(schema.conversations.id, conversationId));
 
     await expect(database.db.transaction((transaction) =>
       appendConversationChange(transaction, conversationId, "message.created", messageId, null, now)))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
 
-    const [conversation] = await database.client`select last_change_sequence from public.conversations where id = ${conversationId}`;
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversationId}`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversationId}`;
-    expect(String(conversation?.last_change_sequence)).toBe("9007199254740991");
+    const [conversation] = await database.db.select({ lastChangeSequence: schema.conversations.lastChangeSequence })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, conversationId));
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(eq(schema.conversationChanges.conversationId, conversationId));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(eq(schema.messagingOutbox.conversationId, conversationId));
+    expect(String(conversation?.lastChangeSequence)).toBe("9007199254740991");
     expect(changes?.count).toBe(0);
     expect(outbox?.count).toBe(0);
   });
-
 });

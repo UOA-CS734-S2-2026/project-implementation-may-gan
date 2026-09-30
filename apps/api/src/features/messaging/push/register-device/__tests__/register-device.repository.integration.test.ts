@@ -1,4 +1,5 @@
-import { createDayliDatabase, sql } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { and, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresRegisterDeviceStore } from "../register-device.repository";
 import { PushSessionInactiveError } from "../register-device.service";
@@ -21,7 +22,7 @@ suite("register device Postgres repository", () => {
     bobSession: `register-device-bob-session-${crypto.randomUUID()}`,
   };
   const store = createPostgresRegisterDeviceStore(database.db);
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   const now = new Date("2026-09-29T11:00:00.000Z");
   const tokenHash = (value: string) => value.repeat(64).slice(0, 64);
 
@@ -43,14 +44,42 @@ suite("register device Postgres repository", () => {
   }
 
   beforeAll(async () => {
-    const createdAt = new Date().toISOString();
-    await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
-    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${ids.aliceSession}, ${expiresAt}, ${`token-${ids.alice}`}, ${createdAt}, ${createdAt}, ${ids.alice}), (${ids.aliceSessionTwo}, ${expiresAt}, ${`token-${ids.alice}-two`}, ${createdAt}, ${createdAt}, ${ids.alice}), (${ids.bobSession}, ${expiresAt}, ${`token-${ids.bob}`}, ${createdAt}, ${createdAt}, ${ids.bob})`;
+    const createdAt = new Date();
+    await database.db.insert(schema.user).values([
+      { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
+      { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
+    ]);
+    await database.db.insert(schema.session).values([
+      {
+        id: ids.aliceSession,
+        expiresAt,
+        token: `token-${ids.alice}`,
+        createdAt,
+        updatedAt: createdAt,
+        userId: ids.alice,
+      },
+      {
+        id: ids.aliceSessionTwo,
+        expiresAt,
+        token: `token-${ids.alice}-two`,
+        createdAt,
+        updatedAt: createdAt,
+        userId: ids.alice,
+      },
+      {
+        id: ids.bobSession,
+        expiresAt,
+        token: `token-${ids.bob}`,
+        createdAt,
+        updatedAt: createdAt,
+        userId: ids.bob,
+      },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public."user" where id = any(${[ids.alice, ids.bob]}::text[])`;
+      await database.db.delete(schema.user).where(inArray(schema.user.id, [ids.alice, ids.bob]));
     } finally {
       await database.close();
     }
@@ -73,11 +102,13 @@ suite("register device Postgres repository", () => {
       tokenHash: hash,
     }));
 
-    const rows = [...await database.db.execute(sql`
-      select user_id, installation_id, token, token_ciphertext, token_key_version
-      from public.push_devices
-      where token_hash = ${hash}
-    `) as Iterable<Record<string, string>>];
+    const rows = await database.db.select({
+      user_id: schema.pushDevices.userId,
+      installation_id: schema.pushDevices.installationId,
+      token: schema.pushDevices.token,
+      token_ciphertext: schema.pushDevices.tokenCiphertext,
+      token_key_version: schema.pushDevices.tokenKeyVersion,
+    }).from(schema.pushDevices).where(eq(schema.pushDevices.tokenHash, hash));
     expect(rows).toEqual([{
       user_id: ids.bob,
       installation_id: "bob-installation",
@@ -117,7 +148,15 @@ suite("register device Postgres repository", () => {
       await Promise.all([firstDatabase.close(), secondDatabase.close()]);
     }
 
-    const rows = await database.client`select session_id, token_hash, token, token_ciphertext from public.push_devices where user_id = ${ids.alice} and installation_id = ${installationId}`;
+    const rows = await database.db.select({
+      session_id: schema.pushDevices.sessionId,
+      token_hash: schema.pushDevices.tokenHash,
+      token: schema.pushDevices.token,
+      token_ciphertext: schema.pushDevices.tokenCiphertext,
+    }).from(schema.pushDevices).where(and(
+      eq(schema.pushDevices.userId, ids.alice),
+      eq(schema.pushDevices.installationId, installationId),
+    ));
     expect(rows).toHaveLength(1);
     expect([
       {
@@ -137,7 +176,7 @@ suite("register device Postgres repository", () => {
 
   it("rejects stale and banned sessions before they can rotate a token", async () => {
     const staleHash = tokenHash("b");
-    await database.db.execute(sql`delete from public.session where id = ${ids.aliceSession}`);
+    await database.db.delete(schema.session).where(eq(schema.session.id, ids.aliceSession));
     await expect(store.register(device({
       id: `register-device-stale-${crypto.randomUUID()}`,
       userId: ids.alice,
@@ -146,7 +185,9 @@ suite("register device Postgres repository", () => {
       tokenHash: staleHash,
     }))).rejects.toBeInstanceOf(PushSessionInactiveError);
 
-    await database.db.execute(sql`update public."user" set banned = true, ban_expires = null where id = ${ids.bob}`);
+    await database.db.update(schema.user)
+      .set({ banned: true, banExpires: null })
+      .where(eq(schema.user.id, ids.bob));
     await expect(store.register(device({
       id: `register-device-banned-${crypto.randomUUID()}`,
       userId: ids.bob,
@@ -155,9 +196,9 @@ suite("register device Postgres repository", () => {
       tokenHash: tokenHash("c"),
     }))).rejects.toBeInstanceOf(PushSessionInactiveError);
 
-    const rows = [...await database.db.execute(sql`
-      select token_hash from public.push_devices where token_hash in (${staleHash}, ${tokenHash("c")})
-    `) as Iterable<unknown>];
+    const rows = await database.db.select({ token_hash: schema.pushDevices.tokenHash })
+      .from(schema.pushDevices)
+      .where(inArray(schema.pushDevices.tokenHash, [staleHash, tokenHash("c")]));
     expect(rows).toEqual([]);
   });
 });

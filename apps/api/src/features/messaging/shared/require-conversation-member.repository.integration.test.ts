@@ -1,4 +1,5 @@
-import { createDayliDatabase, sql } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../app";
 import { requireConversationMember } from "./require-conversation-member";
@@ -18,16 +19,28 @@ suite("require conversation member Postgres query", () => {
   const { direct } = createMessagingPersistenceServices(database.db);
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.user where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await concurrentDatabase.close();
       await database.close();
@@ -55,16 +68,15 @@ suite("require conversation member Postgres query", () => {
     });
     const memberId = users[1]!;
     const memberSequence = Number.MAX_SAFE_INTEGER;
-    await database.db.execute(sql`
-      update public.conversations
-      set last_message_sequence = ${memberSequence}::bigint, last_change_sequence = ${memberSequence}::bigint
-      where id = ${conversation.conversation.id}
-    `);
-    await database.db.execute(sql`
-      update public.conversation_members
-      set last_read_sequence = ${memberSequence}::bigint, receipt_sequence = ${memberSequence}::bigint
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-    `);
+    await database.db.update(schema.conversations)
+      .set({ lastMessageSequence: memberSequence, lastChangeSequence: memberSequence })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
+    await database.db.update(schema.conversationMembers)
+      .set({ lastReadSequence: memberSequence, receiptSequence: memberSequence })
+      .where(and(
+        eq(schema.conversationMembers.conversationId, conversation.conversation.id),
+        eq(schema.conversationMembers.userId, memberId),
+      ));
 
     let releaseLock: (() => void) | undefined;
     let signalLocked: (() => void) | undefined;
@@ -86,19 +98,18 @@ suite("require conversation member Postgres query", () => {
     try {
       await expect(concurrentDatabase.db.transaction(async (tx) => {
         await tx.execute(sql`set local lock_timeout = '100ms'`);
-        await tx.execute(sql`
-          update public.conversation_members
-          set last_read_sequence = last_read_sequence
-          where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-        `);
+        await tx.update(schema.conversationMembers)
+          .set({ lastReadSequence: sql`${schema.conversationMembers.lastReadSequence}` })
+          .where(and(
+            eq(schema.conversationMembers.conversationId, conversation.conversation.id),
+            eq(schema.conversationMembers.userId, memberId),
+          ));
       })).rejects.toMatchObject({ cause: { code: "55P03" } });
       await expect(concurrentDatabase.db.transaction(async (tx) => {
         await tx.execute(sql`set local lock_timeout = '100ms'`);
-        await tx.execute(sql`
-          update public.conversations
-          set updated_at = updated_at
-          where id = ${conversation.conversation.id}
-        `);
+        await tx.update(schema.conversations)
+          .set({ updatedAt: sql`${schema.conversations.updatedAt}` })
+          .where(eq(schema.conversations.id, conversation.conversation.id));
       })).rejects.toMatchObject({ cause: { code: "55P03" } });
     } finally {
       releaseLock!();
@@ -113,17 +124,16 @@ suite("require conversation member Postgres query", () => {
       text: "overflow",
     });
     const memberId = users[2]!;
-    const overflow = "9007199254740993";
-    await database.db.execute(sql`
-      update public.conversations
-      set last_message_sequence = 1, last_change_sequence = 1
-      where id = ${conversation.conversation.id}
-    `);
-    await database.db.execute(sql`
-      update public.conversation_members
-      set last_read_sequence = 0, receipt_sequence = 0
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-    `);
+    const memberWhere = and(
+      eq(schema.conversationMembers.conversationId, conversation.conversation.id),
+      eq(schema.conversationMembers.userId, memberId),
+    );
+    await database.db.update(schema.conversations)
+      .set({ lastMessageSequence: 1, lastChangeSequence: 1 })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
+    await database.db.update(schema.conversationMembers)
+      .set({ lastReadSequence: 0, receiptSequence: 0 })
+      .where(memberWhere);
     const expectOverflowToFail = async () => {
       await expect(database.db.transaction((tx) => requireConversationMember(
         tx,
@@ -133,41 +143,36 @@ suite("require conversation member Postgres query", () => {
       ))).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
     };
 
-    await database.db.execute(sql`
-      update public.conversations set last_message_sequence = ${overflow}::bigint
-      where id = ${conversation.conversation.id}
-    `);
+    await database.db.update(schema.conversations)
+      .set({ lastMessageSequence: sql`9007199254740993::bigint` })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
     await expectOverflowToFail();
-    await database.db.execute(sql`
-      update public.conversations set last_message_sequence = 1
-      where id = ${conversation.conversation.id}
-    `);
+    await database.db.update(schema.conversations)
+      .set({ lastMessageSequence: 1 })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
 
-    await database.db.execute(sql`
-      update public.conversations set last_change_sequence = ${overflow}::bigint
-      where id = ${conversation.conversation.id}
-    `);
+    await database.db.update(schema.conversations)
+      .set({ lastChangeSequence: sql`9007199254740993::bigint` })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
     await expectOverflowToFail();
-    await database.db.execute(sql`
-      update public.conversations set last_change_sequence = 1
-      where id = ${conversation.conversation.id}
-    `);
+    await database.db.update(schema.conversations)
+      .set({ lastChangeSequence: 1 })
+      .where(eq(schema.conversations.id, conversation.conversation.id));
 
-    await database.db.execute(sql`
-      update public.conversation_members set last_read_sequence = ${overflow}::bigint
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-    `);
+    await database.db.update(schema.conversationMembers)
+      .set({ lastReadSequence: sql`9007199254740993::bigint` })
+      .where(memberWhere);
     await expectOverflowToFail();
-    await database.db.execute(sql`
-      update public.conversation_members set last_read_sequence = 0
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-    `);
+    await database.db.update(schema.conversationMembers)
+      .set({ lastReadSequence: 0 })
+      .where(memberWhere);
 
-    await database.db.execute(sql`
-      update public.conversation_members
-      set last_read_sequence = ${overflow}::bigint, receipt_sequence = ${overflow}::bigint
-      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
-    `);
+    await database.db.update(schema.conversationMembers)
+      .set({
+        lastReadSequence: sql`9007199254740993::bigint`,
+        receiptSequence: sql`9007199254740993::bigint`,
+      })
+      .where(memberWhere);
     await expectOverflowToFail();
   });
 });
