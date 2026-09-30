@@ -1,5 +1,5 @@
-import { createDayliDatabase, schema, sql } from "@dayli/db";
-import { asc, eq, inArray } from "drizzle-orm";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { asc, count, eq, inArray } from "drizzle-orm";
 import { createAucklandDayService } from "@dayli/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresDailyPostStore } from "./create-post.repository";
@@ -64,13 +64,14 @@ function requireLocalTestUrl(value: string): string {
   }
 
   async function countRows(authorId: string) {
-    const [row] = await migrator.db.select({
-      posts: sql<number>`(select count(*) from ${schema.posts} where ${schema.posts.authorId} = ${authorId})::int`,
-      media: sql<number>`(select count(*) from ${schema.postMedia}
-        join ${schema.posts} on ${schema.posts.id} = ${schema.postMedia.postId}
-        where ${schema.posts.authorId} = ${authorId})::int`,
-    }).from(sql`(values (1)) as query_source`);
-    return row;
+    const [posts] = await migrator.db.select({ count: count() })
+      .from(schema.posts)
+      .where(eq(schema.posts.authorId, authorId));
+    const [media] = await migrator.db.select({ count: count() })
+      .from(schema.postMedia)
+      .innerJoin(schema.posts, eq(schema.posts.id, schema.postMedia.postId))
+      .where(eq(schema.posts.authorId, authorId));
+    return { posts: posts?.count, media: media?.count };
   }
 
   beforeAll(async () => {
