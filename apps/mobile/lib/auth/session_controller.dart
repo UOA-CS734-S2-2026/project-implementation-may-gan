@@ -83,6 +83,7 @@ class SessionController extends ChangeNotifier {
     this.onPrivateDataClear,
     this.onBeforeSessionReplacement,
     this.onSignedIn,
+    this.clearUserMedia,
   });
 
   final BetterAuthNativeSession _session;
@@ -92,6 +93,11 @@ class SessionController extends ChangeNotifier {
 
   /// Closes sockets and clears messaging caches before account state changes.
   final FutureOr<void> Function()? onPrivateDataClear;
+
+  /// Deletes files kept for a user's draft, such as compressed media, when
+  /// sign-out removes the draft. An expired session keeps the draft for the
+  /// next sign-in, so its files stay too.
+  final FutureOr<void> Function(String userId)? clearUserMedia;
 
   /// Runs under the old bearer before sign-in can replace it. A failure aborts
   /// account switching, preventing the old account's push registration from
@@ -209,7 +215,8 @@ class SessionController extends ChangeNotifier {
     required String password,
   }) => _session.linkGoogle(provider: provider, password: password);
 
-  /// Signs out and removes this user's protected draft from the device.
+  /// Signs out and removes this user's protected draft, and the media saved
+  /// for it, from the device.
   Future<void> signOut() async {
     final userId = _user?.id;
     // Fence a late authenticated startup before its cleanup awaits.
@@ -228,7 +235,14 @@ class SessionController extends ChangeNotifier {
       // must retry its revoke before it can authenticate anyone else.
       await _tokenStore.quarantineActiveToken();
     }
-    if (userId != null) await _drafts.clear(userId);
+    if (userId != null) {
+      await _drafts.clear(userId);
+      try {
+        await clearUserMedia?.call(userId);
+      } catch (_) {
+        // A file that can't be deleted must not keep the user signed in.
+      }
+    }
     await _signedOutLocally(clearPrivateData: false, clearToken: !revokeFailed);
   }
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
@@ -143,11 +144,17 @@ class FakeMediaPicker implements MediaPicker {
 class FakeMediaCompressor implements MediaCompressor {
   final results = <CompressionResult>[];
   final compressed = <DraftAttachment>[];
+  final owners = <String>[];
   final discarded = <String>[];
+  final discardedOwners = <String>[];
 
   @override
-  Future<CompressionResult> compress(DraftAttachment attachment) async {
+  Future<CompressionResult> compress(
+    DraftAttachment attachment, {
+    required String ownerId,
+  }) async {
     compressed.add(attachment);
+    owners.add(ownerId);
     if (results.isNotEmpty) return results.removeAt(0);
     final video = attachment.mediaType == 'video';
     return CompressionSucceeded(
@@ -164,6 +171,17 @@ class FakeMediaCompressor implements MediaCompressor {
   @override
   Future<void> discard(String compressedPath) async =>
       discarded.add(compressedPath);
+
+  /// Runs when [discardAll] is called, to check the state at that moment.
+  void Function(String ownerId)? onDiscardAll;
+  bool failDiscardAll = false;
+
+  @override
+  Future<void> discardAll(String ownerId) async {
+    onDiscardAll?.call(ownerId);
+    if (failDiscardAll) throw const FileSystemException('Permission denied');
+    discardedOwners.add(ownerId);
+  }
 }
 
 /// Records calls and succeeds by default. Queue results per step to script
@@ -401,6 +419,7 @@ class TestHarness {
       tokenStore: tokens,
       userCache: users,
       drafts: drafts,
+      clearUserMedia: mediaCompressor.discardAll,
     );
   }
 

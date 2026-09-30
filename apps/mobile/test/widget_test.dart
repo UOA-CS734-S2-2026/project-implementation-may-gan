@@ -1056,6 +1056,53 @@ void main() {
     expect(harness.session.user, isNull);
   });
 
+  testWidgets('deletes saved media at sign-out after the composer closed', (
+    tester,
+  ) async {
+    final harness = TestHarness();
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await tester.pumpAndSettle();
+    expect(harness.mediaCompressor.owners, ['user-1']);
+
+    // Leave the composer, so no upload controller is watching the draft.
+    await tester.tap(find.byKey(const Key('composer.close')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ComposerScreen), findsNothing);
+    expect(
+      harness.drafts.drafts['user-1']!.attachments.single.compressedPath,
+      isNotNull,
+    );
+
+    await tester.tap(find.byKey(const Key('shell.profile')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('settings.signOut')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('settings.signOut')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('landing.sign-in')), findsOneWidget);
+    expect(harness.drafts.drafts, isEmpty);
+    expect(harness.mediaCompressor.discardedOwners, ['user-1']);
+  });
+
   testWidgets('locks the composer while a post is sending', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(

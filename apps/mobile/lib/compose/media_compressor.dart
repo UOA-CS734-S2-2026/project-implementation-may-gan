@@ -51,13 +51,22 @@ class CompressionFailed extends CompressionResult {
 
 /// Turns a picked photo or video into the upload format. The compressed copy
 /// lives in app support storage so it survives a restart mid-upload, and it
-/// never carries the source's EXIF or location metadata.
+/// never carries the source's EXIF or location metadata. Copies are kept in
+/// a folder per user, so signing one user out never touches another user's
+/// saved draft.
 abstract interface class MediaCompressor {
-  Future<CompressionResult> compress(DraftAttachment attachment);
+  Future<CompressionResult> compress(
+    DraftAttachment attachment, {
+    required String ownerId,
+  });
 
   /// Deletes a compressed copy made by [compress]. Other paths, including
   /// the file the author picked, are left alone.
   Future<void> discard(String compressedPath);
+
+  /// Deletes every compressed copy made for [ownerId], including any a crash
+  /// left behind. Called when that user's draft is removed at sign-out.
+  Future<void> discardAll(String ownerId);
 }
 
 /// Writes a JPEG of [source] to [target]. Returns false if nothing was written.
@@ -96,15 +105,26 @@ class DeviceMediaCompressor implements MediaCompressor {
   final VideoEncoder _encodeVideo;
   final String Function() _newName;
 
-  Future<Directory> _mediaDirectory() async {
+  Future<Directory> _mediaRoot() async {
     final root = await _supportDirectory();
-    return Directory('${root.path}/$_folder').create(recursive: true);
+    return Directory('${root.path}/$_folder');
   }
 
+  /// The owner's folder. Encoding keeps the ID to one path segment, and the
+  /// prefix stops it being `.` or `..`, which encoding leaves as they are.
+  Future<Directory> _ownerDirectory(String ownerId) async => Directory(
+    '${(await _mediaRoot()).path}/user-${Uri.encodeComponent(ownerId)}',
+  );
+
   @override
-  Future<CompressionResult> compress(DraftAttachment attachment) async {
+  Future<CompressionResult> compress(
+    DraftAttachment attachment, {
+    required String ownerId,
+  }) async {
     try {
-      final directory = await _mediaDirectory();
+      final directory = await (await _ownerDirectory(
+        ownerId,
+      )).create(recursive: true);
       return attachment.mediaType == 'video'
           ? await _compressVideo(attachment.localPath, directory)
           : await _compressPhoto(attachment.localPath, directory);
@@ -171,13 +191,23 @@ class DeviceMediaCompressor implements MediaCompressor {
 
   @override
   Future<void> discard(String compressedPath) async {
-    final directory = await _mediaDirectory();
+    final root = await _mediaRoot();
     final file = File(compressedPath);
-    if (file.parent.absolute.path != directory.absolute.path) return;
+    // Only files directly inside an owner's folder.
+    if (file.parent.parent.absolute.path != root.absolute.path) return;
     try {
       await file.delete();
     } on FileSystemException {
       // Already gone.
+    }
+  }
+
+  @override
+  Future<void> discardAll(String ownerId) async {
+    try {
+      await (await _ownerDirectory(ownerId)).delete(recursive: true);
+    } on FileSystemException {
+      // Nothing was saved for this user.
     }
   }
 

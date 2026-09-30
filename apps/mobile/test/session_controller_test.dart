@@ -89,6 +89,61 @@ void main() {
     expect(harness.drafts.drafts, isEmpty);
   });
 
+  group('compressed draft media', () {
+    Future<TestHarness> signedIn() async {
+      final harness = TestHarness();
+      await harness.session.restore();
+      await harness.session.signIn(
+        email: 'jos@example.test',
+        password: 'correct-password',
+      );
+      await harness.drafts.write(
+        DailyPostDraft(
+          userId: 'user-1',
+          localDate: '2026-09-25',
+          promptId: 'p',
+          promptText: 't',
+          idempotencyKey: 'k',
+          updatedAt: DateTime.utc(2026),
+        ),
+      );
+      return harness;
+    }
+
+    test('is deleted with the draft when the user signs out', () async {
+      final harness = await signedIn();
+      var draftGoneFirst = false;
+      harness.mediaCompressor.onDiscardAll = (_) =>
+          draftGoneFirst = harness.drafts.drafts.isEmpty;
+
+      await harness.session.signOut();
+
+      expect(harness.mediaCompressor.discardedOwners, ['user-1']);
+      expect(draftGoneFirst, isTrue);
+    });
+
+    test('stays with the kept draft when the session expires', () async {
+      final harness = await signedIn();
+
+      await harness.session.sessionExpired();
+
+      expect(harness.session.status, SessionStatus.signedOut);
+      expect(harness.drafts.drafts, contains('user-1'));
+      expect(harness.mediaCompressor.discardedOwners, isEmpty);
+    });
+
+    test('does not stop sign-out when a file cannot be deleted', () async {
+      final harness = await signedIn();
+      harness.mediaCompressor.failDiscardAll = true;
+
+      await harness.session.signOut();
+
+      expect(harness.session.status, SessionStatus.signedOut);
+      expect(harness.tokens.value, isNull);
+      expect(harness.users.value, isNull);
+    });
+  });
+
   test('rejects a wrong password without storing a token', () async {
     final harness = TestHarness();
     await expectLater(

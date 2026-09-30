@@ -19,9 +19,12 @@ final log = <String>[];
 
 class LoggingCompressor extends FakeMediaCompressor {
   @override
-  Future<CompressionResult> compress(DraftAttachment attachment) {
+  Future<CompressionResult> compress(
+    DraftAttachment attachment, {
+    required String ownerId,
+  }) {
     log.add('compress ${attachment.localPath}');
-    return super.compress(attachment);
+    return super.compress(attachment, ownerId: ownerId);
   }
 }
 
@@ -131,6 +134,7 @@ void main() {
     expect(attachment.byteSize, 1000);
     expect(attachment.reservationId, 'reservation-1');
     expect(client.reserved.single, (contentType: 'image/jpeg', byteSize: 1000));
+    expect(compressor.owners, ['user-1']);
     expect(client.uploaded.single.path, '/support/dayli-media/1.jpg');
     expect(uploads.active, isNull);
 
