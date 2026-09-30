@@ -1,0 +1,6 @@
+reason: Legal document versions and completed stage counts are bounded small values. Bigint would not improve their realistic range or safety.
+affected_data_and_clients: Only new lifecycle and legal records use these integer columns.
+rollout_sequence: Apply after lifecycle_worker bootstrap and before any lifecycle API or worker deployment.
+backup_checkpoint: Confirm the approved target recovery posture before a hosted migration.
+forward_fix_plan: Add a bigint column in a forward migration if a bounded integer approaches its limit.
+reviewer: Privacy and legal schema reviewer required before hosted migration.

@@ -14,7 +14,11 @@ BEGIN
     CREATE ROLE app LOGIN;
   END IF;
 
-  EXECUTE format('GRANT CONNECT ON DATABASE %I TO migrator, app', current_database());
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'lifecycle_worker') THEN
+    CREATE ROLE lifecycle_worker LOGIN;
+  END IF;
+
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO migrator, app, lifecycle_worker', current_database());
   EXECUTE format('GRANT CREATE ON DATABASE %I TO migrator', current_database());
 END
 $$;
@@ -22,5 +26,5 @@ $$;
 -- Do not rely on the implicit PUBLIC grant when restricting application DDL.
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO migrator;
-GRANT USAGE ON SCHEMA public TO app;
-REVOKE CREATE ON SCHEMA public FROM app;
+GRANT USAGE ON SCHEMA public TO app, lifecycle_worker;
+REVOKE CREATE ON SCHEMA public FROM app, lifecycle_worker;

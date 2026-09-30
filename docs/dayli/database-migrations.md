@@ -1,19 +1,20 @@
 # Database migrations
 
-Dayli uses Neon PostgreSQL 18. Staging is the first deployment target. Its owner reports two restricted SQL roles with passwords, owner grants, migrator defaults, and a successful read-only bootstrap check. The protected workflow applied and verified migrations `0000` through `0007`. The deployed staging API Worker uses a cache-disabled Hyperdrive connection as `app`. The private Hyperdrive transaction proof passed at `1fb6388`. A manual staging browser email/password flow worked; Google, Resend, and native sessions remain untested. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
+Dayli uses Neon PostgreSQL 18. Staging is the first deployment target. Its owner reports two existing restricted SQL roles with passwords, owner grants, migrator defaults, and a successful read-only bootstrap check. Migration `0014_dusty_ben_parker` additionally requires `lifecycle_worker` to be bootstrapped before it is applied; that role is not evidence of a deployed lifecycle runtime. The protected workflow applied and verified migrations `0000` through `0007`. The deployed staging API Worker uses a cache-disabled Hyperdrive connection as `app`. The private Hyperdrive transaction proof passed at `1fb6388`. A manual staging browser email/password flow worked; Google, Resend, and native sessions remain untested. No production service is deployed. If an old empty production Neon project remains, inventory it and replace it only after staging validation. The replacement must be a **separate Neon project**, not a staging branch. Do not use a staging branch as production.
 
 `packages/db` owns the Drizzle schema, migration SQL, review records, and migration commands. PostgreSQL `public` is the application schema. Migrations `0000` through `0007`, their snapshots, and the shared journal are immutable.
 
 ## Roles and connection boundaries
 
-Only two SQL-created restricted login roles are intended:
+Three SQL-created restricted roles are intended:
 
 - `migrator` owns application schema objects and the Drizzle metadata schema. It is used only by direct, unpooled migration tooling.
 - `app` receives application-table DML defaults and is used by Workers only through Hyperdrive.
+- `lifecycle_worker` is reserved for later narrowly scoped lifecycle procedures. The #158 foundation grants it no direct application-table access and does not provision a Worker binding or runtime credential.
 
 `neondb_owner` creates roles and grants but is never a Worker runtime credential, Hyperdrive credential, or application `DATABASE_URL`. Do not create runtime roles in Neon Console because that path grants `neon_superuser`.
 
-Create the two restricted login roles with passwords in the empty target, then run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`. The script grants database and `public` schema access, and creates a missing role without a password if a previous setup stopped early. Do not connect a passwordless role. Run `packages/db/admin/bootstrap-migrator.sql` through a direct TLS `migrator` connection. PostgreSQL permits default-privilege changes only by the current role or a member role, so the owner must not attempt `ALTER DEFAULT PRIVILEGES FOR ROLE migrator`. The migrator script creates and owns `drizzle`, gives `app` DML defaults for `public`, and excludes `app` from Drizzle metadata. It is safe to rerun after interruption.
+Create the `migrator` and `app` restricted login roles with passwords in the empty target, then run `packages/db/admin/bootstrap-roles.sql` as `neondb_owner`. That script also creates `lifecycle_worker` if necessary; do not connect it until a later reviewed lifecycle procedure and credential binding exist. The script grants database and `public` schema access, and creates a missing role without a password if a previous setup stopped early. Do not connect a passwordless role. Run `packages/db/admin/bootstrap-migrator.sql` through a direct TLS `migrator` connection. PostgreSQL permits default-privilege changes only by the current role or a member role, so the owner must not attempt `ALTER DEFAULT PRIVILEGES FOR ROLE migrator`. The migrator script creates and owns `drizzle`, gives `app` DML defaults for `public`, and excludes `app` from Drizzle metadata. It is safe to rerun after interruption.
 
 Run the read-only `packages/db/admin/verify-role-bootstrap.sql` as `neondb_owner` after bootstrap and after password rotation. Every reported value must be `true` before migration or Hyperdrive setup.
 
@@ -28,7 +29,7 @@ CREATE ROLE app WITH LOGIN PASSWORD '<different app password>';
 
 Neon requires the plaintext value for this SQL operation. SQL Editor or database query history may retain the statement. Restrict Console access and handle that history according to the team's retention policy. Keep the generated credentials in the approved password manager and protected secret stores. Never use the Console's Create role action for `app` or `migrator`, since Neon gives Console-created roles `neon_superuser` membership.
 
-Before connecting as either new role, run this read-only check as the owner. Expect exactly two rows. `rolcanlogin` and `no_memberships` must be `true`; all other flags must be `false`. Stop if anything differs.
+Before connecting as a new role, run this read-only check as the owner. Expect exactly three rows. `rolcanlogin` and `no_memberships` must be `true`; all other flags must be `false`. Stop if anything differs.
 
 ```sql
 SELECT r.rolname, r.rolcanlogin, r.rolsuper, r.rolcreatedb,
@@ -36,7 +37,7 @@ SELECT r.rolname, r.rolcanlogin, r.rolsuper, r.rolcreatedb,
        NOT EXISTS (SELECT 1 FROM pg_auth_members m WHERE m.member = r.oid)
          AS no_memberships
 FROM pg_roles r
-WHERE r.rolname IN ('migrator', 'app');
+WHERE r.rolname IN ('migrator', 'app', 'lifecycle_worker');
 ```
 
 If either role already exists from an interrupted passwordless bootstrap, inspect its membership before doing anything else. Use `ALTER ROLE ... WITH PASSWORD` in the same SQL Editor instead of attempting a duplicate `CREATE ROLE`. Neon rejected `psql`'s `\password` for a SQL-created role because it sent a hash, and Console Reset password refused a passwordless SQL-created probe role. Do not retry either method.
@@ -106,7 +107,7 @@ Migration commands enforce all of these guards:
 
 Local restricted-role integration coverage is the current proof. GitHub-hosted PR and push checks are paused. The **Database migrations** workflow remains `workflow_dispatch` only and is not an automatic migration gate. The protected **Run database migrations** workflow also remains manual dispatch and is the only normal staging or production migration path.
 
-After the two restricted SQL roles have passwords, their grants and migrator defaults are in place, and `verify-role-bootstrap.sql` reports only `true`:
+After `migrator` and `app` have passwords, `lifecycle_worker` has been bootstrapped without a runtime binding, their grants and migrator defaults are in place, and `verify-role-bootstrap.sql` reports only `true`:
 
 1. Merge the reviewed schema change to `main` with recorded local verification and CODEOWNER review.
 2. Dispatch the protected staging workflow from `main` with the restricted `migrator` secret.

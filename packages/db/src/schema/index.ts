@@ -27,6 +27,19 @@ import {
   pushDevices,
   socketTickets,
 } from "./messaging";
+import {
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportRequests,
+  operatorCases,
+} from "./lifecycle";
+import {
+  ageDeclarations,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
 import { user } from "./users";
 
 export { profileVisibility, tier, user } from "./users";
@@ -316,30 +329,63 @@ export {
   relationshipSearchQuota,
 } from "./relationships";
 
+export {
+  accountLifecycleState,
+  accountLifecycles,
+  accountManagementGrantAction,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportRequests,
+  dataExportStatus,
+  operatorCaseDecision,
+  operatorCaseStatus,
+  operatorCaseType,
+  operatorCases,
+  purgeReceiptOutcome,
+} from "./lifecycle";
+
+export {
+  ageDeclarations,
+  legalDocumentKind,
+  legalDocumentStatus,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
+
 export const schema = {
   account,
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  ageDeclarations,
   conversationChanges,
   conversationMembers,
   conversations,
+  dataExportRequests,
+  dailyPrompts,
+  friendRequests,
+  friendships,
+  legalDocumentVersions,
+  legacyCloudinaryMedia,
   mediaReservation,
   messageReactions,
   messages,
   messagingOutbox,
-  pushDevices,
-  socketTickets,
-  dailyPrompts,
-  friendRequests,
-  friendships,
-  legacyCloudinaryMedia,
+  operatorCases,
   postIdempotencyKeys,
   postMedia,
   postRevisions,
   posts,
+  pushDevices,
   rateLimit,
+  registrationIntents,
   relationshipBlocks,
   relationshipSearchQuota,
   session,
   socialLinkConfirmation,
+  socketTickets,
+  termsAcceptances,
   tomorrowNotes,
   user,
   verification,

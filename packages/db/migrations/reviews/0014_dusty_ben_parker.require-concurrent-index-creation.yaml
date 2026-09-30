@@ -1,0 +1,6 @@
+reason: All indexes belong to new empty tables created in the same transaction. Concurrent creation is unnecessary and unavailable inside that transaction.
+affected_data_and_clients: No existing table index is rebuilt or locked by this migration.
+rollout_sequence: Apply through the protected migration workflow after role bootstrap, then verify restricted grants before dependent code.
+backup_checkpoint: Confirm the approved target recovery posture before a hosted migration.
+forward_fix_plan: Build later indexes concurrently in a separate reviewed migration when existing lifecycle tables are populated.
+reviewer: Database and privacy reviewers required before hosted migration.

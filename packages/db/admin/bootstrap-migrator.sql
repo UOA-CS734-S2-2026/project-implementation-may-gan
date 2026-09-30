@@ -13,9 +13,42 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app;
 
 -- Prompt versions are deployment data, not app-authored content.
 DO $$
+DECLARE
+  restricted_table text;
 BEGIN
   IF to_regclass('public.daily_prompts') IS NOT NULL THEN
     REVOKE INSERT ON TABLE public.daily_prompts FROM app;
+  END IF;
+
+  -- Reapplying bootstrap must not restore broad default DML to lifecycle data.
+  IF to_regclass('public."user"') IS NOT NULL THEN
+    REVOKE DELETE ON TABLE public."user" FROM app;
+  END IF;
+
+  FOREACH restricted_table IN ARRAY ARRAY[
+    'account_lifecycles',
+    'account_management_grants',
+    'account_purge_receipts',
+    'age_declarations',
+    'data_export_requests',
+    'legal_document_versions',
+    'operator_cases',
+    'registration_intents',
+    'terms_acceptances'
+  ] LOOP
+    IF to_regclass('public.' || restricted_table) IS NOT NULL THEN
+      EXECUTE format('REVOKE ALL ON TABLE public.%I FROM app, lifecycle_worker', restricted_table);
+    END IF;
+  END LOOP;
+
+  IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_management_grants TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
+    GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;
+    GRANT SELECT, INSERT ON TABLE public.terms_acceptances TO app;
+    GRANT SELECT ON TABLE public.legal_document_versions TO app;
   END IF;
 END
 $$;

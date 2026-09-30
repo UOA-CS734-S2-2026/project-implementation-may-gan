@@ -1,0 +1,6 @@
+reason: New child tables reference existing identity and session rows. They begin empty, so no existing orphan validation is required.
+affected_data_and_clients: Account lifecycle, grant, export, age, Terms, registration-intent, and operator-case records are additive.
+rollout_sequence: Apply the additive schema before any code writes these records. Do not run account purge until messaging identity migration is separately complete.
+backup_checkpoint: Confirm the approved target recovery posture before a hosted migration.
+forward_fix_plan: Add a new foreign key or migration if a later reviewed flow requires a different retention relationship.
+reviewer: Database and privacy reviewers required before hosted migration.

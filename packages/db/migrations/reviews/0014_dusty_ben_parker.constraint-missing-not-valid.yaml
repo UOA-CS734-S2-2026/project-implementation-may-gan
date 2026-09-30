@@ -1,0 +1,6 @@
+reason: Every constraint is introduced with a newly created empty table, so validation has no existing-row scan or compatibility risk.
+affected_data_and_clients: Existing tables are unchanged except for revoking app DELETE on user and explicit grants on new tables.
+rollout_sequence: Bootstrap lifecycle_worker, apply the migration, verify grants locally and in the protected target, then deploy later API work.
+backup_checkpoint: Confirm the approved target recovery posture before a hosted migration.
+forward_fix_plan: Add or adjust constraints with a forward-only migration if later lifecycle code needs a correction.
+reviewer: Database and privacy reviewers required before hosted migration.

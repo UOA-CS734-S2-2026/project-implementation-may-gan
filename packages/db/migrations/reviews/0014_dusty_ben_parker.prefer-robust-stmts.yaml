@@ -1,0 +1,6 @@
+reason: The migration creates new additive lifecycle and legal tables in one transaction. PostgreSQL DDL is idempotent only through the protected forward-only migration ledger.
+affected_data_and_clients: No existing application rows are rewritten. Older clients ignore the new tables.
+rollout_sequence: Bootstrap lifecycle_worker, apply this migration through the protected migrator workflow, then deploy only compatible additive application code.
+backup_checkpoint: Confirm the existing target recovery posture through the approved operator procedure before any hosted migration.
+forward_fix_plan: Correct defects with a new forward-only migration. Do not edit this applied migration.
+reviewer: Privacy and legal schema reviewer required before hosted migration.

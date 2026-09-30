@@ -16,6 +16,8 @@ describe("Neon role bootstrap scripts", () => {
 
     expect(ownerBootstrap).toContain("CREATE ROLE migrator LOGIN");
     expect(ownerBootstrap).toContain("CREATE ROLE app LOGIN");
+    expect(ownerBootstrap).toContain("CREATE ROLE lifecycle_worker LOGIN");
+    expect(ownerBootstrap).toContain("GRANT CONNECT ON DATABASE %I TO migrator, app, lifecycle_worker");
     expect(ownerBootstrap).not.toContain("users_accounts_importer");
     const developmentBootstrap = await readFile(developmentBootstrapPath, "utf8");
     expect(developmentBootstrap).not.toContain("users_accounts_importer");
@@ -27,6 +29,8 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).not.toMatch(/ALTER DEFAULT PRIVILEGES FOR ROLE migrator/i);
     expect(migratorBootstrap).toContain("CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator");
     expect(migratorBootstrap).toContain("REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, app");
+    expect(migratorBootstrap).toContain("REVOKE DELETE ON TABLE public.\"user\" FROM app");
+    expect(migratorBootstrap).toContain("REVOKE ALL ON TABLE public.%I FROM app, lifecycle_worker");
   });
 
   it("provides a read-only verification script for the restricted roles", async () => {
@@ -35,6 +39,8 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("roles_are_restricted");
     expect(verification).toContain("app_public_create");
     expect(verification).toContain("app_public_table_defaults");
+    expect(verification).toContain("lifecycle_worker_public_usage");
+    expect(verification).toContain("lifecycle_worker_cannot_use_drizzle");
     expect(verification).toContain("roles_have_no_memberships");
     const executableSql = verification
       .replace(/--.*$/gm, "")
