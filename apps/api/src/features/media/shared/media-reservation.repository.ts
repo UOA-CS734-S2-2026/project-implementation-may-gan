@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, count, eq, gt, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 
 export type MediaReservationStatus = "pending" | "validated" | "failed";
@@ -81,7 +81,7 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
           .from(sql`(values (1)) as lock_source`);
 
         const [row] = await tx
-          .select({ value: sql<number>`count(*)::int` })
+          .select({ value: count() })
           .from(schema.mediaReservation)
           .where(
             and(

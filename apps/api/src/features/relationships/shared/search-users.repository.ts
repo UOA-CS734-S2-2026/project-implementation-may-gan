@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, exists, isNotNull, isNull, ne, notExists, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { RelationshipStoreError, type RelationshipUserCard, type RelationshipUserPage } from "./relationship-service";
@@ -147,7 +147,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
     })
     .from(candidate)
     .where(and(
-      sql`${candidate.id} <> ${actorId}`,
+      ne(candidate.id, actorId),
       isNotNull(candidate.username),
       sql`lower(${candidate.username}) like lower(${prefix}) || '%' escape E'\\\\'`,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
