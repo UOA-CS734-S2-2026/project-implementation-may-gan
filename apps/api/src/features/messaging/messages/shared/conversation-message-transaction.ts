@@ -1,7 +1,7 @@
 import { lockRelationshipPair, schema, type DayliDatabase } from "@dayli/db";
 import { eq } from "drizzle-orm";
 
-type ConversationMessageTransaction = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
+type ConversationMessageTransaction = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
 /**
  * Runs a message-write operation in the caller-owned transaction after it has

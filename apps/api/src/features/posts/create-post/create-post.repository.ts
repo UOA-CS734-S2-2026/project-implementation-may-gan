@@ -16,7 +16,7 @@ import {
   type StoredDailyPost,
 } from "./create-post.service";
 
-type Queryable = Pick<DayliDatabase, "select" | "insert" | "execute">;
+type Queryable = Pick<DayliDatabase, "select" | "insert">;
 
 /** Distinct from the relationship pair lock namespace, which uses 734 directly on a pair key. */
 function authorLockKey(authorId: string): string {

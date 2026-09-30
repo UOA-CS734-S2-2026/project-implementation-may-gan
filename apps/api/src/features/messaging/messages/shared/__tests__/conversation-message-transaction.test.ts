@@ -5,9 +5,16 @@ import { withLockedConversationMessageTransaction } from "../conversation-messag
 describe("withLockedConversationMessageTransaction", () => {
   it("locks the looked-up relationship pair before invoking the caller callback", async () => {
     const events: string[] = [];
-    const queries: unknown[] = [];
     const transaction = {
-      select() {
+      select(fields?: { lock?: unknown }) {
+        if (fields?.lock) {
+          return {
+            async from() {
+              events.push("relationship pair lock");
+              return [];
+            },
+          };
+        }
         return {
           from() {
             return {
@@ -23,11 +30,6 @@ describe("withLockedConversationMessageTransaction", () => {
           },
         };
       },
-      async execute(query: unknown) {
-        queries.push(query);
-        events.push("relationship pair lock");
-        return [];
-      },
     } as unknown as DayliDatabase;
 
     await withLockedConversationMessageTransaction(transaction, "conversation-1", async (received) => {
@@ -36,7 +38,5 @@ describe("withLockedConversationMessageTransaction", () => {
     });
 
     expect(events).toEqual(["pair lookup", "relationship pair lock", "callback"]);
-    const lockKey = (queries[0] as { queryChunks: unknown[] }).queryChunks[1];
-    expect(lockKey).toBe("3:amy:3:zoe");
   });
 });
