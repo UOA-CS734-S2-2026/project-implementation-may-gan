@@ -6,6 +6,8 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
+    pool: "forks",
+    singleFork: true,
     include: [
       "src/features/**/postgres.integration.test.ts",
       "src/features/**/__tests__/**/*.repository.integration.test.ts",

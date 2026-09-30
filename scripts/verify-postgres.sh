@@ -17,6 +17,7 @@ relationship_database="dayli_relationship_test"
 messaging_database="dayli_messaging_test"
 advisory_lock_database="dayli_advisory_lock_ci_test"
 lifecycle_database="dayli_lifecycle_test"
+auth_database="dayli_auth_test"
 
 # The test Compose file and integration guards read these values when a verifier
 # needs an isolated port.
@@ -91,6 +92,8 @@ echo 'Provisioning isolated advisory-lock test database'
 provision_isolated_database "$advisory_lock_database"
 echo 'Provisioning isolated lifecycle test database'
 provision_isolated_database "$lifecycle_database"
+echo 'Provisioning isolated auth test database'
+provision_isolated_database "$auth_database"
 
 # Future suites may request additional disposable databases without sharing a
 # volume or credential with development. Comma-separated names only.
@@ -115,6 +118,8 @@ export ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL="$(migrator_url "$advisory_lock_
 export LIFECYCLE_TEST_DATABASE_URL="$(migrator_url "$lifecycle_database")"
 export LIFECYCLE_TEST_APP_DATABASE_URL="$(app_url "$lifecycle_database")"
 export LIFECYCLE_TEST_WORKER_DATABASE_URL="postgresql://lifecycle_worker:lifecycle_worker@localhost:${postgres_port}/${lifecycle_database}"
+export AUTH_TEST_DATABASE_URL="$(migrator_url "$auth_database")"
+export AUTH_TEST_APP_DATABASE_URL="$(app_url "$auth_database")"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
 pnpm db:check
@@ -123,6 +128,7 @@ DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$LIFECYCLE_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$AUTH_TEST_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate
@@ -134,6 +140,7 @@ DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$LIFECYCLE_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$AUTH_TEST_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
     DATABASE_URL="$(migrator_url "$database_name")" pnpm db:migrate

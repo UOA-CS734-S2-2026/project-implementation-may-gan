@@ -4,8 +4,8 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { createApp, createAppForEnv } from "../../app";
 import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./route";
 
-const migratorUrl = process.env.TEST_DATABASE_URL;
-const appUrl = process.env.TEST_APP_DATABASE_URL;
+const migratorUrl = process.env.AUTH_TEST_DATABASE_URL ?? process.env.TEST_DATABASE_URL;
+const appUrl = process.env.AUTH_TEST_APP_DATABASE_URL ?? process.env.TEST_APP_DATABASE_URL;
 const hasTestDatabaseConfig = Boolean(migratorUrl && appUrl);
 const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const origin = "https://api.example.test";
@@ -15,8 +15,8 @@ const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
 function requireLocalTestUrl(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required for PostgreSQL auth integration tests.`);
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
-    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || !["/dayli_test", "/dayli_auth_test"].includes(url.pathname)) {
+    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test or dayli_auth_test.`);
   }
   return value;
 }
@@ -275,10 +275,9 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       kind: "terms",
       version: Math.floor(Math.random() * 1_000_000_000) + 1,
       contentDigest: digest,
-      status: "effective",
-      effectiveAt: new Date(Date.now() - 1_000),
     });
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionApp();
     const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
       method: "POST",
@@ -329,9 +328,10 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const databaseSchema = (await import("@dayli/db")).schema;
     await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
       id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
-      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+      contentDigest: digest,
     });
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionApp();
     const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -390,9 +390,10 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const databaseSchema = (await import("@dayli/db")).schema;
     await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
       id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
-      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+      contentDigest: digest,
     });
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionGoogleApp();
     const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -484,9 +485,10 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const databaseSchema = (await import("@dayli/db")).schema;
     await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
       id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
-      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+      contentDigest: digest,
     });
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionGoogleApp();
     const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -552,9 +554,10 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const databaseSchema = (await import("@dayli/db")).schema;
     await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
       id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
-      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+      contentDigest: digest,
     });
     await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    await migrator.client`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${documentId}`;
     const app = createProductionGoogleApp();
     const valid = await signedGoogleToken("web-client-id", `browser-valid-${crypto.randomUUID()}`, "browser-recovery@example.test");
     const invalidSignature = await signedGoogleToken("web-client-id", `browser-invalid-signature-${crypto.randomUUID()}`, "browser-invalid-signature@example.test");

@@ -317,6 +317,90 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await migrator`update public.legal_document_versions set status = 'superseded' where id = ${versionId}`;
   });
 
+  it("serializes content edits with publication and acceptance latches", async () => {
+    const publisher = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const writer = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const acceptor = postgres(appConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const waitForLock = async (pid: number) => {
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const [state] = await migrator`select wait_event_type = 'Lock' as blocked from pg_stat_activity where pid = ${pid}`;
+        if (state?.blocked) return;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      throw new Error("Expected a database lock wait.");
+    };
+    const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const base = Math.floor(Math.random() * 1_000_000_000) + 1;
+    const draftContent = "# Draft Terms\n\nOriginal bytes.";
+    const updatedContent = "# Draft Terms\n\nEdited before publication.";
+    const draftDigest = await hash(draftContent);
+    const updatedDigest = await hash(updatedContent);
+    const publicationId = `terms-lock-publication-${crypto.randomUUID()}`;
+    const acceptanceId = `terms-lock-acceptance-${crypto.randomUUID()}`;
+    const reverseId = `terms-lock-reverse-${crypto.randomUUID()}`;
+    const rekeySourceId = `terms-lock-rekey-source-${crypto.randomUUID()}`;
+    const rekeyTargetId = `terms-lock-rekey-target-${crypto.randomUUID()}`;
+    legalVersions.push(publicationId, acceptanceId, reverseId, rekeySourceId, rekeyTargetId);
+    const acceptanceUser = await createUser("lock-acceptance");
+
+    try {
+      await migrator`insert into public.legal_document_versions (id, kind, version, content_digest) values (${publicationId}, 'terms', ${base}, ${draftDigest})`;
+      await migrator`insert into public.legal_document_contents (terms_version_id, canonical_content) values (${publicationId}, ${draftContent})`;
+      await publisher.unsafe("begin");
+      await publisher`update public.legal_document_versions set status = 'notice', notice_starts_at = '2026-09-01T00:00:00.000Z', effective_at = '2026-10-01T00:00:00.000Z' where id = ${publicationId}`;
+      const [{ pid: writerPid }] = await writer`select pg_backend_pid()::int as pid`;
+      const blockedContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${publicationId}`.then((result) => result);
+      await waitForLock(writerPid);
+      await publisher.unsafe("commit");
+      await expect(blockedContent).rejects.toMatchObject({ code: "23514" });
+      const [published] = await migrator`select canonical_content, publication_latched from public.legal_document_contents c join public.legal_document_versions v on v.id = c.terms_version_id where v.id = ${publicationId}`;
+      expect(published).toEqual({ canonical_content: draftContent, publication_latched: true });
+
+      await migrator`insert into public.legal_document_versions (id, kind, version, content_digest) values (${acceptanceId}, 'terms', ${base + 1}, ${draftDigest})`;
+      await migrator`insert into public.legal_document_contents (terms_version_id, canonical_content) values (${acceptanceId}, ${draftContent})`;
+      await acceptor.unsafe("begin");
+      await acceptor`insert into public.terms_acceptances (user_id, terms_version_id) values (${acceptanceUser}, ${acceptanceId})`;
+      const [{ pid: acceptanceWriterPid }] = await writer`select pg_backend_pid()::int as pid`;
+      const blockedAcceptanceContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${acceptanceId}`.then((result) => result);
+      await waitForLock(acceptanceWriterPid);
+      await acceptor.unsafe("commit");
+      await expect(blockedAcceptanceContent).rejects.toMatchObject({ code: "23514" });
+      const [accepted] = await migrator`select canonical_content, publication_latched from public.legal_document_contents c join public.legal_document_versions v on v.id = c.terms_version_id where v.id = ${acceptanceId}`;
+      expect(accepted).toEqual({ canonical_content: draftContent, publication_latched: true });
+
+      await migrator`insert into public.legal_document_versions (id, kind, version, content_digest) values (${rekeySourceId}, 'terms', ${base + 2}, ${draftDigest})`;
+      await migrator`insert into public.legal_document_versions (id, kind, version, content_digest) values (${rekeyTargetId}, 'terms', ${base + 3}, ${draftDigest})`;
+      await migrator`insert into public.legal_document_contents (terms_version_id, canonical_content) values (${rekeySourceId}, ${draftContent})`;
+      await publisher.unsafe("begin");
+      await publisher`update public.legal_document_versions set status = 'notice', notice_starts_at = '2026-10-01T00:00:00.000Z', effective_at = '2026-11-01T00:00:00.000Z' where id = ${rekeyTargetId}`;
+      const [{ pid: rekeyWriterPid }] = await writer`select pg_backend_pid()::int as pid`;
+      const blockedRekey = writer`update public.legal_document_contents set terms_version_id = ${rekeyTargetId} where terms_version_id = ${rekeySourceId}`.then((result) => result);
+      await waitForLock(rekeyWriterPid);
+      await publisher.unsafe("commit");
+      await expect(blockedRekey).rejects.toMatchObject({ code: "23514" });
+      const [rekeySource] = await migrator`select canonical_content from public.legal_document_contents where terms_version_id = ${rekeySourceId}`;
+      const [rekeyTarget] = await migrator`select count(*)::int as contents from public.legal_document_contents where terms_version_id = ${rekeyTargetId}`;
+      expect(rekeySource).toEqual({ canonical_content: draftContent });
+      expect(rekeyTarget).toEqual({ contents: 0 });
+
+      await migrator`insert into public.legal_document_versions (id, kind, version, content_digest) values (${reverseId}, 'terms', ${base + 4}, ${draftDigest})`;
+      await migrator`insert into public.legal_document_contents (terms_version_id, canonical_content) values (${reverseId}, ${draftContent})`;
+      await writer.unsafe("begin");
+      await writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${reverseId}`;
+      const [{ pid: publisherPid }] = await publisher`select pg_backend_pid()::int as pid`;
+      const blockedPublication = publisher`update public.legal_document_versions set content_digest = ${updatedDigest}, status = 'notice', notice_starts_at = '2026-11-01T00:00:00.000Z', effective_at = '2026-12-01T00:00:00.000Z' where id = ${reverseId}`.then((result) => result);
+      await waitForLock(publisherPid);
+      await writer.unsafe("commit");
+      await blockedPublication;
+      const [stable] = await migrator`select v.content_digest, c.canonical_content, v.publication_latched from public.legal_document_versions v join public.legal_document_contents c on c.terms_version_id = v.id where v.id = ${reverseId}`;
+      expect(stable).toEqual({ content_digest: updatedDigest, canonical_content: updatedContent, publication_latched: true });
+    } finally {
+      await Promise.allSettled([publisher.unsafe("rollback"), writer.unsafe("rollback"), acceptor.unsafe("rollback")]);
+      await Promise.all([publisher.end({ timeout: 5 }), writer.end({ timeout: 5 }), acceptor.end({ timeout: 5 })]);
+    }
+  });
+
   it("keeps export cleanup tasks private after reapplying role bootstrap", async () => {
     const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
     await migrator.unsafe(bootstrap);
