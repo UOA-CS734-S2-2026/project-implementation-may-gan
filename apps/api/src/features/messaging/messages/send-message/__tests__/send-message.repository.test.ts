@@ -11,9 +11,14 @@ describe("createHyperdriveMessageWriteStore", () => {
   it("closes its Hyperdrive database when the action callback fails", async () => {
     const callbackError = new Error("action failed");
     const transaction = {
-      execute: vi.fn()
-        .mockResolvedValueOnce([{ user_low_id: "amy", user_high_id: "zoe" }])
-        .mockResolvedValueOnce([]),
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue([{ userLowId: "amy", userHighId: "zoe" }]),
+          })),
+        })),
+      })),
+      execute: vi.fn().mockResolvedValue([]),
     };
     const database = {
       db: {
@@ -31,7 +36,8 @@ describe("createHyperdriveMessageWriteStore", () => {
     })).rejects.toBe(callbackError);
 
     expect(database.db.transaction).toHaveBeenCalledOnce();
-    expect(transaction.execute).toHaveBeenCalledTimes(2);
+    expect(transaction.select).toHaveBeenCalledOnce();
+    expect(transaction.execute).toHaveBeenCalledOnce();
     expect(database.close).toHaveBeenCalledOnce();
   });
 });

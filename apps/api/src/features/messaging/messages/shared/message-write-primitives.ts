@@ -2,7 +2,7 @@ import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
-export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "execute" | "insert" | "select" | "update">;
+export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 type Row = Record<string, unknown>;
 const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 const safeInteger = (value: unknown, field: string): number => {

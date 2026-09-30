@@ -7,12 +7,26 @@ describe("withLockedConversationMessageTransaction", () => {
     const events: string[] = [];
     const queries: unknown[] = [];
     const transaction = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                return {
+                  async limit() {
+                    events.push("pair lookup");
+                    return [{ userLowId: "amy", userHighId: "zoe" }];
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
       async execute(query: unknown) {
         queries.push(query);
-        events.push(queries.length === 1 ? "pair lookup" : "relationship pair lock");
-        return queries.length === 1
-          ? [{ user_low_id: "amy", user_high_id: "zoe" }]
-          : [];
+        events.push("relationship pair lock");
+        return [];
       },
     } as unknown as DayliDatabase;
 
@@ -22,7 +36,7 @@ describe("withLockedConversationMessageTransaction", () => {
     });
 
     expect(events).toEqual(["pair lookup", "relationship pair lock", "callback"]);
-    const lockKey = (queries[1] as { queryChunks: unknown[] }).queryChunks[1];
+    const lockKey = (queries[0] as { queryChunks: unknown[] }).queryChunks[1];
     expect(lockKey).toBe("3:amy:3:zoe");
   });
 });
