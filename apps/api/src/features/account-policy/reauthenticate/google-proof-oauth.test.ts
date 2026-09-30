@@ -18,7 +18,7 @@ describe("Google proof OAuth adapter", () => {
     expect(Object.fromEntries(url.searchParams)).toMatchObject({
       client_id: configuration.clientId,
       redirect_uri: configuration.callbackUrl,
-      scope: "openid email",
+      scope: "openid",
       code_challenge_method: "S256",
       max_age: "600",
     });
