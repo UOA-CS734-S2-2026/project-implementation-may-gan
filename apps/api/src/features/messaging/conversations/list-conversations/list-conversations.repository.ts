@@ -49,6 +49,11 @@ export function createPostgresListConversationsRepository(
               and ${relationshipBlocks.blockedId} = ${conversations.participantLowId})
           )
       )`;
+      const peerPendingDeletion = sql<boolean>`exists(
+        select 1 from ${schema.accountLifecycles}
+        where ${schema.accountLifecycles.userId} = ${messagingParticipants.userId}
+          and ${schema.accountLifecycles.state} = 'pending_deletion'
+      )`;
       const unreadCount = sql<number>`(
         select count(*)::int
         from ${messages}
@@ -91,9 +96,9 @@ export function createPostgresListConversationsRepository(
           last_read_sequence: sql<string>`${conversationMembers.lastReadSequence}::text`,
           receipt_sequence: sql<string>`${conversationMembers.receiptSequence}::text`,
           peer_id: messagingParticipants.id,
-          peer_name: sql<string | null>`coalesce(${user.displayUsername}, ${user.username})`,
-          peer_deleted: eq(messagingParticipants.state, "deleted"),
-          blocked,
+          peer_name: sql<string | null>`case when ${peerPendingDeletion} then null else coalesce(${user.displayUsername}, ${user.username}) end`,
+          peer_deleted: sql<boolean>`${messagingParticipants.state} = 'deleted' or ${peerPendingDeletion}`,
+          blocked: sql<boolean>`${blocked} or ${peerPendingDeletion}`,
           unread_count: unreadCount,
           message_id: latestMessage.message_id,
           message_conversation_id: latestMessage.message_conversation_id,

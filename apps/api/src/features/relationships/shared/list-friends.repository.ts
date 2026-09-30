@@ -63,6 +63,10 @@ export async function listFriendRows(queryable: RelationshipQueryable, actorId: 
       eq(mine.state, "active"),
       isNotNull(friend.username),
       sql`(coalesce(${friend.banned}, false) = false or (${friend.banExpires} is not null and ${friend.banExpires} <= now()))`,
+      notExists(database.select({ one: sql`1` }).from(schema.accountLifecycles).where(and(
+        eq(schema.accountLifecycles.userId, friend.id),
+        eq(schema.accountLifecycles.state, "pending_deletion"),
+      ))),
       notExists(
         database.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),
