@@ -47,6 +47,10 @@ suite("resolve message request Postgres repository", () => {
       requestState: "active",
       capabilities: { canSend: true, canResolveRequest: false },
     });
+    await expect(repository.resolve(users[1]!, created.conversation.id, "accept")).resolves.toMatchObject({
+      id: created.conversation.id,
+      requestState: "active",
+    });
     const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id} and kind = 'request.active'`;
     const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
     expect(changes?.count).toBe(1);
@@ -76,7 +80,13 @@ suite("resolve message request Postgres repository", () => {
     });
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[4]!}, ${users[5]!}, now())`;
 
-    await expect(repository.resolve(users[5]!, created.conversation.id, "accept")).rejects.toMatchObject({ code: "BLOCKED" });
+    const resolutions = await Promise.allSettled([
+      repository.resolve(users[5]!, created.conversation.id, "accept"),
+      concurrentRepository.resolve(users[5]!, created.conversation.id, "accept"),
+    ]);
+    for (const resolution of resolutions) {
+      expect(resolution).toMatchObject({ status: "rejected", reason: { code: "BLOCKED" } });
+    }
     const [conversation] = await database.client`select request_state from public.conversations where id = ${created.conversation.id}`;
     const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
     expect(conversation).toMatchObject({ request_state: "pending" });

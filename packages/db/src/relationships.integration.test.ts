@@ -2,12 +2,13 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const connectionString = process.env.TEST_DATABASE_URL;
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 
 function enabledDatabaseUrl(): string | undefined {
   if (!connectionString) return undefined;
   const url = new URL(connectionString);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error("TEST_DATABASE_URL must target localhost:5433/dayli_test.");
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`TEST_DATABASE_URL must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return connectionString;
 }

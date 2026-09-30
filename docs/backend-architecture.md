@@ -155,7 +155,7 @@ For a simple read, a route may call an authorized query directly. Do not add a s
 
 ### Repository
 
-Keep action-specific queries beside the action. Repositories map rows, implement database constraints and locks, and expose meaningful persistence operations rather than a generic CRUD framework. They may use Drizzle directly internally. Do not create a large shared repository, an interface for every Drizzle method, or a claim that changing database providers is free.
+Keep action-specific queries beside the action. Repositories map rows, implement database constraints and locks, and expose meaningful persistence operations rather than a generic CRUD framework. They may use Drizzle directly internally. Repositories use Drizzle's `select`, `insert`, `update`, and `delete` builders. Bounded SQL expressions inside those builders are allowed, but runtime API code must not use raw `execute`. Database migrations and diagnostics, plus tests and their setup, are excepted. Do not create a large shared repository, an interface for every Drizzle method, or a claim that changing database providers is free.
 
 An operation that coordinates multiple writes owns the transaction boundary explicitly. Business predicates that can race with other writes must use reads/locks within that transaction. Checking a block before opening a transaction and blindly inserting afterward is not safe decoupling.
 

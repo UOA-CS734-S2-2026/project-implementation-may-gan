@@ -33,7 +33,7 @@ suite("list conversation changes Postgres repository", () => {
     }
   });
 
-  it("keeps membership private and returns ordered, paginated durable changes with the high watermark", async () => {
+  it("keeps membership private and returns ordered, strictly paginated bigint changes after blocks", async () => {
     const first = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
@@ -49,41 +49,77 @@ suite("list conversation changes Postgres repository", () => {
     });
     await markConversationRead.markRead(users[0]!, first.conversation.id, "3");
 
+    const sequenceOffset = "9007199254740992";
+    const firstSequence = "9007199254740993";
+    const secondSequence = "9007199254740994";
+    const thirdSequence = "9007199254740995";
+    const fourthSequence = "9007199254740996";
+    await database.client`
+      update public.conversation_changes
+      set change_sequence = change_sequence + ${sequenceOffset}::bigint
+      where conversation_id = ${first.conversation.id}
+    `;
+    await database.client`
+      update public.conversations
+      set last_change_sequence = last_change_sequence + ${sequenceOffset}::bigint
+      where id = ${first.conversation.id}
+    `;
+
     await expect(repository.list(users[2]!, first.conversation.id, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await database.client`
+      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${users[1]!}, ${users[0]!}, now())
+    `;
 
     await expect(repository.list(users[0]!, first.conversation.id, undefined, 2)).resolves.toEqual({
       items: [
         {
-          changeSequence: "1",
+          changeSequence: firstSequence,
           kind: "message.created",
           messageId: first.message.id,
           memberId: null,
           createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
         },
         {
-          changeSequence: "2",
+          changeSequence: secondSequence,
           kind: "message.created",
           messageId: second.message.id,
           memberId: null,
           createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
         },
       ],
-      nextChangeSequence: "2",
+      nextChangeSequence: secondSequence,
       hasMore: true,
-      highWatermark: "4",
+      highWatermark: fourthSequence,
     });
 
-    await expect(repository.list(users[0]!, first.conversation.id, "2", 2)).resolves.toEqual({
+    await expect(repository.list(users[0]!, first.conversation.id, firstSequence, 2)).resolves.toEqual({
       items: [
         {
-          changeSequence: "3",
+          changeSequence: secondSequence,
+          kind: "message.created",
+          messageId: second.message.id,
+          memberId: null,
+          createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        },
+        {
+          changeSequence: thirdSequence,
           kind: "message.created",
           messageId: third.message.id,
           memberId: null,
           createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
         },
+      ],
+      nextChangeSequence: thirdSequence,
+      hasMore: true,
+      highWatermark: fourthSequence,
+    });
+
+    await expect(repository.list(users[0]!, first.conversation.id, thirdSequence, 2)).resolves.toEqual({
+      items: [
         {
-          changeSequence: "4",
+          changeSequence: fourthSequence,
           kind: "read.updated",
           messageId: null,
           memberId: users[0],
@@ -92,7 +128,7 @@ suite("list conversation changes Postgres repository", () => {
       ],
       nextChangeSequence: null,
       hasMore: false,
-      highWatermark: "4",
+      highWatermark: fourthSequence,
     });
   });
 });

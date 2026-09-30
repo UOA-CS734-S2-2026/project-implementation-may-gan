@@ -76,7 +76,9 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
         // Transaction-scoped: released automatically on commit or rollback.
         // Serialises all concurrent reservation attempts for this one owner; other
         // owners are unaffected since the lock key is derived from ownerId.
-        await tx.execute(sql`select pg_advisory_xact_lock(${advisoryLockNamespace}, hashtext(${ownerId}))`);
+        await tx
+          .select({ locked: sql`pg_advisory_xact_lock(${advisoryLockNamespace}, hashtext(${ownerId}))` })
+          .from(sql`(values (1)) as lock_source`);
 
         const [row] = await tx
           .select({ value: sql<number>`count(*)::int` })

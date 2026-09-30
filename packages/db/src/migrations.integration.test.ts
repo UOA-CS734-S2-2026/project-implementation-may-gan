@@ -6,6 +6,7 @@ import { repoPath } from "./migrations/paths";
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
 const hasTestDatabaseConfig = Boolean(migratorUrl && appUrl);
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 
 if (process.env.REQUIRE_DB_TEST === "1" && !hasTestDatabaseConfig) {
   throw new Error("TEST_DATABASE_URL and TEST_APP_DATABASE_URL are required for pnpm db:test.");
@@ -17,8 +18,8 @@ function requireLocalTestUrl(value: string | undefined, name: string): string {
   }
 
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error(`${name} must target localhost:5433/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test.`);
   }
 
   return value;

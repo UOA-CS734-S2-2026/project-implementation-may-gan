@@ -14,14 +14,14 @@ const suite = enabled ? describe : describe.skip;
 suite("mark conversation read Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 8 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 10 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
   const { direct, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresMarkConversationReadRepository(database.db);
   const concurrentRepository = createPostgresMarkConversationReadRepository(concurrentDatabase.db);
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[2]!}, ${users[3]!}, 'active', now()), (${users[3]!}, ${users[2]!}, 'active', now()), (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[2]!}, ${users[3]!}, 'active', now()), (${users[3]!}, ${users[2]!}, 'active', now()), (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now()), (${users[8]!}, ${users[9]!}, 'active', now()), (${users[9]!}, ${users[8]!}, 'active', now())`;
   });
 
   afterAll(async () => {
@@ -59,6 +59,33 @@ suite("mark conversation read Postgres repository", () => {
     const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversation.conversation.id}`;
     expect(changes?.count).toBe(2);
     expect(outbox?.count).toBe(10);
+  });
+
+  it("caps high bigint reads and keeps each member cursor independent on stale retries", async () => {
+    const conversation = await direct.create(users[8]!, {
+      recipientId: users[9]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "high sequence",
+    });
+    const highSequence = "9007199254740993";
+    await database.client`update public.messages set sequence = ${highSequence}::bigint where conversation_id = ${conversation.conversation.id}`;
+    await database.client`update public.conversations set last_message_sequence = ${highSequence}::bigint where id = ${conversation.conversation.id}`;
+
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, "9007199254740994")).resolves.toEqual({
+      lastReadSequence: highSequence,
+      receiptSequence: highSequence,
+      unreadCount: 0,
+    });
+    await expect(repository.markRead(users[8]!, conversation.conversation.id, "1")).resolves.toEqual({
+      lastReadSequence: "1",
+      receiptSequence: "1",
+      unreadCount: 0,
+    });
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, "1")).resolves.toEqual({
+      lastReadSequence: highSequence,
+      receiptSequence: highSequence,
+      unreadCount: 0,
+    });
   });
 
   it("keeps pending and blocked reads private while advancing only the local cursor", async () => {
