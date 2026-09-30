@@ -42,29 +42,74 @@ suite("Postgres outbox leasing", () => {
     } finally { await database.close(); }
   });
 
-  it("allows only one of two workers to claim a due job and returns the declared job shape", async () => {
-    const id = await insertJob();
-    const [first, second] = await Promise.all([
-      store.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "first" }),
-      store.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "second" }),
-    ]);
-    const claimed = [...first, ...second];
-    expect(claimed).toHaveLength(1);
-    const job = claimed[0]!;
-    expect(Object.keys(job).sort()).toEqual([
-      "attempts", "changeSequence", "channel", "conversationId", "deviceRegistrationId", "eventId", "id", "leaseExpiresAt", "leaseToken", "recipientId",
-    ]);
-    expect(job).toMatchObject({
-      id,
-      recipientId: ids.high,
-      conversationId: ids.conversation,
-      changeSequence: "1",
-      channel: "realtime",
-      deviceRegistrationId: null,
-      attempts: 1,
-      leaseExpiresAt: new Date(now.getTime() + 1_000),
+  it("skips a row locked by another connection and claims it after that transaction commits", async () => {
+    const lockedId = await insertJob(`delivery-lock-${crypto.randomUUID()}`, new Date(now.getTime() - 1));
+    const availableId = await insertJob(`delivery-available-${crypto.randomUUID()}`);
+    const lockingDatabase = createDayliDatabase(connectionString!);
+    const claimingDatabase = createDayliDatabase(connectionString!);
+    const claimingStore = createPostgresOutboxStore(claimingDatabase.db);
+    let allowCommit!: () => void;
+    const commitGate = new Promise<void>((resolve) => { allowCommit = resolve; });
+    let signalLocked!: () => void;
+    let rejectLock!: (error: unknown) => void;
+    const rowLocked = new Promise<void>((resolve, reject) => {
+      signalLocked = resolve;
+      rejectLock = reject;
     });
-    await expect(store.markDelivered(job, now)).resolves.toBe(true);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let lockTransaction: Promise<void> | undefined;
+    let claimPromise: Promise<Awaited<ReturnType<typeof claimingStore.claimDue>>> | undefined;
+
+    try {
+      lockTransaction = lockingDatabase.client.begin(async (transaction) => {
+        try {
+          const [row] = await transaction`select id from public.messaging_outbox where id = ${lockedId} for update`;
+          expect(row?.id).toBe(lockedId);
+          signalLocked();
+          await commitGate;
+        } catch (error) {
+          rejectLock(error);
+          throw error;
+        }
+      });
+      void lockTransaction.catch(() => undefined);
+      await rowLocked;
+
+      claimPromise = claimingStore.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "second" });
+      const claimedWhileLocked = await Promise.race([
+        claimPromise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("claimDue waited on a row that should have been skipped.")), 5_000);
+        }),
+      ]);
+      expect(claimedWhileLocked).toHaveLength(1);
+      const job = claimedWhileLocked[0]!;
+      expect(Object.keys(job).sort()).toEqual([
+        "attempts", "changeSequence", "channel", "conversationId", "deviceRegistrationId", "eventId", "id", "leaseExpiresAt", "leaseToken", "recipientId",
+      ]);
+      expect(job).toMatchObject({
+        id: availableId,
+        recipientId: ids.high,
+        conversationId: ids.conversation,
+        changeSequence: "1",
+        channel: "realtime",
+        deviceRegistrationId: null,
+        attempts: 1,
+        leaseExpiresAt: new Date(now.getTime() + 1_000),
+      });
+
+      allowCommit();
+      await lockTransaction;
+      const [claimedAfterCommit] = await claimingStore.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "after-commit" });
+      expect(claimedAfterCommit).toMatchObject({ id: lockedId, attempts: 1, leaseToken: "after-commit" });
+      await expect(claimingStore.markDelivered(claimedAfterCommit!, now)).resolves.toBe(true);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      allowCommit?.();
+      await lockTransaction?.catch(() => undefined);
+      await claimPromise?.catch(() => undefined);
+      await Promise.all([lockingDatabase.close(), claimingDatabase.close()]);
+    }
   });
 
   it("reclaims an expired lease, increments attempts, and fences its stale token", async () => {
