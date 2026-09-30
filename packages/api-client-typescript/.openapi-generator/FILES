@@ -27,6 +27,7 @@ src/models/CreateMediaReservationResponse.ts
 src/models/CreateRealtimeTicket201Response.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPost.ts
+src/models/DailyPostMedia.ts
 src/models/DailyPostPrompt.ts
 src/models/DailyPostTomorrowNote.ts
 src/models/DailyPromptResponse.ts

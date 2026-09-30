@@ -236,6 +236,8 @@ class ApiClient {
           return CurrentPostingDayResponse.fromJson(value);
         case 'DailyPost':
           return DailyPost.fromJson(value);
+        case 'DailyPostMedia':
+          return DailyPostMedia.fromJson(value);
         case 'DailyPostPrompt':
           return DailyPostPrompt.fromJson(value);
         case 'DailyPostTomorrowNote':

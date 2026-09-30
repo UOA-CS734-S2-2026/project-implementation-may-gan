@@ -13,8 +13,11 @@
 | `rating` | Integer 1–10. |
 | `audience` | `solo` or `friends`. |
 | `tomorrowNote` | Optional, trimmed, 1–1000 characters. It is stored outside the post and never returned; the response only reports `tomorrowNote.availableOn`. |
+| `attachments` | Optional list of up to 3 validated [media reservation](media-reservations.md) IDs, in display order, with no repeats. Omit it or send an empty list for a text-only post. |
 
-The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media is optional in both composers. Post attachment linking is not implemented, so posts carry text fields only, and both composers keep selected files on the device by default. A Flutter build with `DAYLI_MEDIA_UPLOADS=true` uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client) and won't post until every attachment passes; it exists for testing uploads until linking lands. The generated Dart request model writes omitted optional fields as `null`, which this strict schema rejects, so the Flutter submitter removes null keys before sending.
+The body is strict: unknown fields, including any author ID, fail with `422 VALIDATION_FAILED`. The response includes `media`, the attached photos or video in display order (`id`, `contentType`, `order`); it is empty for a text-only post. Download URLs are not part of this response.
+
+Media is optional in both composers. The API links validated uploads to the post, but neither client sends `attachments` yet, so both composers keep selected files on the device by default. A Flutter build with `DAYLI_MEDIA_UPLOADS=true` uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client) and won't post until every attachment passes. The generated Dart request model writes omitted optional fields as `null` and `attachments` as an empty list; the Flutter submitter removes both before sending, so a text-only post works against an API with or without attachment support.
 
 ## Acceptance
 
@@ -24,7 +27,8 @@ The service takes a transaction-scoped advisory lock for the author, then, in or
 2. Reads server time and rejects a draft for an earlier day (`POSTING_DAY_CLOSED`) or a later day (`POSTING_DAY_NOT_OPEN`). The deadline decision is the accepted write, not request arrival.
 3. Rejects a second post for the day under a new key (`ALREADY_POSTED`). The `(author_id, local_date)` unique constraint enforces this independently.
 4. Rejects a prompt that is not the day's active prompt (`PROMPT_CHANGED`).
-5. Inserts the post with `released_at` at the next Auckland midnight, the optional tomorrow note, and the idempotency record in one transaction.
+5. Locks the author's reservations named in `attachments` (`SELECT … FOR UPDATE`) and checks them. A reservation that is still uploading returns `409` `MEDIA_NOT_READY`. One that doesn't exist, belongs to someone else, failed validation, expired, or is already attached to a post returns `409` `MEDIA_UNAVAILABLE`; these share one message so a response never reveals another user's upload. Mixing photos and a video, more than one video, or more than 25 MB in total returns `422 VALIDATION_FAILED` with `details.reason` `MEDIA_NOT_ALLOWED`. The server decides photo or video from the content type recorded at reservation, not from the request.
+6. Inserts the post with `released_at` at the next Auckland midnight, the optional tomorrow note, one `post_media` row per attachment, and the idempotency record in one transaction.
 
 Only accepted submissions are recorded, so a rejected attempt can be retried with the same key. Clients should keep the draft for every `409` except a replay, and must not backdate a draft that missed midnight.
 
@@ -32,4 +36,6 @@ The Flutter composer follows this rule. Its draft, including the idempotency key
 
 ## Storage
 
-`post_idempotency_keys` (migration `0007_regular_kinsey_walden`) is keyed by `(author_id, idempotency_key)` and stores a SHA-256 fingerprint of the normalized request plus the accepted `post_id`. Its foreign keys cascade, so post and account cleanup remove idempotency records with their parent rows.
+`post_idempotency_keys` (migration `0007_regular_kinsey_walden`) is keyed by `(author_id, idempotency_key)` and stores a SHA-256 fingerprint of the normalized request plus the accepted `post_id`. A request without attachments keeps the original version 1 fingerprint; one with attachments uses version 2, which adds their IDs in order, so changing attachments under the same key is a different request. Its foreign keys cascade, so post and account cleanup remove idempotency records with their parent rows.
+
+`post_media.reservation_id` (migration `0014_link_post_media`) names the upload that holds each attachment's bytes. A partial unique index lets an upload attach once, even after it is detached, and `ON DELETE RESTRICT` stops reservation cleanup deleting an upload a post still uses. Deleting an account with linked media therefore has to handle its posts first.

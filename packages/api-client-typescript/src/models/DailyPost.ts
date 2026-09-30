@@ -20,6 +20,13 @@ import {
     DailyPostTomorrowNoteToJSON,
     DailyPostTomorrowNoteToJSONTyped,
 } from './DailyPostTomorrowNote';
+import type { DailyPostMedia } from './DailyPostMedia';
+import {
+    DailyPostMediaFromJSON,
+    DailyPostMediaFromJSONTyped,
+    DailyPostMediaToJSON,
+    DailyPostMediaToJSONTyped,
+} from './DailyPostMedia';
 import type { PostAudience } from './PostAudience';
 import {
     PostAudienceFromJSON,
@@ -85,6 +92,10 @@ export interface DailyPost {
      *
      */
     tomorrowNote: DailyPostTomorrowNote;
+    /**
+     * The attached photos or video in display order. Empty for a text-only post.
+     */
+    media: Array<DailyPostMedia>;
 }
 
 
@@ -104,6 +115,7 @@ export function instanceOfDailyPost(value: object): value is DailyPost {
     if (!('acceptedAt' in value) || value['acceptedAt'] === undefined) return false;
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('tomorrowNote' in value) || value['tomorrowNote'] === undefined) return false;
+    if (!('media' in value) || value['media'] === undefined) return false;
     return true;
 }
 
@@ -128,6 +140,7 @@ export function DailyPostFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'acceptedAt': (json['acceptedAt'] == null ? json['acceptedAt'] : parseDateTime(json['acceptedAt'])),
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'tomorrowNote': DailyPostTomorrowNoteFromJSON(json['tomorrowNote']),
+        'media': ((json['media'] as Array<any>).map(DailyPostMediaFromJSON)),
     };
 }
 
@@ -153,5 +166,6 @@ export function DailyPostToJSONTyped(value?: DailyPost | null, ignoreDiscriminat
         'acceptedAt': value['acceptedAt'] == null ? value['acceptedAt'] : serializeDateTime(value['acceptedAt']),
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'tomorrowNote': DailyPostTomorrowNoteToJSON(value['tomorrowNote']),
+        'media': ((value['media'] as Array<any>).map(DailyPostMediaToJSON)),
     };
 }

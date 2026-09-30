@@ -66,6 +66,12 @@ function toResponse(post: StoredDailyPost): DailyPostResponse {
     acceptedAt: post.acceptedAt.toISOString(),
     releasedAt: post.releasedAt.toISOString(),
     tomorrowNote: post.tomorrowNoteAvailableOn ? { availableOn: post.tomorrowNoteAvailableOn } : null,
+    media: post.media.map((media) => ({
+      id: media.id,
+      // The column is text, but a reservation only ever stores an allowed type.
+      contentType: media.contentType as DailyPostResponse["media"][number]["contentType"],
+      order: media.order,
+    })),
   };
 }
 
@@ -89,6 +95,12 @@ export function registerCreateDailyPostRoute(app: OpenAPIHono<AuthenticatedApiEn
     } catch (error) {
       if (error instanceof CreateDailyPostError) {
         if (error.reason === "PROMPT_UNAVAILABLE") return unavailable(context);
+        if (error.reason === "MEDIA_NOT_ALLOWED") {
+          return apiErrorResponse(context, 422, "VALIDATION_FAILED", error.message, {
+            field: "attachments",
+            reason: error.reason,
+          });
+        }
         return apiErrorResponse(context, 409, "CONFLICT", error.message, { reason: error.reason });
       }
       // Never forward SQL, constraint names, or private content to the client.
