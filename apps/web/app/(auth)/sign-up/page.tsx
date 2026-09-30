@@ -9,6 +9,7 @@ import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 const signUpSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores."),
@@ -55,6 +56,11 @@ export default function SignUpPage() {
       </p>
 
       <div className="flex flex-col gap-4">
+        <div className="space-y-1">
+          <p className="text-xs leading-5 text-foreground-secondary">Review Dayli&apos;s legal documents before creating an account or continuing with Google.</p>
+          <LegalLinks className="text-xs text-foreground-secondary" />
+          <LegalDraftNotice />
+        </div>
         <GoogleSignInButton />
 
         <div className="relative flex items-center">

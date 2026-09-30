@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme.dart';
+import '../legal/legal_links.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -60,7 +61,9 @@ class LandingScreen extends StatelessWidget {
                   height: 52,
                   onPressed: () => context.push('/sign-in'),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
+                const LegalLinks(center: true),
+                const SizedBox(height: 8),
                 Text(
                   'one post, every day.',
                   style: DayliText.serif(

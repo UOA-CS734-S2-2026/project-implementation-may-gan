@@ -7,6 +7,7 @@ import '../compose/composer_screen.dart';
 import '../friends/friends_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
+import '../legal/legal_document_screen.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/messages_screen.dart';
 import '../placeholders/placeholder_screens.dart' show MyDaysScreen;
@@ -16,14 +17,19 @@ import '../shell/app_shell.dart';
 import 'splash_screen.dart';
 
 const _publicLocations = {'/welcome', '/sign-in', '/sign-up'};
+const _legalLocations = {'/privacy', '/terms'};
 
 /// A public welcome and auth pages; signed-in tabs inside the shell; and the
 /// composer and settings as full-screen pages above it.
-GoRouter buildRouter(SessionController session) => GoRouter(
-  initialLocation: '/',
+GoRouter buildRouter(
+  SessionController session, {
+  String initialLocation = '/',
+}) => GoRouter(
+  initialLocation: initialLocation,
   refreshListenable: session,
   redirect: (context, state) {
     final location = state.matchedLocation;
+    if (_legalLocations.contains(location)) return null;
     final public = _publicLocations.contains(location);
     switch (session.status) {
       case SessionStatus.unknown:
@@ -40,6 +46,14 @@ GoRouter buildRouter(SessionController session) => GoRouter(
   },
   routes: [
     GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
+    GoRoute(
+      path: '/privacy',
+      builder: (_, _) => const LegalDocumentScreen(documentId: 'privacy'),
+    ),
+    GoRoute(
+      path: '/terms',
+      builder: (_, _) => const LegalDocumentScreen(documentId: 'terms'),
+    ),
     GoRoute(path: '/welcome', builder: (_, _) => const LandingScreen()),
     GoRoute(
       path: '/sign-in',

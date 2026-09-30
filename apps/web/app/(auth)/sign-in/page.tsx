@@ -11,6 +11,7 @@ import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -72,6 +73,11 @@ export default function SignInPage() {
       </p>
 
       <div className="flex flex-col gap-4">
+        <div className="space-y-1">
+          <p className="text-xs leading-5 text-foreground-secondary">Review Dayli&apos;s legal documents before continuing.</p>
+          <LegalLinks className="text-xs text-foreground-secondary" />
+          <LegalDraftNotice />
+        </div>
         <GoogleSignInButton />
         <Suspense fallback={null}><GoogleSignInError /></Suspense>
 
