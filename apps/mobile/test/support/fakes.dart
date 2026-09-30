@@ -5,6 +5,7 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
+import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
@@ -163,6 +164,52 @@ class FakeMediaCompressor implements MediaCompressor {
   @override
   Future<void> discard(String compressedPath) async =>
       discarded.add(compressedPath);
+}
+
+/// Records calls and succeeds by default. Queue results per step to script
+/// failures; each queue is consumed in order.
+class FakeMediaUploadClient implements MediaUploadClient {
+  final reserveResults = <ApiResult<MediaUploadTicket>>[];
+  final uploadResults = <ApiResult<void>>[];
+  final completeResults = <ApiResult<MediaCheck>>[];
+
+  final reserved = <({String contentType, int byteSize})>[];
+  final uploaded = <({String reservationId, String path})>[];
+  final completed = <String>[];
+
+  @override
+  Future<ApiResult<MediaUploadTicket>> reserve({
+    required String contentType,
+    required int byteSize,
+  }) async {
+    reserved.add((contentType: contentType, byteSize: byteSize));
+    if (reserveResults.isNotEmpty) return reserveResults.removeAt(0);
+    return ApiSuccess(
+      MediaUploadTicket(
+        reservationId: 'reservation-${reserved.length}',
+        url: Uri.parse('https://storage.example.test/${reserved.length}'),
+        requiredHeaders: {
+          'content-type': contentType,
+          'content-length': '$byteSize',
+          'if-none-match': '*',
+        },
+      ),
+    );
+  }
+
+  @override
+  Future<ApiResult<void>> upload(MediaUploadTicket ticket, String path) async {
+    uploaded.add((reservationId: ticket.reservationId, path: path));
+    if (uploadResults.isNotEmpty) return uploadResults.removeAt(0);
+    return const ApiSuccess(null);
+  }
+
+  @override
+  Future<ApiResult<MediaCheck>> complete(String reservationId) async {
+    completed.add(reservationId);
+    if (completeResults.isNotEmpty) return completeResults.removeAt(0);
+    return const ApiSuccess(MediaCheck(MediaCheckStatus.validated));
+  }
 }
 
 class FakeFeedClient implements FeedClient {
