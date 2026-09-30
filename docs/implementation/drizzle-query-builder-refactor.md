@@ -1,6 +1,12 @@
 # Drizzle query-builder refactor
 
-Status: implementation plan. Base: `main` at `3a547ce` after `git pull --ff-only`. Work branch: `refactor/drizzle-query-builders`. This is a database access refactor, not a product or schema redesign. Implement in small reviewed stages on this branch. Do not merge automatically.
+Status: implemented, pending squash-merge review. Started from `main` at `3a547ce` and merged the newer `main` at `9f0998f`. PR branch: `refactor/drizzle-query-builders`. This is a database access refactor, not a product or schema redesign. Do not merge automatically.
+
+## Result
+
+The initial base had 102 production `.execute(` calls across 39 files in `apps/api/src`. The updated `main` added two more calls in new direct-conversation and profile reads. All 104 calls now use Drizzle builders. The shared runtime relationship-pair lock in `packages/db/src/relationship-pair-lock.ts` also uses a builder. The 11 `.execute(` calls left in `packages/db/src/index.ts` belong to database connection, migration, and diagnostic probes, not API repositories. Test fixtures can still use raw SQL.
+
+`pnpm lint` runs an AST check that rejects API runtime `execute` calls and typed execute capabilities while allowing tests and database diagnostics. Final verification on the merged branch passed `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm --filter @dayli/api test:realtime`, `pnpm generate:clients:check`, and the disposable PostgreSQL verifier (40 API integration files, 145 tests). OpenAPI, generated clients, and schema definitions have no diff against the updated `main`.
 
 ## Goal and scope
 
