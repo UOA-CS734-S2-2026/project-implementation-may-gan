@@ -1244,6 +1244,169 @@
         }
       }
     },
+    "/api/v1/account/reauthenticate/google/begin": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.begin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request_deletion",
+                      "cancel_deletion"
+                    ]
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A server-built Google authorization URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authorizationUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "authorizationUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/google/callback": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.callback",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "code",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Fixed client completion redirect."
+          },
+          "403": {
+            "description": "Invalid continuation."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/google/complete": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.complete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request_deletion",
+                      "cancel_deletion"
+                    ]
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "state"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opaque short-lived management grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "grant": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "grant",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
     "/api/v1/media-reservations": {
       "post": {
         "tags": [

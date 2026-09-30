@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccountApi';
 export * from './MediaApi';
 export * from './MessagingApi';
 export * from './PostingDaysApi';

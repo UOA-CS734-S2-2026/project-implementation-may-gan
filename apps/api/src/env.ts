@@ -10,6 +10,12 @@ export interface ApiEnv {
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_IOS_CLIENT_ID?: string;
   GOOGLE_ANDROID_CLIENT_ID?: string;
+  /** Dedicated account-management proof keys. They are never used for Better Auth sign-in. */
+  GOOGLE_PROOF_VERIFIER_ENCRYPTION_KEY?: string;
+  GOOGLE_PROOF_VERIFIER_KEY_VERSION?: string;
+  GOOGLE_PROOF_SUBJECT_HMAC_KEY?: string;
+  GOOGLE_PROOF_SUBJECT_KEY_VERSION?: string;
+  GOOGLE_PROOF_COMPLETION_URL?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   R2_ACCOUNT_ID?: string;

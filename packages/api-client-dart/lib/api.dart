@@ -28,6 +28,7 @@ part 'auth/oauth.dart';
 part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
+part 'api/account_api.dart';
 part 'api/media_api.dart';
 part 'api/messaging_api.dart';
 part 'api/posting_days_api.dart';
@@ -36,6 +37,10 @@ part 'api/profile_api.dart';
 part 'api/relationships_api.dart';
 part 'api/system_api.dart';
 
+part 'model/account_google_proof_begin200_response.dart';
+part 'model/account_google_proof_begin_request.dart';
+part 'model/account_google_proof_complete200_response.dart';
+part 'model/account_google_proof_complete_request.dart';
 part 'model/api_error.dart';
 part 'model/api_error_code.dart';
 part 'model/api_error_error.dart';

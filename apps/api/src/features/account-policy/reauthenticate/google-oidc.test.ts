@@ -1,6 +1,6 @@
 import { createLocalJWKSet, createRemoteJWKSet, customFetch, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { createGoogleProofVerifier, verifyGoogleProofIdToken } from "./google-oidc";
+import { createGoogleProofDigestVerifier, createGoogleProofVerifier, verifyGoogleProofIdToken } from "./google-oidc";
 
 const now = new Date("2026-09-30T00:00:00.000Z");
 const seconds = now.getTime() / 1000;
@@ -35,6 +35,13 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe("Google OIDC proof verifier", () => {
   it("verifies an actual RSA-signed token against a local JWK set", async () => {
     await expect(verifier(await sign(), nonce)).resolves.toEqual({ subject: "google-subject", authenticatedAt: now });
+  });
+
+  it("compares a signed nonce to the persisted nonce digest only after JWT verification", async () => {
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(nonce)))].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const digestVerifier = createGoogleProofDigestVerifier(configuration, { jwks: createLocalJWKSet(jwks) });
+    await expect(digestVerifier(await sign(), digest)).resolves.toEqual({ subject: "google-subject", authenticatedAt: now });
+    await expect(digestVerifier(await sign({ ...claims(), nonce: "x".repeat(32) }), digest)).resolves.toBeNull();
   });
 
   it.each(["exp", "iat", "sub", "nonce", "auth_time"])("rejects a signed token without %s", async (claim) => {

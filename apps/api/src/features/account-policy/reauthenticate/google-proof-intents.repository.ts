@@ -124,6 +124,7 @@ export function createGoogleProofIntentStore(database: DayliDatabase, configurat
       sessionId: string;
       action: AccountManagementGrantAction;
       lifecycleGeneration: number;
+      nonceDigest: string;
     } | null> {
       if (!isDigest(stateDigest)) return null;
       const token = claimToken();
@@ -149,6 +150,7 @@ export function createGoogleProofIntentStore(database: DayliDatabase, configurat
         sessionId: row.sessionId,
         action: row.action,
         lifecycleGeneration: row.lifecycleGeneration,
+        nonceDigest: row.nonceDigest,
       } : null;
     },
 

@@ -5,6 +5,7 @@ README.md
 analysis_options.yaml
 git_push.sh
 lib/api.dart
+lib/api/account_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
 lib/api/posting_days_api.dart
@@ -20,6 +21,10 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/account_google_proof_begin200_response.dart
+lib/model/account_google_proof_begin_request.dart
+lib/model/account_google_proof_complete200_response.dart
+lib/model/account_google_proof_complete_request.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart

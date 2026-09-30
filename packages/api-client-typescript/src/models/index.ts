@@ -1,5 +1,9 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccountGoogleProofBegin200Response';
+export * from './AccountGoogleProofBeginRequest';
+export * from './AccountGoogleProofComplete200Response';
+export * from './AccountGoogleProofCompleteRequest';
 export * from './ApiError';
 export * from './ApiErrorCode';
 export * from './ApiErrorError';

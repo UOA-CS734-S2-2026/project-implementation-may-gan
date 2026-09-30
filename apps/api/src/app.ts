@@ -142,6 +142,10 @@ import { createHyperdriveAccountPolicyResolver } from "./features/account-policy
 import { allowsAccountCapability, allowsManagementGrantAction } from "./features/account-policy/shared/account-policy";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerAccountReauthenticationRoutes, type AccountReauthenticationDependencies } from "./features/account-policy/reauthenticate/account-reauthentication.route";
+import { registerGoogleProofRoutes, type GoogleProofRouteDependencies } from "./features/account-policy/reauthenticate/google-proof.route";
+import { createGoogleProofOAuthAdapter } from "./features/account-policy/reauthenticate/google-proof-oauth";
+import { createGoogleProofDigestVerifier } from "./features/account-policy/reauthenticate/google-oidc";
+import { createGoogleProofIntentStore } from "./features/account-policy/reauthenticate/google-proof-intents.repository";
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
 import type { ResolveSession } from "./http/middleware/require-session";
 
@@ -163,6 +167,7 @@ export interface AppDependencies {
   usernameProfile?: UsernameProfileRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   accountReauthentication?: AccountReauthenticationDependencies;
+  googleProof?: GoogleProofRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -182,6 +187,7 @@ export function createApp({
   usernameProfile = unavailableUsernameProfile,
   accountPolicy,
   accountReauthentication,
+  googleProof,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -221,6 +227,7 @@ export function createApp({
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerAccountReauthenticationRoutes(api, accountReauthentication);
+  registerGoogleProofRoutes(api, googleProof);
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
   registerPostsRoutes(api, {
@@ -282,6 +289,7 @@ export function createAppForEnv(env: ApiEnv) {
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
   const accountReauthentication = configuration ? createAccountReauthenticationDependencies(configuration) : undefined;
+  const googleProof = configuration ? createGoogleProofDependencies(configuration, env) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -312,6 +320,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameProfile,
     accountPolicy,
     accountReauthentication,
+    googleProof,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
@@ -547,6 +556,65 @@ function createPushDeviceDependencies(
     unregister: {
       unregister: (actorId, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUnregisterDeviceRepository(database).unregister(actorId, installationId)),
     },
+  };
+}
+
+function createGoogleProofDependencies(configuration: RuntimeConfiguration, env: ApiEnv): GoogleProofRouteDependencies | undefined {
+  const clientId = configuration.google?.clientIds[0];
+  const clientSecret = configuration.google?.clientSecret;
+  const encryption = env.GOOGLE_PROOF_VERIFIER_ENCRYPTION_KEY;
+  const encryptionVersion = env.GOOGLE_PROOF_VERIFIER_KEY_VERSION;
+  const subjectHmac = env.GOOGLE_PROOF_SUBJECT_HMAC_KEY;
+  const subjectVersion = env.GOOGLE_PROOF_SUBJECT_KEY_VERSION;
+  const completionUrl = env.GOOGLE_PROOF_COMPLETION_URL;
+  if (!clientId || !clientSecret || !encryption || !encryptionVersion || !subjectHmac || !subjectVersion || !completionUrl) return undefined;
+  let completion: URL;
+  try {
+    completion = new URL(completionUrl);
+    if (completion.protocol !== "https:" || completion.username || completion.password || completion.hash || completion.search || !configuration.trustedOrigins.includes(completion.origin)) return undefined;
+    createGoogleProofOAuthAdapter({
+      clientId,
+      clientSecret,
+      callbackUrl: new URL("/api/v1/account/reauthenticate/google/callback", configuration.baseURL).toString(),
+      completionUrl: completion.toString(),
+      encryption: { material: encryption, version: encryptionVersion },
+      subjectHmac: { material: subjectHmac, version: subjectVersion },
+    });
+  } catch { return undefined; }
+  const oauth = {
+    clientId,
+    clientSecret,
+    callbackUrl: new URL("/api/v1/account/reauthenticate/google/callback", configuration.baseURL).toString(),
+    completionUrl: completion.toString(),
+    encryption: { material: encryption, version: encryptionVersion },
+    subjectHmac: { material: subjectHmac, version: subjectVersion },
+  };
+  const verifyIdToken = createGoogleProofDigestVerifier({ clientId });
+  const resolveSession = async (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+    const auth = createPostgresBetterAuth({ baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins, database, google: configuration.google, resend: configuration.resend });
+    const current = await auth.api.getSession({ headers: request.headers }) as { user?: { id?: string }; session?: { id?: string; expiresAt?: Date | string } } | null;
+    const userId = current?.user?.id;
+    const sessionId = current?.session?.id;
+    const expiresAt = current?.session?.expiresAt ? new Date(current.session.expiresAt) : undefined;
+    return userId && sessionId && expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt > new Date() ? { userId, sessionId } : null;
+  });
+  return {
+    trustedOrigins: configuration.trustedOrigins,
+    oauth,
+    authorizeAction: async (userId, action) => allowsManagementGrantAction((await createHyperdriveAccountPolicyResolver(configuration.hyperdrive).resolve(userId)).restriction, action),
+    resolveSession,
+    lifecycleGeneration: async (userId) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const [row] = await database.select({ generation: schema.accountLifecycles.generation }).from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId)).limit(1);
+      return row?.generation ?? 0;
+    }),
+    intents: {
+      create: (input) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).create(input)),
+      claim: (stateDigest) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).claim(stateDigest)),
+      recordVerifiedProof: (stateDigest, session, claim, subject) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).recordVerifiedProof(stateDigest, session, claim, subject)),
+      complete: (stateDigest, session, action) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).complete(stateDigest, session, action)),
+      fail: (stateDigest, claim) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).fail(stateDigest, claim)),
+    },
+    verifyIdToken,
   };
 }
 

@@ -204,6 +204,14 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountGoogleProofBegin200Response':
+          return AccountGoogleProofBegin200Response.fromJson(value);
+        case 'AccountGoogleProofBeginRequest':
+          return AccountGoogleProofBeginRequest.fromJson(value);
+        case 'AccountGoogleProofComplete200Response':
+          return AccountGoogleProofComplete200Response.fromJson(value);
+        case 'AccountGoogleProofCompleteRequest':
+          return AccountGoogleProofCompleteRequest.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':
