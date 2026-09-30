@@ -28,4 +28,6 @@ export interface ApiEnv {
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */
   PUSH_TOKEN_ENCRYPTION_KEY?: string;
+  /** Explicit opt-in only. Missing or any other value keeps new deletion requests disabled. */
+  ACCOUNT_DELETION_REQUESTS_ENABLED?: "enabled";
 }

@@ -1,5 +1,5 @@
 import { aucklandDateSchema } from "@dayli/contracts";
-import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, notExists, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
@@ -92,6 +92,10 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           ne(posts.authorId, viewerId),
           eq(posts.audience, "friends"),
           isNotNull(user.username),
+          notExists(database.select({ one: sql`1` }).from(schema.accountLifecycles).where(and(
+            eq(schema.accountLifecycles.userId, posts.authorId),
+            eq(schema.accountLifecycles.state, "pending_deletion"),
+          ))),
           cursor
             ? sql`(${posts.localDate}, ${posts.id}) < (${cursor.localDate}::date, ${cursor.id})`
             : undefined,

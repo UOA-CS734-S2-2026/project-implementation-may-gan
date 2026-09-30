@@ -29,6 +29,9 @@ const managementApiRoutes = new Map<string, AccountCapability>([
   ["POST /api/v1/account/reauthenticate/google/begin", "policy_read"],
   ["POST /api/v1/account/reauthenticate/google/complete", "policy_read"],
   ["POST /api/v1/account/legal/acceptance", "policy_read"],
+  ["GET /api/v1/account/deletion", "lifecycle_status"],
+  ["POST /api/v1/account/deletion/request", "request_deletion"],
+  ["POST /api/v1/account/deletion/cancel", "cancel_deletion_verification"],
 ]);
 
 /**

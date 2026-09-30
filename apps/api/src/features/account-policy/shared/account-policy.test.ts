@@ -66,6 +66,9 @@ describe("account policy", () => {
     expect(classify("GET", "/api/v1/legal/terms/notice")).toBeUndefined();
     expect(classify("POST", "/api/v1/legal/registration-intents")).toBeUndefined();
     expect(classify("POST", "/api/v1/account/legal/acceptance")).toBe("policy_read");
+    expect(classify("GET", "/api/v1/account/deletion")).toBe("lifecycle_status");
+    expect(classify("POST", "/api/v1/account/deletion/request")).toBe("request_deletion");
+    expect(classify("POST", "/api/v1/account/deletion/cancel")).toBe("cancel_deletion_verification");
     expect(classify("GET", "/api/v1/legal/terms/current/extra")).toBe("ordinary");
     expect(classify("POST", "/api/v1/account/reauthenticate/google/callback")).toBe("ordinary");
     expect(classify("GET", "/api/v1/account/reauthenticate/password")).toBe("ordinary");
@@ -101,6 +104,23 @@ describe("account policy", () => {
       restriction: "pending_deletion",
       allowed: ["cancel_deletion_verification", "export", "lifecycle_status", "policy_read", "signout"],
     });
+  });
+
+  it("keeps new deletion requests disabled unless explicitly enabled, while allowing cancellation", async () => {
+    const pending = { state: "pending_deletion" as const, generation: 2, requestId: "4d2f0828-ecbe-4ceb-9dfc-91a5a20f9947", requestedAt: new Date("2026-10-01T00:00:00.000Z"), cancelUntil: new Date("2026-10-08T00:00:00.000Z"), purgeDueAt: new Date("2026-10-15T00:00:00.000Z") };
+    const api = createApp({
+      accountPolicy: { resolveSession: async () => ({ userId: "pending-user" }), policies: { resolve: async () => resolveAccountPolicy({ lifecycleState: "pending_deletion" }) } },
+      accountLifecycle: {
+        requestsEnabled: false,
+        resolveSession: async () => ({ userId: "pending-user", sessionId: "session-a" }),
+        repository: { status: async () => pending, request: async () => ({ view: pending, revokedSessionIds: [] }), cancel: async () => ({ view: { state: "active", generation: 3 }, revokedSessionIds: ["session-a"] }) },
+      },
+    });
+    const disabled = await api.request("https://api.example.test/api/v1/account/deletion/request", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant: "a".repeat(32) }) });
+    expect(disabled.status).toBe(403);
+    const cancelled = await api.request("https://api.example.test/api/v1/account/deletion/cancel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ grant: "a".repeat(32) }) });
+    expect(cancelled.status).toBe(200);
+    await expect(cancelled.json()).resolves.toEqual({ state: "active", generation: 3, reauthenticationRequired: true });
   });
 
   it("issues a password-verified grant only for the current account and trusted origin", async () => {

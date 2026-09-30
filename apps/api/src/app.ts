@@ -149,6 +149,8 @@ import { createGoogleProofIntentStore } from "./features/account-policy/reauthen
 import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
 import type { ResolveSession } from "./http/middleware/require-session";
 import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
+import { registerAccountLifecycleRoutes, type AccountLifecycleRouteDependencies } from "./features/account-lifecycle/account-lifecycle.routes";
+import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/account-lifecycle.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -170,6 +172,7 @@ export interface AppDependencies {
   accountReauthentication?: AccountReauthenticationDependencies;
   googleProof?: GoogleProofRouteDependencies;
   legal?: LegalRouteDependencies;
+  accountLifecycle?: AccountLifecycleRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
 }
@@ -191,6 +194,7 @@ export function createApp({
   accountReauthentication,
   googleProof,
   legal,
+  accountLifecycle,
   trustedOrigins = [],
 }: AppDependencies = {}) {
   const api = new OpenAPIHono<AuthenticatedApiEnv>({
@@ -231,6 +235,7 @@ export function createApp({
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerAccountReauthenticationRoutes(api, accountReauthentication);
   registerGoogleProofRoutes(api, googleProof);
+  registerAccountLifecycleRoutes(api, accountLifecycle);
   registerLegalRoutes(api, legal ?? { trustedOrigins });
   registerMediaReservationRoutes(api, media);
   registerCurrentPostingDayRoute(api, postingDay ?? { resolveSession: async () => null });
@@ -298,6 +303,7 @@ export function createAppForEnv(env: ApiEnv) {
     trustedOrigins: configuration.trustedOrigins,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies LegalRouteDependencies : undefined;
+  const accountLifecycle = configuration ? createAccountLifecycleDependencies(configuration, env) : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -330,6 +336,7 @@ export function createAppForEnv(env: ApiEnv) {
     accountReauthentication,
     googleProof,
     legal,
+    accountLifecycle,
     trustedOrigins: configuration?.trustedOrigins,
   });
   if (!configuration) return api;
@@ -624,6 +631,18 @@ function createGoogleProofDependencies(configuration: RuntimeConfiguration, env:
       fail: (stateDigest, claim) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).fail(stateDigest, claim)),
     },
     verifyIdToken,
+  };
+}
+
+function createAccountLifecycleDependencies(configuration: RuntimeConfiguration, env: ApiEnv): AccountLifecycleRouteDependencies {
+  return {
+    requestsEnabled: env.ACCOUNT_DELETION_REQUESTS_ENABLED === "enabled",
+    resolveSession: createVerifiedRealtimeSessionResolver(configuration),
+    repository: createHyperdriveAccountLifecycleRepository(configuration.hyperdrive),
+    revokeRealtimeSessions: env.USER_REALTIME ? async (userId, sessionIds) => {
+      const publisher = createDurableObjectRealtimePublisher(env.USER_REALTIME!, configuration.hyperdrive);
+      await Promise.all(sessionIds.map((sessionId) => publisher.revokeSession(userId, sessionId)));
+    } : undefined,
   };
 }
 
