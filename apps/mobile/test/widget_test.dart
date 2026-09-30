@@ -1103,6 +1103,48 @@ void main() {
     expect(harness.mediaCompressor.discardedOwners, ['user-1']);
   });
 
+  testWidgets('keeps media on the device when uploads are off', (tester) async {
+    final harness = TestHarness(uploadMedia: false);
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await tester.pumpAndSettle();
+
+    // Nothing is compressed or sent to storage that a post couldn't link.
+    expect(harness.mediaCompressor.compressed, isEmpty);
+    expect(harness.mediaUploads.reserved, isEmpty);
+    expect(find.bySemanticsLabel('Photo, saved on this device'), findsOne);
+    expect(find.textContaining("aren't posted yet"), findsOneWidget);
+    // Let the composer's delayed draft save run.
+    await tester.pump(const Duration(milliseconds: 500));
+    final attachment = harness.drafts.drafts['user-1']!.attachments.single;
+    expect(attachment.status, AttachmentUploadStatus.pending);
+
+    // Posting isn't held for uploads that will never happen.
+    await tester.ensureVisible(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('finish uploading'), findsNothing);
+  });
+
   testWidgets('locks the composer while a post is sending', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(

@@ -14,7 +14,7 @@
 | `audience` | `solo` or `friends`. |
 | `tomorrowNote` | Optional, trimmed, 1–1000 characters. It is stored outside the post and never returned; the response only reports `tomorrowNote.availableOn`. |
 
-The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media is optional in both composers. The Flutter composer uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client-issue-22) and won't post until every attachment passes, but post attachment linking is not implemented, so posts carry text fields only. The web composer keeps selected files in the browser. The generated Dart request model writes omitted optional fields as `null`, which this strict schema rejects, so the Flutter submitter removes null keys before sending.
+The body is strict: unknown fields, including media attachment IDs and any author ID, fail with `422 VALIDATION_FAILED`. Media is optional in both composers. Post attachment linking is not implemented, so posts carry text fields only, and both composers keep selected files on the device by default. A Flutter build with `DAYLI_MEDIA_UPLOADS=true` uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client) and won't post until every attachment passes; it exists for testing uploads until linking lands. The generated Dart request model writes omitted optional fields as `null`, which this strict schema rejects, so the Flutter submitter removes null keys before sending.
 
 ## Acceptance
 
