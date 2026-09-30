@@ -79,20 +79,24 @@ function createBetterAuth(options: BetterAuthOptions) {
             if (displayUsername !== undefined && displayUsername.length > 80) {
               throw new APIError("BAD_REQUEST", { message: "Public name is too long." });
             }
-            const request = (hookContext as { request?: Request } | null)?.request;
-            const intent = request?.headers.get("x-dayli-registration-intent");
-            const binding = request?.headers.get("x-dayli-registration-binding");
-            const browserState = request?.headers.get("x-dayli-registration-browser-state");
+            const context = hookContext as {
+              getHeader?: (name: string) => string | null;
+              request?: Request;
+              body?: { additionalData?: Record<string, unknown> };
+            } | null;
+            const header = (name: string) => context?.getHeader?.(name) ?? context?.request?.headers.get(name) ?? null;
+            const additionalData = context?.body?.additionalData;
+            const intent = header("x-dayli-registration-intent") ?? (typeof additionalData?.dayliRegistrationIntent === "string" ? additionalData.dayliRegistrationIntent : null);
+            const binding = header("x-dayli-registration-binding") ?? (typeof additionalData?.dayliRegistrationBinding === "string" ? additionalData.dayliRegistrationBinding : null);
+            const browserState = header("x-dayli-registration-browser-state");
             // The hook runs immediately before the adapter's real user INSERT.
             // It overwrites all user-controlled values with material from the
             // request wrapper. The database trigger validates and consumes it.
-            const legal_registration_admission = path === "/sign-up/email" && intent && binding
-              ? `email|${intent}|${binding}`
-              : path === "/sign-in/social" && intent && binding
-                ? `google_native|${intent}|${binding}`
-                : path === "/callback/google" && browserState
-                  ? `google_browser||${browserState}`
-                  : undefined;
+            const legal_registration_admission = browserState
+              ? `google_browser||${browserState}`
+              : intent && binding
+                ? `${path === "/sign-up/email" ? "email" : "google_native"}|${intent}|${binding}`
+                : undefined;
             return { data: { ...user, username, displayUsername: displayUsername || null, legal_registration_admission } };
           },
         },

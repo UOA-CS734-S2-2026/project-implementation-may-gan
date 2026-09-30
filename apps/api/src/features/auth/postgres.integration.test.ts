@@ -1,5 +1,6 @@
 import { createDayliDatabase } from "@dayli/db";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { createApp, createAppForEnv } from "../../app";
 import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./route";
 
@@ -31,6 +32,36 @@ function productionAuthEnvironment() {
 
 function createProductionApp() {
   return createAppForEnv(productionAuthEnvironment());
+}
+
+function createProductionGoogleApp() {
+  return createAppForEnv({
+    ...productionAuthEnvironment(),
+    GOOGLE_WEB_CLIENT_ID: "web-client-id",
+    GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+    GOOGLE_ANDROID_CLIENT_ID: "android-client-id",
+    GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+  });
+}
+
+async function signedGoogleToken(audience: string, subject: string, email: string) {
+  const { privateKey, publicKey } = await generateKeyPair("RS256");
+  const publicJwk = await exportJWK(publicKey);
+  publicJwk.kid = "postgres-registration-google-key";
+  const token = await new SignJWT({
+    email,
+    email_verified: true,
+    name: "PostgreSQL Google User",
+    picture: "https://images.example.test/google-avatar.png",
+  })
+    .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+    .setIssuedAt()
+    .setIssuer("https://accounts.google.com")
+    .setAudience(audience)
+    .setSubject(subject)
+    .setExpirationTime("5m")
+    .sign(privateKey);
+  return { publicJwk, token };
 }
 
 function createProductionAuthApp(revocations: SessionRevocationHook) {
@@ -80,7 +111,12 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   ));
 
   beforeEach(async () => {
+    vi.unstubAllGlobals();
     await migrator.client.unsafe('truncate table public."rateLimit", public.account, public.session, public.verification, public."user", public.registration_intents, public.legal_document_versions cascade');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   afterAll(async () => {
@@ -266,8 +302,117 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     const body = await accepted!.json() as { user: { id: string } };
     const [termsAcceptance] = await migrator.client`select accepted_at from public.terms_acceptances where user_id = ${body.user.id} and terms_version_id = ${documentId}`;
     const [ageDeclaration] = await migrator.client`select declaration_version from public.age_declarations where user_id = ${body.user.id}`;
+    const [account] = await migrator.client`select provider_id from public.account where user_id = ${body.user.id}`;
+    const [session] = await migrator.client`select id from public.session where user_id = ${body.user.id}`;
     expect(termsAcceptance?.accepted_at).toBeTruthy();
     expect(ageDeclaration).toEqual({ declaration_version: "age-16-v1" });
+    expect(account).toEqual({ provider_id: "credential" });
+    expect(session?.id).toBeTruthy();
+  });
+
+  it("admits a real Better Auth native Google user only through a current single-use intent", async () => {
+    const canonicalContent = "# Native Google Terms\n\nCanonical test content.";
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalContent)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const documentId = `google-terms-${crypto.randomUUID()}`;
+    const databaseSchema = (await import("@dayli/db")).schema;
+    await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
+      id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+    });
+    await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    const app = createProductionGoogleApp();
+    const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ flow: "google_native", acceptTerms: true, declareAge16OrOlder: true }),
+    }));
+    expect(issued.status).toBe(201);
+    const proof = await issued.json() as { intent: string; flowBinding: string };
+    const { publicJwk, token } = await signedGoogleToken("ios-client-id", `native-${crypto.randomUUID()}`, "native-registration@example.test");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200 })));
+
+    const missing = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "google", idToken: { token } }),
+    }));
+    expect(missing.status).toBe(401);
+    const [missingCount] = await migrator.client`select count(*)::int as count from public."user" where email = 'native-registration@example.test'`;
+    expect(missingCount?.count).toBe(0);
+    const forged = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": "0".repeat(64) },
+      body: JSON.stringify({ provider: "google", idToken: { token } }),
+    }));
+    expect(forged.status).toBe(401);
+    const [forgedCount] = await migrator.client`select count(*)::int as count from public."user" where email = 'native-registration@example.test'`;
+    expect(forgedCount?.count).toBe(0);
+
+    const admitted = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      body: JSON.stringify({ provider: "google", idToken: { token } }),
+    }));
+    expect(admitted.status).toBe(200);
+    const body = await admitted.json() as { user: { id: string } };
+    expect(body.user as Record<string, unknown>).not.toHaveProperty("legal_registration_admission");
+    expect(admitted.headers.get("set-auth-token")).toBeTruthy();
+    const [row] = await migrator.client`select u.legal_registration_admission, a.provider_id, s.id as session_id, ta.terms_version_id, ad.declaration_version from public."user" u join public.account a on a.user_id = u.id join public.session s on s.user_id = u.id join public.terms_acceptances ta on ta.user_id = u.id join public.age_declarations ad on ad.user_id = u.id where u.id = ${body.user.id}`;
+    expect(row?.legal_registration_admission).toBeNull();
+    expect(row).toMatchObject({ provider_id: "google", terms_version_id: documentId, declaration_version: "age-16-v1" });
+    expect(row?.session_id).toBeTruthy();
+
+    const replay = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.20", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      body: JSON.stringify({ provider: "google", idToken: { token } }),
+    }));
+    expect(replay.status).toBe(200);
+    const [count] = await migrator.client`select count(*)::int as count from public."user" where email = 'native-registration@example.test'`;
+    expect(count?.count).toBe(1);
+  });
+
+  it("admits a real Better Auth browser Google callback only through its bound state", async () => {
+    const canonicalContent = "# Browser Google Terms\n\nCanonical test content.";
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalContent)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const documentId = `browser-google-terms-${crypto.randomUUID()}`;
+    const databaseSchema = (await import("@dayli/db")).schema;
+    await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
+      id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+    });
+    await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    const app = createProductionGoogleApp();
+    const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ flow: "google_browser", acceptTerms: true, declareAge16OrOlder: true }),
+    }));
+    expect(issued.status).toBe(201);
+    const proof = await issued.json() as { intent: string; flowBinding: string };
+    const { publicJwk, token } = await signedGoogleToken("web-client-id", `browser-${crypto.randomUUID()}`, "browser-registration@example.test");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      access_token: "test-browser-access-token", token_type: "Bearer", expires_in: 300, id_token: token, keys: [publicJwk],
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+
+    const started = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome`, disableRedirect: true }),
+    }));
+    expect(started.status).toBe(200);
+    const authorization = await started.json() as { url: string };
+    const state = new URL(authorization.url).searchParams.get("state");
+    expect(state).toBeTruthy();
+    const cookie = started.headers.get("set-cookie");
+    expect(cookie).toBeTruthy();
+
+    const callback = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(state!)}&code=test-browser-code`, {
+      headers: { origin, cookie: cookie! },
+    }));
+    expect(callback.status).toBe(302);
+    const [row] = await migrator.client`select a.provider_id, s.id as session_id, ta.terms_version_id, ad.declaration_version from public."user" u join public.account a on a.user_id = u.id join public.session s on s.user_id = u.id join public.terms_acceptances ta on ta.user_id = u.id join public.age_declarations ad on ad.user_id = u.id where u.email = 'browser-registration@example.test'`;
+    expect(row).toMatchObject({ provider_id: "google", terms_version_id: documentId, declaration_version: "age-16-v1" });
+    expect(row?.session_id).toBeTruthy();
   });
 
   it("notifies Worker revocation for every session before Better Auth removes them", async () => {

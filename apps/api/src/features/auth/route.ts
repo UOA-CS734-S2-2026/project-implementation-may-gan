@@ -185,25 +185,38 @@ async function admitRegistration(request: Request, database?: import("@dayli/db"
     if (state) headers.set("x-dayli-registration-browser-state", state);
     return forwarded();
   }
-  const body = await request.clone().json().catch(() => undefined) as { idToken?: unknown } | undefined;
+  const body = await request.clone().json().catch(() => undefined) as { idToken?: unknown; additionalData?: unknown } | undefined;
   if (path === `${authBasePath}/sign-in/social` && body?.idToken === undefined) return request;
   // Do not consume an intent here. The insert trigger consumes it in the exact
   // transaction that inserts the user and writes both legal records.
   const token = request.headers.get("x-dayli-registration-intent");
   const binding = request.headers.get("x-dayli-registration-binding");
   if (!token || !binding) return path === `${authBasePath}/sign-up/email` ? linkFailure(403) : request;
-  return forwarded();
+  if (path !== `${authBasePath}/sign-in/social`) return forwarded();
+  // Better Auth retains additionalData in the trusted endpoint context until
+  // its OAuth user-create hook. Replace, do not trust, any client value.
+  const additionalData = body && typeof body === "object" && body.additionalData && typeof body.additionalData === "object"
+    ? body.additionalData as Record<string, unknown>
+    : {};
+  headers.delete("content-length");
+  headers.set("x-dayli-native-google-admission", "1");
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify({ ...body, additionalData: { ...additionalData, dayliRegistrationIntent: token, dayliRegistrationBinding: binding } }),
+  });
 }
 
 async function bindBrowserRegistration(request: Request, response: Response, database?: import("@dayli/db").DayliDatabase): Promise<Response> {
   if (!database || request.method !== "POST" || new URL(request.url).pathname !== `${authBasePath}/sign-in/social`) return response;
   const token = request.headers.get("x-dayli-registration-intent");
   const flowBinding = request.headers.get("x-dayli-registration-binding");
-  if (!token || !flowBinding || !response.ok) return response;
-  const body = await request.clone().json().catch(() => undefined) as { idToken?: unknown } | undefined;
-  // Native ID-token sign-in creates in this request. Browser OAuth must bind
-  // Better Auth's server-generated state before its later callback.
-  if (!body || body.idToken !== undefined) return response;
+  // Better Auth consumes the request body. Native ID-token registrations are
+  // marked before dispatch, so do not attempt to clone the consumed request.
+  if (!token || !flowBinding || !response.ok || request.headers.get("x-dayli-native-google-admission") === "1") return response;
+  // Browser OAuth binds Better Auth's server-generated state before its later
+  // callback. Read the response rather than the request body, which Better Auth
+  // already used.
   const state = await redirectState(response);
   if (!state || !await bindBrowserRegistrationIntent(database, { token, flowBinding, oauthState: state })) return linkFailure(403);
   return response;
