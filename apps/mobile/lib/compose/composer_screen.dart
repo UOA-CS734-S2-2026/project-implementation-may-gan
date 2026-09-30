@@ -9,6 +9,7 @@ import '../ui/form_input.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
+import 'media_upload_controller.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
 /// rating, the words, a note to tomorrow, and who can see it, with the Post
@@ -23,6 +24,9 @@ class ComposerScreen extends StatefulWidget {
 
 class _ComposerScreenState extends State<ComposerScreen> {
   ComposerController? _controller;
+
+  /// Null when this build doesn't upload media.
+  MediaUploadController? _uploads;
   final _answer = TextEditingController();
   final _caption = TextEditingController();
   final _tomorrowNote = TextEditingController();
@@ -43,6 +47,14 @@ class _ComposerScreenState extends State<ComposerScreen> {
       clock: services.clock,
       onUnauthenticated: () => services.session.sessionExpired(),
     )..addListener(_syncText);
+    final uploads = services.mediaUploads;
+    if (uploads != null) {
+      _uploads = MediaUploadController(
+        composer: _controller!,
+        compressor: services.mediaCompressor,
+        client: uploads,
+      )..start();
+    }
     _controller!.load();
   }
 
@@ -62,6 +74,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
 
   @override
   void dispose() {
+    _uploads?.dispose();
     _controller?.removeListener(_syncText);
     _controller?.dispose();
     _answer.dispose();

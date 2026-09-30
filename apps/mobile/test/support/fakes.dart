@@ -414,6 +414,8 @@ class TestHarness {
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
+  final mediaCompressor = FakeMediaCompressor();
+  final mediaUploads = FakeMediaUploadClient();
   late final SessionController session;
 
   AppServices get services => AppServices(
@@ -425,6 +427,8 @@ class TestHarness {
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
+    mediaCompressor: mediaCompressor,
+    mediaUploads: mediaUploads,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }

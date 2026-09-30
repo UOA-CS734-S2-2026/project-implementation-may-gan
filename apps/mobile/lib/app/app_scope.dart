@@ -2,10 +2,12 @@ import 'package:flutter/widgets.dart';
 
 import '../api/feed_client.dart';
 import '../api/friends_client.dart';
+import '../api/media_upload_client.dart';
 import '../api/post_client.dart';
 import '../api/posting_day_client.dart';
 import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
+import '../compose/media_compressor.dart';
 import '../compose/media_picker.dart';
 import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
@@ -27,9 +29,12 @@ class AppServices {
     this.notifications,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
+    this.mediaUploads,
+    MediaCompressor? mediaCompressor,
     this.clock = DateTime.now,
   }) : messaging =
-           messaging ?? MessagingController(const UnavailableMessagingClient());
+           messaging ?? MessagingController(const UnavailableMessagingClient()),
+       mediaCompressor = mediaCompressor ?? DeviceMediaCompressor();
 
   final SessionController session;
   final PostingDayClient postingDays;
@@ -44,6 +49,10 @@ class AppServices {
   /// Null when this build has no Google client ID configured.
   final GoogleIdTokenProvider? google;
   final MediaPicker mediaPicker;
+
+  /// Null keeps picked media on the device without uploading it.
+  final MediaUploadClient? mediaUploads;
+  final MediaCompressor mediaCompressor;
   final DateTime Function() clock;
 }
 

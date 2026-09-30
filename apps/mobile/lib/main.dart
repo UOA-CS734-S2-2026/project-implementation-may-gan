@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api/feed_client.dart';
 import 'api/post_client.dart';
 import 'api/friends_client.dart';
+import 'api/media_upload_client.dart';
 import 'api/posting_day_client.dart';
 import 'app/app.dart';
 import 'app/app_scope.dart';
@@ -136,6 +137,10 @@ Future<void> main() async {
               )
             : null,
         submitter: GeneratedPostSubmitter(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
+        mediaUploads: GeneratedMediaUploadClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),

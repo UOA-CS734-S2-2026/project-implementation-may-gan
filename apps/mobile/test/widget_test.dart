@@ -846,6 +846,8 @@ void main() {
     expect(sent.tomorrowNote, 'Bring the camera.');
     expect(sent.audience, PostAudience.solo);
     expect(sent.attachments.single.localPath, '/photos/0.jpg');
+    expect(sent.attachments.single.status, AttachmentUploadStatus.validated);
+    expect(harness.mediaUploads.completed, ['reservation-1']);
     expect(find.byKey(const Key('home.empty')), findsOneWidget);
     expect(harness.drafts.drafts, isEmpty);
   });
