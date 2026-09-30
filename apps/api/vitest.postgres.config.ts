@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: "node",
     fileParallelism: false,
+    maxWorkers: 1,
+    minWorkers: 1,
     include: [
       "src/features/**/postgres.integration.test.ts",
       "src/features/**/__tests__/**/*.repository.integration.test.ts",

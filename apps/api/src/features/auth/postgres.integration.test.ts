@@ -47,7 +47,7 @@ function createProductionGoogleApp() {
 async function signedGoogleToken(audience: string, subject: string, email: string) {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const publicJwk = await exportJWK(publicKey);
-  publicJwk.kid = "postgres-registration-google-key";
+  publicJwk.kid = `postgres-registration-google-key-${crypto.randomUUID()}`;
   const token = await new SignJWT({
     email,
     email_verified: true,
@@ -401,18 +401,42 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(issued.status).toBe(201);
     const proof = await issued.json() as { intent: string; flowBinding: string };
     const { publicJwk, token } = await signedGoogleToken("ios-client-id", `native-${crypto.randomUUID()}`, "native-registration@example.test");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200 })));
+    const invalidSignature = await signedGoogleToken("ios-client-id", `invalid-signature-${crypto.randomUUID()}`, "native-invalid-signature@example.test");
+    const invalidAudience = await signedGoogleToken("untrusted-client-id", `invalid-audience-${crypto.randomUUID()}`, "native-invalid-audience@example.test");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ keys: [publicJwk, invalidAudience.publicJwk] }), { status: 200 })));
 
     const missing = await app.fetch(request("/api/auth/sign-in/social", {
-      method: "POST", headers: { "content-type": "application/json" },
+      method: "POST", headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.10" },
       body: JSON.stringify({ provider: "google", idToken: { token } }),
     }));
     expect(missing.status).toBe(401);
     const [missingCount] = await migrator.client`select count(*)::int as count from public."user" where email = 'native-registration@example.test'`;
     expect(missingCount?.count).toBe(0);
+    const signatureFailure = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.11", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      body: JSON.stringify({ provider: "google", idToken: { token: invalidSignature.token } }),
+    }));
+    const audienceFailure = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.12", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      body: JSON.stringify({ provider: "google", idToken: { token: invalidAudience.token } }),
+    }));
+    expect(signatureFailure.status).toBe(401);
+    expect(audienceFailure.status).toBe(401);
+    const [providerFailure] = await migrator.client`
+      select
+        (select count(*)::int from public."user" where email in ('native-invalid-signature@example.test', 'native-invalid-audience@example.test')) as users,
+        (select count(*)::int from public.account where provider_id = 'google') as accounts,
+        (select count(*)::int from public.session) as sessions,
+        (select count(*)::int from public.terms_acceptances where terms_version_id = ${documentId}) as acceptances,
+        (select count(*)::int from public.age_declarations) as declarations,
+        (select consumed_at is null as reusable from public.registration_intents where token_digest = encode(digest(convert_to(${proof.intent}, 'UTF8'), 'sha256'), 'hex')) as reusable
+    `;
+    expect(providerFailure).toEqual({ users: 0, accounts: 0, sessions: 0, acceptances: 0, declarations: 0, reusable: true });
     const forged = await app.fetch(request("/api/auth/sign-in/social", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": "0".repeat(64) },
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.13", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": "0".repeat(64) },
       body: JSON.stringify({ provider: "google", idToken: { token } }),
     }));
     expect(forged.status).toBe(401);
@@ -421,7 +445,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
 
     const admitted = await app.fetch(request("/api/auth/sign-in/social", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.14", "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
       body: JSON.stringify({ provider: "google", idToken: { token } }),
     }));
     expect(admitted.status).toBe(200);
@@ -493,9 +517,128 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       headers: { origin, cookie: cookie! },
     }));
     expect(callback.status).toBe(302);
+    const callbackLocation = callback.headers.get("location") ?? "";
+    const callbackCookie = callback.headers.get("set-cookie") ?? "";
+    expect(callbackLocation.includes(proof.intent)).toBe(false);
+    expect(callbackLocation.includes(proof.flowBinding)).toBe(false);
+    expect(callbackCookie.includes(proof.intent)).toBe(false);
+    expect(callbackCookie.includes(proof.flowBinding)).toBe(false);
+    const callbackCookies = (callback.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.()
+      ?? (callbackCookie ? [callbackCookie] : []);
+    let browserSessionBody: { user?: Record<string, unknown>; session?: Record<string, unknown> } | null = null;
+    for (const setCookie of callbackCookies) {
+      const browserSession = await app.fetch(request("/api/auth/get-session", {
+        headers: { cookie: setCookie.split(";", 1)[0]! },
+      }));
+      expect(browserSession.status).toBe(200);
+      const candidate = await browserSession.json() as { user?: Record<string, unknown>; session?: Record<string, unknown> } | null;
+      if (candidate) browserSessionBody = candidate;
+    }
+    expect(browserSessionBody).toBeTruthy();
+    for (const value of [browserSessionBody?.user, browserSessionBody?.session]) {
+      expect(value).not.toHaveProperty("legal_registration_admission");
+      expect(value).not.toHaveProperty("legalRegistrationAdmission");
+    }
     const [row] = await migrator.client`select a.provider_id, s.id as session_id, ta.terms_version_id, ad.declaration_version from public."user" u join public.account a on a.user_id = u.id join public.session s on s.user_id = u.id join public.terms_acceptances ta on ta.user_id = u.id join public.age_declarations ad on ad.user_id = u.id where u.email = 'browser-registration@example.test'`;
     expect(row).toMatchObject({ provider_id: "google", terms_version_id: documentId, declaration_version: "age-16-v1" });
     expect(row?.session_id).toBeTruthy();
+  });
+
+  it("fails closed for browser Google callback state and provider verification failures", async () => {
+    const canonicalContent = "# Browser failure Terms\n\nCanonical test content.";
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalContent)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const documentId = `browser-failure-terms-${crypto.randomUUID()}`;
+    const databaseSchema = (await import("@dayli/db")).schema;
+    await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
+      id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+    });
+    await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    const app = createProductionGoogleApp();
+    const valid = await signedGoogleToken("web-client-id", `browser-valid-${crypto.randomUUID()}`, "browser-recovery@example.test");
+    const invalidSignature = await signedGoogleToken("web-client-id", `browser-invalid-signature-${crypto.randomUUID()}`, "browser-invalid-signature@example.test");
+    const invalidAudience = await signedGoogleToken("untrusted-client-id", `browser-invalid-audience-${crypto.randomUUID()}`, "browser-invalid-audience@example.test");
+    let callbackToken = invalidSignature.token;
+    let callbackKeys = [valid.publicJwk];
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      access_token: "test-browser-access-token", token_type: "Bearer", expires_in: 300, id_token: callbackToken, keys: callbackKeys,
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const issue = async () => {
+      const response = await app.fetch(request("/api/v1/legal/registration-intents", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ flow: "google_browser", acceptTerms: true, declareAge16OrOlder: true }),
+      }));
+      expect(response.status).toBe(201);
+      return response.json() as Promise<{ intent: string; flowBinding: string }>;
+    };
+    const start = async (proof: { intent: string; flowBinding: string }, ip: string) => {
+      const response = await app.fetch(request("/api/auth/sign-in/social", {
+        method: "POST",
+        headers: { "content-type": "application/json", "cf-connecting-ip": ip, "x-dayli-registration-intent": proof.intent, "x-dayli-registration-binding": proof.flowBinding },
+        body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome`, disableRedirect: true }),
+      }));
+      expect(response.status).toBe(200);
+      const authorization = await response.json() as { url: string };
+      const state = new URL(authorization.url).searchParams.get("state");
+      const cookie = response.headers.get("set-cookie");
+      expect(state).toBeTruthy();
+      expect(cookie).toBeTruthy();
+      return { state: state!, cookie: cookie! };
+    };
+    const assertRejected = async (proof: { intent: string }, email: string) => {
+      const [result] = await migrator.client`
+        select
+          (select count(*)::int from public."user" where email = ${email}) as users,
+          (select count(*)::int from public.account where provider_id = 'google') as accounts,
+          (select count(*)::int from public.session) as sessions,
+          (select count(*)::int from public.terms_acceptances where terms_version_id = ${documentId}) as acceptances,
+          (select count(*)::int from public.age_declarations) as declarations,
+          (select consumed_at is null as reusable from public.registration_intents where token_digest = encode(digest(convert_to(${proof.intent}, 'UTF8'), 'sha256'), 'hex')) as reusable
+      `;
+      expect(result).toEqual({ users: 0, accounts: 0, sessions: 0, acceptances: 0, declarations: 0, reusable: true });
+    };
+
+    const first = await issue();
+    const firstStart = await start(first, "198.51.100.31");
+    const missingState = await app.fetch(new Request(`${origin}/api/auth/callback/google?code=test-browser-code`, { headers: { origin, cookie: firstStart.cookie } }));
+    expect(missingState.ok).toBe(false);
+    await assertRejected(first, "browser-invalid-signature@example.test");
+    const forgedState = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=forged-state&code=test-browser-code`, { headers: { origin, cookie: firstStart.cookie } }));
+    expect(forgedState.ok).toBe(false);
+    await assertRejected(first, "browser-invalid-signature@example.test");
+    const signatureFailure = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(firstStart.state)}&code=test-browser-code`, { headers: { origin, cookie: firstStart.cookie } }));
+    expect(signatureFailure.ok).toBe(false);
+    await assertRejected(first, "browser-invalid-signature@example.test");
+    const rebound = await app.fetch(request("/api/auth/sign-in/social", {
+      method: "POST",
+      headers: { "content-type": "application/json", "cf-connecting-ip": "198.51.100.32", "x-dayli-registration-intent": first.intent, "x-dayli-registration-binding": first.flowBinding },
+      body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome`, disableRedirect: true }),
+    }));
+    expect(rebound.status).toBe(403);
+
+    const second = await issue();
+    const secondStart = await start(second, "198.51.100.33");
+    callbackToken = invalidAudience.token;
+    callbackKeys = [invalidAudience.publicJwk];
+    const audienceFailure = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(secondStart.state)}&code=test-browser-code`, { headers: { origin, cookie: secondStart.cookie } }));
+    expect(audienceFailure.ok).toBe(false);
+    await assertRejected(second, "browser-invalid-audience@example.test");
+    const staleCallback = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(firstStart.state)}&code=test-browser-code`, { headers: { origin, cookie: firstStart.cookie } }));
+    expect(staleCallback.ok).toBe(false);
+    await assertRejected(second, "browser-invalid-audience@example.test");
+
+    const recovery = await issue();
+    const recoveryStart = await start(recovery, "198.51.100.34");
+    callbackToken = valid.token;
+    callbackKeys = [valid.publicJwk];
+    const recovered = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(recoveryStart.state)}&code=test-browser-code`, { headers: { origin, cookie: recoveryStart.cookie } }));
+    expect(recovered.status).toBe(302);
+    const [recoveredUser] = await migrator.client`
+      select count(*)::int as users, (select consumed_at is not null from public.registration_intents where token_digest = encode(digest(convert_to(${recovery.intent}, 'UTF8'), 'sha256'), 'hex')) as consumed
+      from public."user" where email = 'browser-recovery@example.test'
+    `;
+    expect(recoveredUser).toEqual({ users: 1, consumed: true });
   });
 
   it("notifies Worker revocation for every session before Better Auth removes them", async () => {

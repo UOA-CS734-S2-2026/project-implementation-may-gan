@@ -4,6 +4,7 @@ import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { betterAuth } from "better-auth/minimal";
 import { APIError } from "better-auth/api";
 import { bearer } from "better-auth/plugins/bearer";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify, type JWK } from "jose";
 import { createMemorySocialLinkConfirmationStore } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
 import {
@@ -36,6 +37,33 @@ interface BetterAuthOptions {
 
 const silentAuthLogger = { disabled: true };
 const usernamePattern = /^[a-z0-9][a-z0-9_]{2,29}$/;
+
+async function verifyGoogleBrowserIdToken(token: string, audience: readonly string[]) {
+  try {
+    const { alg, kid } = decodeProtectedHeader(token);
+    if (alg !== "RS256" || !kid) return null;
+    const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+    const body = await response.json() as { keys?: JWK[] };
+    const jwks = body.keys?.filter((key) => key.kid === kid) ?? [];
+    for (const jwk of jwks) {
+      try {
+        const publicKey = await importJWK(jwk, "RS256");
+        const { payload } = await jwtVerify(token, publicKey, {
+          algorithms: ["RS256"],
+          issuer: ["https://accounts.google.com", "accounts.google.com"],
+          audience: [...audience],
+          maxTokenAge: "1h",
+        });
+        return payload;
+      } catch {
+        // A key rotation response may contain several candidates. Try each.
+      }
+    }
+  } catch {
+    // OAuth responses remain generic. Do not reflect or log provider tokens.
+  }
+  return null;
+}
 
 function createBetterAuth(options: BetterAuthOptions) {
   return betterAuth({
@@ -154,6 +182,30 @@ function createBetterAuth(options: BetterAuthOptions) {
         clientSecret: options.google.clientSecret,
         accessType: "online",
         includeGrantedScopes: false,
+        // Better Auth's default browser-code profile mapper decodes the token
+        // endpoint ID token. Verify it with Google's JWKS before it can name a
+        // user, matching the native ID-token boundary.
+        async getUserInfo(tokens) {
+          if (!tokens.idToken) return null;
+          // Better Auth verifies direct native ID-token sign-ins before this
+          // mapper. Browser code exchange supplies an access token and must
+          // verify its returned ID token before mapping a user.
+          const profile = tokens.accessToken
+            ? await verifyGoogleBrowserIdToken(tokens.idToken, options.google!.clientIds)
+            : decodeJwt(tokens.idToken);
+          if (!profile || typeof profile.sub !== "string" || typeof profile.email !== "string" || typeof profile.email_verified !== "boolean") return null;
+          return {
+            user: {
+              name: typeof profile.name === "string" ? profile.name : "",
+              email: profile.email,
+              image: typeof profile.picture === "string" ? profile.picture : undefined,
+              emailVerified: profile.email_verified,
+            },
+            // The verified JWT is structurally the provider profile Better Auth
+            // persists alongside the account. Claims used above are checked.
+            data: profile as never,
+          };
+        },
       },
     } : undefined,
     account: {
