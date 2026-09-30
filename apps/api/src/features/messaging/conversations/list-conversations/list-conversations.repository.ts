@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNull, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, exists, gt, isNull, ne, or, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { messageProjectionSelection } from "../../shared/message-projection";
@@ -55,14 +55,16 @@ export function createPostgresListConversationsRepository(
             ),
           )),
       ).mapWith(Boolean);
-      const unreadCount = sql<number>`(
-        select count(*)::int
-        from ${messages}
-        where ${messages.conversationId} = ${conversations.id}
-          and ${messages.senderId} <> ${actorId}
-          and ${messages.sequence} > ${conversationMembers.lastReadSequence}
-          and ${messages.unsentAt} is null
-      )`;
+      const unreadCount = database
+        .select({ count: count().as("count") })
+        .from(messages)
+        .where(and(
+          eq(messages.conversationId, conversations.id),
+          ne(messages.senderId, actorId),
+          gt(messages.sequence, conversationMembers.lastReadSequence),
+          isNull(messages.unsentAt),
+        ))
+        .as("unread_count");
       const latestMessage = database
         .select(messageProjectionSelection)
         .from(messages)

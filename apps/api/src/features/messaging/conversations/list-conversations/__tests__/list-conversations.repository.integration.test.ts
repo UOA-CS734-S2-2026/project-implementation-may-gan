@@ -39,7 +39,7 @@ suite("list conversations Postgres repository", () => {
     }
   });
 
-  it("keeps membership, folders, blocks, precise cursors, pages, unread state, and latest-message DTOs", async () => {
+  it("keeps membership, folders, blocks, precise cursors, pages, unread states, and latest-message DTOs", async () => {
     const activeWithUnread = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
@@ -91,7 +91,14 @@ suite("list conversations Postgres repository", () => {
     expect(listQuery).toContain("to_char");
     expect(listQuery).not.toContain('::text');
     expect(listQuery).not.toContain('::bigint');
-    expect(listQuery).toContain('count(*)::int');
+    expect(listQuery).toMatch(/^select /);
+    expect(listQuery).toContain('select count(*) as "count" from "messages"');
+    expect(listQuery).toContain('"messages"."conversation_id" = "conversations"."id"');
+    expect(listQuery).toContain('"messages"."sender_id" <> $');
+    expect(listQuery).toContain('"messages"."sequence" > "conversation_members"."last_read_sequence"');
+    expect(listQuery).toContain('"messages"."unsent_at" is null');
+    expect(listQuery.match(/select count\(\*\) as "count" from "messages"/g)).toHaveLength(1);
+    expect(builderQueries.filter((query) => query.includes('select count(*)'))).toEqual([listQuery]);
     builderQueries.length = 0;
     const second = await observedRepository.list(users[0]!, "inbox", first.nextCursor ?? undefined, 1);
     expect(builderQueries).toHaveLength(2);
@@ -128,6 +135,11 @@ suite("list conversations Postgres repository", () => {
         capabilities: { canSend: true, canResolveRequest: false },
       }),
     ]));
+    const activeInboxItem = inbox.items.find(
+      (item) => (item as { id?: string }).id === activeWithUnread.conversation.id,
+    ) as { unreadCount?: unknown } | undefined;
+    expect(activeInboxItem?.unreadCount).toBe(1);
+    expect(typeof activeInboxItem?.unreadCount).toBe("number");
 
     await expect(repository.list(users[0]!, "requests", undefined, 10)).resolves.toMatchObject({
       items: [expect.objectContaining({
@@ -154,7 +166,29 @@ suite("list conversations Postgres repository", () => {
     await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
       items: expect.arrayContaining([expect.objectContaining({
         id: activeWithUnread.conversation.id,
+        unreadCount: 0,
         latestMessage: expect.objectContaining({ text: null, unsentAt: expect.any(String), reactions: [] }),
+      })]),
+    });
+    const readReply = await send.send(users[2]!, activeWithoutUnread.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "read active message",
+    });
+    await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({
+        id: activeWithoutUnread.conversation.id,
+        unreadCount: 1,
+      })]),
+    });
+    await database.client`
+      update public.conversation_members
+      set last_read_sequence = ${readReply.message.sequence}::bigint
+      where conversation_id = ${activeWithoutUnread.conversation.id} and user_id = ${users[0]!}
+    `;
+    await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({
+        id: activeWithoutUnread.conversation.id,
+        unreadCount: 0,
       })]),
     });
     const blank = await direct.create(users[5]!, {
