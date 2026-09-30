@@ -117,20 +117,30 @@ suite("send message Postgres repository", () => {
     expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
   });
 
-  it("preserves message sequence precision above Number.MAX_SAFE_INTEGER", async () => {
+  it("rejects unsafe text-mode message sequences and rolls back the write transaction", async () => {
     const created = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
       text: "first",
     });
+    const [beforeMessageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
+    const [beforeChangeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [beforeOutboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
     await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
 
     await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
-      text: "precise",
-    })).resolves.toMatchObject({ message: { sequence: "9007199254740993" } });
-    const [stored] = await database.client`select sequence::text as sequence from public.messages where conversation_id = ${created.conversation.id} and sequence = 9007199254740993`;
-    expect(stored?.sequence).toBe("9007199254740993");
+      text: "unsafe",
+    })).rejects.toThrow(RangeError);
+
+    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
+    const [messageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
+    const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    expect(conversation?.sequence).toBe("9007199254740992");
+    expect(messageCount?.count).toBe(beforeMessageCount?.count);
+    expect(changeCount?.count).toBe(beforeChangeCount?.count);
+    expect(outboxCount?.count).toBe(beforeOutboxCount?.count);
   });
 
   it("rejects pending and blocked sends without additional messages, changes, or outbox work", async () => {

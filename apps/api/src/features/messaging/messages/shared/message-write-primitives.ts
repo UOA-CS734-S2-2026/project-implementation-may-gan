@@ -1,6 +1,6 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, count, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
-import { requireSafeMessageVersion, requireSafeSequenceBigInt } from "../../shared/safe-sequence";
+import { requireSafeMessageVersion, requireSafeSequenceBigInt, requireSafeSequenceText, toSafeSequenceNumber } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
@@ -8,7 +8,12 @@ type Row = Record<string, unknown>;
 
 function sequenceBigInt(value: unknown): bigint {
   if (typeof value === "number") return requireSafeSequenceBigInt(value);
-  return typeof value === "bigint" ? value : BigInt(String(value));
+  if (typeof value === "string") return BigInt(requireSafeSequenceText(value));
+  if (typeof value === "bigint") {
+    toSafeSequenceNumber(value);
+    return value;
+  }
+  throw new RangeError("Database sequence must be a safe nonnegative integer.");
 }
 
 function messageVersion(value: unknown): number {
