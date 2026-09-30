@@ -1,37 +1,60 @@
-import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
-
-type Row = { token_ciphertext: unknown; token_key_version: unknown };
-const rows = <T extends object>(value: unknown) => [...value as Iterable<T>];
 
 /** Rechecks registration, current session, membership and blocks immediately before FCM. */
 export function createPostgresPushDestinationResolver(database: DayliDatabase, protector: PushTokenProtector): PushDestinationResolver {
   return {
     async resolve(job: OutboxJob) {
       if (!job.deviceRegistrationId) return null;
-      const [row] = rows<Row>(await database.execute(sql`
-        select d.token_ciphertext, d.token_key_version
-        from public.push_devices d
-        join public.session s on s.id = d.session_id and s.user_id = d.user_id and s.expires_at > now()
-        join public."user" u on u.id = d.user_id and (coalesce(u.banned, false) = false or (u.ban_expires is not null and u.ban_expires <= now()))
-        join public.conversation_members member on member.conversation_id = ${job.conversationId} and member.user_id = d.user_id
-        join public.conversations c on c.id = ${job.conversationId}
-        where d.id = ${job.deviceRegistrationId} and d.user_id = ${job.recipientId}
-          and d.opted_in and d.invalidated_at is null
-          and not exists (
-            select 1 from public.relationship_blocks b where b.unblocked_at is null and
-              ((b.blocker_id = c.user_low_id and b.blocked_id = c.user_high_id) or (b.blocker_id = c.user_high_id and b.blocked_id = c.user_low_id))
-          )
-        limit 1
-      `));
-      if (!row || typeof row.token_ciphertext !== "string" || typeof row.token_key_version !== "string") return null;
-      const token = await protector.decrypt({ ciphertext: row.token_ciphertext, keyVersion: row.token_key_version });
+      const [row] = await database
+        .select({
+          tokenCiphertext: schema.pushDevices.tokenCiphertext,
+          tokenKeyVersion: schema.pushDevices.tokenKeyVersion,
+        })
+        .from(schema.pushDevices)
+        .innerJoin(schema.session, and(
+          eq(schema.session.id, schema.pushDevices.sessionId),
+          eq(schema.session.userId, schema.pushDevices.userId),
+          gt(schema.session.expiresAt, sql`now()`),
+        ))
+        .innerJoin(schema.user, and(
+          eq(schema.user.id, schema.pushDevices.userId),
+          sql`(coalesce(${schema.user.banned}, false) = false or (${schema.user.banExpires} is not null and ${schema.user.banExpires} <= now()))`,
+        ))
+        .innerJoin(schema.conversationMembers, and(
+          eq(schema.conversationMembers.conversationId, job.conversationId),
+          eq(schema.conversationMembers.userId, schema.pushDevices.userId),
+        ))
+        .innerJoin(schema.conversations, eq(schema.conversations.id, job.conversationId))
+        .where(and(
+          eq(schema.pushDevices.id, job.deviceRegistrationId),
+          eq(schema.pushDevices.userId, job.recipientId),
+          eq(schema.pushDevices.optedIn, true),
+          isNull(schema.pushDevices.invalidatedAt),
+          sql`not exists (
+            select 1 from ${schema.relationshipBlocks}
+            where ${schema.relationshipBlocks.unblockedAt} is null
+              and (
+                (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userLowId}
+                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userHighId})
+                or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userHighId}
+                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userLowId})
+              )
+          )`,
+        ))
+        .limit(1);
+      if (!row || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
+      const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
       return token ? { token, valid: true } : null;
     },
     async invalidate(registrationId) {
-      await database.execute(sql`update public.push_devices set invalidated_at = now(), opted_in = false where id = ${registrationId}`);
+      await database
+        .update(schema.pushDevices)
+        .set({ invalidatedAt: sql`now()`, optedIn: false })
+        .where(eq(schema.pushDevices.id, registrationId));
     },
   };
 }
