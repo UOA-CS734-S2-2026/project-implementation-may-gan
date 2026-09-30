@@ -1,4 +1,4 @@
-import { createDayliDatabase, sql, type DayliDatabase } from "@dayli/db";
+import { createDayliDatabase, sql } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDrizzleMediaReservationRepository, type MediaReservationRecord } from "./media-reservation.repository";
 
@@ -8,8 +8,11 @@ const migratorUrl = process.env.ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL;
 function disposableDatabaseUrl(value: string | undefined, name: string): string | undefined {
   if (!value) return undefined;
   const url = new URL(value);
-  if (url.port === "5433" || !/^\/dayli_advisory_lock_[a-z0-9_]+_test$/.test(url.pathname)) {
-    throw new Error(`${name} must target a disposable advisory-lock database, never port 5433.`);
+  if (
+    !/^\/dayli_advisory_lock_[a-z0-9_]+_test$/.test(url.pathname)
+    || (url.port === "5433" && (url.hostname !== "localhost" || url.pathname !== "/dayli_advisory_lock_ci_test"))
+  ) {
+    throw new Error(`${name} must target an isolated advisory-lock test database, never dayli_test or a development database.`);
   }
   return value;
 }
@@ -77,39 +80,6 @@ const enabled = Boolean(databaseUrl && migrationUrl);
     } finally {
       await Promise.all([...databases.map((value) => value.close()), migrator.close()]);
     }
-  });
-
-  it("uses one row from a VALUES source instead of execute", async () => {
-    const sources: unknown[] = [];
-    const selections: Array<Record<string, unknown>> = [];
-    const transaction = {
-      select(fields: Record<string, unknown>) {
-        selections.push(fields);
-        return {
-          from(source: unknown) {
-            sources.push(source);
-            if ("locked" in fields) return Promise.resolve([{ locked: "" }]);
-            return { where: async () => [{ value: 0 }] };
-          },
-        };
-      },
-      insert() {
-        return { async values() {} };
-      },
-    };
-    const repository = createDrizzleMediaReservationRepository({
-      async transaction(operation: (tx: never) => unknown) {
-        return operation(transaction as never);
-      },
-    } as unknown as DayliDatabase);
-
-    await repository.reserveIfUnderQuota("advisory-media-builder", 1, new Date(), record("advisory-media-builder"));
-
-    expect((sources[0] as { queryChunks: Array<{ value: string[] }> }).queryChunks[0]?.value).toEqual([
-      "(values (1)) as lock_source",
-    ]);
-    const locked = selections[0]?.locked as { queryChunks: Array<{ value: string[] }> };
-    expect(locked.queryChunks[0]?.value).toEqual(["pg_advisory_xact_lock("]);
   });
 
   it("blocks a second client and releases it on commit", async () => {

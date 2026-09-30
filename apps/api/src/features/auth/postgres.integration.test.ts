@@ -6,6 +6,7 @@ import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
 const hasTestDatabaseConfig = Boolean(migratorUrl && appUrl);
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const origin = "https://api.example.test";
 const trustedOrigins = "https://api.example.test,https://web.example.test";
 const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
@@ -13,8 +14,8 @@ const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
 function requireLocalTestUrl(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required for PostgreSQL auth integration tests.`);
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error(`${name} must target localhost:5433/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`${name} must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }
