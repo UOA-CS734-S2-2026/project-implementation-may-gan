@@ -1,4 +1,4 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, ne, or, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { MessagingError } from "../../shared/messaging-error";
@@ -38,17 +38,24 @@ export function createPostgresListConversationsRepository(
       const cursor = cursorDecode(rawCursor);
       const state = folder === "inbox" ? "active" : "pending";
       const { conversationMembers, conversations, messages, relationshipBlocks, user } = schema;
-      const blocked = sql<boolean>`exists(
-        select 1
-        from ${relationshipBlocks}
-        where ${relationshipBlocks.unblockedAt} is null
-          and (
-            (${relationshipBlocks.blockerId} = ${conversations.userLowId}
-              and ${relationshipBlocks.blockedId} = ${conversations.userHighId})
-            or (${relationshipBlocks.blockerId} = ${conversations.userHighId}
-              and ${relationshipBlocks.blockedId} = ${conversations.userLowId})
-          )
-      )`;
+      const blocked = exists(
+        database
+          .select({ blockerId: relationshipBlocks.blockerId })
+          .from(relationshipBlocks)
+          .where(and(
+            isNull(relationshipBlocks.unblockedAt),
+            or(
+              and(
+                eq(relationshipBlocks.blockerId, conversations.userLowId),
+                eq(relationshipBlocks.blockedId, conversations.userHighId),
+              ),
+              and(
+                eq(relationshipBlocks.blockerId, conversations.userHighId),
+                eq(relationshipBlocks.blockedId, conversations.userLowId),
+              ),
+            ),
+          )),
+      ).mapWith(Boolean);
       const unreadCount = sql<number>`(
         select count(*)::int
         from ${messages}

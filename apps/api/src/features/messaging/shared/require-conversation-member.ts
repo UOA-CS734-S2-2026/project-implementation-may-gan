@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, exists, isNull, or } from "drizzle-orm";
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { MessagingError } from "./messaging-error";
 
@@ -12,17 +12,24 @@ export async function requireConversationMember(
   conversationId: string,
   lock = false,
 ): Promise<Row> {
-  const blocked = sql<boolean>`exists(
-    select 1
-    from ${schema.relationshipBlocks}
-    where ${schema.relationshipBlocks.unblockedAt} is null
-      and (
-        (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userLowId}
-          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userHighId})
-        or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userHighId}
-          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userLowId})
-      )
-  )`;
+  const blocked = exists(
+    queryable
+      .select({ blockerId: schema.relationshipBlocks.blockerId })
+      .from(schema.relationshipBlocks)
+      .where(and(
+        isNull(schema.relationshipBlocks.unblockedAt),
+        or(
+          and(
+            eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
+            eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
+          ),
+          and(
+            eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
+            eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
+          ),
+        ),
+      )),
+  ).mapWith(Boolean);
   const query = queryable
     .select({
       id: schema.conversations.id,
