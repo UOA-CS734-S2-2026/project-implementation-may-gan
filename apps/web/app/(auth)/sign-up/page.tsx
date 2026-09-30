@@ -10,6 +10,7 @@ import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { clearHistoryFormDraft, useHistoryFormDraft } from "@/lib/auth/history-form-draft";
 
 const signUpSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores."),
@@ -26,12 +27,16 @@ export default function SignUpPage() {
   const {
     control,
     handleSubmit,
+    reset,
     setError,
+    watch,
     formState: { isSubmitting, errors },
   } = useForm<SignUpValues>({
     resolver: zodResolver(signUpSchema),
     defaultValues: { username: "", publicName: "", email: "", password: "" },
   });
+
+  useHistoryFormDraft("sign-up", reset, watch);
 
   const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
     // Better Auth requires name, but the handle remains the public fallback.
@@ -42,6 +47,7 @@ export default function SignUpPage() {
       return;
     }
 
+    clearHistoryFormDraft("sign-up");
     router.push("/home");
   };
 

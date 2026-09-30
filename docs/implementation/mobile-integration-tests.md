@@ -2,11 +2,14 @@
 
 `apps/mobile/integration_test/auth_navigation_smoke_test.dart` is a native UI smoke test. It starts `DayliApp` with `TestHarness` fakes, enters email and password fields, and checks navigation to the home screen. It does not send a request to Better Auth or prove a real API login.
 
+`apps/mobile/integration_test/legal_navigation_integration_test.dart` does not use `TestHarness`. It starts the real router, session controller, protected stores, generated clients, and bundled legal assets with a cleared session and an unused loopback API origin. It checks offline draft reading and form-state preservation without changing machine networking. It is not evidence of a real account, Better Auth, or lifecycle flow.
+
 Run the smoke test on a booted Android emulator or iOS simulator:
 
 ```bash
 cd apps/mobile
 flutter test integration_test/auth_navigation_smoke_test.dart -d <device-id>
+flutter test integration_test/legal_navigation_integration_test.dart -d <device-id>
 ```
 
 ## Real isolated API journey

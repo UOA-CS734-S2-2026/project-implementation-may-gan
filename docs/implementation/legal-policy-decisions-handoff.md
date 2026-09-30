@@ -64,11 +64,13 @@ The owner selected New Zealand governing law as the drafting basis, subject to q
 
 ## Frontend draft implementation checkpoint
 
-The draft frontend uses one canonical JSON document for each policy in `packages/legal-content`. The web reads those documents directly. Flutter bundles byte-for-byte synchronized copies so the pages work offline. The `legal:check` command validates this parity, and `legal:publish:check` fails while either document is a draft or has no effective date.
+The draft frontend uses one canonical JSON document for each policy in `packages/legal-content`. The web reads those documents directly. Flutter bundles byte-for-byte synchronized copies so the pages work offline. The `legal:check` command validates this parity. `legal:publish:check` rejects a draft or document without an effective date, and `legal:release:check` runs both checks. Existing PR, local, and staging builds intentionally allow drafts so the frontend can be reviewed. GitHub #167 must wire the release check into every final delivery path before any approved policy is released.
 
 Public `/privacy` and `/terms` routes are available on web. Flutter makes the same routes available without waiting for session restoration and without redirecting signed-in users. Links appear on the landing, authentication, and Settings screens. The links do not alter authentication or record acceptance.
 
 The draft wording now reflects the confirmed operator, contact address, 16+ audience, worldwide availability, current indefinite storage report, reported Neon and Cloudflare R2 use, Cloudflare-provided analytics, and no research or AI use. It names current email/password authentication, conditional Google sign-in, conditional Resend authentication email, direct messaging, Firebase push, post revisions, and device-held drafts. It says that selected media stays on the device because the current clients do not post it. It does not make unverified claims about provider regions, recovery copies, exports, deletion, or response times.
+
+The frontend E2E slice runs public policy and entry-point journeys in Playwright against the disposable local Worker, database, and Next server on desktop and mobile browser viewports. Its Flutter integration test uses the real router, protected storage, generated clients, and bundled assets against an unused loopback origin to prove offline legal reading without a fake session controller. It is not evidence of real native authentication or future lifecycle behavior. Android emulator coverage is available locally. iOS simulator and provider-backed native journeys remain separate release blockers.
 
 ## Retention decisions and unresolved proposals
 

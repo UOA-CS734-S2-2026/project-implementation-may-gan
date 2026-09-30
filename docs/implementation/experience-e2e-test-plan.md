@@ -29,6 +29,30 @@ pnpm test:e2e:web
 
 Docker, Docker Compose, curl, OpenSSL, and pnpm must be available. The script asks the operating system for unused local ports. It intentionally does not use `pnpm local:auth:setup`, mkcert, or a developer database.
 
+## Legal draft E2E slice
+
+The legal frontend PR adds a separate browser journey in `apps/web/e2e/legal-pages.spec.ts`. It runs against the same disposable HTTPS API Worker, PostgreSQL database, and real Next server as the account journey. It does not mock the legal renderer or inject a browser session.
+
+The journey runs on desktop Chromium and Pixel 7 Chromium. It covers direct `/privacy` and `/terms` access while signed out, draft notice and version visibility, readable content without horizontal overflow, the default theme, cross-document links, landing and sign-in links, browser back navigation preserving an unsubmitted sign-in form, and signed-in Settings links after a real email/password registration. It clears the real browser cookie jar before a final direct Terms visit to cover a missing-session route without pretending that a static legal link is accepted Terms.
+
+Run it with the normal disposable-stack command:
+
+```bash
+pnpm --filter @dayli/web exec playwright install chromium
+pnpm test:e2e:web
+```
+
+`apps/mobile/integration_test/legal_navigation_integration_test.dart` is a native legal-reading journey. It constructs the real router, `SessionController`, protected token and identity stores, generated API clients, and bundled assets. It intentionally points at an unused loopback origin, clears the protected session first, and never changes machine networking. It proves legal content is available without a network request or active session, and that a real app instance preserves an unsubmitted sign-in email after returning from Privacy. It does not prove a real Better Auth sign-in, Terms acceptance, deletion, export, Google sign-in, or lifecycle policy. Those need the separate isolated backend described below.
+
+Run the native legal journey on a booted Android emulator or iOS simulator:
+
+```bash
+cd apps/mobile
+flutter test integration_test/legal_navigation_integration_test.dart -d <device-id>
+```
+
+An Android emulator and iOS simulator are still required release evidence. A macOS desktop run can catch a native plugin or router regression, but it is not a substitute for either target.
+
 ## Web follow-up
 
 Keep each addition focused on a complete experience instead of checking individual controls.
@@ -46,9 +70,7 @@ Use unique accounts and a fresh database per run. Do not point browser tests at 
 
 ## Native Flutter plan
 
-No native mobile test is added in this PR.
-
-`apps/mobile/integration_test/auth_navigation_smoke_test.dart` currently boots `DayliApp` with `TestHarness` fakes and checks navigation after email and password entry. It is useful UI coverage, but it does not prove Better Auth, a real API session, or emulator networking. `docs/implementation/mobile-integration-tests.md` records the existing command and its constraints.
+The legal-reading native integration journey is described above. `apps/mobile/integration_test/auth_navigation_smoke_test.dart` still boots `DayliApp` with `TestHarness` fakes and checks navigation after email and password entry. It is useful UI coverage, but it does not prove Better Auth, a real API session, or emulator networking. `docs/implementation/mobile-integration-tests.md` records the existing command and its constraints.
 
 Build native experience coverage in these steps:
 

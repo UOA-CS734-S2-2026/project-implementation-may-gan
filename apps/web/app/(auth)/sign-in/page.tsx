@@ -12,6 +12,7 @@ import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { clearHistoryFormDraft, useHistoryFormDraft } from "@/lib/auth/history-form-draft";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -44,12 +45,16 @@ export default function SignInPage() {
   const {
     control,
     handleSubmit,
+    reset,
     setError,
+    watch,
     formState: { isSubmitting, errors },
   } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: "", password: "" },
   });
+
+  useHistoryFormDraft("sign-in", reset, watch);
 
   const onSubmit = async ({ email, password }: SignInValues) => {
     const { error } = await authClient.signIn.email({ email, password });
@@ -59,6 +64,7 @@ export default function SignInPage() {
       return;
     }
 
+    clearHistoryFormDraft("sign-in");
     router.push("/home");
   };
 
