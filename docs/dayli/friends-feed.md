@@ -22,7 +22,7 @@ The response uses the standard `{ items, nextCursor, hasMore }` envelope. `limit
 
 ## Projection
 
-Each item has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, prompt, reflective answer, caption, rating, `audience` (always `friends`), `acceptedAt`, `releasedAt`, and `edited`. `edited` is true when a revision exists. Tomorrow notes are never included. Media is left out until download authorisation (#24) exists, and will be added as an optional field.
+Each item has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, prompt, reflective answer, caption, rating, `audience` (always `friends`), `acceptedAt`, `releasedAt`, `edited`, and `media`. `edited` is true when a revision exists. `media` lists the attached photos or video with private URLs that expire after 5 minutes, read for the whole page in one query (see [Downloads](media-reservations.md#downloads-issue-24)). Tomorrow notes are never included.
 
 The whole page is one query with correlated `EXISTS` checks, so there are no per-post author, prompt, or revision lookups. Responses are `Cache-Control: no-store`.
 
@@ -30,7 +30,7 @@ The whole page is one query with correlated `EXISTS` checks, so there are no per
 
 Web (`apps/web/features/feed`) reads the feed through the generated TypeScript client with a TanStack infinite query keyed by user ID, so switching accounts never shows the previous account's posts. Flutter (`lib/api/feed_client.dart`, `lib/home/feed_controller.dart`) decodes the response itself because the generated Dart `FeedPost` treats the nullable `caption` as required. Its controller drops a page superseded by a newer refresh, and keeps earlier posts visible with a notice when a refresh fails.
 
-Both clients load more with a "Load more" button, skip a repeated post ID, offer a retry when the first page fails, and treat `401` as an ended session. Post cards have no image until media authorisation (#24), and open [post detail](post-detail.md).
+Both clients load more with a "Load more" button, skip a repeated post ID, offer a retry when the first page fails, and treat `401` as an ended session. Post cards show the first photo, or a still tile for a video (videos never play in the feed), and open [post detail](post-detail.md).
 
 ## Tests
 

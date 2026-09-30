@@ -11,7 +11,7 @@ Visibility comes from `buildDrizzlePostVisibilityFilter` with the `detail` actio
 
 ## Projection
 
-The response has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, the prompt stored with the post (not the current day's prompt), reflective answer, caption, rating, audience, `acceptedAt`, `releasedAt`, `edited`, and `viewerIsAuthor`. Tomorrow notes are never included. Media, and like and comment counts, are left out until download authorisation (#24) and interactions (#79) exist. They will be added as optional fields.
+The response has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, the prompt stored with the post (not the current day's prompt), reflective answer, caption, rating, audience, `acceptedAt`, `releasedAt`, `edited`, `viewerIsAuthor`, and `media`: the attached photos or video in display order, each with a private URL that expires after 5 minutes (see [Downloads](media-reservations.md#downloads-issue-24)). Tomorrow notes are never included. Like and comment counts are left out until interactions (#79) exist, and will be added as optional fields.
 
 ## Clients
 
