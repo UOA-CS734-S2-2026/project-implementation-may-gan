@@ -4,6 +4,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
+import '../legal/legal_service.dart';
+
 const _sessionTokenKey = 'dayli.auth.session-token';
 const _pendingRevocationTokenKey = 'dayli.auth.pending-revocation-token';
 
@@ -159,11 +161,18 @@ class BetterAuthNativeSession {
     required String? publicName,
     required String email,
     required String password,
+    LegalRegistrationIntent? registrationIntent,
   }) async {
     await _ensureNoPendingRevocation();
     final response = await _client.post(
       _uri('/api/auth/sign-up/email'),
-      headers: const {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        if (registrationIntent != null)
+          'x-dayli-registration-intent': registrationIntent.intent,
+        if (registrationIntent != null)
+          'x-dayli-registration-binding': registrationIntent.flowBinding,
+      },
       body: jsonEncode({
         'name': name,
         'username': username,
@@ -175,15 +184,29 @@ class BetterAuthNativeSession {
     await _storeNativeToken(response, 'sign-up');
   }
 
-  Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+  Future<void> signInWithGoogle(
+    GoogleIdTokenProvider provider, {
+    LegalRegistrationIntent? registrationIntent,
+  }) async {
     await _ensureNoPendingRevocation();
     final idToken = await provider.authenticate();
     final response = await _client.post(
       _uri('/api/auth/sign-in/social'),
-      headers: const {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        if (registrationIntent != null)
+          'x-dayli-registration-intent': registrationIntent.intent,
+        if (registrationIntent != null)
+          'x-dayli-registration-binding': registrationIntent.flowBinding,
+      },
       body: jsonEncode({
         'provider': 'google',
         'idToken': {'token': idToken},
+        if (registrationIntent != null)
+          'additionalData': {
+            'dayliRegistrationIntent': registrationIntent.intent,
+            'dayliRegistrationBinding': registrationIntent.flowBinding,
+          },
       }),
     );
     await _storeNativeToken(response, 'google-sign-in');

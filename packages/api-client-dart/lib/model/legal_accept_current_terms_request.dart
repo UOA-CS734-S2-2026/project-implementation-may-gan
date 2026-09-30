@@ -19,10 +19,9 @@ class LegalAcceptCurrentTermsRequest {
     required this.contentDigest,
   });
 
-  final LegalAcceptCurrentTermsRequestAcceptTermsEnum acceptTerms;
+  final bool acceptTerms;
 
-  final LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum
-      declareAge16OrOlder;
+  final bool declareAge16OrOlder;
 
   final String termsVersionId;
 
@@ -61,8 +60,8 @@ class LegalAcceptCurrentTermsRequest {
   /// Clones this instance of [LegalAcceptCurrentTermsRequest] and returns a new one where some of the
   /// properties have changed.
   LegalAcceptCurrentTermsRequest copyWith({
-    LegalAcceptCurrentTermsRequestAcceptTermsEnum? acceptTerms,
-    LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum? declareAge16OrOlder,
+    bool? acceptTerms,
+    bool? declareAge16OrOlder,
     String? termsVersionId,
     String? contentDigest,
   }) =>
@@ -104,11 +103,9 @@ class LegalAcceptCurrentTermsRequest {
       }());
 
       return LegalAcceptCurrentTermsRequest(
-        acceptTerms: LegalAcceptCurrentTermsRequestAcceptTermsEnum.fromJson(
-            json[r'acceptTerms'])!,
+        acceptTerms: mapValueOfType<bool>(json, r'acceptTerms')!,
         declareAge16OrOlder:
-            LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum.fromJson(
-                json[r'declareAge16OrOlder'])!,
+            mapValueOfType<bool>(json, r'declareAge16OrOlder')!,
         termsVersionId: mapValueOfType<String>(json, r'termsVersionId')!,
         contentDigest: mapValueOfType<String>(json, r'contentDigest')!,
       );
@@ -172,181 +169,4 @@ class LegalAcceptCurrentTermsRequest {
     'termsVersionId',
     'contentDigest',
   };
-}
-
-enum LegalAcceptCurrentTermsRequestAcceptTermsEnum {
-  true_._('true'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const LegalAcceptCurrentTermsRequestAcceptTermsEnum._(this._value);
-
-  /// The underlying value of this enum member.
-  final bool _value;
-
-  @override
-  String toString() => _value.toString();
-
-  /// Encodes this enum as a value suitable for JSON.
-  bool toJson() => _value;
-
-  /// Returns the instance of [LegalAcceptCurrentTermsRequestAcceptTermsEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static LegalAcceptCurrentTermsRequestAcceptTermsEnum? fromJson(
-          dynamic value) =>
-      LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer()
-          .decode(value);
-
-  /// Returns a [List] containing instances of [LegalAcceptCurrentTermsRequestAcceptTermsEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalAcceptCurrentTermsRequestAcceptTermsEnum> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
-    final result = <LegalAcceptCurrentTermsRequestAcceptTermsEnum>[];
-    if (json is List && json.isNotEmpty) {
-      for (final row in json) {
-        final value =
-            LegalAcceptCurrentTermsRequestAcceptTermsEnum.fromJson(row);
-        if (value != null) {
-          result.add(value);
-        }
-      }
-    }
-    return result.toList(growable: growable);
-  }
-}
-
-/// Transformation class that can [encode] an instance of [LegalAcceptCurrentTermsRequestAcceptTermsEnum] to bool,
-/// and [decode] dynamic data back to [LegalAcceptCurrentTermsRequestAcceptTermsEnum].
-class LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer {
-  factory LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer() =>
-      _instance ??=
-          const LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer
-              ._();
-
-  const LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer._();
-
-  bool encode(LegalAcceptCurrentTermsRequestAcceptTermsEnum data) =>
-      data._value;
-
-  /// Returns the instance of [LegalAcceptCurrentTermsRequestAcceptTermsEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
-  ///
-  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
-  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
-  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
-  ///
-  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
-  /// and users are still using an old app with the old code.
-  LegalAcceptCurrentTermsRequestAcceptTermsEnum? decode(dynamic data,
-      {bool allowNull = true}) {
-    if (data is LegalAcceptCurrentTermsRequestAcceptTermsEnum) {
-      return data;
-    }
-    if (data != null) {
-      switch (data) {
-        case 'true':
-          return LegalAcceptCurrentTermsRequestAcceptTermsEnum.true_;
-        default:
-          if (!allowNull) {
-            throw ArgumentError('Unknown enum value to decode: $data');
-          }
-      }
-    }
-    return null;
-  }
-
-  /// The singleton instance of this transformer.
-  static LegalAcceptCurrentTermsRequestAcceptTermsEnumTypeTransformer?
-      _instance;
-}
-
-enum LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum {
-  true_._('true'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum._(this._value);
-
-  /// The underlying value of this enum member.
-  final bool _value;
-
-  @override
-  String toString() => _value.toString();
-
-  /// Encodes this enum as a value suitable for JSON.
-  bool toJson() => _value;
-
-  /// Returns the instance of [LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum? fromJson(
-          dynamic value) =>
-      LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer()
-          .decode(value);
-
-  /// Returns a [List] containing instances of [LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum>
-      listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
-    final result = <LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum>[];
-    if (json is List && json.isNotEmpty) {
-      for (final row in json) {
-        final value =
-            LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum.fromJson(row);
-        if (value != null) {
-          result.add(value);
-        }
-      }
-    }
-    return result.toList(growable: growable);
-  }
-}
-
-/// Transformation class that can [encode] an instance of [LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum] to bool,
-/// and [decode] dynamic data back to [LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum].
-class LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer {
-  factory LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer() =>
-      _instance ??=
-          const LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer
-              ._();
-
-  const LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer._();
-
-  bool encode(LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum data) =>
-      data._value;
-
-  /// Returns the instance of [LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
-  ///
-  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
-  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
-  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
-  ///
-  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
-  /// and users are still using an old app with the old code.
-  LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum? decode(dynamic data,
-      {bool allowNull = true}) {
-    if (data is LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum) {
-      return data;
-    }
-    if (data != null) {
-      switch (data) {
-        case 'true':
-          return LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum.true_;
-        default:
-          if (!allowNull) {
-            throw ArgumentError('Unknown enum value to decode: $data');
-          }
-      }
-    }
-    return null;
-  }
-
-  /// The singleton instance of this transformer.
-  static LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnumTypeTransformer?
-      _instance;
 }

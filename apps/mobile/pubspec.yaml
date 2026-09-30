@@ -6,6 +6,7 @@ environment:
   sdk: ^3.12.0
   flutter: ">=3.44.0"
 dependencies:
+  crypto: ^3.0.6
   dayli_api_client:
     path: ../../packages/api-client-dart
   firebase_core: ^4.15.0

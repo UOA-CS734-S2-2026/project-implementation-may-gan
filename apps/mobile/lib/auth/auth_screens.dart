@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../legal/legal_links.dart';
+import '../legal/canonical_agreement.dart';
+import '../legal/legal_service.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/google_sign_in_button.dart';
@@ -32,6 +34,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _fieldErrors = const {};
   String? _error;
   bool _googleNeedsLink = false;
+  CanonicalTerms? _terms;
 
   bool get _signUp => widget.mode == AuthMode.signUp;
 
@@ -75,6 +78,10 @@ class _AuthScreenState extends State<AuthScreen> {
       _error = null;
     });
     if (errors.isNotEmpty) return;
+    if (_signUp && AppScope.of(context).legal != null && _terms == null) {
+      setState(() => _error = 'Read the current Terms, then confirm both declarations.');
+      return;
+    }
 
     final email = _email.text.trim();
 
@@ -90,6 +97,7 @@ class _AuthScreenState extends State<AuthScreen> {
               publicName: _name.text.trim().isEmpty ? null : _name.text.trim(),
               email: email,
               password: _password.text,
+              terms: _terms,
             )
           : session.signIn(email: email, password: _password.text),
       rejected: _signUp
@@ -112,7 +120,10 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
     await _run(
-      () => services.session.signInWithGoogle(google),
+      () => services.session.signInWithGoogle(
+        google,
+        registrationTerms: _signUp ? _terms : null,
+      ),
       rejected: "Google sign-in didn't complete. Try again.",
     );
   }
@@ -156,6 +167,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
+    final legalAvailable = AppScope.of(context).legal != null;
     final form = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -170,8 +182,15 @@ class _AuthScreenState extends State<AuthScreen> {
         ),
         const SizedBox(height: 4),
         const LegalLinks(notice: false),
+        if (_signUp && legalAvailable) ...[
+          const SizedBox(height: 12),
+          CanonicalAgreement(
+            enabled: !_busy,
+            onChanged: (terms) => setState(() => _terms = terms),
+          ),
+        ],
         const SizedBox(height: 12),
-        GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
+        GoogleSignInButton(onPressed: _busy || (_signUp && legalAvailable && _terms == null) ? null : _signInWithGoogle),
         const SizedBox(height: 12),
         DayliDivider(
           label: 'or',

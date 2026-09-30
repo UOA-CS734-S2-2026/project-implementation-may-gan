@@ -26,11 +26,11 @@ export interface LegalIssueRegistrationIntentRequest {
     /**
      *
      */
-    acceptTerms: LegalIssueRegistrationIntentRequestAcceptTermsEnum;
+    acceptTerms: boolean;
     /**
      *
      */
-    declareAge16OrOlder: LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum;
+    declareAge16OrOlder: boolean;
 }
 
 
@@ -44,22 +44,6 @@ export const LegalIssueRegistrationIntentRequestFlowEnum = {
 } as const;
 export type LegalIssueRegistrationIntentRequestFlowEnum = typeof LegalIssueRegistrationIntentRequestFlowEnum[keyof typeof LegalIssueRegistrationIntentRequestFlowEnum];
 
-/**
- * @export
- */
-export const LegalIssueRegistrationIntentRequestAcceptTermsEnum = {
-    True: true,
-} as const;
-export type LegalIssueRegistrationIntentRequestAcceptTermsEnum = typeof LegalIssueRegistrationIntentRequestAcceptTermsEnum[keyof typeof LegalIssueRegistrationIntentRequestAcceptTermsEnum];
-
-/**
- * @export
- */
-export const LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum = {
-    True: true,
-} as const;
-export type LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum = typeof LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum[keyof typeof LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum];
-
 
 /**
  * Check if a given object implements the LegalIssueRegistrationIntentRequest interface.
@@ -67,11 +51,7 @@ export type LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum = typeof 
 export function instanceOfLegalIssueRegistrationIntentRequest(value: object): value is LegalIssueRegistrationIntentRequest {
     if (!('flow' in value) || value['flow'] === undefined) return false;
     if (!('acceptTerms' in value) || value['acceptTerms'] === undefined) return false;
-
-    if (value['acceptTerms'] !== true) return false;
     if (!('declareAge16OrOlder' in value) || value['declareAge16OrOlder'] === undefined) return false;
-
-    if (value['declareAge16OrOlder'] !== true) return false;
     return true;
 }
 

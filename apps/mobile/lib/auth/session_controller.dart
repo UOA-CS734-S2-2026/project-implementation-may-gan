@@ -7,9 +7,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' show ClientException;
 
 import '../drafts/draft_store.dart';
+import '../legal/legal_service.dart';
 import 'native_session.dart';
 
-enum SessionStatus { unknown, signedOut, needsUsernameSetup, signedIn }
+enum SessionStatus { unknown, signedOut, needsUsernameSetup, legalRestricted, signedIn }
 
 /// A capability passed to async startup work. It becomes invalid before old
 /// credentials are replaced or cleared, so late startup cannot affect a new
@@ -83,12 +84,15 @@ class SessionController extends ChangeNotifier {
     this.onPrivateDataClear,
     this.onBeforeSessionReplacement,
     this.onSignedIn,
+    this.legal,
   });
 
   final BetterAuthNativeSession _session;
   final SessionTokenStore _tokenStore;
   final SessionUserCache _userCache;
   final DraftStore _drafts;
+  final LegalService? legal;
+  AccountPolicySnapshot? _accountPolicy;
 
   /// Closes sockets and clears messaging caches before account state changes.
   final FutureOr<void> Function()? onPrivateDataClear;
@@ -108,6 +112,7 @@ class SessionController extends ChangeNotifier {
 
   SessionStatus get status => _status;
   SessionUser? get user => _user;
+  AccountPolicySnapshot? get accountPolicy => _accountPolicy;
 
   Future<String?> bearerToken() => _session.bearerToken();
 
@@ -166,14 +171,25 @@ class SessionController extends ChangeNotifier {
     required String? publicName,
     required String email,
     required String password,
+    CanonicalTerms? terms,
   }) async {
+    final client = legal;
     await _beforeCredentialReplacement();
+    LegalRegistrationIntent? intent;
+    if (client != null) {
+      if (terms == null) throw const LegalFailure('Read the current Terms, then confirm both declarations.');
+      intent = await client.issueIntent('email');
+      if (intent.terms.id != terms.id || intent.terms.contentDigest != terms.contentDigest) {
+        throw const LegalFailure('The Terms changed. Read the current version.');
+      }
+    }
     await _session.signUp(
       name: name,
       username: username,
       publicName: publicName,
       email: email,
       password: password,
+      registrationIntent: intent,
     );
     await _afterAuthentication();
   }
@@ -198,9 +214,22 @@ class SessionController extends ChangeNotifier {
     _set(SessionStatus.signedIn, completed);
   }
 
-  Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+  Future<void> signInWithGoogle(
+    GoogleIdTokenProvider provider, {
+    CanonicalTerms? registrationTerms,
+  }) async {
     await _beforeCredentialReplacement();
-    await _session.signInWithGoogle(provider);
+    LegalRegistrationIntent? intent;
+    if (registrationTerms != null) {
+      final client = legal;
+      if (client == null) throw const LegalFailure('Legal registration is unavailable.');
+      intent = await client.issueIntent('google_native');
+      if (intent.terms.id != registrationTerms.id ||
+          intent.terms.contentDigest != registrationTerms.contentDigest) {
+        throw const LegalFailure('The Terms changed. Read the current version.');
+      }
+    }
+    await _session.signInWithGoogle(provider, registrationIntent: intent);
     await _afterAuthentication();
   }
 
@@ -296,10 +325,37 @@ class SessionController extends ChangeNotifier {
     await _signedIn(user);
   }
 
+  Future<void> acceptCurrentTerms(CanonicalTerms terms) async {
+    final client = legal;
+    final bearer = await _session.bearerToken();
+    if (client == null || bearer == null) {
+      throw const LegalFailure('Legal acceptance is unavailable.');
+    }
+    await client.accept(terms, bearer);
+    final user = _user;
+    if (user == null) throw const AuthenticationFailure('get-session', 401);
+    await _signedIn(user);
+  }
+
   Future<void> _signedIn(SessionUser user, {bool persistUser = true}) async {
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
     if (persistUser) await _userCache.write(user);
+    final client = legal;
+    final bearer = await _session.bearerToken();
+    if (client != null && bearer != null) {
+      try {
+        _accountPolicy = await client.readPolicy(bearer);
+      } on LegalFailure {
+        _accountPolicy = null;
+        _set(SessionStatus.legalRestricted, user);
+        return;
+      }
+      if (!_accountPolicy!.isActive) {
+        _set(SessionStatus.legalRestricted, user);
+        return;
+      }
+    }
     _set(
       user.username == null
           ? SessionStatus.needsUsernameSetup
@@ -342,6 +398,7 @@ class SessionController extends ChangeNotifier {
   Future<void> _clearLocalSessionState({bool clearToken = true}) async {
     if (clearToken) await _tokenStore.clear();
     await _userCache.clear();
+    _accountPolicy = null;
     _set(SessionStatus.signedOut, null);
   }
 

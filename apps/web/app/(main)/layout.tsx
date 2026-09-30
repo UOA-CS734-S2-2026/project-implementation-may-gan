@@ -3,10 +3,11 @@ import { MobileNavCloseListener } from "@/components/ui/layout/MobileNavCloseLis
 import { Suspense } from "react";
 import { MessagingProvider } from "@/features/messaging/realtime/MessagingProvider";
 import { UsernameSetupGate } from "@/components/auth/UsernameSetupGate";
+import { RestrictedLegalGate } from "@/components/legal/RestrictedLegalGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <UsernameSetupGate><MessagingProvider><main className="min-h-screen flex w-full bg-background">
+    <RestrictedLegalGate><UsernameSetupGate><MessagingProvider><main className="min-h-screen flex w-full bg-background">
       {/* Left: navbar */}
       <div className="fixed flex-none z-10">
         <Navbar />
@@ -22,6 +23,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <MobileNavCloseListener />
       </Suspense>
-    </main></MessagingProvider></UsernameSetupGate>
+    </main></MessagingProvider></UsernameSetupGate></RestrictedLegalGate>
   );
 }

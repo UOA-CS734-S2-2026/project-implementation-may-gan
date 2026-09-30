@@ -22,11 +22,11 @@ export interface LegalAcceptCurrentTermsRequest {
     /**
      *
      */
-    acceptTerms: LegalAcceptCurrentTermsRequestAcceptTermsEnum;
+    acceptTerms: boolean;
     /**
      *
      */
-    declareAge16OrOlder: LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum;
+    declareAge16OrOlder: boolean;
     /**
      *
      */
@@ -37,34 +37,12 @@ export interface LegalAcceptCurrentTermsRequest {
     contentDigest: string;
 }
 
-
-/**
- * @export
- */
-export const LegalAcceptCurrentTermsRequestAcceptTermsEnum = {
-    True: true,
-} as const;
-export type LegalAcceptCurrentTermsRequestAcceptTermsEnum = typeof LegalAcceptCurrentTermsRequestAcceptTermsEnum[keyof typeof LegalAcceptCurrentTermsRequestAcceptTermsEnum];
-
-/**
- * @export
- */
-export const LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum = {
-    True: true,
-} as const;
-export type LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum = typeof LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum[keyof typeof LegalAcceptCurrentTermsRequestDeclareAge16OrOlderEnum];
-
-
 /**
  * Check if a given object implements the LegalAcceptCurrentTermsRequest interface.
  */
 export function instanceOfLegalAcceptCurrentTermsRequest(value: object): value is LegalAcceptCurrentTermsRequest {
     if (!('acceptTerms' in value) || value['acceptTerms'] === undefined) return false;
-
-    if (value['acceptTerms'] !== true) return false;
     if (!('declareAge16OrOlder' in value) || value['declareAge16OrOlder'] === undefined) return false;
-
-    if (value['declareAge16OrOlder'] !== true) return false;
     if (!('termsVersionId' in value) || value['termsVersionId'] === undefined) return false;
     if (!('contentDigest' in value) || value['contentDigest'] === undefined) return false;
     return true;

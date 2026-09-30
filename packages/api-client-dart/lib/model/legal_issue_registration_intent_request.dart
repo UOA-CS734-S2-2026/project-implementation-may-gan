@@ -20,10 +20,9 @@ class LegalIssueRegistrationIntentRequest {
 
   final LegalIssueRegistrationIntentRequestFlowEnum flow;
 
-  final LegalIssueRegistrationIntentRequestAcceptTermsEnum acceptTerms;
+  final bool acceptTerms;
 
-  final LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum
-      declareAge16OrOlder;
+  final bool declareAge16OrOlder;
 
   @override
   bool operator ==(Object other) =>
@@ -54,9 +53,8 @@ class LegalIssueRegistrationIntentRequest {
   /// properties have changed.
   LegalIssueRegistrationIntentRequest copyWith({
     LegalIssueRegistrationIntentRequestFlowEnum? flow,
-    LegalIssueRegistrationIntentRequestAcceptTermsEnum? acceptTerms,
-    LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum?
-        declareAge16OrOlder,
+    bool? acceptTerms,
+    bool? declareAge16OrOlder,
   }) =>
       LegalIssueRegistrationIntentRequest(
         flow: flow ?? this.flow,
@@ -93,12 +91,9 @@ class LegalIssueRegistrationIntentRequest {
       return LegalIssueRegistrationIntentRequest(
         flow: LegalIssueRegistrationIntentRequestFlowEnum.fromJson(
             json[r'flow'])!,
-        acceptTerms:
-            LegalIssueRegistrationIntentRequestAcceptTermsEnum.fromJson(
-                json[r'acceptTerms'])!,
+        acceptTerms: mapValueOfType<bool>(json, r'acceptTerms')!,
         declareAge16OrOlder:
-            LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum.fromJson(
-                json[r'declareAge16OrOlder'])!,
+            mapValueOfType<bool>(json, r'declareAge16OrOlder')!,
       );
     }
     return null;
@@ -250,187 +245,4 @@ class LegalIssueRegistrationIntentRequestFlowEnumTypeTransformer {
 
   /// The singleton instance of this transformer.
   static LegalIssueRegistrationIntentRequestFlowEnumTypeTransformer? _instance;
-}
-
-enum LegalIssueRegistrationIntentRequestAcceptTermsEnum {
-  true_._('true'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const LegalIssueRegistrationIntentRequestAcceptTermsEnum._(this._value);
-
-  /// The underlying value of this enum member.
-  final bool _value;
-
-  @override
-  String toString() => _value.toString();
-
-  /// Encodes this enum as a value suitable for JSON.
-  bool toJson() => _value;
-
-  /// Returns the instance of [LegalIssueRegistrationIntentRequestAcceptTermsEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static LegalIssueRegistrationIntentRequestAcceptTermsEnum? fromJson(
-          dynamic value) =>
-      LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer()
-          .decode(value);
-
-  /// Returns a [List] containing instances of [LegalIssueRegistrationIntentRequestAcceptTermsEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalIssueRegistrationIntentRequestAcceptTermsEnum> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
-    final result = <LegalIssueRegistrationIntentRequestAcceptTermsEnum>[];
-    if (json is List && json.isNotEmpty) {
-      for (final row in json) {
-        final value =
-            LegalIssueRegistrationIntentRequestAcceptTermsEnum.fromJson(row);
-        if (value != null) {
-          result.add(value);
-        }
-      }
-    }
-    return result.toList(growable: growable);
-  }
-}
-
-/// Transformation class that can [encode] an instance of [LegalIssueRegistrationIntentRequestAcceptTermsEnum] to bool,
-/// and [decode] dynamic data back to [LegalIssueRegistrationIntentRequestAcceptTermsEnum].
-class LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer {
-  factory LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer() =>
-      _instance ??=
-          const LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer
-              ._();
-
-  const LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer._();
-
-  bool encode(LegalIssueRegistrationIntentRequestAcceptTermsEnum data) =>
-      data._value;
-
-  /// Returns the instance of [LegalIssueRegistrationIntentRequestAcceptTermsEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
-  ///
-  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
-  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
-  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
-  ///
-  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
-  /// and users are still using an old app with the old code.
-  LegalIssueRegistrationIntentRequestAcceptTermsEnum? decode(dynamic data,
-      {bool allowNull = true}) {
-    if (data is LegalIssueRegistrationIntentRequestAcceptTermsEnum) {
-      return data;
-    }
-    if (data != null) {
-      switch (data) {
-        case 'true':
-          return LegalIssueRegistrationIntentRequestAcceptTermsEnum.true_;
-        default:
-          if (!allowNull) {
-            throw ArgumentError('Unknown enum value to decode: $data');
-          }
-      }
-    }
-    return null;
-  }
-
-  /// The singleton instance of this transformer.
-  static LegalIssueRegistrationIntentRequestAcceptTermsEnumTypeTransformer?
-      _instance;
-}
-
-enum LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum {
-  true_._('true'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum._(
-      this._value);
-
-  /// The underlying value of this enum member.
-  final bool _value;
-
-  @override
-  String toString() => _value.toString();
-
-  /// Encodes this enum as a value suitable for JSON.
-  bool toJson() => _value;
-
-  /// Returns the instance of [LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum? fromJson(
-          dynamic value) =>
-      LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer()
-          .decode(value);
-
-  /// Returns a [List] containing instances of [LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum>
-      listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
-    final result =
-        <LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum>[];
-    if (json is List && json.isNotEmpty) {
-      for (final row in json) {
-        final value =
-            LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum.fromJson(
-                row);
-        if (value != null) {
-          result.add(value);
-        }
-      }
-    }
-    return result.toList(growable: growable);
-  }
-}
-
-/// Transformation class that can [encode] an instance of [LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum] to bool,
-/// and [decode] dynamic data back to [LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum].
-class LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer {
-  factory LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer() =>
-      _instance ??=
-          const LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer
-              ._();
-
-  const LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer._();
-
-  bool encode(
-          LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum data) =>
-      data._value;
-
-  /// Returns the instance of [LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
-  ///
-  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
-  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
-  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
-  ///
-  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
-  /// and users are still using an old app with the old code.
-  LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum? decode(
-      dynamic data,
-      {bool allowNull = true}) {
-    if (data is LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum) {
-      return data;
-    }
-    if (data != null) {
-      switch (data) {
-        case 'true':
-          return LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnum
-              .true_;
-        default:
-          if (!allowNull) {
-            throw ArgumentError('Unknown enum value to decode: $data');
-          }
-      }
-    }
-    return null;
-  }
-
-  /// The singleton instance of this transformer.
-  static LegalIssueRegistrationIntentRequestDeclareAge16OrOlderEnumTypeTransformer?
-      _instance;
 }

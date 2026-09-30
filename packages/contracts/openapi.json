@@ -1733,16 +1733,10 @@
                     ]
                   },
                   "acceptTerms": {
-                    "type": "boolean",
-                    "enum": [
-                      true
-                    ]
+                    "type": "boolean"
                   },
                   "declareAge16OrOlder": {
-                    "type": "boolean",
-                    "enum": [
-                      true
-                    ]
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1866,16 +1860,10 @@
                 "type": "object",
                 "properties": {
                   "acceptTerms": {
-                    "type": "boolean",
-                    "enum": [
-                      true
-                    ]
+                    "type": "boolean"
                   },
                   "declareAge16OrOlder": {
-                    "type": "boolean",
-                    "enum": [
-                      true
-                    ]
+                    "type": "boolean"
                   },
                   "termsVersionId": {
                     "type": "string"

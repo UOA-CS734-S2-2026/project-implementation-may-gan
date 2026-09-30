@@ -1,15 +1,18 @@
 "use client";
 
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
-import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { LegalAgreement } from "@/components/legal/LegalAgreement";
+import { LegalLinks } from "@/components/legal/LegalLinks";
+import { issueRegistrationIntent, registrationHeaders, type CanonicalTerms } from "@/lib/legal/client";
+import { apiBaseUrl } from "@/lib/api/config";
 import { clearHistoryFormDraft, useHistoryFormDraft } from "@/lib/auth/history-form-draft";
 
 const signUpSchema = z.object({
@@ -23,6 +26,7 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 
 export default function SignUpPage() {
   const router = useRouter();
+  const [agreement, setAgreement] = useState<{ accepted: boolean; terms: CanonicalTerms | null }>({ accepted: false, terms: null });
 
   const {
     control,
@@ -38,17 +42,35 @@ export default function SignUpPage() {
 
   useHistoryFormDraft("sign-up", reset, watch);
 
-  const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
-    // Better Auth requires name, but the handle remains the public fallback.
-    const { error } = await authClient.signUp.email({ name: publicName || username, username, displayUsername: publicName || undefined, email, password } as Parameters<typeof authClient.signUp.email>[0]);
+  const onAgreementChange = useCallback((value: { accepted: boolean; terms: CanonicalTerms | null }) => setAgreement(value), []);
 
-    if (error) {
-      setError("root", { message: error.message ?? "Something went wrong." });
+  const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
+    if (!agreement.accepted || !agreement.terms || !apiBaseUrl) {
+      setError("root", { message: "Read the current Terms, then confirm both declarations." });
       return;
     }
-
-    clearHistoryFormDraft("sign-up");
-    router.push("/home");
+    try {
+      const proof = await issueRegistrationIntent("email");
+      if (proof.terms.id !== agreement.terms.id || proof.terms.contentDigest !== agreement.terms.contentDigest) {
+        setAgreement({ accepted: false, terms: null });
+        setError("root", { message: "The Terms changed. Read the current version before continuing." });
+        return;
+      }
+      const response = await fetch(`${apiBaseUrl}/api/auth/sign-up/email`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json", ...registrationHeaders(proof) },
+        body: JSON.stringify({ name: publicName || username, username, displayUsername: publicName || undefined, email, password }),
+      });
+      if (!response.ok) {
+        setError("root", { message: response.status === 403 || response.status === 409 ? "The Terms changed. Read the current version before continuing." : "That account couldn't be created. Check your details." });
+        return;
+      }
+      clearHistoryFormDraft("sign-up");
+      router.push("/home");
+    } catch (cause) {
+      setError("root", { message: cause instanceof Error ? cause.message : "Legal registration is unavailable. Try again." });
+    }
   };
 
   return (
@@ -63,11 +85,10 @@ export default function SignUpPage() {
 
       <div className="flex flex-col gap-4">
         <div className="space-y-1">
-          <p className="text-xs leading-5 text-foreground-secondary">Review Dayli&apos;s legal documents before creating an account or continuing with Google.</p>
+          <p className="text-xs leading-5 text-foreground-secondary">Privacy information is available separately from the account agreement.</p>
           <LegalLinks className="text-xs text-foreground-secondary" />
-          <LegalDraftNotice />
         </div>
-        <GoogleSignInButton />
+        <GoogleSignInButton mode="signUp" agreement={agreement} onFailure={(message) => setError("root", { message })} disabled={isSubmitting || !agreement.accepted} />
 
         <div className="relative flex items-center">
           <div className="flex-grow border-t border-foreground/10" />
@@ -101,8 +122,9 @@ export default function SignUpPage() {
           type="password"
           autoComplete="new-password"
         />
+        <LegalAgreement onChange={onAgreementChange} disabled={isSubmitting} />
         {errors.root && (
-          <p className="text-sm text-danger">{errors.root.message}</p>
+          <p role="alert" className="text-sm text-danger">{errors.root.message}</p>
         )}
       </div>
 
@@ -111,7 +133,7 @@ export default function SignUpPage() {
         <div className="flex items-center gap-3">
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !agreement.accepted}
             variant={{ weight: "secondary", size: "sm", color: "accent" }}
             arrow
           >

@@ -9,6 +9,7 @@ import '../friends/social_profile_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
 import '../legal/legal_document_screen.dart';
+import '../legal/restricted_legal_screen.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/messages_screen.dart';
 import '../messaging/new_message_screen.dart';
@@ -40,6 +41,8 @@ GoRouter buildRouter(
         return public ? null : '/welcome';
       case SessionStatus.needsUsernameSetup:
         return location == '/setup-username' ? null : '/setup-username';
+      case SessionStatus.legalRestricted:
+        return location == '/legal-restricted' ? null : '/legal-restricted';
       case SessionStatus.signedIn:
         return public || location == '/splash' || location == '/setup-username'
             ? '/'
@@ -68,6 +71,10 @@ GoRouter buildRouter(
     GoRoute(
       path: '/setup-username',
       builder: (_, _) => const UsernameSetupScreen(),
+    ),
+    GoRoute(
+      path: '/legal-restricted',
+      builder: (_, _) => const RestrictedLegalScreen(),
     ),
     // Full-screen pages above the tabs.
     GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),

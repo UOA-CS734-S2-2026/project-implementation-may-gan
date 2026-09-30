@@ -6,6 +6,7 @@ import '../api/post_client.dart';
 import '../api/posting_day_client.dart';
 import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
+import '../legal/legal_service.dart';
 import '../compose/media_picker.dart';
 import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
@@ -23,6 +24,7 @@ class AppServices {
     required this.friends,
     required this.drafts,
     required this.submitter,
+    this.legal,
     MessagingController? messaging,
     this.notifications,
     this.google,
@@ -38,6 +40,7 @@ class AppServices {
   final FriendsClient friends;
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
+  final LegalService? legal;
   final MessagingController messaging;
   final FirebasePushLifecycle? notifications;
 

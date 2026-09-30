@@ -18,6 +18,7 @@ import 'app/session_integrations.dart';
 import 'auth/native_session.dart';
 import 'auth/session_controller.dart';
 import 'drafts/draft_store.dart';
+import 'legal/legal_service.dart';
 import 'messaging/messaging_client.dart';
 import 'messaging/messaging_controller.dart';
 import 'notifications/firebase_push_source.dart';
@@ -59,6 +60,7 @@ Future<void> main() async {
     baseUrl: config.apiBaseUrl,
     tokenStore: tokenStore,
   );
+  final legal = LegalService(baseUrl: config.apiBaseUrl);
   final messagingClient = HttpMessagingClient(
     baseUrl: config.apiBaseUrl,
     bearerToken: nativeSession.bearerToken,
@@ -104,6 +106,7 @@ Future<void> main() async {
     // stops and clears messaging, then rethrows any unsafe push cleanup error.
     onBeforeSessionReplacement: integrations.clear,
     onPrivateDataClear: integrations.clear,
+    legal: legal,
   );
 
   runApp(
@@ -127,6 +130,7 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         drafts: drafts,
+        legal: legal,
         messaging: messaging,
         notifications: notifications,
         google: config.googleSignInConfigured

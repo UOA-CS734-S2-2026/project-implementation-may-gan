@@ -48,6 +48,8 @@ class LegalDocumentScreen extends StatelessWidget {
         context.go('/welcome');
       case SessionStatus.needsUsernameSetup:
         context.go('/setup-username');
+      case SessionStatus.legalRestricted:
+        context.go('/legal-restricted');
       case SessionStatus.signedIn:
         context.go('/');
     }
