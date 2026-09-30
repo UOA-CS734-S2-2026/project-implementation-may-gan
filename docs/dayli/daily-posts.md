@@ -17,7 +17,7 @@
 
 The body is strict: unknown fields, including any author ID, fail with `422 VALIDATION_FAILED`. The response includes `media`, the attached photos or video in display order (`id`, `contentType`, `order`); it is empty for a text-only post. Download URLs are not part of this response.
 
-Media is optional in both composers. The API links validated uploads to the post, but neither client sends `attachments` yet, so both composers keep selected files on the device by default. A Flutter build with `DAYLI_MEDIA_UPLOADS=true` uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client) and won't post until every attachment passes. The generated Dart request model writes omitted optional fields as `null` and `attachments` as an empty list; the Flutter submitter removes both before sending, so a text-only post works against an API with or without attachment support.
+Media is optional in both composers. The Flutter composer uploads and validates each attachment through [media reservations](media-reservations.md#flutter-client), won't post until every attachment passes, then sends their reservation IDs as `attachments`. The web composer keeps selected files in the browser and posts text only. The generated Dart request model writes omitted optional fields as `null` and `attachments` as an empty list; the Flutter submitter removes both before sending, so a text-only post works against an API with or without attachment support.
 
 ## Acceptance
 

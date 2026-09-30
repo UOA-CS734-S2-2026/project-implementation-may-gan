@@ -479,6 +479,66 @@ void main() {
     );
   });
 
+  group('when the server refuses an attachment', () {
+    const validated = DraftAttachment(
+      localPath: '/photos/0.jpg',
+      mediaType: 'image',
+      compressedPath: '/support/dayli-media/0.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1000,
+      reservationId: 'reservation-1',
+      status: AttachmentUploadStatus.validated,
+    );
+
+    Future<ComposerController> filledWithUpload() async {
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      composer.update(attachments: const [validated]);
+      return composer;
+    }
+
+    test(
+      'keeps everything and asks to wait when an upload is in flight',
+      () async {
+        submitter.result = const SubmissionRejected(
+          SubmissionConflict.mediaNotReady,
+        );
+        final composer = await filledWithUpload();
+        await composer.submit();
+
+        expect(composer.phase, ComposerPhase.editing);
+        expect(composer.message, contains('still uploading'));
+        expect(composer.draft!.attachments.single, validated);
+        composer.dispose();
+      },
+    );
+
+    test('uploads every attachment again from its compressed copy', () async {
+      submitter.result = const SubmissionRejected(
+        SubmissionConflict.mediaUnavailable,
+      );
+      final composer = await filledWithUpload();
+      await composer.submit();
+      await composer.close();
+
+      expect(composer.phase, ComposerPhase.editing);
+      expect(composer.message, contains('upload again'));
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.status, AttachmentUploadStatus.pending);
+      expect(attachment.reservationId, isNull);
+      expect(attachment.compressedPath, '/support/dayli-media/0.jpg');
+      expect(attachment.byteSize, 1000);
+      // Saved, so a restart doesn't resume the dead reservation.
+      expect(drafts.drafts['user-1']!.attachments.single, attachment);
+      expect(
+        drafts.drafts['user-1']!.idempotencyKey,
+        composer.draft!.idempotencyKey,
+      );
+      composer.dispose();
+    });
+  });
+
   group('with media uploads', () {
     const uploading = DraftAttachment(
       localPath: '/photos/0.jpg',

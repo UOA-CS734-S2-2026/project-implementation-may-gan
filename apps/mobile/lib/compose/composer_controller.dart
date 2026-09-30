@@ -424,6 +424,15 @@ class ComposerController extends ChangeNotifier {
         _message =
             "Today's dayli was already posted, so this one can't be posted. "
             'Your words are still saved on this device.';
+      case SubmissionRejected(conflict: SubmissionConflict.mediaNotReady):
+        _message =
+            'Your photos and videos are still uploading. Post again once '
+            "they're done.";
+      case SubmissionRejected(conflict: SubmissionConflict.mediaUnavailable):
+        _uploadAttachmentsAgain();
+        _message =
+            'Some photos or videos need to upload again. Post once '
+            "they're done.";
       case SubmissionRejected(
         conflict: SubmissionConflict.idempotencyKeyReused,
       ):
@@ -458,6 +467,29 @@ class ComposerController extends ChangeNotifier {
       if (_phase == ComposerPhase.editing) _message ??= failure;
     }
     _notify();
+  }
+
+  /// Forgets every attachment's reservation but keeps its compressed copy,
+  /// so the upload controller uploads each one again without recompressing.
+  /// The server rejected the attempt, so reusing the idempotency key with the
+  /// new reservations is safe.
+  void _uploadAttachmentsAgain() {
+    final current = _draft;
+    if (current == null) return;
+    _draft = current.copyWith(
+      attachments: [
+        for (final attachment in current.attachments)
+          DraftAttachment(
+            localPath: attachment.localPath,
+            mediaType: attachment.mediaType,
+            compressedPath: attachment.compressedPath,
+            contentType: attachment.contentType,
+            byteSize: attachment.byteSize,
+          ),
+      ],
+      updatedAt: _clock(),
+    );
+    _scheduleSave();
   }
 
   DailyPostDraft _forDay(DailyPostDraft? saved, PostingDay day) {

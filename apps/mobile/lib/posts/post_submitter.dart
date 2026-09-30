@@ -23,7 +23,13 @@ enum SubmissionConflict {
   alreadyPosted('ALREADY_POSTED'),
 
   /// The idempotency key was already used for a different submission.
-  idempotencyKeyReused('IDEMPOTENCY_KEY_REUSED');
+  idempotencyKeyReused('IDEMPOTENCY_KEY_REUSED'),
+
+  /// An attachment is still uploading on the server's side.
+  mediaNotReady('MEDIA_NOT_READY'),
+
+  /// An attachment's upload can't be used any more and must be redone.
+  mediaUnavailable('MEDIA_UNAVAILABLE');
 
   const SubmissionConflict(this.reason);
 
@@ -70,7 +76,7 @@ abstract interface class DailyPostSubmitter {
 }
 
 /// Submits through the generated Dart client with the stored Better Auth
-/// bearer session. Media stays on the device until uploads land (#22).
+/// bearer session. Validated uploads are sent as reservation IDs.
 class GeneratedPostSubmitter implements DailyPostSubmitter {
   GeneratedPostSubmitter({
     required String baseUrl,
@@ -129,15 +135,27 @@ class GeneratedPostSubmitter implements DailyPostSubmitter {
       );
     }
     if (status == HttpStatus.conflict) {
-      final error = _decode(response.body)?['error'];
-      final details = error is Map<String, Object?> ? error['details'] : null;
       final conflict = SubmissionConflict.fromReason(
-        details is Map<String, Object?> ? details['reason'] : null,
+        _errorReason(response.body),
       );
       if (conflict != null) return SubmissionRejected(conflict);
       return const SubmissionFailed(ServiceUnavailable());
     }
+    if (status == HttpStatus.unprocessableEntity &&
+        _errorReason(response.body) == 'MEDIA_NOT_ALLOWED') {
+      return const SubmissionFailed(
+        InvalidRequest(
+          'A dayli can have up to 3 photos or 1 video, up to 25 MB in total.',
+        ),
+      );
+    }
     return SubmissionFailed(failureForStatus(status, null));
+  }
+
+  static Object? _errorReason(String body) {
+    final error = _decode(body)?['error'];
+    final details = error is Map<String, Object?> ? error['details'] : null;
+    return details is Map<String, Object?> ? details['reason'] : null;
   }
 
   static Map<String, Object?>? _decode(String body) {
@@ -151,7 +169,9 @@ class GeneratedPostSubmitter implements DailyPostSubmitter {
 }
 
 /// Builds the create-post body from a draft. Text is trimmed to match the
-/// server's normalisation, and blank optional fields are omitted.
+/// server's normalisation, and blank optional fields are omitted. Only
+/// validated uploads are attached; the composer won't post while any other
+/// attachment is still uploading, so in practice that is all of them.
 generated.CreateDailyPostRequest createRequestFor(
   DailyPostDraft draft,
   PostAudience audience,
@@ -172,6 +192,11 @@ generated.CreateDailyPostRequest createRequestFor(
       PostAudience.solo => generated.PostAudience.solo,
     },
     tomorrowNote: optional(draft.tomorrowNote),
+    attachments: [
+      for (final attachment in draft.attachments)
+        if (attachment.status == AttachmentUploadStatus.validated)
+          if (attachment.reservationId case final id?) id,
+    ],
   );
 }
 
@@ -188,6 +213,7 @@ class _CreateDailyPostRequest extends generated.CreateDailyPostRequest {
     required super.rating,
     required super.audience,
     super.tomorrowNote,
+    super.attachments,
   });
 
   @override

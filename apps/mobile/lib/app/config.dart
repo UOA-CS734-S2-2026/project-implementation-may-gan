@@ -5,7 +5,6 @@ class AppConfig {
     this.googleWebClientId = '',
     this.googleIosClientId = '',
     this.firebaseConfigured = false,
-    this.mediaUploadsEnabled = false,
   });
 
   /// The Hono API origin, for example `https://api.example.test`. See
@@ -19,11 +18,6 @@ class AppConfig {
 
   /// Set only in builds that include owner-provided Firebase platform files.
   final bool firebaseConfigured;
-
-  /// Off by default. Posts can't carry media until the API links uploaded
-  /// attachments to posts, so an upload made now would be orphaned when the
-  /// dayli posts. Turn it on only to test uploads.
-  final bool mediaUploadsEnabled;
 
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty;
 
@@ -39,7 +33,6 @@ class AppConfig {
       googleWebClientId: String.fromEnvironment('DAYLI_GOOGLE_WEB_CLIENT_ID'),
       googleIosClientId: String.fromEnvironment('DAYLI_GOOGLE_IOS_CLIENT_ID'),
       firebaseConfigured: bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED'),
-      mediaUploadsEnabled: bool.fromEnvironment('DAYLI_MEDIA_UPLOADS'),
     );
   }
 }

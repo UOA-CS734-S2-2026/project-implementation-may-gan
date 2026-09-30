@@ -65,7 +65,7 @@ Only the data layer is missing features:
 - Feed cards and post detail show text only until media downloads (#24). Likes and comments arrive with #79/#80.
 - Friends, my days, and messages are placeholders until their APIs land.
 - Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
-- Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media stays on the device and posts carry text only until the API links attachments to posts. Background compression and upload (#22) exists behind `--dart-define=DAYLI_MEDIA_UPLOADS=true` for testing; leave it off otherwise, because a dayli posted with uploaded media would leave those uploads unlinked. Photos are not cropped.
+- Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media is compressed and uploaded in the background (#22), and the post links the validated uploads. Feed cards and post detail can't show it until downloads are authorised (#24). Photos are not cropped.
 
 ## Structure
 

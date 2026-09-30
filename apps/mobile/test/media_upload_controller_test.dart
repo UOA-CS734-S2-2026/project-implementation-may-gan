@@ -427,6 +427,45 @@ void main() {
     });
   });
 
+  test(
+    're-uploads after the server refuses an attachment, then posts',
+    () async {
+      final (composer, _) = await open();
+      composer.update(
+        reflectiveAnswer: 'Coffee by the harbour',
+        rating: () => 7,
+        audience: PostAudience.solo,
+        attachments: [picked('a.jpg')],
+      );
+      await settle();
+      expect(composer.draft!.attachments.single.reservationId, 'reservation-1');
+
+      submitter.result = const SubmissionRejected(
+        SubmissionConflict.mediaUnavailable,
+      );
+      await composer.submit();
+      await settle();
+
+      // Reserved and uploaded again from the same compressed copy.
+      expect(compressor.compressed, hasLength(1));
+      expect(client.reserved, hasLength(2));
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.reservationId, 'reservation-2');
+      expect(attachment.status, AttachmentUploadStatus.validated);
+
+      submitter.result = const SubmissionAccepted(
+        postId: 'post-1',
+        replayed: false,
+      );
+      await composer.submit();
+      expect(composer.phase, ComposerPhase.posted);
+      expect(
+        submitter.submitted.last.attachments.single.reservationId,
+        'reservation-2',
+      );
+    },
+  );
+
   test('backs off when too many uploads are waiting', () async {
     client.reserveResults.add(const ApiError(RateLimited()));
     final (composer, _) = await open();
