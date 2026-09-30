@@ -9,6 +9,7 @@ import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
 import { getUsernameProfile } from "@/lib/profile/username";
 import { useProfileDetailsQuery } from "@/features/profiles/get-profile-details/use-profile-details-query";
 import { EditProfileForm } from "@/features/profiles/update-profile/EditProfileForm";
+import { AvatarForm } from "@/features/profiles/update-profile/AvatarForm";
 import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUsernameForm";
 
 export default function SettingsPage() {
@@ -47,6 +48,7 @@ export default function SettingsPage() {
         {profile.data?.owner ? (
           <>
             {/* Keyed so the forms start from the saved values after each change. */}
+            <AvatarForm profile={profile.data} />
             <EditProfileForm key={`${profile.data.displayName}|${profile.data.bio ?? ""}`} profile={profile.data} />
             <ChangeUsernameForm key={profile.data.username} profile={profile.data} />
             <ProfileVisibilityToggle visibility={profile.data.owner.profileVisibility} />

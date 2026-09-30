@@ -6,12 +6,15 @@ import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUs
 import { profilesApi, type ProfileDetails } from "@/features/profiles/shared/profiles.api";
 import { EditProfileForm } from "@/features/profiles/update-profile/EditProfileForm";
 import { ProfileVisibilityToggle } from "@/app/(main)/settings/_components/ProfileVisibilityToggle";
+import { AvatarForm } from "@/features/profiles/update-profile/AvatarForm";
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "me" }, session: { id: "me" }, isPending: false }) }));
-vi.mock("@/features/profiles/shared/profiles.api", () => ({ profilesApi: { details: vi.fn(), update: vi.fn(), changeUsername: vi.fn() } }));
+vi.mock("@/features/profiles/shared/profiles.api", () => ({ profilesApi: { details: vi.fn(), update: vi.fn(), changeUsername: vi.fn(), uploadAvatar: vi.fn(), removeAvatar: vi.fn() } }));
 
 const update = profilesApi.update as unknown as ReturnType<typeof vi.fn>;
 const changeUsername = profilesApi.changeUsername as unknown as ReturnType<typeof vi.fn>;
+const uploadAvatar = profilesApi.uploadAvatar as unknown as ReturnType<typeof vi.fn>;
+const removeAvatar = profilesApi.removeAvatar as unknown as ReturnType<typeof vi.fn>;
 
 function render(ui: Parameters<typeof rtlRender>[0]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -27,7 +30,7 @@ function me(overrides: Partial<ProfileDetails> = {}): ProfileDetails {
     bio: "Walks a lot.",
     // The generated type drops nullability; the API sends null when hidden.
     streak: null as unknown as ProfileDetails["streak"],
-    stats: null as unknown as ProfileDetails["stats"],
+    avatarUrl: null as unknown as string,
     owner: { profileVisibility: "public", usernameChangeAvailableAt: null as unknown as Date },
     ...overrides,
   };
@@ -114,5 +117,42 @@ describe("ProfileVisibilityToggle", () => {
     await actor.click(screen.getByRole("switch", { name: "Private profile" }));
 
     expect(update).toHaveBeenCalledWith({ profileVisibility: "private" });
+  });
+});
+
+describe("AvatarForm", () => {
+  it("uploads a chosen photo", async () => {
+    const actor = userEvent.setup();
+    uploadAvatar.mockResolvedValue({ ok: true, value: me({ avatarUrl: "https://r2.example.test/photo" }) });
+    render(<AvatarForm profile={me()} />);
+
+    const photo = new File(["jpeg"], "me.jpg", { type: "image/jpeg" });
+    await actor.upload(screen.getByLabelText("Choose a profile photo"), photo);
+
+    expect(uploadAvatar).toHaveBeenCalledWith(photo);
+  });
+
+  it("refuses a photo the server would reject, without uploading", async () => {
+    render(<AvatarForm profile={me()} />);
+
+    const input = screen.getByLabelText("Choose a profile photo");
+    const heic = new File(["heic"], "me.heic", { type: "image/heic" });
+    // userEvent honours `accept`, so fire the change directly as a file picker could.
+    Object.defineProperty(input, "files", { value: [heic] });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Try a JPEG, PNG, or WebP image under 10 MB.");
+    expect(uploadAvatar).not.toHaveBeenCalled();
+  });
+
+  it("shows the photo and removes it", async () => {
+    const actor = userEvent.setup();
+    removeAvatar.mockResolvedValue({ ok: true, value: me() });
+    render(<AvatarForm profile={me({ avatarUrl: "https://r2.example.test/photo" })} />);
+
+    expect(screen.getByAltText("Jos's profile photo").getAttribute("src")).toBe("https://r2.example.test/photo");
+    await actor.click(screen.getByRole("button", { name: "remove" }));
+
+    expect(removeAvatar).toHaveBeenCalled();
   });
 });
