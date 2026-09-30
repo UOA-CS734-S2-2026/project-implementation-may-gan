@@ -79,6 +79,10 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
       after ? sql`(${friendRequests.createdAt}, ${friendRequests.id}) > (${after.createdAt}::timestamptz, ${after.id})` : undefined,
       isNotNull(other.username),
       sql`(coalesce(${other.banned}, false) = false or (${other.banExpires} is not null and ${other.banExpires} <= now()))`,
+      notExists(database.select({ one: sql`1` }).from(schema.accountLifecycles).where(and(
+        eq(schema.accountLifecycles.userId, other.id),
+        eq(schema.accountLifecycles.state, "pending_deletion"),
+      ))),
       notExists(
         database.select({ one: sql`1` }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),

@@ -142,6 +142,14 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     const requireTarget = async (left: string, right: string) => {
       if (!(await targetExists(right)) || !(await targetExists(left))) throw new RelationshipStoreError("TARGET_NOT_FOUND");
     };
+    const requireAvailableTarget = async (left: string, right: string) => {
+      await requireTarget(left, right);
+      const pending = await database.select({ userId: schema.accountLifecycles.userId }).from(schema.accountLifecycles).where(and(
+        eq(schema.accountLifecycles.userId, right),
+        eq(schema.accountLifecycles.state, "pending_deletion"),
+      )).limit(1);
+      if (pending.length > 0) throw new RelationshipStoreError("TARGET_NOT_FOUND");
+    };
     const activeBlock = async (left: string, right: string) => {
       const result = await database
         .select({ one: sql<number>`1` })
@@ -171,6 +179,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         .for("update")
         .limit(1))[0];
       if (!request || request.status !== "pending" || request[actorColumn] !== actorId) throw new RelationshipStoreError("REQUEST_NOT_FOUND");
+      if (status === "accepted") await requireAvailableTarget(actorId, other);
       if (await activeBlock(actorId, other)) throw new RelationshipStoreError("FORBIDDEN");
       await database
         .update(friendRequests)
@@ -179,7 +188,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         .returning({ id: friendRequests.id });
       return { other, request };
     };
-    const context: RelationshipPostgresContext = { queryable, lockPair, requireTarget, activeBlock, snapshot, finishRequest };
+    const context: RelationshipPostgresContext = { queryable, lockPair, requireTarget, requireAvailableTarget, activeBlock, snapshot, finishRequest };
 
     return {
       getSnapshot: snapshot,
