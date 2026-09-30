@@ -1,7 +1,7 @@
-import { FetchError, PostsApi, ResponseError, type PostDetail, type PostMedia } from "@dayli/api-client";
+import { FetchError, PostsApi, ResponseError, type PostDetail, type PostMedia, type ProfilePost, type ProfilePostsPage } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { PostDetail, PostMedia };
+export type { PostDetail, PostMedia, ProfilePost, ProfilePostsPage };
 
 export type PostFailure = "unauthenticated" | "notFound" | "network" | "unavailable";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
@@ -36,6 +36,20 @@ export const postsApi = {
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
       return { ok: true, value: await new PostsApi(configuration).postsGetMedia({ postId, mediaId }) };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error) };
+    }
+  },
+
+  /** 404 is an unknown or blocked profile; a profile you may not read posts on is an empty page. */
+  async profilePage(username: string, cursor?: string): Promise<PostResult<ProfilePostsPage>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      return {
+        ok: true,
+        value: await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username }),
+      };
     } catch (error) {
       return { ok: false, failure: await toFailure(error) };
     }

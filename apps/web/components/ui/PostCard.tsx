@@ -15,6 +15,8 @@ type PostCardProps = {
   /** The post's first attachment, shown on the card. */
   media?: PrivateMediaItem | null;
   createdAt: Date | string;
+  /** A short note for the author, such as who can see the post. */
+  label?: string;
 };
 
 const getRotation = (str: string) => {
@@ -40,6 +42,7 @@ export function PostCard({
   promptResponse,
   media,
   createdAt,
+  label,
 }: PostCardProps) {
   const NZ_TIME_ZONE = "Pacific/Auckland";
   const time = new Intl.DateTimeFormat("en-NZ", {
@@ -133,9 +136,16 @@ export function PostCard({
           </p>
         </div>
 
-        <p className="mt-auto text-right text-xs text-foreground-secondary">
-          {date} | {time}
-        </p>
+        <div className="mt-auto flex items-center gap-2">
+          {label && (
+            <span className="rounded-full bg-background-secondary px-2 py-0.5 text-xs text-foreground-secondary">
+              {label}
+            </span>
+          )}
+          <p className="ml-auto text-xs text-foreground-secondary">
+            {date} | {time}
+          </p>
+        </div>
       </div>
     </article>
   );
