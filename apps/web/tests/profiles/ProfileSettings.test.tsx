@@ -37,7 +37,7 @@ beforeEach(() => {
 describe("EditProfileForm", () => {
   it("saves the trimmed public name and bio, sending blanks to clear them", async () => {
     const actor = userEvent.setup();
-    update.mockResolvedValue({ ok: true, value: me({ displayName: "jos", bio: null }) });
+    update.mockResolvedValue({ ok: true, value: me({ displayName: "jos", bio: undefined }) });
     render(<EditProfileForm profile={me()} />);
 
     await actor.clear(screen.getByLabelText("Public name"));
