@@ -33,7 +33,7 @@ suite("list conversation changes Postgres repository", () => {
     }
   });
 
-  it("keeps membership private and returns ordered, strictly paginated bigint changes after blocks", async () => {
+  it("keeps membership private and returns ordered, strictly paginated near-safe changes after blocks", async () => {
     const first = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
@@ -49,11 +49,11 @@ suite("list conversation changes Postgres repository", () => {
     });
     await markConversationRead.markRead(users[0]!, first.conversation.id, "3");
 
-    const sequenceOffset = "9007199254740992";
-    const firstSequence = "9007199254740993";
-    const secondSequence = "9007199254740994";
-    const thirdSequence = "9007199254740995";
-    const fourthSequence = "9007199254740996";
+    const sequenceOffset = "9007199254740987";
+    const firstSequence = "9007199254740988";
+    const secondSequence = "9007199254740989";
+    const thirdSequence = "9007199254740990";
+    const fourthSequence = "9007199254740991";
     await database.client`
       update public.conversation_changes
       set change_sequence = change_sequence + ${sequenceOffset}::bigint
@@ -65,7 +65,9 @@ suite("list conversation changes Postgres repository", () => {
       where id = ${first.conversation.id}
     `;
 
-    await expect(repository.list(users[2]!, first.conversation.id, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.list(users[2]!, first.conversation.id, "9007199254740992", 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.list(users[0]!, first.conversation.id, "9007199254740992", 2))
+      .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
 
     await database.client`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
@@ -130,5 +132,34 @@ suite("list conversation changes Postgres repository", () => {
       hasMore: false,
       highWatermark: fourthSequence,
     });
+  });
+
+  it("rejects overflowing native change sequences and high watermarks", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[2]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflowing change sequence",
+    });
+
+    await database.client`
+      update public.conversation_changes
+      set change_sequence = 9007199254740993
+      where conversation_id = ${created.conversation.id}
+    `;
+    await expect(repository.list(users[0]!, created.conversation.id, "9007199254740991", 1))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+
+    await database.client`
+      update public.conversation_changes
+      set change_sequence = 1
+      where conversation_id = ${created.conversation.id}
+    `;
+    await database.client`
+      update public.conversations
+      set last_change_sequence = 9007199254740993
+      where id = ${created.conversation.id}
+    `;
+    await expect(repository.list(users[0]!, created.conversation.id, undefined, 1))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
   });
 });

@@ -29,6 +29,15 @@ export function requireSafeSequenceBigInt(sequence: number): bigint {
   return BigInt(sequence);
 }
 
+/** Validates a text-mode database sequence before exposing it as an API string. */
+export function requireSafeSequenceText(sequence: unknown): string {
+  if (typeof sequence !== "string" || !/^\d+$/.test(sequence) || BigInt(sequence) > maximumSafeSequence) {
+    throw new RangeError("Database sequence must be a safe nonnegative integer.");
+  }
+
+  return sequence;
+}
+
 /** Converts a database message version to its public number representation without rounding. */
 export function requireSafeMessageVersion(version: number | string): number {
   if (typeof version === "number") {

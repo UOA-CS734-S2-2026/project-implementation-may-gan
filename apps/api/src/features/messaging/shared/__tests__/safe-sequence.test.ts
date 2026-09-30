@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MessagingError } from "../messaging-error";
-import { parseSequenceCursor, requireSafeMessageVersion, requireSafeSequenceBigInt, toSafeSequenceNumber } from "../safe-sequence";
+import { parseSequenceCursor, requireSafeMessageVersion, requireSafeSequenceBigInt, requireSafeSequenceText, toSafeSequenceNumber } from "../safe-sequence";
 
 const maximumSafeSequence = Number.MAX_SAFE_INTEGER;
 
@@ -20,6 +20,7 @@ describe("safe sequence boundaries", () => {
   it("accepts the maximum safe sequence", () => {
     expect(parseSequenceCursor(String(maximumSafeSequence))).toBe(maximumSafeSequence);
     expect(requireSafeSequenceBigInt(maximumSafeSequence)).toBe(BigInt(maximumSafeSequence));
+    expect(requireSafeSequenceText(String(maximumSafeSequence))).toBe(String(maximumSafeSequence));
     expect(toSafeSequenceNumber(BigInt(maximumSafeSequence))).toBe(maximumSafeSequence);
   });
 
@@ -42,11 +43,12 @@ describe("safe sequence boundaries", () => {
     expect(() => toSafeSequenceNumber(-1n)).toThrow(RangeError);
   });
 
-  it("rejects a database number rounded beyond the safe range", () => {
+  it("rejects database sequences beyond the safe range", () => {
     const roundedOverflow = Number("9007199254740993");
 
     expect(roundedOverflow).toBe(Number.MAX_SAFE_INTEGER + 1);
     expect(() => requireSafeSequenceBigInt(roundedOverflow)).toThrow(RangeError);
+    expect(() => requireSafeSequenceText("9007199254740993")).toThrow(RangeError);
   });
 
   it("converts positive safe database message versions", () => {
