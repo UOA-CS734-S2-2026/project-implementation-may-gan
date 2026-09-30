@@ -1023,6 +1023,39 @@ void main() {
     );
   });
 
+  testWidgets('signs out when a media upload finds the session expired', (
+    tester,
+  ) async {
+    final harness = TestHarness();
+    harness.mediaUploads.reserveResults.add(const ApiError(Unauthenticated()));
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('landing.sign-in')), findsOneWidget);
+    expect(find.byType(ComposerScreen), findsNothing);
+    expect(harness.mediaUploads.reserved, hasLength(1));
+    expect(harness.session.user, isNull);
+  });
+
   testWidgets('locks the composer while a post is sending', (tester) async {
     final harness = TestHarness();
     await tester.pumpWidget(

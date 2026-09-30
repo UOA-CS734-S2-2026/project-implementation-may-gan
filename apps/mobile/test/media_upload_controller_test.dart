@@ -72,6 +72,7 @@ void main() {
   late LoggingCompressor compressor;
   late LoggingClient client;
   late List<ChangeNotifierHandle> opened;
+  late int signOuts;
 
   setUp(() {
     log.clear();
@@ -82,6 +83,7 @@ void main() {
     compressor = LoggingCompressor();
     client = LoggingClient();
     opened = [];
+    signOuts = 0;
   });
 
   tearDown(() {
@@ -105,6 +107,7 @@ void main() {
       composer: composer,
       compressor: compressor,
       client: client,
+      onUnauthenticated: () => signOuts++,
       retryBase: const Duration(milliseconds: 2),
       retryMax: const Duration(milliseconds: 4),
     )..start();
@@ -372,22 +375,52 @@ void main() {
     expect(compressor.discarded, ['/support/dayli-media/1.jpg']);
   });
 
-  test('waits for sign-in instead of retrying', () async {
-    client.reserveResults.add(const ApiError(Unauthenticated()));
-    final (composer, uploads) = await open();
-    add(composer, picked('a.jpg'));
-    await settle();
+  group('when the session has expired', () {
+    test('hands a reserve 401 to sign-out and stops retrying', () async {
+      client.reserveResults.add(const ApiError(Unauthenticated()));
+      final (composer, uploads) = await open();
+      add(composer, picked('a.jpg'));
+      await settle();
+      // Well past every backoff delay: nothing retries with the dead session.
+      await settle();
 
-    expect(uploads.problem, contains('Sign in'));
-    expect(client.reserved, hasLength(1));
+      expect(signOuts, 1);
+      expect(client.reserved, hasLength(1));
+      expect(uploads.problem, contains('Sign in'));
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.status, AttachmentUploadStatus.pending);
+      expect(attachment.compressedPath, isNotNull);
+    });
 
-    uploads.retryNow();
-    await settle();
-    expect(uploads.problem, isNull);
-    expect(
-      composer.draft!.attachments.single.status,
-      AttachmentUploadStatus.validated,
-    );
+    test('hands a completion 401 to sign-out and keeps the upload', () async {
+      client.completeResults.add(const ApiError(Unauthenticated()));
+      final (composer, _) = await open();
+      add(composer, picked('a.jpg'));
+      await settle();
+      await settle();
+
+      expect(signOuts, 1);
+      expect(client.completed, ['reservation-1']);
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.status, AttachmentUploadStatus.uploading);
+      expect(attachment.reservationId, 'reservation-1');
+    });
+
+    test('resumes after signing in again', () async {
+      client.reserveResults.add(const ApiError(Unauthenticated()));
+      final (composer, uploads) = await open();
+      add(composer, picked('a.jpg'));
+      await settle();
+
+      uploads.retryNow();
+      await settle();
+      expect(signOuts, 1);
+      expect(uploads.problem, isNull);
+      expect(
+        composer.draft!.attachments.single.status,
+        AttachmentUploadStatus.validated,
+      );
+    });
   });
 
   test('backs off when too many uploads are waiting', () async {
