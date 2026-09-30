@@ -478,4 +478,92 @@ void main() {
       ),
     );
   });
+
+  group('with media uploads', () {
+    const uploading = DraftAttachment(
+      localPath: '/photos/0.jpg',
+      mediaType: 'image',
+      compressedPath: '/support/dayli-media/0.jpg',
+      contentType: 'image/jpeg',
+      byteSize: 1000,
+      reservationId: 'reservation-1',
+      status: AttachmentUploadStatus.uploading,
+    );
+
+    test('ignores upload state unless the build uploads media', () {
+      final draft = savedToday().copyWith(attachments: const [uploading]);
+      expect(validateDraft(draft).media, isNull);
+      expect(
+        validateDraft(draft, requireUploadedMedia: true).media,
+        contains('finish uploading'),
+      );
+      expect(
+        validateDraft(
+          draft.copyWith(
+            attachments: [
+              uploading.copyWith(
+                status: AttachmentUploadStatus.failed,
+                failureReason: () => 'format_mismatch',
+              ),
+            ],
+          ),
+          requireUploadedMedia: true,
+        ).media,
+        contains("couldn't be uploaded"),
+      );
+      expect(
+        validateDraft(
+          draft.copyWith(
+            attachments: [
+              uploading.copyWith(status: AttachmentUploadStatus.validated),
+            ],
+          ),
+          requireUploadedMedia: true,
+        ).media,
+        isNull,
+      );
+    });
+
+    test('holds the post until uploads pass, then clears the error', () async {
+      final composer = ComposerController(
+        userId: 'user-1',
+        postingDays: days,
+        drafts: drafts,
+        submitter: submitter,
+        onUnauthenticated: () => unauthenticated++,
+        clock: () => DateTime.utc(2026, 9, 25, 3),
+        newIdempotencyKey: () => 'key-1',
+        saveDelay: Duration.zero,
+        requireUploadedMedia: true,
+      );
+      await composer.load();
+      fill(composer);
+      composer.update(attachments: const [uploading]);
+
+      await composer.submit();
+      expect(submitter.submitted, isEmpty);
+      expect(composer.errors.media, contains('finish uploading'));
+
+      expect(
+        composer.replaceAttachment(
+          uploading,
+          uploading.copyWith(status: AttachmentUploadStatus.validated),
+        ),
+        isTrue,
+      );
+      expect(composer.errors.media, isNull);
+
+      await composer.submit();
+      expect(submitter.submitted, hasLength(1));
+      composer.dispose();
+    });
+
+    test('reports an attachment that is no longer in the draft', () async {
+      final composer = controller();
+      await composer.load();
+      expect(composer.replaceAttachment(photo, photo), isFalse);
+      expect(composer.removeAttachment(photo), isFalse);
+      composer.dispose();
+    });
+  });
 }

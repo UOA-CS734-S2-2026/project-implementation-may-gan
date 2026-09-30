@@ -108,6 +108,7 @@ class ComposerFieldErrors {
     this.reflectiveAnswer,
     this.caption,
     this.tomorrowNote,
+    this.media,
   });
 
   final String? audience;
@@ -115,16 +116,23 @@ class ComposerFieldErrors {
   final String? reflectiveAnswer;
   final String? caption;
   final String? tomorrowNote;
+  final String? media;
 
   bool get isEmpty =>
       audience == null &&
       rating == null &&
       reflectiveAnswer == null &&
       caption == null &&
-      tomorrowNote == null;
+      tomorrowNote == null &&
+      media == null;
 }
 
-ComposerFieldErrors validateDraft(DailyPostDraft draft) {
+/// With [requireUploadedMedia], every attachment must have passed the
+/// server's checks before posting.
+ComposerFieldErrors validateDraft(
+  DailyPostDraft draft, {
+  bool requireUploadedMedia = false,
+}) {
   final answer = draft.reflectiveAnswer.trim();
   final rating = draft.rating;
   return ComposerFieldErrors(
@@ -148,7 +156,18 @@ ComposerFieldErrors validateDraft(DailyPostDraft draft) {
             DailyPostLimits.tomorrowNoteMax
         ? 'Keep your note under ${DailyPostLimits.tomorrowNoteMax} characters.'
         : null,
+    media: requireUploadedMedia ? _mediaError(draft.attachments) : null,
   );
+}
+
+String? _mediaError(List<DraftAttachment> attachments) {
+  if (attachments.any((a) => a.status == AttachmentUploadStatus.failed)) {
+    return "Remove the photos or videos that couldn't be uploaded.";
+  }
+  if (attachments.any((a) => a.status != AttachmentUploadStatus.validated)) {
+    return 'Wait for your photos and videos to finish uploading.';
+  }
+  return null;
 }
 
 /// A random RFC 4122 version-4 UUID for idempotency keys.
@@ -174,11 +193,16 @@ class ComposerController extends ChangeNotifier {
     DateTime Function()? clock,
     String Function()? newIdempotencyKey,
     this.saveDelay = const Duration(milliseconds: 400),
+    this.requireUploadedMedia = false,
   }) : _clock = clock ?? DateTime.now,
        _newKey = newIdempotencyKey ?? generateIdempotencyKey;
 
   final String userId;
   final Duration saveDelay;
+
+  /// Set when this build uploads media, so a dayli can't be posted while an
+  /// attachment is still uploading or was rejected.
+  final bool requireUploadedMedia;
   final PostingDayClient _postingDays;
   final DraftStore _drafts;
   final DailyPostSubmitter _submitter;
@@ -322,6 +346,8 @@ class ComposerController extends ChangeNotifier {
     if (index < 0) return false;
     edit(attachments, index);
     _draft = current.copyWith(attachments: attachments, updatedAt: _clock());
+    // Lets "wait for uploads" clear itself once the last upload passes.
+    _clearFixedErrors(_draft!);
     _scheduleSave();
     _notify();
     return true;
@@ -331,7 +357,10 @@ class ComposerController extends ChangeNotifier {
   /// errors while the author is still typing.
   void _clearFixedErrors(DailyPostDraft draft) {
     if (_errors.isEmpty) return;
-    final next = validateDraft(draft);
+    final next = validateDraft(
+      draft,
+      requireUploadedMedia: requireUploadedMedia,
+    );
     _errors = ComposerFieldErrors(
       audience: _errors.audience == null ? null : next.audience,
       rating: _errors.rating == null ? null : next.rating,
@@ -340,6 +369,7 @@ class ComposerController extends ChangeNotifier {
           : next.reflectiveAnswer,
       caption: _errors.caption == null ? null : next.caption,
       tomorrowNote: _errors.tomorrowNote == null ? null : next.tomorrowNote,
+      media: _errors.media == null ? null : next.media,
     );
   }
 
@@ -355,7 +385,10 @@ class ComposerController extends ChangeNotifier {
     if (current == null || _submitting || _phase != ComposerPhase.editing) {
       return;
     }
-    _errors = validateDraft(current);
+    _errors = validateDraft(
+      current,
+      requireUploadedMedia: requireUploadedMedia,
+    );
     if (!_errors.isEmpty) {
       _notify();
       return;
