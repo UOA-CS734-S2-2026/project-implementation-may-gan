@@ -6,6 +6,7 @@ import {
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
 export const relationshipStateSchema = z
   .enum(["none", "outgoing_pending", "incoming_pending", "friends", "blocked"])
@@ -108,10 +109,7 @@ export const relationshipErrorResponses = {
     description: "The request contains invalid values.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
-  429: {
-    description: "The request-send limit has been exceeded.",
-    content: { "application/json": { schema: apiErrorSchema } },
-  },
+  429: rateLimitErrorResponse,
   503: {
     description: "Authentication or relationship storage is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },

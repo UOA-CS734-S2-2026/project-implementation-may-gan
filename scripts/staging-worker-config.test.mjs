@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-worker-config.mjs";
+import { createStagingWorkerConfigs, rateLimitConfig, serializeWranglerConfig } from "./staging-worker-config.mjs";
 
 const input = {
   workerName: "dayli-api-staging",
@@ -16,8 +17,23 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.migrations, [{ tag: "v1", new_sqlite_classes: ["UserRealtime"] }]);
   assert.deepEqual(api.triggers, { crons: ["*/1 * * * *"] });
   assert.deepEqual(api.hyperdrive, [{ binding: "HYPERDRIVE", id: "a".repeat(32) }]);
+  assert.deepEqual(api.ratelimits, rateLimitConfig);
+  assert.equal(api.vars.API_RATE_LIMIT_SCOPE, "staging");
   assert.equal(api.vars.PUSH_TOKEN_ENCRYPTION_KEY_VERSION, undefined);
   assert.equal(JSON.parse(serializeWranglerConfig(api)).name, "dayli-api-staging");
+});
+
+test("keeps native rate-limit mappings and environment scopes aligned", () => {
+  const templates = [
+    ["apps/api/wrangler.jsonc", "production"],
+    ["apps/api/wrangler.local.example.jsonc", "local"],
+    ["apps/api/wrangler.staging.example.jsonc", "staging"],
+  ];
+  for (const [file, scope] of templates) {
+    const config = JSON.parse(readFileSync(file, "utf8"));
+    assert.deepEqual(config.ratelimits, rateLimitConfig, file);
+    assert.equal(config.vars.API_RATE_LIMIT_SCOPE, scope, file);
+  }
 });
 
 test("keeps the remote service probe free of cron and shared Durable Object bindings", () => {

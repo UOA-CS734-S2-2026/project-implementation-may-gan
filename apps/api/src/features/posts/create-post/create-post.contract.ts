@@ -5,6 +5,7 @@ import {
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
 /**
  * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the
@@ -114,6 +115,7 @@ export const createDailyPostErrorResponses = {
     description: "The request contains invalid values.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
+  429: rateLimitErrorResponse,
   503: {
     description: "Post storage is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },

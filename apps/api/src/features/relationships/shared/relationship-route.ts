@@ -11,6 +11,7 @@ import {
   type RelationshipUserPage,
 } from "./relationship-service";
 import type { ResolveSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 
 export interface RelationshipsService {
   getStatus(actorId: string, subjectId: string): Promise<RelationshipStatus>;
@@ -32,6 +33,7 @@ export interface RelationshipsRouteDependencies {
   resolveSession: ResolveSession;
   /** Denies discovery and relationship mutations until the actor has a public handle. */
   hasUsername?: (userId: string) => Promise<boolean>;
+  rateLimiter?: ActorRateLimiter;
 }
 
 export const relationshipSecurity: Array<Record<string, string[]>> = [

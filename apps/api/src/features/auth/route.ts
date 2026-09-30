@@ -153,6 +153,25 @@ async function handleOAuthCallback(
   return handler(request);
 }
 
+/**
+ * Register strict auth origin handling before the ingress limiter. The rate-limit
+ * response still reaches trusted browser clients, while unknown origins stop
+ * before either the limiter or authentication provider runs.
+ */
+export function registerStrictAuthCors<E extends Env>(app: OpenAPIHono<E>, trustedOrigins: readonly string[]) {
+  app.use(`${authBasePath}/*`, async (context, next) => {
+    const origin = context.req.header("origin");
+    if (origin && !trustedOrigins.includes(origin)) return new Response(null, { status: 403 });
+    await next();
+    if (origin && trustedOrigins.includes(origin)) {
+      context.res.headers.set("access-control-allow-origin", origin);
+      context.res.headers.set("access-control-allow-credentials", "true");
+      context.res.headers.set("access-control-expose-headers", "set-auth-token, retry-after");
+      appendVary(context.res.headers, "Origin");
+    }
+  });
+}
+
 function registerStrictAuthRoutes<E extends Env>(
   app: OpenAPIHono<E>,
   trustedOrigins: readonly string[],

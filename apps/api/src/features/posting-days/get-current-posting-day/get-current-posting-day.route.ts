@@ -7,10 +7,13 @@ import {
 } from "./get-current-posting-day.service";
 import { currentPostingDayResponseSchema } from "./get-current-posting-day.contract";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 
 export interface CurrentPostingDayRouteDependencies {
   resolveSession: ResolveSession;
   service?: CurrentPostingDayService;
+  rateLimiter?: ActorRateLimiter;
 }
 
 const security: Array<Record<string, string[]>> = [
@@ -34,6 +37,7 @@ const currentPostingDayRoute = createRoute({
       description: "Authentication is required.",
       content: { "application/json": { schema: apiErrorSchema } },
     },
+    429: rateLimitErrorResponse,
     503: {
       description: "The prompt or posting-state dependency is temporarily unavailable.",
       content: { "application/json": { schema: apiErrorSchema } },
@@ -57,7 +61,7 @@ export function registerCurrentPostingDayRoute(
   app: OpenAPIHono<AuthenticatedApiEnv>,
   dependencies: CurrentPostingDayRouteDependencies,
 ) {
-  app.use("/api/v1/posting-days/current", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/posting-days/current", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(currentPostingDayRoute, async (context) => {
     context.header("Cache-Control", "no-store");
 

@@ -2,6 +2,7 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "./get-post.contract";
 import type { PostDetailRepository } from "./get-post.repository";
 
@@ -10,6 +11,7 @@ export interface GetPostRouteDependencies {
   resolveSession: ResolveSession;
   repository?: PostDetailRepository;
   now?: () => Date;
+  rateLimiter?: ActorRateLimiter;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -33,7 +35,7 @@ const getPostRoute = createRoute({
 });
 
 export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
-  app.use("/api/v1/posts/:postId", createRequireSession(dependencies.resolveSession));
+  app.use("/api/v1/posts/:postId", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {

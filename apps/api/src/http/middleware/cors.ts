@@ -3,7 +3,7 @@ import type { Env } from "hono";
 
 const allowedMethods = ["GET", "POST", "PATCH", "DELETE"];
 const allowedHeaders = ["authorization", "content-type", "idempotency-key"];
-const exposedHeaders = ["idempotent-replayed"];
+const exposedHeaders = ["idempotent-replayed", "retry-after"];
 const applicationPath = "/api/v1/*";
 
 function appendVary(headers: Headers, value: string) {

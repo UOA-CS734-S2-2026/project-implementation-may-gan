@@ -1,9 +1,17 @@
+import rateLimitBindings from "../apps/api/rate-limit-bindings.json" with { type: "json" };
+
 const sharedWorkerConfig = {
   $schema: "node_modules/wrangler/config-schema.json",
   main: "src/index.ts",
   compatibility_date: "2026-03-10",
   compatibility_flags: ["nodejs_compat"],
 };
+
+export const rateLimitConfig = rateLimitBindings.map(({ name, namespaceId, limit, period }) => ({
+  name,
+  namespace_id: namespaceId,
+  simple: { limit, period },
+}));
 
 const durableObjectConfig = {
   durable_objects: {
@@ -36,6 +44,7 @@ export function createStagingWorkerConfigs({
     throw new Error("Staging origins are required.");
   }
   const vars = {
+    API_RATE_LIMIT_SCOPE: "staging",
     BETTER_AUTH_BASE_URL: authApiOrigin,
     BETTER_AUTH_TRUSTED_ORIGINS: `${authApiOrigin},${authWebOrigin}`,
     ...authVars,
@@ -47,6 +56,7 @@ export function createStagingWorkerConfigs({
     name: workerName,
     workers_dev: false,
     observability: { enabled: true },
+    ratelimits: rateLimitConfig,
     vars,
     hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId }],
   };

@@ -1,4 +1,5 @@
 import { usernameSetupStatus, type HasUsername } from "../../../../http/middleware/require-username";
+import { rateLimitedFetchResponse, unavailableFetchResponse, type ActorRateLimiter } from "../../../../http/middleware/rate-limit";
 import type { VerifiedRealtimeSession } from "../shared/realtime-types";
 
 export interface RealtimeConnectDependencies {
@@ -8,6 +9,7 @@ export interface RealtimeConnectDependencies {
   userRealtime: DurableObjectNamespace;
   trustedOrigins: readonly string[];
   hasUsername?: HasUsername;
+  rateLimiter?: ActorRateLimiter;
 }
 
 /**
@@ -27,6 +29,11 @@ export async function connectRealtime(request: Request, dependencies: RealtimeCo
   const session = await dependencies.resolveActiveSession(consumed.sessionId);
   if (!session || session.userId !== consumed.userId || session.expiresAt.getTime() <= Date.now()) {
     return new Response("Unauthorized.", { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  if (dependencies.rateLimiter) {
+    const decision = await dependencies.rateLimiter.check(request, { userId: session.userId });
+    if (decision === "denied") return rateLimitedFetchResponse();
+    if (decision === "unavailable") return unavailableFetchResponse();
   }
   const usernameStatus = await usernameSetupStatus(dependencies.hasUsername, session.userId);
   if (usernameStatus === "unavailable") return new Response("Username setup is temporarily unavailable.", { status: 503, headers: { "Cache-Control": "no-store" } });
