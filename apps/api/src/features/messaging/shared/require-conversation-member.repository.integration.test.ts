@@ -47,14 +47,19 @@ suite("require conversation member Postgres query", () => {
       .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
-  it("preserves member bigint state and locks both conversation and actor member rows", async () => {
+  it("preserves safe native bigint state and locks both conversation and actor member rows", async () => {
     const conversation = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
       text: "locked",
     });
     const memberId = users[1]!;
-    const memberSequence = "9007199254740993";
+    const memberSequence = Number.MAX_SAFE_INTEGER;
+    await database.db.execute(sql`
+      update public.conversations
+      set last_message_sequence = ${memberSequence}::bigint, last_change_sequence = ${memberSequence}::bigint
+      where id = ${conversation.conversation.id}
+    `);
     await database.db.execute(sql`
       update public.conversation_members
       set last_read_sequence = ${memberSequence}::bigint, receipt_sequence = ${memberSequence}::bigint
@@ -68,6 +73,8 @@ suite("require conversation member Postgres query", () => {
     const holder = database.db.transaction(async (tx) => {
       const member = await requireConversationMember(tx, memberId, conversation.conversation.id, true);
       expect(member).toMatchObject({
+        last_message_sequence: memberSequence,
+        last_change_sequence: memberSequence,
         last_read_sequence: memberSequence,
         receipt_sequence: memberSequence,
       });
@@ -97,5 +104,70 @@ suite("require conversation member Postgres query", () => {
       releaseLock!();
       await holder;
     }
+  });
+
+  it("fails closed for every overflowing sequence column within a locked transaction", async () => {
+    const conversation = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflow",
+    });
+    const memberId = users[1]!;
+    const overflow = "9007199254740993";
+    await database.db.execute(sql`
+      update public.conversations
+      set last_message_sequence = 1, last_change_sequence = 1
+      where id = ${conversation.conversation.id}
+    `);
+    await database.db.execute(sql`
+      update public.conversation_members
+      set last_read_sequence = 0, receipt_sequence = 0
+      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+    `);
+    const expectOverflowToFail = async () => {
+      await expect(database.db.transaction((tx) => requireConversationMember(
+        tx,
+        memberId,
+        conversation.conversation.id,
+        true,
+      ))).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
+    };
+
+    await database.db.execute(sql`
+      update public.conversations set last_message_sequence = ${overflow}::bigint
+      where id = ${conversation.conversation.id}
+    `);
+    await expectOverflowToFail();
+    await database.db.execute(sql`
+      update public.conversations set last_message_sequence = 1
+      where id = ${conversation.conversation.id}
+    `);
+
+    await database.db.execute(sql`
+      update public.conversations set last_change_sequence = ${overflow}::bigint
+      where id = ${conversation.conversation.id}
+    `);
+    await expectOverflowToFail();
+    await database.db.execute(sql`
+      update public.conversations set last_change_sequence = 1
+      where id = ${conversation.conversation.id}
+    `);
+
+    await database.db.execute(sql`
+      update public.conversation_members set last_read_sequence = ${overflow}::bigint
+      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+    `);
+    await expectOverflowToFail();
+    await database.db.execute(sql`
+      update public.conversation_members set last_read_sequence = 0
+      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+    `);
+
+    await database.db.execute(sql`
+      update public.conversation_members
+      set last_read_sequence = ${overflow}::bigint, receipt_sequence = ${overflow}::bigint
+      where conversation_id = ${conversation.conversation.id} and user_id = ${memberId}
+    `);
+    await expectOverflowToFail();
   });
 });

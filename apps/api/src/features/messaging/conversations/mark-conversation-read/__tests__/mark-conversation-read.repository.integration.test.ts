@@ -61,7 +61,7 @@ suite("mark conversation read Postgres repository", () => {
     expect(outbox?.count).toBe(10);
   });
 
-  it("caps high bigint reads and keeps each member cursor independent on stale retries", async () => {
+  it("fails closed when locked conversation state overflows", async () => {
     const conversation = await direct.create(users[8]!, {
       recipientId: users[9]!,
       clientMessageId: crypto.randomUUID(),
@@ -71,21 +71,8 @@ suite("mark conversation read Postgres repository", () => {
     await database.client`update public.messages set sequence = ${highSequence}::bigint where conversation_id = ${conversation.conversation.id}`;
     await database.client`update public.conversations set last_message_sequence = ${highSequence}::bigint where id = ${conversation.conversation.id}`;
 
-    await expect(repository.markRead(users[9]!, conversation.conversation.id, "9007199254740994")).resolves.toEqual({
-      lastReadSequence: highSequence,
-      receiptSequence: highSequence,
-      unreadCount: 0,
-    });
-    await expect(repository.markRead(users[8]!, conversation.conversation.id, "1")).resolves.toEqual({
-      lastReadSequence: "1",
-      receiptSequence: "1",
-      unreadCount: 0,
-    });
-    await expect(repository.markRead(users[9]!, conversation.conversation.id, "1")).resolves.toEqual({
-      lastReadSequence: highSequence,
-      receiptSequence: highSequence,
-      unreadCount: 0,
-    });
+    await expect(repository.markRead(users[9]!, conversation.conversation.id, "9007199254740994"))
+      .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
   });
 
   it("keeps pending and blocked reads private while advancing only the local cursor", async () => {

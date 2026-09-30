@@ -3,7 +3,7 @@ import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBi
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { messageProjectionSelection } from "../../shared/message-projection";
 import { requireConversationMember } from "../../shared/require-conversation-member";
-import { requireSafeSequenceText } from "../../shared/safe-sequence";
+import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 
 export interface GetConversationRepository {
   get(actorId: string, conversationId: string): Promise<unknown>;
@@ -14,7 +14,7 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
     async get(actorId, conversationId) {
       const row = await requireConversationMember(database, actorId, conversationId);
       const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
-      const lastReadSequence = Number(requireSafeSequenceText(row.last_read_sequence));
+      const lastReadSequence = Number(requireSafeSequenceBigInt(row.last_read_sequence));
       const [user] = await database
         .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
         .from(schema.user)
