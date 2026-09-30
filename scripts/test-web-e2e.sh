@@ -136,7 +136,37 @@ echo 'Starting local web application'
 web_pid=$!
 wait_for_url "$web_origin" "$web_pid" 'Web application'
 
+reset_auth_rate_limits() {
+  # Better Auth limits sign-up to three attempts per ten seconds for each IP.
+  # Local Workers do not supply CF-Connecting-IP, so separate Playwright browser
+  # projects otherwise share Better Auth's fallback bucket. Each project runs
+  # against a fresh browser profile, so clear only the disposable fixture's
+  # auth limiter between projects while retaining rate-limit behavior in each.
+  docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+    psql -v ON_ERROR_STOP=1 -U postgres -d dayli_test -c 'TRUNCATE TABLE public."rateLimit";' >/dev/null
+}
+
+has_project_filter() {
+  local argument
+  for argument in "$@"; do
+    if [[ "$argument" == "--project" || "$argument" == --project=* ]]; then return 0; fi
+  done
+  return 1
+}
+
+run_playwright_project() {
+  local project="$1"
+  shift
+  E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test --project="$project" "$@"
+}
+
 echo 'Running Playwright browser journeys'
 # `pnpm run <script> -- <args>` passes the separator through to shell scripts.
 if [[ "${1:-}" == "--" ]]; then shift; fi
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"
+if has_project_filter "$@"; then
+  E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"
+else
+  run_playwright_project desktop-chromium "$@"
+  reset_auth_rate_limits
+  run_playwright_project mobile-chromium "$@"
+fi
