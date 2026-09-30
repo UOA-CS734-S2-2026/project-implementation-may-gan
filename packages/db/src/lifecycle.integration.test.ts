@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { repoPath } from "./migrations/paths";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -196,6 +198,31 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       `)).rejects.toMatchObject({ code: "23514" });
     } finally {
       await migrator`set time zone 'UTC'`;
+    }
+  });
+
+  it("keeps export cleanup tasks private after reapplying role bootstrap", async () => {
+    const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
+    await migrator.unsafe(bootstrap);
+
+    const privileges = await migrator`
+      select role_name,
+        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'SELECT') as can_select,
+        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'INSERT') as can_insert,
+        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'UPDATE') as can_update,
+        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'DELETE') as can_delete
+      from (values ('app'), ('lifecycle_worker')) as roles(role_name)
+      order by role_name
+    `;
+    expect(privileges).toEqual([
+      { role_name: "app", can_select: false, can_insert: false, can_update: false, can_delete: false },
+      { role_name: "lifecycle_worker", can_select: false, can_insert: false, can_update: false, can_delete: false },
+    ]);
+    for (const client of [app, lifecycleWorker]) {
+      await expect(client`select * from public.data_export_object_cleanup_tasks`).rejects.toMatchObject({ code: "42501" });
+      await expect(client`insert into public.data_export_object_cleanup_tasks default values`).rejects.toMatchObject({ code: "42501" });
+      await expect(client`update public.data_export_object_cleanup_tasks set status = 'pending' where false`).rejects.toMatchObject({ code: "42501" });
+      await expect(client`delete from public.data_export_object_cleanup_tasks where false`).rejects.toMatchObject({ code: "42501" });
     }
   });
 

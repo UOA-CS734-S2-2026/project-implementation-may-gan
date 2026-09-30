@@ -31,6 +31,7 @@ BEGIN
     'account_purge_receipts',
     'age_declarations',
     'data_export_requests',
+    'data_export_object_cleanup_tasks',
     'legal_document_versions',
     'operator_cases',
     'registration_intents',

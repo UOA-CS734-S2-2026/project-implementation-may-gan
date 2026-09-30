@@ -31,6 +31,7 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, app");
     expect(migratorBootstrap).toContain("REVOKE DELETE ON TABLE public.\"user\" FROM app");
     expect(migratorBootstrap).toContain("REVOKE ALL ON TABLE public.%I FROM app, lifecycle_worker");
+    expect(migratorBootstrap).toContain("'data_export_object_cleanup_tasks'");
   });
 
   it("provides a read-only verification script for the restricted roles", async () => {
