@@ -10,6 +10,17 @@ const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 const origin = "https://api.example.test";
 const trustedOrigins = "https://api.example.test,https://web.example.test";
 const secret = "test-only-better-auth-secret-that-is-at-least-32-characters";
+const allowRateLimit = { limit: async () => ({ success: true }) };
+const rateLimitBindings = {
+  API_RATE_LIMIT_SCOPE: "test",
+  API_INGRESS_RATE_LIMIT: allowRateLimit,
+  API_READ_RATE_LIMIT: allowRateLimit,
+  API_WRITE_RATE_LIMIT: allowRateLimit,
+  API_MESSAGE_RATE_LIMIT: allowRateLimit,
+  API_MEDIA_RATE_LIMIT: allowRateLimit,
+  API_REALTIME_RATE_LIMIT: allowRateLimit,
+  API_DIRECT_PUSH_RATE_LIMIT: allowRateLimit,
+};
 
 function requireLocalTestUrl(value: string | undefined, name: string): string {
   if (!value) throw new Error(`${name} is required for PostgreSQL auth integration tests.`);
@@ -26,6 +37,7 @@ function productionAuthEnvironment() {
     BETTER_AUTH_SECRET: secret,
     BETTER_AUTH_BASE_URL: origin,
     BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
+    ...rateLimitBindings,
   };
 }
 
@@ -44,6 +56,7 @@ function createProductionAuthApp(revocations: SessionRevocationHook) {
 function request(path: string, init: RequestInit = {}, requestOrigin = origin) {
   const headers = new Headers(init.headers);
   headers.set("origin", requestOrigin);
+  if (!headers.has("cf-connecting-ip")) headers.set("cf-connecting-ip", "198.51.100.9");
   return new Request(`${origin}${path}`, { ...init, headers });
 }
 
@@ -233,6 +246,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       BETTER_AUTH_SECRET: "too-short",
       BETTER_AUTH_BASE_URL: origin,
       BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
+      ...rateLimitBindings,
     });
     expect((await unconfigured.fetch(request("/api/auth/get-session"))).status).toBe(404);
   });

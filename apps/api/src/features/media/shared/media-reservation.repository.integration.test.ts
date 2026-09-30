@@ -217,6 +217,7 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
       BETTER_AUTH_SECRET: secret,
       BETTER_AUTH_BASE_URL: origin,
       BETTER_AUTH_TRUSTED_ORIGINS: trustedOrigins,
+      ...rateLimitBindings,
     });
     const token = await signUp(unconfigured, "unconfigured@example.test");
     expect((await reserve(unconfigured, token)).status).toBe(503);
