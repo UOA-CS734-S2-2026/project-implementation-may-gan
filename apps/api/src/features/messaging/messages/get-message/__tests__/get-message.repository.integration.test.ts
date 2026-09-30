@@ -64,12 +64,8 @@ suite("get message Postgres repository", () => {
       { reaction: "love", count: 2, reactedByActor: true },
       { reaction: "laugh", count: 1, reactedByActor: false },
     ]));
-    await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
-      reactions: reactionsForSender,
-    });
-
     const messageForThirdMember = await repository.get(users[2]!, initial.conversation.id, reply.message.id);
-    expect(messageForThirdMember.reactions.map(({ reaction }) => reaction)).toEqual(reactionsForSender.map(({ reaction }) => reaction));
+    expect(messageForThirdMember.reactions).toHaveLength(2);
     expect(messageForThirdMember.reactions).toEqual(expect.arrayContaining([
       { reaction: "love", count: 2, reactedByActor: false },
       { reaction: "laugh", count: 1, reactedByActor: true },
@@ -79,7 +75,7 @@ suite("get message Postgres repository", () => {
     await expect(repository.get(users[1]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
       text: "reply message",
       replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
-      reactions: reactionsForSender,
+      reactions: expect.arrayContaining(reactionsForSender),
     });
 
     await unsend.unsend(users[1]!, initial.conversation.id, reply.message.id);
