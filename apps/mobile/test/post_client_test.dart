@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/post_client.dart';
+import 'package:dayli_mobile/api/post_media.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -81,5 +82,68 @@ void main() {
     expect((expired as ApiError).failure, isA<Unauthenticated>());
     expect((down as ApiError).failure, isA<ServiceUnavailable>());
     expect((malformed as ApiError).failure, isA<ServiceUnavailable>());
+  });
+
+  group('media', () {
+    Map<String, Object?> mediaJson(
+      String id,
+      int order, {
+      Object? url = 'https://storage.example.test/a?sig=1',
+    }) => {
+      'id': id,
+      'contentType': 'image/jpeg',
+      'order': order,
+      'url': url,
+      'expiresAt': '2026-09-26T03:05:00.000Z',
+    };
+
+    test('reads the post\'s attachments', () async {
+      final result = await client(
+        (_) => http.Response(
+          jsonEncode({
+            ...body(),
+            'media': [mediaJson('m-1', 0)],
+          }),
+          200,
+        ),
+      ).get('post-1');
+
+      final post = (result as ApiSuccess<PostDetail>).value;
+      expect(post.media.single.id, 'm-1');
+      expect(post.media.single.isVideo, isFalse);
+    });
+
+    test('gets a fresh URL for one attachment', () async {
+      final result = await client(
+        (_) => http.Response(jsonEncode(mediaJson('m-1', 0)), 200),
+      ).media('post-1', 'm-1');
+
+      expect(requests.single.url.path, '/api/v1/posts/post-1/media/m-1');
+      expect(requests.single.headers['authorization'], 'Bearer token-1');
+      expect(
+        (result as ApiSuccess<PostMedia>).value.url,
+        Uri.parse('https://storage.example.test/a?sig=1'),
+      );
+    });
+
+    test('maps refusals and never calls without a session', () async {
+      for (final status in [404, 422]) {
+        final result = await client(
+          (_) => http.Response('{}', status),
+        ).media('post-1', 'm-1');
+        expect((result as ApiError).failure, isA<NotFound>());
+      }
+      final noUrl = await client(
+        (_) => http.Response(jsonEncode(mediaJson('m-1', 0, url: null)), 200),
+      ).media('post-1', 'm-1');
+      expect((noUrl as ApiError).failure, isA<ServiceUnavailable>());
+
+      final signedOut = await client(
+        (_) => http.Response('{}', 200),
+        token: null,
+      ).media('post-1', 'm-1');
+      expect((signedOut as ApiError).failure, isA<Unauthenticated>());
+      expect(requests, isEmpty);
+    });
   });
 }

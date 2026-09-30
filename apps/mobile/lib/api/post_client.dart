@@ -5,6 +5,7 @@ import 'package:dayli_api_client/api.dart' as generated;
 import 'package:http/http.dart' as http;
 
 import 'api_failure.dart';
+import 'post_media.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
 /// One post the signed-in user may read.
@@ -23,6 +24,7 @@ class PostDetail {
     required this.acceptedAt,
     required this.edited,
     required this.viewerIsAuthor,
+    this.media = const [],
   });
 
   final String id;
@@ -44,6 +46,9 @@ class PostDetail {
   final DateTime acceptedAt;
   final bool edited;
   final bool viewerIsAuthor;
+
+  /// Attached photos or video in display order.
+  final List<PostMedia> media;
 
   static PostDetail? tryParse(Object? json) {
     if (json is! Map<String, Object?>) return null;
@@ -91,12 +96,16 @@ class PostDetail {
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
       viewerIsAuthor: json['viewerIsAuthor'] == true,
+      media: PostMedia.parseList(json['media']),
     );
   }
 }
 
 abstract interface class PostClient {
   Future<ApiResult<PostDetail>> get(String postId);
+
+  /// A fresh download URL for one attachment whose earlier URL expired.
+  Future<ApiResult<PostMedia>> media(String postId, String mediaId);
 }
 
 /// Reads `GET /api/v1/posts/{postId}` with the stored Better Auth bearer
@@ -154,5 +163,49 @@ class GeneratedPostClient implements PostClient {
     return post == null
         ? const ApiError(ServiceUnavailable())
         : ApiSuccess(post);
+  }
+
+  @override
+  Future<ApiResult<PostMedia>> media(String postId, String mediaId) async {
+    final token = await _bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final client = generated.ApiClient(
+      basePath: _baseUrl,
+      authentication: auth,
+    );
+    if (_httpClient != null) client.client = _httpClient;
+
+    final http.Response response;
+    try {
+      response = await generated.PostsApi(
+        client,
+      ).postsGetMediaWithHttpInfo(postId, mediaId);
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+
+    final status = response.statusCode;
+    // Missing, detached, and unreadable media are all 404.
+    if (status == HttpStatus.notFound ||
+        status == HttpStatus.unprocessableEntity) {
+      return const ApiError(NotFound());
+    }
+    if (status != HttpStatus.ok) {
+      return ApiError(failureForStatus(status, null));
+    }
+    final Object? json;
+    try {
+      json = jsonDecode(response.body);
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    }
+    final media = PostMedia.tryParse(json);
+    return media == null || media.url == null
+        ? const ApiError(ServiceUnavailable())
+        : ApiSuccess(media);
   }
 }

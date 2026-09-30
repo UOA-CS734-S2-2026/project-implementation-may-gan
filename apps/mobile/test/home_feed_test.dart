@@ -3,6 +3,8 @@ import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:video_player/video_player.dart';
+import 'package:dayli_mobile/posts/private_media.dart';
 
 import 'support/fakes.dart';
 
@@ -142,5 +144,35 @@ void main() {
     await signIn(tester, harness);
 
     expect(find.byKey(const Key('landing.sign-in')), findsOneWidget);
+  });
+
+  testWidgets('shows a photo on the card, and a still tile for a video', (
+    tester,
+  ) async {
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(
+            items: [
+              feedPost('1', media: [attachment('m-1', 0)]),
+              feedPost(
+                '2',
+                media: [attachment('m-2', 0, contentType: 'video/mp4')],
+              ),
+              feedPost('3'),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]),
+    );
+    await signIn(tester, harness);
+
+    expect(find.byKey(const Key('home.feed.photo.1')), findsOneWidget);
+    expect(find.byKey(const Key('home.feed.video.2')), findsOneWidget);
+    // Videos never play in the feed.
+    expect(find.byType(VideoPlayer), findsNothing);
+    expect(find.byType(PrivateVideo), findsNothing);
   });
 }

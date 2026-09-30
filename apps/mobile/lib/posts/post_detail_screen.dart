@@ -9,6 +9,8 @@ import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 
+import 'private_media.dart';
+
 /// One post, opened from the feed. Every open and refresh asks the server
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
@@ -223,6 +225,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 key: const Key('post.meta'),
                 style: muted,
               ),
+              if (post.media.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _PostMedia(post: post),
+              ],
               const SizedBox(height: 18),
               Text(
                 post.promptText,
@@ -260,6 +266,51 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// One video, or up to three photos, each from a private, expiring URL.
+class _PostMedia extends StatelessWidget {
+  const _PostMedia({required this.post});
+
+  final PostDetail post;
+
+  @override
+  Widget build(BuildContext context) {
+    final first = post.media.first;
+    if (first.isVideo) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: PrivateVideo(
+            postId: post.id,
+            media: first,
+            semanticLabel: "${post.displayName}'s video",
+          ),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        for (final (index, media) in post.media.indexed) ...[
+          if (index > 0) const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: PrivateImage(
+                key: Key('post.photo.$index'),
+                postId: post.id,
+                media: media,
+                semanticLabel:
+                    "${post.displayName}'s photo ${index + 1} of ${post.media.length}",
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

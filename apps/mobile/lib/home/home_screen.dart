@@ -10,6 +10,7 @@ import '../api/posting_day_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../compose/deadline_countdown.dart';
+import '../posts/private_media.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
@@ -504,6 +505,36 @@ class _FeedPostCard extends StatelessWidget {
               ),
             ],
           ),
+          if (post.media.firstOrNull case final media?) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: media.isVideo
+                    // Videos play on the post itself, never in the feed.
+                    ? Semantics(
+                        key: Key('home.feed.video.${post.id}'),
+                        label: 'Video',
+                        excludeSemantics: true,
+                        child: ColoredBox(
+                          color: colors.foreground,
+                          child: const Icon(
+                            Icons.play_circle_outline_rounded,
+                            size: 48,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    : PrivateImage(
+                        key: Key('home.feed.photo.${post.id}'),
+                        postId: post.id,
+                        media: media,
+                        semanticLabel: "${post.displayName}'s photo",
+                      ),
+              ),
+            ),
+          ],
           const SizedBox(height: 14),
           Text(
             post.promptText,

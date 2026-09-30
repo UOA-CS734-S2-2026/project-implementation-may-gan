@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
+import 'package:dayli_mobile/api/post_media.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
@@ -16,8 +17,11 @@ import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 class FakeFriendsClient implements FriendsClient {
   static const emptyFriends = FriendPage(
@@ -255,6 +259,7 @@ FeedPost feedPost(
   String id, {
   String answer = 'Walked to the harbour.',
   String? caption,
+  List<PostMedia> media = const [],
 }) => FeedPost(
   id: id,
   authorId: 'author-$id',
@@ -267,6 +272,7 @@ FeedPost feedPost(
   rating: 7,
   acceptedAt: DateTime.utc(2026, 9, 24, 3),
   edited: false,
+  media: media,
 );
 
 class FakePostClient implements PostClient {
@@ -282,6 +288,18 @@ class FakePostClient implements PostClient {
     requested.add(postId);
     return results.length > 1 ? results.removeAt(0) : results.single;
   }
+
+  /// Refresh results in order; refused once they run out.
+  final mediaResults = <ApiResult<PostMedia>>[];
+  final refreshed = <({String postId, String mediaId})>[];
+
+  @override
+  Future<ApiResult<PostMedia>> media(String postId, String mediaId) async {
+    refreshed.add((postId: postId, mediaId: mediaId));
+    return mediaResults.isEmpty
+        ? const ApiError(NotFound())
+        : mediaResults.removeAt(0);
+  }
 }
 
 PostDetail postDetail(
@@ -291,6 +309,7 @@ PostDetail postDetail(
   String audience = 'friends',
   bool viewerIsAuthor = false,
   bool edited = false,
+  List<PostMedia> media = const [],
 }) => PostDetail(
   id: id,
   authorId: 'author-$id',
@@ -305,6 +324,7 @@ PostDetail postDetail(
   acceptedAt: DateTime.utc(2026, 9, 29, 3),
   edited: edited,
   viewerIsAuthor: viewerIsAuthor,
+  media: media,
 );
 
 class FakePostingDayClient implements PostingDayClient {
@@ -455,3 +475,89 @@ class TestHarness {
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }
+
+/// Records what the app asks the player to do. With [failures] queued, the
+/// next players fail to load instead of initialising.
+class FakeVideoPlatform extends VideoPlayerPlatform {
+  final sources = <String?>[];
+  final calls = <String>[];
+  var failures = 0;
+  var _nextId = 0;
+  final _events = <int, StreamController<VideoEvent>>{};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<int?> createWithOptions(VideoCreationOptions options) async {
+    final id = _nextId++;
+    sources.add(options.dataSource.uri);
+    final events = StreamController<VideoEvent>();
+    _events[id] = events;
+    if (failures > 0) {
+      failures--;
+      // Real platforms report a failed load, such as a 403, this way.
+      events.addError(PlatformException(code: 'VideoError', message: '403'));
+    } else {
+      events.add(
+        VideoEvent(
+          eventType: VideoEventType.initialized,
+          duration: const Duration(seconds: 10),
+          size: const Size(1080, 1920),
+        ),
+      );
+    }
+    return id;
+  }
+
+  @override
+  Stream<VideoEvent> videoEventsFor(int playerId) => _events[playerId]!.stream;
+
+  @override
+  Future<void> setLooping(int playerId, bool looping) async =>
+      calls.add('loop:$looping');
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async =>
+      calls.add('volume:$volume');
+
+  @override
+  Future<void> play(int playerId) async => calls.add('play');
+
+  @override
+  Future<void> pause(int playerId) async => calls.add('pause');
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
+
+  @override
+  Future<void> seekTo(int playerId, Duration position) async {}
+
+  @override
+  Future<Duration> getPosition(int playerId) async => Duration.zero;
+
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
+
+  @override
+  Widget buildViewWithOptions(VideoViewOptions options) =>
+      const SizedBox.expand();
+
+  @override
+  Future<void> dispose(int playerId) async {
+    unawaited(_events.remove(playerId)?.close());
+  }
+}
+
+/// A signed attachment for widget tests.
+PostMedia attachment(
+  String id,
+  int order, {
+  String contentType = 'image/jpeg',
+}) => PostMedia(
+  id: id,
+  contentType: contentType,
+  order: order,
+  url: Uri.parse('https://storage.example.test/$id?sig=1'),
+  expiresAt: DateTime.utc(2026, 9, 26, 3, 5),
+);
