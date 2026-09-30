@@ -55,11 +55,11 @@ flowchart TB
 
 The web post form calls `POST /api/v1/posts` with an idempotency key. It submits the prompt response, rating, optional caption, optional tomorrow note, and the `solo` or `friends` audience the author chose. Media is optional and is not sent. The selected files stay in the browser. The API accepts one post per author and Auckland day and stores idempotency data for accepted requests.
 
-Flutter saves each author's draft and selected media references in protected local storage. It reads the posting day and sends `POST /api/v1/posts` through the generated Dart client with the draft's stored idempotency key. The draft is removed only after the server accepts the post, and media references stay on the device.
+Flutter saves each author's draft in protected local storage, including each attachment's compressed copy, reservation ID, and upload status. While the composer is open it compresses and uploads attachments one at a time, straight to R2, and resumes an interrupted upload on the next open. It reads the posting day and sends `POST /api/v1/posts` through the generated Dart client with the draft's stored idempotency key. The draft is removed only after the server accepts the post. Posts don't include media yet because the API can't link attachments to a post.
 
 `GET /api/v1/feed` returns released `friends` posts from active, unblocked friends, newest day first, using the shared post visibility predicate. The web home page and the Flutter home screen page through it. See [Friends feed](friends-feed.md). `GET /api/v1/posts/{postId}` returns one post through the same predicate and conceals unreadable posts as 404. See [Post detail](post-detail.md).
 
-The API has `POST /api/v1/media-reservations` and `GET /api/v1/media-reservations/{id}`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL. Neither application client calls the reservation endpoint or uploads reserved media.
+The API has `POST /api/v1/media-reservations`, `GET /api/v1/media-reservations/{id}`, and `POST /api/v1/media-reservations/{id}/complete`. When Better Auth and all R2 configuration values are present, the create route records an owner-specific reservation and returns a presigned single-object PUT URL, and completion checks the uploaded object's size, format, and video duration. Flutter uses all three; the web client doesn't upload media yet. See [Media reservations](media-reservations.md).
 
 ## Proposed messaging architecture
 

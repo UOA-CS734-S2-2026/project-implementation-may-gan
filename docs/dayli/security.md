@@ -28,7 +28,7 @@ Password recovery uses expiring one-time tokens, throttling, safe email delivery
 
 ## Data and device protection
 
-Keep R2 private. The current reservation route limits the declared type and size, but actual type validation, attachment linking, and private downloads are not implemented. The completed flow must enforce three attachments, 10 MB per attachment, 25 MB per post, and 15-second videos. It must issue short-lived private downloads and redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
+Keep R2 private. The reservation route limits the declared type and size, and completion checks the uploaded object's size, format, and video duration. Attachment linking and private downloads are not implemented. The completed flow must enforce three photos or one video, 10 MB per attachment, 25 MB per post, and 15-second videos; until posts link attachments, only the Flutter client checks the 25 MB total. Clients strip photo EXIF and video location metadata before upload, and never log or store presigned URLs. It must issue short-lived private downloads and redact signed URLs and secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
 
 Protect local drafts/credentials and hide app-switcher previews. `local_auth` alone does not prove protected key storage. Test passcode fallback, lockout, enrolment changes, and reinstall. Minimise browser persistence and temporary files.
 

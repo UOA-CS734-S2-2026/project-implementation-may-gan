@@ -1,6 +1,6 @@
 # Media reservations
 
-`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. Download authorisation is issue #24; cleanup of abandoned reservations is issue #25.
+`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Download authorisation is issue #24; cleanup of abandoned reservations is issue #25.
 
 ## How it works
 
@@ -18,7 +18,7 @@ Content-type and content-length are both signed headers on the presigned URL, so
 
 Without complete `R2_*` bindings the routes still mount, so they stay in the generated OpenAPI document and clients, but return `503 SERVICE_UNAVAILABLE`. Auth and media reservations fail closed independently, so a missing R2 credential never surfaces as a `500`.
 
-## Completion (issue #23)
+## Completion 
 
 Once a client finishes its PUT, it calls `POST /api/v1/media-reservations/{id}/complete`. This performs the checks a signed PUT alone can't (implementation-reference.md §6: "a signed PUT is not content validation"), entirely outside any database transaction — a real `HEAD` confirms the object exists and its actual byte count, a bounded ranged `GET` checks the leading bytes match the declared content type, and a second bounded check confirms each format's other load-bearing structure is actually present, tight enough that a merely-plausible fabrication (not just a bare marker) still fails: a real trailing EOI for JPEG; IHDR/IEND chunks for PNG; for WEBP, a recognised chunk id *and* RIFF/chunk declared sizes that actually match the real file *and* the format's own bitstream signature (VP8L's `0x2F`, VP8's `0x9D 0x01 0x2A` key-frame start code, VP8X's fixed 10-byte body); a `meta` box for HEIC (`apps/api/src/infrastructure/media/media-format.ts`'s `checkEssentialStructure`). For video, the same file's ISO-BMFF box tree is walked (headers only, never bodies) to require at least one video track (a `trak` whose `mdia`/`hdlr` reports `vide`, with its own `mdhd` media header) and a non-empty `mdat`. Every `trak` is considered, not just the first — an audio track can legitimately be listed first and run longer or shorter than the movie. The duration used for the `MAX_VIDEO_DURATION_SECONDS` (15s) cap is the larger of `mvhd`'s (movie-level) and the video track's `mdhd` declared durations, which must agree within a small tolerance, rather than trusting mvhd's single, otherwise-unverified field alone; no video track, or no video track agreeing with mvhd, fails closed as `malformed_container`. None of this is a full decode (still bounded, box-header/signature-byte reads only), so it doesn't and can't prove the payload is genuinely renderable — it closes the specific gaps of "starts with the right marker" and "declares whatever duration it likes," not more.
 
@@ -29,6 +29,22 @@ Only after all of that does one short atomic `UPDATE ... WHERE status='pending' 
 A settled outcome (`validated` or `failed`) is terminal and idempotent: repeat calls return the stored result with zero R2 calls, since the bytes at an object key don't change. A client that wants to fix a bad upload reserves again rather than retrying `/complete`. The one non-terminal case is calling `/complete` before the object has actually landed in R2 (`HEAD` 404s) — nothing is persisted, the reservation stays `pending`, and the client can retry until the reservation's TTL expires (`409 CONFLICT` after that).
 
 A failed validation returns `200` with `{status: "failed", failureReason}` rather than a 4xx — the HTTP request to complete succeeded; the uploaded *content* failing is a normal outcome, not a malformed request. `failureReason` is one of `byte_size_mismatch`, `format_mismatch`, `duration_exceeded`, `malformed_container`, or `object_not_found` (only written for the rare case where an object existed at `HEAD` time but vanished before a following read — a genuine race, not the ordinary not-yet-uploaded case).
+
+## Flutter client 
+
+The composer takes up to three photos, or one video, from the gallery. Camera capture is separate work. Each picked file goes through these steps in the background while the composer is open, one attachment at a time:
+
+1. **Compress** into app support storage (`dayli-media/`), not temporary storage, so the copy survives a restart. Photos become JPEG with the longest edge at most 2048 px, quality 80, EXIF removed, and orientation applied to the pixels. Videos are checked for length first; a video over 15 seconds is rejected without being encoded. Otherwise they become 720p H.264 and AAC in MP4 at about 2.5 Mbps, with metadata (including location) removed. The client only ever reserves `image/jpeg` or `video/mp4`.
+2. **Check limits** on the compressed copy: 10 MB per file, 15 seconds per video, and 25 MB per post. The server can't check the post total until posts link attachments, so the client is the only check for now. A file over a limit, or one that can't be read, is removed from the draft with a message.
+3. **Reserve** with the compressed type and size. `429` waits and retries.
+4. **PUT** straight to R2 with a plain HTTP request that has no session token, sending exactly the reservation's `requiredHeaders`. `412` means an earlier attempt already stored the object, so the client carries on. `403` means the URL expired, so the client reserves again.
+5. **Complete.** `validated` is done. `failed` keeps the server's `failureReason` on the attachment and shows it in plain words; the author removes the file to post. `409` or `404` reserves again.
+
+Each step is saved in the protected draft (`compressedPath`, `contentType`, `byteSize`, `reservationId`, and `status`: `pending`, `uploading`, `validated`, or `failed`), so an interrupted upload resumes on the next open. After a restart the upload URL is gone, so the client calls `/complete` first: `validated` finishes, and `pending` reserves again and re-uploads. The presigned URL is kept in memory only and never logged or saved. Offline and outage failures keep the file and retry with backoff (2 seconds, doubling to 1 minute); an expired session waits for sign-in.
+
+Posting is blocked until every attachment is `validated`. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded.
+
+Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept; video tiles show a placeholder rather than a thumbnail; and posts don't carry media until attachment linking exists.
 
 ## One-time Cloudflare setup
 
@@ -67,6 +83,6 @@ No numeric policy exists elsewhere in these docs for reservation TTL or a per-ow
 | `RESERVATION_TTL_SECONDS` | 15 minutes | Matches Better Auth's own reset/verification token TTL precedent in this codebase. |
 | `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Row deletion remains separate work. |
 | `MAX_ATTACHMENT_BYTES` | 10 MB | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). |
-| `MAX_VIDEO_DURATION_SECONDS` | 15 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by issue #23's completion check. |
+| `MAX_VIDEO_DURATION_SECONDS` | 15 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by the completion check. |
 
 Revisit these through a reviewed documentation update if the team wants different values, per the change process in [product decisions](product-decisions.md).
