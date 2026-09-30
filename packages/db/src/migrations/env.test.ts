@@ -8,6 +8,19 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
+  it("accepts the configured disposable local test port", () => {
+    const previous = process.env.LOCAL_TEST_POSTGRES_PORT;
+    process.env.LOCAL_TEST_POSTGRES_PORT = "15433";
+    try {
+      expect(() =>
+        validateMigrationConnectionString("postgresql://migrator:migrator@localhost:15433/dayli_test", "local"),
+      ).not.toThrow();
+    } finally {
+      if (previous === undefined) delete process.env.LOCAL_TEST_POSTGRES_PORT;
+      else process.env.LOCAL_TEST_POSTGRES_PORT = previous;
+    }
+  });
+
   it("accepts the isolated local relationship test database", () => {
     expect(() =>
       validateMigrationConnectionString(

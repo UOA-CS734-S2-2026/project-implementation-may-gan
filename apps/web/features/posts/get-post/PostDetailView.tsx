@@ -53,7 +53,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   // username is replaced with the author's current one.
   useEffect(() => {
     if (post && post.author.username.toLowerCase() !== username.toLowerCase()) {
-      router.replace(`/${post.author.username}/${post.id}`);
+      router.replace(`/u/${encodeURIComponent(post.author.username)}/${encodeURIComponent(post.id)}`);
     }
   }, [post, username, router]);
 
@@ -96,7 +96,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   return (
     <article className="max-w-2xl mx-auto p-8 bg-white rounded-2xl shadow-card space-y-6">
       <header className="flex items-center gap-3">
-        <Link href={`/${post.author.username}`} className="flex items-center gap-3 min-w-0 hover:opacity-70 transition-opacity">
+        <Link href={`/u/${encodeURIComponent(post.author.username)}`} className="flex items-center gap-3 min-w-0 hover:opacity-70 transition-opacity">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-background-accent text-sm font-semibold text-foreground-accent">
             {post.author.displayName[0]?.toUpperCase() ?? "?"}
           </div>

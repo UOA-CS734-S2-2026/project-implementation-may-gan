@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { createClientMessageId } from "../shared/client-id";
-import { useCreateConversationMutation } from "@/features/messaging/create-conversation/use-create-conversation-mutation";
-import { useInboxQuery } from "./use-inbox-query";
+import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "@/lib/session/hooks";
 import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvider";
+import { messagingApi } from "../shared/messaging.api";
+import { messagingKeys } from "../shared/messaging.keys";
+import { ConversationList } from "./ConversationList";
+import { useInboxQuery } from "./use-inbox-query";
 
 type Folder = "inbox" | "requests";
-const validText = (text: string) => text.trim().length > 0 && Array.from(text).length <= 4_000;
 
 export function Inbox() {
   const { user } = useSession();
@@ -18,56 +18,43 @@ export function Inbox() {
 }
 
 function InboxBody() {
-  const router = useRouter();
-  const { unread } = useMessagingLive();
+  const { user } = useSession();
+  const { unread, refreshUnread } = useMessagingLive();
+  const queryClient = useQueryClient();
   const [folder, setFolder] = useState<Folder>("inbox");
   const inbox = useInboxQuery(folder);
-  const direct = useCreateConversationMutation();
-  const [recipientId, setRecipientId] = useState("");
-  const [firstText, setFirstText] = useState("");
-  const [directIntent, setDirectIntent] = useState<{ clientMessageId: string; recipientId: string; text: string } | null>(null);
+  const resolve = useMutation({
+    mutationFn: async ({ conversationId, decision }: { conversationId: string; decision: "accept" | "decline" }) => {
+      const result = await messagingApi.resolveRequest(conversationId, decision);
+      if (!result.ok) throw new Error(result.message);
+      return result.value;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: messagingKeys.root(user?.id ?? "anonymous") });
+      void refreshUnread();
+    },
+  });
   const items = inbox.data?.pages.flatMap((page) => page.items).filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index) ?? [];
-  const notice = inbox.error instanceof Error ? inbox.error.message : direct.error instanceof Error ? direct.error.message : null;
+  const notice = inbox.error instanceof Error ? inbox.error.message : resolve.error instanceof Error ? resolve.error.message : null;
 
-  async function startDirect(event: FormEvent) {
-    event.preventDefault();
-    const intent = directIntent ?? { clientMessageId: createClientMessageId(), recipientId: recipientId.trim(), text: firstText };
-    if (!intent.recipientId || !validText(intent.text)) return;
-    setDirectIntent(intent);
-    try {
-      const result = await direct.mutateAsync(intent);
-      setDirectIntent(null); setRecipientId(""); setFirstText("");
-      router.push(`/messages/${result.conversation.id}`);
-    } catch { /* The stable intent and mutation error render the explicit retry path. */ }
-  }
+  return <section className="mx-auto min-h-screen w-full max-w-[332px] px-4 py-12">
+    <header className="relative mb-6 text-center">
+      <h1 className="font-serif text-4xl font-semibold tracking-tighter text-foreground">messages</h1>
+      <Link href="/messages/new" aria-label="new message" title="New message" className="absolute right-0 top-1 grid h-8 w-8 place-items-center rounded-full border border-foreground/10 text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent"><svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg></Link>
+    </header>
 
-  return (
-    <section className="mx-auto max-w-3xl px-6 py-16 md:px-12">
-      <header className="mb-8 flex items-end justify-between gap-5">
-        <div><p className="font-sans text-xs font-semibold uppercase tracking-[0.18em] text-foreground-tertiary">private notes</p><h1 className="mt-2 font-serif text-5xl tracking-tight text-foreground">messages</h1></div>
-        <button type="button" onClick={() => void inbox.refetch()} className="rounded-full border border-foreground/15 px-4 py-2 font-sans text-sm text-foreground-secondary hover:border-foreground-accent hover:text-foreground-accent focus:outline-none focus:ring-2 focus:ring-accent" disabled={inbox.isFetching}>{inbox.isFetching ? "refreshing" : "refresh"}</button>
-      </header>
+    <div className="mb-4 flex border-b border-foreground/60" role="tablist" aria-label="Message folders">
+      <Tab active={folder === "inbox"} onClick={() => setFolder("inbox")}>Messages{unread.inboxCount > 0 && <Count count={unread.inboxCount} />}</Tab>
+      <Tab active={folder === "requests"} onClick={() => setFolder("requests")}>Requests{unread.requestCount > 0 && <Count count={unread.requestCount} />}</Tab>
+    </div>
 
-      <form onSubmit={startDirect} className="mb-8 rounded-2xl border border-foreground/10 bg-background-secondary/50 p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3"><h2 className="font-serif text-xl">Start a private note</h2><span className="font-sans text-xs text-foreground-tertiary">Known user ID only</span></div>
-        <p className="mt-1 font-sans text-xs text-foreground-secondary">People discovery stays in Friends. Paste an ID from an authorized profile.</p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]"><label className="sr-only" htmlFor="recipient-id">Recipient ID</label><input id="recipient-id" value={recipientId} onChange={(event) => { setRecipientId(event.target.value); setDirectIntent(null); }} placeholder="Recipient user ID" className="rounded-xl border border-foreground/15 bg-background px-3 py-2 font-sans text-sm outline-none focus:ring-2 focus:ring-accent" /></div>
-        <div className="mt-2 flex gap-2"><label className="sr-only" htmlFor="first-message">First message</label><input id="first-message" value={firstText} onChange={(event) => { setFirstText(event.target.value); setDirectIntent(null); }} placeholder="Write the first message" className="min-w-0 flex-1 rounded-xl border border-foreground/15 bg-background px-3 py-2 font-sans text-sm outline-none focus:ring-2 focus:ring-accent" /><button type="submit" disabled={!recipientId.trim() || !validText(firstText) || direct.isPending} className="rounded-xl bg-foreground-accent px-4 font-serif text-sm text-white disabled:opacity-50">{directIntent ? "retry" : "start"}</button></div>
-      </form>
-
-      <div className="mb-5 flex gap-2 border-b border-foreground/10" role="tablist" aria-label="Message folders">
-        {(["inbox", "requests"] as const).map((entry) => {
-          const count = entry === "inbox" ? unread.inboxCount : unread.requestCount;
-          return <button key={entry} type="button" role="tab" aria-label={`${entry} ${count}`} aria-selected={folder === entry} onClick={() => setFolder(entry)} className={`border-b-2 px-3 py-2 font-sans text-sm capitalize ${folder === entry ? "border-foreground-accent text-foreground-accent" : "border-transparent text-foreground-secondary"}`}>{entry}{count > 0 && <span className="ml-2 rounded-full bg-foreground-accent px-1.5 py-0.5 text-xs text-white">{count}</span>}</button>;
-        })}
-      </div>
-      {inbox.isError && <p role="status" className="mb-5 rounded-2xl bg-background-accent px-4 py-3 font-sans text-sm text-foreground-secondary">{notice} Manual refresh is available when updates resume.</p>}
-      {!inbox.isLoading && !inbox.isError && items.length === 0 && <div className="border-y border-foreground/10 py-16 text-center"><p className="font-serif text-2xl">No {folder === "requests" ? "requests" : "conversations"} yet.</p></div>}
-      <ul className="divide-y divide-foreground/10 border-y border-foreground/10">
-        {items.map((conversation) => <li key={conversation.id}><Link href={`/messages/${conversation.id}`} className="group flex items-center gap-4 px-2 py-5 hover:bg-background-secondary/60 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent"><span aria-hidden className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-background-accent font-serif text-lg text-foreground-accent">{(conversation.peer.name ?? "?").slice(0, 1).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="flex justify-between gap-3"><strong className="font-serif text-lg font-semibold">{conversation.peer.name ?? "conversation"}</strong>{conversation.unreadCount > 0 && <em className="rounded-full bg-foreground-accent px-2 py-0.5 font-sans text-xs not-italic text-white">{conversation.unreadCount}</em>}</span><span className="mt-1 block truncate font-sans text-sm text-foreground-secondary">{conversation.latestMessage?.text ?? "Message removed"}</span></span></Link></li>)}
-      </ul>
-      {inbox.hasNextPage && <button type="button" onClick={() => void inbox.fetchNextPage()} disabled={inbox.isFetchingNextPage} className="mt-5 rounded-full border border-foreground/15 px-4 py-2 font-sans text-sm hover:border-foreground-accent">load older conversations</button>}
-      {notice && !inbox.isError && <p role="status" className="mt-4 font-sans text-sm text-foreground-secondary">{notice}</p>}
-    </section>
-  );
+    {inbox.isLoading ? <p className="py-16 text-center font-sans text-sm text-foreground-tertiary">Loading messages...</p> : inbox.isError ? <p role="status" className="rounded-2xl border border-foreground/10 bg-background px-5 py-4 font-sans text-sm text-foreground-secondary">{notice} <button type="button" onClick={() => void inbox.refetch()} className="font-medium underline underline-offset-4">Try again</button></p> : <ConversationList conversations={items} folder={folder} resolvingId={resolve.isPending ? resolve.variables?.conversationId ?? null : null} onResolve={(conversationId, decision) => resolve.mutate({ conversationId, decision })} />}
+    {inbox.hasNextPage && <button type="button" onClick={() => void inbox.fetchNextPage()} disabled={inbox.isFetchingNextPage} className="mt-5 font-sans text-sm font-medium text-foreground-secondary underline underline-offset-4 disabled:opacity-50">{inbox.isFetchingNextPage ? "loading..." : "load older conversations"}</button>}
+    {notice && !inbox.isError && <p role="status" className="mt-4 font-sans text-sm text-foreground-secondary">{notice}</p>}
+  </section>;
 }
+
+function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex flex-1 items-center justify-center border-b-2 py-2 font-sans text-sm font-medium transition-colors ${active ? "border-accent text-foreground" : "border-transparent text-foreground-secondary hover:text-foreground"}`}>{children}</button>;
+}
+function Count({ count }: { count: number }) { return <span className="ml-2 inline-grid min-w-5 place-items-center rounded-full bg-foreground-accent px-1.5 py-0.5 font-sans text-xs text-white">{count}</span>; }

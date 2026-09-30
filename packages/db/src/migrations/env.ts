@@ -12,10 +12,9 @@ const localTestDatabases = new Set([
 const localDevelopmentDatabase = "/dayli_dev";
 
 function localTestPort(): string {
-  const configuredPort = process.env.VERIFY_POSTGRES_PORT;
-  if (!configuredPort) return "5433";
-  const port = Number(configuredPort);
-  return Number.isInteger(port) && port > 0 && port <= 65_535 ? configuredPort : "5433";
+  const value = process.env.LOCAL_TEST_POSTGRES_PORT ?? process.env.VERIFY_POSTGRES_PORT ?? "5433";
+  const port = Number(value);
+  return Number.isInteger(port) && port >= 1 && port <= 65_535 ? value : "5433";
 }
 
 export function requireMigrationTarget(): MigrationTarget {

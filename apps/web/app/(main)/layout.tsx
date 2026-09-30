@@ -6,15 +6,15 @@ import { UsernameSetupGate } from "@/components/auth/UsernameSetupGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <UsernameSetupGate><main className="min-h-screen flex w-full bg-background">
+    <UsernameSetupGate><MessagingProvider><main className="min-h-screen flex w-full bg-background">
       {/* Left: navbar */}
       <div className="fixed flex-none z-10">
         <Navbar />
       </div>
 
       {/* Right: main content */}
-      <div className="relative md:pl-[300px] w-full flex-1">
-        <MessagingProvider><div className="relative z-[1]">{children}</div></MessagingProvider>
+      <div className="relative w-full flex-1 pt-20 md:pl-[300px] md:pt-0">
+        <div className="relative z-[1]">{children}</div>
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute inset-[-50%] bg-[url('/dotgridbg.jpg')] bg-[50%] opacity-50"></div>
         </div>
@@ -22,6 +22,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <MobileNavCloseListener />
       </Suspense>
-    </main></UsernameSetupGate>
+    </main></MessagingProvider></UsernameSetupGate>
   );
 }
