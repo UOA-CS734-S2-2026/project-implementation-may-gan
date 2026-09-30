@@ -94,6 +94,7 @@ part 'model/profile_post.dart';
 part 'model/profile_post_author.dart';
 part 'model/profile_post_prompt.dart';
 part 'model/profile_posts_page.dart';
+part 'model/profile_stats.dart';
 part 'model/profile_visibility.dart';
 part 'model/register_push_device_request.dart';
 part 'model/relationship_profile.dart';

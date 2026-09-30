@@ -12,6 +12,7 @@ const profile: ProfileDetails = {
   detailsVisible: true,
   bio: "Bakes bread.",
   streak: { current: 3, longest: 5, lastPostDate: "2026-09-30", postedToday: true, asOf: "2026-09-30" },
+  stats: { posts: 12, friends: 4 },
   owner: null,
 };
 

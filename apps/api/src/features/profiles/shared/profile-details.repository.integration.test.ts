@@ -88,6 +88,7 @@ function requireLocalTestUrl(value: string): string {
         detailsVisible: true,
         bio: "Bio of privateOwner",
         streak: { current: 2, longest: 2, lastPostDate: "2026-09-29", postedToday: false, asOf: "2026-09-30" },
+        stats: { posts: 3, friends: 1 },
         owner: { profileVisibility: "private", usernameChangeAvailableAt: null },
       });
     });
@@ -104,7 +105,7 @@ function requireLocalTestUrl(value: string): string {
       await expect(findProfileDetails(app.db, users.friend, handle("privateOwner"), now))
         .resolves.toMatchObject({ streak: { current: 2, longest: 2 } });
       await expect(findProfileDetails(app.db, users.stranger, handle("privateOwner"), now))
-        .resolves.toMatchObject({ detailsVisible: false, bio: null, streak: null, owner: null });
+        .resolves.toMatchObject({ detailsVisible: false, bio: null, streak: null, stats: null, owner: null });
     });
 
     it("hides the profile across a block, in both directions", async () => {

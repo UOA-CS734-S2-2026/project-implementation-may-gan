@@ -70,6 +70,7 @@ src/models/ProfilePost.ts
 src/models/ProfilePostAuthor.ts
 src/models/ProfilePostPrompt.ts
 src/models/ProfilePostsPage.ts
+src/models/ProfileStats.ts
 src/models/ProfileVisibility.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RelationshipProfile.ts

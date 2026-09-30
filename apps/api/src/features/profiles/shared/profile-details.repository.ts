@@ -1,4 +1,4 @@
-import { and, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExists, or, type SQLWrapper } from "drizzle-orm";
+import { and, count, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExists, or, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
@@ -66,7 +66,18 @@ async function findPostingStreak(database: DayliDatabase, authorId: string, now:
     .select({ localDate: posts.localDate })
     .from(posts)
     .where(eq(posts.authorId, authorId));
-  return { ...calculatePostingStreak(rows.map((row) => row.localDate), today), asOf: today };
+  const localDates = rows.map((row) => row.localDate);
+  return { streak: { ...calculatePostingStreak(localDates, today), asOf: today }, posts: localDates.length };
+}
+
+/** Friendships are stored as reciprocal pairs, so one direction counts each friend once. */
+async function countFriends(database: DayliDatabase, userId: string) {
+  const { friendships } = schema;
+  const [row] = await database
+    .select({ friends: count() })
+    .from(friendships)
+    .where(and(eq(friendships.userId, userId), eq(friendships.state, "active")));
+  return row?.friends ?? 0;
 }
 
 /**
@@ -115,7 +126,9 @@ export async function findProfileDetails(
 
   const isOwner = row.id === viewerId;
   const detailsVisible = isOwner || row.profileVisibility === "public" || row.friends;
-  const streak = detailsVisible ? await findPostingStreak(database, row.id, now) : null;
+  const [activity, friends] = detailsVisible
+    ? await Promise.all([findPostingStreak(database, row.id, now), countFriends(database, row.id)])
+    : [null, null];
   const changeAvailableAt = row.usernameChangedAt
     ? new Date(row.usernameChangedAt.getTime() + USERNAME_CHANGE_INTERVAL_MS)
     : null;
@@ -125,7 +138,8 @@ export async function findProfileDetails(
     displayName: row.displayUsername ?? row.username,
     detailsVisible,
     bio: detailsVisible ? row.bio : null,
-    streak,
+    streak: activity?.streak ?? null,
+    stats: activity ? { posts: activity.posts, friends: friends ?? 0 } : null,
     owner: isOwner
       ? {
         profileVisibility: row.profileVisibility,

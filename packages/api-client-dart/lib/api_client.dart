@@ -322,6 +322,8 @@ class ApiClient {
           return ProfilePostPrompt.fromJson(value);
         case 'ProfilePostsPage':
           return ProfilePostsPage.fromJson(value);
+        case 'ProfileStats':
+          return ProfileStats.fromJson(value);
         case 'ProfileVisibility':
           return ProfileVisibilityTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':

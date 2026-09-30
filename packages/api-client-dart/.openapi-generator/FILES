@@ -78,6 +78,7 @@ lib/model/profile_post.dart
 lib/model/profile_post_author.dart
 lib/model/profile_post_prompt.dart
 lib/model/profile_posts_page.dart
+lib/model/profile_stats.dart
 lib/model/profile_visibility.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_profile.dart

@@ -34,6 +34,10 @@ export const profileDetailsSchema = z
     }).nullable().openapi("PostingStreak", {
       description: "Null whenever the bio is hidden. Solo and friends posts both count; drafts and failed submissions do not.",
     }),
+    stats: z.object({
+      posts: z.number().int().nonnegative().openapi({ description: "Accepted posts, solo ones included; the streak already reveals which days had one." }),
+      friends: z.number().int().nonnegative(),
+    }).nullable().openapi("ProfileStats", { description: "Null whenever the bio is hidden." }),
     owner: z.object({
       profileVisibility: profileVisibilitySchema,
       usernameChangeAvailableAt: utcTimestampSchema.nullable().openapi({

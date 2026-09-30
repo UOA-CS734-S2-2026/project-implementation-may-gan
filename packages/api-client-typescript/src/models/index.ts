@@ -58,6 +58,7 @@ export * from './ProfilePost';
 export * from './ProfilePostAuthor';
 export * from './ProfilePostPrompt';
 export * from './ProfilePostsPage';
+export * from './ProfileStats';
 export * from './ProfileVisibility';
 export * from './RegisterPushDeviceRequest';
 export * from './RelationshipProfile';
