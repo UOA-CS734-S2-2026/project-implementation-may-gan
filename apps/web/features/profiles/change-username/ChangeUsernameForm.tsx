@@ -35,7 +35,7 @@ export function ChangeUsernameForm({ profile }: { profile: ProfileDetails }) {
 
   return (
     <form
-      className="space-y-3 rounded-lg border border-foreground/10 p-4"
+      className="space-y-3 rounded-2xl bg-background p-5 shadow-card"
       onSubmit={(event) => {
         event.preventDefault();
         if (valid && !unchanged) change.mutate();

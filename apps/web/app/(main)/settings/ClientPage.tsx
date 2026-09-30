@@ -36,7 +36,7 @@ export default function SettingsPage() {
           <p className="text-sm text-foreground/60">Your account details.</p>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-foreground/10 p-4">
+        <div className="space-y-3 rounded-2xl bg-background p-5 shadow-card">
           <Row label="Name" value={user.name} />
           <Row label="Email" value={user.email} />
           {/* Paid features — hidden until billing is wired up */}

@@ -16,7 +16,7 @@ export function EditProfileForm({ profile }: { profile: ProfileDetails }) {
 
   return (
     <form
-      className="space-y-4 rounded-lg border border-foreground/10 p-4"
+      className="space-y-4 rounded-2xl bg-background p-5 shadow-card"
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate({ publicName: publicName.trim(), bio: bio.trim() });

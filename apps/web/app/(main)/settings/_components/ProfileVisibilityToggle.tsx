@@ -11,7 +11,7 @@ export function ProfileVisibilityToggle({ visibility }: { visibility: ProfileVis
   const isPrivate = shown === "private";
 
   return (
-    <div className="space-y-2 rounded-lg border border-foreground/10 p-4">
+    <div className="space-y-2 rounded-2xl bg-background p-5 shadow-card">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-sm font-medium">Private profile</span>
