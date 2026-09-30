@@ -5,6 +5,7 @@ import {
   type PendingRelationshipRequest,
   type RelationshipUserCard,
   type RelationshipUserPage,
+  type RelationshipProfile,
 } from "@dayli/api-client";
 import { apiConfiguration } from "./config";
 
@@ -41,6 +42,14 @@ export function searchFriends(query: string, cursor?: string) {
   return call((api) => api.relationshipsSearchUsers({ q: query, limit: 20, cursor }, { cache: "no-store" }));
 }
 
+export function loadSocialProfile(username: string) {
+  return call((api) => api.relationshipsGetProfileByUsername({ username }, { cache: "no-store" }));
+}
+
+export function getRelationship(userId: string) {
+  return call((api) => api.relationshipsGetStatus({ userId }, { cache: "no-store" }));
+}
+
 export function sendFriendRequest(recipientId: string) {
   return call((api) => api.relationshipsSendRequest({ sendRelationshipRequest: { recipientId } }));
 }
@@ -61,4 +70,4 @@ export function removeFriend(userId: string) {
   return call((api) => api.relationshipsRemoveFriendship({ userId }));
 }
 
-export type { RelationshipUserPage };
+export type { RelationshipUserPage, RelationshipProfile };

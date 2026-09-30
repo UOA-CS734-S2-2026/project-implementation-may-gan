@@ -222,6 +222,16 @@ class MessagingController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<ApiResult<String?>> findDirect(String recipientId) async {
+    final generation = _generation;
+    if (_client is! HttpMessagingClient) {
+      return const ApiError(ServiceUnavailable());
+    }
+    final result = await _client.findDirect(recipientId);
+    if (generation != _generation) return const ApiError(Unauthenticated());
+    return result;
+  }
+
   Future<String?> createDirect(
     String recipientId,
     String text, {
@@ -288,6 +298,7 @@ class MessagingController extends ChangeNotifier {
             receiptSequence: value.receiptSequence,
             canSend: conversation.canSend,
             canResolveRequest: conversation.canResolveRequest,
+            updatedAt: conversation.updatedAt,
           );
           _replaceConversation(_conversations[conversationId]!);
         }

@@ -18,4 +18,5 @@ describe("create direct conversation route", () => {
     expect(response.status).toBe(401);
     expect(direct.create).not.toHaveBeenCalled();
   });
+
 });

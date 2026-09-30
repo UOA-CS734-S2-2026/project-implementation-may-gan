@@ -23,6 +23,7 @@ import { createHyperdriveRelationshipsStore } from "./features/relationships/sha
 import type { RelationshipsService } from "./features/relationships/shared/relationship-route";
 import type { RelationshipStore } from "./features/relationships/shared/relationship-service";
 import { getRelationship } from "./features/relationships/get-relationship/get-relationship.service";
+import { getProfileByUsername } from "./features/relationships/get-profile/get-profile.service";
 import { listFriendRequests } from "./features/relationships/list-friend-requests/list-friend-requests.service";
 import { listFriends } from "./features/relationships/list-friends/list-friends.service";
 import { searchUsers } from "./features/relationships/search-users/search-users.service";
@@ -88,6 +89,10 @@ import {
   createHyperdriveGetConversationRepository,
   createPostgresGetConversationRepository,
 } from "./features/messaging/conversations/get-conversation/get-conversation.repository";
+import {
+  createHyperdriveGetDirectConversationRepository,
+  createPostgresGetDirectConversationRepository,
+} from "./features/messaging/conversations/get-direct-conversation/get-direct-conversation.repository";
 import {
   createHyperdriveGetMessageRepository,
   createPostgresGetMessageRepository,
@@ -310,6 +315,7 @@ const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
     listPendingRequests: async () => { throw new Error("Relationship storage is unavailable."); },
     listFriends: async () => { throw new Error("Relationship storage is unavailable."); },
     searchUsers: async () => { throw new Error("Relationship storage is unavailable."); },
+    getProfileByUsername: async () => { throw new Error("Relationship storage is unavailable."); },
     sendRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     acceptRequest: async () => { throw new Error("Relationship storage is unavailable."); },
     declineRequest: async () => { throw new Error("Relationship storage is unavailable."); },
@@ -362,6 +368,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     listConversationChanges: createPostgresListConversationChangesRepository(database),
     listConversations: createPostgresListConversationsRepository(database),
     getConversation: createPostgresGetConversationRepository(database),
+    findDirectConversation: createPostgresGetDirectConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
     send: createSendMessageService({ store, now: options.now }),
@@ -379,6 +386,7 @@ export function createRelationshipsService(store: RelationshipStore, options: { 
     listPendingRequests: (actorId, direction, limit, cursor) => listFriendRequests(dependencies, actorId, direction, limit, cursor),
     listFriends: (actorId, limit, cursor) => listFriends(dependencies, actorId, limit, cursor),
     searchUsers: (actorId, query, limit, cursor) => searchUsers(dependencies, actorId, query, limit, cursor),
+    getProfileByUsername: (actorId, username) => getProfileByUsername(dependencies, actorId, username),
     sendRequest: (actorId, recipientId) => sendFriendRequest(dependencies, actorId, recipientId),
     acceptRequest: (actorId, requestId) => acceptFriendRequest(dependencies, actorId, requestId),
     declineRequest: (actorId, requestId) => declineFriendRequest(dependencies, actorId, requestId),
@@ -452,6 +460,7 @@ function createMessagingDependencies(
     listConversationChanges: createHyperdriveListConversationChangesRepository(configuration.hyperdrive),
     listConversations: createHyperdriveListConversationsRepository(configuration.hyperdrive),
     getConversation: createHyperdriveGetConversationRepository(configuration.hyperdrive),
+    findDirectConversation: createHyperdriveGetDirectConversationRepository(configuration.hyperdrive),
     getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),
     dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,

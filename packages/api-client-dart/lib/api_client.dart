@@ -242,6 +242,8 @@ class ApiClient {
           return DailyPostTomorrowNote.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
+        case 'DirectPairLookup':
+          return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
           return EditMessageRequest.fromJson(value);
         case 'FeedPage':
@@ -298,6 +300,8 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
+        case 'RelationshipProfile':
+          return RelationshipProfile.fromJson(value);
         case 'RelationshipState':
           return RelationshipStateTypeTransformer().decode(value);
         case 'RelationshipStatus':

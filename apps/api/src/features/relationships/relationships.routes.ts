@@ -6,6 +6,7 @@ import { registerBlockUserRoute } from "./block-user/block-user.route";
 import { registerCancelFriendRequestRoute } from "./cancel-friend-request/cancel-friend-request.route";
 import { registerDeclineFriendRequestRoute } from "./decline-friend-request/decline-friend-request.route";
 import { registerGetRelationshipRoute } from "./get-relationship/get-relationship.route";
+import { registerGetProfileRoute } from "./get-profile/get-profile.route";
 import { registerListFriendRequestsRoute } from "./list-friend-requests/list-friend-requests.route";
 import { registerListFriendsRoute } from "./list-friends/list-friends.route";
 import { registerSearchUsersRoute } from "./search-users/search-users.route";
@@ -50,6 +51,7 @@ export function registerRelationshipsRoutes(
   registerListFriendRequestsRoute(app, dependencies);
   registerListFriendsRoute(app, dependencies);
   registerSearchUsersRoute(app, dependencies);
+  registerGetProfileRoute(app, dependencies);
   registerGetRelationshipRoute(app, dependencies);
   registerSendFriendRequestRoute(app, dependencies);
   registerAcceptFriendRequestRoute(app, dependencies);

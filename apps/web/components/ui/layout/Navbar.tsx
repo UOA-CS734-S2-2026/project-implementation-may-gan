@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/lib/session/hooks";
+import { useQuery } from "@tanstack/react-query";
+import { getUsernameProfile } from "@/lib/profile/username";
 import { NavSearch } from "./NavSearch";
 import { Button } from "@/components/ui/core/Button";
 import { NavLink } from "./NavLink";
@@ -11,9 +13,8 @@ import { useMessagingLive } from "@/features/messaging/realtime/MessagingProvide
 export function Navbar() {
   const { user } = useSession();
   const { unread } = useMessagingLive();
-  // Accounts have no username until the profile API (#68); the user id stands
-  // in for the handle in profile links.
-  const handle = user?.id;
+  const username = useQuery({ queryKey: ["username-profile", user?.id ?? "anonymous"], enabled: Boolean(user), retry: false, queryFn: getUsernameProfile });
+  const handle = username.data?.username;
 
   const navContent = (
     <div className="p-10 h-full flex flex-col justify-between overflow-y-auto">
@@ -83,9 +84,9 @@ export function Navbar() {
               </div>
               daylies
             </NavLink>
-            {user && (
+            {user && handle && (
               <>
-                <NavLink href={`/${handle}/friends`}>
+                <NavLink href={`/u/${encodeURIComponent(handle)}/friends`}>
                   <div>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -98,7 +99,7 @@ export function Navbar() {
                   </div>
                   friends
                 </NavLink>
-                <NavLink href={`/${handle}`} exact>
+                <NavLink href={`/u/${encodeURIComponent(handle)}`} exact>
                   <div>
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -131,10 +132,10 @@ export function Navbar() {
       </div>
 
       {/* Lower section (profile) */}
-      {user && (
+      {user && handle && (
         <div className="flex flex-col gap-4">
           <Link
-            href={`/${handle}`}
+            href={`/u/${encodeURIComponent(handle)}`}
             className="group transition hover:text-foreground/80 text-muted-foreground flex gap-4 items-center duration-400 hover:duration-200 hover:-translate-y-1"
           >
             {user.image ? (
@@ -173,6 +174,7 @@ export function Navbar() {
       {/* Mobile Navigation Toggle */}
       <div className="md:hidden">
         <input type="checkbox" id="mobile-nav-toggle" className="peer hidden" />
+        <div aria-hidden="true" className="fixed inset-x-0 top-0 z-30 h-20 border-b border-foreground/5 bg-background/95 backdrop-blur-sm peer-checked:hidden" />
 
         {/* Floating Menu Button */}
         <label

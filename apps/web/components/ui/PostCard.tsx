@@ -68,7 +68,7 @@ export function PostCard({
     >
       {/* The whole card opens the post. The author link sits above it. */}
       <Link
-        href={`/${username}/${postId}`}
+        href={`/u/${encodeURIComponent(username)}/${encodeURIComponent(postId)}`}
         aria-label={`Open ${displayName}'s dayli from ${date}`}
         className="absolute inset-0 z-0"
       />
@@ -103,7 +103,7 @@ export function PostCard({
 
       <div className="flex flex-col flex-1 gap-3 p-4">
         <Link
-          href={`/${username}`}
+          href={`/u/${encodeURIComponent(username)}`}
           className="relative z-10 flex items-center gap-2 self-start hover:opacity-70 transition-opacity"
         >
           {userImage ? (

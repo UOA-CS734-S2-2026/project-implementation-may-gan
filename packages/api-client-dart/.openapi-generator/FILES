@@ -38,6 +38,7 @@ lib/model/daily_post.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
+lib/model/direct_pair_lookup.dart
 lib/model/edit_message_request.dart
 lib/model/feed_page.dart
 lib/model/feed_post.dart
@@ -66,6 +67,7 @@ lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/register_push_device_request.dart
+lib/model/relationship_profile.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart

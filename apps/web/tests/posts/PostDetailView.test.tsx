@@ -52,6 +52,7 @@ describe("PostDetailView", () => {
     expect(screen.getByLabelText("Rated 8 out of 10")).toBeTruthy();
     expect(screen.getByText(/Tuesday, 29 September 2026, 4:00 pm/)).toBeTruthy();
     expect(get).toHaveBeenCalledWith("post-1");
+    expect(screen.getByRole("link", { name: /@ana_walks/ }).getAttribute("href")).toBe("/u/ana_walks");
     expect(replace).not.toHaveBeenCalled();
   });
 
@@ -67,7 +68,7 @@ describe("PostDetailView", () => {
     get.mockResolvedValue({ ok: true, value: detail() });
     render(<PostDetailView username="someone_else" postId="post-1" />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/ana_walks/post-1"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/u/ana_walks/post-1"));
   });
 
   it("explains an unavailable post without revealing why", async () => {

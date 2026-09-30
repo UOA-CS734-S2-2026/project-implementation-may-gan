@@ -24,6 +24,7 @@ function createTestApp(options: {
     listPendingRequests: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
     listFriends: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
     searchUsers: vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false })),
+    getProfileByUsername: vi.fn(async () => ({ id: "user_bob", username: "bob", displayName: "Bob", relationship: "none" as const })),
     sendRequest: vi.fn(async () => status),
     acceptRequest: vi.fn(async () => status),
     declineRequest: vi.fn(async () => status),
@@ -77,6 +78,20 @@ describe("relationships routes", () => {
       { BearerAuth: [] },
       { cookieAuth: [] },
     ]);
+  });
+
+  it("returns only the actor-scoped minimal profile and conceals unavailable profiles", async () => {
+    const { app, service } = createTestApp();
+    const response = await app.request("/api/v1/relationships/profiles/bob");
+    expect(response.status).toBe(200);
+    expectNoStore(response);
+    expect(await response.json()).toEqual({ id: "user_bob", username: "bob", displayName: "Bob", relationship: "none" });
+    expect(service.getProfileByUsername).toHaveBeenCalledWith("user_alice", "bob");
+
+    const unavailable = createTestApp({ service: { getProfileByUsername: vi.fn(async () => { throw new RelationshipServiceError("NOT_FOUND", "The requested profile was not found."); }) } });
+    const hidden = await unavailable.app.request("/api/v1/relationships/profiles/blocked");
+    expect(hidden.status).toBe(404);
+    expectNoStore(hidden);
   });
 
   it("rejects username-less actors at the server boundary", async () => {

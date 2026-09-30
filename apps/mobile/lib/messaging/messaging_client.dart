@@ -143,6 +143,7 @@ class MessagingConversation {
     required this.receiptSequence,
     required this.canSend,
     required this.canResolveRequest,
+    this.updatedAt,
   });
 
   final String id;
@@ -157,6 +158,7 @@ class MessagingConversation {
   final String receiptSequence;
   final bool canSend;
   final bool canResolveRequest;
+  final DateTime? updatedAt;
 
   factory MessagingConversation.fromJson(Map<String, dynamic> json) {
     final peer = json['peer'] as Map<String, dynamic>? ?? const {};
@@ -178,6 +180,7 @@ class MessagingConversation {
       receiptSequence: json['receiptSequence'] as String? ?? '0',
       canSend: capabilities['canSend'] as bool? ?? false,
       canResolveRequest: capabilities['canResolveRequest'] as bool? ?? false,
+      updatedAt: _date(json['updatedAt']),
     );
   }
 }
@@ -442,6 +445,37 @@ class HttpMessagingClient implements MessagingClient {
     '/api/v1/conversations/${Uri.encodeComponent(conversationId)}/messages/${Uri.encodeComponent(messageId)}',
     decode: MessagingMessage.fromJson,
   );
+
+  Future<ApiResult<String?>> findDirect(String recipientId) async {
+    final token = await bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(
+        Uri.parse(
+          '$_baseUrl/api/v1/conversations/direct/${Uri.encodeComponent(recipientId)}',
+        ),
+      );
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      final response = await request.close();
+      final text = await utf8.decodeStream(response);
+      if (response.statusCode == 404) {
+        return const ApiSuccess(null);
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return ApiError(_failure(response.statusCode));
+      }
+      final body = jsonDecode(text) as Map<String, dynamic>;
+      return ApiSuccess(body['conversationId'] as String?);
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    } finally {
+      client.close(force: true);
+    }
+  }
 
   @override
   Future<ApiResult<DirectConversationResult>> createDirect({
