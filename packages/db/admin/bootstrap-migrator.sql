@@ -28,6 +28,7 @@ BEGIN
   FOREACH restricted_table IN ARRAY ARRAY[
     'account_lifecycles',
     'account_management_grants',
+    'account_google_reauthentication_intents',
     'account_purge_receipts',
     'age_declarations',
     'data_export_requests',
@@ -45,6 +46,7 @@ BEGIN
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_management_grants TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_google_reauthentication_intents TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
     GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;

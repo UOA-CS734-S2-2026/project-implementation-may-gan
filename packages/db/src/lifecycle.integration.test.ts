@@ -226,6 +226,43 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
+  it("preserves the complete lifecycle, legal, private, and proof privilege matrix after bootstrap", async () => {
+    const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
+    await migrator.unsafe(bootstrap);
+    const expected = {
+      account_lifecycles: [true, true, true, false],
+      account_management_grants: [true, true, true, false],
+      account_google_reauthentication_intents: [true, true, true, false],
+      age_declarations: [true, true, false, false],
+      data_export_requests: [true, true, true, false],
+      data_export_object_cleanup_tasks: [false, false, false, false],
+      legal_document_versions: [true, false, false, false],
+      operator_cases: [false, false, false, false],
+      registration_intents: [true, true, true, false],
+      terms_acceptances: [true, true, false, false],
+      account_purge_receipts: [false, false, false, false],
+    } as const;
+    for (const [table, permissions] of Object.entries(expected)) {
+      const rows = await migrator`select has_table_privilege('app', ${`public.${table}`}, 'SELECT') as "select", has_table_privilege('app', ${`public.${table}`}, 'INSERT') as "insert", has_table_privilege('app', ${`public.${table}`}, 'UPDATE') as "update", has_table_privilege('app', ${`public.${table}`}, 'DELETE') as "delete", has_table_privilege('lifecycle_worker', ${`public.${table}`}, 'SELECT') as worker_select`;
+      expect(rows[0]).toEqual({ select: permissions[0], insert: permissions[1], update: permissions[2], delete: permissions[3], worker_select: false });
+    }
+    const functions = await migrator`select coalesce(bool_or((entry).grantee = 0 and (entry).privilege_type = 'EXECUTE'), false) as public_execute, has_function_privilege('app', 'public.account_policy_underage_restricted(text)', 'EXECUTE') as app_execute, has_function_privilege('lifecycle_worker', 'public.account_policy_underage_restricted(text)', 'EXECUTE') as worker_execute from pg_proc cross join lateral aclexplode(proacl) entry where oid = 'public.account_policy_underage_restricted(text)'::regprocedure`; 
+    expect(functions[0]).toEqual({ public_execute: false, app_execute: true, worker_execute: false });
+  });
+
+  it("projects only active reviewed underage restrictions", async () => {
+    const userId = await createUser("underage-projection");
+    const caseId = `case-${crypto.randomUUID()}`;
+    await migrator`insert into public.operator_cases (id, subject_user_id, type, status, decision, review_due_at, reviewed_at) values (${caseId}, ${userId}, 'underage_report', 'open', null, now() + interval '1 hour', null)`;
+    await expect(app`select public.account_policy_underage_restricted(${userId}) as restricted`).resolves.toEqual([{ restricted: false }]);
+    await migrator`update public.operator_cases set status = 'restricted', decision = 'temporary_restriction', reviewed_at = now() where id = ${caseId}`;
+    await expect(app`select public.account_policy_underage_restricted(${userId}) as restricted`).resolves.toEqual([{ restricted: true }]);
+    await migrator`update public.operator_cases set review_due_at = now() - interval '1 second' where id = ${caseId}`;
+    await expect(app`select public.account_policy_underage_restricted(${userId}) as restricted`).resolves.toEqual([{ restricted: false }]);
+    await expect(app`select * from public.operator_cases`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`update public.operator_cases set status = 'closed' where id = ${caseId}`).rejects.toMatchObject({ code: "42501" });
+  });
+
   it("denies app and lifecycle_worker direct physical purge access", async () => {
     const userId = await createUser("privileges");
 
