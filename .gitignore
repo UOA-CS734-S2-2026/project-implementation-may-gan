@@ -6,6 +6,8 @@ node_modules
 .next
 .wrangler
 coverage
+playwright-report
+test-results
 
 # Flutter and Dart
 .dart_tool
