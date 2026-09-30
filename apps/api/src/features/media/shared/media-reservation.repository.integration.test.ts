@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { count, eq } from "drizzle-orm";
 import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAppForEnv } from "../../../app";
@@ -103,20 +104,20 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
   ));
 
   beforeAll(async () => {
-    await migrator.client.unsafe('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
-    await migrator.client.unsafe('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade');
+    await migrator.db.execute(sql.raw('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade'));
+    await migrator.db.execute(sql.raw('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade'));
     const authMigration = await readFile(new URL("../../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
     const rateLimitMigration = await readFile(new URL("../../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
     const mediaReservationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0003_add_media_reservation.sql", import.meta.url), "utf8");
     const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0009_add_media_reservation_validation.sql", import.meta.url), "utf8");
-    await migrator.client.unsafe(authMigration);
-    await migrator.client.unsafe(rateLimitMigration);
-    await migrator.client.unsafe(mediaReservationMigration);
-    await migrator.client.unsafe(mediaValidationMigration);
+    await migrator.db.execute(sql.raw(authMigration));
+    await migrator.db.execute(sql.raw(rateLimitMigration));
+    await migrator.db.execute(sql.raw(mediaReservationMigration));
+    await migrator.db.execute(sql.raw(mediaValidationMigration));
   });
 
   beforeEach(async () => {
-    await migrator.client.unsafe('truncate table public.media_reservation, public.account, public.session, public.verification, public."user" cascade');
+    await migrator.db.execute(sql.raw('truncate table public.media_reservation, public.account, public.session, public.verification, public."user" cascade'));
   });
 
   afterAll(async () => {
@@ -131,9 +132,12 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     expect(response.status).toBe(201);
     const body = (await response.json()) as ReservationJson;
 
-    const [row] = await migrator.client`select owner_id, object_key from public.media_reservation where id = ${body.id}`;
+    const [row] = await migrator.db
+      .select({ ownerId: schema.mediaReservation.ownerId, objectKey: schema.mediaReservation.objectKey })
+      .from(schema.mediaReservation)
+      .where(eq(schema.mediaReservation.id, body.id));
     expect(row).toBeDefined();
-    expect(row!.object_key).toContain(row!.owner_id);
+    expect(row!.objectKey).toContain(row!.ownerId);
   });
 
   it("counts real rows for the per-owner quota", async () => {
@@ -146,7 +150,7 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
 
     expect((await reserve(app, token)).status).toBe(429);
 
-    const [row] = await migrator.client`select count(*)::int as count from public.media_reservation`;
+    const [row] = await migrator.db.select({ count: count() }).from(schema.mediaReservation);
     expect(row?.count).toBe(MAX_PENDING_RESERVATIONS_PER_OWNER);
   });
 
@@ -162,11 +166,10 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     }
     expect((await reserve(app, token)).status).toBe(429);
 
-    await migrator.client`
-      update public.media_reservation
-      set status = 'validated', validated_at = now()
-      where id = ${lastCreated!.id}
-    `;
+    await migrator.db
+      .update(schema.mediaReservation)
+      .set({ status: "validated", validatedAt: new Date() })
+      .where(eq(schema.mediaReservation.id, lastCreated!.id));
 
     const afterSettling = await reserve(app, token);
     expect(afterSettling.status).toBe(201);
@@ -186,10 +189,11 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     expect(succeeded).toHaveLength(MAX_PENDING_RESERVATIONS_PER_OWNER);
     expect(quotaExceeded).toHaveLength(attempts - MAX_PENDING_RESERVATIONS_PER_OWNER);
 
-    const [row] = await migrator.client`
-      select count(*)::int as count from public.media_reservation
-      where owner_id = (select id from public."user" where email = 'concurrent-owner@example.test')
-    `;
+    const [row] = await migrator.db
+      .select({ count: count() })
+      .from(schema.mediaReservation)
+      .innerJoin(schema.user, eq(schema.mediaReservation.ownerId, schema.user.id))
+      .where(eq(schema.user.email, "concurrent-owner@example.test"));
     expect(row?.count).toBe(MAX_PENDING_RESERVATIONS_PER_OWNER);
   });
 

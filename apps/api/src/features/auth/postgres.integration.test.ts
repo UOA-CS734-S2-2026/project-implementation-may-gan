@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { count, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, createAppForEnv } from "../../app";
 import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./route";
@@ -89,7 +90,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   ));
 
   beforeEach(async () => {
-    await migrator.client.unsafe('truncate table public."rateLimit", public.account, public.session, public.verification, public."user" cascade');
+    await migrator.db.execute(sql.raw('truncate table public."rateLimit", public.account, public.session, public.verification, public."user" cascade'));
   });
 
   afterAll(async () => {
@@ -97,36 +98,56 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
   });
 
   it("creates empty session and verification target tables", async () => {
-    const [row] = await migrator.client`
-      select
-        (select count(*)::int from public.session) as sessions,
-        (select count(*)::int from public.verification) as verifications
-    `;
-    expect(row).toMatchObject({ sessions: 0, verifications: 0 });
+    const [[sessions], [verifications]] = await Promise.all([
+      migrator.db.select({ count: count() }).from(schema.session),
+      migrator.db.select({ count: count() }).from(schema.verification),
+    ]);
+    expect({ sessions: sessions!.count, verifications: verifications!.count }).toMatchObject({ sessions: 0, verifications: 0 });
   });
 
   it("preserves stable text IDs, profile fields, and account record shape", async () => {
-    await migrator.client`
-      insert into public."user" (id, name, username, display_username, bio, mbti, what_i_do, listening_to, profile_visibility, email, tier, role, banned)
-      values ('schema-user-id', 'Schema User', 'schema_user', 'Schema', 'Bio', 'INTJ', 'Student', 'Music', 'private', 'schema@example.test', 'pro', 'user', false)
-    `;
-    await migrator.client`
-      insert into public.account (id, account_id, provider_id, user_id, password)
-      values ('schema-account-id', 'schema-account', 'credential', 'schema-user-id', 'test-password')
-    `;
+    await migrator.db.insert(schema.user).values({
+      id: "schema-user-id",
+      name: "Schema User",
+      username: "schema_user",
+      displayUsername: "Schema",
+      bio: "Bio",
+      mbti: "INTJ",
+      whatIDo: "Student",
+      listeningTo: "Music",
+      profileVisibility: "private",
+      email: "schema@example.test",
+      tier: "pro",
+      role: "user",
+      banned: false,
+    });
+    await migrator.db.insert(schema.account).values({
+      id: "schema-account-id",
+      accountId: "schema-account",
+      providerId: "credential",
+      userId: "schema-user-id",
+      password: "test-password",
+    });
 
-    const [row] = await migrator.client`
-      select u.id, u.username, u.profile_visibility, u.tier, a.user_id, a.provider_id
-      from public."user" u join public.account a on a.user_id = u.id
-      where u.id = 'schema-user-id'
-    `;
+    const [row] = await migrator.db
+      .select({
+        id: schema.user.id,
+        username: schema.user.username,
+        profileVisibility: schema.user.profileVisibility,
+        tier: schema.user.tier,
+        userId: schema.account.userId,
+        providerId: schema.account.providerId,
+      })
+      .from(schema.user)
+      .innerJoin(schema.account, eq(schema.account.userId, schema.user.id))
+      .where(eq(schema.user.id, "schema-user-id"));
     expect(row).toMatchObject({
       id: "schema-user-id",
       username: "schema_user",
-      profile_visibility: "private",
+      profileVisibility: "private",
       tier: "pro",
-      user_id: "schema-user-id",
-      provider_id: "credential",
+      userId: "schema-user-id",
+      providerId: "credential",
     });
   });
 
@@ -167,7 +188,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(loggedOut.json()).resolves.toBeNull();
 
     const expiryToken = nativeToken(await signIn(firstApp));
-    await migrator.client`update public.session set expires_at = now() - interval '1 second'`;
+    await migrator.db.update(schema.session).set({ expiresAt: new Date(Date.now() - 1_000) });
     const expired = await secondApp.fetch(request("/api/auth/get-session", {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));
@@ -215,7 +236,10 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     }));
     const responses = await Promise.all(bodies.map((body) => createProductionApp().fetch(body)));
     expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
-    const [row] = await migrator.client`select count(*)::int as count from public."user" where lower(username) = 'race_handle'`;
+    const [row] = await migrator.db
+      .select({ count: count() })
+      .from(schema.user)
+      .where(sql`lower(${schema.user.username}) = ${"race_handle"}`);
     expect(row?.count).toBe(1);
   });
 

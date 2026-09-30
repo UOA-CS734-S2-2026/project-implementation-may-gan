@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { count, eq, inArray } from "drizzle-orm";
 import { createAucklandDayService } from "@dayli/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresDailyPostStore } from "./create-post.repository";
@@ -46,18 +47,19 @@ function requireLocalTestUrl(value: string): string {
   }
 
   beforeAll(async () => {
-    await migrator.client`
-      insert into public."user" (id, name, email)
-      select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)
-    `;
+    await migrator.db.insert(schema.user).values(users.map((id) => ({
+      id,
+      name: id,
+      email: `${id}@example.test`,
+    })));
   });
 
   afterAll(async () => {
     try {
       // Immutable post history may only be removed by the migrator cleanup role.
-      await migrator.client`delete from public.tomorrow_notes where author_id = any(${users}::text[])`;
-      await migrator.client`delete from public.posts where author_id = any(${users}::text[])`;
-      await migrator.client`delete from public."user" where id = any(${users}::text[])`;
+      await migrator.db.delete(schema.tomorrowNotes).where(inArray(schema.tomorrowNotes.authorId, users));
+      await migrator.db.delete(schema.posts).where(inArray(schema.posts.authorId, users));
+      await migrator.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await Promise.all([app.close(), migrator.close()]);
     }
@@ -77,13 +79,12 @@ function requireLocalTestUrl(value: string): string {
       tomorrowNoteAvailableOn: "2026-09-26",
     });
 
-    const [row] = await migrator.client`
-      select
-        (select count(*)::int from public.posts where author_id = ${users[0]!}) as posts,
-        (select count(*)::int from public.tomorrow_notes where author_id = ${users[0]!}) as notes,
-        (select count(*)::int from public.post_idempotency_keys where author_id = ${users[0]!}) as keys
-    `;
-    expect(row).toEqual({ posts: 1, notes: 1, keys: 1 });
+    const [[posts], [notes], [keys]] = await Promise.all([
+      migrator.db.select({ count: count() }).from(schema.posts).where(eq(schema.posts.authorId, users[0]!)),
+      migrator.db.select({ count: count() }).from(schema.tomorrowNotes).where(eq(schema.tomorrowNotes.authorId, users[0]!)),
+      migrator.db.select({ count: count() }).from(schema.postIdempotencyKeys).where(eq(schema.postIdempotencyKeys.authorId, users[0]!)),
+    ]);
+    expect({ posts: posts!.count, notes: notes!.count, keys: keys!.count }).toEqual({ posts: 1, notes: 1, keys: 1 });
   });
 
   it("serialises concurrent submissions across connections into exactly one post", async () => {
@@ -102,7 +103,9 @@ function requireLocalTestUrl(value: string): string {
         expect(failure.reason).toBeInstanceOf(CreateDailyPostError);
         expect((failure.reason as CreateDailyPostError).reason).toBe("ALREADY_POSTED");
       }
-      const [row] = await migrator.client`select count(*)::int as count from public.posts where author_id = ${users[1]!}`;
+      const [row] = await migrator.db.select({ count: count() })
+        .from(schema.posts)
+        .where(eq(schema.posts.authorId, users[1]!));
       expect(row?.count).toBe(1);
     } finally {
       await Promise.all(connections.map((connection) => connection.close()));
@@ -112,18 +115,19 @@ function requireLocalTestUrl(value: string): string {
   it("rejects a changed payload under a used key without writing", async () => {
     await expect(service().createDailyPost(users[0]!, "key-1", { ...input, rating: 2 }))
       .rejects.toMatchObject({ reason: "IDEMPOTENCY_KEY_REUSED" });
-    const [row] = await migrator.client`select rating from public.posts where author_id = ${users[0]!}`;
+    const [row] = await migrator.db.select({ rating: schema.posts.rating })
+      .from(schema.posts)
+      .where(eq(schema.posts.authorId, users[0]!));
     expect(row?.rating).toBe(7);
   });
 
   it("rejects the wrong prompt and leaves no partial rows", async () => {
     await expect(service().createDailyPost(users[2]!, "key-1", { ...input, promptId: "prompt-09-24" }))
       .rejects.toMatchObject({ reason: "PROMPT_CHANGED" });
-    const [row] = await migrator.client`
-      select
-        (select count(*)::int from public.posts where author_id = ${users[2]!}) as posts,
-        (select count(*)::int from public.post_idempotency_keys where author_id = ${users[2]!}) as keys
-    `;
-    expect(row).toEqual({ posts: 0, keys: 0 });
+    const [[posts], [keys]] = await Promise.all([
+      migrator.db.select({ count: count() }).from(schema.posts).where(eq(schema.posts.authorId, users[2]!)),
+      migrator.db.select({ count: count() }).from(schema.postIdempotencyKeys).where(eq(schema.postIdempotencyKeys.authorId, users[2]!)),
+    ]);
+    expect({ posts: posts!.count, keys: keys!.count }).toEqual({ posts: 0, keys: 0 });
   });
 });

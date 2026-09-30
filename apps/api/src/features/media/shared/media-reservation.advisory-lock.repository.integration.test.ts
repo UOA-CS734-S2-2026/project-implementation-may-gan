@@ -1,4 +1,5 @@
-import { createDayliDatabase, sql } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDrizzleMediaReservationRepository, type MediaReservationRecord } from "./media-reservation.repository";
 
@@ -67,17 +68,15 @@ const enabled = Boolean(databaseUrl && migrationUrl);
   }
 
   beforeAll(async () => {
-    await migrator.client`
-      insert into public."user" (id, name, email)
-      values
-        (${owners[0]}, 'Advisory Lock One', ${`${owners[0]}@example.test`}),
-        (${owners[1]}, 'Advisory Lock Two', ${`${owners[1]}@example.test`})
-    `;
+    await migrator.db.insert(schema.user).values([
+      { id: owners[0]!, name: "Advisory Lock One", email: `${owners[0]}@example.test` },
+      { id: owners[1]!, name: "Advisory Lock Two", email: `${owners[1]}@example.test` },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await migrator.client`delete from public."user" where id = any(${owners}::text[])`;
+      await migrator.db.delete(schema.user).where(inArray(schema.user.id, owners));
     } finally {
       await Promise.all([...databases.map((value) => value.close()), migrator.close()]);
     }
