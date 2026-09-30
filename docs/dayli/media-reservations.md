@@ -34,7 +34,7 @@ A failed validation returns `200` with `{status: "failed", failureReason}` rathe
 
 The composer takes up to three photos, or one video, from the gallery. Camera capture is separate work. Each picked file goes through these steps in the background while the composer is open, one attachment at a time:
 
-1. **Compress** into app support storage (`dayli-media/`), not temporary storage, so the copy survives a restart. Photos become JPEG with the longest edge at most 2048 px, quality 80, EXIF removed, and orientation applied to the pixels. Videos are checked for length first; a video over 15 seconds is rejected without being encoded. Otherwise they become 720p H.264 and AAC in MP4 at about 2.5 Mbps, with metadata (including location) removed. The client only ever reserves `image/jpeg` or `video/mp4`.
+1. **Compress** into app support storage (`dayli-media/user-<id>/`, one folder per user), not temporary storage, so the copy survives a restart. Photos become JPEG with the longest edge at most 2048 px, quality 80, EXIF removed, and orientation applied to the pixels. Videos are checked for length first; a video over 15 seconds is rejected without being encoded. Otherwise they become 720p H.264 and AAC in MP4 at about 2.5 Mbps, with metadata (including location) removed. The client only ever reserves `image/jpeg` or `video/mp4`.
 2. **Check limits** on the compressed copy: 10 MB per file, 15 seconds per video, and 25 MB per post. The server can't check the post total until posts link attachments, so the client is the only check for now. A file over a limit, or one that can't be read, is removed from the draft with a message.
 3. **Reserve** with the compressed type and size. `429` waits and retries.
 4. **PUT** straight to R2 with a plain HTTP request that has no session token, sending exactly the reservation's `requiredHeaders`. `412` means an earlier attempt already stored the object, so the client carries on. `403` means the URL expired, so the client reserves again.
@@ -42,9 +42,9 @@ The composer takes up to three photos, or one video, from the gallery. Camera ca
 
 Each step is saved in the protected draft (`compressedPath`, `contentType`, `byteSize`, `reservationId`, and `status`: `pending`, `uploading`, `validated`, or `failed`), so an interrupted upload resumes on the next open. After a restart the upload URL is gone, so the client calls `/complete` first: `validated` finishes, and `pending` reserves again and re-uploads. The presigned URL is kept in memory only and never logged or saved. Offline and outage failures keep the file and retry with backoff (2 seconds, doubling to 1 minute); an expired session waits for sign-in.
 
-Posting is blocked until every attachment is `validated`. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded.
+Posting is blocked until every attachment is `validated`. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded. Signing out removes the user's draft and their whole media folder, even if the composer is closed, including copies a crash left behind. An expired session keeps the draft for the next sign-in, so its media stays too.
 
-Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept; video tiles show a placeholder rather than a thumbnail; and posts don't carry media until attachment linking exists.
+Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and posts don't carry media until attachment linking exists.
 
 ## One-time Cloudflare setup
 

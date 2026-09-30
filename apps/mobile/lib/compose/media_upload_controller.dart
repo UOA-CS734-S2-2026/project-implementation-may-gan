@@ -183,7 +183,10 @@ class MediaUploadController extends ChangeNotifier {
 
   Future<_Outcome> _compress(DraftAttachment attachment) async {
     _setActivity(attachment, UploadActivity.compressing);
-    final result = await _compressor.compress(attachment);
+    final result = await _compressor.compress(
+      attachment,
+      ownerId: _composer.userId,
+    );
     switch (result) {
       case CompressionRejected(:final violation):
         return _drop(attachment, violation.message);
