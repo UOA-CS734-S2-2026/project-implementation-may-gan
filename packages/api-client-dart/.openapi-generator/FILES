@@ -69,6 +69,10 @@ lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
+lib/model/profile_post.dart
+lib/model/profile_post_author.dart
+lib/model/profile_post_prompt.dart
+lib/model/profile_posts_page.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_profile.dart
 lib/model/relationship_state.dart

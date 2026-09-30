@@ -155,6 +155,10 @@ async function finalizeGeneratedClients() {
       "localDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/profile_post.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/test_response.dart",
       "aucklandDate",
     ),

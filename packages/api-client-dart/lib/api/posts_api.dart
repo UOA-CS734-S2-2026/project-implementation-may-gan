@@ -323,4 +323,96 @@ class PostsApi {
     }
     return null;
   }
+
+  /// List the posts on a profile
+  ///
+  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] username (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<Response> postsListProfilePostsWithHttpInfo(
+    String username, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/profiles/{username}/posts'.replaceAll('{username}', username);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List the posts on a profile
+  ///
+  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] username (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<ProfilePostsPage?> postsListProfilePosts(
+    String username, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListProfilePostsWithHttpInfo(
+      username,
+      cursor: cursor,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'ProfilePostsPage',
+      ) as ProfilePostsPage;
+    }
+    return null;
+  }
 }

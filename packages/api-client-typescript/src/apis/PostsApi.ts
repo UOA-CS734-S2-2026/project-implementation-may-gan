@@ -43,6 +43,11 @@ import {
     PostMediaFromJSON,
     PostMediaToJSON,
 } from '../models/PostMedia';
+import {
+    type ProfilePostsPage,
+    ProfilePostsPageFromJSON,
+    ProfilePostsPageToJSON,
+} from '../models/ProfilePostsPage';
 
 export interface PostsCreateRequest {
     /**
@@ -74,6 +79,21 @@ export interface PostsGetMediaRequest {
 }
 
 export interface PostsListFeedRequest {
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
+export interface PostsListProfilePostsRequest {
+    /**
+     *
+     */
+    username: string;
     /**
      * Opaque continuation cursor
      */
@@ -327,6 +347,69 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsListFeed(requestParameters: PostsListFeedRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FeedPage> {
         const response = await this.postsListFeedRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListProfilePosts without sending the request
+     */
+    async postsListProfilePostsRequestOpts(requestParameters: PostsListProfilePostsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling postsListProfilePosts().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profiles/{username}/posts`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * List the posts on a profile
+     */
+    async postsListProfilePostsRaw(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfilePostsPage>> {
+        const requestOptions = await this.postsListProfilePostsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProfilePostsPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * List the posts on a profile
+     */
+    async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfilePostsPage> {
+        const response = await this.postsListProfilePostsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
