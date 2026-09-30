@@ -95,8 +95,8 @@ suite("create direct conversation Postgres repository", () => {
       select least(${actorId}, ${recipientId}) as low_id, greatest(${actorId}, ${recipientId}) as high_id
     `;
     const [stored] = await database.client`
-      select user_low_id as low_id, user_high_id as high_id,
-        user_low_id < user_high_id as satisfies_pair_order_check
+      select participant_low_id as low_id, participant_high_id as high_id,
+        participant_low_id < participant_high_id as satisfies_pair_order_check
       from public.conversations
       where id = ${created.conversation.id}
     `;
@@ -114,7 +114,7 @@ suite("create direct conversation Postgres repository", () => {
     });
     await expect(database.client`
       update public.conversations
-      set user_low_id = ${reference!.high_id}, user_high_id = ${reference!.low_id}
+      set participant_low_id = ${reference!.high_id}, participant_high_id = ${reference!.low_id}
       where id = ${created.conversation.id}
     `).rejects.toMatchObject({ code: "23514" });
     expect(queries.some((query) => (

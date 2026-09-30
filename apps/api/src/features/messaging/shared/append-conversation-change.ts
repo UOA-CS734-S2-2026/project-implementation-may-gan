@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 type Queryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 
@@ -9,7 +9,7 @@ export async function appendConversationChange(
   conversationId: string,
   kind: string,
   messageId: string | null,
-  memberId: string | null,
+  memberParticipantId: string | null,
   now: Date,
 ): Promise<void> {
   const [change] = await queryable
@@ -21,8 +21,8 @@ export async function appendConversationChange(
     .where(eq(schema.conversations.id, conversationId))
     .returning({
       sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
-      userLowId: schema.conversations.userLowId,
-      userHighId: schema.conversations.userHighId,
+      participantLowId: schema.conversations.participantLowId,
+      participantHighId: schema.conversations.participantHighId,
     });
   if (!change) throw new Error("Conversation disappeared during change append.");
 
@@ -32,45 +32,52 @@ export async function appendConversationChange(
     changeSequence,
     kind,
     messageId,
-    memberId,
+    memberParticipantId,
     createdAt: now,
   });
 
+  const recipients = await queryable
+    .select({ userId: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      inArray(schema.messagingParticipants.id, [change.participantLowId, change.participantHighId]),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ));
   const eventId = crypto.randomUUID();
-  await queryable.insert(schema.messagingOutbox).values([
-    {
+  if (recipients.length > 0) {
+    await queryable.insert(schema.messagingOutbox).values(recipients.map((recipient) => ({
       id: crypto.randomUUID(),
       eventId,
-      recipientId: change.userLowId,
+      recipientId: recipient.userId!,
       conversationId,
       changeSequence,
-      channel: "realtime",
-      status: "pending",
+      channel: "realtime" as const,
+      status: "pending" as const,
       attempts: 0,
       availableAt: now,
       createdAt: now,
-    },
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userHighId,
-      conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: now,
-      createdAt: now,
-    },
-  ]);
+    })));
+  }
 
   if (kind !== "message.created" || !messageId) return;
 
   const [message] = await queryable
-    .select({ senderId: schema.messages.senderId })
+    .select({ senderParticipantId: schema.messages.senderParticipantId })
     .from(schema.messages)
     .where(eq(schema.messages.id, messageId));
-  const peerId = message?.senderId === change.userLowId ? change.userHighId : change.userLowId;
+  const peerParticipantId = message?.senderParticipantId === change.participantLowId
+    ? change.participantHighId
+    : change.participantLowId;
+  const [peer] = await queryable
+    .select({ userId: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      eq(schema.messagingParticipants.id, peerParticipantId),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ));
+  if (!peer?.userId) return;
   const devices = await queryable
     .select({ id: schema.pushDevices.id })
     .from(schema.pushDevices)
@@ -80,7 +87,7 @@ export async function appendConversationChange(
       gt(schema.session.expiresAt, sql`now()`),
     ))
     .where(and(
-      eq(schema.pushDevices.userId, peerId),
+      eq(schema.pushDevices.userId, peer.userId),
       eq(schema.pushDevices.optedIn, true),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
@@ -91,7 +98,7 @@ export async function appendConversationChange(
     await queryable.insert(schema.messagingOutbox).values({
       id: crypto.randomUUID(),
       eventId: crypto.randomUUID(),
-      recipientId: peerId,
+      recipientId: peer.userId,
       conversationId,
       changeSequence,
       channel: "push",

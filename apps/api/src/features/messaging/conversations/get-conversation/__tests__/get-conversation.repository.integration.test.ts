@@ -78,7 +78,7 @@ suite("get conversation Postgres repository", () => {
     await database.client`
       update public.conversation_members
       set last_read_sequence = ${lastReadSequence}::bigint, receipt_sequence = ${lastReadSequence}::bigint
-      where conversation_id = ${active.conversation.id} and user_id = ${users[0]!}
+      where conversation_id = ${active.conversation.id} and participant_id = ${users[0]!}
     `;
 
     await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({

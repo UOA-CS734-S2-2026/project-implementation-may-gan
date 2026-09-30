@@ -46,8 +46,8 @@ suite("list messages Postgres repository", () => {
     });
     await send.send(users[0]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third message" });
     const fourth = await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
-    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
+    await database.client`insert into public.message_reactions (message_id, participant_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
     await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
 
     await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });

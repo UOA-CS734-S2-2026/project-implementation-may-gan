@@ -52,7 +52,7 @@ export function createPostgresGetMessageRepository(database: DayliDatabase): Get
           id: schema.messages.id,
           conversationId: schema.messages.conversationId,
           sequence: sql<string>`${schema.messages.sequence}::text`,
-          senderId: schema.messages.senderId,
+          senderId: schema.messages.senderParticipantId,
           clientMessageId: schema.messages.clientMessageId,
           requestFingerprint: schema.messages.requestFingerprint,
           body: schema.messages.body,

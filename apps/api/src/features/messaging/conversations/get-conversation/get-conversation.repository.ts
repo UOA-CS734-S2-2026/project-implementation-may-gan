@@ -29,17 +29,24 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
     async get(actorId, conversationId) {
       const row = await requireConversationMember(database, actorId, conversationId);
       const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
-      const [user] = await database
-        .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
-        .from(schema.user)
-        .where(eq(schema.user.id, peer))
+      const [participant] = await database
+        .select({ state: schema.messagingParticipants.state, userId: schema.messagingParticipants.userId })
+        .from(schema.messagingParticipants)
+        .where(eq(schema.messagingParticipants.id, peer))
         .limit(1);
+      const [user] = participant?.userId
+        ? await database
+          .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
+          .from(schema.user)
+          .where(eq(schema.user.id, participant.userId))
+          .limit(1)
+        : [];
       const [latest] = await database
         .select({
           id: schema.messages.id,
           conversationId: schema.messages.conversationId,
           sequence: sql<string>`${schema.messages.sequence}::text`,
-          senderId: schema.messages.senderId,
+          senderId: schema.messages.senderParticipantId,
           clientMessageId: schema.messages.clientMessageId,
           requestFingerprint: schema.messages.requestFingerprint,
           body: schema.messages.body,
@@ -58,7 +65,7 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         .from(schema.messages)
         .where(and(
           eq(schema.messages.conversationId, conversationId),
-          ne(schema.messages.senderId, actorId),
+          ne(schema.messages.senderParticipantId, actorId),
           sql`${schema.messages.sequence} > ${String(row.last_read_sequence)}::bigint`,
           isNull(schema.messages.unsentAt),
         ));
@@ -66,6 +73,7 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         ...row,
         peer_id: peer,
         peer_name: user?.name,
+        peer_deleted: participant?.state === "deleted",
         unread_count: unread?.count ?? 0,
         ...(latest ? messageProjection(latest) : {}),
       }, actorId);

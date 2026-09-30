@@ -38,14 +38,14 @@ export function createPostgresMarkConversationReadRepository(
       return database.transaction(async (tx) => {
         const [pair] = await tx
           .select({
-            userLowId: schema.conversations.userLowId,
-            userHighId: schema.conversations.userHighId,
+            participantLowId: schema.conversations.participantLowId,
+            participantHighId: schema.conversations.participantHighId,
           })
           .from(schema.conversations)
           .where(eq(schema.conversations.id, conversationId))
           .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
-        await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
+        await lockRelationshipPair(tx, pair.participantLowId, pair.participantHighId);
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         const max = BigInt(String(row.last_message_sequence));
@@ -62,7 +62,7 @@ export function createPostgresMarkConversationReadRepository(
           })
           .where(and(
             eq(schema.conversationMembers.conversationId, conversationId),
-            eq(schema.conversationMembers.userId, actorId),
+            eq(schema.conversationMembers.participantId, actorId),
           ))
           .returning({
             lastReadSequence: sql<string>`${schema.conversationMembers.lastReadSequence}::text`,
@@ -78,7 +78,7 @@ export function createPostgresMarkConversationReadRepository(
           .from(schema.messages)
           .where(and(
             eq(schema.messages.conversationId, conversationId),
-            ne(schema.messages.senderId, actorId),
+            ne(schema.messages.senderParticipantId, actorId),
             sql`${schema.messages.sequence} > ${updated.lastReadSequence}::bigint`,
             isNull(schema.messages.unsentAt),
           ));

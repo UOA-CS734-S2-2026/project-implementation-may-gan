@@ -33,7 +33,7 @@ export function createPostgresPushDestinationResolver(
         ))
         .innerJoin(schema.conversationMembers, and(
           eq(schema.conversationMembers.conversationId, job.conversationId),
-          eq(schema.conversationMembers.userId, schema.pushDevices.userId),
+          eq(schema.conversationMembers.participantId, schema.pushDevices.userId),
         ))
         .innerJoin(schema.conversations, eq(schema.conversations.id, job.conversationId))
         .where(and(
@@ -45,10 +45,10 @@ export function createPostgresPushDestinationResolver(
             select 1 from ${schema.relationshipBlocks}
             where ${schema.relationshipBlocks.unblockedAt} is null
               and (
-                (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userLowId}
-                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userHighId})
-                or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userHighId}
-                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userLowId})
+                (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantLowId}
+                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantHighId})
+                or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantHighId}
+                  and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantLowId})
               )
           )`,
         ))

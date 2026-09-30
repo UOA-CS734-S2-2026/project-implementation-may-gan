@@ -70,7 +70,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         id: schema.messages.id,
         conversation_id: schema.messages.conversationId,
         sequence: sql<string>`${schema.messages.sequence}::text`,
-        sender_id: schema.messages.senderId,
+        sender_id: schema.messages.senderParticipantId,
         client_message_id: schema.messages.clientMessageId,
         request_fingerprint: schema.messages.requestFingerprint,
         body: schema.messages.body,
@@ -82,7 +82,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
       })
       .from(schema.messages)
       .where(and(
-        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.senderParticipantId, senderId),
         eq(schema.messages.clientMessageId, clientMessageId),
       ))
       .limit(1);
@@ -108,7 +108,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         id: input.id,
         conversationId: input.conversationId,
         sequence: sql`${allocated.sequence}::bigint`,
-        senderId: input.senderId,
+        senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,
@@ -120,7 +120,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         id: schema.messages.id,
         conversation_id: schema.messages.conversationId,
         sequence: sql<string>`${schema.messages.sequence}::text`,
-        sender_id: schema.messages.senderId,
+        sender_id: schema.messages.senderParticipantId,
         client_message_id: schema.messages.clientMessageId,
         request_fingerprint: schema.messages.requestFingerprint,
         body: schema.messages.body,

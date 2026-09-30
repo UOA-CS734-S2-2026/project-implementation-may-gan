@@ -82,7 +82,7 @@ async function conversationAfterResolution(
       id: schema.messages.id,
       conversationId: schema.messages.conversationId,
       sequence: sql<string>`${schema.messages.sequence}::text`,
-      senderId: schema.messages.senderId,
+      senderId: schema.messages.senderParticipantId,
       clientMessageId: schema.messages.clientMessageId,
       requestFingerprint: schema.messages.requestFingerprint,
       body: schema.messages.body,
@@ -101,7 +101,7 @@ async function conversationAfterResolution(
     .from(schema.messages)
     .where(and(
       eq(schema.messages.conversationId, conversationId),
-      ne(schema.messages.senderId, actorId),
+      ne(schema.messages.senderParticipantId, actorId),
       sql`${schema.messages.sequence} > ${String(row.last_read_sequence)}::bigint`,
       isNull(schema.messages.unsentAt),
     ));
@@ -122,14 +122,14 @@ export function createPostgresResolveMessageRequestRepository(
       await database.transaction(async (tx) => {
         const [pair] = await tx
           .select({
-            userLowId: schema.conversations.userLowId,
-            userHighId: schema.conversations.userHighId,
+            participantLowId: schema.conversations.participantLowId,
+            participantHighId: schema.conversations.participantHighId,
           })
           .from(schema.conversations)
           .where(eq(schema.conversations.id, conversationId))
           .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
-        await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
+        await lockRelationshipPair(tx, pair.participantLowId, pair.participantHighId);
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         if (row.blocked === true) throw new MessagingError("BLOCKED");

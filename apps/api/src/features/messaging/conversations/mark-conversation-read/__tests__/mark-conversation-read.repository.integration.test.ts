@@ -137,7 +137,7 @@ suite("mark conversation read Postgres repository", () => {
       expect.objectContaining({ lastReadSequence: "3", receiptSequence: "3", unreadCount: 0 }),
     ]));
     expect(results.every((result) => BigInt(result.receiptSequence) <= BigInt(result.lastReadSequence))).toBe(true);
-    const [member] = await database.client`select last_read_sequence, receipt_sequence from public.conversation_members where conversation_id = ${conversation.conversation.id} and user_id = ${users[7]!}`;
+    const [member] = await database.client`select last_read_sequence, receipt_sequence from public.conversation_members where conversation_id = ${conversation.conversation.id} and participant_id = ${users[7]!}`;
     expect(member).toMatchObject({ last_read_sequence: "3", receipt_sequence: "3" });
   });
 });

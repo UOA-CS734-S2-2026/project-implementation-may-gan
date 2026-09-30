@@ -17,19 +17,19 @@ export async function requireConversationMember(
     from ${schema.relationshipBlocks}
     where ${schema.relationshipBlocks.unblockedAt} is null
       and (
-        (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userLowId}
-          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userHighId})
-        or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.userHighId}
-          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.userLowId})
+        (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantLowId}
+          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantHighId})
+        or (${schema.relationshipBlocks.blockerId} = ${schema.conversations.participantHighId}
+          and ${schema.relationshipBlocks.blockedId} = ${schema.conversations.participantLowId})
       )
   )`;
   const query = queryable
     .select({
       id: schema.conversations.id,
       kind: schema.conversations.kind,
-      user_low_id: schema.conversations.userLowId,
-      user_high_id: schema.conversations.userHighId,
-      initiator_id: schema.conversations.initiatorId,
+      user_low_id: schema.conversations.participantLowId,
+      user_high_id: schema.conversations.participantHighId,
+      initiator_id: schema.conversations.initiatorParticipantId,
       request_state: schema.conversations.requestState,
       last_message_sequence: sql<string>`${schema.conversations.lastMessageSequence}::text`,
       last_change_sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
@@ -45,7 +45,7 @@ export async function requireConversationMember(
       schema.conversationMembers,
       and(
         eq(schema.conversationMembers.conversationId, schema.conversations.id),
-        eq(schema.conversationMembers.userId, actorId),
+        eq(schema.conversationMembers.participantId, actorId),
       ),
     )
     .where(eq(schema.conversations.id, conversationId))

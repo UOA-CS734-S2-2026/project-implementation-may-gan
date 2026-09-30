@@ -16,7 +16,7 @@ describe("createHyperdriveMessageWriteStore", () => {
         return {
           from: vi.fn(() => ({
             where: vi.fn(() => ({
-              limit: vi.fn().mockResolvedValue([{ userLowId: "amy", userHighId: "zoe" }]),
+              limit: vi.fn().mockResolvedValue([{ participantLowId: "amy", participantHighId: "zoe" }]),
             })),
           })),
         };

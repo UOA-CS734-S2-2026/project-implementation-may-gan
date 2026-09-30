@@ -33,7 +33,7 @@ export function createPostgresListConversationChangesRepository(
           changeSequence: sql<string>`${schema.conversationChanges.changeSequence}::text`,
           kind: schema.conversationChanges.kind,
           messageId: schema.conversationChanges.messageId,
-          memberId: schema.conversationChanges.memberId,
+          memberId: schema.conversationChanges.memberParticipantId,
           createdAt: schema.conversationChanges.createdAt,
         })
         .from(schema.conversationChanges)

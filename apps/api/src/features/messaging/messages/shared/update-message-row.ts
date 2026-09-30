@@ -32,7 +32,7 @@ export async function updateMessageRow(
       id: schema.messages.id,
       conversation_id: schema.messages.conversationId,
       sequence: sql<string>`${schema.messages.sequence}::text`,
-      sender_id: schema.messages.senderId,
+      sender_id: schema.messages.senderParticipantId,
       client_message_id: schema.messages.clientMessageId,
       request_fingerprint: schema.messages.requestFingerprint,
       body: schema.messages.body,

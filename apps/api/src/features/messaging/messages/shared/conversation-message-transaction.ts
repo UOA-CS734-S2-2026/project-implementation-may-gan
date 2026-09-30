@@ -13,10 +13,10 @@ export async function withLockedConversationMessageTransaction<T>(
   operation: (transaction: ConversationMessageTransaction) => Promise<T>,
 ): Promise<T> {
   const [pair] = await transaction
-    .select({ userLowId: schema.conversations.userLowId, userHighId: schema.conversations.userHighId })
+    .select({ participantLowId: schema.conversations.participantLowId, participantHighId: schema.conversations.participantHighId })
     .from(schema.conversations)
     .where(eq(schema.conversations.id, conversationId))
     .limit(1);
-  if (pair) await lockRelationshipPair(transaction, pair.userLowId, pair.userHighId);
+  if (pair) await lockRelationshipPair(transaction, pair.participantLowId, pair.participantHighId);
   return operation(transaction);
 }

@@ -29,7 +29,7 @@ const messageSelection = {
   id: schema.messages.id,
   conversationId: schema.messages.conversationId,
   sequence: sql<string>`${schema.messages.sequence}::text`,
-  senderId: schema.messages.senderId,
+  senderId: schema.messages.senderParticipantId,
   clientMessageId: schema.messages.clientMessageId,
   requestFingerprint: schema.messages.requestFingerprint,
   body: schema.messages.body,
@@ -84,21 +84,21 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     const [row] = await this.queryable
       .select({
         id: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
         requestState: schema.conversations.requestState,
       })
       .from(schema.conversations)
       .where(and(
-        eq(schema.conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
-        eq(schema.conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+        eq(schema.conversations.participantLowId, sql`least(${actorId}, ${recipientId})`),
+        eq(schema.conversations.participantHighId, sql`greatest(${actorId}, ${recipientId})`),
       ))
       .limit(1)
       .for("update");
     if (!row) return null;
     return {
       id: row.id,
-      peerId: row.userLowId === actorId ? row.userHighId : row.userLowId,
+      peerId: row.participantLowId === actorId ? row.participantHighId : row.participantLowId,
       requestState: row.requestState,
     };
   }
@@ -130,14 +130,14 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       .select({
         ...messageSelection,
         directConversationId: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
         requestState: schema.conversations.requestState,
       })
       .from(schema.messages)
       .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messages.conversationId))
       .where(and(
-        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.senderParticipantId, senderId),
         eq(schema.messages.clientMessageId, clientMessageId),
       ))
       .limit(1);
@@ -146,7 +146,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       requestFingerprint: row.requestFingerprint,
       conversation: {
         id: row.directConversationId,
-        peerId: row.userLowId === senderId ? row.userHighId : row.userLowId,
+        peerId: row.participantLowId === senderId ? row.participantHighId : row.participantLowId,
         requestState: row.requestState,
       },
       message: storedMessage(row),
@@ -166,9 +166,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     await this.queryable.insert(schema.conversations).values({
       id: input.conversationId,
       kind: "direct",
-      userLowId: sql`least(${input.initiatorId}, ${input.recipientId})`,
-      userHighId: sql`greatest(${input.initiatorId}, ${input.recipientId})`,
-      initiatorId: input.initiatorId,
+      participantLowId: sql`least(${input.initiatorId}, ${input.recipientId})`,
+      participantHighId: sql`greatest(${input.initiatorId}, ${input.recipientId})`,
+      initiatorParticipantId: input.initiatorId,
       requestState: input.requestState,
       lastMessageSequence: 1,
       lastChangeSequence: 0,
@@ -179,7 +179,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     await this.queryable.insert(schema.conversationMembers).values([
       {
         conversationId: input.conversationId,
-        userId: input.initiatorId,
+        participantId: input.initiatorId,
         lastReadSequence: 0,
         receiptSequence: 0,
         createdAt: input.createdAt,
@@ -187,7 +187,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       },
       {
         conversationId: input.conversationId,
-        userId: input.recipientId,
+        participantId: input.recipientId,
         lastReadSequence: 0,
         receiptSequence: 0,
         createdAt: input.createdAt,
@@ -200,7 +200,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         id: input.messageId,
         conversationId: input.conversationId,
         sequence: 1,
-        senderId: input.initiatorId,
+        senderParticipantId: input.initiatorId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,
@@ -231,7 +231,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         id: input.messageId,
         conversationId: input.conversation.id,
         sequence: sql`${allocated!.sequence}::bigint`,
-        senderId: input.senderId,
+        senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,

@@ -35,7 +35,7 @@ class PostgresRemoveReactionTransaction implements RemoveReactionTransaction {
       .delete(schema.messageReactions)
       .where(and(
         eq(schema.messageReactions.messageId, messageId),
-        eq(schema.messageReactions.userId, actorId),
+        eq(schema.messageReactions.participantId, actorId),
       ));
     const current = await this.findMessage(this.conversationId, messageId);
     if (!current) throw new Error("Message disappeared during reaction.");

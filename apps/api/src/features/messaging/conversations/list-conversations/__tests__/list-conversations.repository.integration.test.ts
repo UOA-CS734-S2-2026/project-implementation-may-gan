@@ -71,7 +71,7 @@ suite("list conversations Postgres repository", () => {
     await database.client`
       update public.conversation_members
       set last_read_sequence = ${lastReadSequence}::bigint, receipt_sequence = ${lastReadSequence}::bigint
-      where conversation_id = ${activeWithUnread.conversation.id} and user_id = ${users[0]!}
+      where conversation_id = ${activeWithUnread.conversation.id} and participant_id = ${users[0]!}
     `;
     await database.client`update public.conversations set last_activity_at = ${"2026-09-28T06:00:00.000001Z"}::timestamptz where id = ${activeWithUnread.conversation.id}`;
     await database.client`update public.conversations set last_activity_at = ${"2026-09-28T06:00:00.000002Z"}::timestamptz where id = ${activeWithoutUnread.conversation.id} or id = ${activeWithSameActivity.conversation.id}`;

@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
@@ -37,7 +37,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
     .from(schema.conversationMembers)
     .where(and(
       eq(schema.conversationMembers.conversationId, schema.conversations.id),
-      eq(schema.conversationMembers.userId, actorId),
+      eq(schema.conversationMembers.participantId, actorId),
     )));
   const blocked = exists(queryable
     .select({ blockerId: schema.relationshipBlocks.blockerId })
@@ -46,19 +46,19 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
       isNull(schema.relationshipBlocks.unblockedAt),
       or(
         and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
+          eq(schema.relationshipBlocks.blockerId, schema.conversations.participantLowId),
+          eq(schema.relationshipBlocks.blockedId, schema.conversations.participantHighId),
         ),
         and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
+          eq(schema.relationshipBlocks.blockerId, schema.conversations.participantHighId),
+          eq(schema.relationshipBlocks.blockedId, schema.conversations.participantLowId),
         ),
       ),
     )));
   const [row] = await queryable
     .select({
-      user_low_id: schema.conversations.userLowId,
-      user_high_id: schema.conversations.userHighId,
+      user_low_id: schema.conversations.participantLowId,
+      user_high_id: schema.conversations.participantHighId,
       request_state: schema.conversations.requestState,
       member: sql<boolean>`${member}`,
       blocked: sql<boolean>`${blocked}`,
@@ -83,7 +83,7 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
       id: schema.messages.id,
       conversation_id: schema.messages.conversationId,
       sequence: sql<string>`${schema.messages.sequence}::text`,
-      sender_id: schema.messages.senderId,
+      sender_id: schema.messages.senderParticipantId,
       client_message_id: schema.messages.clientMessageId,
       request_fingerprint: schema.messages.requestFingerprint,
       body: schema.messages.body,
@@ -106,7 +106,7 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
     .select({
       reaction: schema.messageReactions.reaction,
       count: sql<number>`count(*)::int`,
-      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
+      reacted: sql<boolean>`bool_or(${schema.messageReactions.participantId} = ${actorId})`,
     })
     .from(schema.messageReactions)
     .where(eq(schema.messageReactions.messageId, messageId))
@@ -130,8 +130,8 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     .where(eq(schema.conversations.id, input.conversationId))
     .returning({
       sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
-      userLowId: schema.conversations.userLowId,
-      userHighId: schema.conversations.userHighId,
+      participantLowId: schema.conversations.participantLowId,
+      participantHighId: schema.conversations.participantHighId,
     });
   if (!change) throw new Error("Conversation disappeared during change append.");
 
@@ -144,42 +144,49 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     createdAt,
   });
 
+  const recipients = await queryable
+    .select({ userId: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      inArray(schema.messagingParticipants.id, [change.participantLowId, change.participantHighId]),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ));
   const eventId = crypto.randomUUID();
-  await queryable.insert(schema.messagingOutbox).values([
-    {
+  if (recipients.length > 0) {
+    await queryable.insert(schema.messagingOutbox).values(recipients.map((recipient) => ({
       id: crypto.randomUUID(),
       eventId,
-      recipientId: change.userLowId,
+      recipientId: recipient.userId!,
       conversationId: input.conversationId,
       changeSequence,
-      channel: "realtime",
-      status: "pending",
+      channel: "realtime" as const,
+      status: "pending" as const,
       attempts: 0,
       availableAt: createdAt,
       createdAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userHighId,
-      conversationId: input.conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: createdAt,
-      createdAt,
-    },
-  ]);
+    })));
+  }
 
   if (input.kind !== "message.created" || !input.messageId) return;
 
   const [message] = await queryable
-    .select({ senderId: schema.messages.senderId })
+    .select({ senderParticipantId: schema.messages.senderParticipantId })
     .from(schema.messages)
     .where(eq(schema.messages.id, input.messageId))
     .limit(1);
-  const peerId = message?.senderId === change.userLowId ? change.userHighId : change.userLowId;
+  const peerParticipantId = message?.senderParticipantId === change.participantLowId
+    ? change.participantHighId
+    : change.participantLowId;
+  const [peer] = await queryable
+    .select({ userId: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      eq(schema.messagingParticipants.id, peerParticipantId),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ));
+  if (!peer?.userId) return;
   const devices = await queryable
     .select({ id: schema.pushDevices.id })
     .from(schema.pushDevices)
@@ -189,7 +196,7 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
       gt(schema.session.expiresAt, sql`now()`),
     ))
     .where(and(
-      eq(schema.pushDevices.userId, peerId),
+      eq(schema.pushDevices.userId, peer.userId),
       eq(schema.pushDevices.optedIn, true),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
@@ -199,7 +206,7 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     await queryable.insert(schema.messagingOutbox).values({
       id: crypto.randomUUID(),
       eventId: crypto.randomUUID(),
-      recipientId: peerId,
+      recipientId: peer.userId,
       conversationId: input.conversationId,
       changeSequence,
       channel: "push",
