@@ -188,7 +188,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(loggedOut.json()).resolves.toBeNull();
 
     const expiryToken = nativeToken(await signIn(firstApp));
-    await migrator.db.update(schema.session).set({ expiresAt: new Date(Date.now() - 1_000) });
+    await migrator.db.update(schema.session).set({ expiresAt: sql`now() - interval '1 second'` });
     const expired = await secondApp.fetch(request("/api/auth/get-session", {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));

@@ -168,7 +168,7 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
 
     await migrator.db
       .update(schema.mediaReservation)
-      .set({ status: "validated", validatedAt: new Date() })
+      .set({ status: "validated", validatedAt: sql`now()` })
       .where(eq(schema.mediaReservation.id, lastCreated!.id));
 
     const afterSettling = await reserve(app, token);
