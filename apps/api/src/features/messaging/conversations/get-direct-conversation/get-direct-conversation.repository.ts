@@ -11,7 +11,6 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
   const { conversationMembers, conversations, relationshipBlocks } = schema;
   return {
     async find(actorId, recipientId) {
-      const [lowId, highId] = actorId < recipientId ? [actorId, recipientId] : [recipientId, actorId];
       const [pair] = await database
         .select({
           id: conversations.id,
@@ -33,7 +32,10 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
           eq(conversationMembers.conversationId, conversations.id),
           eq(conversationMembers.userId, actorId),
         ))
-        .where(and(eq(conversations.userLowId, lowId), eq(conversations.userHighId, highId)))
+        .where(and(
+          eq(conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
+          eq(conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+        ))
         .limit(1);
       if (!pair) throw new MessagingError("NOT_FOUND");
       if (pair.blocked) throw new MessagingError("BLOCKED");

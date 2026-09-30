@@ -81,8 +81,6 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   }
 
   async findDirectConversation(actorId: string, recipientId: string): Promise<DirectConversation | null> {
-    const low = actorId < recipientId ? actorId : recipientId;
-    const high = actorId < recipientId ? recipientId : actorId;
     const [row] = await this.queryable
       .select({
         id: schema.conversations.id,
@@ -92,8 +90,8 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       })
       .from(schema.conversations)
       .where(and(
-        eq(schema.conversations.userLowId, low),
-        eq(schema.conversations.userHighId, high),
+        eq(schema.conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
+        eq(schema.conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
       ))
       .limit(1)
       .for("update");
@@ -165,13 +163,11 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   }
 
   async createConversationWithMessage(input: Parameters<DirectConversationTransaction["createConversationWithMessage"]>[0]) {
-    const low = input.initiatorId < input.recipientId ? input.initiatorId : input.recipientId;
-    const high = input.initiatorId < input.recipientId ? input.recipientId : input.initiatorId;
     await this.queryable.insert(schema.conversations).values({
       id: input.conversationId,
       kind: "direct",
-      userLowId: low,
-      userHighId: high,
+      userLowId: sql`least(${input.initiatorId}, ${input.recipientId})`,
+      userHighId: sql`greatest(${input.initiatorId}, ${input.recipientId})`,
       initiatorId: input.initiatorId,
       requestState: input.requestState,
       lastMessageSequence: 1,

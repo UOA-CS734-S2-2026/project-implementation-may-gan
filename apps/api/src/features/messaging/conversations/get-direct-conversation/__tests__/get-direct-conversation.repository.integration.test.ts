@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresGetDirectConversationRepository } from "../get-direct-conversation.repository";
@@ -12,9 +13,20 @@ const suite = connectionString ? describe : describe.skip;
 
 suite("actor-owned direct pair lookup Postgres persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 8 }, (_, index) => `direct-pair-${crypto.randomUUID()}-${index}`);
+  const mixedCasePrefix = `direct-pair-${crypto.randomUUID()}-`;
+  const mixedCaseUsers = [`${mixedCasePrefix}a`, `${mixedCasePrefix}B`] as const;
+  const users = [
+    ...Array.from({ length: 8 }, (_, index) => `direct-pair-${crypto.randomUUID()}-${index}`),
+    ...mixedCaseUsers,
+  ];
+  const builderQueries: string[] = [];
+  const observedDatabase = drizzle(database.client, {
+    schema,
+    logger: { logQuery(query) { builderQueries.push(query); } },
+  });
   const { direct, resolveMessageRequest } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetDirectConversationRepository(database.db);
+  const observedRepository = createPostgresGetDirectConversationRepository(observedDatabase);
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -48,6 +60,19 @@ suite("actor-owned direct pair lookup Postgres persistence", () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[1]!}, ${users[0]!}, now())`;
     await expect(repository.find(users[0]!, users[1]!)).rejects.toMatchObject({ code: "BLOCKED" });
     await expect(repository.find(users[1]!, users[0]!)).rejects.toMatchObject({ code: "BLOCKED" });
+  });
+
+  it("finds a mixed-case pair in reverse request order with PostgreSQL ordering", async () => {
+    const [actorId, recipientId] = mixedCaseUsers;
+    const created = await direct.create(actorId, { recipientId, clientMessageId: crypto.randomUUID(), text: "mixed case" });
+    builderQueries.length = 0;
+
+    await expect(observedRepository.find(recipientId, actorId)).resolves.toEqual({ conversationId: created.conversation.id });
+
+    const queries = builderQueries.map((query) => query.toLowerCase());
+    expect(queries.some((query) => (
+      query.startsWith("select") && query.includes("least(") && query.includes("greatest(")
+    ))).toBe(true);
   });
 
   it("requires an actor-owned membership while retaining counterpart-order lookup", async () => {
