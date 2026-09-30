@@ -57,10 +57,19 @@ function requireLocalTestUrl(value: string): string {
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
       values (${users.publicOwner}, ${users.blocked}, ${changedAt})
     `;
+    // Two days in a row ending yesterday, after a missed day.
+    for (const localDate of ["2026-09-26", "2026-09-28", "2026-09-29"]) {
+      await migrator.client`
+        insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
+        values (${id(`post-${localDate}`)}, ${users.privateOwner}, ${localDate}, ${`prompt-${localDate.slice(5)}`}, 'An answer', 7,
+          ${localDate === "2026-09-28" ? "solo" : "friends"}, ${`${localDate}T03:00:00.000Z`}, ${`${localDate}T12:00:00.000Z`})
+      `;
+    }
   });
 
   afterAll(async () => {
     try {
+      await migrator.client`delete from public.posts where author_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.username_reservations where user_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.relationship_blocks where blocker_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.friendships where user_id = any(${userIds}::text[])`;
@@ -78,6 +87,7 @@ function requireLocalTestUrl(value: string): string {
         displayName: handle("privateOwner"),
         detailsVisible: true,
         bio: "Bio of privateOwner",
+        streak: { current: 2, longest: 2, lastPostDate: "2026-09-29", postedToday: false, asOf: "2026-09-30" },
         owner: { profileVisibility: "private", usernameChangeAvailableAt: null },
       });
     });
@@ -91,8 +101,10 @@ function requireLocalTestUrl(value: string): string {
     it("shows a private bio only to active friends", async () => {
       await expect(findProfileDetails(app.db, users.friend, handle("privateOwner"), now))
         .resolves.toMatchObject({ detailsVisible: true, bio: "Bio of privateOwner" });
+      await expect(findProfileDetails(app.db, users.friend, handle("privateOwner"), now))
+        .resolves.toMatchObject({ streak: { current: 2, longest: 2 } });
       await expect(findProfileDetails(app.db, users.stranger, handle("privateOwner"), now))
-        .resolves.toMatchObject({ detailsVisible: false, bio: null, owner: null });
+        .resolves.toMatchObject({ detailsVisible: false, bio: null, streak: null, owner: null });
     });
 
     it("hides the profile across a block, in both directions", async () => {

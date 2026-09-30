@@ -1,6 +1,7 @@
 import { and, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExists, or, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
+import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
 import type { ProfileDetails } from "./profile-details.contract";
 
 /** How long a changed username must wait, and how long the old handle stays reserved. */
@@ -54,6 +55,21 @@ function activeFriends(database: DayliDatabase, viewerId: string, otherId: SQLWr
 }
 
 /**
+ * One author has at most one post per Auckland day, so this reads one short
+ * date per day they have posted. Streaks are derived on read, so a deleted
+ * post stops counting as soon as it is gone.
+ */
+async function findPostingStreak(database: DayliDatabase, authorId: string, now: Date) {
+  const { posts } = schema;
+  const today = getAucklandDay(() => now).localDate;
+  const rows = await database
+    .select({ localDate: posts.localDate })
+    .from(posts)
+    .where(eq(posts.authorId, authorId));
+  return { ...calculatePostingStreak(rows.map((row) => row.localDate), today), asOf: today };
+}
+
+/**
  * Reads a profile the way the profile card does: a case-insensitive handle
  * that matches exactly one account, not currently banned, and not blocked
  * either way. A handle the owner gave up within the reservation window
@@ -99,6 +115,7 @@ export async function findProfileDetails(
 
   const isOwner = row.id === viewerId;
   const detailsVisible = isOwner || row.profileVisibility === "public" || row.friends;
+  const streak = detailsVisible ? await findPostingStreak(database, row.id, now) : null;
   const changeAvailableAt = row.usernameChangedAt
     ? new Date(row.usernameChangedAt.getTime() + USERNAME_CHANGE_INTERVAL_MS)
     : null;
@@ -108,6 +125,7 @@ export async function findProfileDetails(
     displayName: row.displayUsername ?? row.username,
     detailsVisible,
     bio: detailsVisible ? row.bio : null,
+    streak,
     owner: isOwner
       ? {
         profileVisibility: row.profileVisibility,

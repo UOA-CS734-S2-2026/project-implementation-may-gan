@@ -10,3 +10,5 @@ export type {
   ClockLike,
   PostingWindow,
 } from "./auckland-day.js";
+export { calculatePostingStreak } from "./posting-streak.js";
+export type { PostingStreak } from "./posting-streak.js";
