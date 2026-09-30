@@ -300,6 +300,8 @@ class ApiClient {
           return PostDetailAuthor.fromJson(value);
         case 'PostDetailPrompt':
           return PostDetailPrompt.fromJson(value);
+        case 'PostMedia':
+          return PostMedia.fromJson(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
         case 'RelationshipProfile':

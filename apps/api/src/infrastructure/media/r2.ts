@@ -119,6 +119,48 @@ export async function createPresignedUploadUrl(
   return { url: signed.url.toString(), method: "PUT", requiredHeaders };
 }
 
+export interface PresignedDownload {
+  url: string;
+  expiresAt: Date;
+}
+
+export interface CreatePresignedDownloadUrlInput {
+  objectKey: string;
+  expiresInSeconds: number;
+  now?: Date;
+}
+
+/**
+ * Build a short-lived GET URL for one private object. Callers must decide the
+ * viewer may read the object's post before calling this: the URL is a bearer
+ * credential that works for anyone until it expires. Never log or store it.
+ */
+export async function createPresignedDownloadUrl(
+  configuration: R2RuntimeConfiguration,
+  input: CreatePresignedDownloadUrlInput,
+): Promise<PresignedDownload> {
+  const now = input.now ?? new Date();
+  const url = new URL(buildObjectUrl(configuration, input.objectKey));
+  url.searchParams.set("X-Amz-Expires", String(input.expiresInSeconds));
+
+  const signer = new AwsV4Signer({
+    method: "GET",
+    url: url.toString(),
+    accessKeyId: configuration.accessKeyId,
+    secretAccessKey: configuration.secretAccessKey,
+    service: "s3",
+    region: "auto",
+    signQuery: true,
+    datetime: toAmzDatetime(now),
+  });
+  const signed = await signer.sign();
+
+  return {
+    url: signed.url.toString(),
+    expiresAt: new Date(now.getTime() + input.expiresInSeconds * 1000),
+  };
+}
+
 /**
  * Thrown only for a genuinely unexpected R2/network problem (bad status, malformed
  * response) — never for "object not found" or "range not satisfiable", which are

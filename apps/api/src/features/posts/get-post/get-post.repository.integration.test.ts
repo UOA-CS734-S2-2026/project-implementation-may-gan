@@ -118,6 +118,7 @@ function requireLocalTestUrl(value: string): string {
       releasedAt: "2026-09-24T12:00:00.000Z",
       edited: true,
       viewerIsAuthor: false,
+      media: [],
     });
   });
 
