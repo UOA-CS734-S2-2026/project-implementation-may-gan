@@ -97,6 +97,13 @@ apps/api/src/
       get-post/                             Detail route and repository over the same filter
       list-profile-posts/                   One profile's posts over the same filter
       shared/                               Page cursor and edited-marker expressions
+    profiles/
+      profiles.routes.ts                    Thin registration only
+      username/                             One-time username setup
+      get-profile-details/                  Profile details with bio visibility
+      update-profile/                       Bio, public name, and visibility
+      change-username/                      30-day handle changes and reservations
+      shared/                               Profile details query and contract
     posting-days/
       get-current-posting-day/
     media/
