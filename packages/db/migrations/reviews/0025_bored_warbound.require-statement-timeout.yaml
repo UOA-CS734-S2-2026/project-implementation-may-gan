@@ -1,0 +1,6 @@
+reason: The canonical-content verification is bounded to the one admission row and needs enough time on populated databases.
+affected_data_and_clients: Registration fails closed if its short statement cannot complete.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a new migration for any later trigger correction.
+reviewer: Database and privacy reviewers required.

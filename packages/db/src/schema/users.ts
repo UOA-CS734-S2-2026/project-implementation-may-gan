@@ -24,4 +24,7 @@ export const user = pgTable("user", {
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
+  // Short-lived admission material is supplied only by the Better Auth server hook
+  // and cleared by the insertion trigger before the statement commits.
+  legal_registration_admission: text("legal_registration_admission"),
 });

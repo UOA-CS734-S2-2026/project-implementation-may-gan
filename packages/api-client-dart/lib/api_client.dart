@@ -276,6 +276,10 @@ class ApiClient {
           return LegalGetCurrentTermsContent200Response.fromJson(value);
         case 'LegalGetCurrentTermsContent200ResponseTerms':
           return LegalGetCurrentTermsContent200ResponseTerms.fromJson(value);
+        case 'LegalGetPublishedTermsContent200Response':
+          return LegalGetPublishedTermsContent200Response.fromJson(value);
+        case 'LegalGetPublishedTermsContent200ResponseTerms':
+          return LegalGetPublishedTermsContent200ResponseTerms.fromJson(value);
         case 'LegalGetTermsNotice200Response':
           return LegalGetTermsNotice200Response.fromJson(value);
         case 'LegalGetTermsNotice200ResponseNotice':

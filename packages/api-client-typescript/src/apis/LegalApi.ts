@@ -34,6 +34,11 @@ import {
     LegalGetCurrentTermsContent200ResponseToJSON,
 } from '../models/LegalGetCurrentTermsContent200Response';
 import {
+    type LegalGetPublishedTermsContent200Response,
+    LegalGetPublishedTermsContent200ResponseFromJSON,
+    LegalGetPublishedTermsContent200ResponseToJSON,
+} from '../models/LegalGetPublishedTermsContent200Response';
+import {
     type LegalGetTermsNotice200Response,
     LegalGetTermsNotice200ResponseFromJSON,
     LegalGetTermsNotice200ResponseToJSON,
@@ -54,6 +59,13 @@ export interface LegalAcceptCurrentTermsOperationRequest {
      *
      */
     legalAcceptCurrentTermsRequest?: LegalAcceptCurrentTermsRequest;
+}
+
+export interface LegalGetPublishedTermsContentRequest {
+    /**
+     *
+     */
+    version: number;
 }
 
 export interface LegalIssueRegistrationIntentOperationRequest {
@@ -181,6 +193,49 @@ export class LegalApi extends runtime.BaseAPI {
      */
     async legalGetCurrentTermsContent(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LegalGetCurrentTermsContent200Response> {
         const response = await this.legalGetCurrentTermsContentRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for legalGetPublishedTermsContent without sending the request
+     */
+    async legalGetPublishedTermsContentRequestOpts(requestParameters: LegalGetPublishedTermsContentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['version'] == null) {
+            throw new runtime.RequiredError(
+                'version',
+                'Required parameter "version" was null or undefined when calling legalGetPublishedTermsContent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/legal/terms/versions/{version}/content`;
+        urlPath = urlPath.replace('{version}', encodeURIComponent(String(requestParameters['version'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async legalGetPublishedTermsContentRaw(requestParameters: LegalGetPublishedTermsContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LegalGetPublishedTermsContent200Response>> {
+        const requestOptions = await this.legalGetPublishedTermsContentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => LegalGetPublishedTermsContent200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async legalGetPublishedTermsContent(requestParameters: LegalGetPublishedTermsContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LegalGetPublishedTermsContent200Response> {
+        const response = await this.legalGetPublishedTermsContentRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

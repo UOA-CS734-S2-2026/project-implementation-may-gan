@@ -1482,6 +1482,91 @@
         }
       }
     },
+    "/api/v1/legal/terms/versions/{version}/content": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getPublishedTermsContent",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": true,
+            "name": "version",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest-verified canonical source for a notice or effective Terms version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "notice",
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "canonicalContent": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "canonicalContent"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/legal/terms/current": {
       "get": {
         "tags": [
@@ -1599,9 +1684,7 @@
                         },
                         "documentUrl": {
                           "type": "string",
-                          "enum": [
-                            "/api/v1/legal/terms/current/content"
-                          ]
+                          "pattern": "^\\/api\\/v1\\/legal\\/terms\\/versions\\/\\d+\\/content$"
                         }
                       },
                       "required": [

@@ -30,6 +30,13 @@ export interface CurrentTermsNotice {
   urgentChangeReason: string | null;
 }
 
+export interface PublishedTermsDocument extends Omit<CurrentTermsDocument, "status"> {
+  status: "notice" | "effective";
+  noticeStartsAt: Date | null;
+  materialChange: boolean;
+  urgentChangeReason: string | null;
+}
+
 export interface IssuedRegistrationIntent {
   token: string;
   flowBinding: string;
@@ -54,6 +61,7 @@ function currentTermsWhere() {
     eq(schema.legalDocumentVersions.kind, "terms"),
     eq(schema.legalDocumentVersions.status, "effective"),
     lte(schema.legalDocumentVersions.effectiveAt, sql`now()`),
+    sql`(not ${schema.legalDocumentVersions.materialChange} or ${schema.legalDocumentVersions.urgentChangeReason} is not null or (${schema.legalDocumentVersions.noticeStartsAt} is not null and ${schema.legalDocumentVersions.effectiveAt} >= ${schema.legalDocumentVersions.noticeStartsAt} + interval '30 days'))`,
   );
 }
 
@@ -105,7 +113,40 @@ export async function readCurrentTermsNotice(database: DayliDatabase): Promise<C
     .orderBy(desc(schema.legalDocumentVersions.effectiveAt), desc(schema.legalDocumentVersions.version))
     .limit(1);
   if (!notice || !notice.noticeStartsAt || !notice.effectiveAt) return null;
+  const [content] = await database.select({ canonicalContent: schema.legalDocumentContents.canonicalContent })
+    .from(schema.legalDocumentContents)
+    .where(eq(schema.legalDocumentContents.termsVersionId, notice.id))
+    .limit(1);
+  if (!content || await digest(content.canonicalContent) !== notice.contentDigest) throw new LegalContentIntegrityError();
   return notice as CurrentTermsNotice;
+}
+
+/** Return only notice or effective Terms content for the requested public version. */
+export async function readPublishedTermsContent(
+  database: DayliDatabase,
+  version: number,
+): Promise<{ terms: PublishedTermsDocument; canonicalContent: string } | null> {
+  const [document] = await database.select({
+    id: schema.legalDocumentVersions.id,
+    version: schema.legalDocumentVersions.version,
+    contentDigest: schema.legalDocumentVersions.contentDigest,
+    status: schema.legalDocumentVersions.status,
+    effectiveAt: schema.legalDocumentVersions.effectiveAt,
+    noticeStartsAt: schema.legalDocumentVersions.noticeStartsAt,
+    materialChange: schema.legalDocumentVersions.materialChange,
+    urgentChangeReason: schema.legalDocumentVersions.urgentChangeReason,
+  }).from(schema.legalDocumentVersions).where(and(
+    eq(schema.legalDocumentVersions.kind, "terms"),
+    eq(schema.legalDocumentVersions.version, version),
+    sql`${schema.legalDocumentVersions.status} in ('notice', 'effective')`,
+  )).limit(1);
+  if (!document?.effectiveAt || (document.status !== "notice" && document.status !== "effective")) return null;
+  const [content] = await database.select({ canonicalContent: schema.legalDocumentContents.canonicalContent })
+    .from(schema.legalDocumentContents)
+    .where(eq(schema.legalDocumentContents.termsVersionId, document.id))
+    .limit(1);
+  if (!content || await digest(content.canonicalContent) !== document.contentDigest) throw new LegalContentIntegrityError();
+  return { terms: document as PublishedTermsDocument, canonicalContent: content.canonicalContent };
 }
 
 /** Registration is enabled only when a current Terms document exists. */

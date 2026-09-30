@@ -38,7 +38,7 @@ class LegalGetTermsNotice200ResponseNotice {
 
   final String urgentChangeReason;
 
-  final LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum documentUrl;
+  final String documentUrl;
 
   @override
   bool operator ==(Object other) =>
@@ -92,7 +92,7 @@ class LegalGetTermsNotice200ResponseNotice {
     DateTime? noticeStartsAt,
     DateTime? effectiveAt,
     String? urgentChangeReason,
-    LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum? documentUrl,
+    String? documentUrl,
   }) =>
       LegalGetTermsNotice200ResponseNotice(
         id: id ?? this.id,
@@ -160,9 +160,7 @@ class LegalGetTermsNotice200ResponseNotice {
         effectiveAt: mapDateTime(json, r'effectiveAt', r'')!,
         urgentChangeReason:
             mapValueOfType<String>(json, r'urgentChangeReason')!,
-        documentUrl:
-            LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum.fromJson(
-                json[r'documentUrl'])!,
+        documentUrl: mapValueOfType<String>(json, r'documentUrl')!,
       );
     }
     return null;
@@ -231,94 +229,4 @@ class LegalGetTermsNotice200ResponseNotice {
     'urgentChangeReason',
     'documentUrl',
   };
-}
-
-enum LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum {
-  slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent._(
-      r'/api/v1/legal/terms/current/content'),
-  ;
-
-  /// Instantiate a new enum with the provided value.
-  const LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum._(this._value);
-
-  /// The underlying value of this enum member.
-  final String _value;
-
-  @override
-  String toString() => _value;
-
-  /// Encodes this enum as a value suitable for JSON.
-  String toJson() => _value;
-
-  /// Returns the instance of [LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum] that was successfully decoded
-  /// from the passed [value] on success, null otherwise.
-  static LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum? fromJson(
-          dynamic value) =>
-      LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer()
-          .decode(value);
-
-  /// Returns a [List] containing instances of [LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum]
-  /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum> listFromJson(
-    dynamic json, {
-    bool growable = false,
-  }) {
-    final result = <LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum>[];
-    if (json is List && json.isNotEmpty) {
-      for (final row in json) {
-        final value =
-            LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum.fromJson(row);
-        if (value != null) {
-          result.add(value);
-        }
-      }
-    }
-    return result.toList(growable: growable);
-  }
-}
-
-/// Transformation class that can [encode] an instance of [LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum] to String,
-/// and [decode] dynamic data back to [LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum].
-class LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer {
-  factory LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer() =>
-      _instance ??=
-          const LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer
-              ._();
-
-  const LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer._();
-
-  String encode(LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum data) =>
-      data._value;
-
-  /// Returns the instance of [LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum] that was successfully decoded
-  /// from the passed [data] value on success, null otherwise.
-  ///
-  /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
-  /// then null is returned. However, if [allowNull] is false and the [dynamic value][data]
-  /// cannot be decoded successfully, then an [UnimplementedError] is thrown.
-  ///
-  /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
-  /// and users are still using an old app with the old code.
-  LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum? decode(dynamic data,
-      {bool allowNull = true}) {
-    if (data is LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum) {
-      return data;
-    }
-    if (data != null) {
-      switch (data) {
-        case r'/api/v1/legal/terms/current/content':
-          return LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum
-              .slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent;
-        default:
-          if (!allowNull) {
-            throw ArgumentError('Unknown enum value to decode: $data');
-          }
-      }
-    }
-    return null;
-  }
-
-  /// The singleton instance of this transformer.
-  static LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer?
-      _instance;
 }

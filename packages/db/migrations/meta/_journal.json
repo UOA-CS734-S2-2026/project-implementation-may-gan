@@ -176,6 +176,13 @@
       "when": 1790765337958,
       "tag": "0024_noisy_the_hand",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790766387884,
+      "tag": "0025_bored_warbound",
+      "breakpoints": true
     }
   ]
 }

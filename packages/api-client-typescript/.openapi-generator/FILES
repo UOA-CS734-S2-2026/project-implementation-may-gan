@@ -49,6 +49,8 @@ src/models/LegalAcceptCurrentTermsRequest.ts
 src/models/LegalGetCurrentTerms200Response.ts
 src/models/LegalGetCurrentTermsContent200Response.ts
 src/models/LegalGetCurrentTermsContent200ResponseTerms.ts
+src/models/LegalGetPublishedTermsContent200Response.ts
+src/models/LegalGetPublishedTermsContent200ResponseTerms.ts
 src/models/LegalGetTermsNotice200Response.ts
 src/models/LegalGetTermsNotice200ResponseNotice.ts
 src/models/LegalIssueRegistrationIntent201Response.ts

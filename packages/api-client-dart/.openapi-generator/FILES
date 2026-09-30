@@ -57,6 +57,8 @@ lib/model/legal_accept_current_terms_request.dart
 lib/model/legal_get_current_terms200_response.dart
 lib/model/legal_get_current_terms_content200_response.dart
 lib/model/legal_get_current_terms_content200_response_terms.dart
+lib/model/legal_get_published_terms_content200_response.dart
+lib/model/legal_get_published_terms_content200_response_terms.dart
 lib/model/legal_get_terms_notice200_response.dart
 lib/model/legal_get_terms_notice200_response_notice.dart
 lib/model/legal_issue_registration_intent201_response.dart

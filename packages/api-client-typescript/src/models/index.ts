@@ -35,6 +35,8 @@ export * from './LegalAcceptCurrentTermsRequest';
 export * from './LegalGetCurrentTerms200Response';
 export * from './LegalGetCurrentTermsContent200Response';
 export * from './LegalGetCurrentTermsContent200ResponseTerms';
+export * from './LegalGetPublishedTermsContent200Response';
+export * from './LegalGetPublishedTermsContent200ResponseTerms';
 export * from './LegalGetTermsNotice200Response';
 export * from './LegalGetTermsNotice200ResponseNotice';
 export * from './LegalIssueRegistrationIntent201Response';

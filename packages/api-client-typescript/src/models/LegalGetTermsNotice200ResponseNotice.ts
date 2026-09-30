@@ -50,18 +50,8 @@ export interface LegalGetTermsNotice200ResponseNotice {
     /**
      *
      */
-    documentUrl: LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum;
+    documentUrl: string;
 }
-
-
-/**
- * @export
- */
-export const LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum = {
-    ApiV1LegalTermsCurrentContent: '/api/v1/legal/terms/current/content',
-} as const;
-export type LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum = typeof LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum[keyof typeof LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum];
-
 
 /**
  * Check if a given object implements the LegalGetTermsNotice200ResponseNotice interface.
@@ -75,8 +65,6 @@ export function instanceOfLegalGetTermsNotice200ResponseNotice(value: object): v
     if (!('effectiveAt' in value) || value['effectiveAt'] === undefined) return false;
     if (!('urgentChangeReason' in value) || value['urgentChangeReason'] === undefined) return false;
     if (!('documentUrl' in value) || value['documentUrl'] === undefined) return false;
-    if (value['documentUrl'] !== '/api/v1/legal/terms/current/content') return false;
-
     return true;
 }
 

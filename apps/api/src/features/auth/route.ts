@@ -14,8 +14,8 @@ import {
 } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
 import { schema } from "@dayli/db";
-import { eq, sql } from "drizzle-orm";
-import { bindBrowserRegistrationIntent, consumeBrowserRegistrationIntent, consumeRegistrationIntent, readCurrentTerms, recordCurrentAcceptance, type RegistrationFlow } from "../legal/shared/legal.repository";
+import { eq } from "drizzle-orm";
+import { bindBrowserRegistrationIntent, readCurrentTerms } from "../legal/shared/legal.repository";
 
 const corsMethods = ["GET", "POST"];
 const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
@@ -172,58 +172,27 @@ function registerStrictAuthRoutes<E extends Env>(
   });
 }
 
-async function setRegistrationAdmission(database: import("@dayli/db").DayliDatabase, termsVersionId: string): Promise<void> {
-  // This is process-local state on the sole connection supplied by
-  // withHyperdriveDatabase. It is cleared in handleAuthRequest before that
-  // connection can be returned to the pool.
-  await database.select({ configured: sql`set_config('dayli.registration_terms_version', ${termsVersionId}, false)` });
-}
-
-async function clearRegistrationAdmission(database: import("@dayli/db").DayliDatabase): Promise<void> {
-  // An empty value is distinguishable from an admitted version in the trigger.
-  await database.select({ configured: sql`set_config('dayli.registration_terms_version', '', false)` });
-}
-
 async function admitRegistration(request: Request, database?: import("@dayli/db").DayliDatabase): Promise<Request | Response> {
   if (!database) return request;
   const path = new URL(request.url).pathname;
   const canCreate = (request.method === "POST" && (path === `${authBasePath}/sign-up/email` || path === `${authBasePath}/sign-in/social`))
     || (request.method === "GET" && path === `${authBasePath}/callback/google`);
-  if (!canCreate) return request;
-  const currentTerms = await readCurrentTerms(database);
-  if (!currentTerms) return request;
+  if (!canCreate || !await readCurrentTerms(database)) return request;
   const headers = new Headers(request.headers);
-  headers.set("x-dayli-registration-enforcement", "required");
-  const forwarded = (extra: Headers) => new Request(request, { headers: extra });
+  const forwarded = () => new Request(request, { headers });
   if (request.method === "GET") {
     const state = new URL(request.url).searchParams.get("state");
-    const admission = state ? await consumeBrowserRegistrationIntent(database, state) : null;
-    if (admission) {
-      await setRegistrationAdmission(database, admission.termsVersionId);
-      headers.set("x-dayli-registration-terms-version", admission.termsVersionId);
-    }
-    return forwarded(headers);
+    if (state) headers.set("x-dayli-registration-browser-state", state);
+    return forwarded();
   }
   const body = await request.clone().json().catch(() => undefined) as { idToken?: unknown } | undefined;
-  const isBrowserStart = path === `${authBasePath}/sign-in/social` && body?.idToken === undefined;
-  if (isBrowserStart) return request;
-  const flow: RegistrationFlow = path === `${authBasePath}/sign-up/email` ? "email" : "google_native";
+  if (path === `${authBasePath}/sign-in/social` && body?.idToken === undefined) return request;
+  // Do not consume an intent here. The insert trigger consumes it in the exact
+  // transaction that inserts the user and writes both legal records.
   const token = request.headers.get("x-dayli-registration-intent");
   const binding = request.headers.get("x-dayli-registration-binding");
-  const admission = token && binding ? await consumeRegistrationIntent(database, { token, flowBinding: binding, flow }) : null;
-  if (!admission) return flow === "email" ? linkFailure(403) : forwarded(headers);
-  if (admission.termsVersionId !== currentTerms.id || admission.ageDeclarationVersion !== "age-16-v1") return linkFailure(403);
-  await setRegistrationAdmission(database, admission.termsVersionId);
-  headers.set("x-dayli-registration-terms-version", admission.termsVersionId);
-  return forwarded(headers);
-}
-
-async function recordCompletedRegistration(request: Request, response: Response, database?: import("@dayli/db").DayliDatabase): Promise<Response> {
-  const termsVersionId = request.headers.get("x-dayli-registration-terms-version");
-  if (!database || !termsVersionId || !response.ok) return response;
-  const body = await response.clone().json().catch(() => undefined) as { user?: { id?: unknown } } | undefined;
-  if (typeof body?.user?.id === "string") await recordCurrentAcceptance(database, body.user.id, { id: termsVersionId });
-  return response;
+  if (!token || !binding) return path === `${authBasePath}/sign-up/email` ? linkFailure(403) : request;
+  return forwarded();
 }
 
 async function bindBrowserRegistration(request: Request, response: Response, database?: import("@dayli/db").DayliDatabase): Promise<Response> {
@@ -250,21 +219,13 @@ async function handleAuthRequest(
   const admitted = await admitRegistration(request, database);
   if (admitted instanceof Response) return admitted;
   request = admitted;
-  const admissionWasSet = Boolean(request.headers.get("x-dayli-registration-terms-version"));
-  try {
-    if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
-      return handleProtectedSocialLink(request, handler, confirmations);
-    }
-    if (request.method === "GET" && pathname === `${authBasePath}/callback/google`) {
-      return handleOAuthCallback(request, handler, confirmations);
-    }
-    return bindBrowserRegistration(request, await recordCompletedRegistration(request, await handler(request), database), database);
-  } finally {
-    // Do not rely on Hyperdrive or PostgreSQL pool cleanup as a security boundary.
-    // If this clear fails, fail the request before a potentially tainted client
-    // is released by withHyperdriveDatabase.
-    if (admissionWasSet && database) await clearRegistrationAdmission(database);
+  if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
+    return handleProtectedSocialLink(request, handler, confirmations);
   }
+  if (request.method === "GET" && pathname === `${authBasePath}/callback/google`) {
+    return handleOAuthCallback(request, handler, confirmations);
+  }
+  return bindBrowserRegistration(request, await handler(request), database);
 }
 
 export function registerBetterAuthCompatibilityRoutes<E extends Env>(
