@@ -5,6 +5,7 @@ import 'package:dayli_api_client/api.dart' as generated;
 import 'package:http/http.dart' as http;
 
 import 'api_failure.dart';
+import 'post_media.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
 /// A released post from an active friend.
@@ -21,6 +22,7 @@ class FeedPost {
     required this.rating,
     required this.acceptedAt,
     required this.edited,
+    this.media = const [],
   });
 
   final String id;
@@ -36,6 +38,9 @@ class FeedPost {
   final int rating;
   final DateTime acceptedAt;
   final bool edited;
+
+  /// Attached photos or video in display order.
+  final List<PostMedia> media;
 
   /// Returns null for a malformed item rather than failing the whole page.
   static FeedPost? tryParse(Object? json) {
@@ -80,6 +85,7 @@ class FeedPost {
       rating: rating,
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
+      media: PostMedia.parseList(json['media']),
     );
   }
 }

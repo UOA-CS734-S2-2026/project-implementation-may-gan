@@ -113,4 +113,47 @@ void main() {
     expect((down as ApiError).failure, isA<ServiceUnavailable>());
     expect((garbled as ApiError).failure, isA<ServiceUnavailable>());
   });
+
+  test('reads attachments in order and skips malformed ones', () async {
+    Map<String, Object?> mediaJson(
+      String id,
+      int order, {
+      Object? url = 'https://storage.example.test/a?sig=1',
+    }) => {
+      'id': id,
+      'contentType': 'image/jpeg',
+      'order': order,
+      'url': url,
+      'expiresAt': '2026-09-26T03:05:00.000Z',
+    };
+
+    final withMedia = {
+      ...item('1'),
+      'media': [
+        mediaJson('m-2', 1),
+        mediaJson('m-1', 0),
+        {'id': 'broken'},
+        mediaJson('m-3', 2, url: 'http://insecure.test/x'),
+      ],
+    };
+    final result = await client(
+      (_) => http.Response(
+        jsonEncode({
+          'items': [withMedia, item('2')],
+          'nextCursor': null,
+          'hasMore': false,
+        }),
+        200,
+      ),
+    ).page();
+
+    final page = (result as ApiSuccess<FeedPage>).value;
+    final media = page.items.first.media;
+    expect(media.map((item) => item.id), ['m-1', 'm-2', 'm-3']);
+    expect(media.first.url, Uri.parse('https://storage.example.test/a?sig=1'));
+    expect(media.first.expiresAt, DateTime.utc(2026, 9, 26, 3, 5));
+    // Only HTTPS URLs are used; anything else counts as unavailable.
+    expect(media.last.url, isNull);
+    expect(page.items.last.media, isEmpty);
+  });
 }

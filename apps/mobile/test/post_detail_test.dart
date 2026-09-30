@@ -2,6 +2,8 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+import 'package:dayli_mobile/posts/private_media.dart';
 
 import 'home_feed_test.dart' show signIn;
 import 'support/fakes.dart';
@@ -129,5 +131,50 @@ void main() {
 
     expect(find.text('Still here.'), findsOneWidget);
     expect(find.byKey(const Key('post.stale')), findsOneWidget);
+  });
+
+  testWidgets('shows every photo in order', (tester) async {
+    final harness = harnessWith(
+      FakePostClient([
+        ApiSuccess(
+          postDetail('1', media: [attachment('m-1', 0), attachment('m-2', 1)]),
+        ),
+      ]),
+    );
+    await openPost(tester, harness);
+
+    final first = tester.widget<PrivateImage>(
+      find.byKey(const Key('post.photo.0')),
+    );
+    final second = tester.widget<PrivateImage>(
+      find.byKey(const Key('post.photo.1')),
+    );
+    expect(first.media.id, 'm-1');
+    expect(second.media.id, 'm-2');
+    expect(first.semanticLabel, "Friend 1's photo 1 of 2");
+  });
+
+  testWidgets('plays a video on the post, muted and looping', (tester) async {
+    final videos = FakeVideoPlatform();
+    VideoPlayerPlatform.instance = videos;
+    final harness = harnessWith(
+      FakePostClient([
+        ApiSuccess(
+          postDetail(
+            '1',
+            media: [attachment('m-1', 0, contentType: 'video/mp4')],
+          ),
+        ),
+      ]),
+    );
+    await openPost(tester, harness);
+
+    expect(find.byType(PrivateVideo), findsOneWidget);
+    expect(videos.sources, ['https://storage.example.test/m-1?sig=1']);
+    expect(videos.calls.sublist(videos.calls.length - 3), [
+      'loop:true',
+      'volume:0.0',
+      'play',
+    ]);
   });
 }
