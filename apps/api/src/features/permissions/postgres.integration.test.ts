@@ -4,11 +4,12 @@ import { findVisiblePost, listVisiblePosts } from "./drizzle";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(databaseUrl && process.env.PERMISSIONS_POSTGRES_TEST === "1");
+const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 
 function requireLocalTestUrl(value: string): string {
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== "5433" || url.pathname !== "/dayli_test") {
-    throw new Error("TEST_DATABASE_URL must target localhost:5433/dayli_test.");
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test") {
+    throw new Error(`TEST_DATABASE_URL must target localhost:${testPostgresPort}/dayli_test.`);
   }
   return value;
 }

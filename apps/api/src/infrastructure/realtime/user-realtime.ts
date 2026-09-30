@@ -1,4 +1,5 @@
-import { createHyperdriveDatabase, sql, type HyperdriveBinding } from "@dayli/db";
+import { schema, createHyperdriveDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, eq, gt, sql } from "drizzle-orm";
 import { realtimeEventSchema, type ConversationChangedEvent } from "@dayli/contracts";
 
 interface SocketAttachment {
@@ -80,13 +81,16 @@ export class UserRealtime {
     if (new Date(attachment.expiresAt).getTime() <= Date.now()) return false;
     const database = createHyperdriveDatabase(this.env.HYPERDRIVE);
     try {
-      const result = await database.db.execute(sql`
-        select 1 from public.session
-        where id = ${attachment.sessionId} and user_id = ${attachment.userId}
-          and expires_at > now()
-        limit 1
-      `);
-      return [...result].length === 1;
+      const [session] = await database.db
+        .select({ id: schema.session.id })
+        .from(schema.session)
+        .where(and(
+          eq(schema.session.id, attachment.sessionId),
+          eq(schema.session.userId, attachment.userId),
+          gt(schema.session.expiresAt, sql`now()`),
+        ))
+        .limit(1);
+      return session !== undefined;
     } finally { await database.close(); }
   }
 

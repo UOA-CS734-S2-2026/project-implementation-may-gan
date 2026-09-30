@@ -13,8 +13,8 @@ const suite = enabled ? describe : describe.skip;
 
 suite("get message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 3 }, (_, index) => `get-message-${crypto.randomUUID()}-${index}`);
-  const { direct, send, set: setReaction } = createMessagingPersistenceServices(database.db);
+  const users = Array.from({ length: 4 }, (_, index) => `get-message-${crypto.randomUUID()}-${index}`);
+  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetMessageRepository(database.db);
 
   beforeAll(async () => {
@@ -44,19 +44,46 @@ suite("get message Postgres repository", () => {
       text: "reply message",
       replyToMessageId: initial.message.id,
     });
-    await setReaction.set(users[0]!, initial.conversation.id, reply.message.id, "love");
+    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
+    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
+    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
 
-    await expect(repository.get(users[2]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.get(users[3]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.get(users[0]!, initial.conversation.id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
+    const messageForSender = await repository.get(users[0]!, initial.conversation.id, reply.message.id);
+    expect(messageForSender).toMatchObject({
       id: reply.message.id,
+      sequence: "9007199254740993",
       replyToMessageId: initial.message.id,
       replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
-      reactions: [{ reaction: "love", count: 1, reactedByActor: true }],
     });
+    const reactionsForSender = messageForSender.reactions;
+    expect(reactionsForSender).toHaveLength(2);
+    expect(reactionsForSender).toEqual(expect.arrayContaining([
+      { reaction: "love", count: 2, reactedByActor: true },
+      { reaction: "laugh", count: 1, reactedByActor: false },
+    ]));
+    const messageForThirdMember = await repository.get(users[2]!, initial.conversation.id, reply.message.id);
+    expect(messageForThirdMember.reactions).toHaveLength(2);
+    expect(messageForThirdMember.reactions).toEqual(expect.arrayContaining([
+      { reaction: "love", count: 2, reactedByActor: false },
+      { reaction: "laugh", count: 1, reactedByActor: true },
+    ]));
+
+    await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);
     await expect(repository.get(users[1]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
-      reactions: [{ reaction: "love", count: 1, reactedByActor: false }],
+      text: "reply message",
+      replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+      reactions: expect.arrayContaining(reactionsForSender),
     });
+
+    await unsend.unsend(users[1]!, initial.conversation.id, reply.message.id);
+    await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).resolves.toMatchObject({
+      text: null,
+      replyPreview: { id: initial.message.id, senderId: users[0], text: null, unsentAt: expect.any(String) },
+      reactions: [],
+    });
+    await expect(repository.get(users[3]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

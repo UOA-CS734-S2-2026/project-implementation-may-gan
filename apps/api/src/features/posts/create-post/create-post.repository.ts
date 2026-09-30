@@ -16,7 +16,7 @@ import {
   type StoredDailyPost,
 } from "./create-post.service";
 
-type Queryable = Pick<DayliDatabase, "select" | "insert" | "execute">;
+type Queryable = Pick<DayliDatabase, "select" | "insert">;
 
 /** Distinct from the relationship pair lock namespace, which uses 734 directly on a pair key. */
 function authorLockKey(authorId: string): string {
@@ -157,7 +157,9 @@ export function createPostgresDailyPostStore(database: DayliDatabase): DailyPost
   return {
     withAuthorTransaction(authorId, operation) {
       return database.transaction(async (tx) => {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))`);
+        await tx
+          .select({ locked: sql`pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))` })
+          .from(sql`(values (1)) as lock_source`);
         return operation(createTransaction(tx));
       });
     },

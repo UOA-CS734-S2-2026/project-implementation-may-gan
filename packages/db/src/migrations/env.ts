@@ -3,11 +3,16 @@ import { URL } from "node:url";
 export type MigrationTarget = "local" | "development" | "staging" | "production";
 
 const targets = new Set<MigrationTarget>(["local", "development", "staging", "production"]);
-const localTestDatabases = new Set(["/dayli_test", "/dayli_relationship_test", "/dayli_messaging_test"]);
+const localTestDatabases = new Set([
+  "/dayli_test",
+  "/dayli_relationship_test",
+  "/dayli_messaging_test",
+  "/dayli_advisory_lock_ci_test",
+]);
 const localDevelopmentDatabase = "/dayli_dev";
 
 function localTestPort(): string {
-  const value = process.env.LOCAL_TEST_POSTGRES_PORT ?? "5433";
+  const value = process.env.LOCAL_TEST_POSTGRES_PORT ?? process.env.VERIFY_POSTGRES_PORT ?? "5433";
   const port = Number(value);
   return Number.isInteger(port) && port >= 1 && port <= 65_535 ? value : "5433";
 }
@@ -50,8 +55,9 @@ export function validateMigrationConnectionString(connectionString: string, targ
   }
 
   if (target === "local") {
-    if (parsed.hostname !== "localhost" || parsed.port !== localTestPort() || !localTestDatabases.has(parsed.pathname)) {
-      throw new Error(`Local test migrations must target localhost:${localTestPort()}/dayli_test, dayli_relationship_test, or dayli_messaging_test.`);
+    const port = localTestPort();
+    if (parsed.hostname !== "localhost" || parsed.port !== port || !localTestDatabases.has(parsed.pathname)) {
+      throw new Error(`Local test migrations must target localhost:${port}/dayli_test, dayli_relationship_test, dayli_messaging_test, or dayli_advisory_lock_ci_test.`);
     }
 
     return;

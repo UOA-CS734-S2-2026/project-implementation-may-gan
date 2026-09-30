@@ -1,9 +1,8 @@
 import { sql } from "drizzle-orm";
+import type { DayliDatabase } from "./index";
 
 /** The minimum transaction capability needed for the pair advisory lock. */
-export interface RelationshipPairLockTransaction {
-  execute(query: ReturnType<typeof sql>): Promise<unknown>;
-}
+export type RelationshipPairLockTransaction = Pick<DayliDatabase, "select">;
 
 function relationshipPairKey(leftUserId: string, rightUserId: string): string {
   return [leftUserId, rightUserId]
@@ -21,7 +20,7 @@ export async function lockRelationshipPair(
   leftUserId: string,
   rightUserId: string,
 ): Promise<void> {
-  await transaction.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(leftUserId, rightUserId)}, 734))`,
-  );
+  await transaction
+    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(leftUserId, rightUserId)}, 734))` })
+    .from(sql`(values (1)) as lock_source`);
 }

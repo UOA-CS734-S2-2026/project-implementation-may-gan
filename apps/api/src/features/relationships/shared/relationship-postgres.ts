@@ -1,12 +1,8 @@
-import { sql, type DayliDatabase } from "@dayli/db";
+import type { DayliDatabase } from "@dayli/db";
 import type { StoredRelationshipSnapshot } from "./relationship-service";
 
-export type RelationshipQueryable = Pick<DayliDatabase, "execute">;
+export type RelationshipQueryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 export type RelationshipRow = Record<string, unknown>;
-
-export function relationshipRows<T extends RelationshipRow>(value: unknown): T[] {
-  return [...(value as Iterable<T>)];
-}
 
 export interface RelationshipPostgresContext {
   queryable: RelationshipQueryable;
@@ -22,5 +18,3 @@ export interface RelationshipPostgresContext {
     at: string,
   ): Promise<{ other: string; request: RelationshipRow }>;
 }
-
-export { sql };

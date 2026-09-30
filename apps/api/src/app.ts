@@ -41,7 +41,8 @@ import {
 import { createCurrentPostingDayService } from "./features/posting-days/get-current-posting-day/get-current-posting-day.service";
 import { createDailyPromptRepository, hasPostedOnDay } from "./infrastructure/database/posting-day.repository";
 import { createAucklandDayService } from "@dayli/domain";
-import { sql, type DayliDatabase } from "@dayli/db";
+import { schema, type DayliDatabase } from "@dayli/db";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
@@ -428,9 +429,15 @@ function createVerifiedRealtimeSessionResolver(configuration: RuntimeConfigurati
 
 function resolveRealtimeSessionById(configuration: RuntimeConfiguration, sessionId: string): Promise<VerifiedRealtimeSession | null> {
   return withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
-    const result = await database.execute(sql`select id, user_id, expires_at from public.session where id = ${sessionId} and expires_at > now() limit 1`);
-    const [row] = [...result as Iterable<{ id: unknown; user_id: unknown; expires_at: unknown }>];
-    return row ? { sessionId: String(row.id), userId: String(row.user_id), expiresAt: new Date(String(row.expires_at)) } : null;
+    const [row] = await database
+      .select({ id: schema.session.id, userId: schema.session.userId, expiresAt: schema.session.expiresAt })
+      .from(schema.session)
+      .where(and(
+        eq(schema.session.id, sessionId),
+        gt(schema.session.expiresAt, sql`now()`),
+      ))
+      .limit(1);
+    return row ? { sessionId: row.id, userId: row.userId, expiresAt: row.expiresAt } : null;
   });
 }
 

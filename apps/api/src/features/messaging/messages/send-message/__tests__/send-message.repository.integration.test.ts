@@ -14,9 +14,11 @@ const suite = enabled ? describe : describe.skip;
 
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
+  const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 5 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
+  const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -30,7 +32,7 @@ suite("send message Postgres repository", () => {
       await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
       await database.client`delete from public."user" where id = any(${users}::text[])`;
     } finally {
-      await database.close();
+      await Promise.all([database.close(), contender.close()]);
     }
   });
 
@@ -86,6 +88,49 @@ suite("send message Postgres repository", () => {
       { change_sequence: "2", kind: "message.created", message_id: first.message.id },
     ]);
     expect(outbox?.count).toBe(4);
+  });
+
+  it("serializes concurrent sends from two PostgreSQL clients without losing message or change sequences", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "first",
+    });
+
+    const [beforeChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [beforeOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const results = await Promise.all([
+      send.send(users[0]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "from first client" }),
+      contenderSend.send(users[1]!, created.conversation.id, { clientMessageId: crypto.randomUUID(), text: "from second client" }),
+    ]);
+
+    const initialSequence = BigInt(created.message.sequence);
+    const expectedSequences = [(initialSequence + 1n).toString(), (initialSequence + 2n).toString()];
+    expect(results.map((result) => result.message.sequence).sort()).toEqual(expectedSequences);
+    const messages = [...await database.client`select sequence::text as sequence from public.messages where id in (${results[0].message.id}, ${results[1].message.id}) order by sequence`];
+    const changes = [...await database.client`select change_sequence::text as sequence from public.conversation_changes where message_id in (${results[0].message.id}, ${results[1].message.id}) order by change_sequence`];
+    const [afterChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    expect(messages.map((message) => message.sequence)).toEqual(expectedSequences);
+    expect(changes.map((change) => change.sequence)).toEqual(expectedSequences);
+    expect(afterChanges?.count).toBe((beforeChanges?.count ?? 0) + 2);
+    expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
+  });
+
+  it("preserves message sequence precision above Number.MAX_SAFE_INTEGER", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "first",
+    });
+    await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
+
+    await expect(send.send(users[0]!, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "precise",
+    })).resolves.toMatchObject({ message: { sequence: "9007199254740993" } });
+    const [stored] = await database.client`select sequence::text as sequence from public.messages where conversation_id = ${created.conversation.id} and sequence = 9007199254740993`;
+    expect(stored?.sequence).toBe("9007199254740993");
   });
 
   it("rejects pending and blocked sends without additional messages, changes, or outbox work", async () => {
