@@ -122,10 +122,11 @@ suite("create direct conversation Postgres repository", () => {
 
     const created = await observedDirect.create(actorId, { recipientId, clientMessageId, text: "mixed case" });
     const replayed = await observedDirect.create(actorId, { recipientId, clientMessageId, text: "mixed case" });
-    // PostgreSQL collation determines least/greatest ordering; a typed builder cannot model it.
-    const reference = await database.db.execute(sql`
-      select least(${actorId}, ${recipientId}) as low_id, greatest(${actorId}, ${recipientId}) as high_id
-    `) as { low_id: string; high_id: string }[];
+    // PostgreSQL collation determines least/greatest ordering; keep it in bounded SQL expressions.
+    const reference = await database.db.select({
+      lowId: sql<string>`least(${actorId}, ${recipientId})`,
+      highId: sql<string>`greatest(${actorId}, ${recipientId})`,
+    }).from(conversations).where(eq(conversations.id, created.conversation.id));
     const [stored] = await database.db.select({
       lowId: conversations.userLowId,
       highId: conversations.userHighId,
@@ -140,13 +141,13 @@ suite("create direct conversation Postgres repository", () => {
       replayed: true,
     });
     expect(stored).toEqual({
-      lowId: referencePair?.low_id,
-      highId: referencePair?.high_id,
+      lowId: referencePair?.lowId,
+      highId: referencePair?.highId,
       satisfiesPairOrderCheck: true,
     });
     await expect(database.db.update(conversations).set({
-      userLowId: referencePair!.high_id,
-      userHighId: referencePair!.low_id,
+      userLowId: referencePair!.highId,
+      userHighId: referencePair!.lowId,
     }).where(eq(conversations.id, created.conversation.id))).rejects.toMatchObject({ cause: { code: "23514" } });
     expect(queries.some((query) => (
       query.startsWith("select") && query.includes("least(") && query.includes("greatest(")

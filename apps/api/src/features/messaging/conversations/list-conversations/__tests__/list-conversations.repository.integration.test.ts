@@ -100,9 +100,14 @@ suite("list conversations Postgres repository", () => {
       eq(schema.conversationMembers.userId, users[0]!),
     ));
     // JavaScript Date cannot retain the cursor's microsecond precision.
-    await database.db.execute(sql`update public.conversations set last_activity_at = ${"2026-09-28T06:00:00.000001Z"}::timestamptz where id = ${activeWithUnread.conversation.id}`);
+    await database.db.update(schema.conversations).set({ lastActivityAt: sql`'2026-09-28T06:00:00.000001Z'::timestamptz` })
+      .where(eq(schema.conversations.id, activeWithUnread.conversation.id));
     // JavaScript Date cannot retain the cursor's microsecond precision.
-    await database.db.execute(sql`update public.conversations set last_activity_at = ${"2026-09-28T06:00:00.000002Z"}::timestamptz where id = ${activeWithoutUnread.conversation.id} or id = ${activeWithSameActivity.conversation.id}`);
+    await database.db.update(schema.conversations).set({ lastActivityAt: sql`'2026-09-28T06:00:00.000002Z'::timestamptz` })
+      .where(or(
+        eq(schema.conversations.id, activeWithoutUnread.conversation.id),
+        eq(schema.conversations.id, activeWithSameActivity.conversation.id),
+      ));
 
     const tiedIds = [activeWithoutUnread.conversation.id, activeWithSameActivity.conversation.id].sort().reverse();
     builderQueries.length = 0;
@@ -249,23 +254,32 @@ suite("list conversations Postgres repository", () => {
     });
 
     // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.execute(sql`update public.messages set sequence = 9007199254740993 where id = ${created.message.id}`);
+    await database.db.update(schema.messages).set({ sequence: sql`9007199254740993::bigint` })
+      .where(eq(schema.messages.id, created.message.id));
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
     await database.db.update(schema.messages).set({ sequence: Number(created.message.sequence) })
       .where(eq(schema.messages.id, created.message.id));
     // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.execute(sql`update public.conversations set last_message_sequence = 9007199254740993 where id = ${created.conversation.id}`);
+    await database.db.update(schema.conversations).set({ lastMessageSequence: sql`9007199254740993::bigint` })
+      .where(eq(schema.conversations.id, created.conversation.id));
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
-    // This mixed safe and overflowing bigint update needs an exact native PostgreSQL literal.
-    await database.db.execute(sql`update public.conversations set last_message_sequence = ${created.message.sequence}::bigint, last_change_sequence = 9007199254740993 where id = ${created.conversation.id}`);
+    // This mixed safe and overflowing bigint update needs exact native PostgreSQL literals.
+    await database.db.update(schema.conversations).set({
+      lastMessageSequence: sql`${created.message.sequence}::bigint`,
+      lastChangeSequence: sql`9007199254740993::bigint`,
+    }).where(eq(schema.conversations.id, created.conversation.id));
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
     await database.db.update(schema.conversations).set({ lastChangeSequence: 0 })
       .where(eq(schema.conversations.id, created.conversation.id));
     // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.execute(sql`update public.conversation_members set last_read_sequence = 9007199254740993 where conversation_id = ${created.conversation.id} and user_id = ${users[0]!}`);
+    await database.db.update(schema.conversationMembers).set({ lastReadSequence: sql`9007199254740993::bigint` })
+      .where(and(
+        eq(schema.conversationMembers.conversationId, created.conversation.id),
+        eq(schema.conversationMembers.userId, users[0]!),
+      ));
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
     await database.db.update(schema.conversationMembers).set({ lastReadSequence: 0 })
@@ -274,7 +288,8 @@ suite("list conversations Postgres repository", () => {
         eq(schema.conversationMembers.userId, users[0]!),
       ));
     // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.execute(sql`update public.messages set version = 9007199254740993 where id = ${created.message.id}`);
+    await database.db.update(schema.messages).set({ version: sql`9007199254740993::bigint` })
+      .where(eq(schema.messages.id, created.message.id));
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
   });
