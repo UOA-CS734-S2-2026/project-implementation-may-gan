@@ -9,7 +9,7 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:verify": "tsx src/verify.ts",
     "db:smoke": "tsx src/check.ts",
-    "db:test": "REQUIRE_DB_TEST=1 vitest run src/relationship-pair-lock.test.ts && REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/messaging-participants.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/transactions.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/relationships.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/lifecycle.integration.test.ts",
+    "db:test": "REQUIRE_DB_TEST=1 vitest run src/relationship-pair-lock.test.ts && REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/messaging-participants.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/transactions.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/relationships.integration.test.ts && REQUIRE_DB_TEST=1 TEST_DATABASE_URL=${LIFECYCLE_TEST_DATABASE_URL:-$TEST_DATABASE_URL} TEST_APP_DATABASE_URL=${LIFECYCLE_TEST_APP_DATABASE_URL:-$TEST_APP_DATABASE_URL} TEST_LIFECYCLE_WORKER_DATABASE_URL=${LIFECYCLE_TEST_WORKER_DATABASE_URL:-$TEST_LIFECYCLE_WORKER_DATABASE_URL} vitest run src/lifecycle.integration.test.ts",
     "test": "vitest run",
     "typecheck": "tsc"
   },

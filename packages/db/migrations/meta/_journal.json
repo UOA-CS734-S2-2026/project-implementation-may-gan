@@ -183,6 +183,13 @@
       "when": 1790766387884,
       "tag": "0025_bored_warbound",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790768140725,
+      "tag": "0026_fat_psylocke",
+      "breakpoints": true
     }
   ]
 }

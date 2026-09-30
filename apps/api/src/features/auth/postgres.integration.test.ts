@@ -300,6 +300,17 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(results.filter((response) => response.status === 200)).toHaveLength(1);
     const [accepted] = results.filter((response) => response.status === 200);
     const body = await accepted!.json() as { user: { id: string } };
+    expect(body.user as Record<string, unknown>).not.toHaveProperty("legal_registration_admission");
+    expect(body.user as Record<string, unknown>).not.toHaveProperty("legalRegistrationAdmission");
+    const sessionView = await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${nativeToken(accepted!)}` },
+    }));
+    expect(sessionView.status).toBe(200);
+    const sessionBody = await sessionView.json() as { user?: Record<string, unknown>; session?: Record<string, unknown> };
+    for (const value of [sessionBody.user, sessionBody.session]) {
+      expect(value).not.toHaveProperty("legal_registration_admission");
+      expect(value).not.toHaveProperty("legalRegistrationAdmission");
+    }
     const [termsAcceptance] = await migrator.client`select accepted_at from public.terms_acceptances where user_id = ${body.user.id} and terms_version_id = ${documentId}`;
     const [ageDeclaration] = await migrator.client`select declaration_version from public.age_declarations where user_id = ${body.user.id}`;
     const [account] = await migrator.client`select provider_id from public.account where user_id = ${body.user.id}`;
@@ -308,6 +319,67 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(ageDeclaration).toEqual({ declaration_version: "age-16-v1" });
     expect(account).toEqual({ provider_id: "credential" });
     expect(session?.id).toBeTruthy();
+  });
+
+  it("rolls back consumed admission proof when a legal write fails inside the user insert", async () => {
+    const canonicalContent = "# Rollback Terms\n\nCanonical test content.";
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalContent)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const documentId = `rollback-terms-${crypto.randomUUID()}`;
+    const databaseSchema = (await import("@dayli/db")).schema;
+    await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
+      id: documentId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1,
+      contentDigest: digest, status: "effective", effectiveAt: new Date(Date.now() - 1_000),
+    });
+    await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
+    const app = createProductionApp();
+    const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ flow: "email", acceptTerms: true, declareAge16OrOlder: true }),
+    }));
+    expect(issued.status).toBe(201);
+    const proof = await issued.json() as { intent: string; flowBinding: string };
+    await migrator.client.unsafe(`
+      create schema test_legal_admission_fault;
+      create function test_legal_admission_fault.fail_acceptance() returns trigger language plpgsql as $$
+      begin
+        if new.terms_version_id = '${documentId}' then raise exception 'fixture legal write failure'; end if;
+        return new;
+      end;
+      $$;
+      create trigger test_legal_admission_fault_trigger after insert on public.terms_acceptances
+      for each row execute function test_legal_admission_fault.fail_acceptance();
+    `);
+    try {
+      const failed = await app.fetch(signUpRequest("rollback@example.test", {
+        "x-dayli-registration-intent": proof.intent,
+        "x-dayli-registration-binding": proof.flowBinding,
+      }));
+      expect(failed.ok).toBe(false);
+      const [afterFailure] = await migrator.client`
+        select
+          (select count(*)::int from public."user" where email = 'rollback@example.test') as users,
+          (select count(*)::int from public.terms_acceptances where terms_version_id = ${documentId}) as acceptances,
+          (select count(*)::int from public.age_declarations) as declarations,
+          (select consumed_at is null as reusable from public.registration_intents where token_digest = encode(digest(convert_to(${proof.intent}, 'UTF8'), 'sha256'), 'hex')) as reusable
+      `;
+      expect(afterFailure).toEqual({ users: 0, acceptances: 0, declarations: 0, reusable: true });
+    } finally {
+      await migrator.client.unsafe("drop schema test_legal_admission_fault cascade");
+    }
+    const retried = await app.fetch(signUpRequest("rollback@example.test", {
+      "x-dayli-registration-intent": proof.intent,
+      "x-dayli-registration-binding": proof.flowBinding,
+    }));
+    expect(retried.status).toBe(200);
+    const [afterRetry] = await migrator.client`
+      select
+        (select count(*)::int from public."user" where email = 'rollback@example.test') as users,
+        (select count(*)::int from public.terms_acceptances where terms_version_id = ${documentId}) as acceptances,
+        (select count(*)::int from public.age_declarations) as declarations,
+        (select consumed_at is not null as consumed from public.registration_intents where token_digest = encode(digest(convert_to(${proof.intent}, 'UTF8'), 'sha256'), 'hex')) as consumed
+    `;
+    expect(afterRetry).toEqual({ users: 1, acceptances: 1, declarations: 1, consumed: true });
   });
 
   it("admits a real Better Auth native Google user only through a current single-use intent", async () => {
@@ -355,7 +427,16 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(admitted.status).toBe(200);
     const body = await admitted.json() as { user: { id: string } };
     expect(body.user as Record<string, unknown>).not.toHaveProperty("legal_registration_admission");
-    expect(admitted.headers.get("set-auth-token")).toBeTruthy();
+    expect(body.user as Record<string, unknown>).not.toHaveProperty("legalRegistrationAdmission");
+    const nativeSession = await app.fetch(request("/api/auth/get-session", {
+      headers: { authorization: `Bearer ${nativeToken(admitted)}` },
+    }));
+    expect(nativeSession.status).toBe(200);
+    const nativeSessionBody = await nativeSession.json() as { user?: Record<string, unknown>; session?: Record<string, unknown> };
+    for (const value of [nativeSessionBody.user, nativeSessionBody.session]) {
+      expect(value).not.toHaveProperty("legal_registration_admission");
+      expect(value).not.toHaveProperty("legalRegistrationAdmission");
+    }
     const [row] = await migrator.client`select u.legal_registration_admission, a.provider_id, s.id as session_id, ta.terms_version_id, ad.declaration_version from public."user" u join public.account a on a.user_id = u.id join public.session s on s.user_id = u.id join public.terms_acceptances ta on ta.user_id = u.id join public.age_declarations ad on ad.user_id = u.id where u.id = ${body.user.id}`;
     expect(row?.legal_registration_admission).toBeNull();
     expect(row).toMatchObject({ provider_id: "google", terms_version_id: documentId, declaration_version: "age-16-v1" });
@@ -405,6 +486,8 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(state).toBeTruthy();
     const cookie = started.headers.get("set-cookie");
     expect(cookie).toBeTruthy();
+    expect(cookie!.includes(proof.intent)).toBe(false);
+    expect(cookie!.includes(proof.flowBinding)).toBe(false);
 
     const callback = await app.fetch(new Request(`${origin}/api/auth/callback/google?state=${encodeURIComponent(state!)}&code=test-browser-code`, {
       headers: { origin, cookie: cookie! },

@@ -31,6 +31,9 @@ export const legalDocumentVersions = pgTable("legal_document_versions", {
   noticeStartsAt: timestamp("notice_starts_at", { withTimezone: true }),
   effectiveAt: timestamp("effective_at", { withTimezone: true }),
   urgentChangeReason: text("urgent_change_reason"),
+  // Set permanently when this version is published or accepted. It carries no
+  // claimed publication date, including for legacy rows backfilled by a migration.
+  publicationLatched: boolean("publication_latched").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   unique("legal_document_versions_kind_version_unique").on(table.kind, table.version),

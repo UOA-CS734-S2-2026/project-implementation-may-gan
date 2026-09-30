@@ -12,8 +12,8 @@ const testPostgresPort = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 function requireLocalTestUrl(value: string | undefined, name: string, user: string): string {
   if (!value) throw new Error(`${name} is required for lifecycle database integration tests.`);
   const url = new URL(value);
-  if (url.hostname !== "localhost" || url.port !== testPostgresPort || url.pathname !== "/dayli_test" || url.username !== user) {
-    throw new Error(`${name} must target ${user}@localhost:${testPostgresPort}/dayli_test.`);
+  if (url.hostname !== "localhost" || url.port !== testPostgresPort || !["/dayli_test", "/dayli_lifecycle_test"].includes(url.pathname) || url.username !== user) {
+    throw new Error(`${name} must target ${user}@localhost:${testPostgresPort}/dayli_test or dayli_lifecycle_test.`);
   }
   return value;
 }
@@ -55,7 +55,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       }
       if (users.length > 0) await migrator`delete from public."user" where id = any(${users})`;
       if (exportCleanupTasks.length > 0) await migrator`delete from public.data_export_object_cleanup_tasks where id = any(${exportCleanupTasks})`;
-      if (legalVersions.length > 0) await migrator`delete from public.legal_document_versions where id = any(${legalVersions})`;
+      if (legalVersions.length > 0) await migrator`delete from public.legal_document_versions where id = any(${legalVersions}) and not publication_latched`;
     } finally {
       await migrator.end({ timeout: 5 });
       await app.end({ timeout: 5 });
@@ -169,7 +169,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
 
     await migrator`
       insert into public.legal_document_versions (id, kind, version, content_digest, status, effective_at)
-      values (${versionId}, 'terms', 1, ${"b".repeat(64)}, 'effective', '2026-09-30T00:00:00.000Z')
+      values (${versionId}, 'terms', ${Math.floor(Math.random() * 1_000_000_000) + 1}, ${"b".repeat(64)}, 'effective', '2026-09-30T00:00:00.000Z')
     `;
     await app`
       insert into public.terms_acceptances (user_id, terms_version_id)
@@ -244,6 +244,77 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, effective_at)
       values (${ids[6]}, 'terms', ${versionBase + 20}, ${"e".repeat(64)}, 'effective', false, '2026-09-02T00:00:00.000Z')
     `;
+  });
+
+  it("latches published and accepted Terms against migrator content replacement", async () => {
+    const userId = await createUser("immutable-terms");
+    const versionBase = Math.floor(Math.random() * 1_000_000_000) + 1;
+    const versionId = `terms-immutable-${crypto.randomUUID()}`;
+    const replacementId = `terms-replacement-${crypto.randomUUID()}`;
+    const canonicalContent = "# Immutable Terms\n\nAccepted canonical bytes.";
+    const replacementContent = "# Replaced Terms\n\nUnauthorized replacement bytes.";
+    const hash = async (value: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const digest = await hash(canonicalContent);
+    const replacementDigest = await hash(replacementContent);
+    legalVersions.push(versionId, replacementId);
+
+    await migrator`
+      insert into public.legal_document_versions (id, kind, version, content_digest)
+      values (${versionId}, 'terms', ${versionBase}, ${digest})
+    `;
+    await migrator`
+      insert into public.legal_document_contents (terms_version_id, canonical_content)
+      values (${versionId}, ${canonicalContent})
+    `;
+    await migrator`
+      update public.legal_document_versions
+      set status = 'notice', notice_starts_at = '2026-09-01T00:00:00.000Z', effective_at = '2026-10-01T00:00:00.000Z'
+      where id = ${versionId}
+    `;
+    await migrator`
+      update public.legal_document_versions set status = 'effective' where id = ${versionId}
+    `;
+    await app`
+      insert into public.terms_acceptances (user_id, terms_version_id)
+      values (${userId}, ${versionId})
+    `;
+
+    await expect(migrator.begin(async (tx) => {
+      await tx`update public.legal_document_contents set canonical_content = ${replacementContent} where terms_version_id = ${versionId}`;
+      await tx`update public.legal_document_versions set content_digest = ${replacementDigest} where id = ${versionId}`;
+    })).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`delete from public.legal_document_contents where terms_version_id = ${versionId}`)
+      .rejects.toMatchObject({ code: "23514" });
+    await migrator`
+      insert into public.legal_document_versions (id, kind, version, content_digest)
+      values (${replacementId}, 'terms', ${versionBase + 1}, ${replacementDigest})
+    `;
+    await expect(migrator`update public.legal_document_contents set terms_version_id = ${replacementId} where terms_version_id = ${versionId}`)
+      .rejects.toMatchObject({ code: "23514" });
+    await migrator`
+      insert into public.legal_document_contents (terms_version_id, canonical_content)
+      values (${replacementId}, ${replacementContent})
+    `;
+    await migrator`
+      update public.legal_document_versions
+      set status = 'notice', notice_starts_at = '2026-11-01T00:00:00.000Z', effective_at = '2026-12-01T00:00:00.000Z'
+      where id = ${replacementId}
+    `;
+    await migrator`update public.legal_document_versions set status = 'effective' where id = ${replacementId}`;
+    await expect(migrator`update public.legal_document_versions set status = 'draft' where id = ${versionId}`)
+      .rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`update public.legal_document_versions set kind = 'privacy_policy' where id = ${versionId}`)
+      .rejects.toMatchObject({ code: "23514" });
+
+    const [stored] = await migrator`
+      select lv.content_digest, lc.canonical_content, lv.publication_latched
+      from public.legal_document_versions lv
+      join public.legal_document_contents lc on lc.terms_version_id = lv.id
+      where lv.id = ${versionId}
+    `;
+    expect(stored).toEqual({ content_digest: digest, canonical_content: canonicalContent, publication_latched: true });
+    await migrator`update public.legal_document_versions set status = 'superseded' where id = ${versionId}`;
   });
 
   it("keeps export cleanup tasks private after reapplying role bootstrap", async () => {

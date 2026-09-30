@@ -1,0 +1,6 @@
+reason: The migration sets a five-second lock timeout before altering legal metadata.
+affected_data_and_clients: Migration waits fail quickly rather than indefinitely blocking legal document operations.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Retry in a planned maintenance window if lock acquisition times out.
+reviewer: Database reviewer required.
