@@ -36,6 +36,22 @@ class PostingStreak {
   }
 }
 
+/// Counts shown on a profile.
+class ProfileStats {
+  const ProfileStats({required this.posts, required this.friends});
+
+  final int posts;
+  final int friends;
+
+  static ProfileStats? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final posts = json['posts'];
+    final friends = json['friends'];
+    if (posts is! int || friends is! int) return null;
+    return ProfileStats(posts: posts, friends: friends);
+  }
+}
+
 /// A profile's name and, when the viewer may see them, its bio and streak.
 class ProfileDetails {
   const ProfileDetails({
@@ -46,6 +62,7 @@ class ProfileDetails {
     required this.bio,
     required this.isOwner,
     this.streak,
+    this.stats,
     this.isPrivate = false,
     this.usernameChangeAvailableAt,
   });
@@ -64,6 +81,9 @@ class ProfileDetails {
 
   /// Null whenever the bio is hidden.
   final PostingStreak? streak;
+
+  /// Null whenever the bio is hidden.
+  final ProfileStats? stats;
 
   /// Owner only.
   final bool isPrivate;
@@ -97,6 +117,7 @@ class ProfileDetails {
       bio: bio as String?,
       isOwner: settings != null,
       streak: PostingStreak.tryParse(json['streak']),
+      stats: ProfileStats.tryParse(json['stats']),
       isPrivate: settings?['profileVisibility'] == 'private',
       usernameChangeAvailableAt: availableAt is String
           ? DateTime.tryParse(availableAt)

@@ -19,6 +19,7 @@ Map<String, Object?> body({Map<String, Object?>? owner}) => {
     'postedToday': true,
     'asOf': '2026-09-30',
   },
+  'stats': {'posts': 4, 'friends': 13},
   'owner': owner,
 };
 
@@ -62,6 +63,8 @@ void main() {
     expect(profile.isPrivate, isTrue);
     expect(profile.usernameChangeAvailableAt, DateTime.utc(2026, 10, 30, 3));
     expect(profile.streak?.current, 2);
+    expect(profile.stats?.posts, 4);
+    expect(profile.stats?.friends, 13);
     expect(profile.streak?.longest, 4);
     expect(profile.streak?.postedToday, isTrue);
   });

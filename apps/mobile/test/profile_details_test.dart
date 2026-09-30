@@ -18,6 +18,7 @@ ProfileDetails details(
   bool isPrivate = false,
   DateTime? waitUntil,
   PostingStreak? streak,
+  ProfileStats? stats,
 }) => ProfileDetails(
   id: 'user-$username',
   username: username,
@@ -26,6 +27,7 @@ ProfileDetails details(
   bio: visible ? bio : null,
   isOwner: owner,
   streak: visible ? streak : null,
+  stats: visible ? stats : null,
   isPrivate: isPrivate,
   usernameChangeAvailableAt: waitUntil,
 );
@@ -251,9 +253,10 @@ void main() {
     expect(harness.posts.profileRequests.length, pages + 1);
   });
 
-  testWidgets('shows a friend\'s streak without the owner-only note', (
+  testWidgets('shows a friend\'s posts, friends, and day streak', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     final harness = TestHarness(
       friends: ProfileFriendsClient({'ada': ada}),
       profiles: FakeProfileClient({
@@ -264,36 +267,42 @@ void main() {
             longest: 5,
             postedToday: true,
           ),
+          stats: const ProfileStats(posts: 4, friends: 13),
         ),
       }),
     );
     await openProfile(tester, harness, 'ada');
 
-    expect(find.text('3 days in a row · Longest: 5 days'), findsOneWidget);
+    expect(find.bySemanticsLabel('4 Posts'), findsOneWidget);
+    expect(find.bySemanticsLabel('13 Friends'), findsOneWidget);
+    expect(find.bySemanticsLabel('3 Day streak'), findsOneWidget);
+    semantics.dispose();
   });
 
-  testWidgets('tells the owner today\'s dayli is in, or how to start', (
-    tester,
-  ) async {
-    final profiles = FakeProfileClient({
-      'jos': details(
-        'jos',
-        owner: true,
-        streak: const PostingStreak(current: 1, longest: 1, postedToday: true),
-      ),
-    });
+  testWidgets('opens the owner\'s friends from their count', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'jos': me}),
-      profiles: profiles,
+      profiles: FakeProfileClient({
+        'jos': details(
+          'jos',
+          owner: true,
+          streak: const PostingStreak(
+            current: 0,
+            longest: 0,
+            postedToday: false,
+          ),
+          stats: const ProfileStats(posts: 0, friends: 1),
+        ),
+      }),
     );
     await signIn(tester, harness);
     await tester.tap(find.byKey(const Key('shell.nav.my days')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.stats.friends')));
+    await tester.pumpAndSettle();
 
-    expect(
-      find.text("1 day in a row · Longest: 1 day · Today's dayli is in."),
-      findsOneWidget,
-    );
+    expect(find.text('Friends'), findsWidgets);
+    expect(find.byKey(const Key('profile.stats.friends')), findsNothing);
   });
 
   testWidgets('hides the streak on a private profile', (tester) async {
@@ -313,6 +322,6 @@ void main() {
     );
     await openProfile(tester, harness, 'bea');
 
-    expect(find.byKey(const Key('profile.streak')), findsNothing);
+    expect(find.byKey(const Key('profile.stats.streak')), findsNothing);
   });
 }
