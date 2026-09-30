@@ -1,5 +1,4 @@
-import { and, eq } from "drizzle-orm";
-import { schema, type DayliDatabase } from "@dayli/db";
+import { sql, type DayliDatabase } from "@dayli/db";
 
 export interface UnregisterDeviceRepository {
   unregister(actorId: string, installationId: string): Promise<void>;
@@ -8,12 +7,7 @@ export interface UnregisterDeviceRepository {
 export function createPostgresUnregisterDeviceRepository(database: DayliDatabase): UnregisterDeviceRepository {
   return {
     async unregister(actorId, installationId) {
-      await database
-        .delete(schema.pushDevices)
-        .where(and(
-          eq(schema.pushDevices.userId, actorId),
-          eq(schema.pushDevices.installationId, installationId),
-        ));
+      await database.execute(sql`delete from public.push_devices where user_id = ${actorId} and installation_id = ${installationId}`);
     },
   };
 }

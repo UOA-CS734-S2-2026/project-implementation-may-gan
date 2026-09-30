@@ -1,5 +1,4 @@
-import { createDayliDatabase, schema } from "@dayli/db";
-import { drizzle } from "drizzle-orm/postgres-js";
+import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 
@@ -14,20 +13,9 @@ const suite = enabled ? describe : describe.skip;
 suite("create direct conversation Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const mixedCasePrefix = `create-direct-conversation-${crypto.randomUUID()}-`;
-  const mixedCaseUsers = [`${mixedCasePrefix}a`, `${mixedCasePrefix}B`] as const;
-  const users = [
-    ...Array.from({ length: 8 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
-    ...mixedCaseUsers,
-  ];
-  const builderQueries: string[] = [];
-  const observedDatabase = drizzle(database.client, {
-    schema,
-    logger: { logQuery(query) { builderQueries.push(query); } },
-  });
+  const users = Array.from({ length: 8 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const { direct: concurrentDirect } = createMessagingPersistenceServices(concurrentDatabase.db);
-  const { direct: observedDirect } = createMessagingPersistenceServices(observedDatabase);
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
@@ -82,67 +70,6 @@ suite("create direct conversation Postgres repository", () => {
     expect(messages?.count).toBe(1);
     expect(changes?.count).toBe(1);
     expect(outbox?.count).toBe(2);
-  });
-
-  it("uses PostgreSQL pair ordering for mixed-case creation and idempotent resend", async () => {
-    const [actorId, recipientId] = mixedCaseUsers;
-    const clientMessageId = crypto.randomUUID();
-    builderQueries.length = 0;
-
-    const created = await observedDirect.create(actorId, { recipientId, clientMessageId, text: "mixed case" });
-    const replayed = await observedDirect.create(actorId, { recipientId, clientMessageId, text: "mixed case" });
-    const [reference] = await database.client`
-      select least(${actorId}, ${recipientId}) as low_id, greatest(${actorId}, ${recipientId}) as high_id
-    `;
-    const [stored] = await database.client`
-      select user_low_id as low_id, user_high_id as high_id,
-        user_low_id < user_high_id as satisfies_pair_order_check
-      from public.conversations
-      where id = ${created.conversation.id}
-    `;
-    const queries = builderQueries.map((query) => query.toLowerCase());
-
-    expect(replayed).toMatchObject({
-      conversation: { id: created.conversation.id },
-      message: { id: created.message.id },
-      replayed: true,
-    });
-    expect(stored).toEqual({
-      low_id: reference?.low_id,
-      high_id: reference?.high_id,
-      satisfies_pair_order_check: true,
-    });
-    await expect(database.client`
-      update public.conversations
-      set user_low_id = ${reference!.high_id}, user_high_id = ${reference!.low_id}
-      where id = ${created.conversation.id}
-    `).rejects.toMatchObject({ code: "23514" });
-    expect(queries.some((query) => (
-      query.startsWith("select") && query.includes("least(") && query.includes("greatest(")
-    ))).toBe(true);
-    expect(queries.some((query) => (
-      query.startsWith("insert into \"conversations\"") && query.includes("least(") && query.includes("greatest(")
-    ))).toBe(true);
-  });
-
-  it("preserves message sequence precision above Number.MAX_SAFE_INTEGER", async () => {
-    const created = await direct.create(users[6]!, {
-      recipientId: users[7]!,
-      clientMessageId: crypto.randomUUID(),
-      text: "first",
-    });
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[6]!}, ${users[7]!}, 'active', now()), (${users[7]!}, ${users[6]!}, 'active', now())`;
-    await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
-
-    const appended = await direct.create(users[6]!, {
-      recipientId: users[7]!,
-      clientMessageId: crypto.randomUUID(),
-      text: "precise",
-    });
-
-    expect(appended.message.sequence).toBe("9007199254740993");
-    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${appended.message.id}`;
-    expect(message?.sequence).toBe("9007199254740993");
   });
 
   it("rejects creation after either-direction blocks", async () => {

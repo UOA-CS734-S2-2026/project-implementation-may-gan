@@ -1,9 +1,9 @@
-import { and, desc, eq, ne, sql } from "drizzle-orm";
-import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { MessagingError } from "../../shared/messaging-error";
 
 type Row = Record<string, unknown>;
+const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
 
 export interface ListConversationsRepository {
   list(
@@ -14,7 +14,7 @@ export interface ListConversationsRepository {
   ): Promise<{ items: unknown[]; nextCursor: string | null }>;
 }
 
-function cursorEncode(row: { cursor_activity: unknown; id: unknown }) {
+function cursorEncode(row: Row) {
   return btoa(JSON.stringify([String(row.cursor_activity), String(row.id)]));
 }
 
@@ -37,101 +37,41 @@ export function createPostgresListConversationsRepository(
     async list(actorId, folder, rawCursor, limit) {
       const cursor = cursorDecode(rawCursor);
       const state = folder === "inbox" ? "active" : "pending";
-      const { conversationMembers, conversations, messages, relationshipBlocks, user } = schema;
-      const blocked = sql<boolean>`exists(
-        select 1
-        from ${relationshipBlocks}
-        where ${relationshipBlocks.unblockedAt} is null
-          and (
-            (${relationshipBlocks.blockerId} = ${conversations.userLowId}
-              and ${relationshipBlocks.blockedId} = ${conversations.userHighId})
-            or (${relationshipBlocks.blockerId} = ${conversations.userHighId}
-              and ${relationshipBlocks.blockedId} = ${conversations.userLowId})
-          )
-      )`;
-      const unreadCount = sql<number>`(
-        select count(*)::int
-        from ${messages}
-        where ${messages.conversationId} = ${conversations.id}
-          and ${messages.senderId} <> ${actorId}
-          and ${messages.sequence} > ${conversationMembers.lastReadSequence}
-          and ${messages.unsentAt} is null
-      )`;
-      const latestMessage = database
-        .select({
-          message_id: messages.id,
-          message_conversation_id: messages.conversationId,
-          message_sequence: sql<string>`${messages.sequence}::text`.as("message_sequence"),
-          message_sender_id: messages.senderId,
-          message_client_message_id: messages.clientMessageId,
-          message_request_fingerprint: messages.requestFingerprint,
-          message_body: messages.body,
-          message_reply_to_message_id: messages.replyToMessageId,
-          message_version: sql<string>`${messages.version}::text`.as("message_version"),
-          message_created_at: messages.createdAt,
-          message_edited_at: messages.editedAt,
-          message_unsent_at: messages.unsentAt,
-        })
-        .from(messages)
-        .where(eq(messages.conversationId, conversations.id))
-        .orderBy(desc(messages.sequence))
-        .limit(1)
-        .as("latest_message");
-      const result = await database
-        .select({
-          id: conversations.id,
-          user_low_id: conversations.userLowId,
-          user_high_id: conversations.userHighId,
-          initiator_id: conversations.initiatorId,
-          request_state: conversations.requestState,
-          last_message_sequence: sql<string>`${conversations.lastMessageSequence}::text`,
-          last_change_sequence: sql<string>`${conversations.lastChangeSequence}::text`,
-          updated_at: conversations.updatedAt,
-          cursor_activity: sql<string>`to_char(${conversations.lastActivityAt}, 'YYYY-MM-DD"T"HH24:MI:SS.USOF')`,
-          last_read_sequence: sql<string>`${conversationMembers.lastReadSequence}::text`,
-          receipt_sequence: sql<string>`${conversationMembers.receiptSequence}::text`,
-          peer_id: user.id,
-          peer_name: sql<string | null>`coalesce(${user.displayUsername}, ${user.username})`,
-          blocked,
-          unread_count: unreadCount,
-          message_id: latestMessage.message_id,
-          message_conversation_id: latestMessage.message_conversation_id,
-          message_sequence: latestMessage.message_sequence,
-          message_sender_id: latestMessage.message_sender_id,
-          message_client_message_id: latestMessage.message_client_message_id,
-          message_request_fingerprint: latestMessage.message_request_fingerprint,
-          message_body: latestMessage.message_body,
-          message_reply_to_message_id: latestMessage.message_reply_to_message_id,
-          message_version: latestMessage.message_version,
-          message_created_at: latestMessage.message_created_at,
-          message_edited_at: latestMessage.message_edited_at,
-          message_unsent_at: latestMessage.message_unsent_at,
-        })
-        .from(conversations)
-        .innerJoin(
-          conversationMembers,
-          and(
-            eq(conversationMembers.conversationId, conversations.id),
-            eq(conversationMembers.userId, actorId),
-          ),
-        )
-        .innerJoin(
-          user,
-          eq(user.id, sql`case when ${conversations.userLowId} = ${actorId} then ${conversations.userHighId} else ${conversations.userLowId} end`),
-        )
-        .leftJoinLateral(latestMessage, sql`true`)
-        .where(and(
-          eq(conversations.requestState, state),
-          folder === "requests" ? ne(conversations.initiatorId, actorId) : undefined,
-          cursor
-            ? sql`(${conversations.lastActivityAt}, ${conversations.id}) < (${cursor[0]}::timestamptz, ${cursor[1]})`
-            : undefined,
-        ))
-        .orderBy(desc(conversations.lastActivityAt), desc(conversations.id))
-        .limit(limit + 1);
+      const requestCondition = folder === "requests"
+        ? sql`and c.initiator_participant_id <> ${actorId}`
+        : sql``;
+      const cursorCondition = cursor
+        ? sql`and (c.last_activity_at, c.id) < (${cursor[0]}::timestamptz, ${cursor[1]})`
+        : sql``;
+      const result = rows<Row>(await database.execute(sql`
+        select c.*, to_char(c.last_activity_at, 'YYYY-MM-DD"T"HH24:MI:SS.USOF') as cursor_activity,
+          m.last_read_sequence, m.receipt_sequence, peer.id as peer_id,
+          case when peer.state = 'deleted' then 'Deleted account' else coalesce(p.display_username, p.username) end as peer_name,
+          lm.id as message_id, lm.conversation_id as message_conversation_id,
+          lm.sequence as message_sequence, lm.sender_participant_id as message_sender_participant_id,
+          lm.client_message_id as message_client_message_id,
+          lm.request_fingerprint as message_request_fingerprint, lm.body as message_body,
+          lm.reply_to_message_id as message_reply_to_message_id, lm.version as message_version,
+          lm.created_at as message_created_at, lm.edited_at as message_edited_at,
+          lm.unsent_at as message_unsent_at,
+          (select count(*)::int from public.messages im
+            where im.conversation_id = c.id and im.sender_participant_id <> ${actorId}
+              and im.sequence > m.last_read_sequence and im.unsent_at is null) as unread_count
+        from public.conversations c
+        join public.conversation_members m on m.conversation_id = c.id
+        join public.messaging_participants actor on actor.id = m.participant_id and actor.user_id = ${actorId} and actor.state = 'active'
+        join public.messaging_participants peer on peer.id = case when c.participant_low_id = actor.id then c.participant_high_id else c.participant_low_id end
+        left join public.user p on p.id = peer.user_id and peer.state = 'active'
+        left join lateral (
+          select * from public.messages x where x.conversation_id = c.id order by x.sequence desc limit 1
+        ) lm on true
+        where c.request_state = ${state} ${requestCondition} ${cursorCondition}
+        order by c.last_activity_at desc, c.id desc
+        limit ${limit + 1}
+      `));
       const page = result.slice(0, limit);
       return {
-        items: await Promise.all(page.map((item) => projectConversationDto(database, item as Row, actorId))),
+        items: await Promise.all(page.map((item) => projectConversationDto(database, item, actorId))),
         nextCursor: result.length > limit ? cursorEncode(page.at(-1)!) : null,
       };
     },

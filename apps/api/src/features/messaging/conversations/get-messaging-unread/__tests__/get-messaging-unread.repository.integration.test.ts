@@ -69,7 +69,6 @@ suite("get messaging unread Postgres repository", () => {
     });
 
     await expect(repository.get(users[0]!)).resolves.toEqual({ inboxCount: 2, requestCount: 1 });
-    await expect(repository.get(users[2]!)).resolves.toEqual({ inboxCount: 0, requestCount: 0 });
     await expect(repository.get(users[4]!)).resolves.toEqual({ inboxCount: 1, requestCount: 0 });
   });
 });

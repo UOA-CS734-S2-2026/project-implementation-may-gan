@@ -1,5 +1,4 @@
-import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, gt, ne } from "drizzle-orm";
+import { sql, type DayliDatabase } from "@dayli/db";
 import { PushSessionInactiveError, type RegisterPushDeviceStore } from "./register-device.service";
 
 /** Token ownership rotates transactionally, so a device reused after account switch has one owner. */
@@ -10,55 +9,27 @@ export function createPostgresRegisterDeviceStore(database: DayliDatabase): Regi
         // The route actor can become stale while token encryption is in flight.
         // Reauthorize in this transaction before a stale request can rotate a
         // device token away from its current account owner.
-        const [current] = await tx
-          .select({ id: schema.session.id })
-          .from(schema.session)
-          .innerJoin(schema.user, eq(schema.user.id, schema.session.userId))
-          .where(and(
-            eq(schema.session.id, device.sessionId),
-            eq(schema.session.userId, device.userId),
-            gt(schema.session.expiresAt, sql`now()`),
-            sql`(coalesce(${schema.user.banned}, false) = false or (${schema.user.banExpires} is not null and ${schema.user.banExpires} <= now()))`,
-          ))
-          .for("key share", { of: [schema.session, schema.user] })
-          .limit(1);
-        if (!current) throw new PushSessionInactiveError();
-        await tx
-          .delete(schema.pushDevices)
-          .where(and(
-            eq(schema.pushDevices.tokenHash, device.tokenHash),
-            ne(schema.pushDevices.userId, device.userId),
-          ));
-        await tx
-          .insert(schema.pushDevices)
-          .values({
-            id: device.id,
-            userId: device.userId,
-            sessionId: device.sessionId,
-            installationId: device.installationId,
-            platform: device.platform,
-            token: device.tokenCiphertext,
-            tokenCiphertext: device.tokenCiphertext,
-            tokenKeyVersion: device.tokenKeyVersion,
-            tokenHash: device.tokenHash,
-            optedIn: device.optedIn,
-            registeredAt: device.now,
-            invalidatedAt: null,
-          })
-          .onConflictDoUpdate({
-            target: [schema.pushDevices.userId, schema.pushDevices.installationId],
-            set: {
-              sessionId: sql`excluded.session_id`,
-              platform: sql`excluded.platform`,
-              token: sql`excluded.token`,
-              tokenCiphertext: sql`excluded.token_ciphertext`,
-              tokenKeyVersion: sql`excluded.token_key_version`,
-              tokenHash: sql`excluded.token_hash`,
-              optedIn: sql`excluded.opted_in`,
-              registeredAt: sql`excluded.registered_at`,
-              invalidatedAt: null,
-            },
-          });
+        const current = await tx.execute(sql`
+          select s.id
+          from public.session s
+          join public."user" u on u.id = s.user_id
+          where s.id = ${device.sessionId} and s.user_id = ${device.userId}
+            and s.expires_at > now()
+            and (coalesce(u.banned, false) = false or (u.ban_expires is not null and u.ban_expires <= now()))
+          for key share of s, u
+          limit 1
+        `);
+        if (![...current as Iterable<unknown>][0]) throw new PushSessionInactiveError();
+        await tx.execute(sql`delete from public.push_devices where token_hash = ${device.tokenHash} and user_id <> ${device.userId}`);
+        await tx.execute(sql`
+          insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_ciphertext, token_key_version, token_hash, opted_in, registered_at, invalidated_at)
+          values (${device.id}, ${device.userId}, ${device.sessionId}, ${device.installationId}, ${device.platform}, ${device.tokenCiphertext}, ${device.tokenCiphertext}, ${device.tokenKeyVersion}, ${device.tokenHash}, ${device.optedIn}, ${device.now.toISOString()}::timestamptz, null)
+          on conflict (user_id, installation_id) do update set
+            session_id = excluded.session_id, platform = excluded.platform, token = excluded.token,
+            token_ciphertext = excluded.token_ciphertext, token_key_version = excluded.token_key_version,
+            token_hash = excluded.token_hash, opted_in = excluded.opted_in,
+            registered_at = excluded.registered_at, invalidated_at = null
+        `);
       });
     },
   };

@@ -47,10 +47,10 @@ suite("remove reaction Postgres repository", () => {
       changed: true,
       message: { reactions: [{ reaction: "like", count: 1, reactedByActor: false }] },
     });
-    const [changedReactions] = await database.client`select reaction, user_id from public.message_reactions where message_id = ${message.id}`;
+    const [changedReactions] = await database.client`select reaction, participant_id from public.message_reactions where message_id = ${message.id}`;
     const [changedChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversation.id} and kind = 'reaction.changed'`;
     const [changedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversation.id} and channel = 'realtime'`;
-    expect(changedReactions).toMatchObject({ reaction: "like", user_id: users[0] });
+    expect(changedReactions).toMatchObject({ reaction: "like", participant_id: users[0] });
     expect(changedChanges?.count).toBe(3);
     expect(changedOutbox?.count).toBe(8);
 
@@ -71,7 +71,7 @@ suite("remove reaction Postgres repository", () => {
     await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[0]!}, ${users[3]!}, now())`;
 
     await expect(removeReaction.remove(users[3]!, blocked.conversation.id, blocked.message.id)).rejects.toMatchObject({ code: "BLOCKED" });
-    const [blockedReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${blocked.message.id} and user_id = ${users[3]!}`;
+    const [blockedReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${blocked.message.id} and participant_id = ${users[3]!}`;
     expect(blockedReaction?.count).toBe(1);
 
     const unsent = await direct.create(users[0]!, {
@@ -83,7 +83,7 @@ suite("remove reaction Postgres repository", () => {
     await database.client`update public.messages set body = null, unsent_at = now() where id = ${unsent.message.id}`;
 
     await expect(removeReaction.remove(users[1]!, unsent.conversation.id, unsent.message.id)).rejects.toMatchObject({ code: "CONFLICT" });
-    const [unsentReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${unsent.message.id} and user_id = ${users[1]!}`;
+    const [unsentReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${unsent.message.id} and participant_id = ${users[1]!}`;
     expect(unsentReaction?.count).toBe(1);
   });
 });

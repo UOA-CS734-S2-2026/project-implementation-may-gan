@@ -1,213 +1,56 @@
-import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { sql, type DayliDatabase } from "@dayli/db";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
-export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
+export type MessageWriteQueryable = Pick<DayliDatabase, "execute">;
 type Row = Record<string, unknown>;
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
-const safeInteger = (value: unknown, field: string): number => {
-  const parsed = bigint(value);
-  if (parsed > BigInt(Number.MAX_SAFE_INTEGER) || parsed < BigInt(Number.MIN_SAFE_INTEGER)) {
-    throw new RangeError(`${field} exceeds the JavaScript safe integer range.`);
-  }
-  return Number(parsed);
-};
+const rows = <T extends Row>(value: unknown) => [...value as Iterable<T>];
+const number = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 
 export function mapStoredMessage(row: Row): StoredMessage {
-  return {
-    id: String(row.id),
-    conversationId: String(row.conversation_id),
-    sequence: bigint(row.sequence),
-    senderId: String(row.sender_id),
-    clientMessageId: String(row.client_message_id),
-    requestFingerprint: String(row.request_fingerprint),
-    body: row.body === null ? null : String(row.body),
-    replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id),
-    version: safeInteger(row.version, "Message version"),
-    createdAt: new Date(String(row.created_at)),
-    editedAt: row.edited_at ? new Date(String(row.edited_at)) : null,
-    unsentAt: row.unsent_at ? new Date(String(row.unsent_at)) : null,
-    reactions: [],
-  };
+  return { id: String(row.id), conversationId: String(row.conversation_id), sequence: number(row.sequence), senderId: String(row.sender_participant_id), clientMessageId: String(row.client_message_id), requestFingerprint: String(row.request_fingerprint), body: row.body === null ? null : String(row.body), replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id), version: Number(row.version), createdAt: new Date(String(row.created_at)), editedAt: row.edited_at ? new Date(String(row.edited_at)) : null, unsentAt: row.unsent_at ? new Date(String(row.unsent_at)) : null, reactions: [] };
 }
 
 export async function getAccess(queryable: MessageWriteQueryable, actorId: string, conversationId: string): Promise<ConversationAccess> {
-  const member = exists(queryable
-    .select({ conversationId: schema.conversationMembers.conversationId })
-    .from(schema.conversationMembers)
-    .where(and(
-      eq(schema.conversationMembers.conversationId, schema.conversations.id),
-      eq(schema.conversationMembers.userId, actorId),
-    )));
-  const blocked = exists(queryable
-    .select({ blockerId: schema.relationshipBlocks.blockerId })
-    .from(schema.relationshipBlocks)
-    .where(and(
-      isNull(schema.relationshipBlocks.unblockedAt),
-      or(
-        and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
-        ),
-        and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
-        ),
-      ),
-    )));
-  const [row] = await queryable
-    .select({
-      user_low_id: schema.conversations.userLowId,
-      user_high_id: schema.conversations.userHighId,
-      request_state: schema.conversations.requestState,
-      member: sql<boolean>`${member}`,
-      blocked: sql<boolean>`${blocked}`,
-    })
-    .from(schema.conversations)
-    .where(eq(schema.conversations.id, conversationId))
-    .limit(1)
-    .for("update");
+  const [row] = rows<Row>(await queryable.execute(sql`
+    select c.participant_low_id, c.participant_high_id, c.request_state,
+     exists(select 1 from public.conversation_members m join public.messaging_participants actor on actor.id = m.participant_id and actor.user_id = ${actorId} and actor.state = 'active' where m.conversation_id = c.id) as member,
+     exists(select 1 from public.messaging_participants peer where peer.id in (c.participant_low_id, c.participant_high_id) and peer.state <> 'active') as peer_deleted,
+     exists(select 1 from public.relationship_blocks b where b.unblocked_at is null and ((b.blocker_id = c.participant_low_id and b.blocked_id = c.participant_high_id) or (b.blocker_id = c.participant_high_id and b.blocked_id = c.participant_low_id))) as blocked
+    from public.conversations c where c.id = ${conversationId} for update
+  `));
   if (!row) return { conversationId, peerId: "", requestState: "declined", isMember: false, peerActivityBlocked: false };
-  return {
-    conversationId,
-    peerId: row.user_low_id === actorId ? row.user_high_id : row.user_low_id,
-    requestState: row.request_state,
-    isMember: row.member,
-    peerActivityBlocked: row.blocked,
-  };
+  const low = String(row.participant_low_id); const high = String(row.participant_high_id);
+  return { conversationId, peerId: low === actorId ? high : low, requestState: row.request_state as ConversationAccess["requestState"], isMember: row.member === true, peerActivityBlocked: row.blocked === true || row.peer_deleted === true };
 }
 
 export async function findMessage(queryable: MessageWriteQueryable, actorId: string, conversationId: string, messageId: string): Promise<StoredMessage | null> {
-  const [row] = await queryable
-    .select({
-      id: schema.messages.id,
-      conversation_id: schema.messages.conversationId,
-      sequence: sql<string>`${schema.messages.sequence}::text`,
-      sender_id: schema.messages.senderId,
-      client_message_id: schema.messages.clientMessageId,
-      request_fingerprint: schema.messages.requestFingerprint,
-      body: schema.messages.body,
-      reply_to_message_id: schema.messages.replyToMessageId,
-      version: sql<string>`${schema.messages.version}::text`,
-      created_at: schema.messages.createdAt,
-      edited_at: schema.messages.editedAt,
-      unsent_at: schema.messages.unsentAt,
-    })
-    .from(schema.messages)
-    .where(and(
-      eq(schema.messages.conversationId, conversationId),
-      eq(schema.messages.id, messageId),
-    ))
-    .limit(1);
+  const [row] = rows<Row>(await queryable.execute(sql`select * from public.messages where conversation_id = ${conversationId} and id = ${messageId}`));
   if (!row) return null;
-
   const stored = mapStoredMessage(row);
-  const reactionRows = await queryable
-    .select({
-      reaction: schema.messageReactions.reaction,
-      count: sql<number>`count(*)::int`,
-      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
-    })
-    .from(schema.messageReactions)
-    .where(eq(schema.messageReactions.messageId, messageId))
-    .groupBy(schema.messageReactions.reaction);
-  stored.reactions = reactionRows.map((item) => ({
-    reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
-    count: item.count,
-    reactedByActor: item.reacted,
-  }));
+  const reactionRows = rows<{ reaction: string; count: number | string; reacted: boolean }>(await queryable.execute(sql`select reaction, count(*)::int as count, bool_or(participant_id = ${actorId}) as reacted from public.message_reactions where message_id = ${messageId} group by reaction`));
+  stored.reactions = reactionRows.map((item) => ({ reaction: item.reaction as StoredMessage["reactions"][number]["reaction"], count: Number(item.count), reactedByActor: item.reacted }));
   return stored;
 }
 
 export async function appendPeerChange(queryable: MessageWriteQueryable, input: ConversationPeerChange): Promise<void> {
-  const createdAt = new Date();
-  const [change] = await queryable
-    .update(schema.conversations)
-    .set({
-      lastChangeSequence: sql`${schema.conversations.lastChangeSequence} + 1`,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(schema.conversations.id, input.conversationId))
-    .returning({
-      sequence: sql<string>`${schema.conversations.lastChangeSequence}::text`,
-      userLowId: schema.conversations.userLowId,
-      userHighId: schema.conversations.userHighId,
-    });
+  const [change] = rows<{ sequence: unknown; participant_low_id: string; participant_high_id: string }>(await queryable.execute(sql`update public.conversations set last_change_sequence = last_change_sequence + 1, updated_at = now() where id = ${input.conversationId} returning last_change_sequence as sequence, participant_low_id, participant_high_id`));
   if (!change) throw new Error("Conversation disappeared during change append.");
-
-  const changeSequence = sql`${change.sequence}::bigint`;
-  await queryable.insert(schema.conversationChanges).values({
-    conversationId: input.conversationId,
-    changeSequence,
-    kind: input.kind,
-    messageId: input.messageId,
-    createdAt,
-  });
-
-  const eventId = crypto.randomUUID();
-  await queryable.insert(schema.messagingOutbox).values([
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userLowId,
-      conversationId: input.conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: createdAt,
-      createdAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userHighId,
-      conversationId: input.conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: createdAt,
-      createdAt,
-    },
-  ]);
-
-  if (input.kind !== "message.created" || !input.messageId) return;
-
-  const [message] = await queryable
-    .select({ senderId: schema.messages.senderId })
-    .from(schema.messages)
-    .where(eq(schema.messages.id, input.messageId))
-    .limit(1);
-  const peerId = message?.senderId === change.userLowId ? change.userHighId : change.userLowId;
-  const devices = await queryable
-    .select({ id: schema.pushDevices.id })
-    .from(schema.pushDevices)
-    .innerJoin(schema.session, and(
-      eq(schema.session.id, schema.pushDevices.sessionId),
-      eq(schema.session.userId, schema.pushDevices.userId),
-      gt(schema.session.expiresAt, sql`now()`),
-    ))
-    .where(and(
-      eq(schema.pushDevices.userId, peerId),
-      eq(schema.pushDevices.optedIn, true),
-      isNull(schema.pushDevices.invalidatedAt),
-      isNotNull(schema.pushDevices.tokenCiphertext),
-      isNotNull(schema.pushDevices.tokenKeyVersion),
-    ));
-  for (const device of devices) {
-    await queryable.insert(schema.messagingOutbox).values({
-      id: crypto.randomUUID(),
-      eventId: crypto.randomUUID(),
-      recipientId: peerId,
-      conversationId: input.conversationId,
-      changeSequence,
-      channel: "push",
-      deviceRegistrationId: device.id,
-      status: "pending",
-      attempts: 0,
-      availableAt: createdAt,
-      createdAt,
-    });
+  const eventId = crypto.randomUUID(); const createdAt = new Date().toISOString();
+  await queryable.execute(sql`insert into public.conversation_changes (conversation_id, change_sequence, kind, message_id, created_at) values (${input.conversationId}, ${change.sequence}::bigint, ${input.kind}, ${input.messageId}, ${createdAt}::timestamptz)`);
+  await queryable.execute(sql`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, created_at)
+    select gen_random_uuid()::text, ${eventId}, participant.user_id, ${input.conversationId}, ${change.sequence}::bigint, 'realtime', 'pending', 0, ${createdAt}::timestamptz, ${createdAt}::timestamptz
+    from public.messaging_participants participant
+    where participant.id in (${change.participant_low_id}, ${change.participant_high_id}) and participant.state = 'active' and participant.user_id is not null`);
+  if (input.kind === "message.created" && input.messageId) {
+    const [message] = rows<{ sender_participant_id: string }>(await queryable.execute(sql`select sender_participant_id from public.messages where id = ${input.messageId}`));
+    const peerParticipantId = message?.sender_participant_id === change.participant_low_id ? change.participant_high_id : change.participant_low_id;
+    const [peer] = rows<{ user_id: string | null }>(await queryable.execute(sql`select user_id from public.messaging_participants where id = ${peerParticipantId} and state = 'active'`));
+    const peerId = peer?.user_id;
+    if (!peerId) return;
+    const devices = rows<{ id: string }>(await queryable.execute(sql`
+      select d.id from public.push_devices d join public.session s on s.id = d.session_id and s.user_id = d.user_id and s.expires_at > now()
+      where d.user_id = ${peerId} and d.opted_in and d.invalidated_at is null and d.token_ciphertext is not null and d.token_key_version is not null
+    `));
+    for (const device of devices) await queryable.execute(sql`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, device_registration_id, status, attempts, available_at, created_at) values (${crypto.randomUUID()}, ${crypto.randomUUID()}, ${peerId}, ${input.conversationId}, ${change.sequence}::bigint, 'push', ${device.id}, 'pending', 0, ${createdAt}::timestamptz, ${createdAt}::timestamptz)`);
   }
 }

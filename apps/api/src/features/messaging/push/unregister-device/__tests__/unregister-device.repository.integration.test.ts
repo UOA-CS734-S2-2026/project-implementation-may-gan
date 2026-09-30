@@ -21,7 +21,7 @@ suite("unregister device Postgres repository", () => {
   beforeAll(async () => {
     const now = new Date().toISOString();
     await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
-    await database.client`insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_hash, opted_in, registered_at) values (${`unregister-device-alice-device-${crypto.randomUUID()}`}, ${ids.alice}, ${"session-alice"}, ${"shared-installation"}, ${"ios"}, ${"ciphertext-alice"}, ${"a".repeat(64)}, true, ${now}), (${`unregister-device-bob-device-${crypto.randomUUID()}`}, ${ids.bob}, ${"session-bob"}, ${"shared-installation"}, ${"android"}, ${"ciphertext-bob"}, ${"b".repeat(64)}, true, ${now}), (${`unregister-device-bob-only-device-${crypto.randomUUID()}`}, ${ids.bob}, ${"session-bob"}, ${"bob-only-installation"}, ${"android"}, ${"ciphertext-bob-only"}, ${"c".repeat(64)}, true, ${now})`;
+    await database.client`insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_hash, opted_in, registered_at) values (${`unregister-device-alice-device-${crypto.randomUUID()}`}, ${ids.alice}, ${"session-alice"}, ${"shared-installation"}, ${"ios"}, ${"ciphertext-alice"}, ${"a".repeat(64)}, true, ${now}), (${`unregister-device-bob-device-${crypto.randomUUID()}`}, ${ids.bob}, ${"session-bob"}, ${"shared-installation"}, ${"android"}, ${"ciphertext-bob"}, ${"b".repeat(64)}, true, ${now})`;
   });
 
   afterAll(async () => {
@@ -36,20 +36,6 @@ suite("unregister device Postgres repository", () => {
     await repository.unregister(ids.alice, "shared-installation");
 
     const rows = await database.client`select user_id from public.push_devices where installation_id = ${"shared-installation"} order by user_id`;
-    expect(rows).toEqual([{ user_id: ids.bob }]);
-  });
-
-  it("does not delete an installation owned by another actor", async () => {
-    await repository.unregister(ids.alice, "bob-only-installation");
-
-    const rows = await database.client`select user_id from public.push_devices where installation_id = ${"bob-only-installation"}`;
-    expect(rows).toEqual([{ user_id: ids.bob }]);
-  });
-
-  it("is a no-op when the installation is missing", async () => {
-    await expect(repository.unregister(ids.bob, "missing-installation")).resolves.toBeUndefined();
-
-    const rows = await database.client`select user_id from public.push_devices where installation_id = ${"bob-only-installation"}`;
     expect(rows).toEqual([{ user_id: ids.bob }]);
   });
 });

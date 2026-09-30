@@ -1,5 +1,4 @@
-import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq } from "drizzle-orm";
+import { createHyperdriveDatabase, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
@@ -31,12 +30,7 @@ class PostgresRemoveReactionTransaction implements RemoveReactionTransaction {
   }
 
   async removeReaction(messageId: string, actorId: string): Promise<StoredMessage> {
-    await this.queryable
-      .delete(schema.messageReactions)
-      .where(and(
-        eq(schema.messageReactions.messageId, messageId),
-        eq(schema.messageReactions.userId, actorId),
-      ));
+    await this.queryable.execute(sql`delete from public.message_reactions where message_id = ${messageId} and participant_id = ${actorId}`);
     const current = await this.findMessage(this.conversationId, messageId);
     if (!current) throw new Error("Message disappeared during reaction.");
     return current;

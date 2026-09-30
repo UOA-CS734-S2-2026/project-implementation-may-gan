@@ -1,7 +1,9 @@
-import { lockRelationshipPair, schema, type DayliDatabase } from "@dayli/db";
-import { eq } from "drizzle-orm";
+import { lockRelationshipPair, sql, type DayliDatabase, type RelationshipPairLockTransaction } from "@dayli/db";
 
-type ConversationMessageTransaction = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
+type ConversationMessageTransaction = Pick<DayliDatabase, "execute">;
+type RelationshipPair = { participant_low_id: string; participant_high_id: string };
+
+const rows = <T>(value: unknown) => [...value as Iterable<T>];
 
 /**
  * Runs a message-write operation in the caller-owned transaction after it has
@@ -12,11 +14,9 @@ export async function withLockedConversationMessageTransaction<T>(
   conversationId: string,
   operation: (transaction: ConversationMessageTransaction) => Promise<T>,
 ): Promise<T> {
-  const [pair] = await transaction
-    .select({ userLowId: schema.conversations.userLowId, userHighId: schema.conversations.userHighId })
-    .from(schema.conversations)
-    .where(eq(schema.conversations.id, conversationId))
-    .limit(1);
-  if (pair) await lockRelationshipPair(transaction, pair.userLowId, pair.userHighId);
+  const [pair] = rows<RelationshipPair>(await transaction.execute(sql`
+    select participant_low_id, participant_high_id from public.conversations where id = ${conversationId}
+  `));
+  if (pair) await lockRelationshipPair(transaction as unknown as RelationshipPairLockTransaction, pair.participant_low_id, pair.participant_high_id);
   return operation(transaction);
 }
