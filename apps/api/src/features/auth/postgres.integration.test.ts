@@ -44,7 +44,7 @@ function createProductionGoogleApp() {
   });
 }
 
-async function signedGoogleToken(audience: string | string[], subject: string, email: string, claims: { azp?: string; expiresAt?: number | null; issuedAt?: number } = {}) {
+async function signedGoogleToken(audience: string | string[], subject: string, email: string, claims: { azp?: string; expiresAt?: number | null; issuedAt?: number | null } = {}) {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const publicJwk = await exportJWK(publicKey);
   publicJwk.kid = `postgres-registration-google-key-${crypto.randomUUID()}`;
@@ -56,10 +56,10 @@ async function signedGoogleToken(audience: string | string[], subject: string, e
     picture: "https://images.example.test/google-avatar.png",
   })
     .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
-    .setIssuedAt(claims.issuedAt)
     .setIssuer("https://accounts.google.com")
     .setAudience(audience)
     .setSubject(subject);
+  if (claims.issuedAt !== null) jwt.setIssuedAt(claims.issuedAt);
   if (claims.expiresAt !== null) jwt.setExpirationTime(claims.expiresAt ?? "5m");
   const token = await jwt.sign(privateKey);
   return { publicJwk, token };
@@ -633,7 +633,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await assertRejected(second, "browser-invalid-audience@example.test");
 
     const now = Math.floor(Date.now() / 1000);
-    const rejectedClaims: Array<{ audience: string | string[]; azp?: string; expiresAt?: number | null; issuedAt?: number }> = [
+    const rejectedClaims: Array<{ audience: string | string[]; azp?: string; expiresAt?: number | null; issuedAt?: number | null }> = [
       { audience: "ios-client-id" },
       { audience: "android-client-id" },
       { audience: ["web-client-id", "ios-client-id"] },
@@ -643,6 +643,8 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       { audience: "web-client-id", azp: "other-client-id" },
       { audience: "web-client-id", expiresAt: null },
       { audience: "web-client-id", issuedAt: now - 120, expiresAt: now - 60 },
+      { audience: "web-client-id", issuedAt: null, expiresAt: now + 300 },
+      { audience: "web-client-id", issuedAt: now - 7200, expiresAt: now + 300 },
     ];
     for (const [index, claims] of rejectedClaims.entries()) {
       const email = `browser-rejected-claims-${index}@example.test`;
