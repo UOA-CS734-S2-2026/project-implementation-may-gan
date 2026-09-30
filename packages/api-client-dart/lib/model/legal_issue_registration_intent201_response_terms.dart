@@ -298,7 +298,8 @@ class LegalIssueRegistrationIntent201ResponseTermsStatusEnumTypeTransformer {
 }
 
 enum LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum {
-  slashTerms._(r'/terms'),
+  slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent._(
+      r'/api/v1/legal/terms/current/content'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -375,9 +376,9 @@ class LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnumTypeTransformer
     }
     if (data != null) {
       switch (data) {
-        case r'/terms':
+        case r'/api/v1/legal/terms/current/content':
           return LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum
-              .slashTerms;
+              .slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

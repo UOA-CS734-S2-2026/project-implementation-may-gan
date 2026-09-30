@@ -234,7 +234,8 @@ class LegalGetTermsNotice200ResponseNotice {
 }
 
 enum LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum {
-  slashTerms._(r'/terms'),
+  slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent._(
+      r'/api/v1/legal/terms/current/content'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -305,8 +306,9 @@ class LegalGetTermsNotice200ResponseNoticeDocumentUrlEnumTypeTransformer {
     }
     if (data != null) {
       switch (data) {
-        case r'/terms':
-          return LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum.slashTerms;
+        case r'/api/v1/legal/terms/current/content':
+          return LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum
+              .slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

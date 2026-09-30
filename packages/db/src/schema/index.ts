@@ -38,6 +38,7 @@ import {
 } from "./lifecycle";
 import {
   ageDeclarations,
+  legalDocumentContents,
   legalDocumentVersions,
   registrationIntents,
   termsAcceptances,
@@ -354,6 +355,7 @@ export {
 
 export {
   ageDeclarations,
+  legalDocumentContents,
   legalDocumentKind,
   legalDocumentStatus,
   legalDocumentVersions,
@@ -376,6 +378,7 @@ export const schema = {
   dailyPrompts,
   friendRequests,
   friendships,
+  legalDocumentContents,
   legalDocumentVersions,
   legacyCloudinaryMedia,
   mediaReservation,

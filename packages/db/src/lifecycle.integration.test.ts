@@ -201,29 +201,48 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
-  it("requires a 30-day material Terms notice unless an urgent reason is recorded", async () => {
+  it("requires provenance for every material Terms publication, without blocking nonmaterial changes", async () => {
     const versionBase = Math.floor(Math.random() * 1_000_000_000) + 1;
-    const ordinaryId = `terms-short-notice-${crypto.randomUUID()}`;
-    const urgentId = `terms-urgent-notice-${crypto.randomUUID()}`;
-    const minorId = `terms-minor-notice-${crypto.randomUUID()}`;
-    legalVersions.push(ordinaryId, urgentId, minorId);
+    const ids = Array.from({ length: 7 }, (_, index) => `terms-publication-${index}-${crypto.randomUUID()}`);
+    legalVersions.push(...ids);
     const startsAt = "2026-09-01T00:00:00.000Z";
 
+    // A migrator cannot bypass the policy by publishing a material document directly.
     await expect(migrator`
-      insert into public.legal_document_versions
-        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
-      values (${ordinaryId}, 'terms', ${versionBase}, ${"e".repeat(64)}, 'notice', true, ${startsAt}, '2026-09-30T23:59:59.000Z')
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, effective_at)
+      values (${ids[0]}, 'terms', ${versionBase}, ${"e".repeat(64)}, 'effective', true, '2026-09-01T00:00:00.000Z')
+    `).rejects.toMatchObject({ code: "23514" });
+    await expect(migrator`
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
+      values (${ids[1]}, 'terms', ${versionBase + 1}, ${"f".repeat(64)}, 'effective', true, null, '2026-10-01T00:00:00.000Z')
     `).rejects.toMatchObject({ code: "23514" });
 
     await migrator`
-      insert into public.legal_document_versions
-        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at, urgent_change_reason)
-      values (${urgentId}, 'terms', ${versionBase + 1}, ${"f".repeat(64)}, 'notice', true, ${startsAt}, '2026-09-02T00:00:00.000Z', 'Critical security correction')
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
+      values (${ids[2]}, 'terms', ${versionBase + 2}, ${"a".repeat(64)}, 'notice', true, ${startsAt}, '2026-10-01T00:00:00.000Z')
+    `;
+    await expect(migrator`
+      update public.legal_document_versions set status = 'effective', effective_at = '2026-09-30T23:59:59.000Z' where id = ${ids[2]}
+    `).rejects.toMatchObject({ code: "23514" });
+
+    // Exactly 30 days is allowed, as is a concrete urgent publication reason.
+    await migrator`
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
+      values (${ids[3]}, 'terms', ${versionBase + 3}, ${"b".repeat(64)}, 'effective', true, ${startsAt}, '2026-10-01T00:00:00.000Z')
     `;
     await migrator`
-      insert into public.legal_document_versions
-        (id, kind, version, content_digest, status, material_change, notice_starts_at, effective_at)
-      values (${minorId}, 'terms', ${versionBase + 2}, ${"a".repeat(64)}, 'notice', false, ${startsAt}, '2026-09-02T00:00:00.000Z')
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, effective_at, urgent_change_reason)
+      values (${ids[4]}, 'terms', ${versionBase + 4}, ${"c".repeat(64)}, 'effective', true, '2026-09-02T00:00:00.000Z', 'Critical security correction')
+    `;
+    for (const reason of ["", "   ", " urgent "]) {
+      await expect(migrator`
+        insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, effective_at, urgent_change_reason)
+        values (${`${ids[5]}-${reason.length}-${crypto.randomUUID()}`}, 'terms', ${versionBase + 10 + reason.length}, ${"d".repeat(64)}, 'effective', true, '2026-09-02T00:00:00.000Z', ${reason})
+      `).rejects.toMatchObject({ code: "23514" });
+    }
+    await migrator`
+      insert into public.legal_document_versions (id, kind, version, content_digest, status, material_change, effective_at)
+      values (${ids[6]}, 'terms', ${versionBase + 20}, ${"e".repeat(64)}, 'effective', false, '2026-09-02T00:00:00.000Z')
     `;
   });
 
@@ -262,6 +281,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       age_declarations: [true, true, false, false],
       data_export_requests: [true, true, true, false],
       data_export_object_cleanup_tasks: [false, false, false, false],
+      legal_document_contents: [true, false, false, false],
       legal_document_versions: [true, false, false, false],
       operator_cases: [false, false, false, false],
       registration_intents: [true, true, true, false],

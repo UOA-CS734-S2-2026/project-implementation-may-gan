@@ -1407,6 +1407,81 @@
         }
       }
     },
+    "/api/v1/legal/terms/current/content": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getCurrentTermsContent",
+        "responses": {
+          "200": {
+            "description": "Digest-verified canonical Terms source, or null before publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/api/v1/legal/terms/current/content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "canonicalContent": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "canonicalContent"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/legal/terms/current": {
       "get": {
         "tags": [
@@ -1450,7 +1525,7 @@
                         "documentUrl": {
                           "type": "string",
                           "enum": [
-                            "/terms"
+                            "/api/v1/legal/terms/current/content"
                           ]
                         }
                       },
@@ -1525,7 +1600,7 @@
                         "documentUrl": {
                           "type": "string",
                           "enum": [
-                            "/terms"
+                            "/api/v1/legal/terms/current/content"
                           ]
                         }
                       },
@@ -1644,7 +1719,7 @@
                         "documentUrl": {
                           "type": "string",
                           "enum": [
-                            "/terms"
+                            "/api/v1/legal/terms/current/content"
                           ]
                         }
                       },
@@ -1773,7 +1848,7 @@
                         "documentUrl": {
                           "type": "string",
                           "enum": [
-                            "/terms"
+                            "/api/v1/legal/terms/current/content"
                           ]
                         }
                       },

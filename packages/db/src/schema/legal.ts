@@ -38,25 +38,38 @@ export const legalDocumentVersions = pgTable("legal_document_versions", {
   check("legal_document_versions_id_check", sql`char_length(${table.id}) between 1 and 200`),
   check("legal_document_versions_version_check", sql`${table.version} > 0`),
   check("legal_document_versions_content_digest_check", sql`${table.contentDigest} ~ '^[0-9a-f]{64}$'`),
-  check("legal_document_versions_urgent_reason_check", sql`${table.urgentChangeReason} is null or char_length(${table.urgentChangeReason}) between 1 and 500`),
+  check("legal_document_versions_urgent_reason_check", sql`${table.urgentChangeReason} is null or (${table.urgentChangeReason} = btrim(${table.urgentChangeReason}) and char_length(${table.urgentChangeReason}) between 1 and 500)`),
   check("legal_document_versions_status_check", sql`
     (${table.status} = 'draft' and ${table.noticeStartsAt} is null and ${table.effectiveAt} is null and ${table.urgentChangeReason} is null) or
     (${table.status} = 'notice' and ${table.noticeStartsAt} is not null and ${table.effectiveAt} is not null and ${table.noticeStartsAt} < ${table.effectiveAt}) or
     (${table.status} = 'effective' and ${table.effectiveAt} is not null) or
     (${table.status} = 'superseded' and ${table.effectiveAt} is not null)
   `),
-  check("legal_document_versions_material_notice_check", sql`
-    not ${table.materialChange} or ${table.status} <> 'notice' or
+  check("legal_document_versions_material_publication_check", sql`
+    not ${table.materialChange} or ${table.status} not in ('notice', 'effective') or
     ${table.urgentChangeReason} is not null or
-    ${table.effectiveAt} >= ${table.noticeStartsAt} + interval '30 days'
+    (${table.noticeStartsAt} is not null and ${table.effectiveAt} >= ${table.noticeStartsAt} + interval '30 days')
   `),
   check("legal_document_versions_urgent_change_check", sql`
     ${table.urgentChangeReason} is null or
-    (${table.materialChange} and ${table.noticeStartsAt} is not null and ${table.effectiveAt} is not null and ${table.noticeStartsAt} < ${table.effectiveAt})
+    (${table.materialChange} and ${table.status} in ('notice', 'effective') and ${table.effectiveAt} is not null)
   `),
 ]);
 
 /** Explicit Terms acceptance. Privacy Policy display never writes this table. */
+/**
+ * Immutable canonical UTF-8 policy source. Only the migration role may write
+ * it. An effective version is usable only when this exact byte sequence hashes
+ * to its declared content digest.
+ */
+export const legalDocumentContents = pgTable("legal_document_contents", {
+  termsVersionId: text("terms_version_id").primaryKey().references(() => legalDocumentVersions.id, { onDelete: "cascade" }),
+  canonicalContent: text("canonical_content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  check("legal_document_contents_nonempty_check", sql`char_length(${table.canonicalContent}) between 1 and 500000`),
+]);
+
 export const termsAcceptances = pgTable("terms_acceptances", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   termsVersionId: text("terms_version_id").notNull(),

@@ -10,9 +10,9 @@
 
 part of openapi.api;
 
-class LegalGetCurrentTerms200ResponseTerms {
-  /// Returns a new [LegalGetCurrentTerms200ResponseTerms] instance.
-  LegalGetCurrentTerms200ResponseTerms({
+class LegalGetCurrentTermsContent200ResponseTerms {
+  /// Returns a new [LegalGetCurrentTermsContent200ResponseTerms] instance.
+  LegalGetCurrentTermsContent200ResponseTerms({
     required this.id,
     required this.version,
     required this.contentDigest,
@@ -28,16 +28,16 @@ class LegalGetCurrentTerms200ResponseTerms {
 
   final String contentDigest;
 
-  final LegalGetCurrentTerms200ResponseTermsStatusEnum status;
+  final LegalGetCurrentTermsContent200ResponseTermsStatusEnum status;
 
   final DateTime effectiveAt;
 
-  final LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum documentUrl;
+  final LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum documentUrl;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is LegalGetCurrentTerms200ResponseTerms &&
+      other is LegalGetCurrentTermsContent200ResponseTerms &&
           other.id == id &&
           other.version == version &&
           other.contentDigest == contentDigest &&
@@ -57,7 +57,7 @@ class LegalGetCurrentTerms200ResponseTerms {
 
   @override
   String toString() =>
-      'LegalGetCurrentTerms200ResponseTerms[id=$id, version=$version, contentDigest=$contentDigest, status=$status, effectiveAt=$effectiveAt, documentUrl=$documentUrl]';
+      'LegalGetCurrentTermsContent200ResponseTerms[id=$id, version=$version, contentDigest=$contentDigest, status=$status, effectiveAt=$effectiveAt, documentUrl=$documentUrl]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -70,17 +70,17 @@ class LegalGetCurrentTerms200ResponseTerms {
     return json;
   }
 
-  /// Clones this instance of [LegalGetCurrentTerms200ResponseTerms] and returns a new one where some of the
+  /// Clones this instance of [LegalGetCurrentTermsContent200ResponseTerms] and returns a new one where some of the
   /// properties have changed.
-  LegalGetCurrentTerms200ResponseTerms copyWith({
+  LegalGetCurrentTermsContent200ResponseTerms copyWith({
     String? id,
     int? version,
     String? contentDigest,
-    LegalGetCurrentTerms200ResponseTermsStatusEnum? status,
+    LegalGetCurrentTermsContent200ResponseTermsStatusEnum? status,
     DateTime? effectiveAt,
-    LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum? documentUrl,
+    LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum? documentUrl,
   }) =>
-      LegalGetCurrentTerms200ResponseTerms(
+      LegalGetCurrentTermsContent200ResponseTerms(
         id: id ?? this.id,
         version: version ?? this.version,
         contentDigest: contentDigest ?? this.contentDigest,
@@ -89,10 +89,10 @@ class LegalGetCurrentTerms200ResponseTerms {
         documentUrl: documentUrl ?? this.documentUrl,
       );
 
-  /// Returns a new [LegalGetCurrentTerms200ResponseTerms] instance and imports its values from
+  /// Returns a new [LegalGetCurrentTermsContent200ResponseTerms] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static LegalGetCurrentTerms200ResponseTerms? fromJson(dynamic value) {
+  static LegalGetCurrentTermsContent200ResponseTerms? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -101,55 +101,55 @@ class LegalGetCurrentTerms200ResponseTerms {
       // Note 2: this code is stripped in release mode!
       assert(() {
         assert(json.containsKey(r'id'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[id]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[id]" is missing from JSON.');
         assert(json[r'id'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[id]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[id]" has a null value in JSON.');
         assert(json.containsKey(r'version'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[version]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[version]" is missing from JSON.');
         assert(json[r'version'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[version]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[version]" has a null value in JSON.');
         assert(json.containsKey(r'contentDigest'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[contentDigest]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[contentDigest]" is missing from JSON.');
         assert(json[r'contentDigest'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[contentDigest]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[contentDigest]" has a null value in JSON.');
         assert(json.containsKey(r'status'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[status]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[status]" is missing from JSON.');
         assert(json[r'status'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[status]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[status]" has a null value in JSON.');
         assert(json.containsKey(r'effectiveAt'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[effectiveAt]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[effectiveAt]" is missing from JSON.');
         assert(json[r'effectiveAt'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[effectiveAt]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[effectiveAt]" has a null value in JSON.');
         assert(json.containsKey(r'documentUrl'),
-            'Required key "LegalGetCurrentTerms200ResponseTerms[documentUrl]" is missing from JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[documentUrl]" is missing from JSON.');
         assert(json[r'documentUrl'] != null,
-            'Required key "LegalGetCurrentTerms200ResponseTerms[documentUrl]" has a null value in JSON.');
+            'Required key "LegalGetCurrentTermsContent200ResponseTerms[documentUrl]" has a null value in JSON.');
         return true;
       }());
 
-      return LegalGetCurrentTerms200ResponseTerms(
+      return LegalGetCurrentTermsContent200ResponseTerms(
         id: mapValueOfType<String>(json, r'id')!,
         version: mapValueOfType<int>(json, r'version')!,
         contentDigest: mapValueOfType<String>(json, r'contentDigest')!,
-        status: LegalGetCurrentTerms200ResponseTermsStatusEnum.fromJson(
+        status: LegalGetCurrentTermsContent200ResponseTermsStatusEnum.fromJson(
             json[r'status'])!,
         effectiveAt: mapDateTime(json, r'effectiveAt', r'')!,
         documentUrl:
-            LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum.fromJson(
+            LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum.fromJson(
                 json[r'documentUrl'])!,
       );
     }
     return null;
   }
 
-  static List<LegalGetCurrentTerms200ResponseTerms> listFromJson(
+  static List<LegalGetCurrentTermsContent200ResponseTerms> listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <LegalGetCurrentTerms200ResponseTerms>[];
+    final result = <LegalGetCurrentTermsContent200ResponseTerms>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = LegalGetCurrentTerms200ResponseTerms.fromJson(row);
+        final value = LegalGetCurrentTermsContent200ResponseTerms.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -158,14 +158,14 @@ class LegalGetCurrentTerms200ResponseTerms {
     return result.toList(growable: growable);
   }
 
-  static Map<String, LegalGetCurrentTerms200ResponseTerms> mapFromJson(
+  static Map<String, LegalGetCurrentTermsContent200ResponseTerms> mapFromJson(
       dynamic json) {
-    final map = <String, LegalGetCurrentTerms200ResponseTerms>{};
+    final map = <String, LegalGetCurrentTermsContent200ResponseTerms>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
         final value =
-            LegalGetCurrentTerms200ResponseTerms.fromJson(entry.value);
+            LegalGetCurrentTermsContent200ResponseTerms.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -174,18 +174,19 @@ class LegalGetCurrentTerms200ResponseTerms {
     return map;
   }
 
-  // maps a json object with a list of LegalGetCurrentTerms200ResponseTerms-objects as value to a dart map
-  static Map<String, List<LegalGetCurrentTerms200ResponseTerms>>
+  // maps a json object with a list of LegalGetCurrentTermsContent200ResponseTerms-objects as value to a dart map
+  static Map<String, List<LegalGetCurrentTermsContent200ResponseTerms>>
       mapListFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final map = <String, List<LegalGetCurrentTerms200ResponseTerms>>{};
+    final map = <String, List<LegalGetCurrentTermsContent200ResponseTerms>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = LegalGetCurrentTerms200ResponseTerms.listFromJson(
+        map[entry.key] =
+            LegalGetCurrentTermsContent200ResponseTerms.listFromJson(
           entry.value,
           growable: growable,
         );
@@ -205,12 +206,12 @@ class LegalGetCurrentTerms200ResponseTerms {
   };
 }
 
-enum LegalGetCurrentTerms200ResponseTermsStatusEnum {
+enum LegalGetCurrentTermsContent200ResponseTermsStatusEnum {
   effective._(r'effective'),
   ;
 
   /// Instantiate a new enum with the provided value.
-  const LegalGetCurrentTerms200ResponseTermsStatusEnum._(this._value);
+  const LegalGetCurrentTermsContent200ResponseTermsStatusEnum._(this._value);
 
   /// The underlying value of this enum member.
   final String _value;
@@ -221,24 +222,25 @@ enum LegalGetCurrentTerms200ResponseTermsStatusEnum {
   /// Encodes this enum as a value suitable for JSON.
   String toJson() => _value;
 
-  /// Returns the instance of [LegalGetCurrentTerms200ResponseTermsStatusEnum] that was successfully decoded
+  /// Returns the instance of [LegalGetCurrentTermsContent200ResponseTermsStatusEnum] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static LegalGetCurrentTerms200ResponseTermsStatusEnum? fromJson(
+  static LegalGetCurrentTermsContent200ResponseTermsStatusEnum? fromJson(
           dynamic value) =>
-      LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer()
+      LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer()
           .decode(value);
 
-  /// Returns a [List] containing instances of [LegalGetCurrentTerms200ResponseTermsStatusEnum]
+  /// Returns a [List] containing instances of [LegalGetCurrentTermsContent200ResponseTermsStatusEnum]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalGetCurrentTerms200ResponseTermsStatusEnum> listFromJson(
+  static List<LegalGetCurrentTermsContent200ResponseTermsStatusEnum>
+      listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <LegalGetCurrentTerms200ResponseTermsStatusEnum>[];
+    final result = <LegalGetCurrentTermsContent200ResponseTermsStatusEnum>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
         final value =
-            LegalGetCurrentTerms200ResponseTermsStatusEnum.fromJson(row);
+            LegalGetCurrentTermsContent200ResponseTermsStatusEnum.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -248,20 +250,20 @@ enum LegalGetCurrentTerms200ResponseTermsStatusEnum {
   }
 }
 
-/// Transformation class that can [encode] an instance of [LegalGetCurrentTerms200ResponseTermsStatusEnum] to String,
-/// and [decode] dynamic data back to [LegalGetCurrentTerms200ResponseTermsStatusEnum].
-class LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer {
-  factory LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer() =>
+/// Transformation class that can [encode] an instance of [LegalGetCurrentTermsContent200ResponseTermsStatusEnum] to String,
+/// and [decode] dynamic data back to [LegalGetCurrentTermsContent200ResponseTermsStatusEnum].
+class LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer {
+  factory LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer() =>
       _instance ??=
-          const LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer
+          const LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer
               ._();
 
-  const LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer._();
+  const LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer._();
 
-  String encode(LegalGetCurrentTerms200ResponseTermsStatusEnum data) =>
+  String encode(LegalGetCurrentTermsContent200ResponseTermsStatusEnum data) =>
       data._value;
 
-  /// Returns the instance of [LegalGetCurrentTerms200ResponseTermsStatusEnum] that was successfully decoded
+  /// Returns the instance of [LegalGetCurrentTermsContent200ResponseTermsStatusEnum] that was successfully decoded
   /// from the passed [data] value on success, null otherwise.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
@@ -270,15 +272,16 @@ class LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  LegalGetCurrentTerms200ResponseTermsStatusEnum? decode(dynamic data,
+  LegalGetCurrentTermsContent200ResponseTermsStatusEnum? decode(dynamic data,
       {bool allowNull = true}) {
-    if (data is LegalGetCurrentTerms200ResponseTermsStatusEnum) {
+    if (data is LegalGetCurrentTermsContent200ResponseTermsStatusEnum) {
       return data;
     }
     if (data != null) {
       switch (data) {
         case r'effective':
-          return LegalGetCurrentTerms200ResponseTermsStatusEnum.effective;
+          return LegalGetCurrentTermsContent200ResponseTermsStatusEnum
+              .effective;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -289,16 +292,18 @@ class LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer {
   }
 
   /// The singleton instance of this transformer.
-  static LegalGetCurrentTerms200ResponseTermsStatusEnumTypeTransformer?
+  static LegalGetCurrentTermsContent200ResponseTermsStatusEnumTypeTransformer?
       _instance;
 }
 
-enum LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum {
-  slashTerms._(r'/terms'),
+enum LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum {
+  slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent._(
+      r'/api/v1/legal/terms/current/content'),
   ;
 
   /// Instantiate a new enum with the provided value.
-  const LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum._(this._value);
+  const LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum._(
+      this._value);
 
   /// The underlying value of this enum member.
   final String _value;
@@ -309,24 +314,27 @@ enum LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum {
   /// Encodes this enum as a value suitable for JSON.
   String toJson() => _value;
 
-  /// Returns the instance of [LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum] that was successfully decoded
+  /// Returns the instance of [LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum? fromJson(
+  static LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum? fromJson(
           dynamic value) =>
-      LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer()
+      LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer()
           .decode(value);
 
-  /// Returns a [List] containing instances of [LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum]
+  /// Returns a [List] containing instances of [LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum> listFromJson(
+  static List<LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum>
+      listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum>[];
+    final result =
+        <LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
         final value =
-            LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum.fromJson(row);
+            LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum.fromJson(
+                row);
         if (value != null) {
           result.add(value);
         }
@@ -336,20 +344,21 @@ enum LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum {
   }
 }
 
-/// Transformation class that can [encode] an instance of [LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum] to String,
-/// and [decode] dynamic data back to [LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum].
-class LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer {
-  factory LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer() =>
+/// Transformation class that can [encode] an instance of [LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum] to String,
+/// and [decode] dynamic data back to [LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum].
+class LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer {
+  factory LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer() =>
       _instance ??=
-          const LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer
+          const LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer
               ._();
 
-  const LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer._();
+  const LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer._();
 
-  String encode(LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum data) =>
+  String encode(
+          LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum data) =>
       data._value;
 
-  /// Returns the instance of [LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum] that was successfully decoded
+  /// Returns the instance of [LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum] that was successfully decoded
   /// from the passed [data] value on success, null otherwise.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
@@ -358,15 +367,17 @@ class LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum? decode(dynamic data,
+  LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum? decode(
+      dynamic data,
       {bool allowNull = true}) {
-    if (data is LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum) {
+    if (data is LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum) {
       return data;
     }
     if (data != null) {
       switch (data) {
-        case r'/terms':
-          return LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum.slashTerms;
+        case r'/api/v1/legal/terms/current/content':
+          return LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum
+              .slashApiSlashV1SlashLegalSlashTermsSlashCurrentSlashContent;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -377,6 +388,6 @@ class LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer {
   }
 
   /// The singleton instance of this transformer.
-  static LegalGetCurrentTerms200ResponseTermsDocumentUrlEnumTypeTransformer?
+  static LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnumTypeTransformer?
       _instance;
 }

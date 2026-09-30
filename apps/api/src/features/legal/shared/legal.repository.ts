@@ -14,6 +14,12 @@ export interface CurrentTermsDocument {
   effectiveAt: Date;
 }
 
+export class LegalContentIntegrityError extends Error {
+  constructor() {
+    super("The current Terms document has no matching canonical content.");
+  }
+}
+
 export interface CurrentTermsNotice {
   id: string;
   version: number;
@@ -61,7 +67,24 @@ export async function readCurrentTerms(database: DayliDatabase): Promise<Current
     .where(currentTermsWhere())
     .orderBy(desc(schema.legalDocumentVersions.effectiveAt), desc(schema.legalDocumentVersions.version))
     .limit(1);
-  return document?.effectiveAt ? { ...document, effectiveAt: document.effectiveAt, status: "effective" } : null;
+  if (!document?.effectiveAt) return null;
+  const [content] = await database.select({ canonicalContent: schema.legalDocumentContents.canonicalContent })
+    .from(schema.legalDocumentContents)
+    .where(eq(schema.legalDocumentContents.termsVersionId, document.id))
+    .limit(1);
+  if (!content || await digest(content.canonicalContent) !== document.contentDigest) throw new LegalContentIntegrityError();
+  return { ...document, effectiveAt: document.effectiveAt, status: "effective" };
+}
+
+export async function readCurrentTermsContent(database: DayliDatabase): Promise<{ terms: CurrentTermsDocument; canonicalContent: string } | null> {
+  const terms = await readCurrentTerms(database);
+  if (!terms) return null;
+  const [content] = await database.select({ canonicalContent: schema.legalDocumentContents.canonicalContent })
+    .from(schema.legalDocumentContents)
+    .where(eq(schema.legalDocumentContents.termsVersionId, terms.id))
+    .limit(1);
+  if (!content || await digest(content.canonicalContent) !== terms.contentDigest) throw new LegalContentIntegrityError();
+  return { terms, canonicalContent: content.canonicalContent };
 }
 
 export async function readCurrentTermsNotice(database: DayliDatabase): Promise<CurrentTermsNotice | null> {

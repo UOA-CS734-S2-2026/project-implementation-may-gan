@@ -1,0 +1,6 @@
+reason: Replacing unpublished legal metadata constraints briefly locks the legal version table.
+affected_data_and_clients: Existing rows remain valid without invented notice provenance.
+rollout_sequence: Apply with the five-second lock timeout before legal metadata activation.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Correct any rule through a later additive migration.
+reviewer: Database and privacy reviewers required.

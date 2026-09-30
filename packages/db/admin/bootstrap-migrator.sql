@@ -33,6 +33,7 @@ BEGIN
     'age_declarations',
     'data_export_requests',
     'data_export_object_cleanup_tasks',
+    'legal_document_contents',
     'legal_document_versions',
     'operator_cases',
     'registration_intents',
@@ -51,6 +52,7 @@ BEGIN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
     GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;
     GRANT SELECT, INSERT ON TABLE public.terms_acceptances TO app;
+    GRANT SELECT ON TABLE public.legal_document_contents TO app;
     GRANT SELECT ON TABLE public.legal_document_versions TO app;
   END IF;
 END

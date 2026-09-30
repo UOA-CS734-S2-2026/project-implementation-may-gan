@@ -16,7 +16,7 @@ class LegalGetCurrentTerms200Response {
     required this.terms,
   });
 
-  final LegalGetCurrentTerms200ResponseTerms terms;
+  final LegalGetCurrentTermsContent200ResponseTerms terms;
 
   @override
   bool operator ==(Object other) =>
@@ -40,7 +40,7 @@ class LegalGetCurrentTerms200Response {
   /// Clones this instance of [LegalGetCurrentTerms200Response] and returns a new one where some of the
   /// properties have changed.
   LegalGetCurrentTerms200Response copyWith({
-    LegalGetCurrentTerms200ResponseTerms? terms,
+    LegalGetCurrentTermsContent200ResponseTerms? terms,
   }) =>
       LegalGetCurrentTerms200Response(
         terms: terms ?? this.terms,
@@ -65,7 +65,8 @@ class LegalGetCurrentTerms200Response {
       }());
 
       return LegalGetCurrentTerms200Response(
-        terms: LegalGetCurrentTerms200ResponseTerms.fromJson(json[r'terms'])!,
+        terms: LegalGetCurrentTermsContent200ResponseTerms.fromJson(
+            json[r'terms'])!,
       );
     }
     return null;

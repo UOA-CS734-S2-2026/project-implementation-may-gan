@@ -58,7 +58,7 @@ export interface LegalGetTermsNotice200ResponseNotice {
  * @export
  */
 export const LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum = {
-    Terms: '/terms',
+    ApiV1LegalTermsCurrentContent: '/api/v1/legal/terms/current/content',
 } as const;
 export type LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum = typeof LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum[keyof typeof LegalGetTermsNotice200ResponseNoticeDocumentUrlEnum];
 
@@ -75,7 +75,7 @@ export function instanceOfLegalGetTermsNotice200ResponseNotice(value: object): v
     if (!('effectiveAt' in value) || value['effectiveAt'] === undefined) return false;
     if (!('urgentChangeReason' in value) || value['urgentChangeReason'] === undefined) return false;
     if (!('documentUrl' in value) || value['documentUrl'] === undefined) return false;
-    if (value['documentUrl'] !== '/terms') return false;
+    if (value['documentUrl'] !== '/api/v1/legal/terms/current/content') return false;
 
     return true;
 }

@@ -230,8 +230,11 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
 
   it("requires a single-use server Terms and age intent before creating a password account", async () => {
     const documentId = `terms-${crypto.randomUUID()}`;
-    const digest = "a".repeat(64);
-    await migrator.db.insert((await import("@dayli/db")).schema.legalDocumentVersions).values({
+    const canonicalContent = "# Test Terms\n\nCanonical test content.";
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalContent)))]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    const databaseSchema = (await import("@dayli/db")).schema;
+    await migrator.db.insert(databaseSchema.legalDocumentVersions).values({
       id: documentId,
       kind: "terms",
       version: Math.floor(Math.random() * 1_000_000_000) + 1,
@@ -239,6 +242,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       status: "effective",
       effectiveAt: new Date(Date.now() - 1_000),
     });
+    await migrator.db.insert(databaseSchema.legalDocumentContents).values({ termsVersionId: documentId, canonicalContent });
     const app = createProductionApp();
     const issued = await app.fetch(request("/api/v1/legal/registration-intents", {
       method: "POST",

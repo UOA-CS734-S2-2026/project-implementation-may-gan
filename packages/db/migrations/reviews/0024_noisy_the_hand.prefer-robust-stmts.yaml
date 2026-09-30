@@ -1,0 +1,6 @@
+reason: The protected migration runner applies this narrow constraint replacement transactionally.
+affected_data_and_clients: Existing rows remain valid without invented notice provenance.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Apply a later additive correction if needed.
+reviewer: Database and privacy reviewers required.

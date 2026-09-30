@@ -24,42 +24,48 @@ import {
 /**
  *
  * @export
- * @interface LegalGetCurrentTerms200Response
+ * @interface LegalGetCurrentTermsContent200Response
  */
-export interface LegalGetCurrentTerms200Response {
+export interface LegalGetCurrentTermsContent200Response {
     /**
      *
      */
     terms: LegalGetCurrentTermsContent200ResponseTerms;
+    /**
+     *
+     */
+    canonicalContent: string;
 }
 
 /**
- * Check if a given object implements the LegalGetCurrentTerms200Response interface.
+ * Check if a given object implements the LegalGetCurrentTermsContent200Response interface.
  */
-export function instanceOfLegalGetCurrentTerms200Response(value: object): value is LegalGetCurrentTerms200Response {
+export function instanceOfLegalGetCurrentTermsContent200Response(value: object): value is LegalGetCurrentTermsContent200Response {
     if (!('terms' in value) || value['terms'] === undefined) return false;
+    if (!('canonicalContent' in value) || value['canonicalContent'] === undefined) return false;
     return true;
 }
 
-export function LegalGetCurrentTerms200ResponseFromJSON(json: any): LegalGetCurrentTerms200Response {
-    return LegalGetCurrentTerms200ResponseFromJSONTyped(json, false);
+export function LegalGetCurrentTermsContent200ResponseFromJSON(json: any): LegalGetCurrentTermsContent200Response {
+    return LegalGetCurrentTermsContent200ResponseFromJSONTyped(json, false);
 }
 
-export function LegalGetCurrentTerms200ResponseFromJSONTyped(json: any, ignoreDiscriminator: boolean): LegalGetCurrentTerms200Response {
+export function LegalGetCurrentTermsContent200ResponseFromJSONTyped(json: any, ignoreDiscriminator: boolean): LegalGetCurrentTermsContent200Response {
     if (json == null) {
         return json;
     }
     return {
 
         'terms': LegalGetCurrentTermsContent200ResponseTermsFromJSON(json['terms']),
+        'canonicalContent': json['canonicalContent'],
     };
 }
 
-export function LegalGetCurrentTerms200ResponseToJSON(json: any): LegalGetCurrentTerms200Response {
-    return LegalGetCurrentTerms200ResponseToJSONTyped(json, false);
+export function LegalGetCurrentTermsContent200ResponseToJSON(json: any): LegalGetCurrentTermsContent200Response {
+    return LegalGetCurrentTermsContent200ResponseToJSONTyped(json, false);
 }
 
-export function LegalGetCurrentTerms200ResponseToJSONTyped(value?: LegalGetCurrentTerms200Response | null, ignoreDiscriminator: boolean = false): any {
+export function LegalGetCurrentTermsContent200ResponseToJSONTyped(value?: LegalGetCurrentTermsContent200Response | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }
@@ -67,5 +73,6 @@ export function LegalGetCurrentTerms200ResponseToJSONTyped(value?: LegalGetCurre
     return {
 
         'terms': LegalGetCurrentTermsContent200ResponseTermsToJSON(value['terms']),
+        'canonicalContent': value['canonicalContent'],
     };
 }

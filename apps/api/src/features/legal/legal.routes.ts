@@ -7,6 +7,7 @@ import {
   consumeRegistrationIntent,
   issueRegistrationIntent,
   readCurrentTerms,
+  readCurrentTermsContent,
   readCurrentTermsNotice,
   recordCurrentAcceptance,
   type RegistrationFlow,
@@ -21,10 +22,11 @@ const digestPattern = /^[0-9a-f]{64}$/;
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
 const termsSchema = z.object({
   id: z.string(), version: z.number().int().positive(), contentDigest: z.string().regex(digestPattern),
-  status: z.literal("effective"), effectiveAt: z.string().datetime(), documentUrl: z.literal("/terms"),
+  status: z.literal("effective"), effectiveAt: z.string().datetime(), documentUrl: z.literal("/api/v1/legal/terms/current/content"),
 });
+const currentTermsContentRoute = createRoute({ method: "get", path: "/api/v1/legal/terms/current/content", tags: ["Legal"], operationId: "legal.getCurrentTermsContent", responses: { 200: { description: "Digest-verified canonical Terms source, or null before publication.", content: { "application/json": { schema: z.object({ terms: termsSchema.nullable(), canonicalContent: z.string().nullable() }) } } }, 503: { description: "Legal metadata unavailable." } } });
 const currentTermsRoute = createRoute({ method: "get", path: "/api/v1/legal/terms/current", tags: ["Legal"], operationId: "legal.getCurrentTerms", responses: { 200: { description: "Current effective Terms, or null before publication.", content: { "application/json": { schema: z.object({ terms: termsSchema.nullable() }) } } }, 503: { description: "Legal metadata unavailable." } } });
-const termsNoticeRoute = createRoute({ method: "get", path: "/api/v1/legal/terms/notice", tags: ["Legal"], operationId: "legal.getTermsNotice", responses: { 200: { description: "Current Terms notice, or null.", content: { "application/json": { schema: z.object({ notice: z.object({ id: z.string(), version: z.number().int().positive(), contentDigest: z.string().regex(digestPattern), materialChange: z.boolean(), noticeStartsAt: z.string().datetime(), effectiveAt: z.string().datetime(), urgentChangeReason: z.string().nullable(), documentUrl: z.literal("/terms") }).nullable() }) } } }, 503: { description: "Legal metadata unavailable." } } });
+const termsNoticeRoute = createRoute({ method: "get", path: "/api/v1/legal/terms/notice", tags: ["Legal"], operationId: "legal.getTermsNotice", responses: { 200: { description: "Current Terms notice, or null.", content: { "application/json": { schema: z.object({ notice: z.object({ id: z.string(), version: z.number().int().positive(), contentDigest: z.string().regex(digestPattern), materialChange: z.boolean(), noticeStartsAt: z.string().datetime(), effectiveAt: z.string().datetime(), urgentChangeReason: z.string().nullable(), documentUrl: z.literal("/api/v1/legal/terms/current/content") }).nullable() }) } } }, 503: { description: "Legal metadata unavailable." } } });
 const registrationIntentRoute = createRoute({ method: "post", path: "/api/v1/legal/registration-intents", tags: ["Legal"], operationId: "legal.issueRegistrationIntent", request: { body: { content: { "application/json": { schema: z.object({ flow: z.enum(["email", "google_native", "google_browser"]), acceptTerms: z.literal(true), declareAge16OrOlder: z.literal(true) }) } } } }, responses: { 201: { description: "Short-lived opaque registration proof.", content: { "application/json": { schema: z.object({ intent: z.string().regex(/^[0-9a-f]{64}$/), flowBinding: z.string().regex(/^[0-9a-f]{64}$/), expiresAt: z.string().datetime(), terms: termsSchema, ageDeclarationVersion: z.literal("age-16-v1") }) } } }, 409: { description: "Terms are not published." }, 422: { description: "Unchecked Terms or age declaration." }, 503: { description: "Legal registration unavailable." } } });
 const acceptanceRoute = createRoute({ method: "post", path: "/api/v1/account/legal/acceptance", tags: ["Legal"], operationId: "legal.acceptCurrentTerms", security, request: { body: { content: { "application/json": { schema: z.object({ acceptTerms: z.literal(true), declareAge16OrOlder: z.literal(true), termsVersionId: z.string(), contentDigest: z.string().regex(digestPattern) }) } } } }, responses: { 200: { description: "Current Terms acceptance recorded idempotently.", content: { "application/json": { schema: z.object({ terms: termsSchema, ageDeclarationVersion: z.literal("age-16-v1") }) } } }, 401: { description: "No current session." }, 409: { description: "Terms changed or not published." }, 422: { description: "Unchecked Terms or age declaration." }, 503: { description: "Legal acceptance unavailable." } } });
 
@@ -48,9 +50,8 @@ function publicTerms(document: NonNullable<Awaited<ReturnType<typeof readCurrent
     contentDigest: document.contentDigest,
     status: document.status,
     effectiveAt: document.effectiveAt.toISOString(),
-    // The document route is intentionally stable. Activation requires the
-    // canonical renderer to serve bytes whose SHA-256 is contentDigest.
-    documentUrl: "/terms",
+    // This endpoint returns the server-verified canonical source for this version.
+    documentUrl: "/api/v1/legal/terms/current/content",
   };
 }
 
@@ -59,6 +60,17 @@ function publicTerms(document: NonNullable<Awaited<ReturnType<typeof readCurrent
  * needed to render the canonical Terms document, never an acceptance record.
  */
 export function registerLegalRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: LegalRouteDependencies) {
+  app.openapi(currentTermsContentRoute, async (context) => {
+    if (!dependencies.withDatabase) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Legal documents are temporarily unavailable.");
+    try {
+      const content = await dependencies.withDatabase(readCurrentTermsContent);
+      context.header("Cache-Control", "no-store");
+      return context.json(content ? { terms: publicTerms(content.terms), canonicalContent: content.canonicalContent } : { terms: null, canonicalContent: null }, 200);
+    } catch {
+      return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Legal documents are temporarily unavailable.");
+    }
+  });
+
   app.openapi(currentTermsRoute, async (context) => {
     if (!dependencies.withDatabase) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Legal documents are temporarily unavailable.");
     try {

@@ -18,7 +18,7 @@ import { eq, sql } from "drizzle-orm";
 import { bindBrowserRegistrationIntent, consumeBrowserRegistrationIntent, consumeRegistrationIntent, readCurrentTerms, recordCurrentAcceptance, type RegistrationFlow } from "../legal/shared/legal.repository";
 
 const corsMethods = ["GET", "POST"];
-const corsHeaders = ["authorization", "content-type"];
+const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
 
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
@@ -173,12 +173,15 @@ function registerStrictAuthRoutes<E extends Env>(
 }
 
 async function setRegistrationAdmission(database: import("@dayli/db").DayliDatabase, termsVersionId: string): Promise<void> {
-  // The selected version is known to be a current Terms row. Running this as a
-  // typed select keeps the request on Better Auth's one PostgreSQL connection.
-  await database.select({ configured: sql`set_config('dayli.registration_terms_version', ${termsVersionId}, false)` })
-    .from(schema.legalDocumentVersions)
-    .where(eq(schema.legalDocumentVersions.id, termsVersionId))
-    .limit(1);
+  // This is process-local state on the sole connection supplied by
+  // withHyperdriveDatabase. It is cleared in handleAuthRequest before that
+  // connection can be returned to the pool.
+  await database.select({ configured: sql`set_config('dayli.registration_terms_version', ${termsVersionId}, false)` });
+}
+
+async function clearRegistrationAdmission(database: import("@dayli/db").DayliDatabase): Promise<void> {
+  // An empty value is distinguishable from an admitted version in the trigger.
+  await database.select({ configured: sql`set_config('dayli.registration_terms_version', '', false)` });
 }
 
 async function admitRegistration(request: Request, database?: import("@dayli/db").DayliDatabase): Promise<Request | Response> {
@@ -247,13 +250,21 @@ async function handleAuthRequest(
   const admitted = await admitRegistration(request, database);
   if (admitted instanceof Response) return admitted;
   request = admitted;
-  if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
-    return handleProtectedSocialLink(request, handler, confirmations);
+  const admissionWasSet = Boolean(request.headers.get("x-dayli-registration-terms-version"));
+  try {
+    if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
+      return handleProtectedSocialLink(request, handler, confirmations);
+    }
+    if (request.method === "GET" && pathname === `${authBasePath}/callback/google`) {
+      return handleOAuthCallback(request, handler, confirmations);
+    }
+    return bindBrowserRegistration(request, await recordCompletedRegistration(request, await handler(request), database), database);
+  } finally {
+    // Do not rely on Hyperdrive or PostgreSQL pool cleanup as a security boundary.
+    // If this clear fails, fail the request before a potentially tainted client
+    // is released by withHyperdriveDatabase.
+    if (admissionWasSet && database) await clearRegistrationAdmission(database);
   }
-  if (request.method === "GET" && pathname === `${authBasePath}/callback/google`) {
-    return handleOAuthCallback(request, handler, confirmations);
-  }
-  return bindBrowserRegistration(request, await recordCompletedRegistration(request, await handler(request), database), database);
 }
 
 export function registerBetterAuthCompatibilityRoutes<E extends Env>(

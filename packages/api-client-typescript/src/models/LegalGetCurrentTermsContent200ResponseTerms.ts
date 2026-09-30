@@ -16,9 +16,9 @@ import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime }
 /**
  *
  * @export
- * @interface LegalGetCurrentTerms200ResponseTerms
+ * @interface LegalGetCurrentTermsContent200ResponseTerms
  */
-export interface LegalGetCurrentTerms200ResponseTerms {
+export interface LegalGetCurrentTermsContent200ResponseTerms {
     /**
      *
      */
@@ -34,7 +34,7 @@ export interface LegalGetCurrentTerms200ResponseTerms {
     /**
      *
      */
-    status: LegalGetCurrentTerms200ResponseTermsStatusEnum;
+    status: LegalGetCurrentTermsContent200ResponseTermsStatusEnum;
     /**
      *
      */
@@ -42,31 +42,31 @@ export interface LegalGetCurrentTerms200ResponseTerms {
     /**
      *
      */
-    documentUrl: LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum;
+    documentUrl: LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum;
 }
 
 
 /**
  * @export
  */
-export const LegalGetCurrentTerms200ResponseTermsStatusEnum = {
+export const LegalGetCurrentTermsContent200ResponseTermsStatusEnum = {
     Effective: 'effective',
 } as const;
-export type LegalGetCurrentTerms200ResponseTermsStatusEnum = typeof LegalGetCurrentTerms200ResponseTermsStatusEnum[keyof typeof LegalGetCurrentTerms200ResponseTermsStatusEnum];
+export type LegalGetCurrentTermsContent200ResponseTermsStatusEnum = typeof LegalGetCurrentTermsContent200ResponseTermsStatusEnum[keyof typeof LegalGetCurrentTermsContent200ResponseTermsStatusEnum];
 
 /**
  * @export
  */
-export const LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum = {
-    Terms: '/terms',
+export const LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum = {
+    ApiV1LegalTermsCurrentContent: '/api/v1/legal/terms/current/content',
 } as const;
-export type LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum = typeof LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum[keyof typeof LegalGetCurrentTerms200ResponseTermsDocumentUrlEnum];
+export type LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum = typeof LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum[keyof typeof LegalGetCurrentTermsContent200ResponseTermsDocumentUrlEnum];
 
 
 /**
- * Check if a given object implements the LegalGetCurrentTerms200ResponseTerms interface.
+ * Check if a given object implements the LegalGetCurrentTermsContent200ResponseTerms interface.
  */
-export function instanceOfLegalGetCurrentTerms200ResponseTerms(value: object): value is LegalGetCurrentTerms200ResponseTerms {
+export function instanceOfLegalGetCurrentTermsContent200ResponseTerms(value: object): value is LegalGetCurrentTermsContent200ResponseTerms {
     if (!('id' in value) || value['id'] === undefined) return false;
     if (!('version' in value) || value['version'] === undefined) return false;
     if (!('contentDigest' in value) || value['contentDigest'] === undefined) return false;
@@ -75,16 +75,16 @@ export function instanceOfLegalGetCurrentTerms200ResponseTerms(value: object): v
 
     if (!('effectiveAt' in value) || value['effectiveAt'] === undefined) return false;
     if (!('documentUrl' in value) || value['documentUrl'] === undefined) return false;
-    if (value['documentUrl'] !== '/terms') return false;
+    if (value['documentUrl'] !== '/api/v1/legal/terms/current/content') return false;
 
     return true;
 }
 
-export function LegalGetCurrentTerms200ResponseTermsFromJSON(json: any): LegalGetCurrentTerms200ResponseTerms {
-    return LegalGetCurrentTerms200ResponseTermsFromJSONTyped(json, false);
+export function LegalGetCurrentTermsContent200ResponseTermsFromJSON(json: any): LegalGetCurrentTermsContent200ResponseTerms {
+    return LegalGetCurrentTermsContent200ResponseTermsFromJSONTyped(json, false);
 }
 
-export function LegalGetCurrentTerms200ResponseTermsFromJSONTyped(json: any, ignoreDiscriminator: boolean): LegalGetCurrentTerms200ResponseTerms {
+export function LegalGetCurrentTermsContent200ResponseTermsFromJSONTyped(json: any, ignoreDiscriminator: boolean): LegalGetCurrentTermsContent200ResponseTerms {
     if (json == null) {
         return json;
     }
@@ -99,11 +99,11 @@ export function LegalGetCurrentTerms200ResponseTermsFromJSONTyped(json: any, ign
     };
 }
 
-export function LegalGetCurrentTerms200ResponseTermsToJSON(json: any): LegalGetCurrentTerms200ResponseTerms {
-    return LegalGetCurrentTerms200ResponseTermsToJSONTyped(json, false);
+export function LegalGetCurrentTermsContent200ResponseTermsToJSON(json: any): LegalGetCurrentTermsContent200ResponseTerms {
+    return LegalGetCurrentTermsContent200ResponseTermsToJSONTyped(json, false);
 }
 
-export function LegalGetCurrentTerms200ResponseTermsToJSONTyped(value?: LegalGetCurrentTerms200ResponseTerms | null, ignoreDiscriminator: boolean = false): any {
+export function LegalGetCurrentTermsContent200ResponseTermsToJSONTyped(value?: LegalGetCurrentTermsContent200ResponseTerms | null, ignoreDiscriminator: boolean = false): any {
     if (value == null) {
         return value;
     }

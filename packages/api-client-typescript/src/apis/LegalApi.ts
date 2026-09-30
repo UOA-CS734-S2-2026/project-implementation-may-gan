@@ -29,6 +29,11 @@ import {
     LegalGetCurrentTerms200ResponseToJSON,
 } from '../models/LegalGetCurrentTerms200Response';
 import {
+    type LegalGetCurrentTermsContent200Response,
+    LegalGetCurrentTermsContent200ResponseFromJSON,
+    LegalGetCurrentTermsContent200ResponseToJSON,
+} from '../models/LegalGetCurrentTermsContent200Response';
+import {
     type LegalGetTermsNotice200Response,
     LegalGetTermsNotice200ResponseFromJSON,
     LegalGetTermsNotice200ResponseToJSON,
@@ -141,6 +146,41 @@ export class LegalApi extends runtime.BaseAPI {
      */
     async legalGetCurrentTerms(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LegalGetCurrentTerms200Response> {
         const response = await this.legalGetCurrentTermsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for legalGetCurrentTermsContent without sending the request
+     */
+    async legalGetCurrentTermsContentRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/legal/terms/current/content`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async legalGetCurrentTermsContentRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<LegalGetCurrentTermsContent200Response>> {
+        const requestOptions = await this.legalGetCurrentTermsContentRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => LegalGetCurrentTermsContent200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async legalGetCurrentTermsContent(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<LegalGetCurrentTermsContent200Response> {
+        const response = await this.legalGetCurrentTermsContentRaw(initOverrides);
         return await response.value();
     }
 

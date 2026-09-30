@@ -58,7 +58,7 @@ export type LegalIssueRegistrationIntent201ResponseTermsStatusEnum = typeof Lega
  * @export
  */
 export const LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum = {
-    Terms: '/terms',
+    ApiV1LegalTermsCurrentContent: '/api/v1/legal/terms/current/content',
 } as const;
 export type LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum = typeof LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum[keyof typeof LegalIssueRegistrationIntent201ResponseTermsDocumentUrlEnum];
 
@@ -75,7 +75,7 @@ export function instanceOfLegalIssueRegistrationIntent201ResponseTerms(value: ob
 
     if (!('effectiveAt' in value) || value['effectiveAt'] === undefined) return false;
     if (!('documentUrl' in value) || value['documentUrl'] === undefined) return false;
-    if (value['documentUrl'] !== '/terms') return false;
+    if (value['documentUrl'] !== '/api/v1/legal/terms/current/content') return false;
 
     return true;
 }
