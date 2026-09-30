@@ -33,7 +33,7 @@ describe("DELETE /api/v1/profile/avatar", () => {
   it("removes the actor's photo", async () => {
     const removeAvatar = vi.fn<RemoveAvatarRepository["removeAvatar"]>(async () => ({
       kind: "removed",
-      profile: { id: "user-me", username: "me", displayName: "Me", detailsVisible: true, bio: null, avatarUrl: null, streak: null, owner: { profileVisibility: "public", usernameChangeAvailableAt: null } },
+      profile: { id: "user-me", username: "me", displayName: "Me", detailsVisible: true, bio: null, avatarUrl: null, streak: null, stats: null, owner: { profileVisibility: "public", usernameChangeAvailableAt: null } },
     }));
     const response = await remove(dependencies(removeAvatar));
 

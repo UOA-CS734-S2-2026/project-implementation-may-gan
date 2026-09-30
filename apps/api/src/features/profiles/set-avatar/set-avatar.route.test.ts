@@ -13,6 +13,7 @@ const profile: ProfileDetails = {
   bio: null,
   avatarUrl: "https://r2.example.test/photo?signed",
   streak: null,
+  stats: null,
   owner: { profileVisibility: "public", usernameChangeAvailableAt: null },
 };
 

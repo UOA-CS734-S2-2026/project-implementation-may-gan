@@ -20,6 +20,7 @@ class ProfileDetails {
     required this.bio,
     required this.avatarUrl,
     required this.streak,
+    required this.stats,
     required this.owner,
   });
 
@@ -40,6 +41,8 @@ class ProfileDetails {
 
   final PostingStreak streak;
 
+  final ProfileStats stats;
+
   final ProfileOwnerSettings owner;
 
   @override
@@ -53,6 +56,7 @@ class ProfileDetails {
           other.bio == bio &&
           other.avatarUrl == avatarUrl &&
           other.streak == streak &&
+          other.stats == stats &&
           other.owner == owner;
 
   @override
@@ -65,11 +69,12 @@ class ProfileDetails {
       (bio.hashCode) +
       (avatarUrl.hashCode) +
       (streak.hashCode) +
+      (stats.hashCode) +
       (owner.hashCode);
 
   @override
   String toString() =>
-      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, avatarUrl=$avatarUrl, streak=$streak, owner=$owner]';
+      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, avatarUrl=$avatarUrl, streak=$streak, stats=$stats, owner=$owner]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -80,6 +85,7 @@ class ProfileDetails {
     json[r'bio'] = this.bio;
     json[r'avatarUrl'] = this.avatarUrl;
     json[r'streak'] = this.streak;
+    json[r'stats'] = this.stats;
     json[r'owner'] = this.owner;
     return json;
   }
@@ -94,6 +100,7 @@ class ProfileDetails {
     String? bio,
     String? avatarUrl,
     PostingStreak? streak,
+    ProfileStats? stats,
     ProfileOwnerSettings? owner,
   }) =>
       ProfileDetails(
@@ -104,6 +111,7 @@ class ProfileDetails {
         bio: bio ?? this.bio,
         avatarUrl: avatarUrl ?? this.avatarUrl,
         streak: streak ?? this.streak,
+        stats: stats ?? this.stats,
         owner: owner ?? this.owner,
       );
 
@@ -146,6 +154,10 @@ class ProfileDetails {
             'Required key "ProfileDetails[streak]" is missing from JSON.');
         assert(json[r'streak'] != null,
             'Required key "ProfileDetails[streak]" has a null value in JSON.');
+        assert(json.containsKey(r'stats'),
+            'Required key "ProfileDetails[stats]" is missing from JSON.');
+        assert(json[r'stats'] != null,
+            'Required key "ProfileDetails[stats]" has a null value in JSON.');
         assert(json.containsKey(r'owner'),
             'Required key "ProfileDetails[owner]" is missing from JSON.');
         assert(json[r'owner'] != null,
@@ -161,6 +173,7 @@ class ProfileDetails {
         bio: mapValueOfType<String>(json, r'bio')!,
         avatarUrl: mapValueOfType<String>(json, r'avatarUrl')!,
         streak: PostingStreak.fromJson(json[r'streak'])!,
+        stats: ProfileStats.fromJson(json[r'stats'])!,
         owner: ProfileOwnerSettings.fromJson(json[r'owner'])!,
       );
     }
@@ -225,6 +238,7 @@ class ProfileDetails {
     'bio',
     'avatarUrl',
     'streak',
+    'stats',
     'owner',
   };
 }

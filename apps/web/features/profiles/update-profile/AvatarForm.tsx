@@ -46,7 +46,7 @@ export function AvatarForm({ profile }: { profile: ProfileDetails }) {
   const error = upload.error ?? remove.error;
 
   return (
-    <section className="space-y-3 rounded-lg border border-foreground/10 p-4">
+    <section className="space-y-3 rounded-2xl bg-background p-5 shadow-card">
       <h2 className="text-sm font-medium">Photo</h2>
       <div className="flex items-center gap-4">
         <ProfileAvatar profile={profile} size={64} />
