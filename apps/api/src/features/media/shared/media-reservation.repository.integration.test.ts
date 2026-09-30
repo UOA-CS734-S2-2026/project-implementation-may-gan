@@ -1,7 +1,6 @@
 import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { count, eq } from "drizzle-orm";
-import { readFile } from "node:fs/promises";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createAppForEnv } from "../../../app";
 import { MAX_PENDING_RESERVATIONS_PER_OWNER } from "../shared/media-reservation-policy";
 
@@ -103,18 +102,8 @@ async function reserve(app: ReturnType<typeof createProductionApp>, token: strin
     "TEST_DATABASE_URL",
   ));
 
-  beforeAll(async () => {
-    await migrator.db.execute(sql.raw('drop table if exists public.media_reservation, public."rateLimit", public.account, public.session, public.verification, public."user" cascade'));
-    await migrator.db.execute(sql.raw('drop type if exists public.profile_visibility, public.tier, public.media_reservation_status, public.media_validation_failure_reason cascade'));
-    const authMigration = await readFile(new URL("../../../../../../packages/db/migrations/0001_better_auth_postgres.sql", import.meta.url), "utf8");
-    const rateLimitMigration = await readFile(new URL("../../../../../../packages/db/migrations/0002_add_better_auth_rate_limit.sql", import.meta.url), "utf8");
-    const mediaReservationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0003_add_media_reservation.sql", import.meta.url), "utf8");
-    const mediaValidationMigration = await readFile(new URL("../../../../../../packages/db/migrations/0009_add_media_reservation_validation.sql", import.meta.url), "utf8");
-    await migrator.db.execute(sql.raw(authMigration));
-    await migrator.db.execute(sql.raw(rateLimitMigration));
-    await migrator.db.execute(sql.raw(mediaReservationMigration));
-    await migrator.db.execute(sql.raw(mediaValidationMigration));
-  });
+  // The suite runs on a fully migrated database (pnpm db:test migrates first).
+  // Rebuilding tables here would cascade-drop other tables' foreign keys.
 
   beforeEach(async () => {
     await migrator.db.execute(sql.raw('truncate table public.media_reservation, public.account, public.session, public.verification, public."user" cascade'));
