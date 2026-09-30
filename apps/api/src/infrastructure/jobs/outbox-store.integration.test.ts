@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, type DayliDatabase } from "@dayli/db";
 import { createPostgresOutboxStore } from "./outbox-store";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
@@ -8,6 +8,49 @@ if (target?.hostname === "localhost" && target.port === "5433" && target.pathnam
   throw new Error("Outbox leasing integration tests must use the isolated dayli_messaging_test database.");
 }
 const suite = connectionString ? describe : describe.skip;
+
+function defer(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  return { promise: new Promise<void>((done) => { resolve = done; }), resolve };
+}
+
+/** Pauses the first transaction's UPDATE after its preceding SELECT has returned. */
+function pauseFirstUpdate(database: DayliDatabase, gate: Promise<void>, signal: () => void): DayliDatabase {
+  let shouldPause = true;
+  return new Proxy(database, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (property !== "transaction" || typeof value !== "function") return value;
+      return (callback: (transaction: object) => Promise<unknown>, ...args: unknown[]) => value.call(
+        target,
+        (transaction: object) => callback(new Proxy(transaction, {
+          get(transactionTarget, transactionProperty, transactionReceiver) {
+            const transactionValue = Reflect.get(transactionTarget, transactionProperty, transactionReceiver);
+            if (transactionProperty !== "update" || typeof transactionValue !== "function") return transactionValue;
+            const wrapUpdate = (update: object): object => new Proxy(update, {
+              get(updateTarget, updateProperty, updateReceiver) {
+                const updateValue = Reflect.get(updateTarget, updateProperty, updateReceiver);
+                if (updateProperty === "returning" && typeof updateValue === "function" && shouldPause) {
+                  return (...returningArgs: unknown[]) => {
+                    shouldPause = false;
+                    signal();
+                    return gate.then(() => updateValue.apply(updateTarget, returningArgs));
+                  };
+                }
+                if ((updateProperty === "set" || updateProperty === "where") && typeof updateValue === "function") {
+                  return (...updateArgs: unknown[]) => wrapUpdate(updateValue.apply(updateTarget, updateArgs));
+                }
+                return updateValue;
+              },
+            });
+            return (...updateArgs: unknown[]) => wrapUpdate(transactionValue.apply(transactionTarget, updateArgs));
+          },
+        })),
+        ...args,
+      );
+    },
+  });
+}
 
 suite("Postgres outbox leasing", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_delivery");
@@ -21,8 +64,8 @@ suite("Postgres outbox leasing", () => {
   const nowIso = now.toISOString();
   const jobIds: string[] = [];
 
-  async function insertJob(id = `delivery-j-${crypto.randomUUID()}`, availableAt = now): Promise<string> {
-    await database.client`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, created_at) values (${id}, ${crypto.randomUUID()}, ${ids.high}, ${ids.conversation}, 1, 'realtime', 'pending', 0, ${availableAt.toISOString()}, ${nowIso})`;
+  async function insertJob(id = `delivery-j-${crypto.randomUUID()}`, availableAt = now, changeSequence = "1"): Promise<string> {
+    await database.client`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, created_at) values (${id}, ${crypto.randomUUID()}, ${ids.high}, ${ids.conversation}, ${changeSequence}, 'realtime', 'pending', 0, ${availableAt.toISOString()}, ${nowIso})`;
     jobIds.push(id);
     return id;
   }
@@ -40,6 +83,48 @@ suite("Postgres outbox leasing", () => {
     try {
       await database.client`delete from public."user" where id = any(${[ids.low, ids.high]}::text[])`;
     } finally { await database.close(); }
+  });
+
+  it("retains a selected row lock until the claim update executes", async () => {
+    const id = await insertJob(`delivery-claim-lock-${crypto.randomUUID()}`);
+    const firstDatabase = createDayliDatabase(connectionString!);
+    const secondDatabase = createDayliDatabase(connectionString!);
+    const updateGate = defer();
+    const updateQueued = defer();
+    const firstStore = createPostgresOutboxStore(pauseFirstUpdate(firstDatabase.db, updateGate.promise, updateQueued.resolve));
+    const secondStore = createPostgresOutboxStore(secondDatabase.db);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let firstClaim: Promise<Awaited<ReturnType<typeof firstStore.claimDue>>> | undefined;
+
+    try {
+      firstClaim = firstStore.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "first" });
+      await Promise.race([
+        updateQueued.promise,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("The first claim did not reach its update.")), 5_000);
+        }),
+      ]);
+      if (timeout) clearTimeout(timeout);
+      timeout = undefined;
+
+      const secondClaim = await Promise.race([
+        secondStore.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "second" }),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("The second claim did not skip the selected row.")), 5_000);
+        }),
+      ]);
+      expect(secondClaim).toEqual([]);
+      if (timeout) clearTimeout(timeout);
+      timeout = undefined;
+
+      updateGate.resolve();
+      await expect(firstClaim).resolves.toMatchObject([{ id, leaseToken: "first" }]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      updateGate.resolve();
+      await firstClaim?.catch(() => undefined);
+      await Promise.all([firstDatabase.close(), secondDatabase.close()]);
+    }
   });
 
   it("skips a row locked by another connection and claims it after that transaction commits", async () => {
@@ -110,6 +195,19 @@ suite("Postgres outbox leasing", () => {
       await claimPromise?.catch(() => undefined);
       await Promise.all([lockingDatabase.close(), claimingDatabase.close()]);
     }
+  });
+
+  it("preserves bigint change sequences beyond Number.MAX_SAFE_INTEGER", async () => {
+    const changeSequence = "9007199254740993";
+    const id = await insertJob(undefined, now, changeSequence);
+    const [claimed] = await store.claimDue({ now, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "precise" });
+    expect(claimed).toMatchObject({ id });
+    expect(claimed?.changeSequence).toBe(changeSequence);
+
+    const renewed = await store.renewLease(claimed!, { now: new Date(now.getTime() + 500), leaseForMs: 1_000 });
+    expect(renewed).toMatchObject({ id, leaseToken: "precise" });
+    expect(renewed?.changeSequence).toBe(changeSequence);
+    await expect(store.markDelivered(renewed!, now)).resolves.toBe(true);
   });
 
   it("reclaims an expired lease, increments attempts, and fences its stale token", async () => {

@@ -41,15 +41,17 @@ export interface OutboxStore {
 export type FailureCategory = "transient" | "rate_limited" | "provider_rejected" | "unauthorized" | "unknown";
 
 type OutboxJobRow = Pick<typeof schema.messagingOutbox.$inferSelect,
-  "id" | "eventId" | "recipientId" | "conversationId" | "changeSequence" | "channel" |
-  "deviceRegistrationId" | "attempts" | "leaseToken" | "leaseExpiresAt">;
+  "id" | "eventId" | "recipientId" | "conversationId" | "channel" |
+  "deviceRegistrationId" | "attempts" | "leaseToken" | "leaseExpiresAt"> & {
+  changeSequence: string;
+};
 
 const outboxJobFields = {
   id: schema.messagingOutbox.id,
   eventId: schema.messagingOutbox.eventId,
   recipientId: schema.messagingOutbox.recipientId,
   conversationId: schema.messagingOutbox.conversationId,
-  changeSequence: schema.messagingOutbox.changeSequence,
+  changeSequence: sql<string>`${schema.messagingOutbox.changeSequence}::text`,
   channel: schema.messagingOutbox.channel,
   deviceRegistrationId: schema.messagingOutbox.deviceRegistrationId,
   attempts: schema.messagingOutbox.attempts,
@@ -61,7 +63,7 @@ function toOutboxJob(row: OutboxJobRow): OutboxJob {
   // Both callers set these non-null columns as part of the same UPDATE.
   return {
     ...row,
-    changeSequence: String(row.changeSequence),
+    changeSequence: row.changeSequence,
     leaseToken: row.leaseToken!,
     leaseExpiresAt: row.leaseExpiresAt!,
   };
