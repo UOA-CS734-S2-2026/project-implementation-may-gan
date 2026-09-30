@@ -1,4 +1,5 @@
 import { createDayliDatabase, schema } from "@dayli/db";
+import { eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
@@ -24,16 +25,29 @@ suite("list messages Postgres repository", () => {
   }));
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+    const now = new Date();
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: now },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: now },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.user where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }
@@ -52,9 +66,23 @@ suite("list messages Postgres repository", () => {
     });
     await send.send(users[0]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "third message" });
     const fourth = await send.send(users[1]!, initial.conversation.id, { clientMessageId: crypto.randomUUID(), text: "fourth message" });
-    await database.client`insert into public.conversation_members (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
-    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
-    await database.client`update public.messages set sequence = 9007199254740991 where id = ${fourth.message.id}`;
+    const now = new Date();
+    await database.db.insert(schema.conversationMembers).values({
+      conversationId: initial.conversation.id,
+      userId: users[2]!,
+      lastReadSequence: 0,
+      receiptSequence: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await database.db.insert(schema.messageReactions).values([
+      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[2]!, reaction: "laugh", createdAt: now },
+    ]);
+    await database.db.update(schema.messages)
+      .set({ sequence: Number.MAX_SAFE_INTEGER })
+      .where(eq(schema.messages.id, fourth.message.id));
 
     await expect(repository.list(users[3]!, initial.conversation.id, "not-a-cursor", undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, "9007199254740992", 2)).rejects.toMatchObject({ code: "VALIDATION_FAILED" });
@@ -134,9 +162,13 @@ suite("list messages Postgres repository", () => {
     });
     await expect(repository.list(users[3]!, initial.conversation.id, undefined, undefined, 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
 
-    await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
+    await database.db.update(schema.messages)
+      .set({ sequence: sql`${Number.MAX_SAFE_INTEGER}::bigint + 2` })
+      .where(eq(schema.messages.id, fourth.message.id));
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).rejects.toThrow(RangeError);
-    await database.client`update public.messages set sequence = 4 where id = ${fourth.message.id}`;
+    await database.db.update(schema.messages)
+      .set({ sequence: 4 })
+      .where(eq(schema.messages.id, fourth.message.id));
   });
 
   it("rejects overflowing native message versions instead of rounding list DTOs", async () => {
@@ -145,7 +177,9 @@ suite("list messages Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "overflowing list version",
     });
-    await database.client`update public.messages set version = 9007199254740993 where id = ${created.message.id}`;
+    await database.db.update(schema.messages)
+      .set({ version: sql`${Number.MAX_SAFE_INTEGER}::bigint + 2` })
+      .where(eq(schema.messages.id, created.message.id));
 
     await expect(repository.list(users[0]!, created.conversation.id, undefined, undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
