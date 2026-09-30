@@ -17,6 +17,8 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   await page.getByRole("button", { name: "Let's go" }).click();
 
   await expect(page).toHaveURL(/\/home$/);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/home$/);
 
   if (testInfo.project.name === "mobile-chromium") {
     await page.locator('label[for="mobile-nav-toggle"]').first().click();

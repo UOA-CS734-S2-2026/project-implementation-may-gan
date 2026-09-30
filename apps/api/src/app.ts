@@ -9,6 +9,7 @@ import {
   readBetterAuthRuntimeConfiguration,
   type BetterAuthCompatibilitySlice,
 } from "./features/auth/better-auth";
+import { registerLandingRedirectRoute, type LandingRedirectDependencies } from "./features/auth/landing-redirect";
 import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
 import type { ApiEnv } from "./env";
 import {
@@ -159,6 +160,7 @@ export interface AppDependencies {
   realtimeConnect?: RealtimeConnectRouteDependencies;
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
+  landingRedirect?: LandingRedirectDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -178,6 +180,7 @@ export function createApp({
   realtimeConnect = {},
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
+  landingRedirect = unavailableLandingRedirect,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -208,6 +211,7 @@ export function createApp({
     api.use("/api/auth/*", createIngressRateLimitMiddleware(rateLimiting));
   }
   const rateLimiter = rateLimiting ? createActorRateLimiter(rateLimiting) : undefined;
+  registerLandingRedirectRoute(api, landingRedirect);
   if (auth) registerBetterAuthCompatibilityRoutes(api, auth);
 
   api.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
@@ -275,10 +279,16 @@ export function createAppForEnv(env: ApiEnv) {
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
+  const usernameStore = configuration ? withHyperdriveUsernameProfileStore(configuration) : undefined;
   const usernameProfile = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    store: withHyperdriveUsernameProfileStore(configuration),
+    store: usernameStore,
   } satisfies UsernameProfileRouteDependencies : undefined;
+  const landingRedirect = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    store: usernameStore,
+    webOrigin: configuredWebOrigin(configuration),
+  } satisfies LandingRedirectDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -307,6 +317,7 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeConnect: realtime?.connect,
     pushDevices,
     usernameProfile,
+    landingRedirect,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
@@ -333,6 +344,7 @@ export function createAppForEnv(env: ApiEnv) {
 }
 
 const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
+const unavailableLandingRedirect: LandingRedirectDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,
@@ -357,6 +369,11 @@ const unavailableRelationships: RelationshipsRouteDependencies = {  service: {
   },
   resolveSession: async () => null,
 };
+
+function configuredWebOrigin(configuration: RuntimeConfiguration): string | undefined {
+  const webOrigins = configuration.trustedOrigins.filter((origin) => origin !== configuration.baseURL);
+  return webOrigins.length === 1 ? webOrigins[0] : undefined;
+}
 
 function withHyperdriveUsernameProfileStore(configuration: NonNullable<ReturnType<typeof readBetterAuthRuntimeConfiguration>>) {
   return {
