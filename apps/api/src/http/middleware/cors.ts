@@ -1,7 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "hono";
 
-const allowedMethods = ["GET", "POST", "PATCH", "DELETE"];
+const allowedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const allowedHeaders = ["authorization", "content-type", "idempotency-key"];
 const exposedHeaders = ["idempotent-replayed", "retry-after"];
 const applicationPath = "/api/v1/*";
@@ -45,12 +45,22 @@ export function registerApplicationCors<E extends Env>(app: OpenAPIHono<E>, trus
       return new Response(null, { status: 204, headers });
     }
 
+    // WebSocket handshakes have immutable upgrade responses. They validate Origin in
+    // their route and do not use Fetch CORS headers, so leave them untouched.
+    if (context.req.header("upgrade")?.toLowerCase() === "websocket") return next();
+
     await next();
-    appendVary(context.res.headers, "Origin");
+    // Responses returned by middleware can have immutable headers (for example,
+    // Response.redirect()). Replace the response with an equivalent response whose
+    // copied headers can safely receive the CORS policy.
+    const response = context.res;
+    const headers = new Headers(response.headers);
+    appendVary(headers, "Origin");
     if (trusted) {
-      context.res.headers.set("access-control-allow-origin", origin);
-      context.res.headers.set("access-control-allow-credentials", "true");
-      context.res.headers.set("access-control-expose-headers", exposedHeaders.join(", "));
+      headers.set("access-control-allow-origin", origin);
+      headers.set("access-control-allow-credentials", "true");
+      headers.set("access-control-expose-headers", exposedHeaders.join(", "));
     }
+    context.res = new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   });
 }
