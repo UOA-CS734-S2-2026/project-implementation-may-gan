@@ -1,7 +1,7 @@
-import { FetchError, MediaApi, ProfileApi, ResponseError, type ChangeUsernameResponse, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
+import { FetchError, MediaApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { ChangeUsernameResponse, ProfileDetails, ProfileVisibility };
+export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility };
 
 export type ProfileFailure =
   | { kind: "unauthenticated" | "notFound" | "network" | "unavailable" | "invalid" }
@@ -11,7 +11,15 @@ export type ProfileFailure =
   | { kind: "needsUsername" };
 export type ProfileResult<T> = { ok: true; value: T } | { ok: false; failure: ProfileFailure };
 
-export type ProfileUpdate = { bio?: string; publicName?: string; profileVisibility?: ProfileVisibility };
+export type ProfileUpdate = {
+  bio?: string;
+  publicName?: string;
+  profileVisibility?: ProfileVisibility;
+  /** Null clears it. */
+  mbti?: Mbti | null;
+  whatIDo?: string;
+  listeningTo?: string;
+};
 
 async function toFailure(error: unknown): Promise<ProfileFailure> {
   if (error instanceof ResponseError) {

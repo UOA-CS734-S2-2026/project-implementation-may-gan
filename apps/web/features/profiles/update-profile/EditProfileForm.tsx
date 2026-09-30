@@ -1,17 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import type { ProfileDetails } from "@/features/profiles/shared/profiles.api";
+import type { Mbti, ProfileDetails } from "@/features/profiles/shared/profiles.api";
 import { ProfileApiError, profileSaveMessage } from "@/features/profiles/shared/query-result";
 import { useUpdateProfile } from "./use-update-profile";
 
 const BIO_MAX = 160;
 const NAME_MAX = 80;
+const ABOUT_MAX = 100;
+const MBTI_TYPES: Mbti[] = [
+  "INTJ", "INTP", "INFJ", "INFP", "ISTJ", "ISFJ", "ISTP", "ISFP",
+  "ENTJ", "ENTP", "ENFJ", "ENFP", "ESTJ", "ESFJ", "ESTP", "ESFP",
+];
+const field = "w-full rounded-lg bg-background-secondary px-3 py-2 text-base outline-none focus:ring-2 focus:ring-accent";
 
 /** The public name and bio. A blank name shows the username instead. */
 export function EditProfileForm({ profile }: { profile: ProfileDetails }) {
   const [publicName, setPublicName] = useState(profile.displayName === profile.username ? "" : profile.displayName);
   const [bio, setBio] = useState(profile.bio ?? "");
+  const [mbti, setMbti] = useState<Mbti | "">(profile.mbti ?? "");
+  const [whatIDo, setWhatIDo] = useState(profile.whatIDo ?? "");
+  const [listeningTo, setListeningTo] = useState(profile.listeningTo ?? "");
   const save = useUpdateProfile();
 
   return (
@@ -19,7 +28,13 @@ export function EditProfileForm({ profile }: { profile: ProfileDetails }) {
       className="space-y-4 rounded-2xl bg-background p-5 shadow-card"
       onSubmit={(event) => {
         event.preventDefault();
-        save.mutate({ publicName: publicName.trim(), bio: bio.trim() });
+        save.mutate({
+          publicName: publicName.trim(),
+          bio: bio.trim(),
+          mbti: mbti || null,
+          whatIDo: whatIDo.trim(),
+          listeningTo: listeningTo.trim(),
+        });
       }}
     >
       <h2 className="text-sm font-medium">Profile</h2>
@@ -45,6 +60,23 @@ export function EditProfileForm({ profile }: { profile: ProfileDetails }) {
           rows={3}
           className="w-full resize-none rounded-lg bg-background-secondary px-3 py-2 text-base outline-none focus:ring-2 focus:ring-accent"
         />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block space-y-1">
+          <span className="text-xs text-foreground/60">MBTI</span>
+          <select value={mbti} onChange={(event) => setMbti(event.target.value as Mbti | "")} className={field}>
+            <option value="">—</option>
+            {MBTI_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+          </select>
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-foreground/60">What I do</span>
+          <input value={whatIDo} onChange={(event) => setWhatIDo(event.target.value)} maxLength={ABOUT_MAX} className={field} />
+        </label>
+      </div>
+      <label className="block space-y-1">
+        <span className="text-xs text-foreground/60">What I&apos;m listening to</span>
+        <input value={listeningTo} onChange={(event) => setListeningTo(event.target.value)} maxLength={ABOUT_MAX} className={field} />
       </label>
       <div className="flex items-center justify-end gap-3">
         {save.isError && save.error instanceof ProfileApiError && (

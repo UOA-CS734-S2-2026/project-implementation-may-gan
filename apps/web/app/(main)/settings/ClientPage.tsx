@@ -49,7 +49,7 @@ export default function SettingsPage() {
           <>
             {/* Keyed so the forms start from the saved values after each change. */}
             <AvatarForm profile={profile.data} />
-            <EditProfileForm key={`${profile.data.displayName}|${profile.data.bio ?? ""}`} profile={profile.data} />
+            <EditProfileForm key={[profile.data.displayName, profile.data.bio, profile.data.mbti, profile.data.whatIDo, profile.data.listeningTo].join("|")} profile={profile.data} />
             <ChangeUsernameForm key={profile.data.username} profile={profile.data} />
             <ProfileVisibilityToggle visibility={profile.data.owner.profileVisibility} />
           </>
