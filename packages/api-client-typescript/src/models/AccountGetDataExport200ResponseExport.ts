@@ -34,11 +34,11 @@ export interface AccountGetDataExport200ResponseExport {
     /**
      *
      */
-    readyAt: Date;
+    readyAt: Date | null;
     /**
      *
      */
-    expiresAt: Date;
+    expiresAt: Date | null;
     /**
      *
      */

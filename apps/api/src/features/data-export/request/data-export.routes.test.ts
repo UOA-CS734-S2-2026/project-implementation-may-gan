@@ -16,7 +16,7 @@ function store(overrides: Partial<DataExportStore> = {}): DataExportStore {
   };
 }
 function api(deps: Partial<DataExportRouteDependencies> = {}) {
-  return createApp({ dataExport: { resolveSession: async () => ({ userId: "owner" }), trustedOrigins: ["https://app.dayli.test"], store: store(), ...deps } });
+  return createApp({ dataExport: { resolveSession: async () => ({ userId: "owner" }), trustedOrigins: ["https://app.dayli.test"], requestsEnabled: true, store: store(), ...deps } });
 }
 
 describe("data export routes", () => {

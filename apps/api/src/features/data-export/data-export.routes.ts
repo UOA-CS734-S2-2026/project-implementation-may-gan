@@ -26,6 +26,8 @@ export interface DataExportRouteDependencies {
   store?: DataExportStore;
   withDatabase?<T>(run: (database: DayliDatabase) => Promise<T>): Promise<T>;
   archiveReader?: ExportArchiveReader;
+  /** Missing is deliberately disabled. Existing status, cancellation, and download stay protected. */
+  requestsEnabled?: boolean;
   trustedOrigins?: readonly string[];
 }
 
@@ -55,6 +57,7 @@ export function registerDataExportRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, 
 
   app.openapi(requestRoute, async (context) => {
     if (!originPermitted(context.req.raw, deps.trustedOrigins ?? [])) return apiErrorResponse(context, 403, "FORBIDDEN", "Export is unavailable.");
+    if (deps.requestsEnabled !== true) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export requests are temporarily unavailable.");
     const actor = context.get("actor");
     if (!actor?.userId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.");
     try {

@@ -471,6 +471,27 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await expect(app`update public.operator_cases set status = 'closed' where id = ${caseId}`).rejects.toMatchObject({ code: "42501" });
   });
 
+  it("claims and fences export publication through the lifecycle worker procedures", async () => {
+    const userId = await createUser("export-worker");
+    const exportId = `export-${crypto.randomUUID()}`;
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`;
+    await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status) values (${exportId}, ${userId}, 0, 'requested')`;
+    await expect(app`select * from public.dayli_export_claim(${'a'.repeat(32)}, 300)`).rejects.toMatchObject({ code: "42501" });
+    const claimed = await lifecycleWorker`select * from public.dayli_export_claim(${'a'.repeat(32)}, 300)`;
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]?.id).toBe(exportId);
+    await expect(lifecycleWorker`select * from public.data_export_requests`).rejects.toMatchObject({ code: "42501" });
+    await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'wrong'.repeat(8)}, 0, 'private/forged.zip', now())`).resolves.toEqual([{ dayli_export_publish: false }]);
+    await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'a'.repeat(32)}, 0, 'private/export.zip', now())`).resolves.toEqual([{ dayli_export_publish: true }]);
+    const ready = await migrator`select status, archive_object_key, expires_at = ready_at + interval '24 hours' as exact_expiry from public.data_export_requests where id = ${exportId}`;
+    expect(ready[0]).toEqual({ status: "ready", archive_object_key: "private/export.zip", exact_expiry: true });
+    await expect(lifecycleWorker`select public.dayli_export_cancel_for_purge(${userId})`).resolves.toEqual([{ dayli_export_cancel_for_purge: 1 }]);
+    const expired = await migrator`select status, archive_object_key, archive_cleanup_task_id from public.data_export_requests where id = ${exportId}`;
+    expect(expired[0]?.status).toBe("expired");
+    expect(expired[0]?.archive_object_key).toBeNull();
+    expect(expired[0]?.archive_cleanup_task_id).toBe(`export-cleanup-${exportId}`);
+  });
+
   it("denies app and lifecycle_worker direct physical purge access", async () => {
     const userId = await createUser("privileges");
 

@@ -98,6 +98,18 @@ async function normalizeDartDateOnlyModel(path: string, field: string): Promise<
   await writeFile(path, normalized);
 }
 
+async function normalizeNullableExportDates(path: string): Promise<void> {
+  const source = await readFile(path, "utf8");
+  const normalized = source
+    .replace(/(readyAt|expiresAt): Date;/g, "$1: Date | null;")
+    .replace(/final DateTime (readyAt|expiresAt);/g, "final DateTime? $1;")
+    .replace(/json\[r'(readyAt|expiresAt)'\] = this\.\1\.toUtc\(\)\.toIso8601String\(\);/g, "json[r'$1'] = this.$1 == null ? null : this.$1!.toUtc().toIso8601String();")
+    .replace(/(readyAt|expiresAt): mapDateTime\(json, r'\1', r''\)!/g, "$1: mapDateTime(json, r'$1', r'' )")
+    .replace(/\s*assert\(json\[r'(?:readyAt|expiresAt)'\] != null,[^;]+\);/g, "");
+  if (normalized === source) throw new Error(`Could not normalize nullable export dates in ${path}`);
+  await writeFile(path, normalized);
+}
+
 async function finalizeGeneratedClients() {
   const dartPubspecPath = "packages/api-client-dart/pubspec.yaml";
   const dartPubspec = await readFile(dartPubspecPath, "utf8");
@@ -154,6 +166,10 @@ async function finalizeGeneratedClients() {
       "packages/api-client-dart/lib/model/test_response.dart",
       "aucklandDate",
     ),
+    normalizeNullableExportDates("packages/api-client-typescript/src/models/AccountRequestDataExport202Response.ts"),
+    normalizeNullableExportDates("packages/api-client-typescript/src/models/AccountGetDataExport200ResponseExport.ts"),
+    normalizeNullableExportDates("packages/api-client-dart/lib/model/account_request_data_export202_response.dart"),
+    normalizeNullableExportDates("packages/api-client-dart/lib/model/account_get_data_export200_response_export.dart"),
   ]);
 
   await Promise.all([

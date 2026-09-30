@@ -27,9 +27,9 @@ class AccountRequestDataExport202Response {
 
   final DateTime requestedAt;
 
-  final DateTime readyAt;
+  final DateTime? readyAt;
 
-  final DateTime expiresAt;
+  final DateTime? expiresAt;
 
   final bool downloadable;
 
@@ -63,8 +63,11 @@ class AccountRequestDataExport202Response {
     json[r'id'] = this.id;
     json[r'status'] = this.status;
     json[r'requestedAt'] = this.requestedAt.toUtc().toIso8601String();
-    json[r'readyAt'] = this.readyAt.toUtc().toIso8601String();
-    json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
+    json[r'readyAt'] =
+        this.readyAt == null ? null : this.readyAt!.toUtc().toIso8601String();
+    json[r'expiresAt'] = this.expiresAt == null
+        ? null
+        : this.expiresAt!.toUtc().toIso8601String();
     json[r'downloadable'] = this.downloadable;
     return json;
   }
@@ -113,12 +116,8 @@ class AccountRequestDataExport202Response {
             'Required key "AccountRequestDataExport202Response[requestedAt]" has a null value in JSON.');
         assert(json.containsKey(r'readyAt'),
             'Required key "AccountRequestDataExport202Response[readyAt]" is missing from JSON.');
-        assert(json[r'readyAt'] != null,
-            'Required key "AccountRequestDataExport202Response[readyAt]" has a null value in JSON.');
         assert(json.containsKey(r'expiresAt'),
             'Required key "AccountRequestDataExport202Response[expiresAt]" is missing from JSON.');
-        assert(json[r'expiresAt'] != null,
-            'Required key "AccountRequestDataExport202Response[expiresAt]" has a null value in JSON.');
         assert(json.containsKey(r'downloadable'),
             'Required key "AccountRequestDataExport202Response[downloadable]" is missing from JSON.');
         assert(json[r'downloadable'] != null,
@@ -131,8 +130,8 @@ class AccountRequestDataExport202Response {
         status: AccountRequestDataExport202ResponseStatusEnum.fromJson(
             json[r'status'])!,
         requestedAt: mapDateTime(json, r'requestedAt', r'')!,
-        readyAt: mapDateTime(json, r'readyAt', r'')!,
-        expiresAt: mapDateTime(json, r'expiresAt', r'')!,
+        readyAt: mapDateTime(json, r'readyAt', r''),
+        expiresAt: mapDateTime(json, r'expiresAt', r''),
         downloadable: mapValueOfType<bool>(json, r'downloadable')!,
       );
     }

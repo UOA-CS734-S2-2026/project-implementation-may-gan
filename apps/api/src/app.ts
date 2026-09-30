@@ -303,10 +303,12 @@ export function createAppForEnv(env: ApiEnv) {
     trustedOrigins: configuration.trustedOrigins,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies LegalRouteDependencies : undefined;
-  const dataExport = configuration && r2Runtime ? {
+  const dataExport = configuration ? {
     resolveSession: createSessionResolver(configuration),
     trustedOrigins: configuration.trustedOrigins,
-    archiveReader: createR2ExportArchiveReader(createR2Reader(r2Runtime)),
+    // This exact opt-in is intentionally separate from ordinary auth and R2 configuration.
+    requestsEnabled: env.DATA_EXPORT_REQUESTS_ENABLED === "true" && Boolean(r2Runtime),
+    archiveReader: r2Runtime ? createR2ExportArchiveReader(createR2Reader(r2Runtime)) : undefined,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies DataExportRouteDependencies : undefined;
   const relationships = configuration ? {
