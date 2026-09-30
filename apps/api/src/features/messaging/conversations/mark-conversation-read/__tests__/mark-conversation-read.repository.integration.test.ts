@@ -5,15 +5,16 @@ import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresMarkConversationReadRepository } from "../mark-conversation-read.repository";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
-if (!connectionString) throw new Error("MESSAGING_TEST_DATABASE_URL is required for mark-conversation-read integration tests.");
-const target = new URL(connectionString);
-if (target.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+const enabled = Boolean(connectionString);
+const target = connectionString ? new URL(connectionString) : undefined;
+if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
+const suite = enabled ? describe : describe.skip;
 
-describe("mark conversation read Postgres repository", () => {
-  const database = createDayliDatabase(connectionString);
-  const concurrentDatabase = createDayliDatabase(connectionString);
+suite("mark conversation read Postgres repository", () => {
+  const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
+  const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 14 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
   const { direct, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresMarkConversationReadRepository(database.db);
