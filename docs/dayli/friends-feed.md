@@ -2,6 +2,8 @@
 
 `GET /api/v1/feed` returns one page of yesterday's posts from the authenticated user's friends: the Auckland day released at the most recent midnight, as in the original web app. Earlier days stay on each friend's profile. The web home page and the Flutter home screen both show it.
 
+Each page carries its `feedDate`. A cursor from a page loaded before the most recent midnight is refused with `409` (`details.reason = "feedDayChanged"`) rather than returning an empty page, and both clients then start again from the new day's first page. Web also refetches from the first page when the window regains focus, and Flutter reloads the home screen when the app returns to the foreground.
+
 ## Who sees what
 
 A post appears only when all of these hold:

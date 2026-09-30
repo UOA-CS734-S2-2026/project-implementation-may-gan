@@ -175,4 +175,66 @@ void main() {
     expect(find.byType(VideoPlayer), findsNothing);
     expect(find.byType(PrivateVideo), findsNothing);
   });
+
+  testWidgets('starts again from the new day when more is loaded after '
+      'midnight', (tester) async {
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(
+            items: [feedPost('1', answer: 'Baked bread.')],
+            nextCursor: 'c1',
+            hasMore: true,
+          ),
+        ),
+        const ApiError(Expired()),
+        ApiSuccess(
+          FeedPage(
+            items: [feedPost('2', answer: 'A new day.')],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]),
+    );
+    await signIn(tester, harness);
+
+    await tester.ensureVisible(find.byKey(const Key('home.feed.more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home.feed.more')));
+    await tester.pumpAndSettle();
+
+    expect(harness.feed.cursors, [null, 'c1', null]);
+    expect(find.text('A new day.'), findsOneWidget);
+    expect(find.text('Baked bread.'), findsNothing);
+    expect(find.byKey(const Key('home.feed.moreError')), findsNothing);
+  });
+
+  testWidgets('reloads the feed when the app comes back', (tester) async {
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(
+            items: [feedPost('1', answer: 'Baked bread.')],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+        ApiSuccess(
+          FeedPage(
+            items: [feedPost('2', answer: 'A new day.')],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]),
+    );
+    await signIn(tester, harness);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('A new day.'), findsOneWidget);
+  });
 }
