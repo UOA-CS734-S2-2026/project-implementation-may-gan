@@ -113,6 +113,9 @@ fi
 
 echo 'Running PostgreSQL migration and integration checks'
 export MIGRATION_TARGET=local
+# Candidate migration history is compared with this reviewed, immutable main
+# commit. A moving ref or caller override could conceal a rewritten migration.
+export MIGRATION_BASE_REF="d6704a17403f31c09e78cb2a04d148f33bae8eb3"
 export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
@@ -130,6 +133,15 @@ export DATA_EXPORT_TEST_DATABASE_URL="$(migrator_url "$export_database")"
 export DATA_EXPORT_TEST_APP_DATABASE_URL="$(app_url "$export_database")"
 export DATA_EXPORT_TEST_WORKER_DATABASE_URL="postgresql://lifecycle_worker:lifecycle_worker@localhost:${postgres_port}/${export_database}"
 export MIGRATION_LINEAGE_TEST_DATABASE_URL="$(migrator_url "$migration_lineage_database")"
+# Lifecycle request storage tests need a stable dedicated auth-shaped fixture,
+# while the Better Auth lifecycle flow needs the separate lifecycle fixture.
+# Keep both explicit: these guards deliberately fail if a verifier omits them.
+export REQUIRE_LIFECYCLE_REQUEST_TEST=1
+export LIFECYCLE_REQUEST_TEST_DATABASE_URL="$AUTH_TEST_DATABASE_URL"
+export LIFECYCLE_REQUEST_TEST_APP_DATABASE_URL="$AUTH_TEST_APP_DATABASE_URL"
+export REQUIRE_LIFECYCLE_AUTH_TEST=1
+export LIFECYCLE_AUTH_TEST_DATABASE_URL="$LIFECYCLE_TEST_DATABASE_URL"
+export LIFECYCLE_AUTH_TEST_APP_DATABASE_URL="$LIFECYCLE_TEST_APP_DATABASE_URL"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
 pnpm db:check
