@@ -126,7 +126,7 @@ suite("create direct conversation Postgres repository", () => {
     const reference = await database.db.select({
       lowId: sql<string>`least(${actorId}, ${recipientId})`,
       highId: sql<string>`greatest(${actorId}, ${recipientId})`,
-    }).from(conversations).where(eq(conversations.id, created.conversation.id));
+    }).from(sql`(values (1)) as pair_source`);
     const [stored] = await database.db.select({
       lowId: conversations.userLowId,
       highId: conversations.userHighId,
