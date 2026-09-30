@@ -20,6 +20,17 @@ class NotFound extends ApiFailure {
   const NotFound();
 }
 
+/// Too many requests; wait before trying again.
+class RateLimited extends ApiFailure {
+  const RateLimited();
+}
+
+/// Something short-lived, such as a media reservation or its upload URL,
+/// ran out before it was used. Start again rather than retrying.
+class Expired extends ApiFailure {
+  const Expired();
+}
+
 class InvalidRequest extends ApiFailure {
   const InvalidRequest(this.message);
 
