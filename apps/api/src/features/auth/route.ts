@@ -13,7 +13,8 @@ import {
   type SocialLinkConfirmationStore,
 } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
-import { sql } from "@dayli/db";
+import { schema } from "@dayli/db";
+import { eq } from "drizzle-orm";
 
 const corsMethods = ["GET", "POST"];
 const corsHeaders = ["authorization", "content-type"];
@@ -224,8 +225,11 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
         : undefined;
       let sessionIds: string[] = [];
       if (revoke) {
-        const stored = await database.execute(sql`select id from public.session where user_id = ${revoke.userId}`);
-        sessionIds = [...stored as Iterable<{ id: unknown }>].map((row) => String(row.id));
+        const stored = await database
+          .select({ id: schema.session.id })
+          .from(schema.session)
+          .where(eq(schema.session.userId, revoke.userId));
+        sessionIds = stored.map((row) => row.id);
       }
       const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
       if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
