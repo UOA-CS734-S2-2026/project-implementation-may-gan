@@ -1,6 +1,0 @@
-reason: The migration backfills and validates participant references atomically while preserving current messaging rows and direct-pair uniqueness.
-affected_data_and_clients: Existing messaging identities move from user foreign keys to profile-free participant references. Active DTO identifiers remain the same; deleted participants project a fixed label.
-rollout_sequence: Apply only through the protected migration runner, verify all backfilled references, then deploy the matching messaging repository changes before any account deletion procedure exists.
-backup_checkpoint: Confirm the approved target recovery posture before a hosted migration and test the migration only on disposable local PostgreSQL in this slice.
-forward_fix_plan: Correct any projection or index issue with a new forward-only migration. Do not restore cascading user foreign keys.
-reviewer: Database, messaging, and privacy reviewers must inspect the backfill, deletion trigger, and retention boundary before hosted rollout.
