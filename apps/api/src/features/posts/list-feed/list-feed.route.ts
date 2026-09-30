@@ -24,8 +24,8 @@ const listFeedRoute = createRoute({
   path: "/api/v1/feed",
   tags: ["Posts"],
   operationId: "posts.listFeed",
-  summary: "List released posts from friends",
-  description: "Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
+  summary: "List yesterday's posts from friends",
+  description: "Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
   security,
   request: { query: feedQuerySchema },
   responses: {

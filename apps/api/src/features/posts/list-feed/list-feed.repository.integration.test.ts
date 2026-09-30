@@ -29,6 +29,8 @@ function requireLocalTestUrl(value: string): string {
     viewer: id("viewer"),
     friendA: id("friend-a"),
     friendB: id("friend-b"),
+    friendC: id("friend-c"),
+    soloFriend: id("solo-friend"),
     stranger: id("stranger"),
     ended: id("ended"),
     blocked: id("blocked"),
@@ -77,6 +79,8 @@ function requireLocalTestUrl(value: string): string {
 
     await befriend(users.viewer, users.friendA);
     await befriend(users.viewer, users.friendB);
+    await befriend(users.viewer, users.friendC);
+    await befriend(users.viewer, users.soloFriend);
     await befriend(users.viewer, users.blocked);
     await befriend(users.viewer, users.blocker);
     await befriend(users.viewer, users.noUsername);
@@ -86,15 +90,16 @@ function requireLocalTestUrl(value: string): string {
       { blockerId: users.blocker, blockedId: users.viewer, blockedAt: now },
     ]);
 
-    // Visible: friends posts released before the friendship's state changed are
-    // still part of the shared history.
-    await insertPost("a-20", users.friendA, "2026-09-20");
-    await insertPost("a-22", users.friendA, "2026-09-22");
-    await insertPost("b-22", users.friendB, "2026-09-22");
-    await insertPost("b-24", users.friendB, "2026-09-24");
-    // Hidden.
-    await insertPost("a-21-solo", users.friendA, "2026-09-21", { audience: "solo" });
-    await insertPost("a-26-unreleased", users.friendA, "2026-09-26", { released: false });
+    // `now` is 26 September in Auckland, so the feed is 25 September's posts.
+    await insertPost("a-25", users.friendA, "2026-09-25");
+    await insertPost("b-25", users.friendB, "2026-09-25");
+    await insertPost("c-25", users.friendC, "2026-09-25");
+    // Hidden: older days stay on profiles, today is unreleased, and the rest
+    // are never the viewer's to see.
+    await insertPost("a-24", users.friendA, "2026-09-24");
+    await insertPost("c-20", users.friendC, "2026-09-20");
+    await insertPost("b-26-unreleased", users.friendB, "2026-09-26", { released: false });
+    await insertPost("solo-25", users.soloFriend, "2026-09-25", { audience: "solo" });
     await insertPost("viewer-25", users.viewer, "2026-09-25");
     await insertPost("stranger-25", users.stranger, "2026-09-25");
     await insertPost("ended-25", users.ended, "2026-09-25");
@@ -104,12 +109,12 @@ function requireLocalTestUrl(value: string): string {
 
     await migrator.db.insert(schema.postRevisions).values({
       id: id("rev-1"),
-      postId: id("b-24"),
+      postId: id("b-25"),
       revisionNumber: 1,
       previousReflectiveAnswer: "Before the edit",
       previousRating: 6,
       previousAudience: "friends",
-      previousPromptId: "prompt-09-24",
+      previousPromptId: "prompt-09-25",
       previousAttachmentRefs: [],
     });
   });
@@ -129,29 +134,29 @@ function requireLocalTestUrl(value: string): string {
     }
   });
 
-  it("lists only released friends posts by active, unblocked friends", async () => {
+  it("lists only yesterday's friends posts by active, unblocked friends", async () => {
     const page = await feed().listFeed(users.viewer, now, 20);
 
-    expect(page.items.map((post) => post.id)).toEqual([id("b-24"), id("b-22"), id("a-22"), id("a-20")]);
+    expect(page.items.map((post) => post.id)).toEqual([id("c-25"), id("b-25"), id("a-25")]);
     expect(page).toMatchObject({ hasMore: false, nextCursor: null });
   });
 
   it("projects the author, prompt, and edited marker", async () => {
     const page = await feed().listFeed(users.viewer, now, 20);
-    const [edited, , friendA] = page.items;
+    const [, edited, friendA] = page.items;
 
-    expect(edited).toMatchObject({ id: id("b-24"), edited: true, audience: "friends" });
+    expect(edited).toMatchObject({ id: id("b-25"), edited: true, audience: "friends" });
     expect(friendA).toEqual({
-      id: id("a-22"),
+      id: id("a-25"),
       author: { id: users.friendA, username: `f${run}frienda`.slice(0, 30), displayName: "Friend A" },
-      localDate: "2026-09-22",
-      prompt: { id: "prompt-09-22", text: expect.any(String) },
-      reflectiveAnswer: "Answer a-22",
+      localDate: "2026-09-25",
+      prompt: { id: "prompt-09-25", text: expect.any(String) },
+      reflectiveAnswer: "Answer a-25",
       caption: null,
       rating: 7,
       audience: "friends",
-      acceptedAt: "2026-09-22T03:00:00.000Z",
-      releasedAt: "2026-09-22T12:00:00.000Z",
+      acceptedAt: "2026-09-25T03:00:00.000Z",
+      releasedAt: "2026-09-25T12:00:00.000Z",
       edited: false,
       media: [],
     });
@@ -159,18 +164,20 @@ function requireLocalTestUrl(value: string): string {
 
   it("pages deterministically without repeating or skipping posts", async () => {
     const first = await feed().listFeed(users.viewer, now, 2);
-    expect(first.items.map((post) => post.id)).toEqual([id("b-24"), id("b-22")]);
+    expect(first.items.map((post) => post.id)).toEqual([id("c-25"), id("b-25")]);
     expect(first.hasMore).toBe(true);
 
     const second = await feed().listFeed(users.viewer, now, 2, first.nextCursor!);
-    expect(second.items.map((post) => post.id)).toEqual([id("a-22"), id("a-20")]);
+    expect(second.items.map((post) => post.id)).toEqual([id("a-25")]);
     expect(second).toMatchObject({ hasMore: false, nextCursor: null });
   });
 
-  it("shows a post once its release time passes", async () => {
-    const afterMidnight = await feed().listFeed(users.viewer, new Date("2026-09-26T12:00:00.000Z"), 1);
+  it("moves on to the next day at Auckland midnight", async () => {
+    const justBefore = await feed().listFeed(users.viewer, new Date("2026-09-26T10:59:59.999Z"), 20);
+    expect(justBefore.items.map((post) => post.id)).toEqual([id("c-25"), id("b-25"), id("a-25")]);
 
-    expect(afterMidnight.items.map((post) => post.id)).toEqual([id("a-26-unreleased")]);
+    const afterMidnight = await feed().listFeed(users.viewer, new Date("2026-09-26T12:00:00.000Z"), 20);
+    expect(afterMidnight.items.map((post) => post.id)).toEqual([id("b-26-unreleased")]);
   });
 
   it("never shows a friend's feed to the stranger", async () => {
@@ -181,7 +188,7 @@ function requireLocalTestUrl(value: string): string {
 
   it("rejects an unreadable cursor", async () => {
     await expect(feed().listFeed(users.viewer, now, 20, "not-a-cursor")).rejects.toBeInstanceOf(InvalidFeedCursorError);
-    const impossibleDate = btoa(JSON.stringify(["2026-99-99", id("b-24")])).replaceAll("=", "");
+    const impossibleDate = btoa(JSON.stringify(["2026-99-99", id("b-25")])).replaceAll("=", "");
     await expect(feed().listFeed(users.viewer, now, 20, impossibleDate)).rejects.toBeInstanceOf(InvalidFeedCursorError);
   });
 });
