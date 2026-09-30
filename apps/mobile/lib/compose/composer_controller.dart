@@ -20,7 +20,62 @@ abstract final class DailyPostLimits {
 
   /// WDCC's media rule: up to three photos, or one video.
   static const photosMax = 3;
+
+  /// Per attachment, after compression. Matches the API's
+  /// `MAX_ATTACHMENT_BYTES`, which allows exactly this size.
+  static const attachmentBytesMax = 10 * 1024 * 1024;
+
+  /// Per post. Enforced here only: the API can't check it until posts link
+  /// their attachments.
+  static const postBytesMax = 25 * 1024 * 1024;
+
+  /// Matches the API's `MAX_VIDEO_DURATION_SECONDS`, which allows exactly
+  /// this length.
+  static const videoDurationMax = Duration(seconds: 15);
 }
+
+/// Why a picked attachment can't be added to the draft.
+enum MediaLimitViolation {
+  empty('That file is empty. Choose another.'),
+  attachmentTooLarge('Each photo or video must be 10 MB or smaller.'),
+  postTooLarge('Photos in one dayli must add up to 25 MB or less.'),
+  videoTooLong('Videos can be up to 15 seconds long.');
+
+  const MediaLimitViolation(this.message);
+
+  final String message;
+}
+
+/// Checks one compressed attachment against the per-file limits and, with
+/// [otherBytes] (the sizes already in the draft), the per-post total.
+/// [videoDuration] is required for videos and ignored for photos.
+MediaLimitViolation? checkAttachmentLimits({
+  required String mediaType,
+  required int byteSize,
+  Iterable<int> otherBytes = const [],
+  Duration? videoDuration,
+}) {
+  if (byteSize <= 0) return MediaLimitViolation.empty;
+  if (byteSize > DailyPostLimits.attachmentBytesMax) {
+    return MediaLimitViolation.attachmentTooLarge;
+  }
+  if (mediaType == 'video' &&
+      (videoDuration == null ||
+          videoDuration > DailyPostLimits.videoDurationMax)) {
+    return MediaLimitViolation.videoTooLong;
+  }
+  final total = otherBytes.fold(byteSize, (sum, bytes) => sum + bytes);
+  if (total > DailyPostLimits.postBytesMax) {
+    return MediaLimitViolation.postTooLarge;
+  }
+  return null;
+}
+
+/// True when the draft can take another attachment: fewer than three photos
+/// and no video. Removing every photo lets the first slot take a video again.
+bool canAddAttachment(List<DraftAttachment> attachments) =>
+    attachments.length < DailyPostLimits.photosMax &&
+    !attachments.any((attachment) => attachment.mediaType == 'video');
 
 int codePointLength(String value) => value.runes.length;
 
