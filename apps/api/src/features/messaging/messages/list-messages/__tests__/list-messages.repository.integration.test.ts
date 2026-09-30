@@ -136,5 +136,18 @@ suite("list messages Postgres repository", () => {
 
     await database.client`update public.messages set sequence = 9007199254740993 where id = ${fourth.message.id}`;
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, undefined, 2)).rejects.toThrow(RangeError);
+    await database.client`update public.messages set sequence = 4 where id = ${fourth.message.id}`;
+  });
+
+  it("rejects overflowing native message versions instead of rounding list DTOs", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflowing list version",
+    });
+    await database.client`update public.messages set version = 9007199254740993 where id = ${created.message.id}`;
+
+    await expect(repository.list(users[0]!, created.conversation.id, undefined, undefined, 10))
+      .rejects.toThrow("Database message version must be a positive safe integer.");
   });
 });

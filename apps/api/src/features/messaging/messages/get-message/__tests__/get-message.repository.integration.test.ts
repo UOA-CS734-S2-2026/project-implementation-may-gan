@@ -63,6 +63,7 @@ suite("get message Postgres repository", () => {
     expect(messageForSender).toMatchObject({
       id: reply.message.id,
       sequence: "9007199254740991",
+      version: 1,
       replyToMessageId: initial.message.id,
       replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
     });
@@ -96,5 +97,30 @@ suite("get message Postgres repository", () => {
 
     await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
     await expect(repository.get(users[0]!, initial.conversation.id, reply.message.id)).rejects.toThrow(RangeError);
+  });
+
+  it("rejects overflowing native message and reply parent versions", async () => {
+    const directMessage = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflowing direct version",
+    });
+    await database.client`update public.messages set version = 9007199254740993 where id = ${directMessage.message.id}`;
+    await expect(repository.get(users[0]!, directMessage.conversation.id, directMessage.message.id))
+      .rejects.toThrow("Database message version must be a positive safe integer.");
+
+    const parent = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflowing reply parent version",
+    });
+    const reply = await send.send(users[1]!, parent.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "reply to overflowing parent",
+      replyToMessageId: parent.message.id,
+    });
+    await database.client`update public.messages set version = 9007199254740993 where id = ${parent.message.id}`;
+    await expect(repository.get(users[1]!, parent.conversation.id, reply.message.id))
+      .rejects.toThrow("Database message version must be a positive safe integer.");
   });
 });

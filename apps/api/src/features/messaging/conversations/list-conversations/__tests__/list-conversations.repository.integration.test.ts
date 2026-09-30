@@ -100,6 +100,7 @@ suite("list conversations Postgres repository", () => {
         latestMessage: expect.objectContaining({
           id: reply.message.id,
           sequence,
+          version: 1,
           senderId: users[1],
           text: "latest active message",
         }),
@@ -135,5 +136,17 @@ suite("list conversations Postgres repository", () => {
         capabilities: { canSend: false, canResolveRequest: false },
       })]),
     }));
+  });
+
+  it("rejects overflowing legacy latest-message versions", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[2]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "overflowing conversation latest version",
+    });
+    await database.client`update public.messages set version = 9007199254740993 where id = ${created.message.id}`;
+
+    await expect(repository.list(users[0]!, "inbox", undefined, 10))
+      .rejects.toThrow("Database message version must be a positive safe integer.");
   });
 });

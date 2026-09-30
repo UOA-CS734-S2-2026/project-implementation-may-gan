@@ -6,6 +6,10 @@ function isSafeNonnegativeInteger(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 0;
 }
 
+function isSafePositiveInteger(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
 /** Parses a digit-only user cursor without losing sequence precision. */
 export function parseSequenceCursor(cursor: string): number {
   if (!/^\d+$/.test(cursor)) throw new MessagingError("VALIDATION_FAILED");
@@ -23,6 +27,27 @@ export function requireSafeSequenceBigInt(sequence: number): bigint {
   }
 
   return BigInt(sequence);
+}
+
+/** Converts a database message version to its public number representation without rounding. */
+export function requireSafeMessageVersion(version: number | string): number {
+  if (typeof version === "number") {
+    if (!isSafePositiveInteger(version)) {
+      throw new RangeError("Database message version must be a positive safe integer.");
+    }
+    return version;
+  }
+
+  if (!/^[1-9]\d*$/.test(version)) {
+    throw new RangeError("Database message version must be a positive safe integer.");
+  }
+
+  const parsed = BigInt(version);
+  if (parsed > maximumSafeSequence) {
+    throw new RangeError("Database message version must be a positive safe integer.");
+  }
+
+  return Number(parsed);
 }
 
 /** Converts an internal sequence to a number-mode Drizzle value without rounding. */

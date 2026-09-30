@@ -1,6 +1,6 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
-import { requireSafeSequenceBigInt } from "./safe-sequence";
+import { requireSafeMessageVersion, requireSafeSequenceBigInt } from "./safe-sequence";
 import type { MessageDto, StoredMessage } from "./messaging-types";
 
 type Queryable = Pick<DayliDatabase, "select">;
@@ -43,11 +43,21 @@ type LegacyMessageProjectionRow = Omit<MessageProjectionRow, "sequence" | "versi
 };
 
 function storedMessage(row: MessageProjectionRow): StoredMessage {
-  return { ...row, sequence: requireSafeSequenceBigInt(row.sequence), reactions: [] };
+  return {
+    ...row,
+    sequence: requireSafeSequenceBigInt(row.sequence),
+    version: requireSafeMessageVersion(row.version),
+    reactions: [],
+  };
 }
 
 function storedLegacyMessage(row: LegacyMessageProjectionRow): StoredMessage {
-  return { ...row, sequence: BigInt(row.sequence), version: Number(row.version), reactions: [] };
+  return {
+    ...row,
+    sequence: BigInt(row.sequence),
+    version: requireSafeMessageVersion(row.version),
+    reactions: [],
+  };
 }
 
 /**
