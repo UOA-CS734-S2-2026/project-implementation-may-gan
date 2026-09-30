@@ -15,7 +15,7 @@ type SearchRow = {
 const searchWindowMilliseconds = 60_000;
 const maxSearchesPerWindow = 30;
 
-type SearchDatabase = Pick<DayliDatabase, "select" | "insert" | "update">;
+type SearchDatabase = Pick<DayliDatabase, "insert" | "update">;
 
 function cursorValue(cursor: string | undefined): { usernameKey: string; id: string } | undefined {
   if (!cursor) return undefined;
@@ -55,11 +55,12 @@ function card(row: SearchRow): RelationshipUserCard {
  * cannot evade discovery limits with concurrent requests.
  */
 export async function consumeUsernameSearchQuota(queryable: RelationshipQueryable, actorId: string, now: Date): Promise<void> {
-  // PostgreSQL advisory locks do not have a Drizzle builder equivalent.
-  await queryable.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"relationship-search:" + actorId}, 734))`);
-  // The shared transaction interface predates builder writes; callers provide DayliDatabase transactions.
+  await queryable
+    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${"relationship-search:" + actorId}, 734))` })
+    .from(sql`(values (1)) as lock_source`);
+  // Callers provide DayliDatabase transactions for quota writes.
   const database = queryable as unknown as SearchDatabase;
-  const [existing] = await database
+  const [existing] = await queryable
     .select({
       window_started_at: schema.relationshipSearchQuota.windowStartedAt,
       request_count: schema.relationshipSearchQuota.requestCount,
@@ -96,8 +97,6 @@ export async function consumeUsernameSearchQuota(queryable: RelationshipQueryabl
 
 /** Private profiles are discoverable here only as a minimal username/display-name card. */
 export async function searchUsernameRows(queryable: RelationshipQueryable, actorId: string, query: string, limit: number, cursor?: string): Promise<RelationshipUserPage> {
-  // The shared transaction interface predates builder reads; callers provide DayliDatabase transactions.
-  const database = queryable as unknown as SearchDatabase;
   const { friendRequests, friendships, relationshipBlocks, user } = schema;
   const mine = alias(friendships, "mine");
   const reciprocal = alias(friendships, "reciprocal");
@@ -107,7 +106,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
   const relationship = sql<RelationshipUserCard["relationship"]>`
     case
       when ${exists(
-        database
+        queryable
           .select({ one: sql`1` })
           .from(mine)
           .innerJoin(reciprocal, and(
@@ -122,14 +121,14 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
           )),
       )} then 'friends'
       when ${exists(
-        database.select({ one: sql`1` }).from(friendRequests).where(and(
+        queryable.select({ one: sql`1` }).from(friendRequests).where(and(
           eq(friendRequests.status, "pending"),
           eq(friendRequests.senderId, actorId),
           eq(friendRequests.recipientId, candidate.id),
         )),
       )} then 'outgoing_pending'
       when ${exists(
-        database.select({ one: sql`1` }).from(friendRequests).where(and(
+        queryable.select({ one: sql`1` }).from(friendRequests).where(and(
           eq(friendRequests.status, "pending"),
           eq(friendRequests.senderId, candidate.id),
           eq(friendRequests.recipientId, actorId),
@@ -138,7 +137,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
       else 'none'
     end
   `;
-  const rows: SearchRow[] = await database
+  const rows: SearchRow[] = await queryable
     .select({
       id: candidate.id,
       username: candidate.username,
@@ -153,7 +152,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
       sql`lower(${candidate.username}) like lower(${prefix}) || '%' escape E'\\\\'`,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
       notExists(
-        database.select({ one: sql`1` }).from(relationshipBlocks).where(and(
+        queryable.select({ one: sql`1` }).from(relationshipBlocks).where(and(
           isNull(relationshipBlocks.unblockedAt),
           or(
             and(eq(relationshipBlocks.blockerId, actorId), eq(relationshipBlocks.blockedId, candidate.id)),

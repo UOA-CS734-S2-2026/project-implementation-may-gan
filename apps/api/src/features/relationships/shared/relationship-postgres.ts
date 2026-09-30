@@ -1,7 +1,7 @@
 import { sql, type DayliDatabase } from "@dayli/db";
 import type { StoredRelationshipSnapshot } from "./relationship-service";
 
-export type RelationshipQueryable = Pick<DayliDatabase, "execute">;
+export type RelationshipQueryable = Pick<DayliDatabase, "execute" | "select">;
 export type RelationshipRow = Record<string, unknown>;
 
 export function relationshipRows<T extends RelationshipRow>(value: unknown): T[] {

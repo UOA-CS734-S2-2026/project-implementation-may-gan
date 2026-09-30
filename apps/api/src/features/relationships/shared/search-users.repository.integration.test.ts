@@ -1,7 +1,7 @@
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { createDayliDatabase, schema } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { searchUsernameRows } from "./search-users.repository";
+import { consumeUsernameSearchQuota, searchUsernameRows } from "./search-users.repository";
 
 const connectionString = process.env.RELATIONSHIP_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
@@ -17,6 +17,7 @@ function cursor(usernameKey: string, id: string): string {
 
 suite("username search Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/search_users_tests");
+  const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/search_users_tests");
   const run = crypto.randomUUID().replaceAll("-", "").slice(0, 10);
   const id = (name: string) => `search-users-${run}-${name}`;
   const users = {
@@ -25,6 +26,8 @@ suite("username search Postgres repository", () => {
     privateUser: id("privacy-private"),
     blockedUser: id("privacy-blocked"),
     bannedUser: id("privacy-banned"),
+    quotaCommit: id("quota-commit"),
+    quotaRollback: id("quota-rollback"),
   };
   const handles = {
     cursor: `Tie_${run}`,
@@ -38,6 +41,8 @@ suite("username search Postgres repository", () => {
       { id: users.privateUser, name: "Private user", email: `${users.privateUser}@example.test`, username: `${handles.privacy}_private`, displayUsername: "Private Card", profileVisibility: "private" },
       { id: users.blockedUser, name: "Blocked user", email: `${users.blockedUser}@example.test`, username: `${handles.privacy}_blocked` },
       { id: users.bannedUser, name: "Banned user", email: `${users.bannedUser}@example.test`, username: `${handles.privacy}_banned`, banned: true },
+      { id: users.quotaCommit, name: "Quota commit", email: `${users.quotaCommit}@example.test`, username: `quota_commit_${run}` },
+      { id: users.quotaRollback, name: "Quota rollback", email: `${users.quotaRollback}@example.test`, username: `quota_rollback_${run}` },
     ]);
     await database.db.insert(schema.relationshipBlocks).values({
       blockerId: users.blockedUser,
@@ -51,6 +56,7 @@ suite("username search Postgres repository", () => {
       await database.db.delete(schema.relationshipBlocks).where(inArray(schema.relationshipBlocks.blockerId, [users.blockedUser]));
       await database.db.delete(schema.user).where(inArray(schema.user.id, Object.values(users)));
     } finally {
+      await concurrentDatabase.close();
       await database.close();
     }
   });
@@ -79,5 +85,63 @@ suite("username search Postgres repository", () => {
       relationship: "none",
     }]);
     expect(Object.keys(page.items[0]!)).toEqual(["id", "username", "displayName", "relationship"]);
+  });
+
+  it("serializes quota attempts and releases the lock after commit", async () => {
+    const now = new Date("2026-09-30T00:00:00.000Z");
+    let releaseLock: (() => void) | undefined;
+    let signalLocked: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
+    const release = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const holder = database.db.transaction(async (transaction) => {
+      await consumeUsernameSearchQuota(transaction, users.quotaCommit, now);
+      signalLocked!();
+      await release;
+    });
+
+    await locked;
+    try {
+      await expect(concurrentDatabase.db.transaction(async (transaction) => {
+        await transaction.execute(sql`set local lock_timeout = '100ms'`);
+        await consumeUsernameSearchQuota(transaction, users.quotaCommit, now);
+      })).rejects.toMatchObject({ cause: { code: "55P03" } });
+    } finally {
+      releaseLock!();
+      await holder;
+    }
+
+    await expect(concurrentDatabase.db.transaction((transaction) => (
+      consumeUsernameSearchQuota(transaction, users.quotaCommit, now)
+    ))).resolves.toBeUndefined();
+  });
+
+  it("releases the quota lock after rollback", async () => {
+    const now = new Date("2026-09-30T00:00:00.000Z");
+    const rollback = new Error("rollback quota holder");
+    let releaseLock: (() => void) | undefined;
+    let signalLocked: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
+    const release = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const holder = database.db.transaction(async (transaction) => {
+      await consumeUsernameSearchQuota(transaction, users.quotaRollback, now);
+      signalLocked!();
+      await release;
+      throw rollback;
+    });
+
+    await locked;
+    try {
+      await expect(concurrentDatabase.db.transaction(async (transaction) => {
+        await transaction.execute(sql`set local lock_timeout = '100ms'`);
+        await consumeUsernameSearchQuota(transaction, users.quotaRollback, now);
+      })).rejects.toMatchObject({ cause: { code: "55P03" } });
+    } finally {
+      releaseLock!();
+    }
+    await expect(holder).rejects.toBe(rollback);
+
+    await expect(concurrentDatabase.db.transaction((transaction) => (
+      consumeUsernameSearchQuota(transaction, users.quotaRollback, now)
+    ))).resolves.toBeUndefined();
   });
 });
