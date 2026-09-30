@@ -1,7 +1,7 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, sql } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRelationshipsService } from "../../../app";
-import { createHyperdriveRelationshipsStore } from "./relationships.repository";
+import { createHyperdriveRelationshipsStore, createPostgresRelationshipsStore } from "./relationships.repository";
 
 /**
  * These tests must use a disposable database containing migration 0006.
@@ -18,9 +18,12 @@ const suite = enabled ? describe : describe.skip;
 
 suite("Postgres relationship persistence", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/relationship_tests");
+  const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/relationship_tests");
   const store = createHyperdriveRelationshipsStore({ connectionString: connectionString ?? "" });
+  const directStore = createPostgresRelationshipsStore(database.db);
+  const concurrentStore = createPostgresRelationshipsStore(concurrentDatabase.db);
   const service = createRelationshipsService(store, { now: () => new Date("2026-09-22T00:00:00.000Z") });
-  const users = Array.from({ length: 18 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 25 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.client`
@@ -39,6 +42,7 @@ suite("Postgres relationship persistence", () => {
       await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
       await database.client`delete from public."user" where id = any(${users}::text[])`;
     } finally {
+      await concurrentDatabase.close();
       await database.close();
     }
   });
@@ -235,6 +239,86 @@ suite("Postgres relationship persistence", () => {
     expect(firstPage.hasMore).toBe(true);
     expect(secondPage.items.map((item) => item.id)).toEqual([second]);
     expect(secondPage.hasMore).toBe(false);
+  });
+
+  it("holds the canonical pair lock through rollback and releases it afterwards", async () => {
+    const sender = users[18]!;
+    const recipient = users[19]!;
+    const rollback = new Error("rollback relationship lock holder");
+    let releaseLock: (() => void) | undefined;
+    let signalLocked: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
+    const release = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const holder = directStore.withTransaction(async (transaction) => {
+      await transaction.sendRequest({ senderId: sender, recipientId: recipient, createdAt: "2026-09-22T00:00:00.000Z" });
+      signalLocked!();
+      await release;
+      throw rollback;
+    });
+
+    await locked;
+    try {
+      await concurrentDatabase.db.execute(sql`set lock_timeout = '100ms'`);
+      await expect(concurrentStore.withTransaction((transaction) => transaction.sendRequest({
+        senderId: recipient,
+        recipientId: sender,
+        createdAt: "2026-09-22T00:00:00.000Z",
+      }))).rejects.toMatchObject({ cause: { code: "55P03" } });
+    } finally {
+      releaseLock!();
+    }
+    await expect(holder).rejects.toBe(rollback);
+    await concurrentDatabase.db.execute(sql`set lock_timeout = '0'`);
+
+    await expect(concurrentStore.withTransaction((transaction) => transaction.sendRequest({
+      senderId: recipient,
+      recipientId: sender,
+      createdAt: "2026-09-22T00:00:00.000Z",
+    }))).resolves.toMatchObject({ requests: { outgoing: { senderId: recipient, recipientId: sender } } });
+    const [requests] = await database.client`
+      select count(*)::int as count from public.friend_requests
+      where (sender_id = ${sender} and recipient_id = ${recipient})
+         or (sender_id = ${recipient} and recipient_id = ${sender})
+    `;
+    expect(requests?.count).toBe(1);
+  });
+
+  it("keeps block and unblock transitions idempotent", async () => {
+    const blocker = users[20]!;
+    const blocked = users[21]!;
+
+    await expect(service.block(blocker, blocked)).resolves.toMatchObject({ status: "blocked" });
+    await expect(service.block(blocker, blocked)).resolves.toMatchObject({ status: "blocked" });
+    const [activeBlock] = await database.client`
+      select count(*)::int as count from public.relationship_blocks
+      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
+    `;
+    expect(activeBlock?.count).toBe(1);
+
+    await expect(service.unblock(blocker, blocked)).resolves.toMatchObject({ status: "none" });
+    await expect(service.unblock(blocker, blocked)).resolves.toMatchObject({ status: "none" });
+    const [remainingBlock] = await database.client`
+      select count(*)::int as count from public.relationship_blocks
+      where blocker_id = ${blocker} and blocked_id = ${blocked} and unblocked_at is null
+    `;
+    expect(remainingBlock?.count).toBe(0);
+  });
+
+  it("conceals requests from a wrong actor and blocks relationship reads in either direction", async () => {
+    const sender = users[22]!;
+    const recipient = users[23]!;
+    const stranger = users[24]!;
+    const sent = await service.sendRequest(sender, recipient);
+
+    await expect(service.acceptRequest(stranger, sent.outgoingRequest!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const [pending] = await database.client`
+      select status from public.friend_requests where id = ${sent.outgoingRequest!.id}
+    `;
+    expect(pending?.status).toBe("pending");
+
+    await service.block(recipient, sender);
+    await expect(service.getStatus(sender, recipient)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.getStatus(recipient, sender)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("enforces five sends in a rolling 24-hour window", async () => {
