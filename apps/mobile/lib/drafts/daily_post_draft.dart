@@ -17,26 +17,129 @@ enum PostAudience {
   }
 }
 
-/// A reference to a locally captured attachment. Upload and validation arrive
-/// with the media issues (#22, #23); drafts already persist the references so
-/// the storage format does not change when they do.
-class DraftAttachment {
-  const DraftAttachment({required this.localPath, required this.mediaType});
+/// Where an attachment is in the upload flow.
+enum AttachmentUploadStatus {
+  /// Not uploaded yet, or interrupted before the server received it.
+  pending,
 
+  /// Reserved and possibly sent. On restart, ask the server before
+  /// reserving again.
+  uploading,
+
+  /// The server checked the upload. Only validated attachments can be posted.
+  validated,
+
+  /// The server rejected the upload. The author can replace the file.
+  failed;
+
+  /// Unknown values fall back to [pending], which retries the upload rather
+  /// than trusting a status this build does not understand.
+  static AttachmentUploadStatus fromWire(Object? value) {
+    for (final status in values) {
+      if (status.name == value) return status;
+    }
+    return pending;
+  }
+}
+
+/// A locally chosen attachment and, once the upload starts, its compressed
+/// copy and server reservation. The upload fields are optional and omitted
+/// from JSON until set, so drafts saved before uploads existed still load
+/// and the storage format stays at version 1.
+///
+/// Never store the presigned upload URL here: it is a short-lived credential.
+class DraftAttachment {
+  const DraftAttachment({
+    required this.localPath,
+    required this.mediaType,
+    this.compressedPath,
+    this.contentType,
+    this.byteSize,
+    this.reservationId,
+    this.status = AttachmentUploadStatus.pending,
+    this.failureReason,
+  });
+
+  /// The file the author picked.
   final String localPath;
+
+  /// `image` or `video`.
   final String mediaType;
+
+  /// The compressed copy in app support storage, which is what gets uploaded.
+  final String? compressedPath;
+
+  /// The MIME type of the compressed copy, as sent to the server.
+  final String? contentType;
+
+  /// The compressed copy's size in bytes, as reserved with the server.
+  final int? byteSize;
+  final String? reservationId;
+  final AttachmentUploadStatus status;
+
+  /// The server's `failureReason` when [status] is `failed`.
+  final String? failureReason;
+
+  DraftAttachment copyWith({
+    String? compressedPath,
+    String? contentType,
+    int? byteSize,
+    String? Function()? reservationId,
+    AttachmentUploadStatus? status,
+    String? Function()? failureReason,
+  }) => DraftAttachment(
+    localPath: localPath,
+    mediaType: mediaType,
+    compressedPath: compressedPath ?? this.compressedPath,
+    contentType: contentType ?? this.contentType,
+    byteSize: byteSize ?? this.byteSize,
+    reservationId: reservationId == null ? this.reservationId : reservationId(),
+    status: status ?? this.status,
+    failureReason: failureReason == null ? this.failureReason : failureReason(),
+  );
 
   Map<String, Object?> toJson() => {
     'localPath': localPath,
     'mediaType': mediaType,
+    if (compressedPath != null) 'compressedPath': compressedPath,
+    if (contentType != null) 'contentType': contentType,
+    if (byteSize != null) 'byteSize': byteSize,
+    if (reservationId != null) 'reservationId': reservationId,
+    if (status != AttachmentUploadStatus.pending) 'status': status.name,
+    if (failureReason != null) 'failureReason': failureReason,
   };
 
+  /// Returns null without a usable path and media type. Malformed upload
+  /// fields are dropped individually, so the worst case is a fresh upload.
   static DraftAttachment? fromJson(Object? json) {
     if (json is! Map<String, Object?>) return null;
     final localPath = json['localPath'];
     final mediaType = json['mediaType'];
     if (localPath is! String || mediaType is! String) return null;
-    return DraftAttachment(localPath: localPath, mediaType: mediaType);
+    String? text(String key) {
+      final value = json[key];
+      return value is String && value.isNotEmpty ? value : null;
+    }
+
+    final byteSize = json['byteSize'];
+    final reservationId = text('reservationId');
+    // Every status past pending refers to a reservation. Without one there is
+    // nothing to resume or link, so upload again.
+    final status = reservationId == null
+        ? AttachmentUploadStatus.pending
+        : AttachmentUploadStatus.fromWire(json['status']);
+    return DraftAttachment(
+      localPath: localPath,
+      mediaType: mediaType,
+      compressedPath: text('compressedPath'),
+      contentType: text('contentType'),
+      byteSize: byteSize is int && byteSize > 0 ? byteSize : null,
+      reservationId: reservationId,
+      status: status,
+      failureReason: status == AttachmentUploadStatus.failed
+          ? text('failureReason')
+          : null,
+    );
   }
 }
 
