@@ -198,7 +198,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     }, "https://attacker.example.test"));
     expect(maliciousOrigin.status).toBe(403);
 
-    await migrator.client`update public.session set expires_at = now() - interval '1 second' where token = ${bearer}`;
+    await migrator.client`update public.session set expires_at = now() - interval '1 second'`;
     const expired = await app.fetch(new Request(`${origin}/api/v1/account/reauthenticate/password`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${bearer}` },
