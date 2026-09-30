@@ -360,6 +360,7 @@ class TestHarness {
     FriendsClient? friends,
     FakeFeedClient? feed,
     FakePostClient? posts,
+    this.uploadMedia = true,
   }) : friends = friends ?? FakeFriendsClient(),
        feed = feed ?? FakeFeedClient(),
        posts = posts ?? FakePostClient(),
@@ -435,6 +436,9 @@ class TestHarness {
   final mediaPicker = FakeMediaPicker();
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
+
+  /// False matches a build without `DAYLI_MEDIA_UPLOADS`.
+  final bool uploadMedia;
   late final SessionController session;
 
   AppServices get services => AppServices(
@@ -447,7 +451,7 @@ class TestHarness {
     submitter: submitter,
     mediaPicker: mediaPicker,
     mediaCompressor: mediaCompressor,
-    mediaUploads: mediaUploads,
+    mediaUploads: uploadMedia ? mediaUploads : null,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }

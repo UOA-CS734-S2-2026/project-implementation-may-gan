@@ -32,7 +32,9 @@ A failed validation returns `200` with `{status: "failed", failureReason}` rathe
 
 ## Flutter client 
 
-The composer takes up to three photos, or one video, from the gallery. Camera capture is separate work. Each picked file goes through these steps in the background while the composer is open, one attachment at a time:
+**Off by default.** A build uploads media only with `--dart-define=DAYLI_MEDIA_UPLOADS=true`. Posts can't carry media until the API links attachments to posts, so posting a dayli after its media uploaded would leave the private R2 objects unlinked and unreachable. Without the flag, picked media stays on the device, the composer says it isn't posted, and posting isn't held for uploads. Turn it on only to test uploads until attachment linking lands.
+
+The composer takes up to three photos, or one video, from the gallery. Camera capture is separate work. With uploads on, each picked file goes through these steps in the background while the composer is open, one attachment at a time:
 
 1. **Compress** into app support storage (`dayli-media/user-<id>/`, one folder per user), not temporary storage, so the copy survives a restart. Photos become JPEG with the longest edge at most 2048 px, quality 80, EXIF removed, and orientation applied to the pixels. Videos are checked for length first; a video over 15 seconds is rejected without being encoded. Otherwise they become 720p H.264 and AAC in MP4 at about 2.5 Mbps, with metadata (including location) removed. The client only ever reserves `image/jpeg` or `video/mp4`.
 2. **Check limits** on the compressed copy: 10 MB per file, 15 seconds per video, and 25 MB per post. The server can't check the post total until posts link attachments, so the client is the only check for now. A file over a limit, or one that can't be read, is removed from the draft with a message.
