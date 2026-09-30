@@ -35,6 +35,7 @@ lib/model/create_media_reservation_response.dart
 lib/model/create_realtime_ticket201_response.dart
 lib/model/current_posting_day_response.dart
 lib/model/daily_post.dart
+lib/model/daily_post_media.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart

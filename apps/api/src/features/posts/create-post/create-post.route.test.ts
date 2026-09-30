@@ -79,6 +79,7 @@ describe("POST /api/v1/posts", () => {
       acceptedAt: "2026-09-25T03:00:00.000Z",
       releasedAt: "2026-09-25T12:00:00.000Z",
       tomorrowNote: { availableOn: "2026-09-26" },
+      media: [],
     });
     expect(JSON.stringify(created)).not.toContain("Bring the camera.");
   });
@@ -175,5 +176,100 @@ describe("POST /api/v1/posts", () => {
     expect(operation?.operationId).toBe("posts.create");
     expect(operation?.parameters).toContainEqual(expect.objectContaining({ name: "idempotency-key", in: "header", required: true }));
     expect(Object.keys(operation?.responses ?? {})).toEqual(expect.arrayContaining(["201", "401", "409", "422", "503"]));
+  });
+
+  describe("attachments", () => {
+    const mb = 1024 * 1024;
+
+    function withUploads(uploads: Array<{ id: string; status?: "pending" | "validated" | "failed"; contentType?: string; byteSize?: number }>) {
+      const setup = dependencies();
+      for (const upload of uploads) {
+        setup.memory.reservations.push({
+          ownerId: "user-1",
+          status: "validated",
+          contentType: "image/jpeg",
+          byteSize: mb,
+          expiresAt: new Date("2026-09-25T03:15:00.000Z"),
+          ...upload,
+        });
+      }
+      return createApp({ posts: setup.deps });
+    }
+
+    it("links validated uploads and returns them in order", async () => {
+      const app = withUploads([{ id: "r-a" }, { id: "r-b", contentType: "image/png" }]);
+      const response = await post(app, { user: "user-1", json: { ...body, attachments: ["r-b", "r-a"] } });
+
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toMatchObject({
+        media: [
+          { id: expect.any(String), contentType: "image/png", order: 0 },
+          { id: expect.any(String), contentType: "image/jpeg", order: 1 },
+        ],
+      });
+    });
+
+    it("treats an empty list as a text-only post, as the Dart client sends it", async () => {
+      const app = withUploads([]);
+      const response = await post(app, { user: "user-1", json: { ...body, attachments: [] } });
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toMatchObject({ media: [] });
+
+      // Same fingerprint as omitting it, so a retry from an older build replays.
+      const retry = await post(app, { user: "user-1" });
+      expect(retry.status).toBe(201);
+      expect(retry.headers.get("idempotent-replayed")).toBe("true");
+    });
+
+    it("rejects a malformed list before reaching the service", async () => {
+      const app = withUploads([]);
+      for (const attachments of [["r-a", "r-a"], ["r-a", "r-b", "r-c", "r-d"], [""], ["x".repeat(129)], "r-a"]) {
+        const response = await post(app, { user: "user-1", json: { ...body, attachments } });
+        expect(response.status, JSON.stringify(attachments)).toBe(422);
+        await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+      }
+    });
+
+    it("reports a mix of photos and a video as a validation failure", async () => {
+      const app = withUploads([{ id: "r-a" }, { id: "r-v", contentType: "video/mp4" }]);
+      const response = await post(app, { user: "user-1", json: { ...body, attachments: ["r-a", "r-v"] } });
+
+      expect(response.status).toBe(422);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "VALIDATION_FAILED", details: { field: "attachments", reason: "MEDIA_NOT_ALLOWED" } },
+      });
+    });
+
+    it("tells the client to wait for a pending upload or upload again", async () => {
+      const cases = [
+        { uploads: [{ id: "r-a", status: "pending" as const }], reason: "MEDIA_NOT_READY" },
+        { uploads: [{ id: "r-a", status: "failed" as const }], reason: "MEDIA_UNAVAILABLE" },
+        { uploads: [], reason: "MEDIA_UNAVAILABLE" },
+      ];
+      for (const { uploads, reason } of cases) {
+        const response = await post(withUploads(uploads), { user: "user-1", json: { ...body, attachments: ["r-a"] } });
+        expect(response.status, reason).toBe(409);
+        await expect(response.json()).resolves.toMatchObject({ error: { code: "CONFLICT", details: { reason } } });
+      }
+    });
+
+    it("doesn't reveal another user's upload", async () => {
+      const setup = dependencies();
+      setup.memory.reservations.push({
+        id: "r-theirs",
+        ownerId: "user-2",
+        status: "validated",
+        contentType: "image/jpeg",
+        byteSize: mb,
+        expiresAt: new Date("2026-09-25T03:15:00.000Z"),
+      });
+      const app = createApp({ posts: setup.deps });
+      const theirs = await (await post(app, { user: "user-1", json: { ...body, attachments: ["r-theirs"] } })).json();
+      const missing = await (await post(app, { user: "user-1", key: "key-2", json: { ...body, attachments: ["r-none"] } })).json();
+
+      const strip = (value: { error: { requestId: string } }) => ({ ...value.error, requestId: undefined });
+      expect(strip(theirs as { error: { requestId: string } })).toEqual(strip(missing as { error: { requestId: string } }));
+    });
   });
 });

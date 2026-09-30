@@ -6,6 +6,8 @@ import {
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { MAX_POST_PHOTOS } from "../../media/shared/media-reservation-policy";
+import { mediaContentTypeSchema } from "../../media/shared/media-reservation.contract";
 
 /**
  * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the
@@ -55,6 +57,18 @@ export const createDailyPostRequestSchema = z
       description: "An author-only note that becomes readable on the following Auckland day. It is never echoed back.",
       example: "Remember to bring the camera.",
     }),
+    // An empty list means a text-only post: the generated Dart client always
+    // sends this field, defaulting to [].
+    attachments: z
+      .array(opaqueIdSchema)
+      .max(MAX_POST_PHOTOS)
+      .refine((ids) => new Set(ids).size === ids.length, { message: "Must not repeat an attachment." })
+      .optional()
+      .openapi({
+        description: "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. "
+          + "Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
+        example: ["0f8fad5b-d9cb-469f-a165-70867728950e"],
+      }),
   })
   .strict()
   .openapi("CreateDailyPostRequest");
@@ -91,6 +105,13 @@ export const dailyPostSchema = z
       .object({ availableOn: aucklandDateSchema })
       .nullable()
       .openapi({ description: "Present when a tomorrow note was submitted; its text is readable from availableOn." }),
+    media: z
+      .array(z.object({
+        id: opaqueIdSchema,
+        contentType: mediaContentTypeSchema,
+        order: z.number().int().min(0),
+      }).openapi("DailyPostMedia"))
+      .openapi({ description: "The attached photos or video in display order. Empty for a text-only post." }),
   })
   .openapi("DailyPost");
 
@@ -100,6 +121,8 @@ export const createDailyPostConflictReasons = [
   "PROMPT_CHANGED",
   "ALREADY_POSTED",
   "IDEMPOTENCY_KEY_REUSED",
+  "MEDIA_NOT_READY",
+  "MEDIA_UNAVAILABLE",
 ] as const;
 
 export const createDailyPostErrorResponses = {
@@ -108,11 +131,11 @@ export const createDailyPostErrorResponses = {
     content: { "application/json": { schema: apiErrorSchema } },
   },
   409: {
-    description: "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, or the idempotency key was used for a different request. `details.reason` identifies which.",
+    description: "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   422: {
-    description: "The request contains invalid values.",
+    description: "The request contains invalid values. `details.reason` is `MEDIA_NOT_ALLOWED` when the attachments mix photos and a video, include more than one video, or exceed 25 MB in total.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   429: rateLimitErrorResponse,

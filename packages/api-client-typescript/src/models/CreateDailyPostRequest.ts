@@ -55,6 +55,10 @@ export interface CreateDailyPostRequest {
      * An author-only note that becomes readable on the following Auckland day. It is never echoed back.
      */
     tomorrowNote?: string;
+    /**
+     * Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.
+     */
+    attachments?: Array<string>;
 }
 
 
@@ -88,6 +92,7 @@ export function CreateDailyPostRequestFromJSONTyped(json: any, ignoreDiscriminat
         'rating': json['rating'],
         'audience': PostAudienceFromJSON(json['audience']),
         'tomorrowNote': json['tomorrowNote'] == null ? undefined : json['tomorrowNote'],
+        'attachments': json['attachments'] == null ? undefined : json['attachments'],
     };
 }
 
@@ -109,5 +114,6 @@ export function CreateDailyPostRequestToJSONTyped(value?: CreateDailyPostRequest
         'rating': value['rating'],
         'audience': PostAudienceToJSON(value['audience']),
         'tomorrowNote': value['tomorrowNote'],
+        'attachments': value['attachments'],
     };
 }

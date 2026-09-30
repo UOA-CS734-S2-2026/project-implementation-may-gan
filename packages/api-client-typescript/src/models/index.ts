@@ -15,6 +15,7 @@ export * from './CreateMediaReservationResponse';
 export * from './CreateRealtimeTicket201Response';
 export * from './CurrentPostingDayResponse';
 export * from './DailyPost';
+export * from './DailyPostMedia';
 export * from './DailyPostPrompt';
 export * from './DailyPostTomorrowNote';
 export * from './DailyPromptResponse';

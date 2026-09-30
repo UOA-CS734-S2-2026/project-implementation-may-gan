@@ -20,6 +20,7 @@ class CreateDailyPostRequest {
     required this.rating,
     required this.audience,
     this.tomorrowNote,
+    this.attachments = const [],
   });
 
   /// The Auckland day the draft was written for. It must still be the server's current day when the post is accepted.
@@ -53,6 +54,9 @@ class CreateDailyPostRequest {
   ///
   final String? tomorrowNote;
 
+  /// Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.
+  final List<String> attachments;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -63,7 +67,8 @@ class CreateDailyPostRequest {
           other.caption == caption &&
           other.rating == rating &&
           other.audience == audience &&
-          other.tomorrowNote == tomorrowNote;
+          other.tomorrowNote == tomorrowNote &&
+          _deepEquality.equals(other.attachments, attachments);
 
   @override
   int get hashCode =>
@@ -74,11 +79,12 @@ class CreateDailyPostRequest {
       (caption == null ? 0 : caption!.hashCode) +
       (rating.hashCode) +
       (audience.hashCode) +
-      (tomorrowNote == null ? 0 : tomorrowNote!.hashCode);
+      (tomorrowNote == null ? 0 : tomorrowNote!.hashCode) +
+      (attachments.hashCode);
 
   @override
   String toString() =>
-      'CreateDailyPostRequest[localDate=$localDate, promptId=$promptId, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, tomorrowNote=$tomorrowNote]';
+      'CreateDailyPostRequest[localDate=$localDate, promptId=$promptId, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, tomorrowNote=$tomorrowNote, attachments=$attachments]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -97,6 +103,7 @@ class CreateDailyPostRequest {
     } else {
       json[r'tomorrowNote'] = null;
     }
+    json[r'attachments'] = this.attachments;
     return json;
   }
 
@@ -110,6 +117,7 @@ class CreateDailyPostRequest {
     int? rating,
     PostAudience? audience,
     String? tomorrowNote,
+    List<String>? attachments,
   }) =>
       CreateDailyPostRequest(
         localDate: localDate ?? this.localDate,
@@ -119,6 +127,7 @@ class CreateDailyPostRequest {
         rating: rating ?? this.rating,
         audience: audience ?? this.audience,
         tomorrowNote: tomorrowNote ?? this.tomorrowNote,
+        attachments: attachments ?? this.attachments,
       );
 
   /// Returns a new [CreateDailyPostRequest] instance and imports its values from
@@ -163,6 +172,11 @@ class CreateDailyPostRequest {
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: PostAudience.fromJson(json[r'audience'])!,
         tomorrowNote: mapValueOfType<String>(json, r'tomorrowNote'),
+        attachments: json[r'attachments'] is Iterable
+            ? (json[r'attachments'] as Iterable)
+                .cast<String>()
+                .toList(growable: false)
+            : const [],
       );
     }
     return null;

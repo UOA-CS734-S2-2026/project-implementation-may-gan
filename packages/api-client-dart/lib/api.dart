@@ -51,6 +51,7 @@ part 'model/create_media_reservation_response.dart';
 part 'model/create_realtime_ticket201_response.dart';
 part 'model/current_posting_day_response.dart';
 part 'model/daily_post.dart';
+part 'model/daily_post_media.dart';
 part 'model/daily_post_prompt.dart';
 part 'model/daily_post_tomorrow_note.dart';
 part 'model/daily_prompt_response.dart';

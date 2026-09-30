@@ -175,8 +175,10 @@ generated.CreateDailyPostRequest createRequestFor(
   );
 }
 
-/// The generated model writes absent optional fields as `null`, which the
-/// API's strict schema rejects. This omits them instead.
+/// The generated model writes absent optional fields as `null`, and
+/// `attachments` as an empty list, which the API's strict schema rejects
+/// (an API without attachment support rejects the field outright). This
+/// omits both, so a text-only post sends exactly what it always has.
 class _CreateDailyPostRequest extends generated.CreateDailyPostRequest {
   _CreateDailyPostRequest({
     required super.localDate,
@@ -189,6 +191,8 @@ class _CreateDailyPostRequest extends generated.CreateDailyPostRequest {
   });
 
   @override
-  Map<String, dynamic> toJson() =>
-      super.toJson()..removeWhere((_, value) => value == null);
+  Map<String, dynamic> toJson() => super.toJson()
+    ..removeWhere(
+      (_, value) => value == null || value is List && value.isEmpty,
+    );
 }
