@@ -107,6 +107,14 @@ fi
 
 echo 'Running PostgreSQL migration and integration checks'
 export MIGRATION_TARGET=local
+# This privacy branch is reviewed against the private legal foundation, whose
+# migration journal predates main's unrelated 0014 media lineage. Callers may
+# override this while that integration is coordinated.
+if [[ -z "${MIGRATION_BASE_REF:-}" ]] && git rev-parse --verify origin/feat/privacy-legal-acceptance >/dev/null 2>&1; then
+  export MIGRATION_BASE_REF=origin/feat/privacy-legal-acceptance
+else
+  export MIGRATION_BASE_REF="${MIGRATION_BASE_REF:-origin/main}"
+fi
 export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
@@ -120,6 +128,15 @@ export LIFECYCLE_TEST_APP_DATABASE_URL="$(app_url "$lifecycle_database")"
 export LIFECYCLE_TEST_WORKER_DATABASE_URL="postgresql://lifecycle_worker:lifecycle_worker@localhost:${postgres_port}/${lifecycle_database}"
 export AUTH_TEST_DATABASE_URL="$(migrator_url "$auth_database")"
 export AUTH_TEST_APP_DATABASE_URL="$(app_url "$auth_database")"
+# Lifecycle request storage tests need a stable dedicated auth-shaped fixture,
+# while the Better Auth lifecycle flow needs the separate lifecycle fixture.
+# Keep both explicit: these guards deliberately fail if a verifier omits them.
+export REQUIRE_LIFECYCLE_REQUEST_TEST=1
+export LIFECYCLE_REQUEST_TEST_DATABASE_URL="$AUTH_TEST_DATABASE_URL"
+export LIFECYCLE_REQUEST_TEST_APP_DATABASE_URL="$AUTH_TEST_APP_DATABASE_URL"
+export REQUIRE_LIFECYCLE_AUTH_TEST=1
+export LIFECYCLE_AUTH_TEST_DATABASE_URL="$LIFECYCLE_TEST_DATABASE_URL"
+export LIFECYCLE_AUTH_TEST_APP_DATABASE_URL="$LIFECYCLE_TEST_APP_DATABASE_URL"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
 pnpm db:check
