@@ -37,24 +37,10 @@ export const messageProjectionSelection = {
   unsentAt: schema.messages.unsentAt,
 };
 
-type LegacyMessageProjectionRow = Omit<MessageProjectionRow, "sequence" | "version"> & {
-  sequence: string;
-  version: string;
-};
-
 function storedMessage(row: MessageProjectionRow): StoredMessage {
   return {
     ...row,
     sequence: requireSafeSequenceBigInt(row.sequence),
-    version: requireSafeMessageVersion(row.version),
-    reactions: [],
-  };
-}
-
-function storedLegacyMessage(row: LegacyMessageProjectionRow): StoredMessage {
-  return {
-    ...row,
-    sequence: BigInt(row.sequence),
     version: requireSafeMessageVersion(row.version),
     reactions: [],
   };
@@ -129,17 +115,4 @@ export async function projectMessageDto(
   actorId: string,
 ): Promise<MessageDto> {
   return projectStoredMessageDto(queryable, storedMessage(row), actorId);
-}
-
-/**
- * Compatibility projector for conversation read queries that still select
- * legacy text-mode message fields. Remove after those queries use
- * messageProjectionSelection.
- */
-export async function projectLegacyMessageDto(
-  queryable: Queryable,
-  row: LegacyMessageProjectionRow,
-  actorId: string,
-): Promise<MessageDto> {
-  return projectStoredMessageDto(queryable, storedLegacyMessage(row), actorId);
 }
