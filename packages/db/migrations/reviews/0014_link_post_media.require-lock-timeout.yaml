@@ -1,0 +1,6 @@
+reason: The protected migration runner sets the transaction lock timeout. The statements take short locks on post_media and media_reservation, and neither table is rewritten.
+affected_data_and_clients: Adds a nullable reservation_id column, a foreign key to media_reservation, and a partial unique index on post_media. Existing post_media rows are legacy imports and keep a null reservation_id; no API route writes post_media before this change ships.
+rollout_sequence: Apply through the protected migration workflow before deploying the API that links uploads to posts. The column is unused until then, so the migration is safe to apply ahead of the code.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+forward_fix_plan: Add a new reviewed forward migration for corrections and never edit this migration after release.
+reviewer: Required database CODEOWNER review before migration execution.
