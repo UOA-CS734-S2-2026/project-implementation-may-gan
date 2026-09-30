@@ -84,6 +84,13 @@ suite("message write primitive builders", () => {
     expect(outboxCount?.count).toBe(2);
   });
 
+  it("fails closed when a message read has an unsafe sequence", async () => {
+    const { conversationId, messageId } = await createConversation();
+    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${messageId}`;
+
+    await expect(findMessage(database.db, users[0]!, conversationId, messageId)).rejects.toThrow(RangeError);
+  });
+
   it("serializes concurrent access through the conversation row lock", async () => {
     const { conversationId } = await createConversation();
     let notifyFirstLocked: (() => void) | undefined;

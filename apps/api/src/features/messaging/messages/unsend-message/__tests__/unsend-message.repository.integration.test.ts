@@ -64,6 +64,42 @@ suite("unsend message Postgres repository", () => {
     expect(replayedOutbox?.count).toBe(6);
   });
 
+  it("accepts Number.MAX_SAFE_INTEGER and rolls back an unsafe version before deleting reactions or appending changes", async () => {
+    const maximumSafe = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "maximum safe version",
+    });
+    await setReaction.set(users[1]!, maximumSafe.conversation.id, maximumSafe.message.id, "love");
+    await database.client`update public.messages set version = ${Number.MAX_SAFE_INTEGER - 1}::bigint where id = ${maximumSafe.message.id}`;
+
+    await expect(unsend.unsend(users[0]!, maximumSafe.conversation.id, maximumSafe.message.id)).resolves.toMatchObject({
+      replayed: false,
+      message: { version: Number.MAX_SAFE_INTEGER, text: null, reactions: [] },
+    });
+
+    const overflow = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "unsafe version",
+    });
+    await setReaction.set(users[1]!, overflow.conversation.id, overflow.message.id, "love");
+    await database.client`update public.messages set version = ${Number.MAX_SAFE_INTEGER}::bigint where id = ${overflow.message.id}`;
+    const [beforeChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${overflow.conversation.id}`;
+    const [beforeOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${overflow.conversation.id}`;
+
+    await expect(unsend.unsend(users[0]!, overflow.conversation.id, overflow.message.id)).rejects.toThrow(RangeError);
+
+    const [message] = await database.client`select body, unsent_at, version::text as version from public.messages where id = ${overflow.message.id}`;
+    const [reactions] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${overflow.message.id}`;
+    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${overflow.conversation.id}`;
+    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${overflow.conversation.id}`;
+    expect(message).toMatchObject({ body: "unsafe version", unsent_at: null, version: String(Number.MAX_SAFE_INTEGER) });
+    expect(reactions?.count).toBe(1);
+    expect(changes?.count).toBe(beforeChanges?.count);
+    expect(outbox?.count).toBe(beforeOutbox?.count);
+  });
+
   it("allows a pending initiator but rejects a blocked sender without a mutation", async () => {
     const pending = await direct.create(users[0]!, {
       recipientId: users[2]!,

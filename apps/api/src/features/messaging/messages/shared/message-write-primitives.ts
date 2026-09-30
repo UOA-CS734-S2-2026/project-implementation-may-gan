@@ -1,42 +1,10 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, count, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
-import { requireSafeMessageVersion, requireSafeSequenceBigInt, requireSafeSequenceText, toSafeSequenceNumber } from "../../shared/safe-sequence";
+import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
+import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
-type Row = Record<string, unknown>;
-
-function sequenceBigInt(value: unknown): bigint {
-  if (typeof value === "number") return requireSafeSequenceBigInt(value);
-  if (typeof value === "string") return BigInt(requireSafeSequenceText(value));
-  if (typeof value === "bigint") {
-    toSafeSequenceNumber(value);
-    return value;
-  }
-  throw new RangeError("Database sequence must be a safe nonnegative integer.");
-}
-
-function messageVersion(value: unknown): number {
-  return requireSafeMessageVersion(typeof value === "number" ? value : String(value));
-}
-
-export function mapStoredMessage(row: Row): StoredMessage {
-  return {
-    id: String(row.id),
-    conversationId: String(row.conversation_id),
-    sequence: sequenceBigInt(row.sequence),
-    senderId: String(row.sender_id),
-    clientMessageId: String(row.client_message_id),
-    requestFingerprint: String(row.request_fingerprint),
-    body: row.body === null ? null : String(row.body),
-    replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id),
-    version: messageVersion(row.version),
-    createdAt: new Date(String(row.created_at)),
-    editedAt: row.edited_at ? new Date(String(row.edited_at)) : null,
-    unsentAt: row.unsent_at ? new Date(String(row.unsent_at)) : null,
-    reactions: [],
-  };
-}
 
 export async function getAccess(queryable: MessageWriteQueryable, actorId: string, conversationId: string): Promise<ConversationAccess> {
   const member = exists(queryable
@@ -86,20 +54,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
 
 export async function findMessage(queryable: MessageWriteQueryable, actorId: string, conversationId: string, messageId: string): Promise<StoredMessage | null> {
   const [row] = await queryable
-    .select({
-      id: schema.messages.id,
-      conversation_id: schema.messages.conversationId,
-      sequence: schema.messages.sequence,
-      sender_id: schema.messages.senderId,
-      client_message_id: schema.messages.clientMessageId,
-      request_fingerprint: schema.messages.requestFingerprint,
-      body: schema.messages.body,
-      reply_to_message_id: schema.messages.replyToMessageId,
-      version: schema.messages.version,
-      created_at: schema.messages.createdAt,
-      edited_at: schema.messages.editedAt,
-      unsent_at: schema.messages.unsentAt,
-    })
+    .select(messageProjectionSelection)
     .from(schema.messages)
     .where(and(
       eq(schema.messages.conversationId, conversationId),
@@ -107,10 +62,7 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
     ))
     .limit(1);
   if (!row) return null;
-  requireSafeSequenceBigInt(row.sequence);
-  requireSafeMessageVersion(row.version);
-
-  const stored = mapStoredMessage(row);
+  const stored = toStoredMessage(row);
   const reactionRows = await queryable
     .select({
       reaction: schema.messageReactions.reaction,

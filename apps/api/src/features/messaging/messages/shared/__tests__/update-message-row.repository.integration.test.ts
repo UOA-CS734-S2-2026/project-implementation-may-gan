@@ -62,4 +62,38 @@ suite("message row update builders", () => {
     expect(message?.unsent_at).not.toBeNull();
     expect(reactions?.count).toBe(0);
   });
+
+  it("accepts Number.MAX_SAFE_INTEGER and fails closed for an unsafe returned sequence", async () => {
+    const conversationId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+    const now = new Date("2026-09-30T00:00:00.000Z");
+    await database.client`delete from public.conversations where user_low_id = ${users[0]!} and user_high_id = ${users[1]!}`;
+    await database.client`insert into public.conversations (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', 1, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, 1, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', ${Number.MAX_SAFE_INTEGER - 1}, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.message_reactions (message_id, user_id, reaction, created_at) values (${messageId}, ${users[1]!}, 'love', ${now.toISOString()}::timestamptz)`;
+
+    await expect(database.db.transaction((transaction) => updateMessageRow(transaction, {
+      messageId,
+      body: "maximum safe version",
+      expectedVersion: Number.MAX_SAFE_INTEGER - 1,
+    }))).resolves.toMatchObject({ body: "maximum safe version", version: Number.MAX_SAFE_INTEGER });
+
+    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${messageId}`;
+    await expect(database.db.transaction((transaction) => updateMessageRow(transaction, {
+      messageId,
+      body: null,
+      unsentAt: now,
+      expectedVersion: Number.MAX_SAFE_INTEGER,
+    }))).rejects.toThrow(RangeError);
+
+    const [message] = await database.client`select sequence::text as sequence, body, unsent_at, version::text as version from public.messages where id = ${messageId}`;
+    const [reactions] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${messageId}`;
+    expect(message).toMatchObject({
+      sequence: "9007199254740992",
+      body: "maximum safe version",
+      unsent_at: null,
+      version: String(Number.MAX_SAFE_INTEGER),
+    });
+    expect(reactions?.count).toBe(1);
+  });
 });
