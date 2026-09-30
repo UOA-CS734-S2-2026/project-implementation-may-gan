@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
@@ -974,6 +975,52 @@ void main() {
 
     expect(harness.drafts.drafts['user-1']!.rating, 1);
     expect(find.text('1/10', skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets('explains a rejected upload and holds the post', (tester) async {
+    final harness = TestHarness();
+    harness.mediaUploads.completeResults.add(
+      const ApiSuccess(
+        MediaCheck(MediaCheckStatus.failed, failureReason: 'format_mismatch'),
+      ),
+    );
+    await tester.pumpWidget(
+      DayliApp(services: harness.services, useGoogleFonts: false),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('landing.sign-in')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('auth.email')),
+      'jos@example.test',
+    );
+    await tester.enterText(
+      find.byKey(const Key('auth.password')),
+      'correct-password',
+    );
+    await tester.tap(find.byKey(const Key('auth.submit')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('shell.newDayli')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel("Photo, couldn't be uploaded"), findsOne);
+    expect(
+      find.text(
+        "This file isn't a supported photo or video. Remove it to post.",
+      ),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.byKey(const Key('composer.submit')));
+    await tester.tap(find.byKey(const Key('composer.submit')));
+    await tester.pumpAndSettle();
+    expect(harness.submitter.submitted, isEmpty);
+    expect(
+      find.text("Remove the photos or videos that couldn't be uploaded."),
+      findsOneWidget,
+    );
   });
 
   testWidgets('locks the composer while a post is sending', (tester) async {

@@ -46,6 +46,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
       submitter: services.submitter,
       clock: services.clock,
       onUnauthenticated: () => services.session.sessionExpired(),
+      requireUploadedMedia: services.mediaUploads != null,
     )..addListener(_syncText);
     final uploads = services.mediaUploads;
     if (uploads != null) {
@@ -84,6 +85,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
   }
 
   Future<void> _pick(ComposerController controller, int slot) async {
+    _uploads?.clearNotice();
     final picker = AppScope.of(context).mediaPicker;
     final picked = slot == 0
         ? await picker.pickPhotoOrVideo()
@@ -103,6 +105,58 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final draft = controller.draft;
     if (draft == null) return;
     controller.update(attachments: [...draft.attachments]..removeAt(slot));
+  }
+
+  Widget _media(
+    ComposerController controller,
+    DailyPostDraft draft,
+    String? error,
+  ) {
+    final uploads = _uploads;
+    if (uploads == null) {
+      return MediaInput(
+        attachments: draft.attachments,
+        onPick: (slot) => _pick(controller, slot),
+        onRemove: (slot) => _remove(controller, slot),
+        error: error,
+      );
+    }
+    return ListenableBuilder(
+      listenable: uploads,
+      builder: (context, _) => MediaInput(
+        attachments: draft.attachments,
+        onPick: (slot) => _pick(controller, slot),
+        onRemove: (slot) => _remove(controller, slot),
+        error: error,
+        uploads: true,
+        states: [
+          for (final attachment in draft.attachments)
+            _tileState(uploads, attachment),
+        ],
+        notice: uploads.notice,
+        problem: uploads.problem,
+        onRetry: uploads.retryNow,
+      ),
+    );
+  }
+
+  static MediaTileState _tileState(
+    MediaUploadController uploads,
+    DraftAttachment attachment,
+  ) {
+    switch (attachment.status) {
+      case AttachmentUploadStatus.validated:
+        return MediaTileState.done;
+      case AttachmentUploadStatus.failed:
+        return MediaTileState.failed;
+      case AttachmentUploadStatus.pending || AttachmentUploadStatus.uploading:
+        if (uploads.active != attachment) return MediaTileState.queued;
+        return switch (uploads.activity) {
+          UploadActivity.compressing => MediaTileState.compressing,
+          UploadActivity.checking => MediaTileState.checking,
+          _ => MediaTileState.uploading,
+        };
+    }
   }
 
   void _close() => context.canPop() ? context.pop() : context.go('/');
@@ -241,11 +295,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         const _SectionLabel('your day in pictures'),
         _Lockable(
           locked: locked,
-          child: MediaInput(
-            attachments: draft.attachments,
-            onPick: (slot) => _pick(controller, slot),
-            onRemove: (slot) => _remove(controller, slot),
-          ),
+          child: _media(controller, draft, errors.media),
         ),
         const SizedBox(height: 28),
         _SectionLabel(
