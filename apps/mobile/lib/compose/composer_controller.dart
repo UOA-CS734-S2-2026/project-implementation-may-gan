@@ -295,6 +295,38 @@ class ComposerController extends ChangeNotifier {
     _notify();
   }
 
+  /// Records upload progress on one attachment. Unlike [update] this isn't an
+  /// author edit, so it also applies while a submission is in flight. Returns
+  /// false when [previous] is no longer in the draft, for example because the
+  /// author removed it.
+  bool replaceAttachment(DraftAttachment previous, DraftAttachment next) =>
+      _editAttachments(previous, (attachments, index) {
+        attachments[index] = next;
+      });
+
+  /// Drops an attachment that can't be uploaded, such as a video over the
+  /// length limit. Returns false when it is already gone.
+  bool removeAttachment(DraftAttachment attachment) =>
+      _editAttachments(attachment, (attachments, index) {
+        attachments.removeAt(index);
+      });
+
+  bool _editAttachments(
+    DraftAttachment target,
+    void Function(List<DraftAttachment> attachments, int index) edit,
+  ) {
+    final current = _draft;
+    if (current == null || _phase != ComposerPhase.editing) return false;
+    final attachments = [...current.attachments];
+    final index = attachments.indexOf(target);
+    if (index < 0) return false;
+    edit(attachments, index);
+    _draft = current.copyWith(attachments: attachments, updatedAt: _clock());
+    _scheduleSave();
+    _notify();
+    return true;
+  }
+
   /// Clears each shown error once its field is valid, without raising new
   /// errors while the author is still typing.
   void _clearFixedErrors(DailyPostDraft draft) {

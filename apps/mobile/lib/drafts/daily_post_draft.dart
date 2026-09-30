@@ -98,6 +98,37 @@ class DraftAttachment {
     failureReason: failureReason == null ? this.failureReason : failureReason(),
   );
 
+  /// The same picked file with no upload state, to start over from
+  /// compression.
+  DraftAttachment restarted() =>
+      DraftAttachment(localPath: localPath, mediaType: mediaType);
+
+  /// Attachments compare by value: a draft reloaded from storage holds new
+  /// instances of the same attachments.
+  @override
+  bool operator ==(Object other) =>
+      other is DraftAttachment &&
+      other.localPath == localPath &&
+      other.mediaType == mediaType &&
+      other.compressedPath == compressedPath &&
+      other.contentType == contentType &&
+      other.byteSize == byteSize &&
+      other.reservationId == reservationId &&
+      other.status == status &&
+      other.failureReason == failureReason;
+
+  @override
+  int get hashCode => Object.hash(
+    localPath,
+    mediaType,
+    compressedPath,
+    contentType,
+    byteSize,
+    reservationId,
+    status,
+    failureReason,
+  );
+
   Map<String, Object?> toJson() => {
     'localPath': localPath,
     'mediaType': mediaType,
