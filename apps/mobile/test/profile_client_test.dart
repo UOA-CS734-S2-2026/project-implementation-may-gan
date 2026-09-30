@@ -12,6 +12,13 @@ Map<String, Object?> body({Map<String, Object?>? owner}) => {
   'displayName': 'Jos',
   'detailsVisible': true,
   'bio': 'Walks.',
+  'streak': {
+    'current': 2,
+    'longest': 4,
+    'lastPostDate': '2026-09-30',
+    'postedToday': true,
+    'asOf': '2026-09-30',
+  },
   'owner': owner,
 };
 
@@ -54,6 +61,9 @@ void main() {
     expect(profile.isOwner, isTrue);
     expect(profile.isPrivate, isTrue);
     expect(profile.usernameChangeAvailableAt, DateTime.utc(2026, 10, 30, 3));
+    expect(profile.streak?.current, 2);
+    expect(profile.streak?.longest, 4);
+    expect(profile.streak?.postedToday, isTrue);
   });
 
   test('sends only the fields being changed', () async {

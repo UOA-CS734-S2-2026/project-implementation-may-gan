@@ -8,6 +8,7 @@ import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
 import '../app/theme.dart';
 import '../profile/profile_posts.dart';
+import '../profile/profile_streak.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -298,6 +299,8 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     ),
                   ),
                 ],
+                if (info.streak case final streak?)
+                  ProfileStreakLine(streak: streak, isMe: isMe),
                 const SizedBox(height: 22),
                 if (isMe)
                   SizedBox(
