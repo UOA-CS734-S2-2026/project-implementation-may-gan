@@ -61,4 +61,18 @@ describe("MessagingProvider", () => {
       expect(api.inbox).toHaveBeenCalledTimes(3);
     });
   });
+
+  it("reconciles active projections when the page returns to the foreground", async () => {
+    render(<MessagingProvider><ActiveMessagingViews /></MessagingProvider>);
+    await waitFor(() => expect(realtimeInputs).toHaveLength(1));
+    await waitFor(() => expect(api.conversation).toHaveBeenCalledTimes(1));
+
+    document.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => {
+      expect(api.conversation).toHaveBeenCalledTimes(2);
+      expect(api.messages).toHaveBeenCalledTimes(2);
+      expect(api.inbox).toHaveBeenCalledTimes(2);
+    });
+  });
 });

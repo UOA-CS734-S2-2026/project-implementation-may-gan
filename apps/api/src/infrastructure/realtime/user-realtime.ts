@@ -21,7 +21,14 @@ export class UserRealtime {
   constructor(private readonly ctx: DurableObjectState, private readonly env: UserRealtimeEnv) {}
 
   async fetch(request: Request): Promise<Response> {
-    if (new URL(request.url).pathname !== "/connect" || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Not found.", { status: 404 });
+    const path = new URL(request.url).pathname;
+    if (path === "/publish" && request.method === "POST") {
+      const event = realtimeEventSchema.safeParse(await request.json().catch(() => undefined));
+      if (!event.success || event.data.type !== "conversation.changed") return new Response("Invalid event.", { status: 400 });
+      await this.publish(event.data);
+      return new Response(null, { status: 204 });
+    }
+    if (path !== "/connect" || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") return new Response("Not found.", { status: 404 });
     const attachment = parseAttachment(request.headers.get("x-dayli-realtime-session"));
     if (!attachment) return new Response("Unauthorized.", { status: 401 });
     if (this.ctx.getWebSockets().length >= maxSocketsPerUser) return new Response("Too many connections.", { status: 429 });
