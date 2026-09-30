@@ -158,7 +158,7 @@ import { registerLegalRoutes, type LegalRouteDependencies } from "./features/leg
 import { registerDataExportRoutes, type DataExportRouteDependencies } from "./features/data-export/data-export.routes";
 import { createR2ExportArchiveReader } from "./features/data-export/shared/export-archive-reader";
 import { registerAccountLifecycleRoutes, type AccountLifecycleRouteDependencies } from "./features/account-lifecycle/account-lifecycle.routes";
-import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/account-lifecycle.repository";
+import { createHyperdriveAccountLifecycleRepository } from "./features/account-lifecycle/shared/account-lifecycle.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
