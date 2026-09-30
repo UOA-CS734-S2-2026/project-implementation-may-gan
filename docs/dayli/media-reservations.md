@@ -1,6 +1,6 @@
 # Media reservations
 
-`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Download authorisation is issue #24; cleanup of abandoned reservations is issue #25.
+`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Reading attached media is covered in [Downloads](#downloads-issue-24) (#24); cleanup of abandoned reservations is issue #25.
 
 ## How it works
 
@@ -44,7 +44,20 @@ Each step is saved in the protected draft (`compressedPath`, `contentType`, `byt
 
 Posting is blocked until every attachment is `validated`. The post then sends their reservation IDs as `attachments`, and the API links them to the post in the same transaction (see [Daily post creation](daily-posts.md)). If the API answers `MEDIA_NOT_READY`, the composer asks the author to post again once uploads finish. If it answers `MEDIA_UNAVAILABLE`, the composer forgets every reservation, keeps the compressed copies, uploads them again, and asks the author to post once that's done. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded. Signing out removes the user's draft and their whole media folder, even if the composer is closed, including copies a crash left behind. An expired session keeps the draft for the next sign-in, so its media stays too.
 
-Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and attached media can't be viewed until downloads are authorised (#24).
+Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and attached media is shown only to people who can read its post (see [Downloads](#downloads-issue-24)).
+
+## Downloads (issue #24)
+
+A post's media is shown through short-lived private download URLs. The Worker never proxies the bytes.
+
+- **Where URLs come from.** `GET /api/v1/posts/{postId}` and `GET /api/v1/feed` return `media: [{ id, contentType, order, url, expiresAt }]`. The API reads media only for posts the shared visibility predicate has already allowed, in one query per response, and then signs one GET URL per object with `aws4fetch`. Only the `host` header is signed, so a plain image or video request works.
+- **Lifetime.** URLs expire after **5 minutes** (`MEDIA_DOWNLOAD_TTL_SECONDS`). A URL works for anyone who has it until then: never log, store, or cache it. Responses are `Cache-Control: no-store`.
+- **Refreshing.** `GET /api/v1/posts/{postId}/media/{mediaId}` returns one fresh URL through the permission module's `media` action: the same rules as reading the post, plus a live, attached `post_media` row. Missing, detached, and unreadable media all return the same `404`. Without R2 configuration it returns `503`; the post and feed routes return the media with `url: null` instead.
+- **Never signed.** Detached rows, legacy imports without an upload, and anything on a post the viewer may not read.
+- **Public links.** The media lookup accepts a validated public-link grant, so #41's public route can issue the same URLs to signed-out viewers.
+- **After access ends.** Unfriending, blocking, deleting the post, or detaching media stops new URLs immediately, but a URL already issued keeps working for up to 5 minutes, and downloaded copies can't be recalled.
+
+Clients load a fresh URL once when media fails to load, then show "Photo unavailable" or "Video unavailable". The web renders photos unoptimized and keeps R2 out of `next.config`'s `remotePatterns`, because the Next image optimizer would fetch and cache private media on the server. Flutter caches images in memory only. In both clients the feed card shows the first photo, or a still tile for a video, and never plays video. The post page shows every photo, and plays a video on its own, muted and looping, with controls to unmute.
 
 ## One-time Cloudflare setup
 
@@ -73,6 +86,14 @@ Checked manually against the deployed staging API and `dayli-media-staging` on 2
 5. `/complete` before any upload returns `pending`, which stays retryable until the reservation expires.
 
 `curl` doesn't send a CORS preflight, so this doesn't cover the bucket's CORS rule. A browser upload from the staging web origin is still unverified. Repeat these checks after changing the signing code or the R2 token.
+
+**Downloads (#24), still to run on staging** after migration `0014` and the API that signs download URLs are deployed. Post a dayli with a synthetic photo from Flutter, then:
+
+1. `GET /api/v1/posts/{id}` as a friend returns `media[0].url`, and the photo opens from it.
+2. The same URL gets `403` from R2 after 5 minutes.
+3. Changing the object path in a URL gets `403`: a signature covers one object only.
+4. `GET /api/v1/posts/{id}/media/{mediaId}` as a non-friend gets `404`, and as a friend returns a new URL.
+5. Note which caching headers R2 sends on a signed GET. If it allows public caching, consider signing a `response-cache-control=private, no-store` override.
 
 ## Quota and expiry (proposed defaults)
 
