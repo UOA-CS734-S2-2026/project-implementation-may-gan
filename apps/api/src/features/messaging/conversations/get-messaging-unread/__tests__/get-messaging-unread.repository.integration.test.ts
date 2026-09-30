@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresGetMessagingUnreadRepository } from "../get-messaging-unread.repository";
@@ -18,16 +19,30 @@ suite("get messaging unread Postgres repository", () => {
   const repository = createPostgresGetMessagingUnreadRepository(database.db);
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[4]!}, ${users[5]!}, 'active', now()), (${users[5]!}, ${users[4]!}, 'active', now())`;
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[4]!, friendId: users[5]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[5]!, friendId: users[4]!, state: "active", stateChangedAt: new Date() },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.user where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }

@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema, sql } from "@dayli/db";
+import { eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresListConversationChangesRepository } from "../list-conversation-changes.repository";
@@ -18,16 +19,28 @@ suite("list conversation changes Postgres repository", () => {
   const repository = createPostgresListConversationChangesRepository(database.db);
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public.user where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }
@@ -54,25 +67,22 @@ suite("list conversation changes Postgres repository", () => {
     const secondSequence = "9007199254740989";
     const thirdSequence = "9007199254740990";
     const fourthSequence = "9007199254740991";
-    await database.client`
-      update public.conversation_changes
-      set change_sequence = change_sequence + ${sequenceOffset}::bigint
-      where conversation_id = ${first.conversation.id}
-    `;
-    await database.client`
-      update public.conversations
-      set last_change_sequence = last_change_sequence + ${sequenceOffset}::bigint
-      where id = ${first.conversation.id}
-    `;
+    await database.db.update(schema.conversationChanges)
+      .set({ changeSequence: sql`${schema.conversationChanges.changeSequence} + ${Number(sequenceOffset)}` })
+      .where(eq(schema.conversationChanges.conversationId, first.conversation.id));
+    await database.db.update(schema.conversations)
+      .set({ lastChangeSequence: sql`${schema.conversations.lastChangeSequence} + ${Number(sequenceOffset)}` })
+      .where(eq(schema.conversations.id, first.conversation.id));
 
     await expect(repository.list(users[2]!, first.conversation.id, "9007199254740992", 2)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.list(users[0]!, first.conversation.id, "9007199254740992", 2))
       .rejects.toMatchObject({ code: "VALIDATION_FAILED" });
 
-    await database.client`
-      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
-      values (${users[1]!}, ${users[0]!}, now())
-    `;
+    await database.db.insert(schema.relationshipBlocks).values({
+      blockerId: users[1]!,
+      blockedId: users[0]!,
+      blockedAt: new Date(),
+    });
 
     await expect(repository.list(users[0]!, first.conversation.id, undefined, 2)).resolves.toEqual({
       items: [
@@ -141,24 +151,23 @@ suite("list conversation changes Postgres repository", () => {
       text: "overflowing change sequence",
     });
 
-    await database.client`
+    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
+    await database.db.execute(sql`
       update public.conversation_changes
       set change_sequence = 9007199254740993
       where conversation_id = ${created.conversation.id}
-    `;
+    `);
     await expect(repository.list(users[0]!, created.conversation.id, "9007199254740991", 1))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
 
-    await database.client`
-      update public.conversation_changes
-      set change_sequence = 1
-      where conversation_id = ${created.conversation.id}
-    `;
-    await database.client`
+    await database.db.update(schema.conversationChanges).set({ changeSequence: 1 })
+      .where(eq(schema.conversationChanges.conversationId, created.conversation.id));
+    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
+    await database.db.execute(sql`
       update public.conversations
       set last_change_sequence = 9007199254740993
       where id = ${created.conversation.id}
-    `;
+    `);
     await expect(repository.list(users[0]!, created.conversation.id, undefined, 1))
       .rejects.toThrow("Database sequence must be a safe nonnegative integer.");
   });
