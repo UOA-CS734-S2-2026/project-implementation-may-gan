@@ -61,6 +61,7 @@ class ProfileDetails {
     required this.detailsVisible,
     required this.bio,
     required this.isOwner,
+    this.avatarUrl,
     this.streak,
     this.stats,
     this.isPrivate = false,
@@ -78,6 +79,10 @@ class ProfileDetails {
   final bool detailsVisible;
   final String? bio;
   final bool isOwner;
+
+  /// A link to the profile photo that expires after 10 minutes; null when
+  /// there is none or the bio is hidden.
+  final String? avatarUrl;
 
   /// Null whenever the bio is hidden.
   final PostingStreak? streak;
@@ -116,6 +121,9 @@ class ProfileDetails {
       detailsVisible: detailsVisible,
       bio: bio as String?,
       isOwner: settings != null,
+      avatarUrl: json['avatarUrl'] is String
+          ? json['avatarUrl']! as String
+          : null,
       streak: PostingStreak.tryParse(json['streak']),
       stats: ProfileStats.tryParse(json['stats']),
       isPrivate: settings?['profileVisibility'] == 'private',
