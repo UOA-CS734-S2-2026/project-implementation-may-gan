@@ -9,6 +9,7 @@ import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
+import 'package:dayli_mobile/compose/media_compressor.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
@@ -134,6 +135,34 @@ class FakeMediaPicker implements MediaPicker {
 
   DraftAttachment _next() =>
       DraftAttachment(localPath: '/photos/${picks++}.jpg', mediaType: 'image');
+}
+
+/// Compresses instantly. Queue [results] to script outcomes; otherwise each
+/// photo becomes a 1000-byte JPEG and each video a 2000-byte MP4.
+class FakeMediaCompressor implements MediaCompressor {
+  final results = <CompressionResult>[];
+  final compressed = <DraftAttachment>[];
+  final discarded = <String>[];
+
+  @override
+  Future<CompressionResult> compress(DraftAttachment attachment) async {
+    compressed.add(attachment);
+    if (results.isNotEmpty) return results.removeAt(0);
+    final video = attachment.mediaType == 'video';
+    return CompressionSucceeded(
+      CompressedMedia(
+        path:
+            '/support/dayli-media/${compressed.length}.${video ? 'mp4' : 'jpg'}',
+        contentType: video ? 'video/mp4' : 'image/jpeg',
+        byteSize: video ? 2000 : 1000,
+        videoDuration: video ? const Duration(seconds: 5) : null,
+      ),
+    );
+  }
+
+  @override
+  Future<void> discard(String compressedPath) async =>
+      discarded.add(compressedPath);
 }
 
 class FakeFeedClient implements FeedClient {

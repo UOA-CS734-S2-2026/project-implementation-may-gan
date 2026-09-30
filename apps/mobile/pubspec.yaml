@@ -12,6 +12,7 @@ dependencies:
   firebase_messaging: ^16.7.0
   flutter:
     sdk: flutter
+  flutter_image_compress: ^2.5.1
   flutter_secure_storage: ^11.2.0
   flutter_svg: ^2.3.0
   go_router: ^18.0.1
@@ -19,7 +20,9 @@ dependencies:
   google_sign_in: ^7.2.0
   http: ^1.6.0
   image_picker: ^1.2.3
+  path_provider: ^2.1.6
   shared_preferences: ^2.5.5
+  v_video_compressor: ^2.2.3
   web_socket_channel: ^3.0.3
 dev_dependencies:
   fake_async: ^1.3.3
