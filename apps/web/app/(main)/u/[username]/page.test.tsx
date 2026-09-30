@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,20 +13,48 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/friends", () => api);
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "actor" } }) }));
+const replace = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
+const profiles = vi.hoisted(() => ({ profilesApi: { details: vi.fn(), update: vi.fn(), changeUsername: vi.fn() } }));
+vi.mock("@/features/profiles/shared/profiles.api", () => profiles);
 vi.mock("@/features/posts/list-profile-posts/ProfilePosts", () => ({
   ProfilePosts: ({ username }: { username: string }) => <p>posts for {username}</p>,
 }));
 
 import { Profile } from "./ClientPage";
 
-function renderProfile() {
+function details(overrides: Partial<{ username: string; detailsVisible: boolean; bio: string | null }> = {}) {
+  return { ok: true, value: { id: "ada", username: "ada", displayName: "Ada", detailsVisible: true, bio: "Counts things.", owner: null, ...overrides } };
+}
+
+function renderProfile(username = "ada") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}><Profile username="ada" /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><Profile username={username} /></QueryClientProvider>);
 }
 
 describe("social profile actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    profiles.profilesApi.details.mockResolvedValue(details());
+  });
+
+  it("shows a visible bio, or says the profile is private", async () => {
+    api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "none" } });
+    const open = renderProfile();
+    expect(await screen.findByText("Counts things.")).toBeTruthy();
+    open.unmount();
+
+    profiles.profilesApi.details.mockResolvedValue(details({ detailsVisible: false, bio: null }));
+    renderProfile();
+    expect(await screen.findByText("Ada's profile is private.")).toBeTruthy();
+  });
+
+  it("sends an old handle to the owner's current one", async () => {
+    profiles.profilesApi.details.mockResolvedValue(details({ username: "ada_new" }));
+    renderProfile("ada");
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/u/ada_new"));
+    expect(api.loadSocialProfile).not.toHaveBeenCalled();
   });
 
   it("shows a friend's posts and asks anyone else to add them first", async () => {
