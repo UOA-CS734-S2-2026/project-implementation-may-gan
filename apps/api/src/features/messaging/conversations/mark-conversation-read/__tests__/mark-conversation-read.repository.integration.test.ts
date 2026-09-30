@@ -7,7 +7,7 @@ import { createPostgresMarkConversationReadRepository } from "../mark-conversati
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
 const target = connectionString ? new URL(connectionString) : undefined;
-if (enabled && target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
+if (enabled && target?.pathname !== "/dayli_messaging_test") {
   throw new Error("MESSAGING_TEST_DATABASE_URL must use the isolated dayli_messaging_test database.");
 }
 const suite = enabled ? describe : describe.skip;
