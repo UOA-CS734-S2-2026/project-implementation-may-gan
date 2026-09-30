@@ -1,13 +1,13 @@
 import {
   apiErrorSchema,
   aucklandDateSchema,
+  MAX_POST_PHOTOS,
+  mediaContentTypeSchema,
   opaqueIdSchema,
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
-import { MAX_POST_PHOTOS } from "../../media/shared/media-reservation-policy";
-import { mediaContentTypeSchema } from "../../media/shared/media-reservation.contract";
 
 /**
  * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the

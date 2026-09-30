@@ -1,5 +1,5 @@
 import type { AucklandDayService, ClockLike } from "@dayli/domain";
-import { MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "../../media/shared/media-reservation-policy";
+import { MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "@dayli/contracts";
 
 export type DailyPostAudience = "solo" | "friends";
 

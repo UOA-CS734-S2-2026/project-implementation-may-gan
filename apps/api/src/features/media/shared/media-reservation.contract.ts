@@ -1,10 +1,8 @@
-import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
+import { apiErrorSchema, mediaContentTypeSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
-import { allowedContentTypes, MAX_ATTACHMENT_BYTES } from "./media-reservation-policy";
+import { MAX_ATTACHMENT_BYTES } from "./media-reservation-policy";
 
-export { apiErrorSchema };
-
-export const mediaContentTypeSchema = z.enum(allowedContentTypes).openapi("MediaContentType");
+export { apiErrorSchema, mediaContentTypeSchema };
 
 export const mediaReservationStatusSchema = z
   .enum(["pending", "expired", "validated", "failed"])
