@@ -127,6 +127,13 @@
       "when": 1790750487091,
       "tag": "0017_rainy_the_anarchist",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790751413721,
+      "tag": "0018_handy_shard",
+      "breakpoints": true
     }
   ]
 }
