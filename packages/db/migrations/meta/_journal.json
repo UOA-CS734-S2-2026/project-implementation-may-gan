@@ -197,6 +197,13 @@
       "when": 1790769000000,
       "tag": "0027_legal_publication_locking",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790811268425,
+      "tag": "0028_data_export_worker_procedures",
+      "breakpoints": true
     }
   ]
 }
