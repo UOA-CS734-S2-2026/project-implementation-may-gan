@@ -37,7 +37,8 @@ export const messageProjectionSelection = {
   unsentAt: schema.messages.unsentAt,
 };
 
-function storedMessage(row: MessageProjectionRow): StoredMessage {
+/** Validates and converts a native Drizzle message row to the internal model. */
+export function toStoredMessage(row: MessageProjectionRow): StoredMessage {
   return {
     ...row,
     sequence: requireSafeSequenceBigInt(row.sequence),
@@ -105,7 +106,7 @@ async function projectStoredMessageDto(
     count: item.count,
     reactedByActor: item.reacted,
   }));
-  return toMessageDto(message, parent ? storedMessage(parent) : null);
+  return toMessageDto(message, parent ? toStoredMessage(parent) : null);
 }
 
 /** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
@@ -114,5 +115,5 @@ export async function projectMessageDto(
   row: MessageProjectionRow,
   actorId: string,
 ): Promise<MessageDto> {
-  return projectStoredMessageDto(queryable, storedMessage(row), actorId);
+  return projectStoredMessageDto(queryable, toStoredMessage(row), actorId);
 }

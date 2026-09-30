@@ -15,14 +15,14 @@ const suite = enabled ? describe : describe.skip;
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 5 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 6 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
   const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
 
   beforeAll(async () => {
     await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[4]!}, 'active', now()), (${users[4]!}, ${users[0]!}, 'active', now())`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[4]!}, 'active', now()), (${users[4]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[5]!}, 'active', now()), (${users[5]!}, ${users[0]!}, 'active', now())`;
   });
 
   afterAll(async () => {
@@ -117,7 +117,25 @@ suite("send message Postgres repository", () => {
     expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
   });
 
-  it("rejects unsafe text-mode message sequences and rolls back the write transaction", async () => {
+  it("allocates Number.MAX_SAFE_INTEGER without changing the public sequence string", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "first",
+    });
+    await database.client`update public.conversations set last_message_sequence = 9007199254740990::bigint where id = ${created.conversation.id}`;
+
+    const result = await send.send(users[0]!, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "maximum safe sequence",
+    });
+
+    const [stored] = await database.client`select sequence::text as sequence from public.messages where id = ${result.message.id}`;
+    expect(result).toMatchObject({ replayed: false, message: { sequence: "9007199254740991" } });
+    expect(stored?.sequence).toBe("9007199254740991");
+  });
+
+  it("rejects Number.MAX_SAFE_INTEGER plus one and rolls back counter, message, change, and outbox work", async () => {
     const created = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
@@ -126,7 +144,7 @@ suite("send message Postgres repository", () => {
     const [beforeMessageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
     const [beforeChangeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
     const [beforeOutboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
-    await database.client`update public.conversations set last_message_sequence = 9007199254740992::bigint where id = ${created.conversation.id}`;
+    await database.client`update public.conversations set last_message_sequence = 9007199254740991::bigint where id = ${created.conversation.id}`;
 
     await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
@@ -137,8 +155,34 @@ suite("send message Postgres repository", () => {
     const [messageCount] = await database.client`select count(*)::int as count from public.messages where conversation_id = ${created.conversation.id}`;
     const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
     const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
-    expect(conversation?.sequence).toBe("9007199254740992");
+    expect(conversation?.sequence).toBe("9007199254740991");
     expect(messageCount?.count).toBe(beforeMessageCount?.count);
+    expect(changeCount?.count).toBe(beforeChangeCount?.count);
+    expect(outboxCount?.count).toBe(beforeOutboxCount?.count);
+  });
+
+  it("fails closed when an existing idempotent message has an unsafe sequence", async () => {
+    const clientMessageId = crypto.randomUUID();
+    const created = await direct.create(users[0]!, {
+      recipientId: users[5]!,
+      clientMessageId,
+      text: "first",
+    });
+    const [beforeChangeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [beforeOutboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    await database.client`update public.messages set sequence = 9007199254740992::bigint where id = ${created.message.id}`;
+
+    await expect(send.send(users[0]!, created.conversation.id, {
+      clientMessageId,
+      text: "first",
+    })).rejects.toThrow(RangeError);
+
+    const [conversation] = await database.client`select last_message_sequence::text as sequence from public.conversations where id = ${created.conversation.id}`;
+    const [message] = await database.client`select sequence::text as sequence from public.messages where id = ${created.message.id}`;
+    const [changeCount] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id}`;
+    const [outboxCount] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id}`;
+    expect(conversation?.sequence).toBe("1");
+    expect(message?.sequence).toBe("9007199254740992");
     expect(changeCount?.count).toBe(beforeChangeCount?.count);
     expect(outboxCount?.count).toBe(beforeOutboxCount?.count);
   });
