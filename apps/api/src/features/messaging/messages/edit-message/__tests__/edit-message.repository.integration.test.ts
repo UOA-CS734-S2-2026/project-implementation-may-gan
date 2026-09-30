@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresEditMessageStore } from "../edit-message.repository";
@@ -20,16 +21,29 @@ suite("edit message Postgres repository", () => {
   const edit = createEditMessageService({ store: createPostgresEditMessageStore(database.db), now: () => now });
 
   beforeAll(async () => {
-    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
-    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
+    const createdAt = new Date();
+    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: createdAt },
+      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: createdAt },
+    ]);
   });
 
   afterAll(async () => {
     try {
-      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
-      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
-      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
-      await database.client`delete from public."user" where id = any(${users}::text[])`;
+      await database.db.delete(schema.relationshipBlocks).where(or(
+        inArray(schema.relationshipBlocks.blockerId, users),
+        inArray(schema.relationshipBlocks.blockedId, users),
+      ));
+      await database.db.delete(schema.friendships).where(or(
+        inArray(schema.friendships.userId, users),
+        inArray(schema.friendships.friendId, users),
+      ));
+      await database.db.delete(schema.friendRequests).where(or(
+        inArray(schema.friendRequests.senderId, users),
+        inArray(schema.friendRequests.recipientId, users),
+      ));
+      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
     } finally {
       await database.close();
     }
@@ -56,8 +70,12 @@ suite("edit message Postgres repository", () => {
       expectedVersion: 1,
     })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
 
-    const [changes] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${created.conversation.id} and kind = 'message.edited'`;
-    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${created.conversation.id} and channel = 'realtime'`;
+    const [changes] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.conversationChanges)
+      .where(and(eq(schema.conversationChanges.conversationId, created.conversation.id), eq(schema.conversationChanges.kind, "message.edited")));
+    const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.messagingOutbox)
+      .where(and(eq(schema.messagingOutbox.conversationId, created.conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(changes?.count).toBe(1);
     expect(outbox?.count).toBe(4);
 
@@ -78,7 +96,9 @@ suite("edit message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "unsent",
     });
-    await database.client`update public.messages set body = null, unsent_at = now() where id = ${unsent.message.id}`;
+    await database.db.update(schema.messages)
+      .set({ body: null, unsentAt: new Date() })
+      .where(eq(schema.messages.id, unsent.message.id));
     await expect(edit.edit(users[0]!, unsent.conversation.id, unsent.message.id, {
       text: "cannot edit",
       expectedVersion: 1,
@@ -89,7 +109,11 @@ suite("edit message Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "blocked",
     });
-    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[1]!}, ${users[0]!}, now())`;
+    await database.db.insert(schema.relationshipBlocks).values({
+      blockerId: users[1]!,
+      blockedId: users[0]!,
+      blockedAt: new Date(),
+    });
     await expect(edit.edit(users[0]!, blocked.conversation.id, blocked.message.id, {
       text: "cannot edit",
       expectedVersion: 1,
