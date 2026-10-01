@@ -9,6 +9,22 @@ function browserRequest(headers: HeadersInit = {}, body?: BodyInit | null): Requ
   });
 }
 
+/** A request wrapper from another runtime, such as Vinext's NextRequest. */
+class CrossBrandRequest {
+  constructor(private readonly request: Request) {}
+
+  get [Symbol.toStringTag](): string { return "Request"; }
+  get url(): string { return this.request.url; }
+  get method(): string { return this.request.method; }
+  get headers(): Headers { return this.request.headers; }
+  get body(): ReadableStream<Uint8Array> | null { return this.request.body; }
+  get signal(): AbortSignal { return this.request.signal; }
+}
+
+function crossBrandRequest(request: Request): Request {
+  return new CrossBrandRequest(request) as unknown as Request;
+}
+
 describe("browser API proxy", () => {
   it("passes cookies, origin, request bodies, redirects, and individual Set-Cookie values through a fixed transport", async () => {
     const transport: ApiTransport = {
@@ -54,6 +70,44 @@ describe("browser API proxy", () => {
       "session=; Path=/; Max-Age=0; HttpOnly; Secure",
     ]);
     await expect(response.text()).resolves.toBe("redirecting");
+  });
+
+  it("reconstructs a cross-brand request wrapper without losing headers or a streaming body", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("streamed "));
+        controller.enqueue(new TextEncoder().encode("body"));
+        controller.close();
+      },
+    });
+    const request = crossBrandRequest(new Request("https://web.example.test/api/auth/get-session", {
+      method: "POST",
+      headers: {
+        "cf-connecting-ip": "203.0.113.11",
+        "content-type": "text/plain",
+        "x-request-source": "browser",
+      },
+      body,
+      duplex: "half",
+    } as RequestInit & { duplex?: "half" }));
+
+    expect(() => new Request(request, { headers: new Headers() })).toThrow(/(?:Invalid URL|parse URL).*Request/);
+
+    const transport: ApiTransport = {
+      fetch: vi.fn(async (upstream: Request) => {
+        expect(upstream.url).toBe("https://web.example.test/api/auth/get-session");
+        expect(upstream.method).toBe("POST");
+        expect(upstream.redirect).toBe("manual");
+        expect(upstream.headers.get("content-type")).toBe("text/plain");
+        expect(upstream.headers.get("x-request-source")).toBe("browser");
+        expect(upstream.headers.get("x-dayli-browser-source")).toBe("203.0.113.11");
+        await expect(upstream.text()).resolves.toBe("streamed body");
+        return new Response(null, { status: 204 });
+      }),
+    };
+
+    await expect(forwardBrowserApiRequest(request, transport)).resolves.toMatchObject({ status: 204 });
+    expect(transport.fetch).toHaveBeenCalledOnce();
   });
 
   it("rejects WebSocket upgrades and missing or invalid edge identity", async () => {
