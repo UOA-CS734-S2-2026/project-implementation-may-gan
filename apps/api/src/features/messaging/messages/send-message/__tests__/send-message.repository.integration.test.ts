@@ -1,4 +1,4 @@
-import { createDayliDatabase, lockRelationshipPair, schema } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
 import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
@@ -34,7 +34,6 @@ async function waitFor(condition: () => Promise<boolean>, message: string): Prom
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const relationshipClient = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 10 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
@@ -63,7 +62,7 @@ suite("send message Postgres repository", () => {
       await database.db.delete(friendRequests).where(or(inArray(friendRequests.senderId, users), inArray(friendRequests.recipientId, users)));
       await database.db.delete(user).where(inArray(user.id, users));
     } finally {
-      await Promise.all([database.close(), contender.close(), relationshipClient.close()]);
+      await Promise.all([database.close(), contender.close()]);
     }
   });
 
@@ -288,64 +287,6 @@ suite("send message Postgres repository", () => {
       expect(messageCount?.count).toBe(1);
     } finally {
       await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[9]!));
-    }
-  });
-
-  it("serializes block and send through user locks, then makes send observe the committed block", async () => {
-    const created = await direct.create(users[8]!, {
-      recipientId: users[9]!, clientMessageId: crypto.randomUUID(), text: "block contender",
-    });
-    const holder = createDayliDatabase(connectionString!);
-    const inspector = createDayliDatabase(connectionString!);
-    let release: (() => void) | undefined;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    let locksHeld: (() => void) | undefined;
-    const locked = new Promise<void>((resolve) => { locksHeld = resolve; });
-    try {
-      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
-      const [blockerBackend] = await relationshipClient.client`select pg_backend_pid() as pid`;
-      const [senderBackend] = await contender.client`select pg_backend_pid() as pid`;
-      const holderPid = Number(holderBackend?.pid);
-      const blockerPid = Number(blockerBackend?.pid);
-      const senderPid = Number(senderBackend?.pid);
-      const holderTransaction = holder.client.begin(async (tx) => {
-        await tx`select id from public."user" where id in (${users[8]!}, ${users[9]!}) order by id for update`;
-        locksHeld?.();
-        await held;
-      });
-      await locked;
-      const blocking = relationshipClient.db.transaction(async (tx) => {
-        await tx.select({ id: user.id }).from(user).where(inArray(user.id, [users[8]!, users[9]!]))
-          .orderBy(asc(user.id)).for("update");
-        await lockRelationshipPair(tx, users[8]!, users[9]!);
-        await tx.insert(relationshipBlocks).values({
-          blockerId: users[8]!, blockedId: users[9]!, blockedAt: new Date(),
-        });
-      });
-      await waitFor(async () => {
-        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${blockerPid})) as blocked`;
-        return row?.blocked === true;
-      }, "Expected relationship block to wait for canonical user locks.");
-      const sending = contenderSend.send(users[8]!, created.conversation.id, {
-        clientMessageId: crypto.randomUUID(), text: "must observe block",
-      });
-      await waitFor(async () => {
-        const [row] = await inspector.client`
-          select ${holderPid} = any(pg_blocking_pids(${senderPid}))
-            or ${blockerPid} = any(pg_blocking_pids(${senderPid})) as blocked
-        `;
-        return row?.blocked === true;
-      }, "Expected send to wait behind the canonical user-lock queue.");
-      release!();
-      await holderTransaction;
-      await expect(blocking).resolves.toBeUndefined();
-      await expect(sending).rejects.toMatchObject({ code: "BLOCKED" });
-    } finally {
-      release?.();
-      await database.db.delete(relationshipBlocks).where(and(
-        eq(relationshipBlocks.blockerId, users[8]!), eq(relationshipBlocks.blockedId, users[9]!),
-      ));
-      await Promise.all([holder.close(), inspector.close()]);
     }
   });
 

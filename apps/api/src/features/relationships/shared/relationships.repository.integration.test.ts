@@ -1,7 +1,7 @@
 import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createRelationshipsService } from "../../../app";
+import { createMessagingPersistenceServices, createRelationshipsService } from "../../../app";
 import { createHyperdriveRelationshipsStore, createPostgresRelationshipsStore } from "./relationships.repository";
 
 /**
@@ -24,7 +24,10 @@ suite("Postgres relationship persistence", () => {
   const directStore = createPostgresRelationshipsStore(database.db);
   const concurrentStore = createPostgresRelationshipsStore(concurrentDatabase.db);
   const service = createRelationshipsService(store, { now: () => new Date("2026-09-22T00:00:00.000Z") });
-  const users = Array.from({ length: 30 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const directService = createRelationshipsService(directStore);
+  const messaging = createMessagingPersistenceServices(database.db);
+  const concurrentMessaging = createMessagingPersistenceServices(concurrentDatabase.db);
+  const users = Array.from({ length: 32 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.db.insert(schema.user).values(users.map((id) => ({
@@ -109,6 +112,67 @@ suite("Postgres relationship persistence", () => {
       blocks: sql<number>`(select count(*) from ${schema.relationshipBlocks} where ${schema.relationshipBlocks.blockerId} = ${users[0]!} and ${schema.relationshipBlocks.blockedId} = ${users[1]!} and ${schema.relationshipBlocks.unblockedAt} is null)::int`,
     }).from(sql`(values (1)) as query_source`);
     expect(afterBlock).toEqual({ pending: 0, active: 0, blocks: 1 });
+  });
+
+  it("serializes the production block mutation before a concurrent send", async () => {
+    const blockerId = users[30]!;
+    const blockedId = users[31]!;
+    await database.db.insert(schema.friendships).values([
+      { userId: blockerId, friendId: blockedId, state: "active", stateChangedAt: new Date() },
+      { userId: blockedId, friendId: blockerId, state: "active", stateChangedAt: new Date() },
+    ]);
+    const conversation = await messaging.direct.create(blockerId, {
+      recipientId: blockedId, clientMessageId: crypto.randomUUID(), text: "block contention",
+    });
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let locksHeld: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => { locksHeld = resolve; });
+    const waitFor = async (condition: () => Promise<boolean>, message: string): Promise<void> => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (await condition()) return;
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+      throw new Error(message);
+    };
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [blockerBackend] = await database.client`select pg_backend_pid() as pid`;
+      const [senderBackend] = await concurrentDatabase.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const blockerPid = Number(blockerBackend?.pid);
+      const senderPid = Number(senderBackend?.pid);
+      const holderTransaction = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id in (${blockerId}, ${blockedId}) order by id for update`;
+        locksHeld?.();
+        await held;
+      });
+      await locked;
+      const blocking = directService.block(blockerId, blockedId);
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${blockerPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected production block mutation to wait for canonical user locks.");
+      const sending = concurrentMessaging.send.send(blockerId, conversation.conversation.id, {
+        clientMessageId: crypto.randomUUID(), text: "must observe production block",
+      });
+      await waitFor(async () => {
+        const [row] = await inspector.client`
+          select ${holderPid} = any(pg_blocking_pids(${senderPid}))
+            or ${blockerPid} = any(pg_blocking_pids(${senderPid})) as blocked
+        `;
+        return row?.blocked === true;
+      }, "Expected send to wait behind the production block mutation.");
+      release!();
+      await holderTransaction;
+      await expect(blocking).resolves.toMatchObject({ status: "blocked" });
+      await expect(sending).rejects.toMatchObject({ code: "BLOCKED" });
+    } finally {
+      release?.();
+      await Promise.all([holder.close(), inspector.close()]);
+    }
   });
 
   it("lists only minimal discoverable cards and omits private blocked and banned identities", async () => {
