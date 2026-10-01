@@ -36,6 +36,12 @@ describe("validateMigrationConnectionString", () => {
     ).not.toThrow();
   });
 
+  it("accepts the isolated lifecycle and export test database", () => {
+    expect(() =>
+      validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_lifecycle_test", "local"),
+    ).not.toThrow();
+  });
+
   it("accepts the isolated advisory-lock test database", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_advisory_lock_ci_test", "local"),
@@ -45,13 +51,13 @@ describe("validateMigrationConnectionString", () => {
   it("rejects local databases that are not explicitly designated test databases", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5433/dayli_relationship_test_copy", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, or dayli_advisory_lock_ci_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, dayli_lifecycle_test, or dayli_advisory_lock_ci_test.");
   });
 
   it("rejects local databases on another port", () => {
     expect(() =>
       validateMigrationConnectionString("postgresql://migrator:migrator@localhost:5432/postgres", "local"),
-    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, or dayli_advisory_lock_ci_test.");
+    ).toThrow("Local test migrations must target localhost:5433/dayli_test, dayli_relationship_test, dayli_messaging_test, dayli_lifecycle_test, or dayli_advisory_lock_ci_test.");
   });
 
   it("accepts only the dedicated development database", () => {

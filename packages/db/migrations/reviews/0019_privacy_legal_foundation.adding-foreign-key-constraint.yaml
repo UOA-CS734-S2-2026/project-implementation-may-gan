@@ -1,0 +1,6 @@
+reason: The nullable cleanup-task reference is added to the additive export table. It is immediately validated so terminal export rows cannot point at a missing durable cleanup task.
+affected_data_and_clients: Existing export rows may keep a null reference. Future expired rows require a cleanup task.
+rollout_sequence: Apply before code creates terminal export cleanup tasks.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a separately reviewed reference migration if the cleanup retention relationship changes.
+reviewer: Database and privacy reviewers required before hosted migration.
