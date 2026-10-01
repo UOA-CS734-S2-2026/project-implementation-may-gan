@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "index",
+    "about-dayli",
+    "using-dayli",
+    "systems",
+    "development",
+    "operations",
+    "api-reference",
+    "decisions-and-future-work"
+  ]
+}
