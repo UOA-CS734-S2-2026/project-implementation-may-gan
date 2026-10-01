@@ -47,6 +47,8 @@ jobs:
         run: pnpm test
       - name: Test local workerd browser proxy boundary
         run: pnpm --filter @dayli/api test:proxy-integration
+      - name: Test local source-provenance diagnostics
+        run: pnpm test:proxy-provenance
       - name: Test staging release workflow contract
         run: pnpm test:staging-release-contract
       - name: Test realtime API when present

@@ -353,10 +353,11 @@ This record deliberately omits raw session cookies, passwords, OAuth codes, conn
 | [#211](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/211) | Merged | Database identity/ledger gate and persistent web logs |
 | [#213](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/213) | Merged | Local workerd entrypoint proof in CI |
 | [#214](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/214) | Merged | Automatic forward staging migrations |
+| [#217](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/217) | Merged | Reject unsafe cross-origin mutations and fail closed on limiter outages |
 
 ## 19. Security audit follow-up, 2026-10-01
 
-A follow-up review confirmed two application-layer findings and fixed them locally. This section records the boundary of those fixes. It does not close the outstanding deployed provenance work.
+A follow-up review confirmed two application-layer findings. The fixes landed in PR #217 as `d9481b6b52a06c4452e81428ca957847a5c1f41c` after independent review and all four hosted CI jobs passed. Local verification covered 458 API tests and one workerd boundary test. This records the merge, not deployment verification, and does not close the outstanding provenance work.
 
 ### Fixed P1: actual cross-origin application mutations
 
@@ -378,7 +379,21 @@ Focused tests distinguish missing, unavailable, denied, and allowed decisions. T
 
 This remains an external Cloudflare verification gate, not a confirmed local fix. Current Cloudflare documentation says that a same-zone Worker subrequest derives `CF-Connecting-IP` from `x-real-ip`, which the caller Worker can alter. It also says a direct browser request has `x-real-ip` stripped. The observed normal direct-browser staging traffic contains both `cf-connecting-ip` and `x-real-ip`, so rejecting `x-real-ip` would break normal users and is not a valid mitigation. Service-binding documentation establishes private invocation, but does not provide a documented origin-authentication guarantee for the source context carried by this application.
 
-No source-header filter or speculative Worker provenance change was deployed. The smallest next step needs owner approval for a no-state staging diagnostic probe: compare sanitized booleans and short-lived aggregate buckets for a normal direct browser request, a controlled same-zone Worker subrequest, and the named service-binding request. It must not retain raw IPs, cookies, authorization values, request IDs, or copied headers, and it must not make account, database, deployment, secret, or settings changes without separate authorization. The probe must establish whether a Cloudflare-owned request signal can distinguish the paths before any source-identity enforcement is designed.
+At this audit stage, no source-header filter or speculative Worker provenance change had been deployed. The proposed next step was an owner-approved, no-state staging diagnostic to distinguish normal direct requests from incoming Worker requests without retaining sensitive metadata. The owner subsequently approved temporary diagnostic setup, recorded below.
+
+## 20. Approved deployed provenance diagnostic, 2026-10-01
+
+The owner asked the assistant to implement and set up the diagnostic directly, without a sub-agent. Wrangler access to the staging account was confirmed. Two temporary Workers were deployed on new, randomly named staging subdomains. The receiver imports the production `selectBrowserSource()` function. The caller has a fixed receiver destination and no access to the application or database. Worker secrets gate requests and key the returned identity hashes. Both Workers reject requests after six hours; cleanup remains required to delete the resources.
+
+The direct request retained its source identity when either of two synthetic `x-real-ip` values was supplied. A directly forged `CF-Worker` was absent at the receiver. A combined forwarding forgery returned 403 from the edge, which does not establish which individual header triggered rejection. Legitimate direct requests still included `x-real-ip`, confirming that blanket rejection of that header would be wrong.
+
+The same-zone caller selected two different synthetic identities by changing `x-real-ip`. This reproduces the issue with the actual production selector at the Cloudflare edge, rather than only in a local request fixture. Omitting or forging `CF-Worker` did not remove the same-zone marker at the receiver in these cases. Calls through the workers.dev endpoint received the documented fixed Worker IP and a different Worker marker. The baseline same-zone call also received the fixed IP when it did not supply `x-real-ip`, so that address alone must not be used to classify caller provenance.
+
+The initial system-resolver run could not resolve the new caller hostname. The complete comparison used Cloudflare public DNS with normal TLS hostname validation and no system DNS changes. This selected IPv4; the deployed Chromium browser check used IPv6. Their different hashes are not evidence of two independent networks.
+
+Eight Node tests, a real workerd smoke test, focused lint, and strict Worker-source typechecking passed. The deployed Chromium check confirmed that the page removes its token fragment and returns a sanitized sample. No login, cookie lifecycle, named-entrypoint, application mutation, database, or actual rate-limit-bucket test occurred. The app's source-selection policy was not changed.
+
+The Wi-Fi/mobile-data comparison is still pending owner participation. `CF-Worker` is a candidate rejection signal, supported by these observed cases and Cloudflare documentation, but enforcement and broader compatibility testing remain separate work. See [Temporary source-provenance diagnostic](./proxy-provenance-diagnostic.md) for commands, interpretation limits, and cleanup.
 
 ## References for platform assumptions
 
