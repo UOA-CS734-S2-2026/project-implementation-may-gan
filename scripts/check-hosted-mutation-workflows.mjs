@@ -24,12 +24,21 @@ const workflowPolicy = {
   "staging-hyperdrive.yml": {
     jobs: { "hosted-mutation-authorization": "guard", deploy: "mutation" },
     authorizedCheckoutJobs: ["deploy"],
+    reusable: true,
+  },
+  "staging-release.yml": {
+    jobs: {
+      "hosted-mutation-authorization": "guard",
+      capture: "capture",
+      api: "reusable-mutation",
+      web: "reusable-mutation",
+    },
     requiresTrustedWorkflowRun: true,
   },
   "staging-web.yml": {
     jobs: { "hosted-mutation-authorization": "guard", deploy: "mutation" },
     authorizedCheckoutJobs: ["deploy"],
-    requiresTrustedWorkflowRun: true,
+    reusable: true,
   },
 };
 
@@ -125,19 +134,22 @@ function requireCiHostedMutationHoldTest(workflow, filename, errors) {
 function requireTrustedWorkflowRun(workflow, guard, mutation, filename, errors) {
   const trigger = workflow.on?.workflow_run;
   const branches = Array.isArray(trigger?.branches) ? [...trigger.branches].sort() : [];
+  if (workflow.on?.workflow_dispatch?.inputs?.commit_sha) {
+    fail(errors, `${filename}: manual dispatch must not accept an unchecked rollback SHA.`);
+  }
   if (!trigger || !sameStrings(branches, ["main"])) {
     fail(errors, `${filename}: workflow_run must be restricted to main.`);
   }
-  const condition = String(mutation.if ?? "");
+  const condition = String(guard.if ?? "");
   if (!condition.includes("github.event.workflow_run.head_branch == 'main'")
     || !condition.includes("github.event.workflow_run.head_repository.full_name == github.repository")) {
     fail(errors, `${filename}: the mutation job must reject workflow_run events from forks and non-main branches.`);
   }
-  const checkout = (guard.steps ?? []).find((step) => step.uses === "actions/checkout@v4");
+  const checkout = (guard?.steps ?? []).find((step) => step.uses === "actions/checkout@v4");
   if (checkout?.with?.ref !== "refs/heads/main") {
     fail(errors, `${filename}: the guard must check out the live main ref.`);
   }
-  const authorization = (guard.steps ?? []).find((step) => String(step.run ?? "").includes("check-hosted-mutation-authorization.mjs"));
+  const authorization = (guard?.steps ?? []).find((step) => String(step.run ?? "").includes("check-hosted-mutation-authorization.mjs"));
   if (!String(authorization?.env?.EXPECTED_SHA ?? "").includes("github.event.workflow_run.head_sha")) {
     fail(errors, `${filename}: the guard must compare workflow_run.head_sha to the live main ref.`);
   }
@@ -186,6 +198,18 @@ export function auditHostedMutationWorkflows(repositoryRoot = process.cwd()) {
             fail(errors, `${filename}:${jobName} must check out the authorized commit.`);
           }
         }
+      } else if (classification === "capture") {
+        if (!String(job.needs ?? "").includes("hosted-mutation-authorization")
+          || !String(job.if ?? "").includes("needs.hosted-mutation-authorization.outputs.authorized == 'true'")) {
+          fail(errors, `${filename}:${jobName} must depend on the authorization guard.`);
+        }
+        if (!job.environment) fail(errors, `${filename}:${jobName} must capture protected staging mode after authorization.`);
+        if (hasSecretReference(job) || hasIdTokenWrite(job)) fail(errors, `${filename}:${jobName} exposes credentials before deployment.`);
+      } else if (classification === "reusable-mutation") {
+        const needs = Array.isArray(job.needs) ? job.needs : [job.needs].filter(Boolean);
+        if (!needs.includes("capture") || job.secrets !== "inherit" || !String(job.uses ?? "").startsWith("./.github/workflows/")) {
+          fail(errors, `${filename}:${jobName} must call a guarded reusable workflow after capture.`);
+        }
       } else {
         if (hasSecretReference(job)) fail(errors, `${filename}:${jobName} exposes a secret before authorization.`);
         if (hasIdTokenWrite(job)) fail(errors, `${filename}:${jobName} can mint an OIDC token before authorization.`);
@@ -212,7 +236,24 @@ export function auditHostedMutationWorkflows(repositoryRoot = process.cwd()) {
 
     if (filename === "ci.yml") requireCiHostedMutationHoldTest(workflow, filename, errors);
     if (policy.requiresTrustedWorkflowRun) {
-      requireTrustedWorkflowRun(workflow, jobs["hosted-mutation-authorization"], jobs.deploy, filename, errors);
+      requireTrustedWorkflowRun(workflow, jobs["hosted-mutation-authorization"], jobs.capture, filename, errors);
+      const api = jobs.api;
+      const web = jobs.web;
+      if (api?.uses !== "./.github/workflows/staging-hyperdrive.yml" || web?.uses !== "./.github/workflows/staging-web.yml"
+        || !String(web.needs ?? "").includes("api")
+        || api.with?.commit_sha !== "${{ needs.capture.outputs.commit_sha }}"
+        || web.with?.commit_sha !== "${{ needs.capture.outputs.commit_sha }}"
+        || api.with?.browser_proxy_enabled !== "${{ needs.capture.outputs.browser_proxy_enabled }}"
+        || web.with?.browser_proxy_enabled !== "${{ needs.capture.outputs.browser_proxy_enabled }}") {
+        fail(errors, `${filename}: API then web must use the same captured release contract.`);
+      }
+    }
+    if (policy.reusable) {
+      const deploy = jobs.deploy;
+      if (!String(deploy.needs ?? "").includes("hosted-mutation-authorization")
+        || !String(deploy.if ?? "").includes("needs.hosted-mutation-authorization.outputs.authorized == 'true'")) {
+        fail(errors, `${filename}: the reusable deployment must require its own guard.`);
+      }
     }
   }
 

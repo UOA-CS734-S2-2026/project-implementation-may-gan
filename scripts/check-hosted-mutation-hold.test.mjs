@@ -110,18 +110,48 @@ test("secret synchronization and manual database migration remain held mutation 
 
 test("workflow_run trust checks reject fork paths and stale guard bypasses", () => withFixture((root) => {
   replaceAll(
-    workflowPath(root, "staging-hyperdrive.yml"),
+    workflowPath(root, "staging-release.yml"),
     "github.event.workflow_run.head_repository.full_name == github.repository",
     "true",
   );
   assert.throws(() => auditHostedMutationWorkflows(root), /reject workflow_run events from forks/);
 
   replace(
-    workflowPath(root, "staging-web.yml"),
+    workflowPath(root, "staging-release.yml"),
     "ref: refs/heads/main",
     "ref: ${{ github.sha }}",
   );
   assert.throws(() => auditHostedMutationWorkflows(root), /must fully check out the live main ref/);
+}));
+
+test("coordinated capture rejects unchecked rollback inputs and reusable bypasses", () => withFixture((root) => {
+  replace(
+    workflowPath(root, "staging-release.yml"),
+    "  workflow_dispatch:\n",
+    "  workflow_dispatch:\n    inputs:\n      commit_sha:\n        required: false\n        type: string\n",
+  );
+  assert.throws(() => auditHostedMutationWorkflows(root), /must not accept an unchecked rollback SHA/);
+
+  replace(
+    workflowPath(root, "staging-release.yml"),
+    "    needs: hosted-mutation-authorization",
+    "    needs: []",
+  );
+  assert.throws(() => auditHostedMutationWorkflows(root), /capture must depend on the authorization guard/);
+
+  replace(
+    workflowPath(root, "staging-release.yml"),
+    "    needs: [capture, api]",
+    "    needs: [capture]",
+  );
+  assert.throws(() => auditHostedMutationWorkflows(root), /API then web must use the same captured release contract/);
+
+  replace(
+    workflowPath(root, "staging-hyperdrive.yml"),
+    "    needs: hosted-mutation-authorization",
+    "    needs: []",
+  );
+  assert.throws(() => auditHostedMutationWorkflows(root), /reusable deployment must require its own guard/);
 }));
 
 test("CI runs the hosted mutation hold test", () => withFixture((root) => {

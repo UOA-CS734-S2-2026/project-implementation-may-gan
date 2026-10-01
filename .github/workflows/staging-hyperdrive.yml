@@ -20,13 +20,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    environment: staging
+  hosted-mutation-authorization:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
+    outputs:
+      authorized: ${{ steps.authorization.outputs.authorized }}
+      target_sha: ${{ steps.authorization.outputs.target_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit_sha }}
+          ref: refs/heads/main
+          fetch-depth: 0
+      - id: authorization
+        name: Check the live operational hold and release contract
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+        run: |
+          TARGET_SHA="$(node scripts/check-hosted-mutation-authorization.mjs --expected-sha "$EXPECTED_SHA")"
+          if [[ "$TARGET_SHA" != "$REQUESTED_COMMIT_SHA" ]]; then
+            echo 'The reusable API workflow was not given the authorized release commit.' >&2
+            exit 1
+          fi
+          echo 'authorized=true' >> "$GITHUB_OUTPUT"
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: hosted-mutation-authorization
+    if: needs.hosted-mutation-authorization.outputs.authorized == 'true'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate captured browser proxy mode
+        env:
+          CAPTURED_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
+          STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
+        run: |
+          if [[ "$CAPTURED_BROWSER_PROXY_ENABLED" != "true" && "$CAPTURED_BROWSER_PROXY_ENABLED" != "false" ]]; then
+            echo 'Captured browser proxy mode must be true or false.' >&2
+            exit 1
+          fi
+          if [[ "$CAPTURED_BROWSER_PROXY_ENABLED" != "$STAGING_BROWSER_PROXY_ENABLED" ]]; then
+            echo 'Captured browser proxy mode no longer matches staging.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.hosted-mutation-authorization.outputs.target_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
