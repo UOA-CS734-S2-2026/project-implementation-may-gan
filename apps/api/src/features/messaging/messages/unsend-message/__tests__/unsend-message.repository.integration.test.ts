@@ -14,11 +14,20 @@ const suite = enabled ? describe : describe.skip;
 suite("unsend message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 4 }, (_, index) => `unsend-message-${crypto.randomUUID()}-${index}`);
+  const participantIds = new Map(users.slice().sort().map((userId, index) => [
+    userId,
+    `${String.fromCharCode(97 + index)}-unsend-message-participant-${crypto.randomUUID()}`,
+  ]));
+  const divergentParticipantId = participantIds.get(users[0]!)!;
   const { direct, set: setReaction, unsend } = createMessagingPersistenceServices(database.db);
 
   beforeAll(async () => {
     const now = new Date();
     await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    for (const [userId, participantId] of participantIds) {
+      await database.db.update(schema.messagingParticipants).set({ id: participantId })
+        .where(eq(schema.messagingParticipants.userId, userId));
+    }
     await database.db.insert(schema.friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: now },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: now },
@@ -83,6 +92,21 @@ suite("unsend message Postgres repository", () => {
     expect(reactions?.count).toBe(0);
     expect(changes?.count).toBe(1);
     expect(outbox?.count).toBe(6);
+    const [ownership] = await database.db.select({
+      senderId: schema.messages.senderId,
+      senderParticipantId: schema.messages.senderParticipantId,
+      memberId: schema.conversationChanges.memberId,
+      memberParticipantId: schema.conversationChanges.memberParticipantId,
+    }).from(schema.messages)
+      .innerJoin(schema.conversationChanges, and(
+        eq(schema.conversationChanges.messageId, schema.messages.id),
+        eq(schema.conversationChanges.kind, "message.unsent"),
+      ))
+      .where(eq(schema.messages.id, created.message.id));
+    expect(ownership).toEqual({
+      senderId: users[0], senderParticipantId: divergentParticipantId,
+      memberId: users[0], memberParticipantId: divergentParticipantId,
+    });
 
     await expect(unsend.unsend(users[0]!, created.conversation.id, created.message.id)).resolves.toMatchObject({ replayed: true });
     const [replayedChanges] = await database.db.select({ count: sql<number>`count(*)::int` })

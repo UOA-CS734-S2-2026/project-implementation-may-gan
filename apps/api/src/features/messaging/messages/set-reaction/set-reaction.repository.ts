@@ -2,6 +2,7 @@ import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type Hyperdr
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import { loadReactionSummaries } from "../../shared/message-projection";
+import { participantIdForUser } from "../../shared/participant-identity";
 import type { ConversationAccess, ReactionKey, StoredMessage } from "../../shared/messaging-types";
 
 export interface SetReactionTransaction {
@@ -33,9 +34,15 @@ class PostgresSetReactionTransaction implements SetReactionTransaction {
   async setReaction(messageId: string, actorId: string, reaction: ReactionKey): Promise<StoredMessage> {
     await this.queryable
       .insert(schema.messageReactions)
-      .values({ messageId, userId: actorId, reaction, createdAt: sql`now()` })
+      .values({
+        messageId,
+        userId: actorId,
+        participantId: participantIdForUser(actorId),
+        reaction,
+        createdAt: sql`now()`,
+      })
       .onConflictDoUpdate({
-        target: [schema.messageReactions.messageId, schema.messageReactions.userId],
+        target: [schema.messageReactions.messageId, schema.messageReactions.participantId],
         set: { reaction, createdAt: sql`now()` },
       });
     const current = await this.findMessage(this.conversationId, messageId);

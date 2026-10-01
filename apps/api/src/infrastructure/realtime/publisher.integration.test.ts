@@ -16,6 +16,8 @@ suite("Postgres realtime publisher authorization", () => {
   const ids = {
     alice: `realtime-publisher-a-${crypto.randomUUID()}`,
     bob: `realtime-publisher-b-${crypto.randomUUID()}`,
+    aliceParticipant: `a-realtime-participant-${crypto.randomUUID()}`,
+    bobParticipant: `z-realtime-participant-${crypto.randomUUID()}`,
     conversation: `realtime-publisher-c-${crypto.randomUUID()}`,
   };
   const createdAt = new Date();
@@ -66,6 +68,10 @@ suite("Postgres realtime publisher authorization", () => {
       { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
       { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
     ]);
+    await database.db.update(schema.messagingParticipants).set({ id: ids.aliceParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.alice));
+    await database.db.update(schema.messagingParticipants).set({ id: ids.bobParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.bob));
     await database.db.insert(schema.conversations).values({
       id: ids.conversation, kind: "direct", userLowId: ids.alice, userHighId: ids.bob, initiatorId: ids.alice,
       requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: createdAt, createdAt, updatedAt: createdAt,
@@ -163,6 +169,36 @@ suite("Postgres realtime publisher authorization", () => {
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, sender)).resolves.toBe(false);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, reactor)).resolves.toBe(true);
+  });
+
+  it("does not treat an ambiguous legacy reaction as the message author's blocked invalidation", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "reaction.changed" });
+    const author = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(true);
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(false);
+  });
+
+  it("does not deliver an ambiguous legacy reaction cleanup to the message author", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "reaction.changed" });
+    const author = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: ids.bob, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "d".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(false);
+  });
+
+  it("resolves an old-worker user-addressed recipient through divergent participant membership", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(true);
   });
 
   it("rejects old-worker positive delivery after either lifecycle becomes unavailable", async () => {

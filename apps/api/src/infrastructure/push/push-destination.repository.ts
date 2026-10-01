@@ -10,18 +10,18 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
     async resolve(job: OutboxJob) {
       if (!job.deviceRegistrationId) return null;
       const availableParticipant = (
-        userId: typeof schema.conversations.userLowId | typeof schema.conversations.userHighId,
+        participantId: typeof schema.conversations.participantLowId | typeof schema.conversations.participantHighId,
       ) => exists(database
-        .select({ id: schema.user.id })
-        .from(schema.user)
-        .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+        .select({ id: schema.messagingParticipants.id })
+        .from(schema.messagingParticipants)
+        .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
         .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
         .where(and(
-          eq(schema.user.id, userId),
+          eq(schema.messagingParticipants.id, participantId),
           eq(schema.messagingParticipants.state, "active"),
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
         )));
-      const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.userLowId)} and ${availableParticipant(schema.conversations.userHighId)}`;
+      const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.participantLowId)} and ${availableParticipant(schema.conversations.participantHighId)}`;
       const [row] = await database
         .select({
           tokenCiphertext: schema.pushDevices.tokenCiphertext,
@@ -42,11 +42,12 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
             and(isNotNull(schema.user.banExpires), lte(schema.user.banExpires, sql`now()`)),
           ),
         ))
-        .innerJoin(schema.conversationMembers, and(
-          eq(schema.conversationMembers.conversationId, job.conversationId),
-          eq(schema.conversationMembers.userId, schema.pushDevices.userId),
+        .innerJoin(schema.conversationMembers, eq(
+          schema.conversationMembers.conversationId,
+          job.conversationId,
         ))
         .innerJoin(schema.messagingParticipants, and(
+          eq(schema.messagingParticipants.id, schema.conversationMembers.participantId),
           eq(schema.messagingParticipants.userId, schema.pushDevices.userId),
           eq(schema.messagingParticipants.state, "active"),
         ))

@@ -16,6 +16,10 @@ const suite = enabled ? describe : describe.skip;
 suite("edit message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 2 }, (_, index) => `edit-message-${crypto.randomUUID()}-${index}`);
+  const lowParticipantId = `a-edit-message-participant-${crypto.randomUUID()}`;
+  const highParticipantId = `z-edit-message-participant-${crypto.randomUUID()}`;
+  const divergentParticipantId = users[0]! < users[1]! ? lowParticipantId : highParticipantId;
+  const peerParticipantId = users[0]! < users[1]! ? highParticipantId : lowParticipantId;
   let now = new Date("2026-09-29T10:00:00.000Z");
   const { direct } = createMessagingPersistenceServices(database.db, { now: () => now });
   const edit = createEditMessageService({ store: createPostgresEditMessageStore(database.db), now: () => now });
@@ -23,6 +27,10 @@ suite("edit message Postgres repository", () => {
   beforeAll(async () => {
     const createdAt = new Date();
     await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.update(schema.messagingParticipants).set({ id: divergentParticipantId })
+      .where(eq(schema.messagingParticipants.userId, users[0]!));
+    await database.db.update(schema.messagingParticipants).set({ id: peerParticipantId })
+      .where(eq(schema.messagingParticipants.userId, users[1]!));
     await database.db.insert(schema.friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: createdAt },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: createdAt },
@@ -78,6 +86,21 @@ suite("edit message Postgres repository", () => {
       .where(and(eq(schema.messagingOutbox.conversationId, created.conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(changes?.count).toBe(1);
     expect(outbox?.count).toBe(4);
+    const [ownership] = await database.db.select({
+      senderId: schema.messages.senderId,
+      senderParticipantId: schema.messages.senderParticipantId,
+      memberId: schema.conversationChanges.memberId,
+      memberParticipantId: schema.conversationChanges.memberParticipantId,
+    }).from(schema.messages)
+      .innerJoin(schema.conversationChanges, and(
+        eq(schema.conversationChanges.messageId, schema.messages.id),
+        eq(schema.conversationChanges.kind, "message.edited"),
+      ))
+      .where(eq(schema.messages.id, created.message.id));
+    expect(ownership).toEqual({
+      senderId: users[0], senderParticipantId: divergentParticipantId,
+      memberId: users[0], memberParticipantId: divergentParticipantId,
+    });
 
     const expiring = await direct.create(users[0]!, {
       recipientId: users[1]!,

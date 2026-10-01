@@ -25,6 +25,12 @@ suite("resolve message request Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 19 }, (_, index) => `resolve-message-request-${crypto.randomUUID()}-${index}`);
+  const acceptingParticipantId = users[1]! < users[0]!
+    ? `a-resolve-accept-participant-${crypto.randomUUID()}`
+    : `z-resolve-accept-participant-${crypto.randomUUID()}`;
+  const decliningParticipantId = users[14]! < users[13]!
+    ? `a-resolve-decline-participant-${crypto.randomUUID()}`
+    : `z-resolve-decline-participant-${crypto.randomUUID()}`;
   const {
     accountLifecycles,
     conversationChanges,
@@ -151,6 +157,10 @@ suite("resolve message request Postgres repository", () => {
 
   beforeAll(async () => {
     await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.update(schema.messagingParticipants).set({ id: acceptingParticipantId })
+      .where(eq(schema.messagingParticipants.userId, users[1]!));
+    await database.db.update(schema.messagingParticipants).set({ id: decliningParticipantId })
+      .where(eq(schema.messagingParticipants.userId, users[14]!));
   });
 
   afterAll(async () => {
@@ -196,6 +206,14 @@ suite("resolve message request Postgres repository", () => {
     const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
     expect(changeCount?.count).toBe(1);
     expect(outboxCount?.count).toBe(4);
+    const [change] = await database.db.select({
+      memberId: conversationChanges.memberId,
+      memberParticipantId: conversationChanges.memberParticipantId,
+    }).from(conversationChanges).where(and(
+      eq(conversationChanges.conversationId, created.conversation.id),
+      eq(conversationChanges.kind, "request.active"),
+    ));
+    expect(change).toEqual({ memberId: users[1], memberParticipantId: acceptingParticipantId });
   });
 
   it("refuses activation for a pending-deletion peer but permits decline", async () => {
@@ -248,6 +266,14 @@ suite("resolve message request Postgres repository", () => {
 
     await expect(repository.resolve(users[14]!, created.conversation.id, "decline"))
       .resolves.toMatchObject({ requestState: "declined", capabilities: { canSend: false, canResolveRequest: false } });
+    const [declineChange] = await database.db.select({
+      memberId: conversationChanges.memberId,
+      memberParticipantId: conversationChanges.memberParticipantId,
+    }).from(conversationChanges).where(and(
+      eq(conversationChanges.conversationId, created.conversation.id),
+      eq(conversationChanges.kind, "request.declined"),
+    ));
+    expect(declineChange).toEqual({ memberId: users[14], memberParticipantId: decliningParticipantId });
   });
 
   it("rejects acceptance when a pending lifecycle is inserted while its user lock is held", async () => {

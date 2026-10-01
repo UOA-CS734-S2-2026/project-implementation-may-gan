@@ -26,7 +26,7 @@ suite("create direct conversation Postgres repository", () => {
   const mixedCasePrefix = `create-direct-conversation-${crypto.randomUUID()}-`;
   const mixedCaseUsers = [`${mixedCasePrefix}a`, `${mixedCasePrefix}B`] as const;
   const users = [
-    ...Array.from({ length: 14 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
+    ...Array.from({ length: 16 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
     ...mixedCaseUsers,
   ];
   const builderQueries: string[] = [];
@@ -123,6 +123,52 @@ suite("create direct conversation Postgres repository", () => {
     expect(outboxCount?.count).toBe(2);
   });
 
+  it("writes divergent participant identities beside legacy direct-create fields and replays by participant", async () => {
+    const actorId = users[14]!;
+    const recipientId = users[15]!;
+    const lowParticipantId = `a-participant-${crypto.randomUUID()}`;
+    const highParticipantId = `z-participant-${crypto.randomUUID()}`;
+    const actorParticipantId = actorId < recipientId ? lowParticipantId : highParticipantId;
+    const recipientParticipantId = actorId < recipientId ? highParticipantId : lowParticipantId;
+    await database.db.update(schema.messagingParticipants).set({ id: actorParticipantId })
+      .where(eq(schema.messagingParticipants.userId, actorId));
+    await database.db.update(schema.messagingParticipants).set({ id: recipientParticipantId })
+      .where(eq(schema.messagingParticipants.userId, recipientId));
+
+    const clientMessageId = crypto.randomUUID();
+    const created = await direct.create(actorId, { recipientId, clientMessageId, text: "durable direct create" });
+    const replayed = await direct.create(actorId, { recipientId, clientMessageId, text: "durable direct create" });
+    const [stored] = await database.db.select({
+      userLowId: conversations.userLowId,
+      userHighId: conversations.userHighId,
+      participantLowId: conversations.participantLowId,
+      participantHighId: conversations.participantHighId,
+      initiatorParticipantId: conversations.initiatorParticipantId,
+      senderId: messages.senderId,
+      senderParticipantId: messages.senderParticipantId,
+    }).from(conversations)
+      .innerJoin(messages, eq(messages.conversationId, conversations.id))
+      .where(eq(conversations.id, created.conversation.id));
+    const members = await database.db.select({ userId: conversationMembers.userId, participantId: conversationMembers.participantId })
+      .from(conversationMembers)
+      .where(eq(conversationMembers.conversationId, created.conversation.id));
+
+    expect(replayed).toMatchObject({ replayed: true, message: { id: created.message.id } });
+    expect(stored).toMatchObject({
+      userLowId: actorId < recipientId ? actorId : recipientId,
+      userHighId: actorId < recipientId ? recipientId : actorId,
+      participantLowId: lowParticipantId,
+      participantHighId: highParticipantId,
+      initiatorParticipantId: actorParticipantId,
+      senderId: actorId,
+      senderParticipantId: actorParticipantId,
+    });
+    expect(members).toEqual(expect.arrayContaining([
+      { userId: actorId, participantId: actorParticipantId },
+      { userId: recipientId, participantId: recipientParticipantId },
+    ]));
+  });
+
   it("uses PostgreSQL pair ordering for mixed-case creation and idempotent resend", async () => {
     const [actorId, recipientId] = mixedCaseUsers;
     const clientMessageId = crypto.randomUUID();
@@ -158,7 +204,7 @@ suite("create direct conversation Postgres repository", () => {
       userHighId: referencePair!.lowId,
     }).where(eq(conversations.id, created.conversation.id))).rejects.toMatchObject({ cause: { code: "23514" } });
     expect(queries.some((query) => (
-      query.startsWith("select") && query.includes("least(") && query.includes("greatest(")
+      query.startsWith("select") && query.includes("case when") && query.includes("participant_low_id")
     ))).toBe(true);
     expect(queries.some((query) => (
       query.startsWith("insert into \"conversations\"") && query.includes("least(") && query.includes("greatest(")

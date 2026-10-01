@@ -23,6 +23,8 @@ suite("Postgres push destination authorization", () => {
   const ids = {
     alice: `push-alice-${crypto.randomUUID()}`,
     bob: `push-bob-${crypto.randomUUID()}`,
+    aliceParticipant: `a-push-participant-${crypto.randomUUID()}`,
+    bobParticipant: `z-push-participant-${crypto.randomUUID()}`,
     aliceSession: `push-alice-session-${crypto.randomUUID()}`,
     bobSession: `push-bob-session-${crypto.randomUUID()}`,
     conversation: `push-conversation-${crypto.randomUUID()}`,
@@ -53,6 +55,10 @@ suite("Postgres push destination authorization", () => {
       { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
       { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
     ]);
+    await database.db.update(schema.messagingParticipants).set({ id: ids.aliceParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.alice));
+    await database.db.update(schema.messagingParticipants).set({ id: ids.bobParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.bob));
     await database.db.insert(schema.session).values([
       { id: ids.aliceSession, expiresAt, token: `token-${ids.alice}`, createdAt: now, updatedAt: now, userId: ids.alice },
       { id: ids.bobSession, expiresAt, token: `token-${ids.bob}`, createdAt: now, updatedAt: now, userId: ids.bob },

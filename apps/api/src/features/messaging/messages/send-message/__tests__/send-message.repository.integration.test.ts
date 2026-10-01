@@ -34,13 +34,22 @@ async function waitFor(condition: () => Promise<boolean>, message: string): Prom
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 10 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 12 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const durableUsers = [users[10]!, users[11]!].sort();
+  const durableParticipantIds = new Map([
+    [durableUsers[0]!, `a-send-message-participant-${crypto.randomUUID()}`],
+    [durableUsers[1]!, `z-send-message-participant-${crypto.randomUUID()}`],
+  ]);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
   const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
 
   beforeAll(async () => {
     await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    for (const [userId, participantId] of durableParticipantIds) {
+      await database.db.update(schema.messagingParticipants).set({ id: participantId })
+        .where(eq(schema.messagingParticipants.userId, userId));
+    }
     await database.db.insert(friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
@@ -52,6 +61,8 @@ suite("send message Postgres repository", () => {
       { userId: users[7]!, friendId: users[6]!, state: "active", stateChangedAt: new Date() },
       { userId: users[8]!, friendId: users[9]!, state: "active", stateChangedAt: new Date() },
       { userId: users[9]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[10]!, friendId: users[11]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[11]!, friendId: users[10]!, state: "active", stateChangedAt: new Date() },
     ]);
   });
 
@@ -118,6 +129,33 @@ suite("send message Postgres repository", () => {
       { changeSequence: 2, kind: "message.created", messageId: first.message.id },
     ]);
     expect(outbox?.count).toBe(4);
+  });
+
+  it("sends and replays by a divergent participant while retaining its legacy sender and change actor", async () => {
+    const actorId = users[10]!;
+    const recipientId = users[11]!;
+    const created = await direct.create(actorId, {
+      recipientId, clientMessageId: crypto.randomUUID(), text: "durable first",
+    });
+    const clientMessageId = crypto.randomUUID();
+    const sent = await send.send(actorId, created.conversation.id, { clientMessageId, text: "durable send" });
+    const replayed = await send.send(actorId, created.conversation.id, { clientMessageId, text: "durable send" });
+    const [stored] = await database.db.select({
+      senderId: messages.senderId,
+      senderParticipantId: messages.senderParticipantId,
+      memberId: conversationChanges.memberId,
+      memberParticipantId: conversationChanges.memberParticipantId,
+    }).from(messages)
+      .innerJoin(conversationChanges, eq(conversationChanges.messageId, messages.id))
+      .where(eq(messages.id, sent.message.id));
+
+    expect(replayed).toMatchObject({ replayed: true, message: { id: sent.message.id } });
+    expect(stored).toEqual({
+      senderId: actorId,
+      senderParticipantId: durableParticipantIds.get(actorId),
+      memberId: null,
+      memberParticipantId: null,
+    });
   });
 
   it("serializes concurrent sends from two PostgreSQL clients without losing message or change sequences", async () => {
