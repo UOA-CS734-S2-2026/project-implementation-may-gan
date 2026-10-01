@@ -91,7 +91,11 @@ Migration commands enforce all of these guards:
 - Disposable local test migrations use only the named localhost fixture databases, including `dayli_test`, `dayli_relationship_test`, and the isolated `dayli_lifecycle_test` lifecycle and export fixture. Persistent local development uses only `migrator` at `localhost:5434/dayli_dev` through `pnpm db:dev:migrate` and `pnpm db:dev:verify`.
 - Staging and production URLs require a direct `*.neon.tech` host, reject `-pooler`, and require `sslmode=require`, `verify-ca`, or `verify-full`.
 - Production migration application additionally requires `CONFIRM_PRODUCTION_MIGRATION="MIGRATE production"` and `CONFIRM_NEON_BACKUP_CHECKED=true`.
-- `pnpm db:verify` is read-only and fails if migrations are pending, hashes differ, or the database has unknown migration records.
+- `pnpm db:verify` opens a read-only transaction and compares the ordered `drizzle.__drizzle_migrations` hashes with the migration SQL in the checked-out release. It fails if migrations are pending, hashes differ, or the database has unknown migration records.
+
+Before that comparison, the coordinated staging API workflow reads the exact Hyperdrive selected by `CLOUDFLARE_STAGING_HYPERDRIVE_ID` through Cloudflare's read-only API. It compares the returned direct Neon host, database, and port with the parsed direct `DATABASE_URL`. It accepts `migrator` for the direct connection and requires Hyperdrive to use the restricted `app` role. It rejects pooler hosts, unavailable origin fields, and every mismatch without printing a connection string or target values.
+
+The workflow checks out the captured release at the repository root and separately checks out the immutable workflow tooling revision. It runs the tooling revision's verifier against the root release's migration directory, so a compatible historical rollback does not need to contain the verifier while its own migration hashes remain the comparison input. The comparison happens before it generates configuration, synchronizes Worker secrets, deploys either Worker, or runs the Hyperdrive proof. It uses the existing protected staging `DATABASE_URL` only as a direct `migrator` connection. It does not use Hyperdrive or expose that connection to a Worker. This is a migration-record check, not a CI-artifact or commit-SHA check, so a documentation-only commit does not change the result. It does not inspect every physical schema object and cannot prove that no out-of-band DDL drift occurred. The gate never applies migrations. Pending records require reviewed staging migrations and a retry. Changed hashes require a migration-ledger investigation, not an edit to applied migrations. Unknown or newer records require compatible code or a reviewed forward fix, never a destructive downgrade.
 
 `pnpm db:migrate` takes a PostgreSQL advisory lock, waits up to 30 seconds for it, uses a 5-second object-lock timeout, and uses a 5-minute statement timeout. It is forward-only. Do not write automatic down migrations.
 
@@ -113,11 +117,15 @@ After `migrator` and `app` have passwords, `lifecycle_worker` has been bootstrap
 2. Dispatch the protected staging workflow from `main` with the restricted `migrator` secret.
 3. Review the sanitized evidence artifact and verify application compatibility through Hyperdrive as `app`, never as owner.
 4. Provision a separate production Neon project only after staging succeeds. Confirm a recent production restore point, obtain protected-environment approval, and dispatch the same `main` commit with the production confirmations.
-5. Deploy dependent Worker code after the additive database change is present.
+5. Dispatch the coordinated staging release. Its read-only schema gate must pass before it can synchronize secrets, deploy the API, run the Hyperdrive proof, or deploy web.
 
 ## Rollback, break glass, and repository settings
 
 Prefer application rollback for a faulty release. For database defects, write a forward-fix migration. If restoration is necessary, use Neon restore-point procedures, record the chosen checkpoint, expected data-loss window, and verification, then redeploy from `main`.
+
+The release gate requires an exact ordered migration history for the selected commit. It rejects a rollback commit when staging has migrations that are newer than that checkout, even if the older application code might appear schema-compatible. It also rejects a newer application release when reviewed migrations are pending. Do not bypass the gate or restore a database just to make an old Worker deploy. Choose a release whose schema history exactly matches staging, or use a reviewed forward fix and migration plan.
+
+The staging API job and staging manual-migration runs share a GitHub Actions concurrency group. It serializes those normal workflows from the target check through the API proof, but not through the dependent web job. GitHub Actions keeps at most one pending run in this group and replaces an older pending run when a newer request arrives. Do not rely on FIFO ordering. It cannot lock out a direct or break-glass database change, and it is not a continuing physical-schema guarantee after the check finishes.
 
 Normal staging and production migrations run only through the manual GitHub Actions workflow. Break glass is allowed only when GitHub Actions is unavailable and delay would worsen an incident. Use the protected direct `migrator` URL, set `MIGRATION_TARGET`, run `pnpm db:check`, `pnpm db:migrate`, and `pnpm db:verify`, save sanitized output, and open a retrospective PR or issue.
 
