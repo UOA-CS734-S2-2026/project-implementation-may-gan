@@ -136,6 +136,7 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
           contentType: schema.mediaReservation.contentType,
           byteSize: schema.mediaReservation.byteSize,
           expiresAt: schema.mediaReservation.expiresAt,
+          cleanupClaimedAt: schema.mediaReservation.cleanupClaimedAt,
         })
         .from(schema.mediaReservation)
         .where(and(
@@ -149,7 +150,12 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .from(schema.postMedia)
         .where(inArray(schema.postMedia.reservationId, reservations.map((row) => row.reservationId)));
       const linkedIds = new Set(linked.map((row) => row.reservationId));
-      return reservations.map((row) => ({ ...row, linked: linkedIds.has(row.reservationId) }));
+      return reservations.map(({ cleanupClaimedAt, ...row }) => ({
+        ...row,
+        // Cleanup tombstones the upload under this same row lock, so a claimed
+        // upload reads as already used and is never attached.
+        linked: linkedIds.has(row.reservationId) || cleanupClaimedAt !== null,
+      }));
     },
 
     async insertPost(post) {

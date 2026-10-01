@@ -62,7 +62,7 @@ export interface AttachableMedia {
   contentType: string;
   byteSize: number;
   expiresAt: Date;
-  /** True when a post already uses this upload, detached or not. */
+  /** True when a post already uses this upload, detached or not, or cleanup has claimed it. */
   linked: boolean;
 }
 

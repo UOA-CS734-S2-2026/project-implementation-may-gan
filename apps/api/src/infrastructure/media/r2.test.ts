@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPresignedDownloadUrl,
   createPresignedUploadUrl,
+  deleteR2Object,
   headR2Object,
   R2ReadInfrastructureError,
   readR2ObjectRange,
@@ -143,5 +144,29 @@ describe("headR2Object / readR2ObjectRange — infrastructure error wrapping", (
 
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(headResponse(new Headers({ "content-length": "1024" }))));
     await expect(headR2Object(configuration, "media/owner/id")).resolves.toEqual({ outcome: "found", contentLength: 1024 });
+  });
+});
+
+describe("deleteR2Object", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends one signed DELETE for the object key and treats 204 and 404 as success", async () => {
+    for (const status of [204, 404]) {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status }));
+      vi.stubGlobal("fetch", fetchMock);
+      await expect(deleteR2Object(configuration, "media/owner/reservation")).resolves.toBeUndefined();
+      const [url, init] = fetchMock.mock.calls[0] as [Request | string | URL, RequestInit | undefined];
+      const request = url instanceof Request ? url : new Request(url, init);
+      expect(request.method).toBe("DELETE");
+      expect(new URL(request.url).pathname).toContain("media/owner/reservation");
+      expect(request.headers.get("authorization")).toContain("AWS4-HMAC-SHA256");
+    }
+  });
+
+  it("wraps an unexpected status and a raw network error in R2ReadInfrastructureError", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+    await expect(deleteR2Object(configuration, "media/o/r")).rejects.toBeInstanceOf(R2ReadInfrastructureError);
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("network error")));
+    await expect(deleteR2Object(configuration, "media/o/r")).rejects.toBeInstanceOf(R2ReadInfrastructureError);
   });
 });

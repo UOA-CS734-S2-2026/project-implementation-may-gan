@@ -64,3 +64,39 @@ describe("completeMediaReservation — TTL race between the pre-check and the cl
     expect(repository.records.get(record.id)!.status).toBe("validated");
   });
 });
+
+describe("completeMediaReservation — claimed by cleanup", () => {
+  it("reads a tombstoned upload as gone, without reading R2 or settling it", async () => {
+    const repository = createFakeMediaReservationRepository();
+    const record = pendingRecord({ cleanupClaimedAt: new Date() });
+    repository.records.set(record.id, record);
+
+    const result = await completeMediaReservation(
+      { repository, r2Reader: createFakeR2Reader(new Map([[objectKey, validJpegBytes]])) },
+      ownerId,
+      record.id,
+    );
+
+    expect(result).toEqual({ outcome: "not_found" });
+    expect(repository.records.get(record.id)?.status).toBe("pending");
+  });
+
+  it("does not settle a pending upload cleanup claims during the R2 reads", async () => {
+    const repository = createFakeMediaReservationRepository();
+    const record = pendingRecord();
+    repository.records.set(record.id, record);
+    const reader = createFakeR2Reader(new Map([[objectKey, validJpegBytes]]));
+    const claimingReader = {
+      ...reader,
+      head: async (key: string) => {
+        repository.records.set(record.id, { ...record, cleanupClaimedAt: new Date() });
+        return reader.head(key);
+      },
+    };
+
+    const result = await completeMediaReservation({ repository, r2Reader: claimingReader }, ownerId, record.id);
+
+    expect(result).toEqual({ outcome: "expired" });
+    expect(repository.records.get(record.id)?.status).toBe("pending");
+  });
+});
