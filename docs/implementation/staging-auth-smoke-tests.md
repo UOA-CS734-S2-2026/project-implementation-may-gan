@@ -1,6 +1,6 @@
 # Staging authentication smoke tests
 
-Status: the first hosted manual run, [36919168053](https://github.com/agroupforcoders/dayli/actions/runs/36919168053), failed with `browser_failure` after 5 ms. Scheduled and post-release execution remain disabled by default. No hosted rerun or scheduled monitoring has been enabled by this document.
+Status: the first hosted manual run, [36919168053](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36919168053), failed with `browser_failure` after 5 ms. Scheduled and post-release execution remain disabled by default. No hosted rerun or scheduled monitoring has been enabled by this document.
 
 The owner created a disposable staging account and reported adding `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` as GitHub secrets. This work adds a small synthetic browser journey against the deployed site. It does not claim complete authentication security coverage.
 
@@ -83,12 +83,12 @@ The post-release path accepts only a successful same-repository, `main`-branch `
 
 ## Evidence to record as work proceeds
 
-The hosted manual run [36919168053](https://github.com/agroupforcoders/dayli/actions/runs/36919168053) installed dependencies but had no Playwright browser-install step, then reported `browser_failure` in 5 ms. That category and duration strongly point to missing Chromium provisioning. The raw browser error is intentionally suppressed by the runner's safe reporting, so it is not retained as evidence. A hosted rerun remains pending after this fix.
+The hosted manual run [36919168053](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36919168053) installed dependencies but had no Playwright browser-install step, then reported `browser_failure` in 5 ms. That category and duration strongly point to missing Chromium provisioning. The raw browser error is intentionally suppressed by the runner's safe reporting, so it is not retained as evidence. A hosted rerun remains pending after this fix.
 
-Local validation for this repair passed: `pnpm test:staging-auth-smoke-contract` passed 9 default-journey, privacy, cleanup, and workflow-contract tests, including the browser-install ordering check; `pnpm test:staging-release-contract` passed 22 tests; and `pnpm lint` passed. Chromium launched and closed locally without credentials using the smoke runner's production environment allowlist. `MIGRATION_BASE_REF=7e2f29fa070cb252fd39fa166960f1f2e1e06d55 VERIFY_POSTGRES_PORT=55433 pnpm verify:local:full` also passed. The immutable ancestor is this branch's direct parent, and the verification uses only an isolated local PostgreSQL fixture. This is local-only evidence, not a hosted authentication-smoke result.
+Local validation for this repair passed: `pnpm test:staging-auth-smoke-contract` passed 9 default-journey, privacy, cleanup, and workflow-contract tests, including the browser-install ordering check; `pnpm test:staging-release-contract` passed 22 tests; and `pnpm lint` passed. Chromium launched and closed locally without credentials using the smoke runner's production environment allowlist. `MIGRATION_BASE_REF=7e2f29fa070cb252fd39fa166960f1f2e1e06d55 VERIFY_POSTGRES_PORT=55433 pnpm verify:local:full` also passed. The migration baseline is an immutable ancestor, not the direct parent of the repair commit. The verification uses only an isolated local PostgreSQL fixture. This is local-only evidence, not a hosted authentication-smoke result.
 
 - Implementation commit and test commands/results.
-- Independent review findings and resolutions. No independent review was performed in this implementation worktree because the owner explicitly required the selected implementor to make the change without further delegation. Obtain normal PR review before merge.
+- Independent review of repair commit `13272a2d` found no code or workflow issues. Its documentation finding, incorrectly calling the migration baseline the direct parent, was corrected. The reviewer independently passed both contract suites and checked workspace Playwright resolution and the credential boundary.
 - Workflow and report locations.
 - Manual hosted run URL, automation revision, release attribution, and sanitized result.
 - Whether automated execution is still disabled or has been enabled with approval.
