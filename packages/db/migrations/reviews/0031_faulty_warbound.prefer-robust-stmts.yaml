@@ -1,0 +1,6 @@
+reason: The generated constraint replacement is applied atomically by the protected migration runner. The nullable column is additive and uses IF NOT EXISTS.
+affected_data_and_clients: Adds a nullable multipart upload identifier to private cleanup tombstones.
+rollout_sequence: Apply with the repository migration runner and its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Correct any later constraint change in a new migration.
+reviewer: Database and privacy reviewers required.

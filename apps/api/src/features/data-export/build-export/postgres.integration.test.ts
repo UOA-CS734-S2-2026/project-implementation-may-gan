@@ -43,6 +43,7 @@ function local(url: string | undefined, role: string) {
       uploadPart: async ({ key, bytes }) => { parts.get(key)?.push(bytes); return { etag: String(parts.get(key)?.length) }; },
       complete: async ({ key }) => { const chunks = parts.get(key) ?? []; const archive = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.byteLength, 0)); let offset = 0; for (const chunk of chunks) { archive.set(chunk, offset); offset += chunk.byteLength; } objects.set(key, archive); },
       abort: async () => undefined,
+      listMultipartUploads: async () => [],
       remove: async (key) => { objects.delete(key); },
     };
     const api = createApp({ dataExport: {

@@ -48,6 +48,10 @@ export function createRestrictedDataExportWorkerStore(database: DayliDatabase) {
       const rows = Array.isArray(result) ? result as unknown as Array<{ object_key: string | null }> : (result as unknown as { rows: Array<{ object_key: string | null }> }).rows;
       return rows[0]?.object_key ?? null;
     },
+    async recordMultipartUpload(input: { id: string; leaseToken: string; uploadId: string }): Promise<boolean> {
+      const result = await database.execute(sql`select public.dayli_export_record_multipart_upload(${input.id}, ${input.leaseToken}, ${input.uploadId}) as recorded`);
+      return resultRows<{ recorded: boolean }>(result)[0]?.recorded === true;
+    },
     async publish(input: { id: string; leaseToken: string; lifecycleGeneration: number; objectKey: string; snapshotCutoffAt: Date }): Promise<boolean> {
       const result = await database.execute(sql`select public.dayli_export_publish(${input.id}, ${input.leaseToken}, ${input.lifecycleGeneration}, ${input.objectKey}, ${input.snapshotCutoffAt.toISOString()}) as published`);
       const rows = Array.isArray(result) ? result as unknown as Array<{ published: boolean }> : (result as unknown as { rows: Array<{ published: boolean }> }).rows;
@@ -57,11 +61,11 @@ export function createRestrictedDataExportWorkerStore(database: DayliDatabase) {
       const result = await database.execute(sql`select public.dayli_export_fail(${input.id}, ${input.leaseToken}, ${input.category}) as failed`);
       return resultRows<{ failed: boolean }>(result)[0]?.failed === true;
     },
-    async claimCleanup(): Promise<{ id: string; objectKey: string; leaseToken: string } | null> {
+    async claimCleanup(): Promise<{ id: string; objectKey: string; leaseToken: string; multipartUploadId: string | null } | null> {
       const token = crypto.randomUUID();
       const result = await database.execute(sql`select * from public.dayli_export_cleanup_claim(${token}, 300)`);
-      const row = resultRows<{ id: string; archive_object_key: string; lease_token: string }>(result)[0];
-      return row ? { id: row.id, objectKey: row.archive_object_key, leaseToken: row.lease_token } : null;
+      const row = resultRows<{ id: string; archive_object_key: string; lease_token: string; multipart_upload_id: string | null }>(result)[0];
+      return row ? { id: row.id, objectKey: row.archive_object_key, leaseToken: row.lease_token, multipartUploadId: row.multipart_upload_id } : null;
     },
     async completeCleanup(id: string, leaseToken: string): Promise<boolean> {
       const result = await database.execute(sql`select public.dayli_export_cleanup_complete(${id}, ${leaseToken}) as completed`);

@@ -2,6 +2,7 @@ export const exportArchiveVersion = 1;
 export const exportPartBytes = 5 * 1024 * 1024;
 export const exportMaximumBytes = 250 * 1024 * 1024;
 export const exportMaximumParts = 50;
+export const exportMaximumRecordBytes = 32 * 1024;
 
 export interface ExportBuildJob {
   id: string;
@@ -15,6 +16,8 @@ export interface ExportBuildStore {
   claim(now: Date): Promise<ExportBuildJob | null>;
   /** Inserts a durable cleanup ownership record before any object is created. */
   reserveObject(job: ExportBuildJob): Promise<string | null>;
+  /** Persists the multipart ID before any part or completion request. */
+  recordMultipartUpload(job: ExportBuildJob, uploadId: string): Promise<boolean>;
   /** Must lock the lifecycle row and compare generation before publication. */
   publish(input: { job: ExportBuildJob; objectKey: string; snapshotCutoffAt: Date; readyAt: Date }): Promise<"published" | "stale">;
   /** A false result means the lease was stale, never that cleanup can be forgotten. */
@@ -25,6 +28,8 @@ export interface ExportObjectStore {
   uploadPart(input: { key: string; uploadId: string; partNumber: number; bytes: Uint8Array }): Promise<{ etag: string }>;
   complete(input: { key: string; uploadId: string; parts: Array<{ partNumber: number; etag: string }> }): Promise<void>;
   abort(input: { key: string; uploadId: string }): Promise<void>;
+  /** Lists active multipart uploads for this exact, lease-fenced object key. */
+  listMultipartUploads(key: string): Promise<string[]>;
   remove(key: string): Promise<void>;
 }
 export interface ExportSource {
@@ -51,6 +56,28 @@ function descriptor(crc: number, size: number) { return concat([u32(0x08074b50),
 function centralHeader(name: Uint8Array, crc: number, size: number, offset: number) { return concat([u32(0x02014b50), u16(20), u16(8), u16(0), u16(0), u16(0), u32(crc), u32(size), u32(size), u16(name.byteLength), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset), name]); }
 function endOfCentralDirectory(size: number, offset: number) { return concat([u32(0x06054b50), u16(0), u16(0), u16(1), u16(1), u32(size), u32(offset), u16(0)]); }
 
+function boundedJson(value: unknown): string {
+  const visit = (item: unknown): string => {
+    if (item === null || typeof item === "boolean") return JSON.stringify(item);
+    if (typeof item === "number") { if (!Number.isFinite(item)) throw new ExportLimitError(); return JSON.stringify(item); }
+    if (typeof item === "string") {
+      if (encoder.encode(item).byteLength > exportMaximumRecordBytes) throw new ExportLimitError();
+      return JSON.stringify(item);
+    }
+    if (Array.isArray(item)) {
+      if (item.length > 100) throw new ExportLimitError();
+      return `[${item.map(visit).join(",")}]`;
+    }
+    if (typeof item !== "object" || Object.getPrototypeOf(item) !== Object.prototype) throw new ExportLimitError();
+    const entries = Object.entries(item);
+    if (entries.length > 100) throw new ExportLimitError();
+    return `{${entries.map(([key, nested]) => `${visit(key)}:${visit(nested)}`).join(",")}}`;
+  };
+  const serialized = visit(value);
+  if (encoder.encode(serialized).byteLength > exportMaximumRecordBytes) throw new ExportLimitError();
+  return serialized;
+}
+
 /** A bounded stored ZIP writer. At most one multipart part is held in memory. */
 export async function buildExportArchive(input: { job: ExportBuildJob; store: ExportBuildStore; source: ExportSource; objects: ExportObjectStore; now: () => Date }): Promise<"published" | "stale" | "failed"> {
   const key = await input.store.reserveObject(input.job);
@@ -59,6 +86,7 @@ export async function buildExportArchive(input: { job: ExportBuildJob; store: Ex
   let category: "size_limit" | "storage" | "source" = "storage";
   try {
     upload = await input.objects.begin(key);
+    if (!await input.store.recordMultipartUpload(input.job, upload.uploadId)) throw new Error("Export multipart lease is stale.");
     const name = encoder.encode("data.ndjson");
     const header = localHeader(name);
     const pending: Uint8Array[] = [header];
@@ -84,10 +112,9 @@ export async function buildExportArchive(input: { job: ExportBuildJob; store: Ex
       pendingBytes += manifestBytes.byteLength;
       await flush();
       for await (const projection of input.source.records(input.job)) {
-        const serialized = JSON.stringify(projection);
-        // The source functions project bounded database columns. This additional
-        // check prevents a malformed adapter from allocating an unbounded part.
-        if (serialized.length > exportMaximumBytes) throw new ExportLimitError();
+        // Validate strings and nested references before serializing them. This
+        // avoids stringifying an untrusted object of arbitrary size first.
+        const serialized = boundedJson(projection);
         const bytes = encoder.encode(`${serialized}\n`);
         entryBytes += bytes.byteLength;
         archiveBytes += bytes.byteLength;

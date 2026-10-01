@@ -21,10 +21,10 @@ export default {
     const r2 = readR2RuntimeConfiguration(env);
     if (env.DATA_EXPORT_WORKER_ENABLED === "true" && env.DATA_EXPORT_WORKER_HYPERDRIVE && r2) {
       const objects = createR2ExportObjectStore(r2);
-      context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, async (database) => {
-        await runOneDataExport(database, objects);
-        await runOneDataExportCleanup(database, objects);
-      }));
+      // Cleanup has its own connection and invocation. A hung archive build
+      // cannot consume the only scheduled cleanup opportunity.
+      context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, (database) => runOneDataExportCleanup(database, objects)));
+      context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, (database) => runOneDataExport(database, objects)));
     }
   },
 };

@@ -7,6 +7,7 @@ export function createPostgresExportBuildStore(database: DayliDatabase): ExportB
   return {
     claim: async () => procedures.claim(),
     reserveObject: async (job) => procedures.reserveObject({ id: job.id, leaseToken: job.leaseToken }),
+    recordMultipartUpload: async (job, uploadId) => procedures.recordMultipartUpload({ id: job.id, leaseToken: job.leaseToken, uploadId }),
     publish: async (input) => (await procedures.publish({
       id: input.job.id, leaseToken: input.job.leaseToken, lifecycleGeneration: input.job.lifecycleGeneration,
       objectKey: input.objectKey, snapshotCutoffAt: input.snapshotCutoffAt,

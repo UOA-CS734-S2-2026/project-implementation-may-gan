@@ -497,6 +497,20 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(expired[0]?.archive_cleanup_task_id).toBe(`export-cleanup-${exportId}`);
   });
 
+  it("reclaims expired cleanup leases and rejects stale completion tokens", async () => {
+    const taskId = `export-reclaim-${crypto.randomUUID()}`;
+    exportCleanupTasks.push(taskId);
+    await migrator`update public.data_export_object_cleanup_tasks set next_attempt_at=now() + interval '1 hour' where status in ('pending', 'failed')`;
+    await migrator`insert into public.data_export_object_cleanup_tasks (id, archive_object_key, status, lease_token, lease_expires_at) values (${taskId}, 'private/data-exports/reclaim.zip', 'deleting', ${'old'.repeat(16)}, now() - interval '1 day')`;
+    const [claimed] = await lifecycleWorker`select * from public.dayli_export_cleanup_claim(${'new'.repeat(16)}, 300)`;
+    expect(claimed?.id).toBe(taskId);
+    await expect(lifecycleWorker`select public.dayli_export_cleanup_complete(${taskId}, ${'old'.repeat(16)}) as completed`).resolves.toEqual([{ completed: false }]);
+    await expect(lifecycleWorker`select public.dayli_export_cleanup_retry(${taskId}, ${'old'.repeat(16)}) as retried`).resolves.toEqual([{ retried: false }]);
+    await expect(lifecycleWorker`select public.dayli_export_cleanup_complete(${taskId}, ${'new'.repeat(16)}) as completed`).resolves.toEqual([{ completed: true }]);
+    const [tombstone] = await migrator`select status, next_attempt_at > now() as retained from public.data_export_object_cleanup_tasks where id=${taskId}`;
+    expect(tombstone).toEqual({ status: "pending", retained: true });
+  });
+
   it("denies app and lifecycle_worker direct physical purge access", async () => {
     const userId = await createUser("privileges");
 

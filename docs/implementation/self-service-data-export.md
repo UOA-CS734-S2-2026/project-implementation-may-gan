@@ -1,22 +1,27 @@
 # Self-service data export backend contract
 
-Issue #162 backend slice, based on the legal acceptance branch. This is draft-only work. The export worker and cleanup dispatcher are deliberately not registered in `apps/api/src/index.ts`, and no production binding, deployment, object-store setting, or lifecycle activation is changed here.
+Issue #162 remains draft work. The scheduled worker is registered only when `DATA_EXPORT_WORKER_ENABLED` is exactly `true`, `DATA_EXPORT_WORKER_HYPERDRIVE` is present, and the complete R2 configuration parses. The default is disabled. No deployment setting changes this document makes the worker live.
 
 ## Implemented backend surface
 
-- `POST`, `GET`, and `DELETE /api/v1/account/export` are authenticated account-management routes. The account-policy capability is `export`, so Terms and age gates permit export while `pending_deletion` does too. `purging` and `purge_failed` fail closed.
-- One active request is enforced by the existing partial unique index. Concurrent request replay returns the active request. Cancellation is limited to pre-publication `requested` and `building` work. A ready archive is left to its expiry cleanup path rather than risking an orphaned private object.
-- `GET /api/v1/account/export/download` rechecks the current actor, ready state, and database-clock expiry immediately before reading the object. It streams bounded authenticated R2 range reads, has `Cache-Control: no-store`, a fixed attachment disposition, and never returns an object key, redirect, or presigned URL.
-- `export-worker.ts` defines the offline, bounded multipart archive builder. It emits a versioned stored ZIP with an NDJSON entry, caps archive bytes and parts, aborts failed multipart uploads, and deletes a completed object if claim-bound publication reports a lifecycle generation race. It is an injectable offline component, not active scheduled work.
+- `POST`, `GET`, and `DELETE /api/v1/account/export` require an authenticated account-management session. The `export` capability permits active and pending-deletion accounts. Purging states fail closed.
+- The partial unique index permits one active request. Replayed concurrent requests return that request. Cancellation applies only before publication. Ready archives go through durable expiry cleanup.
+- `GET /api/v1/account/export/download` checks the current actor, ready state, and the database-clock 24-hour expiry before opening the object. It streams an authenticated bounded read with `Cache-Control: no-store`. It does not disclose an object key, redirect, or signed URL.
+- Each scheduled run starts a bounded cleanup and a build on separate Hyperdrive connections. Cleanup is scheduled independently so a stalled build does not consume its chance to reconcile retention work.
+- The builder writes one stored ZIP containing `data.ndjson`. The manifest's `selectionCutoffAt` is a selection cutoff captured when the lease is claimed. It is not an atomic historical MVCC snapshot. Each whitelisted query applies that cutoff independently, and no database transaction spans R2 I/O.
 
-## Archive contract for the worker integration
+## Archive contents and limits
 
-The worker source must yield only these whitelist projections: account profile fields approved for export, owner posts and revisions, owner private tomorrow notes, attached upload bytes where the current post-media schema can identify them, and messages where `messages.sender_participant_id` is the actor's stable participant. Never join a replied-to message body or preview. Do not emit received bodies, peers' posts, credentials, Better Auth sessions, provider account tokens, push tokens, logs, generated signed URLs, or purged/revoked rows. Legitimate owned text is retained verbatim, including text that happens to contain a URL.
+The archive includes approved account profile fields, owner posts and revisions, owner private tomorrow notes, and messages sent by the owner. It excludes received message bodies and previews, credentials, Better Auth sessions, provider tokens, push tokens, logs, keys, and signed URLs. Legitimate owned text remains unchanged even when it contains a URL.
 
-Current `post_media` records contain no native R2 object key. This backend therefore does not claim attached-upload byte export until #190 supplies a reviewed attachment object relationship. Legacy Cloudinary URLs are provenance metadata and are not serving grants.
+The current `post_media` schema does not identify an R2 object key. Attachment references can appear in revision metadata, but owned upload bytes are still absent. Do not claim that attachment bytes export until a reviewed object relationship exists.
 
-## Required next slice
+## Multipart cleanup
 
-A reviewed restricted-role procedure must implement `ExportBuildStore.claim`, `publish`, `fail`, expiry transition, and durable cleanup-task delivery using the existing `data_export_object_cleanup_tasks` table. It must lock the lifecycle and export rows, compare lease token and lifecycle generation, enqueue cleanup before clearing a ready key, and make stale workers incapable of publishing or deleting another attempt's object. Register that dispatcher only behind an explicitly disabled rollout binding after Miniflare or faithful fault-injected R2 tests and two-connection PostgreSQL race tests exist.
+A lease-fenced cleanup tombstone exists before multipart creation. The worker records a returned multipart ID before uploading parts. If the create response is lost, cleanup lists multipart uploads for the exact fenced key and aborts them. Cleanup aborts known and listed uploads before removing the object. Failed aborts or deletes remain retryable. Successful reconciliation retains the tombstone for later passes, which catches a delayed completion instead of forgetting an untracked object.
 
-Client follow-up #165 and #169 needs account-export status, request, cancellation, download affordance, native bearer coverage, browser CSRF behavior, and end-to-end archive parsing. Keep #162 open until those user journeys and the offline worker procedures are integrated.
+R2 completion responses are bounded XML. A HTTP 200 response containing an XML error or malformed completion result fails the build. Worker errors do not expose provider bodies, keys, or credentials.
+
+## Remaining work
+
+This does not complete the whole export feature. Better Auth source canaries, browser and native user journeys, and owned-upload byte export remain separate work. Keep the feature disabled until those reviews and fault-injected R2 and two-connection PostgreSQL tests are complete.

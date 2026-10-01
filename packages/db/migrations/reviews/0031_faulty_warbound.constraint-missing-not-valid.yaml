@@ -1,0 +1,6 @@
+reason: The migration adds constraints NOT VALID and validates them after the additive column is present.
+affected_data_and_clients: Validates export request and cleanup tombstone constraints.
+rollout_sequence: Apply with the repository migration runner and its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Use a new migration if validation requires correction.
+reviewer: Database and privacy reviewers required.

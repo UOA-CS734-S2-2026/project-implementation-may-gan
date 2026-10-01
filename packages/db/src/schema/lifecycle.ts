@@ -34,7 +34,7 @@ export const dataExportStatus = pgEnum("data_export_status", [
   "expired",
 ]);
 
-/** Cleanup succeeds by removing its task. Retry state remains durable until then. */
+/** Cleanup tombstones are retained and reconciled after every physical delete. */
 export const dataExportObjectCleanupStatus = pgEnum("data_export_object_cleanup_status", [
   "pending",
   "deleting",
@@ -122,9 +122,8 @@ export const accountManagementGrants = pgTable("account_management_grants", {
 ]);
 
 /**
- * A durable private-object cleanup retry. A task is deleted only after its R2
- * object is gone. It intentionally has no user foreign key, so it remains
- * actionable after a terminal export request is removed during later cleanup.
+ * A durable private-object cleanup tombstone. It intentionally has no user
+ * foreign key, so it remains actionable after a terminal export request is removed.
  */
 export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_tasks", {
   id: text("id").primaryKey(),
@@ -134,6 +133,7 @@ export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
   leaseToken: text("lease_token"),
   leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  multipartUploadId: text("multipart_upload_id"),
   failureCategory: text("failure_category"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -144,6 +144,7 @@ export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_
   check("data_export_object_cleanup_tasks_archive_key_check", sql`char_length(${table.archiveObjectKey}) between 1 and 1024`),
   check("data_export_object_cleanup_tasks_attempt_count_check", sql`${table.attemptCount} >= 0`),
   check("data_export_object_cleanup_tasks_failure_category_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),
+  check("data_export_object_cleanup_tasks_multipart_upload_id_check", sql`${table.multipartUploadId} is null or char_length(${table.multipartUploadId}) between 1 and 1024`),
   check("data_export_object_cleanup_tasks_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),
   check("data_export_object_cleanup_tasks_state_check", sql`
     (${table.status} = 'pending' and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.nextAttemptAt} is not null) or

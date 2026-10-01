@@ -24,11 +24,11 @@ describe("offline export archive", () => {
     const objects: ExportObjectStore = {
       begin: async () => ({ uploadId: "upload" }),
       uploadPart: async ({ bytes }) => { parts.push(bytes); return { etag: String(parts.length) }; },
-      complete: async () => undefined, abort: async () => undefined, remove: async () => undefined,
+      complete: async () => undefined, abort: async () => undefined, listMultipartUploads: async () => [], remove: async () => undefined,
     };
     const store: ExportBuildStore = {
       claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip",
-      publish: async (input) => { published = input; return "published"; }, fail: async () => true,
+      recordMultipartUpload: async () => true, publish: async (input) => { published = input; return "published"; }, fail: async () => true,
     };
     const source = { async *records() {
       yield { kind: "profile", name: "Owner", bio: "https://legitimate.example/path" };
@@ -47,16 +47,25 @@ describe("offline export archive", () => {
 
   it("leaves its pre-creation cleanup reservation durable when storage fails", async () => {
     let failed = false;
-    const store: ExportBuildStore = { claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip", publish: async () => "published", fail: async () => { failed = true; return true; } };
-    const objects: ExportObjectStore = { begin: async () => ({ uploadId: "upload" }), uploadPart: async () => { throw new Error("R2 unavailable"); }, complete: async () => undefined, abort: async () => { throw new Error("abort unavailable"); }, remove: async () => undefined };
+    const store: ExportBuildStore = { claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip", recordMultipartUpload: async () => true, publish: async () => "published", fail: async () => { failed = true; return true; } };
+    const objects: ExportObjectStore = { begin: async () => ({ uploadId: "upload" }), uploadPart: async () => { throw new Error("R2 unavailable"); }, complete: async () => undefined, abort: async () => { throw new Error("abort unavailable"); }, listMultipartUploads: async () => [], remove: async () => undefined };
     expect(await buildExportArchive({ job, store, objects, source: { async *records() { yield { kind: "profile" }; } }, now: () => new Date() })).toBe("failed");
     expect(failed).toBe(true);
   });
 
+  it("rejects oversized text and nested untrusted references before writing a part", async () => {
+    let uploaded = false;
+    const store: ExportBuildStore = { claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip", recordMultipartUpload: async () => true, publish: async () => "published", fail: async () => true };
+    const objects: ExportObjectStore = { begin: async () => ({ uploadId: "upload" }), uploadPart: async () => { uploaded = true; return { etag: "1" }; }, complete: async () => undefined, abort: async () => undefined, listMultipartUploads: async () => [], remove: async () => undefined };
+    const source = { async *records() { yield { text: "x".repeat(32 * 1024 + 1) }; yield { refs: Array.from({ length: 101 }, () => ({ id: "ref" })) }; } };
+    expect(await buildExportArchive({ job, store, objects, source, now: () => new Date() })).toBe("failed");
+    expect(uploaded).toBe(false);
+  });
+
   it("deletes only its own uploaded object if a lifecycle generation fence rejects publication", async () => {
     let removed = false;
-    const objects: ExportObjectStore = { begin: async () => ({ uploadId: "upload" }), uploadPart: async () => ({ etag: "1" }), complete: async () => undefined, abort: async () => undefined, remove: async () => { removed = true; } };
-    const store: ExportBuildStore = { claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip", publish: async () => "stale", fail: async () => true };
+    const objects: ExportObjectStore = { begin: async () => ({ uploadId: "upload" }), uploadPart: async () => ({ etag: "1" }), complete: async () => undefined, abort: async () => undefined, listMultipartUploads: async () => [], remove: async () => { removed = true; } };
+    const store: ExportBuildStore = { claim: async () => null, reserveObject: async () => "private/data-exports/job/lease.zip", recordMultipartUpload: async () => true, publish: async () => "stale", fail: async () => true };
     expect(await buildExportArchive({ job, store, objects, source: { async *records() { yield { kind: "profile" }; } }, now: () => new Date("2026-10-01T00:00:00.000Z") })).toBe("stale");
     expect(removed).toBe(true);
   });
