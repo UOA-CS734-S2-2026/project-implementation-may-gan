@@ -80,14 +80,15 @@ async function activeConversationParticipants(
     .limit(1);
   if (!conversation?.participantLowId || !conversation.participantHighId) return null;
 
+  // Lock identity ownership independently from lifecycle availability. A peer
+  // in pending deletion still owns a user row, and omitting it would let a
+  // cancellation commit between this read and the positive-action recheck.
   const rows = await queryable
     .select({ participantId: schema.messagingParticipants.id, userId: schema.messagingParticipants.userId })
     .from(schema.messagingParticipants)
-    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.messagingParticipants.userId))
     .where(and(
       inArray(schema.messagingParticipants.id, [conversation.participantLowId, conversation.participantHighId]),
       eq(schema.messagingParticipants.state, "active"),
-      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
     ));
   const users = new Map(rows.filter((row): row is { participantId: string; userId: string } => row.userId !== null)
     .map((row) => [row.participantId, row.userId]));
@@ -100,10 +101,10 @@ async function activeConversationParticipants(
 }
 
 /**
- * Locks the live account rows that a conversation currently maps to, in
- * canonical order. The mapping is read again after waiting: a lifecycle can
- * detach a peer between the first read and the locks, in which case callers
- * see the peer unavailable instead of using stale legacy IDs.
+ * Locks every account row that a conversation currently maps to, in canonical
+ * order, including a pending-deletion account. The mapping is reread after
+ * waiting. Callers then evaluate lifecycle availability from that post-lock
+ * snapshot, so a cancellation cannot race a positive action.
  */
 export async function lockActiveConversationParticipants(
   transaction: Selectable,

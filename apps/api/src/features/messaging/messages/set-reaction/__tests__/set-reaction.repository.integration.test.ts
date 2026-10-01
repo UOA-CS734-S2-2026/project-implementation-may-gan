@@ -62,6 +62,51 @@ suite("set reaction Postgres repository", () => {
     }
   });
 
+  it("waits for a pending peer cancellation before allowing a positive reaction", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "cancellation reaction contender",
+    });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[0]!, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "c".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let cancellationWritten: (() => void) | undefined;
+    const written = new Promise<void>((resolve) => { cancellationWritten = resolve; });
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [contenderBackend] = await contender.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const contenderPid = Number(contenderBackend?.pid);
+      const cancellation = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${users[0]!} for update`;
+        await tx`delete from public.account_lifecycles where user_id = ${users[0]!}`;
+        cancellationWritten?.();
+        await held;
+      });
+      await written;
+      const outcome = contenderSetReaction.set(users[1]!, created.conversation.id, created.message.id, "angry");
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${contenderPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected positive reaction to wait for the pending peer's user lock.");
+      release!();
+      await cancellation;
+      await expect(outcome).resolves.toMatchObject({ changed: true, message: { reactions: [{ reaction: "angry", reactedByActor: true }] } });
+    } finally {
+      release?.();
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[0]!));
+      await database.db.delete(schema.conversations).where(eq(schema.conversations.id, created.conversation.id));
+      await Promise.all([holder.close(), inspector.close()]);
+    }
+  });
+
   it("waits for a concurrent lifecycle transition, then rejects a new reaction", async () => {
     const created = await direct.create(users[0]!, {
       recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "lifecycle reaction contender",
