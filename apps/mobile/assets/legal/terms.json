@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "id": "terms",
+  "title": "Terms of Service",
+  "status": "draft",
+  "version": "draft-2",
+  "effectiveDate": null,
+  "summary": "This is a working draft for review. It sets out proposed rules for Dayli, but no final terms have been approved or accepted.",
+  "sections": [
+    {
+      "id": "draft-status",
+      "title": "Draft status",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "These are draft Terms of Service. They have not been approved, have no effective date, and do not create a final contract. A static link to this draft does not record acceptance. Dayli must not present these terms as final until the responsible operator, final legal wording, governing-law decision, and acceptance process have been approved."
+        }
+      ]
+    },
+    {
+      "id": "dayli-and-eligibility",
+      "title": "Dayli and eligibility",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli is operated by agroupforcoders, an informal group of friends based in New Zealand, not a registered company. Dayli is primarily intended for New Zealand and is available worldwide. The proposed minimum age is 16. The final terms must identify the responsible people and confirm how this age rule is checked and applied."
+        }
+      ]
+    },
+    {
+      "id": "accounts-and-sign-in",
+      "title": "Accounts and sign-in",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli currently supports email and password accounts. Google sign-in may be available when configured. Keep your sign-in credentials private and give accurate account information. Google accounts are not connected to an existing Dayli account only because the emails match. The final terms should explain when Dayli may restrict an account for abuse, security, or legal reasons."
+        }
+      ]
+    },
+    {
+      "id": "your-content",
+      "title": "Your content",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "You keep ownership of the posts, notes, messages, and other content you submit. The proposed final terms would give Dayli only the limited permission needed to host, process, back up if backups are later introduced, and show that content to you and the people you choose through available features. Dayli does not use personal content for research or AI training."
+        },
+        {
+          "type": "paragraph",
+          "text": "Solo posts are for their author. Friends posts are available to active friends after release, subject to blocks. Direct messages are available to people in the conversation. Editing a released post can retain an earlier revision. Do not rely on a block, edit, or unsend action to remove material another person has already seen or saved."
+        }
+      ]
+    },
+    {
+      "id": "acceptable-use",
+      "title": "Acceptable use",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The proposed final terms would not allow you to use Dayli unlawfully, impersonate someone else, attempt to access another person's account or content, interfere with the service, send abusive or harmful material, or upload material that Dayli cannot lawfully host. The operator must approve a reporting and enforcement process before relying on it as a final rule."
+        }
+      ]
+    },
+    {
+      "id": "service-and-providers",
+      "title": "Service and providers",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli uses third-party services to operate the app. The operator currently reports Neon PostgreSQL and Cloudflare R2, with regions believed to be Sydney or Southeast Asia. Google sign-in, Firebase push delivery, and Resend authentication email may be enabled depending on the deployment. Exact provider processing locations and recovery arrangements still need verification."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dayli does not promise uninterrupted or error-free service in this draft. The operator has not approved final availability commitments, suspension rules, or service-level terms."
+        }
+      ]
+    },
+    {
+      "id": "ending-access-and-data",
+      "title": "Ending access and data",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The operator currently reports indefinite data storage and no operator-managed backups. Dayli does not currently offer a verified self-service account deletion or data export function. These draft terms do not promise an account-deletion process, a data-removal schedule, or a deadline for requests. Contact agroupforcoders@gmail.com with account questions, but email alone does not create an automated deletion workflow."
+        }
+      ]
+    },
+    {
+      "id": "law-disputes-and-changes",
+      "title": "Law, disputes, and changes",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "No governing law, dispute process, arbitration term, warranty disclaimer, or liability limit has been approved for these draft terms. The operator needs legal review before choosing them, particularly because Dayli is available worldwide. Any final terms must preserve rights that cannot lawfully be excluded. The operator must also decide how material changes will be communicated."
+        },
+        {
+          "type": "link",
+          "label": "Read the draft Privacy Policy",
+          "href": "/privacy"
+        }
+      ]
+    }
+  ]
+}

@@ -5,7 +5,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"],
-      "@dayli/api-client": ["../../packages/api-client-typescript/src/index.ts"]
+      "@dayli/api-client": ["../../packages/api-client-typescript/src/index.ts"],
+      "@dayli/legal-content": ["../../packages/legal-content/index.ts"]
     }
   },
   "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],

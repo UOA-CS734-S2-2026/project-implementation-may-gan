@@ -37,4 +37,5 @@ flutter:
   uses-material-design: true
   # Imported from the WDCC web frontend; see apps/web/ATTRIBUTION.md.
   assets:
+    - assets/legal/
     - assets/wdcc/

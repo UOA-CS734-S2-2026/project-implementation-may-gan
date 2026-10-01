@@ -11,6 +11,7 @@ import { useProfileDetailsQuery } from "@/features/profiles/get-profile-details/
 import { EditProfileForm } from "@/features/profiles/update-profile/EditProfileForm";
 import { AvatarForm } from "@/features/profiles/update-profile/AvatarForm";
 import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUsernameForm";
+import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -61,6 +62,12 @@ export default function SettingsPage() {
           <h2 className="text-sm font-medium">Sign-in methods</h2>
           <p className="text-xs text-foreground/60">Google is connected only when you choose it here. Matching emails are never connected automatically.</p>
           <LinkGoogleAccount />
+        </section>
+
+        <section className="space-y-2 rounded-lg border border-foreground/10 p-4">
+          <h2 className="text-sm font-medium">Legal</h2>
+          <LegalLinks className="text-sm text-foreground-secondary" />
+          <LegalDraftNotice />
         </section>
 
         {/* Paid features — hidden until billing is wired up */}
