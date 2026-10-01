@@ -1,0 +1,13 @@
+{
+  "title": "Systems",
+  "defaultOpen": true,
+  "pages": [
+    "architecture-overview",
+    "accounts-and-authentication",
+    "daily-posts-and-release-timing",
+    "friends-and-feed-visibility",
+    "media-uploads-and-storage",
+    "messaging",
+    "reflection-and-history"
+  ]
+}

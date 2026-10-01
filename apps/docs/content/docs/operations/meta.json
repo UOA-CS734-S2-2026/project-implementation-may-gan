@@ -1,0 +1,10 @@
+{
+  "title": "Operations",
+  "defaultOpen": true,
+  "pages": [
+    "environments-and-deployment",
+    "database-migrations",
+    "security",
+    "troubleshooting"
+  ]
+}
