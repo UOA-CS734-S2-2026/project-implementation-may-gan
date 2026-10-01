@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { repoPath, repoRoot } from "./migrations/paths";
-import { assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
+import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
 import { readLocalMigrations } from "./migrations/state";
 
@@ -104,6 +104,9 @@ async function ensureHistoryIsAdditive(): Promise<void> {
   const base = (await run("git", ["rev-parse", "--verify", `${baseRef}^{commit}`])).trim();
   const head = (await run("git", ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
   assertMigrationBasePrecedesHead(base, head);
+  await assertMigrationBaseIsAncestor(base, head, async (candidate, reference) => {
+    await run("git", ["merge-base", "--is-ancestor", candidate, reference]);
+  });
 
   const diff = await run("git", ["diff", "--name-status", `${base}...HEAD`, "--", "packages/db/migrations"]);
   for (const line of diff.trim().split("\n").filter(Boolean)) {

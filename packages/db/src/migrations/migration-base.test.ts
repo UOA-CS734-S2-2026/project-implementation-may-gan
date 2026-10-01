@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { assertMigrationBasePrecedesHead, configuredMigrationBaseRef, resolveMigrationBaseRef } from "./migration-base";
+import {
+  assertMigrationBaseIsAncestor,
+  assertMigrationBasePrecedesHead,
+  configuredMigrationBaseRef,
+  resolveMigrationBaseRef,
+} from "./migration-base";
 
 describe("migration base resolution", () => {
   it("requires an explicit immutable base in GitHub Actions", () => {
@@ -22,6 +27,18 @@ describe("migration base resolution", () => {
   it("rejects a base that resolves to HEAD", () => {
     expect(() => assertMigrationBasePrecedesHead("abc", "abc"))
       .toThrow("Migration base ref must name the immutable commit before HEAD, not HEAD itself.");
+  });
+
+  it("rejects a resolvable non-ancestor base", async () => {
+    await expect(assertMigrationBaseIsAncestor("unrelated", "head", async () => {
+      throw new Error("no shared history");
+    })).rejects.toThrow("Migration base ref must name an ancestor of HEAD.");
+  });
+
+  it("rejects a resolvable descendant base", async () => {
+    await expect(assertMigrationBaseIsAncestor("descendant", "head", async () => {
+      throw new Error("base is ahead of head");
+    })).rejects.toThrow("Migration base ref must name an ancestor of HEAD.");
   });
 
   it("uses the exact configured pull request base", async () => {

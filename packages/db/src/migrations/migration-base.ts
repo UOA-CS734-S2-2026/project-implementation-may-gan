@@ -20,6 +20,18 @@ export function assertMigrationBasePrecedesHead(base: string, head: string): voi
   }
 }
 
+export async function assertMigrationBaseIsAncestor(
+  base: string,
+  head: string,
+  isAncestor: (base: string, head: string) => Promise<void>,
+): Promise<void> {
+  try {
+    await isAncestor(base, head);
+  } catch {
+    throw new Error("Migration base ref must name an ancestor of HEAD.");
+  }
+}
+
 export async function resolveMigrationBaseRef(
   verifyRef: (ref: string) => Promise<void>,
   environment: MigrationBaseEnvironment = process.env,
