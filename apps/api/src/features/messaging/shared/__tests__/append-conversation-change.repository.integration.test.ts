@@ -91,7 +91,9 @@ suite("conversation change builders", () => {
     const sessionId = crypto.randomUUID();
     await database.db.insert(schema.session).values({
       id: sessionId,
-      expiresAt: new Date("2026-10-01T00:00:00.000Z"),
+      // Push eligibility compares against the database's real clock (now()), so
+      // a fixed date would expire and silently drop every push row.
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       token: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,
