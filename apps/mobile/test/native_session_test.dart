@@ -271,7 +271,12 @@ void main() {
     'clears the protected token only after Better Auth confirms logout',
     () async {
       final tokenStore = MemorySessionTokenStore()..value = 'worker-token';
-      final client = MockClient((request) async => http.Response('', 200));
+      final client = MockClient((request) async {
+        expect(request.headers['content-type'], 'application/json');
+        expect(request.headers['authorization'], 'Bearer worker-token');
+        expect(request.body, '{}');
+        return http.Response('', 200);
+      });
       final session = BetterAuthNativeSession(
         baseUrl: 'https://api.example.test',
         tokenStore: tokenStore,
@@ -281,6 +286,30 @@ void main() {
       await session.signOut();
 
       expect(tokenStore.value, isNull);
+    },
+  );
+
+  test(
+    'revokes a quarantined bearer with the Better Auth JSON request',
+    () async {
+      final tokenStore = MemorySessionTokenStore()
+        ..pendingRevocation = 'quarantined-token';
+      final client = MockClient((request) async {
+        expect(request.url.path, '/api/auth/sign-out');
+        expect(request.headers['content-type'], 'application/json');
+        expect(request.headers['authorization'], 'Bearer quarantined-token');
+        expect(request.body, '{}');
+        return http.Response('', 200);
+      });
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: client,
+      );
+
+      await session.revokePendingSession();
+
+      expect(tokenStore.pendingRevocation, isNull);
     },
   );
 

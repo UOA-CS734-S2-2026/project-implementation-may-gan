@@ -1,0 +1,11 @@
+{
+  "name": "@dayli/legal-content",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./privacy.json": "./privacy.json",
+    "./terms.json": "./terms.json"
+  }
+}

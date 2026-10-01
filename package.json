@@ -8,6 +8,10 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "dev": "pnpm --parallel --filter './apps/*' dev",
+    "legal:sync": "node scripts/sync-legal-content.mjs",
+    "legal:check": "node scripts/sync-legal-content.mjs --check",
+    "legal:release:check": "node scripts/sync-legal-content.mjs --release",
+    "legal:test": "node --test scripts/legal-release-gate.test.mjs",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "generate:client:typescript": "openapi-generator-cli generate -i packages/contracts/openapi.json -g typescript-fetch -o packages/api-client-typescript --type-mappings date=string --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=npmName=@dayli/api-client,npmVersion=0.1.0,supportsES6=true,useSingleRequestParameter=true",
     "generate:client:dart": "openapi-generator-cli generate -i packages/contracts/openapi.json -g dart -o packages/api-client-dart --type-mappings date=String --global-property=apiDocs=false,modelDocs=false,apiTests=false,modelTests=false --additional-properties=pubName=dayli_api_client,pubVersion=0.1.0,useEnumExtension=true,useFinalProperties=true",

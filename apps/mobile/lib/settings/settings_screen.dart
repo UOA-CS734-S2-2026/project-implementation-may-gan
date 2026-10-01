@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../legal/legal_links.dart';
 
 /// Account settings show the established username. Signing out also removes the unsent draft.
 class SettingsScreen extends StatefulWidget {
@@ -219,6 +220,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const _GroupLabel('legal'),
+                  const _Group(
+                    children: [
+                      Padding(padding: EdgeInsets.all(12), child: LegalLinks()),
                     ],
                   ),
                   const SizedBox(height: 24),

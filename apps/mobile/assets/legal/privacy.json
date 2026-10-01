@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "id": "privacy",
+  "title": "Privacy Policy",
+  "status": "draft",
+  "version": "draft-2",
+  "effectiveDate": null,
+  "summary": "This is a working draft for review. It explains the handling Dayli currently reports and identifies decisions that must be made before a final policy can take effect.",
+  "sections": [
+    {
+      "id": "draft-status",
+      "title": "Draft status",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "This policy is a draft. It has not been approved, has no effective date, and is not a final privacy notice. Reading it, following a link to it, or using Dayli does not record acceptance. Dayli must not present it as the final policy until the operator, processing details, retention practice, and final wording have been approved."
+        }
+      ]
+    },
+    {
+      "id": "operator-and-contact",
+      "title": "Operator and contact",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli is operated by agroupforcoders, an informal group of friends based in New Zealand. It is not a registered company. For privacy questions, account requests, or support, contact agroupforcoders@gmail.com. The people responsible for the group and any address or other disclosure needed for a final policy still need to be confirmed."
+        }
+      ]
+    },
+    {
+      "id": "who-dayli-is-for",
+      "title": "Who Dayli is for",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli is primarily intended for people in New Zealand and is available worldwide. It is intended for people aged 16 and over. The current software does not yet include a confirmed age-checking or consent-recording flow, so the operator must decide how this rule will be applied before final publication."
+        }
+      ]
+    },
+    {
+      "id": "information-collected",
+      "title": "Information Dayli handles",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "To create and run an account, Dayli handles your username, public name if you provide one, email address, account identifier, password hash, account and session records, session IP address, user agent, verification and password-recovery records, and rate-limit records. Dayli does not store passwords as plaintext."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dayli supports email and password accounts. Google sign-in may be available when it is enabled for the deployment. A Google identity is not linked to an existing Dayli account only because the email addresses match. Where configured, Resend sends password-recovery and verification emails."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dayli handles the journal content and social information needed for its features. This includes posts, captions, ratings, tomorrow notes, audiences, release times, revisions, friendships, friend requests, blocks, direct messages, message edits, message reactions, and message-request decisions. Earlier post revisions can remain stored when a post is edited."
+        },
+        {
+          "type": "paragraph",
+          "text": "The mobile app stores a bearer session, cached identity, and unsent drafts in protected device storage. Media selected in the current web and mobile composer stays on the device and is not posted yet. If push notifications are enabled, Dayli handles a device registration token. Notification payloads are designed to identify a conversation without message text."
+        }
+      ]
+    },
+    {
+      "id": "how-dayli-uses-information",
+      "title": "How Dayli uses information",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli uses account and session information to sign people in, protect accounts, recover passwords, apply rate limits, and operate available features. It uses posts, friendships, and blocks to decide who can view a post. It uses direct-message information to deliver and display messages to the people in a conversation. It uses device registration information to send notifications when that feature is enabled."
+        },
+        {
+          "type": "paragraph",
+          "text": "Dayli does not use personal content for research or to train AI systems. Content is server-readable, so this is not end-to-end encrypted messaging or journaling."
+        }
+      ]
+    },
+    {
+      "id": "sharing-and-visibility",
+      "title": "Sharing and visibility",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Solo posts are available to their author. Friends posts are available to active friends after release, subject to blocks. Direct messages are available to the people in the relevant conversation. Blocking limits future access and interaction, but it cannot take back information another person has already seen, copied, or saved."
+        }
+      ]
+    },
+    {
+      "id": "providers-and-overseas-processing",
+      "title": "Providers and overseas processing",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The operator currently reports using Neon PostgreSQL for application data and Cloudflare R2 for storage. The operator believes those services use Sydney or Southeast Asia regions, but this has not been independently verified and is not a promise that every copy, log, support operation, or provider process stays in a particular place. Dayli may also use Google for enabled sign-in and Firebase for enabled mobile push delivery. Resend may process authentication email when configured."
+        },
+        {
+          "type": "paragraph",
+          "text": "The operator reports using only Cloudflare-provided analytics. The enabled analytics products, identifiers, logs, purposes, and retention settings have not yet been inventoried. This draft therefore does not claim that Dayli has no analytics or tracking."
+        }
+      ]
+    },
+    {
+      "id": "retention-and-requests",
+      "title": "Retention and requests",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The operator currently reports that Dayli stores data indefinitely and does not operate its own backups. Provider recovery copies, recovery history, exports, object versioning, and logs still need verification. This draft does not promise a particular storage location, a deletion date, the absence of recoverable copies, or a backup-purge period."
+        },
+        {
+          "type": "paragraph",
+          "text": "You can contact agroupforcoders@gmail.com about your information. Dayli does not currently provide a verified self-service account deletion or data export function, and no response deadline or deletion schedule has been approved. Emailing a request does not by itself create an automated deletion process."
+        }
+      ]
+    },
+    {
+      "id": "security-and-changes",
+      "title": "Security and changes",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Dayli uses account controls and secure cookie settings, but no system can guarantee absolute security. The operator must decide how final policy changes will be communicated and who approves them."
+        },
+        {
+          "type": "link",
+          "label": "Read the draft Terms of Service",
+          "href": "/terms"
+        }
+      ]
+    }
+  ]
+}
