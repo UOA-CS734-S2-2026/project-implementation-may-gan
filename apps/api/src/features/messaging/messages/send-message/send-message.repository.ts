@@ -4,6 +4,7 @@ import { withLockedConversationMessageTransaction } from "../shared/conversation
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
+import { participantIdForUser } from "../../shared/participant-identity";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export interface StoredIdempotentMessage {
@@ -71,7 +72,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
       .select(messageProjectionSelection)
       .from(schema.messages)
       .where(and(
-        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.senderParticipantId, participantIdForUser(senderId)),
         eq(schema.messages.clientMessageId, clientMessageId),
       ))
       .limit(1);
@@ -99,6 +100,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         conversationId: input.conversationId,
         sequence: allocated.sequence,
         senderId: input.senderId,
+        senderParticipantId: participantIdForUser(input.senderId),
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,

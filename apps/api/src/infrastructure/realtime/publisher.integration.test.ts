@@ -16,6 +16,8 @@ suite("Postgres realtime publisher authorization", () => {
   const ids = {
     alice: `realtime-publisher-a-${crypto.randomUUID()}`,
     bob: `realtime-publisher-b-${crypto.randomUUID()}`,
+    aliceParticipant: `a-realtime-participant-${crypto.randomUUID()}`,
+    bobParticipant: `z-realtime-participant-${crypto.randomUUID()}`,
     conversation: `realtime-publisher-c-${crypto.randomUUID()}`,
   };
   const createdAt = new Date();
@@ -66,6 +68,10 @@ suite("Postgres realtime publisher authorization", () => {
       { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
       { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
     ]);
+    await database.db.update(schema.messagingParticipants).set({ id: ids.aliceParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.alice));
+    await database.db.update(schema.messagingParticipants).set({ id: ids.bobParticipant })
+      .where(eq(schema.messagingParticipants.userId, ids.bob));
     await database.db.insert(schema.conversations).values({
       id: ids.conversation, kind: "direct", userLowId: ids.alice, userHighId: ids.bob, initiatorId: ids.alice,
       requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: createdAt, createdAt, updatedAt: createdAt,
@@ -163,6 +169,13 @@ suite("Postgres realtime publisher authorization", () => {
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, sender)).resolves.toBe(false);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, reactor)).resolves.toBe(true);
+  });
+
+  it("resolves an old-worker user-addressed recipient through divergent participant membership", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(true);
   });
 
   it("rejects old-worker positive delivery after either lifecycle becomes unavailable", async () => {

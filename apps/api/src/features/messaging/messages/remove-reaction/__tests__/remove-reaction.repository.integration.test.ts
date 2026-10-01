@@ -14,11 +14,16 @@ const suite = enabled ? describe : describe.skip;
 suite("remove reaction Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 4 }, (_, index) => `remove-reaction-${crypto.randomUUID()}-${index}`);
+  const divergentParticipantId = users[1]! < users[0]!
+    ? `a-remove-reaction-participant-${crypto.randomUUID()}`
+    : `z-remove-reaction-participant-${crypto.randomUUID()}`;
   const { direct, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
 
   beforeAll(async () => {
     const now = new Date();
     await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.db.update(schema.messagingParticipants).set({ id: divergentParticipantId })
+      .where(eq(schema.messagingParticipants.userId, users[1]!));
     await database.db.insert(schema.friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: now },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: now },
@@ -66,6 +71,7 @@ suite("remove reaction Postgres repository", () => {
     const [changedReactions] = await database.db.select({
       reaction: schema.messageReactions.reaction,
       userId: schema.messageReactions.userId,
+      participantId: schema.messageReactions.participantId,
     }).from(schema.messageReactions).where(eq(schema.messageReactions.messageId, message.id));
     const [changedChanges] = await database.db.select({ count: sql<number>`count(*)::int` })
       .from(schema.conversationChanges)
@@ -74,6 +80,15 @@ suite("remove reaction Postgres repository", () => {
       .from(schema.messagingOutbox)
       .where(and(eq(schema.messagingOutbox.conversationId, conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(changedReactions).toMatchObject({ reaction: "like", userId: users[0] });
+    const [removedChange] = await database.db.select({
+      memberId: schema.conversationChanges.memberId,
+      memberParticipantId: schema.conversationChanges.memberParticipantId,
+    }).from(schema.conversationChanges).where(and(
+      eq(schema.conversationChanges.conversationId, conversation.id),
+      eq(schema.conversationChanges.kind, "reaction.changed"),
+      eq(schema.conversationChanges.memberId, users[1]!),
+    )).orderBy(schema.conversationChanges.changeSequence);
+    expect(removedChange).toEqual({ memberId: users[1], memberParticipantId: divergentParticipantId });
     expect(changedChanges?.count).toBe(3);
     expect(changedOutbox?.count).toBe(8);
 

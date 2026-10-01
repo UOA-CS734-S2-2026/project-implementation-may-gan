@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import type { ConversationAccess, StoredMessage } from "../../shared/messaging-types";
+import { participantIdForUser } from "../../shared/participant-identity";
 
 export interface RemoveReactionTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
@@ -35,7 +36,7 @@ class PostgresRemoveReactionTransaction implements RemoveReactionTransaction {
       .delete(schema.messageReactions)
       .where(and(
         eq(schema.messageReactions.messageId, messageId),
-        eq(schema.messageReactions.userId, actorId),
+        eq(schema.messageReactions.participantId, participantIdForUser(actorId)),
       ));
     const current = await this.findMessage(this.conversationId, messageId);
     if (!current) throw new Error("Message disappeared during reaction.");

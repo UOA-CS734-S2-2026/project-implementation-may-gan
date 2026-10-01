@@ -51,13 +51,13 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
         .select({ conversationId: schema.conversationMembers.conversationId })
         .from(schema.conversationMembers)
         .innerJoin(schema.messagingParticipants, and(
-          eq(schema.messagingParticipants.userId, schema.conversationMembers.userId),
+          eq(schema.messagingParticipants.id, schema.conversationMembers.participantId),
+          eq(schema.messagingParticipants.userId, job.recipientId),
           eq(schema.messagingParticipants.state, "active"),
         ))
         .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.conversationMembers.userId))
         .where(and(
           eq(schema.conversationMembers.conversationId, schema.conversations.id),
-          eq(schema.conversationMembers.userId, job.recipientId),
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
         )),
     );
@@ -80,29 +80,36 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
         )),
     );
     const availableParticipant = (
-      userId: typeof schema.conversations.userLowId | typeof schema.conversations.userHighId,
+      participantId: typeof schema.conversations.participantLowId | typeof schema.conversations.participantHighId,
     ) => exists(database.db
-      .select({ id: schema.user.id })
-      .from(schema.user)
-      .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+      .select({ id: schema.messagingParticipants.id })
+      .from(schema.messagingParticipants)
+      .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
       .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
       .where(and(
-        eq(schema.user.id, userId),
+        eq(schema.messagingParticipants.id, participantId),
         eq(schema.messagingParticipants.state, "active"),
         or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
       )));
-    const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.userLowId)} and ${availableParticipant(schema.conversations.userHighId)}`;
+    const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.participantLowId)} and ${availableParticipant(schema.conversations.participantHighId)}`;
     const reactionStillPresent = exists(database.db
       .select({ messageId: schema.messageReactions.messageId })
       .from(schema.messageReactions)
       .where(and(
         eq(schema.messageReactions.messageId, schema.conversationChanges.messageId),
-        eq(schema.messageReactions.userId, schema.conversationChanges.memberId),
+        eq(schema.messageReactions.participantId, schema.conversationChanges.memberParticipantId),
       )));
     const [row] = await database.db
       .select({
-        senderId: schema.messages.senderId,
-        memberId: schema.conversationChanges.memberId,
+        actorId: sql<string | null>`coalesce((
+          select ${schema.messagingParticipants.userId}
+          from ${schema.messagingParticipants}
+          where ${schema.messagingParticipants.id} = coalesce(
+            ${schema.conversationChanges.memberParticipantId},
+            ${schema.messages.senderParticipantId}
+          )
+          limit 1
+        ), ${schema.conversationChanges.memberId}, ${schema.messages.senderId})`,
         kind: schema.conversationChanges.kind,
         recipientMember,
         participantsAvailable,
@@ -128,7 +135,7 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
     // New writers persist the actual actor. Old message-created jobs can derive
     // it from the immutable message sender. Other ambiguous old queued changes
     // may be delivered only when neither availability nor blocks changed.
-    const actorId = row.memberId ?? (row.kind === "reaction.changed" ? null : row.senderId);
+    const actorId = row.actorId;
     const positive = row.kind === "message.created"
       || row.kind === "message.edited"
       || row.kind === "request.active"
