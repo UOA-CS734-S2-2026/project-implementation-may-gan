@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
+    "types": ["@cloudflare/workers-types"],
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"],

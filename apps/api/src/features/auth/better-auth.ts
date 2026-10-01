@@ -217,6 +217,8 @@ export interface BetterAuthWorkerBindings {
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
   BETTER_AUTH_TRUSTED_ORIGINS: string;
+  /** Direct public API origin retained for native clients and ticket WebSockets. */
+  PUBLIC_API_BASE_URL?: string;
   GOOGLE_WEB_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_IOS_CLIENT_ID?: string;
@@ -230,6 +232,8 @@ export interface BetterAuthRuntimeConfiguration {
   secret: string;
   trustedOrigins: string[];
   hyperdrive: HyperdriveBinding;
+  /** Direct public API origin. Defaults to the auth origin before proxy cutover. */
+  publicApiBaseURL: string;
   google?: GoogleAuthConfiguration;
   resend?: ResendConfiguration;
 }
@@ -300,22 +304,25 @@ export function readBetterAuthRuntimeConfiguration(
 ): BetterAuthRuntimeConfiguration | undefined {
   const secret = bindings.BETTER_AUTH_SECRET;
   const baseURL = parseExactHttpsOrigin(bindings.BETTER_AUTH_BASE_URL);
+  const publicApiBaseURL = bindings.PUBLIC_API_BASE_URL === undefined
+    ? baseURL
+    : parseExactHttpsOrigin(bindings.PUBLIC_API_BASE_URL);
   const hyperdrive = bindings.HYPERDRIVE;
   const google = readGoogleConfiguration(bindings);
   const resend = readResendConfiguration(bindings);
   if (
-    typeof secret !== "string" || secret.length < 32 || !baseURL || !hyperdrive?.connectionString?.trim()
+    typeof secret !== "string" || secret.length < 32 || !baseURL || !publicApiBaseURL || !hyperdrive?.connectionString?.trim()
     || google.state === "invalid" || resend.state === "invalid"
   ) return undefined;
 
   const trustedOrigins = typeof bindings.BETTER_AUTH_TRUSTED_ORIGINS === "string"
     ? bindings.BETTER_AUTH_TRUSTED_ORIGINS.split(",").map((origin) => parseExactHttpsOrigin(origin)).filter((origin): origin is string => Boolean(origin))
     : [];
-  if (trustedOrigins.length === 0 || trustedOrigins.length !== new Set(trustedOrigins).size || !trustedOrigins.includes(baseURL)) {
+  if (trustedOrigins.length === 0 || trustedOrigins.length !== new Set(trustedOrigins).size || !trustedOrigins.includes(baseURL) || !trustedOrigins.includes(publicApiBaseURL)) {
     return undefined;
   }
 
-  return { baseURL, secret, trustedOrigins, hyperdrive, google: google.value, resend: resend.value };
+  return { baseURL, secret, trustedOrigins, hyperdrive, publicApiBaseURL, google: google.value, resend: resend.value };
 }
 
 export async function handlePostgresBetterAuthRequest(

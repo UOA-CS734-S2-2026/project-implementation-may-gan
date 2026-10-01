@@ -2,20 +2,18 @@ import rateLimitBindingConfig from "../../../rate-limit-bindings.json";
 import type { Context, Env, MiddlewareHandler } from "hono";
 import { apiErrorResponse } from "../api-error";
 import type { AuthenticatedActor } from "../authenticated-actor";
-
-export interface RateLimitBinding {
-  limit(options: { key: string }): Promise<{ success: boolean }>;
-}
-
-type RateLimitBindingName = "ingress" | "read" | "write" | "message" | "media" | "realtime" | "directPush";
+import {
+  createCloudflareRateLimitProvider,
+  type RateLimitBinding,
+  type RateLimitBindingName,
+  type RateLimitBindings,
+  type RateLimitDecision,
+  type RateLimitProvider,
+} from "./rate-limit-provider";
 
 export const rateLimitBindings = Object.fromEntries(
   rateLimitBindingConfig.map(({ key, ...binding }) => [key, binding]),
 ) as Record<RateLimitBindingName, Omit<(typeof rateLimitBindingConfig)[number], "key">>;
-type RateLimitBindings = Partial<Record<RateLimitBindingName, RateLimitBinding>>;
-
-export type RateLimitDecision = "allowed" | "denied" | "unavailable";
-
 export interface ActorRateLimiter {
   check(request: Request, actor: AuthenticatedActor): Promise<RateLimitDecision>;
 }
@@ -23,6 +21,9 @@ export interface ActorRateLimiter {
 export interface ApiRateLimitDependencies {
   /** A public, environment-specific namespace prefix, such as "staging". */
   environmentScope?: string;
+  /** Infrastructure adapter used by rate-limit policies. */
+  provider?: RateLimitProvider;
+  /** Temporary compatibility input for existing local fixtures. Runtime composition supplies provider. */
   bindings?: RateLimitBindings;
   onOperationalAlert?: (message: "rate_limit_backend_unavailable") => void;
 }
@@ -52,37 +53,33 @@ function hasScope(scope: string | undefined): scope is string {
   return typeof scope === "string" && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(scope);
 }
 
+function providerFor(dependencies: ApiRateLimitDependencies): RateLimitProvider {
+  return dependencies.provider ?? createCloudflareRateLimitProvider({
+    bindings: dependencies.bindings,
+    onOperationalAlert: dependencies.onOperationalAlert,
+  });
+}
+
 function ingressUnavailable(dependencies: ApiRateLimitDependencies) {
-  return !hasScope(dependencies.environmentScope) || !dependencies.bindings?.ingress;
+  return !hasScope(dependencies.environmentScope) || !providerFor(dependencies).has("ingress");
 }
 
 function actorUnavailable(dependencies: ApiRateLimitDependencies) {
-  return ingressUnavailable(dependencies)
-    || !dependencies.bindings?.read
-    || !dependencies.bindings?.write
-    || !dependencies.bindings?.message
-    || !dependencies.bindings?.media
-    || !dependencies.bindings?.realtime
-    || !dependencies.bindings?.directPush;
+  const provider = providerFor(dependencies);
+  return !hasScope(dependencies.environmentScope)
+    || !provider.has("ingress")
+    || !provider.has("read")
+    || !provider.has("write")
+    || !provider.has("message")
+    || !provider.has("media")
+    || !provider.has("realtime")
+    || !provider.has("directPush");
 }
 
 function key(scope: string, value: string) {
   return `environment:${scope}:${value}`;
 }
 
-async function limit(
-  binding: RateLimitBinding,
-  keyValue: string,
-  onOperationalAlert: ApiRateLimitDependencies["onOperationalAlert"],
-): Promise<RateLimitDecision> {
-  try {
-    return (await binding.limit({ key: keyValue })).success ? "allowed" : "denied";
-  } catch {
-    // The native limiter has no precise reset value. Continue during an outage and alert without a key or identity.
-    onOperationalAlert?.("rate_limit_backend_unavailable");
-    return "allowed";
-  }
-}
 
 /**
  * Enforce actor buckets after Better Auth established a server-verified identity.
@@ -92,14 +89,14 @@ export function createActorRateLimiter(dependencies: ApiRateLimitDependencies): 
   return {
     async check(request, actor) {
       if (actorUnavailable(dependencies)) return "unavailable";
-      const bindings = dependencies.bindings!;
+      const provider = providerFor(dependencies);
       const scope = dependencies.environmentScope!;
-      const general = request.method === "GET" || request.method === "HEAD" ? bindings.read! : bindings.write!;
-      const generalDecision = await limit(general, key(scope, `actor:${actor.userId}`), dependencies.onOperationalAlert);
+      const general = request.method === "GET" || request.method === "HEAD" ? "read" : "write";
+      const generalDecision = await provider.check(general, key(scope, `actor:${actor.userId}`));
       if (generalDecision !== "allowed") return generalDecision;
       const policy = rateLimitActionFor(request);
       return policy
-        ? limit(bindings[policy.binding]!, key(scope, `action:${policy.action}:actor:${actor.userId}`), dependencies.onOperationalAlert)
+        ? provider.check(policy.binding, key(scope, `action:${policy.action}:actor:${actor.userId}`))
         : "allowed";
     },
   };
@@ -119,10 +116,9 @@ export function createIngressRateLimitMiddleware<E extends Env>(dependencies: Ap
     if (ingressUnavailable(dependencies)) return unavailableResponse(context);
     const ip = request.headers.get("cf-connecting-ip");
     if (!ip) return unavailableResponse(context);
-    const decision = await limit(
-      dependencies.bindings!.ingress!,
+    const decision = await providerFor(dependencies).check(
+      "ingress",
       key(dependencies.environmentScope!, `ingress:${ip}`),
-      dependencies.onOperationalAlert,
     );
     if (decision === "allowed") return next();
     if (decision === "unavailable") return unavailableResponse(context);
@@ -163,4 +159,4 @@ export function unavailableFetchResponse() {
   });
 }
 
-export type { ActionRateLimitPolicy, RateLimitBindings };
+export type { ActionRateLimitPolicy, RateLimitBinding, RateLimitBindings, RateLimitDecision, RateLimitProvider };

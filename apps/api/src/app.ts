@@ -63,6 +63,7 @@ import {
   createIngressRateLimitMiddleware,
   type ApiRateLimitDependencies,
 } from "./http/middleware/rate-limit";
+import { createCloudflareRateLimitProvider } from "./http/middleware/rate-limit-provider";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "./http/authenticated-actor";
 import { registerMessagingRoutes, type MessagingRouteDependencies } from "./features/messaging/messaging.routes";
 import { createSendMessageService } from "./features/messaging/messages/send-message/send-message.service";
@@ -325,16 +326,18 @@ export function createAppForEnv(env: ApiEnv) {
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
-      bindings: {
-        ingress: env.API_INGRESS_RATE_LIMIT,
-        read: env.API_READ_RATE_LIMIT,
-        write: env.API_WRITE_RATE_LIMIT,
-        message: env.API_MESSAGE_RATE_LIMIT,
-        media: env.API_MEDIA_RATE_LIMIT,
-        realtime: env.API_REALTIME_RATE_LIMIT,
-        directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
-      },
-      onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
+      provider: createCloudflareRateLimitProvider({
+        bindings: {
+          ingress: env.API_INGRESS_RATE_LIMIT,
+          read: env.API_READ_RATE_LIMIT,
+          write: env.API_WRITE_RATE_LIMIT,
+          message: env.API_MESSAGE_RATE_LIMIT,
+          media: env.API_MEDIA_RATE_LIMIT,
+          realtime: env.API_REALTIME_RATE_LIMIT,
+          directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
+        },
+        onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
+      }),
     },
   });
   if (!configuration) return api;
@@ -529,7 +532,7 @@ function createRealtimeDependencies(
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
     consume: async (ticket: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).consume(ticket)),
   };
-  const webSocketUrl = new URL("/api/v1/realtime/connect", configuration.baseURL);
+  const webSocketUrl = new URL("/api/v1/realtime/connect", configuration.publicApiBaseURL);
   webSocketUrl.protocol = webSocketUrl.protocol === "https:" ? "wss:" : "ws:";
   const connect: RealtimeConnectRouteDependencies = {
     tickets,

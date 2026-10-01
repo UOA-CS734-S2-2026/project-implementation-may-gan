@@ -3,6 +3,7 @@ import type { ApiEnv } from "./env";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 
 export { app };
+export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
 export { HyperdriveIntegrationEntrypoint } from "./features/system/hyperdrive/integration-entrypoint";
 export { UserRealtime } from "./infrastructure/realtime/user-realtime";
 
