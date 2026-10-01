@@ -4,6 +4,7 @@ import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/pro
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { candidateMigrationBase, resolveMigrationBase } from "./migrations/migration-base";
 import { repoPath, repoRoot } from "./migrations/paths";
 import { parseMigrationReview } from "./migrations/reviews";
 import { readLocalMigrations } from "./migrations/state";
@@ -96,8 +97,6 @@ function assertSameHashes(before: Map<string, string>, after: Map<string, string
   }
 }
 
-const publishedMigrationBase = "d6704a17403f31c09e78cb2a04d148f33bae8eb3";
-
 async function ensurePublishedBaseFilesAreByteIdentical(base: string): Promise<void> {
   const files = (await run("git", ["ls-tree", "-r", "--name-only", base, "--", "packages/db/migrations"]))
     .trim()
@@ -114,17 +113,17 @@ async function ensurePublishedBaseFilesAreByteIdentical(base: string): Promise<v
 }
 
 async function ensureHistoryIsAdditive(): Promise<void> {
-  // The candidate must compare against the reviewed main commit, not a moving
-  // remote ref or the current HEAD.
-  const base = process.env.MIGRATION_BASE_REF ?? publishedMigrationBase;
+  // Byte identity is always checked against the reviewed candidate baseline.
+  // Additive history normally follows origin/main, unless CI supplies its
+  // immutable pull-request base or the candidate verifier supplies its pin.
+  await ensurePublishedBaseFilesAreByteIdentical(candidateMigrationBase);
+  const base = resolveMigrationBase(process.env.MIGRATION_BASE_REF);
 
   try {
     await run("git", ["rev-parse", "--verify", base]);
   } catch {
     return;
   }
-
-  await ensurePublishedBaseFilesAreByteIdentical(base);
 
   const diff = await run("git", ["diff", "--name-status", `${base}...HEAD`, "--", "packages/db/migrations"]);
   for (const line of diff.trim().split("\n").filter(Boolean)) {

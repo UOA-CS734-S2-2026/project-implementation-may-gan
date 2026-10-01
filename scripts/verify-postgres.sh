@@ -113,9 +113,9 @@ fi
 
 echo 'Running PostgreSQL migration and integration checks'
 export MIGRATION_TARGET=local
-# Candidate migration history is compared with this reviewed, immutable main
-# commit. A moving ref or caller override could conceal a rewritten migration.
-export MIGRATION_BASE_REF="d6704a17403f31c09e78cb2a04d148f33bae8eb3"
+# Only this candidate verifier compares additive history with the reviewed,
+# immutable integration base. Do not export this value: ordinary db:check
+# retains its origin/main default and honors an explicit CI pull-request base.
 export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
@@ -144,7 +144,7 @@ export LIFECYCLE_AUTH_TEST_DATABASE_URL="$LIFECYCLE_TEST_DATABASE_URL"
 export LIFECYCLE_AUTH_TEST_APP_DATABASE_URL="$LIFECYCLE_TEST_APP_DATABASE_URL"
 export PERMISSIONS_POSTGRES_TEST=1
 export POSTS_POSTGRES_TEST=1
-pnpm db:check
+MIGRATION_BASE_REF="d6704a17403f31c09e78cb2a04d148f33bae8eb3" pnpm db:check
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
