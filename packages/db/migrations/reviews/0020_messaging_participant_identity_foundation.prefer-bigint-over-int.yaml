@@ -1,0 +1,6 @@
+reason: The migration does not add an integer counter. Squawk flags generated table metadata for review; participant IDs remain opaque text values.
+affected_data_and_clients: No runtime client behavior changes in this phase.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use bigint for any future participant sequence if one becomes necessary.
+reviewer: Database reviewers must approve the migration and generated SQL exception.

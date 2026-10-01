@@ -1,0 +1,6 @@
+reason: The protected migration runner holds an advisory lock and this migration sets object and statement timeouts. A transactional SHARE ROW EXCLUSIVE lock on user is acquired at the outset because CREATE TRIGGER later needs that mode. Taking it early prevents a lock-upgrade deadlock with SELECT FOR UPDATE followed by a user write.
+affected_data_and_clients: Existing users are backfilled and future user inserts receive a participant row. Existing messaging queries remain unchanged. Concurrent signup or deletion waits for this short migration transaction instead of landing between backfill and trigger installation.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Keep participant-dependent runtime disabled until staging proves the schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Correct migration defects with a forward-only migration. Do not rerun pieces manually against a hosted target.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

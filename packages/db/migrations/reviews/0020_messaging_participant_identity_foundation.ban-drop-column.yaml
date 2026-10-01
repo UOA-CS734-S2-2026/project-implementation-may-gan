@@ -1,0 +1,6 @@
+reason: The first phase intentionally keeps all existing messaging user-reference columns. It adds a sidecar participant table only.
+affected_data_and_clients: Existing deployed messaging queries continue to use their current columns. The new table is trigger-maintained and not read by the runtime.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. A later reviewed cutover may add participant references before any old column is retired.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use additive forward-only migrations for the runtime cutover and any later cleanup. Do not delete columns in this phase.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

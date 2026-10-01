@@ -1,0 +1,6 @@
+reason: Squawk treats the opaque text participant primary key as a primary-key addition. The migration uses existing opaque user IDs rather than a sequence.
+affected_data_and_clients: Each existing user receives one participant row. No existing messaging primary key changes in this phase.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Do not deploy participant-dependent runtime code until staging proves this schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a forward-only constraint or data correction if an identity collision is found. Never reuse a detached participant ID.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

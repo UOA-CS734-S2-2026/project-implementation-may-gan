@@ -33,6 +33,7 @@ BEGIN
     'data_export_requests',
     'data_export_object_cleanup_tasks',
     'legal_document_versions',
+    'messaging_participants',
     'operator_cases',
     'registration_intents',
     'terms_acceptances'

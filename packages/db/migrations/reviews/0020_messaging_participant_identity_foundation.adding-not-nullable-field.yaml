@@ -1,0 +1,6 @@
+reason: The new participant identity and state fields are required for every new participant row. The migration creates and backfills the table before it is available to future runtime code.
+affected_data_and_clients: Existing users receive active participant rows with unchanged opaque IDs. Existing messaging tables remain unchanged.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Keep the existing runtime until staging proves the new schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a forward-only correction if a backfill invariant fails. Do not relax the active or deleted mapping state check.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

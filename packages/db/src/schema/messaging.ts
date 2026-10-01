@@ -19,6 +19,22 @@ export const messageRequestState = pgEnum("message_request_state", ["pending", "
 export const messagingOutboxChannel = pgEnum("messaging_outbox_channel", ["realtime", "push"]);
 export const messagingOutboxStatus = pgEnum("messaging_outbox_status", ["pending", "leased", "delivered", "failed"]);
 export const pushPlatform = pgEnum("push_platform", ["ios", "android"]);
+export const messagingParticipantState = pgEnum("messaging_participant_state", ["active", "deleted"]);
+
+/**
+ * A durable, profile-free identity for later messaging retention work. The ID
+ * begins equal to the active user's opaque ID. This schema-only phase does not
+ * redirect conversations, messages, or reactions to this table yet.
+ */
+export const messagingParticipants = pgTable("messaging_participants", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").unique().references(() => user.id, { onDelete: "set null" }),
+  state: messagingParticipantState("state").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("messaging_participants_active_user_idx").on(table.userId),
+  check("messaging_participants_state_user_check", sql`(${table.state} = 'active' and ${table.userId} is not null) or (${table.state} = 'deleted' and ${table.userId} is null)`),
+]);
 
 /** The unordered direct pair is immutable and unique. No group representation exists in V1. */
 export const conversations = pgTable("conversations", {
