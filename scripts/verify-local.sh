@@ -51,7 +51,7 @@ echo 'Running TypeScript verification'
 pnpm lint
 pnpm --filter @dayli/web exec next typegen
 pnpm typecheck
-node --test scripts/staging-origins.test.mjs scripts/staging-auth-bindings.test.mjs scripts/staging-media-bindings.test.mjs
+node --test scripts/staging-origins.test.mjs scripts/staging-auth-bindings.test.mjs scripts/staging-media-bindings.test.mjs scripts/staging-auth-smoke.test.mjs
 env -u TEST_DATABASE_URL -u TEST_APP_DATABASE_URL -u TEST_LIFECYCLE_DATABASE_URL -u TEST_LIFECYCLE_APP_DATABASE_URL -u TEST_LIFECYCLE_WORKER_DATABASE_URL -u TEST_PRIVACY_PREFLIGHT_DATABASE_URL -u VERIFY_POSTGRES_PORT -u LOCAL_TEST_POSTGRES_PORT pnpm test
 pnpm --filter @dayli/api test:proxy-integration
 pnpm test:proxy-provenance
