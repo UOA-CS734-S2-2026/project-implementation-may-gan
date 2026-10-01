@@ -482,9 +482,11 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(claimed[0]?.id).toBe(exportId);
     await expect(lifecycleWorker`select * from public.data_export_requests`).rejects.toMatchObject({ code: "42501" });
     await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'wrong'.repeat(8)}, 0, 'private/forged.zip', now())`).resolves.toEqual([{ dayli_export_publish: false }]);
-    await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'a'.repeat(32)}, 0, 'private/export.zip', now())`).resolves.toEqual([{ dayli_export_publish: true }]);
+    const key = `private/data-exports/${exportId}/${"a".repeat(32)}.zip`;
+    const [{ snapshot_cutoff_at: cutoff }] = await migrator`select snapshot_cutoff_at from public.data_export_requests where id = ${exportId}`;
+    await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'a'.repeat(32)}, 0, ${key}, ${cutoff})`).resolves.toEqual([{ dayli_export_publish: true }]);
     const ready = await migrator`select status, archive_object_key, expires_at = ready_at + interval '24 hours' as exact_expiry from public.data_export_requests where id = ${exportId}`;
-    expect(ready[0]).toEqual({ status: "ready", archive_object_key: "private/export.zip", exact_expiry: true });
+    expect(ready[0]).toEqual({ status: "ready", archive_object_key: key, exact_expiry: true });
     await expect(lifecycleWorker`select public.dayli_export_cancel_for_purge(${userId})`).resolves.toEqual([{ dayli_export_cancel_for_purge: 1 }]);
     const expired = await migrator`select status, archive_object_key, archive_cleanup_task_id from public.data_export_requests where id = ${exportId}`;
     expect(expired[0]?.status).toBe("expired");

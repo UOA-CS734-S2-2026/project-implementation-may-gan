@@ -189,15 +189,17 @@ export const dataExportRequests = pgTable("data_export_requests", {
   check("data_export_requests_state_check", sql`
     (${table.status} = 'ready' and ${table.snapshotCutoffAt} is not null and ${table.archiveObjectKey} is not null and
       ${table.readyAt} is not null and ${table.expiresAt} = ${table.readyAt} + interval '24 hours' and
-      ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null) or
-    (${table.status} in ('requested', 'building') and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
-      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null) or
+      ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null) or
+    (${table.status} = 'requested' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null) or
+    (${table.status} = 'building' and ${table.snapshotCutoffAt} is not null and ${table.archiveObjectKey} is null and
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null and ${table.leaseToken} is not null and ${table.leaseExpiresAt} is not null) or
     (${table.status} = 'failed' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
-      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is not null) or
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is not null and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null) or
     (${table.status} = 'cancelled' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
-      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.failureCategory} is null) or
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is null and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null) or
     (${table.status} = 'expired' and ${table.snapshotCutoffAt} is null and ${table.archiveObjectKey} is null and
-      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is not null and ${table.failureCategory} is null)
+      ${table.readyAt} is null and ${table.expiresAt} is null and ${table.archiveCleanupTaskId} is not null and ${table.failureCategory} is null and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null)
   `),
 ]);
 

@@ -78,8 +78,9 @@ export function createPostgresDataExportStore(database: DayliDatabase): DataExpo
       return rows[0] ? record(rows[0]) : null;
     },
     async cancel(userId) {
-      const rows = await database.update(schema.dataExportRequests).set({ status: "cancelled", updatedAt: sql`now()` })
-        .where(and(eq(schema.dataExportRequests.userId, userId), inArray(schema.dataExportRequests.status, cancellableStatuses)))
+      const rows = await database.update(schema.dataExportRequests).set({
+        status: "cancelled", snapshotCutoffAt: null, leaseToken: null, leaseExpiresAt: null, updatedAt: sql`now()`,
+      }).where(and(eq(schema.dataExportRequests.userId, userId), inArray(schema.dataExportRequests.status, cancellableStatuses)))
         .returning();
       return rows[0] ? record(rows[0]) : null;
     },

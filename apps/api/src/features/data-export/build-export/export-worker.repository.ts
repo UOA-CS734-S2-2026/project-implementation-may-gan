@@ -6,6 +6,7 @@ export function createPostgresExportBuildStore(database: DayliDatabase): ExportB
   const procedures = createRestrictedDataExportWorkerStore(database);
   return {
     claim: async () => procedures.claim(),
+    reserveObject: async (job) => procedures.reserveObject({ id: job.id, leaseToken: job.leaseToken }),
     publish: async (input) => (await procedures.publish({
       id: input.job.id, leaseToken: input.job.leaseToken, lifecycleGeneration: input.job.lifecycleGeneration,
       objectKey: input.objectKey, snapshotCutoffAt: input.snapshotCutoffAt,
