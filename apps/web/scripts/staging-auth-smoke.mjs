@@ -46,38 +46,39 @@ export function createSafeReporter(write = (line) => process.stdout.write(`${lin
   };
 }
 
-function hasNewUnexpectedHost(unexpectedHost, checkpoint) {
-  return unexpectedHost.count !== checkpoint;
+function checkPhase(unexpectedHost, phaseBaseline) {
+  if (unexpectedHost.count !== phaseBaseline) throw failure("unexpected_host");
 }
 
-async function checkTrustedPage(page, unexpectedHost, checkpoint = unexpectedHost.count) {
-  if (hasNewUnexpectedHost(unexpectedHost, checkpoint) || !isTrustedUrl(page.url())) throw failure("unexpected_host");
+async function checkTrustedPage(page, unexpectedHost, phaseBaseline) {
+  checkPhase(unexpectedHost, phaseBaseline);
+  if (!isTrustedUrl(page.url())) throw failure("unexpected_host");
 }
 
-async function visit(page, path, unexpectedHost) {
-  const checkpoint = unexpectedHost.count;
+async function visit(page, path, unexpectedHost, phaseBaseline) {
   await page.goto(`${STAGING_ORIGIN}${path}`, { waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost, checkpoint);
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
 }
 
-async function reload(page, unexpectedHost) {
-  const checkpoint = unexpectedHost.count;
+async function reload(page, unexpectedHost, phaseBaseline) {
   await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost, checkpoint);
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
 }
 
-async function waitForVisible(locator) {
+async function waitForVisible(locator, unexpectedHost, phaseBaseline) {
   await locator.waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS });
+  checkPhase(unexpectedHost, phaseBaseline);
 }
 
-async function verifySettings(page, unexpectedHost) {
-  await checkTrustedPage(page, unexpectedHost);
+async function verifySettings(page, unexpectedHost, phaseBaseline) {
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
   if (!isPath(page, "/settings", "?smoke=auth")) throw failure("return_path_lost");
-  await waitForVisible(page.getByRole("heading", { name: "Settings", exact: true }));
+  await waitForVisible(page.getByRole("heading", { name: "Settings", exact: true }), unexpectedHost, phaseBaseline);
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
 }
 
-async function verifySignInDestination(page, unexpectedHost) {
-  await checkTrustedPage(page, unexpectedHost);
+async function verifySignInDestination(page, unexpectedHost, phaseBaseline) {
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
   let url;
   try {
     url = new URL(page.url());
@@ -89,8 +90,9 @@ async function verifySignInDestination(page, unexpectedHost) {
   }
 }
 
-async function verifySessionCookie(context) {
+async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
   const cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => SESSION_COOKIE.test(name));
+  checkPhase(unexpectedHost, phaseBaseline);
   if (!cookie) throw failure("session_cookie_missing");
   if (
     cookie.secure !== true
@@ -103,66 +105,75 @@ async function verifySessionCookie(context) {
   }
 }
 
-async function defaultJourney({ context, page, unexpectedHost, markSessionPossible, markLoggedOut, email, password }) {
-  await visit(page, "/", unexpectedHost);
-  await visit(page, PROTECTED_PATH, unexpectedHost);
-  await verifySignInDestination(page, unexpectedHost);
+async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, markSessionPossible, markLoggedOut, email, password }) {
+  await visit(page, "/", unexpectedHost, journeyBaseline);
+  await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
+  await verifySignInDestination(page, unexpectedHost, journeyBaseline);
 
   await page.getByLabel("Email", { exact: true }).fill(email);
+  checkPhase(unexpectedHost, journeyBaseline);
   await page.getByLabel("Password", { exact: true }).fill(password);
+  checkPhase(unexpectedHost, journeyBaseline);
   // The server can establish a cookie before this navigation becomes visible.
   // Cleanup must therefore assume a session exists from submission onward.
   markSessionPossible();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  checkPhase(unexpectedHost, journeyBaseline);
   try {
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
+    checkPhase(unexpectedHost, journeyBaseline);
   } catch {
     throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "login_failed");
   }
-  await verifySettings(page, unexpectedHost);
+  await verifySettings(page, unexpectedHost, journeyBaseline);
 
-  await reload(page, unexpectedHost);
-  await verifySettings(page, unexpectedHost);
+  await reload(page, unexpectedHost, journeyBaseline);
+  await verifySettings(page, unexpectedHost, journeyBaseline);
 
   const secondPage = await context.newPage();
-  await visit(secondPage, PROTECTED_PATH, unexpectedHost);
-  await verifySettings(secondPage, unexpectedHost);
-  await verifySessionCookie(context);
+  checkPhase(unexpectedHost, journeyBaseline);
+  await visit(secondPage, PROTECTED_PATH, unexpectedHost, journeyBaseline);
+  await verifySettings(secondPage, unexpectedHost, journeyBaseline);
+  await verifySessionCookie(context, unexpectedHost, journeyBaseline);
 
-  const logoutCheckpoint = unexpectedHost.count;
+  await waitForVisible(page.getByRole("button", { name: "Sign out", exact: true }), unexpectedHost, journeyBaseline);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  checkPhase(unexpectedHost, journeyBaseline);
   try {
     // SignOutButton always navigates home after its request. Home alone is not
     // logout proof, so each existing tab must subsequently lose protected access.
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
-    await checkTrustedPage(page, unexpectedHost, logoutCheckpoint);
-    await visit(page, PROTECTED_PATH, unexpectedHost);
-    await verifySignInDestination(page, unexpectedHost);
-    await visit(secondPage, PROTECTED_PATH, unexpectedHost);
-    await verifySignInDestination(secondPage, unexpectedHost);
+    await checkTrustedPage(page, unexpectedHost, journeyBaseline);
+    await visit(page, PROTECTED_PATH, unexpectedHost, journeyBaseline);
+    await verifySignInDestination(page, unexpectedHost, journeyBaseline);
+    await visit(secondPage, PROTECTED_PATH, unexpectedHost, journeyBaseline);
+    await verifySignInDestination(secondPage, unexpectedHost, journeyBaseline);
+    checkPhase(unexpectedHost, journeyBaseline);
   } catch {
     throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "logout_failed");
   }
   markLoggedOut();
 }
 
-async function confirmUnauthenticated(page, unexpectedHost) {
-  await visit(page, PROTECTED_PATH, unexpectedHost);
-  await verifySignInDestination(page, unexpectedHost);
+async function confirmUnauthenticated(page, unexpectedHost, cleanupBaseline) {
+  await visit(page, PROTECTED_PATH, unexpectedHost, cleanupBaseline);
+  await verifySignInDestination(page, unexpectedHost, cleanupBaseline);
 }
 
-async function bestEffortLogout(page, unexpectedHost) {
-  await visit(page, PROTECTED_PATH, unexpectedHost);
+async function bestEffortLogout(page, unexpectedHost, cleanupBaseline) {
+  await visit(page, PROTECTED_PATH, unexpectedHost, cleanupBaseline);
   if (isPath(page, "/sign-in")) {
-    await verifySignInDestination(page, unexpectedHost);
+    await verifySignInDestination(page, unexpectedHost, cleanupBaseline);
     return;
   }
   if (!isPath(page, "/settings", "?smoke=auth")) throw failure("cleanup_failed");
-  const logoutCheckpoint = unexpectedHost.count;
+  await waitForVisible(page.getByRole("button", { name: "Sign out", exact: true }), unexpectedHost, cleanupBaseline);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  checkPhase(unexpectedHost, cleanupBaseline);
   await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost, logoutCheckpoint);
-  await confirmUnauthenticated(page, unexpectedHost);
+  await checkTrustedPage(page, unexpectedHost, cleanupBaseline);
+  await confirmUnauthenticated(page, unexpectedHost, cleanupBaseline);
+  checkPhase(unexpectedHost, cleanupBaseline);
 }
 
 function browserEnvironment(environment = process.env) {
@@ -202,25 +213,32 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
       await route.continue();
     });
     page = await context.newPage();
+    const journeyBaseline = unexpectedHost.count;
     await journey({
       context,
       page,
       unexpectedHost,
+      journeyBaseline,
       markSessionPossible: () => { sessionPossible = true; },
       markLoggedOut: () => { loggedOut = true; },
       email,
       password,
     });
+    checkPhase(unexpectedHost, journeyBaseline);
     reporter({ step: "journey", outcome: "passed", durationMs: Date.now() - startedAt });
     passed = true;
   } catch (error) {
     reporter({ step: "journey", outcome: "failed", durationMs: Date.now() - startedAt, category: categoryFor(error, unexpectedHost.count > 0 ? "unexpected_host" : "browser_failure") });
   } finally {
     const cleanupStartedAt = Date.now();
+    const cleanupBaseline = unexpectedHost.count;
     try {
-      if (sessionPossible && !loggedOut && page) await bestEffortLogout(page, unexpectedHost);
+      if (sessionPossible && !loggedOut && page) await bestEffortLogout(page, unexpectedHost, cleanupBaseline);
+      checkPhase(unexpectedHost, cleanupBaseline);
       if (context) await context.close();
+      checkPhase(unexpectedHost, cleanupBaseline);
       if (browser) await browser.close();
+      checkPhase(unexpectedHost, cleanupBaseline);
       reporter({ step: "cleanup", outcome: "passed", durationMs: Date.now() - cleanupStartedAt });
     } catch {
       passed = false;

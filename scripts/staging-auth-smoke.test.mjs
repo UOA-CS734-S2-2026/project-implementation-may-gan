@@ -10,7 +10,7 @@ const workflow = readFileSync(resolve(repositoryRoot, ".github", "workflows", "s
 const protectedUrl = `${STAGING_ORIGIN}/settings?smoke=auth`;
 
 function browserType(options = {}) {
-  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, protectedVisits: 0, session: false, signInAttempts: 0, signOutAttempts: 0 };
+  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, newPages: 0, protectedVisits: 0, session: false, signInAttempts: 0, signOutAttempts: 0 };
   let routeHandler;
 
   async function interceptUnexpected(reason) {
@@ -46,6 +46,7 @@ function browserType(options = {}) {
       getByRole: (_role, locator) => {
         if (locator.name === "Settings") {
           return { waitFor: async () => {
+            if (options.unexpectedDuringJourneyLocator && state.session && state.abortedOrigins.length === 0) await interceptUnexpected("journey-locator");
             if (new URL(currentUrl).pathname !== "/settings") throw new Error(options.errorText ?? "settings unavailable");
           } };
         }
@@ -57,12 +58,17 @@ function browserType(options = {}) {
           } };
         }
         if (locator.name === "Sign out") {
-          return { click: async () => {
-            state.signOutAttempts += 1;
-            // The real button navigates home even when its sign-out request fails.
-            currentUrl = `${STAGING_ORIGIN}/`;
-            if (!options.signOutFails) state.session = false;
-          } };
+          return {
+            waitFor: async () => {
+              if (options.unexpectedDuringCleanupLocator && state.protectedVisits === 3) await interceptUnexpected("cleanup-locator");
+            },
+            click: async () => {
+              state.signOutAttempts += 1;
+              // The real button navigates home even when its sign-out request fails.
+              currentUrl = `${STAGING_ORIGIN}/`;
+              if (!options.signOutFails) state.session = false;
+            },
+          };
         }
         throw new Error("unexpected locator");
       },
@@ -71,7 +77,11 @@ function browserType(options = {}) {
 
   const context = {
     route: async (_pattern, handler) => { routeHandler = handler; },
-    newPage: async () => page(),
+    newPage: async () => {
+      state.newPages += 1;
+      if (options.unexpectedBetweenOperations && state.newPages === 2) await interceptUnexpected("between-operations");
+      return page();
+    },
     cookies: async () => [{
       name: "__Secure-better-auth.session_token",
       secure: true,
@@ -156,14 +166,27 @@ test("an external request after session creation preserves the journey failure a
 });
 
 test("a fresh external request during cleanup is blocked and fails safely", async () => {
-  const result = await runDefault({ cookieMismatch: true, unexpectedDuringCleanup: true, errorText: "cleanup-origin private-password session=private-cookie" });
+  const result = await runDefault({ cookieMismatch: true, unexpectedDuringCleanupLocator: true, errorText: "cleanup-origin private-password session=private-cookie" });
   assert.equal(result.passed, false);
-  assert.deepEqual(result.fake.state.abortedOrigins, ["cleanup"]);
+  assert.deepEqual(result.fake.state.abortedOrigins, ["cleanup-locator"]);
   assert.equal(result.fake.state.session, true);
   assert.equal(result.fake.state.signOutAttempts, 0);
   assert.match(result.output, /step=journey outcome=failed .*category=session_cookie_attributes/);
   assert.match(result.output, /step=cleanup outcome=failed .*category=cleanup_failed/);
   assertNoSensitiveOutput(result);
+});
+
+test("journey locator waits and inter-operation boundaries cannot absorb blocked external requests", async () => {
+  for (const [option, reason] of [["unexpectedDuringJourneyLocator", "journey-locator"], ["unexpectedBetweenOperations", "between-operations"]]) {
+    const result = await runDefault({ [option]: true, errorText: `${reason} private-password session=private-cookie` });
+    assert.equal(result.passed, false);
+    assert.deepEqual(result.fake.state.abortedOrigins, [reason]);
+    assert.equal(result.fake.state.session, false);
+    assert.equal(result.fake.state.signOutAttempts, 1);
+    assert.match(result.output, /step=journey outcome=failed .*category=unexpected_host/);
+    assert.match(result.output, /step=cleanup outcome=passed/);
+    assertNoSensitiveOutput(result);
+  }
 });
 
 test("unexpected-origin interception, cookie mismatches, and close failures are non-sensitive failures", async () => {
