@@ -1,0 +1,6 @@
+reason: The protected migrator executes this migration as one transaction. Requiring an exact starting schema prevents a partial manual replay from silently skipping an object.
+affected_data_and_clients: Old Workers continue to write user references. The migration holds table locks until trigger installation and backfill commit.
+rollout_sequence: Apply only through the protected staging migrator after reviewed evidence confirms migration 0020 is present. Keep participant runtime code disabled.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Correct defects with a new additive migration. Do not rerun fragments against a hosted database.
+reviewer: Database and messaging reviewers must approve this compatibility phase.

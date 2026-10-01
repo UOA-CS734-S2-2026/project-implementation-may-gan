@@ -14,11 +14,13 @@ Do not merge a participant-dependent API runtime change until staging has applie
 
 Before that runtime PR can merge, reviewers need the protected staging migration evidence, a Hyperdrive compatibility check as `app`, and a review of the schema transition. There is no hidden feature flag or fallback query in this phase. The runtime is disabled by absence, not by a switch that might send one request down an unsafe path.
 
-## Planned cutover
+## Compatibility expansion
 
-The next migration must add participant references alongside the current user references. It must backfill both forms, keep them consistent during the API transition, and leave the current user-reference columns in place until staging proves the new runtime. The runtime can then read and write participant identities while preserving the current user IDs for active delivery and authorization.
+Migration `0021_messaging_participant_compatibility` adds nullable participant references beside every messaging user reference that will later need durable identity: direct pairs, initiator, memberships, senders, reactions, and conversation-change members. It backfills active rows and database triggers write the matching participant value for every legacy insert or update. The old Worker keeps using only user columns. The triggers make its rows ready for the later runtime without asking it to know about the new columns.
 
-Only after that cutover can a separate deletion review remove the cascading messaging user references. That review must prove that a surviving participant can find the direct conversation and retained history. It must project a fixed unavailable-account label only when the participant has no active user mapping. It must not join a deleted profile.
+The user-reference columns, their unique constraints, and their cascading foreign keys remain. The outbox, push devices, and socket tickets also remain user-scoped. This migration does not enable physical account deletion, alter lifecycle procedures, or make a message survive a physical user delete. Today, the existing user foreign keys still cascade messaging rows if another system deletes a user.
+
+The participant API can only read and write these references after staging has applied both `0020` and `0021`, reviewers have checked the migration evidence, and the old API has passed its compatibility checks. A later contract migration may remove legacy cascading references only after a separate deletion review proves retained history, inactive-peer projection, delivery authorization, and rollback behavior.
 
 A later inspection query may identify conversations with no active participant. It must remain read-only. It cannot authorize deletion, and it cannot remove a conversation while another participant survives.
 
