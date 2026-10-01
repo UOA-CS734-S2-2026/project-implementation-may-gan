@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 export const STAGING_ORIGIN = "https://staging.dayli.agroupforcoders.com";
 const PROTECTED_PATH = "/settings?smoke=auth";
 const STEP_TIMEOUT_MS = 15_000;
-const SESSION_COOKIE = /^(?:__Secure-)?better-auth\.session_token$/;
+const SESSION_COOKIE = "__Secure-better-auth.session_token";
 const CLOUDFLARE_ANALYTICS_HOST = "static.cloudflareinsights.com";
 const CLOUDFLARE_ANALYTICS_PATH = /^\/beacon\.min\.js\/v[0-9a-f]+$/;
 
@@ -123,7 +123,7 @@ async function verifySignInDestination(page, unexpectedHost, phaseBaseline) {
 }
 
 async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
-  const cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => SESSION_COOKIE.test(name));
+  const cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => name === SESSION_COOKIE);
   checkPhase(unexpectedHost, phaseBaseline);
   if (!cookie) throw failure("session_cookie_missing");
   if (
@@ -199,6 +199,24 @@ async function bestEffortLogout(page, unexpectedHost, cleanupBaseline) {
     return;
   }
   if (!isPath(page, "/settings", "?smoke=auth")) throw failure("cleanup_failed");
+
+  let cleanupDestination;
+  try {
+    // A stale session can reach the streamed settings shell before it redirects.
+    cleanupDestination = await Promise.any([
+      page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/sign-in", { timeout: STEP_TIMEOUT_MS }).then(() => "sign-in"),
+      page.getByRole("button", { name: "Sign out", exact: true }).waitFor({ state: "visible", timeout: STEP_TIMEOUT_MS }).then(() => "settings"),
+    ]);
+  } catch {
+    checkPhase(unexpectedHost, cleanupBaseline);
+    throw failure("cleanup_failed");
+  }
+  checkPhase(unexpectedHost, cleanupBaseline);
+  if (cleanupDestination === "sign-in") {
+    await verifySignInDestination(page, unexpectedHost, cleanupBaseline);
+    return;
+  }
+
   await waitForVisible(page.getByRole("button", { name: "Sign out", exact: true }), unexpectedHost, cleanupBaseline);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   checkPhase(unexpectedHost, cleanupBaseline);
