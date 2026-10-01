@@ -23,7 +23,7 @@ function requireLocalTestUrl(value: string | undefined): string {
   return value;
 }
 
-(databaseUrl ? describe : describe.skip)("privacy foundation populated-main preflight", () => {
+(databaseUrl ? describe : describe.skip)("privacy and messaging foundation populated-main preflight", () => {
   let client: ReturnType<typeof postgres> | undefined;
   let partialMigrationsDirectory: string | undefined;
 
@@ -32,13 +32,13 @@ function requireLocalTestUrl(value: string | undefined): string {
     if (partialMigrationsDirectory) await rm(partialMigrationsDirectory, { recursive: true, force: true });
   });
 
-  it("applies after populated profile, username, reservation, and avatar history", async () => {
+  it("applies participant identity after populated profile, username, reservation, and avatar history", async () => {
     client = postgres(requireLocalTestUrl(databaseUrl), { max: 1, prepare: false, onnotice: () => undefined });
     partialMigrationsDirectory = await mkdtemp(path.join(os.tmpdir(), "dayli-main-baseline-"));
     await cp(migrationsFolder, partialMigrationsDirectory, { recursive: true });
     const journalPath = path.join(partialMigrationsDirectory, "meta", "_journal.json");
     const journal = JSON.parse(await readFile(journalPath, "utf8")) as { entries: Array<{ idx: number }> };
-    journal.entries = journal.entries.filter((entry) => entry.idx <= 18);
+    journal.entries = journal.entries.filter((entry) => entry.idx <= 19);
     await writeFile(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
 
     await migrate(drizzle(client), {
@@ -77,6 +77,11 @@ function requireLocalTestUrl(value: string | undefined): string {
       where u.id = ${userId}
     `;
     expect(profileRows).toEqual([{ username: "privacy_preflight", reservation_id: reservationId }]);
+    await expect(client`
+      select id, user_id, state
+      from public.messaging_participants
+      where id = ${userId}
+    `).resolves.toEqual([{ id: userId, user_id: userId, state: "active" }]);
 
     await client`insert into public.account_lifecycles (user_id) values (${userId})`;
     const lifecycleRows = await client`

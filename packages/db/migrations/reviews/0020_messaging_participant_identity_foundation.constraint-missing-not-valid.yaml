@@ -1,0 +1,6 @@
+reason: The new mapping foreign key is validated during creation because the migration backfills all participants in the same transaction.
+affected_data_and_clients: Existing users receive a valid participant mapping. No deployed runtime query changes in this phase.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Do not deploy participant-dependent runtime code until staging proves this schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Correct an unexpected mapping failure with a forward-only migration after investigation. Do not bypass the foreign key.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

@@ -1,0 +1,6 @@
+reason: The participant mapping index is created inside the transactional migration so the new table, backfill, mapping constraint, and triggers become available together.
+affected_data_and_clients: The table is new and has no prior runtime readers. Existing messaging tables remain unchanged.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Do not deploy participant-dependent runtime code until staging proves this schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a concurrent replacement index in a later forward-only migration if production measurements require it.
+reviewer: Database and messaging reviewers must approve the migration and later runtime cutover.

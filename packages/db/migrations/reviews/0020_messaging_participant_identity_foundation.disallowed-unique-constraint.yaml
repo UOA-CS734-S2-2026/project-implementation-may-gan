@@ -1,0 +1,6 @@
+reason: The unique active-user mapping gives each account one stable participant identity. It prevents a profile from being linked to multiple participant rows.
+affected_data_and_clients: Existing users are backfilled one-to-one. Existing messaging tables remain unchanged.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Keep the existing runtime until staging proves the new schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Investigate any duplicate mapping before applying a forward-only repair. Do not merge participant identities automatically.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

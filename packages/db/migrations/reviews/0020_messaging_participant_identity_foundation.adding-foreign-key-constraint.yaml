@@ -1,0 +1,6 @@
+reason: The active-user mapping uses a foreign key so a detached participant cannot retain a profile link after its user row is removed.
+affected_data_and_clients: Existing users are backfilled with opaque participant IDs. No deployed runtime query changes in this phase.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Do not deploy participant-dependent runtime code until staging proves this schema.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Correct any mapping issue with a forward-only migration. Do not restore participant identity from deleted profile data.
+reviewer: Database, messaging, and privacy reviewers must approve the migration and the later runtime cutover.

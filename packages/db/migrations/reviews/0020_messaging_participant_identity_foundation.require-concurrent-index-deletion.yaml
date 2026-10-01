@@ -1,0 +1,6 @@
+reason: This first phase deletes no indexes. The suppression documents that existing messaging indexes and constraints remain in place.
+affected_data_and_clients: Existing deployed messaging queries continue to use their current indexes.
+rollout_sequence: Apply through the protected migrator workflow after the approved privacy foundation migration. Retire old indexes only after a staged runtime cutover.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a forward-only, separately reviewed concurrent cleanup migration for any future index retirement.
+reviewer: Database and messaging reviewers must approve any later index removal.
