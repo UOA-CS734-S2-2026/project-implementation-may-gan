@@ -19,9 +19,11 @@ function browserType(options = {}) {
     newPages: 0,
     protectedVisits: 0,
     session: false,
+    sessionCookieName: options.sessionCookieName ?? "__Secure-better-auth.session_token",
     signInAttempts: 0,
     signOutAttempts: 0,
     streamedRedirects: 0,
+    streamedRedirectWaits: 0,
   };
   let routeHandler;
 
@@ -47,7 +49,18 @@ function browserType(options = {}) {
 
   function page() {
     let currentUrl = `${STAGING_ORIGIN}/`;
-    let redirectPending = false;
+    let redirectPending;
+
+    function scheduleSignInRedirect(pathname, search) {
+      const signInUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${pathname}${search}`)}`;
+      redirectPending = new Promise((resolve) => {
+        setTimeout(() => {
+          currentUrl = signInUrl;
+          state.streamedRedirects += 1;
+          resolve();
+        }, 0);
+      });
+    }
     return {
       url: () => currentUrl,
       goto: async (url) => {
@@ -73,11 +86,11 @@ function browserType(options = {}) {
           if (options.unexpectedDuringCleanup && state.protectedVisits === 3) await interceptUnexpected("cleanup");
           if (state.session) {
             currentUrl = `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`;
+          } else if (options.delayedSignInRedirect) {
+            currentUrl = `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`;
+            scheduleSignInRedirect(parsed.pathname, parsed.search);
           } else {
-            redirectPending = Boolean(options.delayedSignInRedirect);
-            currentUrl = redirectPending
-              ? `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`
-              : `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+            currentUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
           }
           return;
         }
@@ -85,15 +98,20 @@ function browserType(options = {}) {
       },
       reload: async () => { if (options.unexpectedAfterLogin) await interceptUnexpected("after-login"); },
       waitForURL: async (predicate) => {
-        if (redirectPending) {
-          redirectPending = false;
-          state.streamedRedirects += 1;
-          const parsed = new URL(currentUrl);
-          currentUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+        if (!predicate(new URL(currentUrl)) && redirectPending) {
+          state.streamedRedirectWaits += 1;
+          await redirectPending;
+          redirectPending = undefined;
         }
         if (!predicate(new URL(currentUrl))) throw new Error(options.errorText ?? "navigation failed");
       },
-      getByLabel: () => ({ fill: async () => {} }),
+      getByLabel: () => ({
+        fill: async () => {
+          if (new URL(currentUrl).pathname !== "/sign-in") {
+            throw new Error(options.errorText ?? "sign-in controls unavailable before redirect");
+          }
+        },
+      }),
       getByRole: (_role, locator) => {
         if (locator.name === "Settings") {
           return { waitFor: async () => {
@@ -107,7 +125,7 @@ function browserType(options = {}) {
         if (locator.name === "Sign in") {
           return { click: async () => {
             state.signInAttempts += 1;
-            state.session = true;
+            state.session = !options.sessionMissingAfterFailedLogin;
             if (!options.loginNavigationFails) currentUrl = protectedUrl;
           } };
         }
@@ -115,6 +133,10 @@ function browserType(options = {}) {
           return {
             waitFor: async () => {
               if (options.unexpectedDuringCleanupLocator && state.protectedVisits === 3) await interceptUnexpected("cleanup-locator");
+              if (!state.session || new URL(currentUrl).pathname !== "/settings") {
+                if (redirectPending) await redirectPending;
+                throw new Error(options.errorText ?? "sign-out control unavailable");
+              }
             },
             click: async () => {
               state.signOutAttempts += 1;
@@ -137,7 +159,7 @@ function browserType(options = {}) {
       return page();
     },
     cookies: async () => [{
-      name: "__Secure-better-auth.session_token",
+      name: state.sessionCookieName,
       secure: true,
       httpOnly: true,
       sameSite: options.cookieMismatch ? "Strict" : "Lax",
@@ -157,7 +179,7 @@ function browserType(options = {}) {
   };
 }
 
-async function runDefault(options = {}) {
+async function runDefault({ journey, ...options } = {}) {
   const fake = browserType(options);
   const lines = [];
   const email = "private-account@example.test";
@@ -166,6 +188,7 @@ async function runDefault(options = {}) {
   const passed = await runSmoke({
     browserType: fake.browserType,
     reporter: createSafeReporter((line) => lines.push(line)),
+    journey,
     email,
     password,
     environment: { HOME: "/tmp/smoke", PATH: "/usr/bin", GITHUB_TOKEN: "private-token", SMOKE_TEST_PASSWORD: password },
@@ -182,6 +205,7 @@ test("the default journey completes and launches Chromium without runner secrets
   assert.equal(result.passed, true);
   assert.equal(result.fake.state.signInAttempts, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.equal(result.fake.state.sessionCookieName, "__Secure-better-auth.session_token");
   assert.equal(result.fake.state.browserClosed, true);
   assert.deepEqual(result.fake.state.launchOptions.env, { HOME: "/tmp/smoke", PATH: "/usr/bin" });
   assertNoSensitiveOutput(result);
@@ -224,10 +248,44 @@ test("only the verified Cloudflare analytics request shape is non-fatal", async 
   }
 });
 
-test("a streamed anonymous redirect is awaited before checking the return path", async () => {
+test("a streamed anonymous redirect exposes sign-in controls only after asynchronous navigation", async () => {
+  const result = await runDefault({
+    delayedSignInRedirect: true,
+    journey: async ({ page }) => {
+      await page.goto(protectedUrl);
+      assert.equal(new URL(page.url()).pathname, "/settings");
+      await assert.rejects(page.getByLabel("Email", { exact: true }).fill("private-account@example.test"), /sign-in controls unavailable before redirect/);
+      await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/sign-in");
+      await page.getByLabel("Email", { exact: true }).fill("private-account@example.test");
+    },
+  });
+  assert.equal(result.passed, true);
+  assert.equal(result.fake.state.streamedRedirects, 1);
+  assert.equal(result.fake.state.streamedRedirectWaits, 1);
+  assertNoSensitiveOutput(result);
+});
+
+test("a streamed anonymous redirect is awaited for the initial and post-logout checks", async () => {
   const result = await runDefault({ delayedSignInRedirect: true });
   assert.equal(result.passed, true);
   assert.ok(result.fake.state.streamedRedirects >= 3);
+  assert.ok(result.fake.state.streamedRedirectWaits >= 3);
+  assertNoSensitiveOutput(result);
+});
+
+test("cleanup waits for a streamed anonymous redirect when a session disappears", async () => {
+  const result = await runDefault({
+    delayedSignInRedirect: true,
+    loginNavigationFails: true,
+    sessionMissingAfterFailedLogin: true,
+    errorText: "cleanup private-password session=private-cookie",
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.signOutAttempts, 0);
+  assert.ok(result.fake.state.streamedRedirects >= 2);
+  assert.ok(result.fake.state.streamedRedirectWaits >= 2);
+  assert.match(result.output, /step=journey outcome=failed .*category=login_failed/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
 
@@ -247,6 +305,19 @@ test("a session created before failed sign-in navigation is cleaned up once", as
   assert.equal(result.fake.state.signInAttempts, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
   assert.match(result.output, /category=login_failed/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("an unprefixed session cookie is rejected even when its attributes match", async () => {
+  const result = await runDefault({
+    sessionCookieName: "better-auth.session_token",
+    errorText: "cookie private-password session=private-cookie",
+  });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.session, false);
+  assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.match(result.output, /step=journey outcome=failed .*category=session_cookie_missing/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
