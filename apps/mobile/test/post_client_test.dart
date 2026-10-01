@@ -146,4 +146,58 @@ void main() {
       expect(requests, isEmpty);
     });
   });
+
+  group('profile posts', () {
+    Map<String, Object?> profilePost({bool released = true}) => {
+      ...body(),
+      'released': released,
+    };
+
+    test(
+      'reads a page with the cursor and keeps solo and unreleased posts',
+      () async {
+        final result = await client(
+          (_) => http.Response(
+            jsonEncode({
+              'items': [
+                profilePost(released: false),
+                {'id': 'malformed'},
+              ],
+              'nextCursor': 'c2',
+              'hasMore': true,
+            }),
+            200,
+          ),
+        ).profilePage('ana_walks', cursor: 'c1');
+
+        expect(requests.single.url.path, '/api/v1/profiles/ana_walks/posts');
+        expect(requests.single.url.queryParameters['cursor'], 'c1');
+        expect(requests.single.headers['authorization'], 'Bearer token-1');
+        final page = (result as ApiSuccess<ProfilePostsPage>).value;
+        expect(page.items.single.audience, 'solo');
+        expect(page.items.single.released, isFalse);
+        expect(page.nextCursor, 'c2');
+        expect(page.hasMore, isTrue);
+      },
+    );
+
+    test('treats an unknown or blocked profile as not found', () async {
+      final result = await client(
+        (_) => http.Response('{}', 404),
+      ).profilePage('nobody');
+
+      expect(result, isA<ApiError<ProfilePostsPage>>());
+      expect((result as ApiError).failure, isA<NotFound>());
+    });
+
+    test('does not call the API without a session', () async {
+      final result = await client(
+        (_) => http.Response('{}', 200),
+        token: null,
+      ).profilePage('ana_walks');
+
+      expect((result as ApiError).failure, isA<Unauthenticated>());
+      expect(requests, isEmpty);
+    });
+  });
 }

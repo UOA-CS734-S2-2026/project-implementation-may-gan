@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_failure.dart';
 import 'post_media.dart';
+import 'post_page.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
 /// A released post from an active friend.
@@ -90,17 +91,7 @@ class FeedPost {
   }
 }
 
-class FeedPage {
-  const FeedPage({
-    required this.items,
-    required this.nextCursor,
-    required this.hasMore,
-  });
-
-  final List<FeedPost> items;
-  final String? nextCursor;
-  final bool hasMore;
-}
+typedef FeedPage = PostPage<FeedPost>;
 
 abstract interface class FeedClient {
   Future<ApiResult<FeedPage>> page({String? cursor});
@@ -157,18 +148,9 @@ class GeneratedFeedClient implements FeedClient {
     } on FormatException {
       return const ApiError(ServiceUnavailable());
     }
-    if (json is! Map<String, Object?> || json['items'] is! List) {
-      return const ApiError(ServiceUnavailable());
-    }
-    final nextCursor = json['nextCursor'];
-    return ApiSuccess(
-      FeedPage(
-        items: [
-          for (final item in json['items']! as List) ?FeedPost.tryParse(item),
-        ],
-        nextCursor: nextCursor is String ? nextCursor : null,
-        hasMore: json['hasMore'] == true,
-      ),
-    );
+    final page = PostPage.tryParse(json, FeedPost.tryParse);
+    return page == null
+        ? const ApiError(ServiceUnavailable())
+        : ApiSuccess(page);
   }
 }

@@ -61,6 +61,10 @@ src/models/PostDetail.ts
 src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
+src/models/ProfilePost.ts
+src/models/ProfilePostAuthor.ts
+src/models/ProfilePostPrompt.ts
+src/models/ProfilePostsPage.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RelationshipProfile.ts
 src/models/RelationshipState.ts

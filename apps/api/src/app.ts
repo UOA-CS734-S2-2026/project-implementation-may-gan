@@ -47,6 +47,8 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
+import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
+import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
 import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
@@ -158,6 +160,7 @@ export interface AppDependencies {
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
   postMedia?: GetPostMediaRouteDependencies;
+  profilePosts?: ListProfilePostsRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -178,6 +181,7 @@ export function createApp({
   feed,
   postDetail,
   postMedia,
+  profilePosts,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -235,6 +239,7 @@ export function createApp({
     feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
     media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
+    profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -286,6 +291,11 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostMediaRouteDependencies : undefined;
+  const profilePosts = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveProfilePostsRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies ListProfilePostsRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
@@ -316,6 +326,7 @@ export function createAppForEnv(env: ApiEnv) {
     feed,
     postDetail,
     postMedia,
+    profilePosts,
     media,
     relationships,
     messaging,

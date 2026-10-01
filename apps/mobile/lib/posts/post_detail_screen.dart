@@ -164,39 +164,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: colors.backgroundAccent,
-                    child: Text(
-                      post.displayName.isEmpty
-                          ? '?'
-                          : post.displayName.characters.first.toUpperCase(),
-                      style: DayliText.sans(
-                        context,
-                        weight: FontWeight.w600,
-                        color: colors.foregroundAccent,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.displayName,
-                          overflow: TextOverflow.ellipsis,
-                          style: DayliText.sans(
-                            context,
-                            weight: FontWeight.w600,
-                          ),
+                    child: Semantics(
+                      button: true,
+                      label: "Open ${post.displayName}'s profile",
+                      child: GestureDetector(
+                        key: const Key('post.author'),
+                        behavior: HitTestBehavior.opaque,
+                        // The post sits above the tab shell, so a pushed
+                        // profile would clash with the shell's navigator.
+                        onTap: () => context.go(
+                          '/u/${Uri.encodeComponent(post.username)}',
                         ),
-                        Text(
-                          '@${post.username}',
-                          overflow: TextOverflow.ellipsis,
-                          style: muted,
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 22,
+                              backgroundColor: colors.backgroundAccent,
+                              child: Text(
+                                post.displayName.isEmpty
+                                    ? '?'
+                                    : post.displayName.characters.first
+                                          .toUpperCase(),
+                                style: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w600,
+                                  color: colors.foregroundAccent,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    post.displayName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: DayliText.sans(
+                                      context,
+                                      weight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '@${post.username}',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: muted,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                   Semantics(

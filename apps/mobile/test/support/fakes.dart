@@ -276,12 +276,34 @@ FeedPost feedPost(
 );
 
 class FakePostClient implements PostClient {
-  FakePostClient([List<ApiResult<PostDetail>>? results])
-    : results = results ?? [const ApiError(NotFound())];
+  FakePostClient([
+    List<ApiResult<PostDetail>>? results,
+    List<ApiResult<ProfilePostsPage>>? profileResults,
+  ]) : results = results ?? [const ApiError(NotFound())],
+       profileResults =
+           profileResults ??
+           [
+             const ApiSuccess(
+               ProfilePostsPage(items: [], nextCursor: null, hasMore: false),
+             ),
+           ];
 
   /// Returned in order; the last result repeats.
   final List<ApiResult<PostDetail>> results;
+  final List<ApiResult<ProfilePostsPage>> profileResults;
   final requested = <String>[];
+  final profileRequests = <(String, String?)>[];
+
+  @override
+  Future<ApiResult<ProfilePostsPage>> profilePage(
+    String username, {
+    String? cursor,
+  }) async {
+    profileRequests.add((username, cursor));
+    return profileResults.length > 1
+        ? profileResults.removeAt(0)
+        : profileResults.single;
+  }
 
   @override
   Future<ApiResult<PostDetail>> get(String postId) async {
@@ -301,6 +323,29 @@ class FakePostClient implements PostClient {
         : mediaResults.removeAt(0);
   }
 }
+
+ProfilePost profilePost(
+  String id, {
+  String answer = 'Walked to the harbour.',
+  String username = 'ada',
+  String displayName = 'Ada',
+  String audience = 'friends',
+  bool released = true,
+}) => ProfilePost(
+  id: id,
+  authorId: 'author-$username',
+  username: username,
+  displayName: displayName,
+  localDate: '2026-09-25',
+  promptText: 'What made you smile today?',
+  reflectiveAnswer: answer,
+  caption: null,
+  rating: 7,
+  acceptedAt: DateTime.utc(2026, 9, 25, 3),
+  edited: false,
+  audience: audience,
+  released: released,
+);
 
 PostDetail postDetail(
   String id, {

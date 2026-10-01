@@ -793,6 +793,137 @@
         ],
         "description": "The prompt stored with the post, not the current day's prompt."
       },
+      "ProfilePostsPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfilePost"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "ProfilePost": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "author": {
+            "$ref": "#/components/schemas/ProfilePostAuthor"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/ProfilePostPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "friends"
+            ],
+            "description": "`solo` appears only on the caller's own profile."
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "releasedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "released": {
+            "type": "boolean",
+            "description": "False only on the caller's own profile, for a post whose day has not been released yet."
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True when the author has edited the post since it was accepted."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "localDate",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience",
+          "acceptedAt",
+          "releasedAt",
+          "released",
+          "edited",
+          "media"
+        ],
+        "description": "One post on a profile. Tomorrow notes are not part of this projection."
+      },
+      "ProfilePostAuthor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName"
+        ]
+      },
+      "ProfilePostPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
       "PendingRequestPage": {
         "type": "object",
         "properties": {
@@ -2121,6 +2252,132 @@
           },
           "503": {
             "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{username}/posts": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listProfilePosts",
+        "summary": "List the posts on a profile",
+        "description": "Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$",
+              "example": "ben"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the profile's posts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePostsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The profile does not exist or is blocked in either direction. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The username or query contains invalid values, including an unrecognised cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable, or the page has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {

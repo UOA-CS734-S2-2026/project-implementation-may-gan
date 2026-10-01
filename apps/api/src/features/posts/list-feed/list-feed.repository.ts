@@ -1,10 +1,10 @@
-import { aucklandDateSchema } from "@dayli/contracts";
 import { and, desc, eq, exists, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { getAucklandDay } from "@dayli/domain";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
+import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
 import type { FeedPage, FeedPost } from "./list-feed.contract";
 
 /** A feed item with its media not yet signed; the route signs it for the response. */
@@ -13,14 +13,6 @@ export type FeedPageRecord = Omit<FeedPage, "items"> & { items: FeedPostRecord[]
 
 export interface FeedRepository {
   listFeed(viewerId: string, now: Date, limit: number, cursor?: string): Promise<FeedPageRecord>;
-}
-
-/** A cursor the client altered or kept from another endpoint. */
-export class InvalidFeedCursorError extends Error {
-  constructor() {
-    super("The feed cursor is not valid.");
-    this.name = "InvalidFeedCursorError";
-  }
 }
 
 /**
@@ -32,43 +24,6 @@ export class StaleFeedCursorError extends Error {
     super("The feed has moved on to a new day.");
     this.name = "StaleFeedCursorError";
   }
-}
-
-interface FeedCursor {
-  localDate: string;
-  id: string;
-}
-
-/**
- * A calendar day PostgreSQL can cast, not just the `YYYY-MM-DD` shape, so a
- * forged cursor such as `2026-99-99` is a 422 rather than a failed query.
- * PostgreSQL has no year zero.
- */
-function isLocalDate(value: unknown): value is string {
-  return typeof value === "string" && aucklandDateSchema.safeParse(value).success && value >= "0001-01-01";
-}
-
-function encodeCursor(cursor: FeedCursor): string {
-  return btoa(JSON.stringify([cursor.localDate, cursor.id]))
-    .replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
-function decodeCursor(value: string | undefined): FeedCursor | undefined {
-  if (!value) return undefined;
-  try {
-    const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
-    const parsed: unknown = JSON.parse(atob(base64 + "=".repeat((4 - base64.length % 4) % 4)));
-    if (
-      Array.isArray(parsed) && parsed.length === 2
-      && isLocalDate(parsed[0])
-      && typeof parsed[1] === "string" && parsed[1].length > 0
-    ) {
-      return { localDate: parsed[0], id: parsed[1] };
-    }
-  } catch {
-    // Fall through to the stable validation error.
-  }
-  throw new InvalidFeedCursorError();
 }
 
 /** The Auckland day before `localDate`. Calendar dates carry no zone, so UTC arithmetic is exact. */
@@ -89,7 +44,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
   const { posts, user, dailyPrompts, postRevisions } = schema;
   return {
     async listFeed(viewerId, now, limit, rawCursor) {
-      const cursor = decodeCursor(rawCursor);
+      const cursor = decodePostCursor(rawCursor);
       const yesterday = previousDay(getAucklandDay(() => now).localDate);
       // Every post in the feed is from one day, so a cursor from another day
       // was issued before the most recent midnight.
@@ -126,9 +81,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           eq(posts.localDate, yesterday),
           eq(posts.audience, "friends"),
           isNotNull(user.username),
-          cursor
-            ? sql`(${posts.localDate}, ${posts.id}) < (${cursor.localDate}::date, ${cursor.id})`
-            : undefined,
+          afterPostCursor(cursor),
         ))
         .orderBy(desc(posts.localDate), desc(posts.id))
         .limit(limit + 1);
@@ -155,7 +108,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
         })),
         feedDate: yesterday,
         hasMore,
-        nextCursor: hasMore && last ? encodeCursor({ localDate: last.localDate, id: last.id }) : null,
+        nextCursor: hasMore && last ? encodePostCursor({ localDate: last.localDate, id: last.id }) : null,
       };
     },
   };
