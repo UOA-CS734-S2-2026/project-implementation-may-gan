@@ -80,6 +80,20 @@ describe("session refresh route", () => {
     ]));
   });
 
+  it("preserves the Worker marker so refresh cannot bypass the real proxy rejection", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/api/server/browser-proxy")>("@/lib/api/server/browser-proxy");
+    mocks.forward.mockImplementation(actual.forwardBrowserApiRequest);
+    const fetch = vi.fn();
+    mocks.transport.mockResolvedValue({ fetch });
+    const response = await GET(new Request("https://web.example.test/auth/session-refresh", {
+      headers: { "cf-worker": "", "cf-connecting-ip": "203.0.113.10", cookie: "session=old" },
+    }));
+    expect(response.status).toBe(502);
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("location")).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not redirect through unavailable or malformed API responses", async () => {
     mocks.transport.mockResolvedValue(undefined);
     mocks.forward.mockResolvedValue(Response.json({ error: "unavailable" }, { status: 503 }));

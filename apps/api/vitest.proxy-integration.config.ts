@@ -1,7 +1,14 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
+import { readFileSync } from "node:fs";
+import { transpileModule, ScriptTarget, ModuleKind } from "typescript";
 
-const webProxyFixture = `
+// Compile the real, dependency-free proxy rather than copying its security logic.
+const proxySource = transpileModule(readFileSync(new URL("../web/lib/api/server/browser-proxy.ts", import.meta.url), "utf8"), {
+  compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.ES2022 },
+}).outputText;
+const webProxyFixture = `${proxySource}
+
 const testEdgeSourceHeader = "x-dayli-test-edge-source";
 
 export default {
@@ -13,13 +20,8 @@ export default {
 
     const headers = new Headers(request.headers);
     headers.delete(testEdgeSourceHeader);
-    headers.delete("cf-connecting-ip");
-    headers.set("x-dayli-browser-source", sourceIp);
-    headers.set("x-dayli-browser-request-id", "a".repeat(32));
-    const response = await env.API_BROWSER_PROXY.fetch(new Request(request, { headers, redirect: "manual" }));
-    const responseHeaders = new Headers(response.headers);
-    responseHeaders.set("Cache-Control", "no-store");
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers: responseHeaders });
+    headers.set("cf-connecting-ip", sourceIp);
+    return forwardBrowserApiRequest(new Request(request, { headers }), env.API_BROWSER_PROXY);
   },
 };
 `;

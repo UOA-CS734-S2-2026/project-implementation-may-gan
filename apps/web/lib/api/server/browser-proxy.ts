@@ -44,11 +44,13 @@ function isValidIpv6(value: string): boolean {
 }
 
 /**
- * Cloudflare owns cf-connecting-ip at the web Worker ingress. Forwarding
- * headers from a browser are deliberately ignored. Edge behavior for incoming
- * Worker subrequests still needs deployed verification before this is enabled.
+ * Direct ingress uses Cloudflare's cf-connecting-ip. Incoming Worker fetches
+ * carry cf-worker and must be rejected: a same-zone caller can choose the
+ * downstream IP through x-real-ip. Never reject x-real-ip alone; direct traffic
+ * legitimately carries it. The private service-binding hop happens afterward.
  */
 export function selectBrowserSource(request: Request): BrowserSourceSelection {
+  if (request.headers.has("cf-worker")) return { ok: false };
   const sourceIp = request.headers.get("cf-connecting-ip");
   return sourceIp && (isValidIpv4(sourceIp) || isValidIpv6(sourceIp))
     ? { ok: true, sourceIp }
@@ -96,6 +98,10 @@ function noStoreResponse(response: Response): Response {
 export async function forwardBrowserApiRequest(request: Request, transport: ApiTransport | undefined): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   if (!pathname.startsWith("/api/")) return new Response(null, { status: 404 });
+  if (request.headers.has("cf-worker")) return Response.json({ error: { code: "WORKER_ORIGIN_NOT_ALLOWED" } }, {
+    status: 403,
+    headers: { "Cache-Control": "no-store" },
+  });
   if (request.headers.has("upgrade")) return rejectedUpgradeResponse();
   if (!transport) return unavailableResponse();
 

@@ -19,6 +19,14 @@ function browserRequest(init: RequestInit = {}): RequestInit {
 }
 
 describe("BrowserProxyEntrypoint through a workerd service binding", () => {
+  it("rejects Worker-originated public and web-proxy requests", async () => {
+    const headers = { "cf-worker": "agroupforcoders.com", "cf-connecting-ip": "203.0.113.10" };
+    const direct = await bindings.DIRECT_API.fetch(new Request(`${apiOrigin}/api/auth/get-session`, { headers }));
+    expect(direct.status).toBe(403);
+    const proxied = await bindings.WEB_PROXY_FIXTURE.fetch(new Request(`${webOrigin}/api/auth/get-session`, browserRequest({ headers })));
+    expect(proxied.status).toBe(403);
+  });
+
   it("uses the named entrypoint and keeps its private context out of the public API handler", async () => {
     const forged = await bindings.DIRECT_API.fetch(new Request(`${apiOrigin}/api/auth/get-session`, {
       headers: {
