@@ -1,0 +1,6 @@
+reason: The protected migration runner sets the statement timeout. Adding columns, including one with a constant default, is metadata-only on PostgreSQL 18.
+affected_data_and_clients: Adds five nullable or defaulted columns and two partial indexes to media_reservation. No existing row changes meaning and no client contract changes.
+rollout_sequence: Apply through the protected migration workflow before deploying the API that runs cleanup and checks cleanup_claimed_at. The columns are unused until then, so the migration is safe to apply ahead of the code.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+forward_fix_plan: Add a new reviewed forward migration for corrections and never edit this migration after release.
+reviewer: Required database CODEOWNER review before migration execution.

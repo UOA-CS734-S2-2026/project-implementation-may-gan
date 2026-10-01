@@ -289,8 +289,21 @@ export const mediaReservation = pgTable("media_reservation", {
   validatedAt: timestamp("validated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  /** Set once, under the row lock, when cleanup claims the upload. A claimed
+   * upload can never be attached, completed, or served again. */
+  cleanupClaimedAt: timestamp("cleanup_claimed_at", { withTimezone: true }),
+  cleanupLeaseToken: text("cleanup_lease_token"),
+  cleanupLeaseExpiresAt: timestamp("cleanup_lease_expires_at", { withTimezone: true }),
+  cleanupAttempts: bigint("cleanup_attempts", { mode: "number" }).default(0).notNull(),
+  cleanupAvailableAt: timestamp("cleanup_available_at", { withTimezone: true }),
 }, (table) => [
   index("media_reservation_owner_id_expires_at_idx").on(table.ownerId, table.expiresAt),
+  index("media_reservation_cleanup_candidate_idx").on(table.expiresAt).where(sql`${table.cleanupClaimedAt} is null`),
+  // Matches the retry query's coalesce exactly. A row with neither timestamp (an
+  // exhausted one) has no entry, so the index only holds work that can still run.
+  index("media_reservation_cleanup_retry_idx")
+    .on(sql`coalesce(${table.cleanupLeaseExpiresAt}, ${table.cleanupAvailableAt})`)
+    .where(sql`${table.cleanupClaimedAt} is not null and coalesce(${table.cleanupLeaseExpiresAt}, ${table.cleanupAvailableAt}) is not null`),
   check("media_reservation_status_consistency_check", sql`
     (${table.status} = 'pending' and ${table.failureReason} is null and ${table.validatedAt} is null) or
     (${table.status} = 'validated' and ${table.failureReason} is null and ${table.validatedAt} is not null) or

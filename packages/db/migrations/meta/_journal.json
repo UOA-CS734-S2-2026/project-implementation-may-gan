@@ -127,6 +127,13 @@
       "when": 1790819294112,
       "tag": "0017_profile_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790828171446,
+      "tag": "0018_media_reservation_cleanup",
+      "breakpoints": true
     }
   ]
 }
