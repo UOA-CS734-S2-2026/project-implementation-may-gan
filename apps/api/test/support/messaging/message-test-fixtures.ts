@@ -80,7 +80,7 @@ export function messageMemory(initial = message()) {
     findMessage: transaction.findMessage,
     setReaction: async (id: string, _actor: string, reaction: StoredMessage["reactions"][number]["reaction"]) => {
       const old = messages.get(id)!;
-      const updated = message({ ...old, reactions: [{ reaction, count: 1, reactedByActor: true }] });
+      const updated = message({ ...old, reactions: [{ reaction, count: 1, reactedByActor: true, reactors: [{ id: "alice", name: "alice" }] }] });
       messages.set(id, updated);
       return updated;
     },

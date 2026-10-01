@@ -102,7 +102,7 @@ test("two people exchange live messages and synchronize unread state", async ({ 
 
     await messageBubble(recipientPage, firstMessage).getByLabel("Add reaction").click();
     await recipientPage.getByRole("button", { name: "React Like" }).click();
-    await expect(messageBubble(page, firstMessage).getByRole("button", { name: "Like 1" })).toBeVisible({ timeout: 15_000 });
+    await expect(messageBubble(page, firstMessage).getByLabel("View reactions")).toContainText("👍 1", { timeout: 15_000 });
 
     const multiline = `line one ${sender.username}\nline two`;
     const composer = page.getByRole("textbox", { name: "Message" });

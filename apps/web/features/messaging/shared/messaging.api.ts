@@ -1,7 +1,7 @@
 import { Configuration, MessagingApi, ResponseError } from "@dayli/api-client";
 import { apiBaseUrl } from "@/lib/api/config";
 
-export type Reaction = "like" | "love" | "laugh" | "surprised" | "sad" | "thanks";
+export type Reaction = "like" | "love" | "laugh" | "surprised" | "sad" | "angry" | "thanks";
 
 export interface MessagingReplyPreview {
   id: string;
@@ -23,7 +23,7 @@ export interface MessagingMessage {
   createdAt: string;
   editedAt: string | null;
   unsentAt: string | null;
-  reactions: Array<{ reaction: Reaction; count: number; reactedByActor: boolean }>;
+  reactions: Array<{ reaction: Reaction; count: number; reactedByActor: boolean; reactors?: Array<{ id: string; name: string }> }>;
 }
 
 export interface MessagingConversation {

@@ -40,6 +40,7 @@ export * from './MediaReservationUpload';
 export * from './MediaValidationFailureReason';
 export * from './Message';
 export * from './MessageReactionsInner';
+export * from './MessageReactionsInnerReactorsInner';
 export * from './MessageReplyPreview';
 export * from './PendingRelationshipRequest';
 export * from './PendingRequestPage';

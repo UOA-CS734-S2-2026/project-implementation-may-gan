@@ -5,7 +5,7 @@ import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 const sequenceSchema = z.string().regex(/^\d+$/).openapi({ example: "42" });
 const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
 
-export const reactionKeySchema = z.enum(["like", "love", "laugh", "surprised", "sad", "thanks"]);
+export const reactionKeySchema = z.enum(["like", "love", "laugh", "surprised", "sad", "angry", "thanks"]);
 export const messageParamsSchema = z.object({ conversationId: opaqueIdSchema, messageId: opaqueIdSchema });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
 export const sendMessageBodySchema = z.object({
@@ -29,7 +29,7 @@ export const messageSchema = z.object({
   createdAt: utcTimestampSchema,
   editedAt: utcTimestampSchema.nullable(),
   unsentAt: utcTimestampSchema.nullable(),
-  reactions: z.array(z.object({ reaction: reactionKeySchema, count: z.number().int().min(1), reactedByActor: z.boolean() })),
+  reactions: z.array(z.object({ reaction: reactionKeySchema, count: z.number().int().min(1), reactedByActor: z.boolean(), reactors: z.array(z.object({ id: opaqueIdSchema, name: z.string() })) })),
 }).openapi("Message");
 
 export const messagingErrorResponses = {

@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { MessageReactionsInnerReactorsInner } from './MessageReactionsInnerReactorsInner';
+import {
+    MessageReactionsInnerReactorsInnerFromJSON,
+    MessageReactionsInnerReactorsInnerFromJSONTyped,
+    MessageReactionsInnerReactorsInnerToJSON,
+    MessageReactionsInnerReactorsInnerToJSONTyped,
+} from './MessageReactionsInnerReactorsInner';
+
 /**
  *
  * @export
@@ -31,6 +39,10 @@ export interface MessageReactionsInner {
      *
      */
     reactedByActor: boolean;
+    /**
+     *
+     */
+    reactors: Array<MessageReactionsInnerReactorsInner>;
 }
 
 
@@ -43,6 +55,7 @@ export const MessageReactionsInnerReactionEnum = {
     Laugh: 'laugh',
     Surprised: 'surprised',
     Sad: 'sad',
+    Angry: 'angry',
     Thanks: 'thanks',
 } as const;
 export type MessageReactionsInnerReactionEnum = typeof MessageReactionsInnerReactionEnum[keyof typeof MessageReactionsInnerReactionEnum];
@@ -55,6 +68,7 @@ export function instanceOfMessageReactionsInner(value: object): value is Message
     if (!('reaction' in value) || value['reaction'] === undefined) return false;
     if (!('count' in value) || value['count'] === undefined) return false;
     if (!('reactedByActor' in value) || value['reactedByActor'] === undefined) return false;
+    if (!('reactors' in value) || value['reactors'] === undefined) return false;
     return true;
 }
 
@@ -71,6 +85,7 @@ export function MessageReactionsInnerFromJSONTyped(json: any, ignoreDiscriminato
         'reaction': json['reaction'],
         'count': json['count'],
         'reactedByActor': json['reactedByActor'],
+        'reactors': ((json['reactors'] as Array<any>).map(MessageReactionsInnerReactorsInnerFromJSON)),
     };
 }
 
@@ -88,5 +103,6 @@ export function MessageReactionsInnerToJSONTyped(value?: MessageReactionsInner |
         'reaction': value['reaction'],
         'count': value['count'],
         'reactedByActor': value['reactedByActor'],
+        'reactors': ((value['reactors'] as Array<any>).map(MessageReactionsInnerReactorsInnerToJSON)),
     };
 }

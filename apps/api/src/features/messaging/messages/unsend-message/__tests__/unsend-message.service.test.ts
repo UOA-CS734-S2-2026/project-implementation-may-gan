@@ -4,7 +4,7 @@ import { fixedMessageNow, message, messageMemory } from "../../../../../../test/
 
 describe("unsend message service", () => {
   it("unsends into a body-free tombstone and removes reactions", async () => {
-    const state = messageMemory(message({ reactions: [{ reaction: "love", count: 1, reactedByActor: true }] }));
+    const state = messageMemory(message({ reactions: [{ reaction: "love", count: 1, reactedByActor: true, reactors: [{ id: "alice", name: "alice" }] }] }));
     const result = await createUnsendMessageService({ store: state.unsendStore, now: () => fixedMessageNow }).unsend("alice", "conversation-1", "message-1");
     expect(result).toMatchObject({ replayed: false, message: { text: null, unsentAt: fixedMessageNow.toISOString(), reactions: [] } });
     await expect(createUnsendMessageService({ store: state.unsendStore }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ replayed: true });

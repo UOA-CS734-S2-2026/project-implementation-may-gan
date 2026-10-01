@@ -1,6 +1,6 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, count, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
-import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
+import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { loadReactionSummaries, messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
@@ -63,20 +63,7 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
     .limit(1);
   if (!row) return null;
   const stored = toStoredMessage(row);
-  const reactionRows = await queryable
-    .select({
-      reaction: schema.messageReactions.reaction,
-      count: count(),
-      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
-    })
-    .from(schema.messageReactions)
-    .where(eq(schema.messageReactions.messageId, messageId))
-    .groupBy(schema.messageReactions.reaction);
-  stored.reactions = reactionRows.map((item) => ({
-    reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
-    count: item.count,
-    reactedByActor: item.reacted,
-  }));
+  stored.reactions = await loadReactionSummaries(queryable, messageId, actorId);
   return stored;
 }
 

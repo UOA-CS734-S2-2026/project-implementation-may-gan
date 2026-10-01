@@ -1,10 +1,11 @@
 export type ConversationRequestState = "pending" | "active" | "declined";
-export type ReactionKey = "like" | "love" | "laugh" | "surprised" | "sad" | "thanks";
+export type ReactionKey = "like" | "love" | "laugh" | "surprised" | "sad" | "angry" | "thanks";
 
 export interface MessageReactionSummary {
   reaction: ReactionKey;
   count: number;
   reactedByActor: boolean;
+  reactors: Array<{ id: string; name: string }>;
 }
 
 export interface StoredMessage {

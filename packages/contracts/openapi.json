@@ -1018,6 +1018,7 @@
                     "laugh",
                     "surprised",
                     "sad",
+                    "angry",
                     "thanks"
                   ]
                 },
@@ -1027,12 +1028,31 @@
                 },
                 "reactedByActor": {
                   "type": "boolean"
+                },
+                "reactors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "$ref": "#/components/schemas/OpaqueId"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name"
+                    ]
+                  }
                 }
               },
               "required": [
                 "reaction",
                 "count",
-                "reactedByActor"
+                "reactedByActor",
+                "reactors"
               ]
             }
           }
@@ -4293,6 +4313,7 @@
                       "laugh",
                       "surprised",
                       "sad",
+                      "angry",
                       "thanks"
                     ]
                   }

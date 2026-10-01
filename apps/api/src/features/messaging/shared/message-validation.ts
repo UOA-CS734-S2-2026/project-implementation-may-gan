@@ -2,7 +2,7 @@ import { MessagingError } from "./messaging-error";
 import type { ReactionKey } from "./messaging-types";
 
 export const maxMessageCodePoints = 4_000;
-export const reactionKeys = ["like", "love", "laugh", "surprised", "sad", "thanks"] as const satisfies readonly ReactionKey[];
+export const reactionKeys = ["like", "love", "laugh", "surprised", "sad", "angry", "thanks"] as const satisfies readonly ReactionKey[];
 
 /**
  * Message text stays plain text. Whitespace-only values are rejected, while

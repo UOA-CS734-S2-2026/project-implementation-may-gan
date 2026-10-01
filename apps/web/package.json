@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
+    "test:e2e:messaging": "E2E_MESSAGING=1 playwright test --config playwright.messaging.config.ts",
     "typecheck": "tsc --noEmit",
     "check:vinext": "vinext check",
     "dev:vinext": "vite dev --port 3001",

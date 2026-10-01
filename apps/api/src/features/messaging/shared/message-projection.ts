@@ -92,6 +92,12 @@ async function projectStoredMessageDto(
       ))
       .limit(1))[0]
     : undefined;
+  message.reactions = await loadReactionSummaries(queryable, message.id, actorId);
+  return toMessageDto(message, parent ? toStoredMessage(parent) : null);
+}
+
+/** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
+export async function loadReactionSummaries(queryable: Queryable, messageId: string, actorId: string): Promise<StoredMessage["reactions"]> {
   const reactions = await queryable
     .select({
       reaction: schema.messageReactions.reaction,
@@ -99,17 +105,26 @@ async function projectStoredMessageDto(
       reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
     })
     .from(schema.messageReactions)
-    .where(eq(schema.messageReactions.messageId, message.id))
+    .where(eq(schema.messageReactions.messageId, messageId))
     .groupBy(schema.messageReactions.reaction);
-  message.reactions = reactions.map((item) => ({
+  const reactors = await queryable
+    .select({
+      reaction: schema.messageReactions.reaction,
+      id: schema.user.id,
+      name: sql<string>`coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''), ${schema.user.name})`,
+    })
+    .from(schema.messageReactions)
+    .innerJoin(schema.user, eq(schema.user.id, schema.messageReactions.userId))
+    .where(eq(schema.messageReactions.messageId, messageId))
+    .orderBy(schema.messageReactions.createdAt);
+  return reactions.map((item) => ({
     reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
     count: item.count,
     reactedByActor: item.reacted,
+    reactors: reactors.filter((reactor) => reactor.reaction === item.reaction).map((reactor) => ({ id: reactor.id, name: reactor.name })),
   }));
-  return toMessageDto(message, parent ? toStoredMessage(parent) : null);
 }
 
-/** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
 export async function projectMessageDto(
   queryable: Queryable,
   row: MessageProjectionRow,

@@ -133,6 +133,7 @@ enum SetMessageReactionRequestReactionEnum {
   laugh._(r'laugh'),
   surprised._(r'surprised'),
   sad._(r'sad'),
+  angry._(r'angry'),
   thanks._(r'thanks'),
   ;
 
@@ -209,6 +210,8 @@ class SetMessageReactionRequestReactionEnumTypeTransformer {
           return SetMessageReactionRequestReactionEnum.surprised;
         case r'sad':
           return SetMessageReactionRequestReactionEnum.sad;
+        case r'angry':
+          return SetMessageReactionRequestReactionEnum.angry;
         case r'thanks':
           return SetMessageReactionRequestReactionEnum.thanks;
         default:
