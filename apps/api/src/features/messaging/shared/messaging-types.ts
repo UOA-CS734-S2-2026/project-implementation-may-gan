@@ -30,6 +30,8 @@ export interface ConversationAccess {
   peerId: string;
   requestState: ConversationRequestState;
   isMember: boolean;
+  /** Both rows still map to active participants with an active lifecycle. */
+  participantsAvailable: boolean;
   /** True when either participant currently blocks the other. */
   peerActivityBlocked: boolean;
 }

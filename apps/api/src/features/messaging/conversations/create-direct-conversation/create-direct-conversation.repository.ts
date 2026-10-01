@@ -1,5 +1,5 @@
-import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { createHyperdriveDatabase, lockRelationshipPair, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
@@ -12,15 +12,12 @@ import type { StoredMessage } from "../../shared/messaging-types";
 
 type Queryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
-function relationshipPairKey(leftUserId: string, rightUserId: string): string {
-  return [leftUserId, rightUserId]
-    .sort()
-    .map((value) => `${value.length}:${value}`)
-    .join(":");
-}
-
 class PostgresDirectTransaction implements DirectConversationTransaction {
-  constructor(private readonly queryable: Queryable, private readonly actorId: string) {}
+  constructor(
+    private readonly queryable: Queryable,
+    private readonly actorId: string,
+    private readonly recipientId: string,
+  ) {}
 
   async isPairBlocked(actorId: string, recipientId: string): Promise<boolean> {
     const [row] = await this.queryable
@@ -73,6 +70,20 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       .where(eq(schema.user.id, recipientId))
       .limit(1);
     return Boolean(row);
+  }
+
+  async participantsAvailable(): Promise<boolean> {
+    const rows = await this.queryable
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+      .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+      .where(and(
+        inArray(schema.user.id, [this.actorId, this.recipientId]),
+        eq(schema.messagingParticipants.state, "active"),
+        or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+      ));
+    return rows.length === 2;
   }
 
   async hasActiveFriendship(actorId: string, recipientId: string): Promise<boolean> {
@@ -213,9 +224,13 @@ export function createPostgresDirectConversationStore(database: DayliDatabase): 
   return {
     withDirectTransaction: (actorId, recipientId, action) => database.transaction(async (tx) => {
       await tx
-        .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(actorId, recipientId)}, 734))` })
-        .from(sql`(values (1)) as lock_source`);
-      return action(new PostgresDirectTransaction(tx, actorId));
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .where(inArray(schema.user.id, [actorId, recipientId]))
+        .orderBy(asc(schema.user.id))
+        .for("update");
+      await lockRelationshipPair(tx, actorId, recipientId);
+      return action(new PostgresDirectTransaction(tx, actorId, recipientId));
     }),
   };
 }

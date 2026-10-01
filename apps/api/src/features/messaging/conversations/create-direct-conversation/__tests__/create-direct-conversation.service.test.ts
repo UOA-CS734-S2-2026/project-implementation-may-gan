@@ -10,6 +10,7 @@ function transaction(blocked: boolean): DirectConversationTransaction {
     isPairBlocked: async () => blocked,
     findDirectConversation: async () => null,
     recipientExists: async () => true,
+    participantsAvailable: async () => true,
     hasActiveFriendship: async () => false,
     findIdempotentMessage: async () => null,
     activateConversation: async (conversation) => ({ ...conversation, requestState: "active" }),

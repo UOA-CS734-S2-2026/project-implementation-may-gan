@@ -15,6 +15,18 @@ describe("send message service", () => {
     await expect(service.send("alice", "conversation-1", { clientMessageId: "client-2", text: "changed" })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
   });
 
+  it("does not write to an unavailable participant", async () => {
+    const state = sendMessageMemory();
+    state.transaction.getAccess = async () => ({
+      conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true,
+      participantsAvailable: false, peerActivityBlocked: false,
+    });
+    const service = createSendMessageService({ store: state.store });
+    await expect(service.send("alice", "conversation-1", { clientMessageId: "unavailable", text: "no delivery" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(state.changes).toEqual([]);
+  });
+
   it("rejects whitespace-only input and accepts 4,000 Unicode code points", async () => {
     const service = createSendMessageService({ store: sendMessageMemory().store, generateId: () => "message-2" });
     await expect(service.send("alice", "conversation-1", { clientMessageId: "a", text: " \n " })).rejects.toMatchObject({ code: "VALIDATION_FAILED" });

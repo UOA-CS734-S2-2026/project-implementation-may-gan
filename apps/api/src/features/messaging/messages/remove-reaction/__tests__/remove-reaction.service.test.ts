@@ -9,4 +9,15 @@ describe("remove message reaction service", () => {
     await expect(service.remove("alice", "conversation-1", "message-1")).resolves.toMatchObject({ changed: true });
     await expect(service.remove("alice", "conversation-1", "message-1")).resolves.toMatchObject({ changed: false });
   });
+
+  it("keeps an authorized removal available when the peer is unavailable", async () => {
+    const state = messageMemory(message({ reactions: [{ reaction: "angry", count: 1, reactedByActor: true, reactors: [{ id: "alice", name: "alice" }] }] }));
+    state.transaction.getAccess = async () => ({
+      conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true,
+      participantsAvailable: false, peerActivityBlocked: false,
+    });
+    await expect(createRemoveReactionService({ store: state.removeReactionStore })
+      .remove("alice", "conversation-1", "message-1"))
+      .resolves.toMatchObject({ changed: true, message: { reactions: [] } });
+  });
 });

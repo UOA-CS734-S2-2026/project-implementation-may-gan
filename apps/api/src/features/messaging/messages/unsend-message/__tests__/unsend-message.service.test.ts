@@ -12,16 +12,16 @@ describe("unsend message service", () => {
 
   it("allows the pending initiator to unsend the initial message", async () => {
     const state = messageMemory();
-    state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "pending", isMember: true, peerActivityBlocked: false });
+    state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "pending", isMember: true, participantsAvailable: false, peerActivityBlocked: false });
     await expect(createUnsendMessageService({ store: state.unsendStore, now: () => fixedMessageNow }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ replayed: false, message: { text: null } });
   });
 
   it("allows the author to unsend a declined request but never a blocked pair", async () => {
     const state = messageMemory();
-    state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "declined", isMember: true, peerActivityBlocked: false });
+    state.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "declined", isMember: true, participantsAvailable: false, peerActivityBlocked: false });
     await expect(createUnsendMessageService({ store: state.unsendStore, now: () => fixedMessageNow }).unsend("alice", "conversation-1", "message-1")).resolves.toMatchObject({ message: { text: null } });
     const blocked = messageMemory();
-    blocked.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: true });
+    blocked.transaction.getAccess = async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, participantsAvailable: true, peerActivityBlocked: true });
     await expect(createUnsendMessageService({ store: blocked.unsendStore }).unsend("alice", "conversation-1", "message-1")).rejects.toMatchObject({ code: "BLOCKED" });
   });
 });

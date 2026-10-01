@@ -15,6 +15,7 @@ export function assertPeerActivityAllowed(access: ConversationAccess): void {
   if (access.peerActivityBlocked) throw new MessagingError("BLOCKED");
   if (access.requestState === "pending") throw new MessagingError("PENDING");
   if (access.requestState === "declined") throw new MessagingError("DECLINED");
+  if (!access.participantsAvailable) throw new MessagingError("FORBIDDEN");
 }
 
 /** Pending initiators may only unsend their own initial message. Other new peer activity remains blocked. */

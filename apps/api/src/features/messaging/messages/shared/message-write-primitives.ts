@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, exists, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, exists, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import { loadReactionSummaries, messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
@@ -30,6 +30,19 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
         ),
       ),
     )));
+  const availableParticipant = (
+    userId: typeof schema.conversations.userLowId | typeof schema.conversations.userHighId,
+  ) => exists(queryable
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+    .where(and(
+      eq(schema.user.id, userId),
+      eq(schema.messagingParticipants.state, "active"),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+    )));
+  const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.userLowId)} and ${availableParticipant(schema.conversations.userHighId)}`;
   const [row] = await queryable
     .select({
       user_low_id: schema.conversations.userLowId,
@@ -37,17 +50,19 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
       request_state: schema.conversations.requestState,
       member: member.mapWith(Boolean),
       blocked: blocked.mapWith(Boolean),
+      participantsAvailable,
     })
     .from(schema.conversations)
     .where(eq(schema.conversations.id, conversationId))
     .limit(1)
     .for("update");
-  if (!row) return { conversationId, peerId: "", requestState: "declined", isMember: false, peerActivityBlocked: false };
+  if (!row) return { conversationId, peerId: "", requestState: "declined", isMember: false, participantsAvailable: false, peerActivityBlocked: false };
   return {
     conversationId,
     peerId: row.user_low_id === actorId ? row.user_high_id : row.user_low_id,
     requestState: row.request_state,
     isMember: row.member,
+    participantsAvailable: row.participantsAvailable,
     peerActivityBlocked: row.blocked,
   };
 }
@@ -93,33 +108,31 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     createdAt,
   });
 
-  const eventId = crypto.randomUUID();
-  await queryable.insert(schema.messagingOutbox).values([
-    {
+  const recipients = await queryable
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+    .where(and(
+      inArray(schema.user.id, [change.userLowId, change.userHighId]),
+      eq(schema.messagingParticipants.state, "active"),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+    ));
+  if (recipients.length > 0) {
+    const eventId = crypto.randomUUID();
+    await queryable.insert(schema.messagingOutbox).values(recipients.map((recipient) => ({
       id: crypto.randomUUID(),
       eventId,
-      recipientId: change.userLowId,
+      recipientId: recipient.id,
       conversationId: input.conversationId,
       changeSequence,
-      channel: "realtime",
-      status: "pending",
+      channel: "realtime" as const,
+      status: "pending" as const,
       attempts: 0,
       availableAt: createdAt,
       createdAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userHighId,
-      conversationId: input.conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: createdAt,
-      createdAt,
-    },
-  ]);
+    })));
+  }
 
   if (input.kind !== "message.created" || !input.messageId) return;
 
@@ -132,6 +145,11 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
   const devices = await queryable
     .select({ id: schema.pushDevices.id })
     .from(schema.pushDevices)
+    .innerJoin(schema.messagingParticipants, and(
+      eq(schema.messagingParticipants.userId, schema.pushDevices.userId),
+      eq(schema.messagingParticipants.state, "active"),
+    ))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.pushDevices.userId))
     .innerJoin(schema.session, and(
       eq(schema.session.id, schema.pushDevices.sessionId),
       eq(schema.session.userId, schema.pushDevices.userId),
@@ -140,6 +158,7 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     .where(and(
       eq(schema.pushDevices.userId, peerId),
       eq(schema.pushDevices.optedIn, true),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
       isNotNull(schema.pushDevices.tokenKeyVersion),

@@ -39,6 +39,7 @@ export function createCreateDirectConversationService(dependencies: {
           if (replay.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
           return { conversation: replay.conversation, message: toMessageDto(replay.message), replayed: true };
         }
+        if (!await transaction.participantsAvailable()) throw new MessagingError("FORBIDDEN");
         const friendshipActive = await transaction.hasActiveFriendship(actorId, input.recipientId);
         if (existing) {
           if (!friendshipActive && existing.requestState === "pending") throw new MessagingError("PENDING");

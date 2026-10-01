@@ -32,11 +32,17 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           eq(schema.conversationMembers.conversationId, job.conversationId),
           eq(schema.conversationMembers.userId, schema.pushDevices.userId),
         ))
+        .innerJoin(schema.messagingParticipants, and(
+          eq(schema.messagingParticipants.userId, schema.pushDevices.userId),
+          eq(schema.messagingParticipants.state, "active"),
+        ))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.pushDevices.userId))
         .innerJoin(schema.conversations, eq(schema.conversations.id, job.conversationId))
         .where(and(
           eq(schema.pushDevices.id, job.deviceRegistrationId),
           eq(schema.pushDevices.userId, job.recipientId),
           eq(schema.pushDevices.optedIn, true),
+          or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
           isNull(schema.pushDevices.invalidatedAt),
           notExists(
             database.select({ blockerId: schema.relationshipBlocks.blockerId }).from(schema.relationshipBlocks).where(and(

@@ -23,6 +23,14 @@ if (enabled && target?.hostname === "localhost" && target.port === "5433" && tar
 }
 const suite = enabled ? describe : describe.skip;
 
+async function waitFor(condition: () => Promise<boolean>, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
@@ -135,6 +143,56 @@ suite("send message Postgres repository", () => {
     expect(changes.map((change) => String(change.sequence))).toEqual(expectedSequences);
     expect(afterChanges?.count).toBe((beforeChanges?.count ?? 0) + 2);
     expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
+  });
+
+  it("waits for a concurrent lifecycle transition, then rejects the positive send", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "lifecycle contender",
+    });
+    const [beforeMessageCount] = await database.db.select({ count: count() }).from(messages)
+      .where(eq(messages.conversationId, created.conversation.id));
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let lifecycleWritten: (() => void) | undefined;
+    const written = new Promise<void>((resolve) => { lifecycleWritten = resolve; });
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [contenderBackend] = await contender.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const contenderPid = Number(contenderBackend?.pid);
+      const requestId = crypto.randomUUID();
+      const transition = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${users[1]!} for update`;
+        await tx`
+          insert into public.account_lifecycles
+            (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+          values (${users[1]!}, 'pending_deletion', ${requestId}, ${"e".repeat(64)}, 1, now(), now() + interval '168 hours', now() + interval '336 hours')
+        `;
+        lifecycleWritten?.();
+        await held;
+      });
+      await written;
+      const outcome = contenderSend.send(users[0]!, created.conversation.id, {
+        clientMessageId: crypto.randomUUID(), text: "must not follow lifecycle transition",
+      });
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${contenderPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected send to wait for the lifecycle user lock.");
+      release!();
+      await transition;
+      await expect(outcome).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const [messageCount] = await database.db.select({ count: count() }).from(messages)
+        .where(eq(messages.conversationId, created.conversation.id));
+      expect(messageCount?.count).toBe(beforeMessageCount?.count);
+    } finally {
+      release?.();
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[1]!));
+      await database.db.delete(schema.conversations).where(eq(schema.conversations.id, created.conversation.id));
+      await Promise.all([holder.close(), inspector.close()]);
+    }
   });
 
   it("allocates Number.MAX_SAFE_INTEGER without changing the public sequence string", async () => {

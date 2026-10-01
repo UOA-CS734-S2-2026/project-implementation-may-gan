@@ -50,9 +50,15 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       database.db
         .select({ conversationId: schema.conversationMembers.conversationId })
         .from(schema.conversationMembers)
+        .innerJoin(schema.messagingParticipants, and(
+          eq(schema.messagingParticipants.userId, schema.conversationMembers.userId),
+          eq(schema.messagingParticipants.state, "active"),
+        ))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.conversationMembers.userId))
         .where(and(
           eq(schema.conversationMembers.conversationId, schema.conversations.id),
           eq(schema.conversationMembers.userId, job.recipientId),
+          or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
         )),
     );
     const blocked = exists(
