@@ -141,7 +141,7 @@ describe("GET /api/v1/feed", () => {
       expiresAt: new Date(now.getTime() + 300_000),
     }));
     const app = createApp({
-      feed: dependencies({ listFeed: vi.fn(async () => ({ items, nextCursor: null, hasMore: false })) }, sign),
+      feed: dependencies({ listFeed: vi.fn(async () => ({ items, nextCursor: null, hasMore: false, feedDate: "2026-09-25" })) }, sign),
     });
     const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
     const body = await response.json<{ items: Array<{ media: Array<{ url: string }> }> }>();
@@ -163,7 +163,7 @@ describe("GET /api/v1/feed", () => {
       media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
     };
     const app = createApp({
-      feed: dependencies({ listFeed: vi.fn(async () => ({ items: [withMedia], nextCursor: null, hasMore: false })) }),
+      feed: dependencies({ listFeed: vi.fn(async () => ({ items: [withMedia], nextCursor: null, hasMore: false, feedDate: "2026-09-25" })) }),
     });
     const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
 
