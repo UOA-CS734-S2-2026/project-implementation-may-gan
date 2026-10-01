@@ -20,10 +20,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
   requireMatch(release, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/, "workflow_run must reject fork sources");
   requireMatch(release, /environment: staging/, "release capture must require the protected staging environment");
   requireMatch(release, /ref: main\n {10}fetch-depth: 0/, "release capture must fetch main history");
-  requireMatch(release, /sha="\$\{EVENT_SHA:-\$\{INPUT_SHA:-\$DISPATCH_SHA\}\}"/, "release must select the event, rollback, or dispatch SHA deterministically");
-  requireMatch(release, /git cat-file -e "\$\{sha\}\^\{commit\}"/, "release must require an immutable commit SHA");
-  requireMatch(release, /git merge-base --is-ancestor "\$sha" origin\/main/, "release must reject a commit outside main history");
-  requireMatch(release, /STAGING_BROWSER_PROXY_ENABLED must be true or false/, "release must validate the captured proxy mode");
+  requireMatch(release, /EVENT_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}[\s\S]*?INPUT_SHA: \$\{\{ inputs\.commit_sha \}\}[\s\S]*?DISPATCH_SHA: \$\{\{ github\.sha \}\}[\s\S]*?run: node scripts\/capture-staging-release\.mjs/, "release must capture event, rollback, and dispatch SHAs through the release selector");
   requireMatch(release, /api:\n {4}needs: capture\n {4}uses: \.\/\.github\/workflows\/staging-hyperdrive\.yml[\s\S]*?commit_sha: \$\{\{ needs\.capture\.outputs\.commit_sha \}\}[\s\S]*?browser_proxy_enabled: \$\{\{ needs\.capture\.outputs\.browser_proxy_enabled \}\}[\s\S]*?secrets: inherit/, "API must use the captured release contract");
   requireMatch(release, /web:\n {4}needs: \[capture, api\]\n {4}uses: \.\/\.github\/workflows\/staging-web\.yml[\s\S]*?commit_sha: \$\{\{ needs\.capture\.outputs\.commit_sha \}\}[\s\S]*?browser_proxy_enabled: \$\{\{ needs\.capture\.outputs\.browser_proxy_enabled \}\}[\s\S]*?secrets: inherit/, "web must wait for API and use the captured release contract");
   requireMatch(release, /group: staging-release\n {2}cancel-in-progress: false/, "release concurrency must not cancel an active deployment");
@@ -72,6 +69,11 @@ test("the contract rejects an untrusted source, changed release order, or uncapt
     ...current,
     release: current.release.replace("needs: [capture, api]", "needs: capture"),
   }), /web must wait for API/);
+
+  assert.throws(() => assertStagingReleaseContract({
+    ...current,
+    release: current.release.replace("run: node scripts/capture-staging-release.mjs", "run: true"),
+  }), /release selector/);
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,

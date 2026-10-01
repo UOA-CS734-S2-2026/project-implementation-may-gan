@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { captureRelease, validateBrowserProxyMode } from "./capture-staging-release.mjs";
+
+function git(root, args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+}
+
+function releaseRepository() {
+  const root = mkdtempSync(join(tmpdir(), "dayli-staging-release-"));
+  git(root, ["init", "--quiet"]);
+  git(root, ["config", "user.email", "test@example.com"]);
+  git(root, ["config", "user.name", "Test User"]);
+  git(root, ["branch", "-M", "main"]);
+
+  writeFileSync(join(root, "release.txt"), "first\n");
+  git(root, ["add", "release.txt"]);
+  git(root, ["commit", "--quiet", "-m", "first"]);
+  const previousSha = git(root, ["rev-parse", "HEAD"]);
+
+  writeFileSync(join(root, "release.txt"), "current\n");
+  git(root, ["commit", "--all", "--quiet", "-m", "current"]);
+  const currentSha = git(root, ["rev-parse", "HEAD"]);
+  git(root, ["update-ref", "refs/remotes/origin/main", currentSha]);
+
+  return { root, previousSha, currentSha };
+}
+
+function withReleaseRepository(callback) {
+  const repository = releaseRepository();
+  try {
+    callback(repository);
+  } finally {
+    rmSync(repository.root, { recursive: true, force: true });
+  }
+}
+
+test("automatic staging releases accept only the current main commit", () => withReleaseRepository(({ root, previousSha, currentSha }) => {
+  assert.deepEqual(captureRelease({
+    eventSha: currentSha,
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), { commitSha: currentSha, browserProxyEnabled: "false" });
+
+  assert.throws(() => captureRelease({
+    eventSha: previousSha,
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), /no longer the current main commit/);
+}));
+
+test("manual dispatch allows a reachable explicit rollback but not a stale default target", () => withReleaseRepository(({ root, previousSha, currentSha }) => {
+  assert.deepEqual(captureRelease({
+    inputSha: previousSha,
+    dispatchSha: currentSha,
+    browserProxyEnabled: "true",
+    cwd: root,
+  }), { commitSha: previousSha, browserProxyEnabled: "true" });
+
+  assert.deepEqual(captureRelease({
+    dispatchSha: currentSha,
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), { commitSha: currentSha, browserProxyEnabled: "false" });
+
+  assert.throws(() => captureRelease({
+    dispatchSha: previousSha,
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), /main advanced before this manual dispatch was captured/);
+}));
+
+test("captured browser proxy mode must be an explicit boolean", () => {
+  assert.equal(validateBrowserProxyMode("true"), "true");
+  assert.equal(validateBrowserProxyMode("false"), "false");
+  assert.throws(() => validateBrowserProxyMode("enabled"), /must be true or false/);
+});
