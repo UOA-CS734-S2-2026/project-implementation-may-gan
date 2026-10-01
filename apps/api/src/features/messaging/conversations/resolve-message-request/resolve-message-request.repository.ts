@@ -1,5 +1,5 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, count, desc, eq, gt, isNull, ne } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { messageProjectionSelection } from "../../shared/message-projection";
@@ -33,19 +33,75 @@ async function lockRelationshipPair(
   if (locks.length !== 1) throw new Error("Relationship pair lock did not return exactly one row.");
 }
 
+/**
+ * The lifecycle procedure will take these same user rows before changing
+ * availability. Lock them canonically before the pair and conversation locks
+ * so an accept cannot race a deletion request into an active conversation.
+ */
+async function requireAvailableParticipants(
+  database: Pick<DayliDatabase, "select">,
+  leftUserId: string,
+  rightUserId: string,
+): Promise<void> {
+  const userIds = [leftUserId, rightUserId].sort();
+  for (const userId of userIds) {
+    const rows = await database
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(eq(schema.user.id, userId))
+      .for("update");
+    if (rows.length !== 1) throw new MessagingError("FORBIDDEN");
+  }
+
+  // PostgreSQL's READ COMMITTED snapshot is statement-scoped. This must be a
+  // separate statement after the canonical locks, otherwise joined lifecycle
+  // state can have been snapshotted before waiting for a lifecycle transaction.
+  const availability = await database
+    .select({
+      userId: schema.user.id,
+      lifecycleState: schema.accountLifecycles.state,
+      participantId: schema.messagingParticipants.id,
+      participantState: schema.messagingParticipants.state,
+    })
+    .from(schema.user)
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+    .leftJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+    .where(inArray(schema.user.id, userIds));
+  if (availability.length !== userIds.length || availability.some((row) => (
+    row.participantId === null
+    || row.participantState !== "active"
+    || (row.lifecycleState !== null && row.lifecycleState !== "active")
+  ))) {
+    throw new MessagingError("FORBIDDEN");
+  }
+}
+
 async function conversationAfterResolution(
   database: DayliDatabase,
   actorId: string,
   conversationId: string,
 ) {
   const row = await requireConversationMember(database, actorId, conversationId);
-  const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
+  const peerParticipantId = String(row.user_low_id) === actorId
+    ? row.participant_high_id
+    : row.participant_low_id;
+  if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
   const lastReadSequence = Number(requireSafeSequenceBigInt(row.last_read_sequence));
-  const [user] = await database
-    .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
-    .from(schema.user)
-    .where(eq(schema.user.id, peer))
+  const [peer] = await database
+    .select({
+      id: schema.messagingParticipants.id,
+      name: sql<string | null>`case when ${schema.messagingParticipants.state} = 'active'
+          and coalesce(${schema.accountLifecycles.state}, 'active') = 'active'
+        then coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''))
+        else 'Deleted account'
+      end`,
+    })
+    .from(schema.messagingParticipants)
+    .leftJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+    .where(eq(schema.messagingParticipants.id, peerParticipantId))
     .limit(1);
+  if (!peer) throw new Error("Conversation peer participant is missing.");
   const [latest] = await database
     .select(messageProjectionSelection)
     .from(schema.messages)
@@ -63,8 +119,9 @@ async function conversationAfterResolution(
     ));
   return projectConversationDto(database, {
     ...row,
-    peer_id: peer,
-    peer_name: user?.name,
+    peer_id: peer.id,
+    peer_name: peer.name,
+    peer_deleted: peer.name === "Deleted account",
     unread_count: unread?.count ?? 0,
     latestMessage: latest ?? null,
   }, actorId);
@@ -85,6 +142,12 @@ export function createPostgresResolveMessageRequestRepository(
           .where(eq(schema.conversations.id, conversationId))
           .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
+        // Positive activation locks lifecycle user rows first, then follows the
+        // established pair and conversation order. Decline remains a safe
+        // negative transition and does not require an availability grant.
+        if (decision === "accept") {
+          await requireAvailableParticipants(tx, pair.userLowId, pair.userHighId);
+        }
         await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);

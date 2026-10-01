@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
+import { repoPath } from "./migrations/paths";
 import { migrationsFolder } from "./migrations/state";
 
 const migratorUrl = process.env.TEST_MESSAGING_PARTICIPANT_COMPATIBILITY_DATABASE_URL;
@@ -28,11 +29,13 @@ function requireLocalUrl(value: string | undefined, name: string, user: string):
 (enabled ? describe : describe.skip)("messaging participant compatibility migration", () => {
   const migrator = postgres(requireLocalUrl(migratorUrl ?? `postgresql://migrator:migrator@localhost:${testPostgresPort}/dayli_messaging_participant_compatibility_test`, "TEST_MESSAGING_PARTICIPANT_COMPATIBILITY_DATABASE_URL", "migrator"), { max: 1, prepare: false, onnotice: () => undefined });
   const app = postgres(requireLocalUrl(appUrl ?? `postgresql://app:app@localhost:${testPostgresPort}/dayli_messaging_participant_compatibility_test`, "TEST_MESSAGING_PARTICIPANT_COMPATIBILITY_APP_DATABASE_URL", "app"), { max: 1, prepare: false, onnotice: () => undefined });
+  const lifecycleWorker = postgres(`postgresql://lifecycle_worker:lifecycle_worker@localhost:${testPostgresPort}/dayli_messaging_participant_compatibility_test`, { max: 1, prepare: false, onnotice: () => undefined });
   let baselineMigrations: string | undefined;
 
   afterAll(async () => {
     await migrator.end({ timeout: 5 });
     await app.end({ timeout: 5 });
+    await lifecycleWorker.end({ timeout: 5 });
     if (baselineMigrations) await rm(baselineMigrations, { recursive: true, force: true });
   });
 
@@ -140,8 +143,21 @@ function requireLocalUrl(value: string | undefined, name: string, user: string):
       from pg_constraint
       where conname = 'messaging_outbox_recipient_id_user_id_fk'
     `).resolves.toEqual([{ definition: 'FOREIGN KEY (recipient_id) REFERENCES "user"(id) ON DELETE CASCADE' }]);
-    await expect(app`select id from public.messaging_participants`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`select id, state from public.messaging_participants where id = ${alice}`)
+      .resolves.toEqual([{ id: alice, state: "active" }]);
     await expect(app`insert into public.messaging_participants (id, user_id, state) values ('forbidden', ${alice}, 'active')`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`update public.messaging_participants set state = 'deleted' where id = ${alice}`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`delete from public.messaging_participants where id = ${alice}`).rejects.toMatchObject({ code: "42501" });
+    await expect(lifecycleWorker`select id from public.messaging_participants`).rejects.toMatchObject({ code: "42501" });
+
+    const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
+    await migrator.unsafe(bootstrap);
+    await expect(app`select id, state from public.messaging_participants where id = ${alice}`)
+      .resolves.toEqual([{ id: alice, state: "active" }]);
+    await expect(app`insert into public.messaging_participants (id, user_id, state) values ('forbidden-after-bootstrap', ${alice}, 'active')`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`update public.messaging_participants set state = 'deleted' where id = ${alice}`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`delete from public.messaging_participants where id = ${alice}`).rejects.toMatchObject({ code: "42501" });
+    await expect(lifecycleWorker`select id from public.messaging_participants`).rejects.toMatchObject({ code: "42501" });
 
     const lateConversation = `late-conversation-${suffix}`;
     const lateMessage = `late-message-${suffix}`;

@@ -12,6 +12,8 @@ export type ConversationMemberRow = {
   kind: Conversation["kind"];
   user_low_id: Conversation["userLowId"];
   user_high_id: Conversation["userHighId"];
+  participant_low_id: Conversation["participantLowId"];
+  participant_high_id: Conversation["participantHighId"];
   initiator_id: Conversation["initiatorId"];
   request_state: Conversation["requestState"];
   last_message_sequence: Conversation["lastMessageSequence"];
@@ -55,6 +57,8 @@ export async function requireConversationMember(
       kind: schema.conversations.kind,
       user_low_id: schema.conversations.userLowId,
       user_high_id: schema.conversations.userHighId,
+      participant_low_id: schema.conversations.participantLowId,
+      participant_high_id: schema.conversations.participantHighId,
       initiator_id: schema.conversations.initiatorId,
       request_state: schema.conversations.requestState,
       last_message_sequence: schema.conversations.lastMessageSequence,

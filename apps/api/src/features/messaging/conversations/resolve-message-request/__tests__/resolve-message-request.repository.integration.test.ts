@@ -13,11 +13,20 @@ if (enabled && target?.hostname === "localhost" && target.port === "5433" && tar
 }
 const suite = enabled ? describe : describe.skip;
 
+async function waitFor(condition: () => Promise<boolean>, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
 suite("resolve message request Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 13 }, (_, index) => `resolve-message-request-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 19 }, (_, index) => `resolve-message-request-${crypto.randomUUID()}-${index}`);
   const {
+    accountLifecycles,
     conversationChanges,
     conversationMembers,
     conversations,
@@ -28,7 +37,7 @@ suite("resolve message request Postgres repository", () => {
     relationshipBlocks,
     user,
   } = schema;
-  const { direct } = createMessagingPersistenceServices(database.db);
+  const { direct, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresResolveMessageRequestRepository(database.db);
   const concurrentRepository = createPostgresResolveMessageRequestRepository(concurrentDatabase.db);
   const builderQueries: string[] = [];
@@ -37,6 +46,108 @@ suite("resolve message request Postgres repository", () => {
     schema,
     logger: { logQuery(query) { builderQueries.push(query); } },
   }));
+
+  async function assertAcceptanceCannotRacePendingLifecycle(
+    lifecycleChange: "insert" | "update",
+    senderId: string,
+    recipientId: string,
+  ): Promise<void> {
+    const created = await direct.create(senderId, {
+      recipientId,
+      clientMessageId: crypto.randomUUID(),
+      text: `lifecycle ${lifecycleChange} race`,
+    });
+    if (lifecycleChange === "update") {
+      await database.db.insert(accountLifecycles).values({ userId: senderId });
+    }
+
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    const accepting = createDayliDatabase(connectionString!);
+    let releaseHolder: (() => void) | undefined;
+    const holderReleased = new Promise<void>((resolve) => { releaseHolder = resolve; });
+    let pendingLifecycleWritten: (() => void) | undefined;
+    const lifecycleWritten = new Promise<void>((resolve) => { pendingLifecycleWritten = resolve; });
+    let holderOutcome: Promise<{ status: "fulfilled" } | { status: "rejected"; error: unknown }> | undefined;
+
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [acceptingBackend] = await accepting.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const acceptingPid = Number(acceptingBackend?.pid);
+      const requestId = crypto.randomUUID();
+      holderOutcome = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${senderId} for update`;
+        if (lifecycleChange === "insert") {
+          await tx`
+            insert into public.account_lifecycles
+              (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+            values (${senderId}, 'pending_deletion', ${requestId}, ${"d".repeat(64)}, 1, now(), now() + interval '168 hours', now() + interval '336 hours')
+          `;
+        } else {
+          await tx`
+            update public.account_lifecycles
+            set state = 'pending_deletion', request_id = ${requestId}, idempotency_key_digest = ${"d".repeat(64)},
+                generation = 1, requested_at = now(), cancel_until = now() + interval '168 hours', purge_due_at = now() + interval '336 hours'
+            where user_id = ${senderId}
+          `;
+        }
+        pendingLifecycleWritten?.();
+        await holderReleased;
+      }).then(
+        () => ({ status: "fulfilled" as const }),
+        (error) => ({ status: "rejected" as const, error }),
+      );
+      await lifecycleWritten;
+
+      const acceptingRepository = createPostgresResolveMessageRequestRepository(accepting.db);
+      const acceptanceOutcome = acceptingRepository.resolve(recipientId, created.conversation.id, "accept").then(
+        () => ({ status: "fulfilled" as const }),
+        (error) => ({ status: "rejected" as const, error }),
+      );
+      await waitFor(async () => {
+        const [row] = await inspector.client`
+          select ${holderPid} = any(pg_blocking_pids(${acceptingPid})) as blocked
+        `;
+        return row?.blocked === true;
+      }, "Expected request acceptance to block on the lifecycle user lock.");
+
+      if (!releaseHolder) throw new Error("Lifecycle lock release barrier was not initialized.");
+      releaseHolder();
+      await expect(holderOutcome).resolves.toEqual({ status: "fulfilled" });
+      await expect(acceptanceOutcome).resolves.toMatchObject({ status: "rejected", error: { code: "FORBIDDEN" } });
+
+      await expect(send.send(recipientId, created.conversation.id, {
+        clientMessageId: crypto.randomUUID(),
+        text: "must remain pending after lifecycle contention",
+      })).rejects.toMatchObject({ code: "PENDING" });
+      const [conversation] = await database.db.select({ requestState: conversations.requestState })
+        .from(conversations)
+        .where(eq(conversations.id, created.conversation.id));
+      const [activeChanges] = await database.db.select({ count: count() })
+        .from(conversationChanges)
+        .where(and(eq(conversationChanges.conversationId, created.conversation.id), eq(conversationChanges.kind, "request.active")));
+      const [outboxCount] = await database.db.select({ count: count() })
+        .from(messagingOutbox)
+        .where(eq(messagingOutbox.conversationId, created.conversation.id));
+      const [friendshipCount] = await database.db.select({ count: count() })
+        .from(friendships)
+        .where(or(
+          and(eq(friendships.userId, senderId), eq(friendships.friendId, recipientId)),
+          and(eq(friendships.userId, recipientId), eq(friendships.friendId, senderId)),
+        ));
+      expect(conversation?.requestState).toBe("pending");
+      expect(activeChanges?.count).toBe(0);
+      expect(outboxCount?.count).toBe(2);
+      expect(friendshipCount?.count).toBe(0);
+    } finally {
+      releaseHolder?.();
+      if (holderOutcome) await holderOutcome;
+      await holder.close();
+      await inspector.close();
+      await accepting.close();
+    }
+  }
 
   beforeAll(async () => {
     await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
@@ -69,7 +180,6 @@ suite("resolve message request Postgres repository", () => {
       clientMessageId: crypto.randomUUID(),
       text: "accept me",
     });
-
     await expect(repository.resolve(users[1]!, created.conversation.id, "accept")).resolves.toMatchObject({
       id: created.conversation.id,
       requestState: "active",
@@ -86,6 +196,66 @@ suite("resolve message request Postgres repository", () => {
     const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
     expect(changeCount?.count).toBe(1);
     expect(outboxCount?.count).toBe(4);
+  });
+
+  it("refuses activation for a pending-deletion peer but permits decline", async () => {
+    const created = await direct.create(users[13]!, {
+      recipientId: users[14]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "unavailable request sender",
+    });
+    const requestedAt = new Date();
+    await database.db.insert(accountLifecycles).values({
+      userId: users[13]!,
+      state: "pending_deletion",
+      requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "c".repeat(64),
+      generation: 1,
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(repository.resolve(users[14]!, created.conversation.id, "accept"))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(send.send(users[14]!, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "must remain pending",
+    })).rejects.toMatchObject({ code: "PENDING" });
+
+    const [afterRejectedAccept] = await database.db.select({ requestState: conversations.requestState })
+      .from(conversations)
+      .where(eq(conversations.id, created.conversation.id));
+    const [activeChangeCount] = await database.db.select({ count: count() })
+      .from(conversationChanges)
+      .where(and(
+        eq(conversationChanges.conversationId, created.conversation.id),
+        eq(conversationChanges.kind, "request.active"),
+      ));
+    const [initialOutboxCount] = await database.db.select({ count: count() })
+      .from(messagingOutbox)
+      .where(eq(messagingOutbox.conversationId, created.conversation.id));
+    const [friendshipCount] = await database.db.select({ count: count() })
+      .from(friendships)
+      .where(or(
+        and(eq(friendships.userId, users[13]!), eq(friendships.friendId, users[14]!)),
+        and(eq(friendships.userId, users[14]!), eq(friendships.friendId, users[13]!)),
+      ));
+    expect(afterRejectedAccept?.requestState).toBe("pending");
+    expect(activeChangeCount?.count).toBe(0);
+    expect(initialOutboxCount?.count).toBe(2);
+    expect(friendshipCount?.count).toBe(0);
+
+    await expect(repository.resolve(users[14]!, created.conversation.id, "decline"))
+      .resolves.toMatchObject({ requestState: "declined", capabilities: { canSend: false, canResolveRequest: false } });
+  });
+
+  it("rejects acceptance when a pending lifecycle is inserted while its user lock is held", async () => {
+    await assertAcceptanceCannotRacePendingLifecycle("insert", users[15]!, users[16]!);
+  });
+
+  it("rejects acceptance when an active lifecycle becomes pending while its user lock is held", async () => {
+    await assertAcceptanceCannotRacePendingLifecycle("update", users[17]!, users[18]!);
   });
 
   it("uses native response reads at MAX_SAFE_INTEGER", async () => {
@@ -123,7 +293,7 @@ suite("resolve message request Postgres repository", () => {
       lastReadSequence: previousSequence,
       receiptSequence: previousSequence,
     });
-    expect(builderQueries).toHaveLength(12);
+    expect(builderQueries).toHaveLength(15);
     const responseQueries = builderQueries.slice(-5);
     expect(responseQueries).toHaveLength(5);
     const latestQuery = responseQueries.find((query) => query.includes('order by "messages"."sequence" desc'));

@@ -45,7 +45,7 @@ function requireLocalUrl(value: string | undefined, name: string, user: string):
     }
   });
 
-  it("creates and detaches a profile-free participant without granting runtime access", async () => {
+  it("creates and detaches a profile-free participant with read-only runtime access", async () => {
     const alice = await createUser("Alice");
 
     await expect(migrator`
@@ -53,7 +53,8 @@ function requireLocalUrl(value: string | undefined, name: string, user: string):
       from public.messaging_participants
       where id = ${alice}
     `).resolves.toEqual([{ id: alice, user_id: alice, state: "active" }]);
-    await expect(app`select id from public.messaging_participants`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`select id, state from public.messaging_participants where id = ${alice}`)
+      .resolves.toEqual([{ id: alice, state: "active" }]);
 
     await migrator`delete from public."user" where id = ${alice}`;
     users.splice(users.indexOf(alice), 1);
@@ -66,6 +67,7 @@ function requireLocalUrl(value: string | undefined, name: string, user: string):
 
     const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
     await migrator.unsafe(bootstrap);
-    await expect(app`select id from public.messaging_participants`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`select id, state from public.messaging_participants where id = ${alice}`)
+      .resolves.toEqual([{ id: alice, state: "deleted" }]);
   });
 });

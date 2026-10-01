@@ -304,4 +304,43 @@ suite("list conversations Postgres repository", () => {
     await expect(repository.list(users[0]!, "inbox", undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
   });
+
+  it("masks a pending-deletion peer in the conversation list", async () => {
+    const [conversation] = await database.db.select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(or(
+        and(eq(schema.conversations.userLowId, users[0]!), eq(schema.conversations.userHighId, users[2]!)),
+        and(eq(schema.conversations.userLowId, users[2]!), eq(schema.conversations.userHighId, users[0]!)),
+      ))
+      .limit(1);
+    if (!conversation) throw new Error("Expected a conversation for lifecycle peer projection.");
+    await database.db.update(schema.messages).set({ version: 1 })
+      .where(eq(schema.messages.conversationId, conversation.id));
+    await database.db.update(schema.user).set({
+      name: "private peer name",
+      username: "privatepeer",
+      displayUsername: "private peer display name",
+      image: "https://example.test/private-peer-avatar.png",
+    }).where(eq(schema.user.id, users[2]!));
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[2]!,
+      state: "pending_deletion",
+      requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "b".repeat(64),
+      generation: 1,
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: conversation.id,
+          peer: { id: users[2], name: "Deleted account" },
+        }),
+      ]),
+    });
+  });
 });

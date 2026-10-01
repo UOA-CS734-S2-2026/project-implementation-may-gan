@@ -36,6 +36,7 @@ export function createPostgresListConversationChangesRepository(
           kind: schema.conversationChanges.kind,
           messageId: schema.conversationChanges.messageId,
           memberId: schema.conversationChanges.memberId,
+          memberParticipantId: schema.conversationChanges.memberParticipantId,
           createdAt: schema.conversationChanges.createdAt,
         })
         .from(schema.conversationChanges)
@@ -51,7 +52,7 @@ export function createPostgresListConversationChangesRepository(
           changeSequence: requireSafeSequenceBigInt(item.changeSequence).toString(),
           kind: item.kind,
           messageId: item.messageId,
-          memberId: item.memberId,
+          memberId: item.memberParticipantId ?? item.memberId,
           createdAt: item.createdAt.toISOString(),
         })),
         nextChangeSequence: result.length > limit
