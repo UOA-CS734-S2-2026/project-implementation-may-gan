@@ -1,4 +1,4 @@
-import { and, count, eq, gt, sql } from "drizzle-orm";
+import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 
 export type MediaReservationStatus = "pending" | "validated" | "failed";
@@ -20,6 +20,8 @@ export interface MediaReservationRecord {
   validatedAt: Date | null;
   createdAt: Date;
   expiresAt: Date;
+  /** Set once cleanup has claimed the upload. It can never be attached or completed again. */
+  cleanupClaimedAt?: Date | null;
 }
 
 export type ReserveIfUnderQuotaResult = "inserted" | "quota_exceeded";
@@ -113,6 +115,8 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
           and(
             eq(schema.mediaReservation.id, id),
             eq(schema.mediaReservation.status, "pending"),
+            // A claimed upload is being deleted; settling it would resurrect it.
+            isNull(schema.mediaReservation.cleanupClaimedAt),
             // Database time, not a value threaded in from the caller — the point is to
             // catch a reservation that lapses during the R2 reads this call follows.
             gt(schema.mediaReservation.expiresAt, sql`now()`),
@@ -126,8 +130,8 @@ export function createDrizzleMediaReservationRepository(db: DayliDatabase): Medi
         .from(schema.mediaReservation)
         .where(eq(schema.mediaReservation.id, id))
         .limit(1);
-      // Still pending means the WHERE above failed only on the expiry check —
-      // anyone who actually settled it would have moved it off "pending".
+      // Still pending means the WHERE above failed only on the expiry or cleanup
+      // check — anyone who actually settled it would have moved it off "pending".
       if (current?.status === "pending") return { outcome: "expired" };
       return { outcome: "already_settled", record: current };
     },

@@ -25,7 +25,7 @@ export async function getMediaReservation(
       id: record.id,
       contentType: record.contentType as MediaReservationResponse["contentType"],
       byteSize: record.byteSize,
-      status: record.expiresAt.getTime() > now.getTime() ? "pending" : "expired",
+      status: record.expiresAt.getTime() > now.getTime() && !record.cleanupClaimedAt ? "pending" : "expired",
       createdAt: record.createdAt.toISOString(),
       expiresAt: record.expiresAt.toISOString(),
     },

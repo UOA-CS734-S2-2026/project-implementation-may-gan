@@ -1,4 +1,4 @@
-import type { MediaR2Reader } from "./r2";
+import type { MediaR2Deleter, MediaR2Reader } from "./r2";
 
 /** Backs a fake R2 reader with an in-memory object map, keyed by object key. */
 export function createFakeR2Reader(objects: Map<string, Uint8Array>): MediaR2Reader {
@@ -28,6 +28,15 @@ export function createUnusedR2Reader(): MediaR2Reader {
     },
     readRange() {
       throw new Error("R2 was not expected to be read in this test.");
+    },
+  };
+}
+
+/** Deletes from the same in-memory map the fake reader uses. Absent keys succeed, like R2. */
+export function createFakeR2Deleter(objects: Map<string, Uint8Array>): MediaR2Deleter {
+  return {
+    async delete(objectKey) {
+      objects.delete(objectKey);
     },
   };
 }

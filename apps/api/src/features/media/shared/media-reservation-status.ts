@@ -9,10 +9,10 @@ export type ClientMediaReservationStatus = "pending" | "expired" | "validated" |
  * so there is nothing left to "expire").
  */
 export function deriveMediaReservationStatus(
-  record: Pick<MediaReservationRecord, "status" | "expiresAt">,
+  record: Pick<MediaReservationRecord, "status" | "expiresAt" | "cleanupClaimedAt">,
   now: Date,
 ): ClientMediaReservationStatus {
-  if (record.status === "pending" && record.expiresAt.getTime() <= now.getTime()) return "expired";
+  if (record.status === "pending" && (record.cleanupClaimedAt || record.expiresAt.getTime() <= now.getTime())) return "expired";
   return record.status;
 }
 

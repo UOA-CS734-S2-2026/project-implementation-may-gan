@@ -106,7 +106,8 @@ export async function completeMediaReservation(
 ): Promise<CompleteMediaReservationResult> {
   const now = (deps.clock ?? (() => new Date()))();
   const record = await deps.repository.findById(id);
-  if (!record || record.ownerId !== ownerId) {
+  // A claimed upload is being deleted, so it reads as gone, like a deleted row.
+  if (!record || record.ownerId !== ownerId || record.cleanupClaimedAt) {
     return { outcome: "not_found" };
   }
 
@@ -134,7 +135,7 @@ export async function completeMediaReservation(
   // e.g. while the R2 reads above were in flight — so it must not be settled.
   if (claim.outcome === "expired") return { outcome: "expired" };
   // claim.record is only absent if the row vanished between findById and here,
-  // which cannot happen for an owned reservation (never physically deleted).
+  // which only happens if cleanup deleted it in between.
   if (!claim.record) return { outcome: "not_found" };
   return { outcome: "settled", reservation: toMediaReservationResponse(claim.record, now) };
 }

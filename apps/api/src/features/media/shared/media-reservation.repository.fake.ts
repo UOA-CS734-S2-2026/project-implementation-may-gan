@@ -38,7 +38,7 @@ export function createFakeMediaReservationRepository(): MediaReservationReposito
       }
       // Real wall-clock time, mirroring the real repository's use of the database's
       // own `now()` rather than whatever the caller checked before its R2 reads.
-      if (current.expiresAt.getTime() <= Date.now()) {
+      if (current.cleanupClaimedAt || current.expiresAt.getTime() <= Date.now()) {
         return { outcome: "expired" };
       }
 

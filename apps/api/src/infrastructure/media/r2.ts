@@ -262,3 +262,28 @@ export function createR2Reader(configuration: R2RuntimeConfiguration): MediaR2Re
     readRange: (objectKey, range) => readR2ObjectRange(configuration, objectKey, range),
   };
 }
+
+/**
+ * Deletes one object. R2 answers 204 for an absent key too, and 404 is treated the
+ * same way, so a retry after a lost response is a success rather than a failure.
+ * Any other outcome, including a raw network error, is an infrastructure error the
+ * caller retries.
+ */
+export async function deleteR2Object(configuration: R2RuntimeConfiguration, objectKey: string): Promise<void> {
+  try {
+    const client = createAwsClient(configuration);
+    const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "DELETE" });
+    if (response.ok || response.status === 404) return;
+    throw new R2ReadInfrastructureError(`R2 DELETE failed with status ${response.status}`);
+  } catch (error) {
+    throw wrapAsInfrastructureError(error, "R2 DELETE request failed");
+  }
+}
+
+export interface MediaR2Deleter {
+  delete(objectKey: string): Promise<void>;
+}
+
+export function createR2Deleter(configuration: R2RuntimeConfiguration): MediaR2Deleter {
+  return { delete: (objectKey) => deleteR2Object(configuration, objectKey) };
+}
