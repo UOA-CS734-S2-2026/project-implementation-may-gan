@@ -62,7 +62,12 @@ class LandingScreen extends StatelessWidget {
                   onPressed: () => context.push('/sign-in'),
                 ),
                 const SizedBox(height: 8),
-                const LegalLinks(center: true),
+                const LegalLinks(
+                  center: true,
+                  compact: true,
+                  draftMarker: true,
+                  notice: false,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'one post, every day.',

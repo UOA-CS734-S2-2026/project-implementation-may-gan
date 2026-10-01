@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ search: "", push: vi.fn(), email: vi.fn() }));
@@ -27,6 +27,16 @@ beforeEach(() => {
 });
 
 describe("email sign-in return destination", () => {
+  it("shows compact draft legal links without a consent notice", () => {
+    render(<SignInPage />);
+
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByText("(draft)")).toBeInTheDocument();
+    expect(screen.queryByText(/Review Dayli's draft legal documents/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not approved terms or privacy notices/i)).not.toBeInTheDocument();
+  });
+
   it("uses a valid deep-link path and query after successful sign in", async () => {
     mocks.search = "next=%2Fmessages%3Ftab%3Dinbox";
     const { container } = render(<SignInPage />);

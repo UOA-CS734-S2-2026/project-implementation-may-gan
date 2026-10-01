@@ -11,7 +11,7 @@ import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
-import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 import { safeReturnPath } from "@/lib/routing/safe-return-path";
 
 const signInSchema = z.object({
@@ -75,10 +75,9 @@ function SignInForm() {
       </p>
 
       <div className="flex flex-col gap-4">
-        <div className="space-y-1">
-          <p className="text-xs leading-5 text-foreground-secondary">Review Dayli&apos;s draft legal documents before continuing.</p>
-          <LegalLinks className="text-xs text-foreground-secondary" />
-          <LegalDraftNotice />
+        <div className="flex flex-wrap items-baseline gap-x-1 text-xs leading-5 text-foreground-secondary">
+          <LegalLinks />
+          <LegalDraftMarker />
         </div>
         <GoogleSignInButton returnTo={returnTo} />
         <Suspense fallback={null}><GoogleSignInError /></Suspense>

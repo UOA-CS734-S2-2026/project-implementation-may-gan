@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../legal/legal_links.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/google_sign_in_button.dart';
@@ -175,7 +176,14 @@ class _AuthScreenState extends State<AuthScreen> {
               : "Sign in to post today's dayli.",
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 8),
+        const LegalLinks(
+          center: true,
+          compact: true,
+          draftMarker: true,
+          notice: false,
+        ),
+        const SizedBox(height: 20),
         GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
         const SizedBox(height: 20),
         DayliDivider(
