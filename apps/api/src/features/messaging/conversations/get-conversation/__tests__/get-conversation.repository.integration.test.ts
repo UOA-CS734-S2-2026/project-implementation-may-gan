@@ -222,6 +222,7 @@ suite("get conversation Postgres repository", () => {
 
     await expect(repository.get(users[0]!, conversation.id)).resolves.toMatchObject({
       peer: { id: users[2], name: "Deleted account" },
+      capabilities: { canSend: false, canResolveRequest: false },
     });
   });
 

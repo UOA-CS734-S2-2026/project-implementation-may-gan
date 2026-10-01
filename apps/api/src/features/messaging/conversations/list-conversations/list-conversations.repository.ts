@@ -1,9 +1,10 @@
-import { and, count, desc, eq, exists, gt, isNull, ne, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { messageProjectionSelection } from "../../shared/message-projection";
 import { MessagingError } from "../../shared/messaging-error";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { conversationPairBlocked, conversationParticipantsAvailable } from "../../shared/conversation-participants";
 
 export interface ListConversationsRepository {
   list(
@@ -37,25 +38,9 @@ export function createPostgresListConversationsRepository(
     async list(actorId, folder, rawCursor, limit) {
       const cursor = cursorDecode(rawCursor);
       const state = folder === "inbox" ? "active" : "pending";
-      const { conversationMembers, conversations, messages, messagingParticipants, relationshipBlocks, user } = schema;
-      const blocked = exists(
-        database
-          .select({ blockerId: relationshipBlocks.blockerId })
-          .from(relationshipBlocks)
-          .where(and(
-            isNull(relationshipBlocks.unblockedAt),
-            or(
-              and(
-                eq(relationshipBlocks.blockerId, conversations.userLowId),
-                eq(relationshipBlocks.blockedId, conversations.userHighId),
-              ),
-              and(
-                eq(relationshipBlocks.blockerId, conversations.userHighId),
-                eq(relationshipBlocks.blockedId, conversations.userLowId),
-              ),
-            ),
-          )),
-      ).mapWith(Boolean);
+      const { conversationMembers, conversations, messages, messagingParticipants, user } = schema;
+      const blocked = conversationPairBlocked(database, conversations.participantLowId, conversations.participantHighId);
+      const participantsAvailable = conversationParticipantsAvailable(conversations.participantLowId, conversations.participantHighId);
       const unreadCount = database
         .select({ count: count().as("count") })
         .from(messages)
@@ -76,9 +61,6 @@ export function createPostgresListConversationsRepository(
       const result = await database
         .select({
           id: conversations.id,
-          user_low_id: conversations.userLowId,
-          user_high_id: conversations.userHighId,
-          initiator_id: conversations.initiatorId,
           initiator_participant_id: conversations.initiatorParticipantId,
           member_participant_id: conversationMembers.participantId,
           request_state: conversations.requestState,
@@ -96,6 +78,7 @@ export function createPostgresListConversationsRepository(
           end`,
           peer_deleted: sql<boolean>`${messagingParticipants.state} = 'deleted'`,
           blocked,
+          participants_available: participantsAvailable,
           unread_count: unreadCount,
           latestMessage: {
             id: latestMessage.id,

@@ -2,6 +2,7 @@ import { createDayliDatabase, schema } from "@dayli/db";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendPeerChange, findMessage, getAccess } from "../message-write-primitives";
+import { withLockedConversationMessageTransaction } from "../conversation-message-transaction";
 
 const {
   accountLifecycles,
@@ -11,6 +12,8 @@ const {
   messageReactions,
   messages,
   messagingOutbox,
+  messagingParticipants,
+  relationshipBlocks,
   user,
 } = schema;
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
@@ -148,6 +151,53 @@ suite("message write primitive builders", () => {
       .from(messagingOutbox)
       .where(eq(messagingOutbox.conversationId, conversationId));
     expect(outbox.map((row) => row.recipientId)).toEqual([users[0]]);
+  });
+
+  it("rechecks mappings after a peer detaches while waiting for its canonical lock", async () => {
+    const { conversationId } = await createConversation();
+    const peerId = users[1]!;
+    let releasePeer: (() => void) | undefined;
+    let peerLocked: (() => void) | undefined;
+    const locked = new Promise<void>((resolve) => { peerLocked = resolve; });
+    const release = new Promise<void>((resolve) => { releasePeer = resolve; });
+    const lifecycle = database.db.transaction(async (transaction) => {
+      await transaction.select({ id: user.id }).from(user).where(eq(user.id, peerId)).for("update");
+      peerLocked!();
+      await release;
+      // This models only the durable mapping transition. Current 0023 FKs
+      // intentionally still retain the user row, so this is not a deletion test.
+      await transaction.update(messagingParticipants)
+        .set({ userId: null, state: "deleted" })
+        .where(eq(messagingParticipants.userId, peerId));
+    });
+    await locked;
+    let callbackRan = false;
+    const write = contender.db.transaction(async (transaction) =>
+      withLockedConversationMessageTransaction(transaction, conversationId, async (lockedTransaction) => {
+        callbackRan = true;
+        await expect(getAccess(lockedTransaction, users[0]!, conversationId)).resolves.toMatchObject({
+          isMember: true,
+          participantsAvailable: false,
+          peerActivityBlocked: false,
+        });
+      }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(callbackRan).toBe(false);
+    releasePeer!();
+    await Promise.all([lifecycle, write]);
+
+    await database.db.insert(relationshipBlocks).values({ blockerId: users[0]!, blockedId: peerId, blockedAt: new Date() });
+    await expect(getAccess(database.db, users[0]!, conversationId)).resolves.toMatchObject({
+      participantsAvailable: false,
+      peerActivityBlocked: false,
+    });
+    await database.db.delete(relationshipBlocks).where(and(
+      eq(relationshipBlocks.blockerId, users[0]!),
+      eq(relationshipBlocks.blockedId, peerId),
+    ));
+    await database.db.update(messagingParticipants)
+      .set({ userId: peerId, state: "active" })
+      .where(eq(messagingParticipants.id, peerId));
   });
 
   it("serializes concurrent access through the conversation row lock", async () => {

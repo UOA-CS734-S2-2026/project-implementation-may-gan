@@ -173,6 +173,37 @@ suite("unsend message Postgres repository", () => {
     expect(outbox?.count).toBe(beforeOutbox?.count);
   });
 
+  it("keeps an attached member's cleanup after the peer mapping detaches", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[2]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "surviving cleanup",
+    });
+    const peerParticipantId = participantIds.get(users[2]!)!;
+    await database.db.update(schema.messagingParticipants)
+      .set({ userId: null, state: "deleted" })
+      .where(eq(schema.messagingParticipants.id, peerParticipantId));
+
+    await expect(unsend.unsend(users[0]!, created.conversation.id, created.message.id)).resolves.toMatchObject({
+      replayed: false,
+      message: { text: null },
+    });
+    const [change] = await database.db.select({ changeSequence: schema.conversationChanges.changeSequence })
+      .from(schema.conversationChanges)
+      .where(and(
+        eq(schema.conversationChanges.conversationId, created.conversation.id),
+        eq(schema.conversationChanges.kind, "message.unsent"),
+      ));
+    const recipients = await database.db.select({ recipientId: schema.messagingOutbox.recipientId })
+      .from(schema.messagingOutbox)
+      .where(and(
+        eq(schema.messagingOutbox.conversationId, created.conversation.id),
+        eq(schema.messagingOutbox.changeSequence, change!.changeSequence),
+        eq(schema.messagingOutbox.channel, "realtime"),
+      ));
+    expect(recipients).toEqual([{ recipientId: users[0] }]);
+  });
+
   it("allows a pending initiator but rejects a blocked sender without a mutation", async () => {
     const pending = await direct.create(users[0]!, {
       recipientId: users[2]!,
