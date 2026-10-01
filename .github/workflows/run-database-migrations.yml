@@ -29,11 +29,15 @@ jobs:
       actions: read
     env:
       MIGRATION_TARGET: ${{ inputs.target }}
+      MIGRATION_BASE_REF: ${{ format('{0}~1', github.sha) }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CONFIRM_PRODUCTION_MIGRATION: ${{ inputs.target == 'production' && 'MIGRATE production' || '' }}
       CONFIRM_NEON_BACKUP_CHECKED: ${{ inputs.target == 'production' && inputs.production_backup_checked == 'checked' && 'true' || '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
