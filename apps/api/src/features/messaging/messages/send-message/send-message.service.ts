@@ -41,6 +41,7 @@ export function createSendMessageService(dependencies: {
           text: input.text,
           replyToMessageId,
         });
+        assertPeerActivityAllowed(access);
         const previous = await transaction.findIdempotentMessage(actorId, input.clientMessageId);
         if (previous) {
           if (previous.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");

@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   createHyperdriveDatabase,
   schema,
@@ -84,6 +84,12 @@ export class PostgresRelationshipsStore implements RelationshipStore {
       and(eq(friendRequests.senderId, right), eq(friendRequests.recipientId, left)),
     );
     const lockPair = async (left: string, right: string) => {
+      await database
+        .select({ id: user.id })
+        .from(user)
+        .where(inArray(user.id, [left, right]))
+        .orderBy(asc(user.id))
+        .for("update");
       const rows = await database
         .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(left, right)}, 734))` })
         .from(sql`(values (1)) as lock_source`);

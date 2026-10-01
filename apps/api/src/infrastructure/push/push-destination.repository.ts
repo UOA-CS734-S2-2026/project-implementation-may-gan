@@ -1,5 +1,5 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, gt, isNotNull, isNull, lte, notExists, or } from "drizzle-orm";
+import { and, eq, exists, gt, isNotNull, isNull, lte, notExists, or } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
@@ -9,10 +9,24 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
   return {
     async resolve(job: OutboxJob) {
       if (!job.deviceRegistrationId) return null;
+      const availableParticipant = (
+        userId: typeof schema.conversations.userLowId | typeof schema.conversations.userHighId,
+      ) => exists(database
+        .select({ id: schema.user.id })
+        .from(schema.user)
+        .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+        .where(and(
+          eq(schema.user.id, userId),
+          eq(schema.messagingParticipants.state, "active"),
+          or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+        )));
+      const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.userLowId)} and ${availableParticipant(schema.conversations.userHighId)}`;
       const [row] = await database
         .select({
           tokenCiphertext: schema.pushDevices.tokenCiphertext,
           tokenKeyVersion: schema.pushDevices.tokenKeyVersion,
+          participantsAvailable,
         })
         .from(schema.pushDevices)
         .innerJoin(schema.session, and(
@@ -61,7 +75,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           ),
         ))
         .limit(1);
-      if (!row || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
+      if (!row || !row.participantsAvailable || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
       const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
       return token ? { token, valid: true } : null;
     },

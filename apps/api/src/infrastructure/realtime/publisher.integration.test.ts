@@ -35,7 +35,7 @@ suite("Postgres realtime publisher authorization", () => {
     };
   }
 
-  async function insertChange(input: { sequence: number; senderId?: string; memberId?: string }): Promise<void> {
+  async function insertChange(input: { sequence: number; senderId?: string; memberId?: string; kind?: string }): Promise<void> {
     const messageId = input.senderId ? `realtime-publisher-message-${crypto.randomUUID()}` : null;
     if (messageId) {
       await database.db.insert(schema.messages).values({
@@ -44,7 +44,7 @@ suite("Postgres realtime publisher authorization", () => {
       });
     }
     await database.db.insert(schema.conversationChanges).values({
-      conversationId: ids.conversation, changeSequence: input.sequence, kind: "realtime.test", messageId,
+      conversationId: ids.conversation, changeSequence: input.sequence, kind: input.kind ?? "realtime.test", messageId,
       memberId: input.memberId ?? null, createdAt,
     });
   }
@@ -83,6 +83,7 @@ suite("Postgres realtime publisher authorization", () => {
 
   afterEach(async () => {
     await database.db.delete(schema.relationshipBlocks).where(isTestUserBlock);
+    await database.db.delete(schema.accountLifecycles).where(inArray(schema.accountLifecycles.userId, [ids.alice, ids.bob]));
     await database.db.delete(schema.messagingOutbox).where(eq(schema.messagingOutbox.conversationId, ids.conversation));
     await database.db.delete(schema.conversationChanges).where(eq(schema.conversationChanges.conversationId, ids.conversation));
     await database.db.delete(schema.messages).where(eq(schema.messages.conversationId, ids.conversation));
@@ -126,6 +127,30 @@ suite("Postgres realtime publisher authorization", () => {
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, actor)).resolves.toBe(true);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, peer)).resolves.toBe(false);
+  });
+
+  it("uses the persisted reaction actor, not the message sender, behind a block", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, memberId: ids.bob, kind: "reaction.changed" });
+    const sender = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
+    const reactor = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, sender)).resolves.toBe(false);
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, reactor)).resolves.toBe(true);
+  });
+
+  it("rejects old-worker positive delivery after either lifecycle becomes unavailable", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    const job = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: ids.alice, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "d".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, job)).resolves.toBe(false);
   });
 
   it("rejects a recipient whose membership was removed", async () => {

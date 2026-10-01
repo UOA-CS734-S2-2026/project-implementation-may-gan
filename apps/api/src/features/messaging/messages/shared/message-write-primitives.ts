@@ -105,6 +105,7 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     changeSequence,
     kind: input.kind,
     messageId: input.messageId,
+    memberId: input.actorId ?? null,
     createdAt,
   });
 

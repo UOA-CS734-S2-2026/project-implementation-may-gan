@@ -132,7 +132,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       .update(schema.conversations)
       .set({ requestState: "active", updatedAt: now })
       .where(eq(schema.conversations.id, conversation.id));
-    await appendConversationChange(this.queryable, conversation.id, "request.active", null, null, now);
+    await appendConversationChange(this.queryable, conversation.id, "request.active", null, this.actorId, now);
     return { ...conversation, requestState: "active" };
   }
 

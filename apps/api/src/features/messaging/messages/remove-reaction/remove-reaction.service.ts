@@ -21,7 +21,7 @@ export function createRemoveReactionService(dependencies: { store: RemoveReactio
           return { message: toMessageDto(before), changed: false };
         }
         const updated = await transaction.removeReaction(messageId, actorId);
-        await transaction.appendPeerChange({ conversationId, messageId, kind: "reaction.changed" });
+        await transaction.appendPeerChange({ conversationId, messageId, actorId, kind: "reaction.changed" });
         return { message: toMessageDto(updated), changed: true };
       });
     },

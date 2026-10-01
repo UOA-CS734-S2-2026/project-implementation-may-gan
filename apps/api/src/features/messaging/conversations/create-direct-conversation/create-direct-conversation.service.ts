@@ -30,6 +30,7 @@ export function createCreateDirectConversationService(dependencies: {
         // Check before replay so a stale retry cannot emit a peer-visible
         // result after either participant has blocked the pair.
         if (await transaction.isPairBlocked(actorId, input.recipientId)) throw new MessagingError("BLOCKED");
+        if (!await transaction.participantsAvailable()) throw new MessagingError("FORBIDDEN");
         const existing = await transaction.findDirectConversation(actorId, input.recipientId);
         // The direct-create request is addressed to a pair, not a prior thread ID.
         // This stable target keeps a lost first response replayable after creation.
@@ -39,7 +40,6 @@ export function createCreateDirectConversationService(dependencies: {
           if (replay.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
           return { conversation: replay.conversation, message: toMessageDto(replay.message), replayed: true };
         }
-        if (!await transaction.participantsAvailable()) throw new MessagingError("FORBIDDEN");
         const friendshipActive = await transaction.hasActiveFriendship(actorId, input.recipientId);
         if (existing) {
           if (!friendshipActive && existing.requestState === "pending") throw new MessagingError("PENDING");

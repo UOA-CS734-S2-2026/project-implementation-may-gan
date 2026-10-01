@@ -63,7 +63,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
       .update(schema.conversations)
       .set({ requestState: "active", updatedAt: sql`now()` })
       .where(eq(schema.conversations.id, conversationId));
-    await this.appendPeerChange({ conversationId, messageId: null, kind: "request.active" });
+    await this.appendPeerChange({ conversationId, messageId: null, actorId, kind: "request.active" });
     return this.getAccess(actorId, conversationId);
   }
   async findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null> {

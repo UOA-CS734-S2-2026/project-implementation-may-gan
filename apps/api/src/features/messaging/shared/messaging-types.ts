@@ -39,6 +39,8 @@ export interface ConversationAccess {
 export interface ConversationPeerChange {
   conversationId: string;
   messageId: string | null;
+  /** The actual mutation actor. Older queued rows may lack this legacy field. */
+  actorId?: string;
   kind: "message.created" | "message.edited" | "message.unsent" | "reaction.changed" | "request.active";
 }
 

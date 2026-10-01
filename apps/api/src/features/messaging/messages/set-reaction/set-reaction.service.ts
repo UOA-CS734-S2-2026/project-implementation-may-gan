@@ -22,7 +22,7 @@ export function createSetReactionService(dependencies: { store: SetReactionStore
         const own = before.reactions.find((summary) => summary.reactedByActor)?.reaction;
         if (own === reaction) return { message: toMessageDto(before), changed: false };
         const updated = await transaction.setReaction(messageId, actorId, reaction);
-        await transaction.appendPeerChange({ conversationId, messageId, kind: "reaction.changed" });
+        await transaction.appendPeerChange({ conversationId, messageId, actorId, kind: "reaction.changed" });
         return { message: toMessageDto(updated), changed: true };
       });
     },

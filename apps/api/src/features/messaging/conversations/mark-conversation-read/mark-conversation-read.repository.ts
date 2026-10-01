@@ -1,5 +1,5 @@
-import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, count, eq, gt, isNull, ne } from "drizzle-orm";
+import { createHyperdriveDatabase, lockRelationshipPair, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, asc, count, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { MessagingError } from "../../shared/messaging-error";
 import { requireConversationMember } from "../../shared/require-conversation-member";
@@ -11,24 +11,6 @@ export interface MarkConversationReadRepository {
     conversationId: string,
     throughSequence: string,
   ): Promise<{ lastReadSequence: string; receiptSequence: string; unreadCount: number }>;
-}
-
-function relationshipPairKey(leftUserId: string, rightUserId: string): string {
-  return [leftUserId, rightUserId]
-    .sort()
-    .map((value) => `${value.length}:${value}`)
-    .join(":");
-}
-
-async function lockRelationshipPair(
-  database: Pick<DayliDatabase, "select">,
-  leftUserId: string,
-  rightUserId: string,
-): Promise<void> {
-  const locks = await database
-    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${relationshipPairKey(leftUserId, rightUserId)}, 734))` })
-    .from(sql`(values (1)) as lock_source`);
-  if (locks.length !== 1) throw new Error("Relationship pair lock did not return exactly one row.");
 }
 
 export function createPostgresMarkConversationReadRepository(
@@ -46,11 +28,28 @@ export function createPostgresMarkConversationReadRepository(
           .where(eq(schema.conversations.id, conversationId))
           .limit(1);
         if (!pair) throw new MessagingError("NOT_FOUND");
+        await tx
+          .select({ id: schema.user.id })
+          .from(schema.user)
+          .where(inArray(schema.user.id, [pair.userLowId, pair.userHighId]))
+          .orderBy(asc(schema.user.id))
+          .for("update");
         await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
+        // This separate statement runs after waiting on lifecycle locks.
+        const available = await tx
+          .select({ id: schema.user.id })
+          .from(schema.user)
+          .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+          .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+          .where(and(
+            inArray(schema.user.id, [pair.userLowId, pair.userHighId]),
+            eq(schema.messagingParticipants.state, "active"),
+            or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+          ));
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         const target = Math.min(parseSequenceCursor(through), row.last_message_sequence);
-        const allowedReceipt = row.request_state === "active" && row.blocked !== true;
+        const allowedReceipt = available.length === 2 && row.request_state === "active" && row.blocked !== true;
         const [updated] = await tx
           .update(schema.conversationMembers)
           .set({

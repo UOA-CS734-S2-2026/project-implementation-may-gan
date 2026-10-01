@@ -20,7 +20,7 @@ export function createUnsendMessageService(dependencies: { store: UnsendMessageS
         if (message.senderId !== actorId) throw new MessagingError("FORBIDDEN");
         if (message.unsentAt) return { message: toMessageDto(message), replayed: true };
         const updated = await transaction.unsendMessage({ messageId, unsentAt: now() });
-        await transaction.appendPeerChange({ conversationId, messageId, kind: "message.unsent" });
+        await transaction.appendPeerChange({ conversationId, messageId, actorId, kind: "message.unsent" });
         return { message: toMessageDto(updated), replayed: false };
       });
     },
