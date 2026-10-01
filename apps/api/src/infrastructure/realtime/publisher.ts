@@ -52,7 +52,7 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
         .from(schema.conversationMembers)
         .where(and(
           eq(schema.conversationMembers.conversationId, schema.conversations.id),
-          eq(schema.conversationMembers.userId, job.recipientId),
+          eq(schema.conversationMembers.participantId, job.recipientId),
         )),
     );
     const blocked = exists(
@@ -63,20 +63,20 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
           isNull(schema.relationshipBlocks.unblockedAt),
           or(
             and(
-              eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-              eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
+              eq(schema.relationshipBlocks.blockerId, schema.conversations.participantLowId),
+              eq(schema.relationshipBlocks.blockedId, schema.conversations.participantHighId),
             ),
             and(
-              eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-              eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
+              eq(schema.relationshipBlocks.blockerId, schema.conversations.participantHighId),
+              eq(schema.relationshipBlocks.blockedId, schema.conversations.participantLowId),
             ),
           ),
         )),
     );
     const [row] = await database.db
       .select({
-        senderId: schema.messages.senderId,
-        memberId: schema.conversationChanges.memberId,
+        senderId: schema.messages.senderParticipantId,
+        memberId: schema.conversationChanges.memberParticipantId,
         recipientMember,
         blocked,
       })

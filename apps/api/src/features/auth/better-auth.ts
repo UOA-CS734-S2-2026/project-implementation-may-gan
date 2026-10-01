@@ -4,6 +4,7 @@ import { memoryAdapter, type MemoryDB } from "better-auth/adapters/memory";
 import { betterAuth } from "better-auth/minimal";
 import { APIError } from "better-auth/api";
 import { bearer } from "better-auth/plugins/bearer";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify, type JWK } from "jose";
 import { createMemorySocialLinkConfirmationStore } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
 import {
@@ -28,6 +29,7 @@ interface BetterAuthOptions {
   trustedOrigins: string[];
   database: Parameters<typeof betterAuth>[0]["database"];
   google?: GoogleAuthConfiguration;
+  googleProfileFlow?: "native" | "browser";
   resend?: ResendConfiguration;
   rateLimitStorage?: "database" | "memory";
   rateLimitEnabled?: boolean;
@@ -36,6 +38,36 @@ interface BetterAuthOptions {
 
 const silentAuthLogger = { disabled: true };
 const usernamePattern = /^[a-z0-9][a-z0-9_]{2,29}$/;
+
+async function verifyGoogleBrowserIdToken(token: string, webClientId: string) {
+  try {
+    const { alg, kid } = decodeProtectedHeader(token);
+    if (alg !== "RS256" || !kid) return null;
+    const response = await fetch("https://www.googleapis.com/oauth2/v3/certs");
+    const body = await response.json() as { keys?: JWK[] };
+    const jwks = body.keys?.filter((key) => key.kid === kid) ?? [];
+    for (const jwk of jwks) {
+      try {
+        const publicKey = await importJWK(jwk, "RS256");
+        const { payload } = await jwtVerify(token, publicKey, {
+          algorithms: ["RS256"],
+          issuer: ["https://accounts.google.com", "accounts.google.com"],
+          audience: webClientId,
+          requiredClaims: ["iss", "aud", "sub", "iat", "exp"],
+          maxTokenAge: "1h",
+        });
+        if ((Array.isArray(payload.aud) || payload.azp !== undefined) && payload.azp !== webClientId) return null;
+        if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
+        return payload;
+      } catch {
+        // A key rotation response may contain several candidates. Try each.
+      }
+    }
+  } catch {
+    // OAuth responses remain generic. Do not reflect or log provider tokens.
+  }
+  return null;
+}
 
 function createBetterAuth(options: BetterAuthOptions) {
   return betterAuth({
@@ -51,6 +83,14 @@ function createBetterAuth(options: BetterAuthOptions) {
         // The public name is deliberately separate from Better Auth's name.
         // OAuth providers can populate name, but never this explicit field.
         displayUsername: { type: "string", required: false },
+        // This is an insertion-only, server-populated bridge into the actual
+        // Better Auth adapter transaction. Clients can neither send nor read it.
+        legal_registration_admission: {
+          type: "string",
+          required: false,
+          input: false,
+          returned: false,
+        },
       },
     },
     databaseHooks: {
@@ -71,7 +111,25 @@ function createBetterAuth(options: BetterAuthOptions) {
             if (displayUsername !== undefined && displayUsername.length > 80) {
               throw new APIError("BAD_REQUEST", { message: "Public name is too long." });
             }
-            return { data: { ...user, username, displayUsername: displayUsername || null } };
+            const context = hookContext as {
+              getHeader?: (name: string) => string | null;
+              request?: Request;
+              body?: { additionalData?: Record<string, unknown> };
+            } | null;
+            const header = (name: string) => context?.getHeader?.(name) ?? context?.request?.headers.get(name) ?? null;
+            const additionalData = context?.body?.additionalData;
+            const intent = header("x-dayli-registration-intent") ?? (typeof additionalData?.dayliRegistrationIntent === "string" ? additionalData.dayliRegistrationIntent : null);
+            const binding = header("x-dayli-registration-binding") ?? (typeof additionalData?.dayliRegistrationBinding === "string" ? additionalData.dayliRegistrationBinding : null);
+            const browserState = header("x-dayli-registration-browser-state");
+            // The hook runs immediately before the adapter's real user INSERT.
+            // It overwrites all user-controlled values with material from the
+            // request wrapper. The database trigger validates and consumes it.
+            const legal_registration_admission = browserState
+              ? `google_browser||${browserState}`
+              : intent && binding
+                ? `${path === "/sign-up/email" ? "email" : "google_native"}|${intent}|${binding}`
+                : undefined;
+            return { data: { ...user, username, displayUsername: displayUsername || null, legal_registration_admission } };
           },
         },
         update: {
@@ -128,6 +186,30 @@ function createBetterAuth(options: BetterAuthOptions) {
         clientSecret: options.google.clientSecret,
         accessType: "online",
         includeGrantedScopes: false,
+        // Better Auth's default browser-code profile mapper decodes the token
+        // endpoint ID token. Verify it with Google's JWKS before it can name a
+        // user, matching the native ID-token boundary.
+        async getUserInfo(tokens) {
+          if (!tokens.idToken) return null;
+          // The server route selects the flow, never optional provider fields.
+          // Better Auth verifies native ID tokens before invoking this mapper.
+          // Browser callbacks always require the web client's signed token.
+          const profile = options.googleProfileFlow === "native"
+            ? decodeJwt(tokens.idToken)
+            : await verifyGoogleBrowserIdToken(tokens.idToken, options.google!.clientIds[0]);
+          if (!profile || typeof profile.sub !== "string" || typeof profile.email !== "string" || typeof profile.email_verified !== "boolean") return null;
+          return {
+            user: {
+              name: typeof profile.name === "string" ? profile.name : "",
+              email: profile.email,
+              image: typeof profile.picture === "string" ? profile.picture : undefined,
+              emailVerified: profile.email_verified,
+            },
+            // The verified JWT is structurally the provider profile Better Auth
+            // persists alongside the account. Claims used above are checked.
+            data: profile as never,
+          };
+        },
       },
     } : undefined,
     account: {
@@ -170,6 +252,7 @@ export interface BetterAuthCompatibilityOptions {
   secret: string;
   database: MemoryDB;
   google?: GoogleAuthConfiguration;
+  googleProfileFlow?: "native" | "browser";
   resend?: ResendConfiguration;
   sessionExpiresIn?: number;
 }
@@ -180,6 +263,7 @@ export function createBetterAuthCompatibilitySlice({
   secret,
   database,
   google,
+  googleProfileFlow,
   resend,
   sessionExpiresIn,
 }: BetterAuthCompatibilityOptions) {
@@ -190,6 +274,7 @@ export function createBetterAuthCompatibilitySlice({
       secret,
       database: memoryAdapter(database),
       google,
+      googleProfileFlow,
       resend,
       rateLimitStorage: "memory",
       rateLimitEnabled: false,

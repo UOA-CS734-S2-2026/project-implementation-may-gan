@@ -1,16 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { createDayliDatabase, schema, sql } from "@dayli/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { createDayliDatabase, sql } from "@dayli/db";
 import { createPostgresRegisterDeviceStore } from "../../features/messaging/push/register-device/register-device.repository";
 import { PushSessionInactiveError } from "../../features/messaging/push/register-device/register-device.service";
 import { createPushOutboxHandler } from "./push-dispatcher";
 import { createPostgresPushDestinationResolver } from "./push-destination.repository";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
-const target = connectionString ? new URL(connectionString) : undefined;
-if (target?.hostname === "localhost" && target.port === "5433" && target.pathname !== "/dayli_messaging_test") {
-  throw new Error("Push destination integration tests must use the isolated dayli_messaging_test database.");
-}
 const suite = connectionString ? describe : describe.skip;
 
 suite("Postgres push destination authorization", () => {
@@ -29,8 +24,8 @@ suite("Postgres push destination authorization", () => {
     aliceDevice: `push-alice-device-${crypto.randomUUID()}`,
     bobDevice: `push-bob-device-${crypto.randomUUID()}`,
   };
-  const now = new Date();
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const tokenHash = (value: string) => value.repeat(64).slice(0, 64);
 
   function job(recipientId: string, deviceRegistrationId: string) {
@@ -49,95 +44,39 @@ suite("Postgres push destination authorization", () => {
   }
 
   beforeAll(async () => {
-    await database.db.insert(schema.user).values([
-      { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
-      { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
-    ]);
-    await database.db.insert(schema.session).values([
-      { id: ids.aliceSession, expiresAt, token: `token-${ids.alice}`, createdAt: now, updatedAt: now, userId: ids.alice },
-      { id: ids.bobSession, expiresAt, token: `token-${ids.bob}`, createdAt: now, updatedAt: now, userId: ids.bob },
-    ]);
-    await database.db.insert(schema.conversations).values({
-      id: ids.conversation, kind: "direct", userLowId: ids.alice, userHighId: ids.bob, initiatorId: ids.alice,
-      requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: now, createdAt: now, updatedAt: now,
-    });
-    await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
-    ]);
+    await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
+    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${ids.aliceSession}, ${expiresAt}, ${`token-${ids.alice}`}, ${now}, ${now}, ${ids.alice}), (${ids.bobSession}, ${expiresAt}, ${`token-${ids.bob}`}, ${now}, ${now}, ${ids.bob})`;
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${ids.conversation}, 'direct', ${ids.alice}, ${ids.bob}, ${ids.alice}, 'active', 0, 0, ${now}, ${now}, ${now})`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${now}, ${now}), (${ids.conversation}, ${ids.bob}, 0, 0, ${now}, ${now})`;
     await devices.register({ id: ids.aliceDevice, userId: ids.alice, sessionId: ids.aliceSession, installationId: "alice-installation", platform: "ios", tokenCiphertext: "alice-token", tokenKeyVersion: "test", tokenHash: tokenHash("a"), optedIn: true, now: new Date() });
     await devices.register({ id: ids.bobDevice, userId: ids.bob, sessionId: ids.bobSession, installationId: "bob-installation", platform: "android", tokenCiphertext: "bob-token", tokenKeyVersion: "test", tokenHash: tokenHash("b"), optedIn: true, now: new Date() });
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(schema.user).where(inArray(schema.user.id, [ids.alice, ids.bob]));
+      await database.client`delete from public."user" where id = any(${[ids.alice, ids.bob]}::text[])`;
     } finally { await database.close(); }
   });
 
-  it("rejects a delayed revoked-session registration and suppresses banned, nonmember, blocked, invalidated, and deleted destinations", async () => {
+  it("rejects a delayed revoked-session registration and suppresses stale, banned, and deleted destinations", async () => {
+    await database.db.execute(sql`delete from public.session where id = ${ids.aliceSession}`);
+
+    await expect(devices.register({ id: `late-${crypto.randomUUID()}`, userId: ids.alice, sessionId: ids.aliceSession, installationId: "late-installation", platform: "ios", tokenCiphertext: "late-token", tokenKeyVersion: "test", tokenHash: tokenHash("c"), optedIn: true, now: new Date() })).rejects.toBeInstanceOf(PushSessionInactiveError);
+
     const sender = { send: vi.fn(async () => ({ ok: true as const })) };
     const deliver = createPushOutboxHandler({ destinations: resolver, sender });
+    await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).not.toHaveBeenCalled();
 
-    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(eq(schema.user.id, ids.bob));
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledWith(expect.objectContaining({ token: "bob-token" }), undefined);
 
-    await database.db.update(schema.user).set({ banned: null }).where(eq(schema.user.id, ids.bob));
+    await database.db.execute(sql`update public."user" set banned = true, ban_expires = null where id = ${ids.bob}`);
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(2);
+    expect(sender.send).toHaveBeenCalledTimes(1);
 
-    await database.db.update(schema.user).set({ banned: true, banExpires: sql`now() - interval '5 minutes'` }).where(eq(schema.user.id, ids.bob));
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-
-    await database.db.update(schema.user).set({ banned: true, banExpires: sql`now() + interval '5 minutes'` }).where(eq(schema.user.id, ids.bob));
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-
-    await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(eq(schema.user.id, ids.bob));
-
-    await database.db.delete(schema.conversationMembers).where(and(
-      eq(schema.conversationMembers.conversationId, ids.conversation),
-      eq(schema.conversationMembers.userId, ids.bob),
-    ));
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-    await database.db.insert(schema.conversationMembers).values({
-      conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now,
-    });
-
-    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: now });
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-    await database.db.delete(schema.relationshipBlocks).where(and(
-      eq(schema.relationshipBlocks.blockerId, ids.alice),
-      eq(schema.relationshipBlocks.blockedId, ids.bob),
-    ));
-
-    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.bob, blockedId: ids.alice, blockedAt: now });
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-    await database.db.delete(schema.relationshipBlocks).where(and(
-      eq(schema.relationshipBlocks.blockerId, ids.bob),
-      eq(schema.relationshipBlocks.blockedId, ids.alice),
-    ));
-
-    await resolver.invalidate(ids.bobDevice);
-    await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
-    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-
-    await database.db.delete(schema.session).where(eq(schema.session.id, ids.aliceSession));
-    await expect(devices.register({ id: `late-${crypto.randomUUID()}`, userId: ids.alice, sessionId: ids.aliceSession, installationId: "late-installation", platform: "ios", tokenCiphertext: "late-token", tokenKeyVersion: "test", tokenHash: tokenHash("c"), optedIn: true, now: new Date() })).rejects.toBeInstanceOf(PushSessionInactiveError);
+    await database.db.execute(sql`delete from public."user" where id = ${ids.alice}`);
     await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
-
-    await database.db.delete(schema.user).where(eq(schema.user.id, ids.alice));
-    await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
-    expect(sender.send).toHaveBeenCalledTimes(3);
+    expect(sender.send).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,0 +1,6 @@
+reason: The migration sets a five-minute statement timeout for the bounded legal-version latch backfill.
+affected_data_and_clients: Large historical legal-version tables fail safely instead of running indefinitely.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a separately reviewed batched migration if the backfill exceeds the timeout.
+reviewer: Database reviewer required.

@@ -1,0 +1,6 @@
+reason: Protected forward-only migration applies atomically.
+affected_data_and_clients: Additive empty intent table and policy function.
+rollout_sequence: Apply before Google reauthentication runtime.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Use a later forward migration.
+reviewer: Database and privacy reviewers required.

@@ -1,0 +1,6 @@
+reason: The migration adds a nullable-history-safe latch, backfills only a boolean, and creates idempotent trigger functions.
+affected_data_and_clients: Published and accepted legal versions become immutable under ordinary migrator DML. Draft editing remains available.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a new migration for any later legal-history correction.
+reviewer: Database and privacy reviewers required.

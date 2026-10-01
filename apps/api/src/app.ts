@@ -53,7 +53,7 @@ import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createR2Reader, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import {
   createActorRateLimiter,
@@ -143,8 +143,23 @@ import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messagi
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 import { registerUsernameProfileRoutes, type UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
+import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
+import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
+import { allowsAccountCapability, allowsManagementGrantAction } from "./features/account-policy/shared/account-policy";
+import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import { registerAccountReauthenticationRoutes, type AccountReauthenticationDependencies } from "./features/account-policy/reauthenticate/account-reauthentication.route";
+import { registerGoogleProofRoutes, type GoogleProofRouteDependencies } from "./features/account-policy/reauthenticate/google-proof.route";
+import { createGoogleProofOAuthAdapter } from "./features/account-policy/reauthenticate/google-proof-oauth";
+import { createGoogleProofDigestVerifier } from "./features/account-policy/reauthenticate/google-oidc";
+import { createGoogleProofIntentStore } from "./features/account-policy/reauthenticate/google-proof-intents.repository";
+import { issueAccountManagementGrant } from "./features/account-policy/shared/account-management-grants";
+import type { ResolveSession } from "./http/middleware/require-session";
+import { registerLegalRoutes, type LegalRouteDependencies } from "./features/legal/legal.routes";
+import { registerDataExportRoutes, type DataExportRouteDependencies } from "./features/data-export/data-export.routes";
+import { createR2ExportArchiveReader } from "./features/data-export/shared/export-archive-reader";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
+type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -159,6 +174,11 @@ export interface AppDependencies {
   realtimeConnect?: RealtimeConnectRouteDependencies;
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
+  accountPolicy?: AccountPolicyDependencies;
+  accountReauthentication?: AccountReauthenticationDependencies;
+  googleProof?: GoogleProofRouteDependencies;
+  legal?: LegalRouteDependencies;
+  dataExport?: DataExportRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -178,6 +198,11 @@ export function createApp({
   realtimeConnect = {},
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
+  accountPolicy,
+  accountReauthentication,
+  googleProof,
+  legal,
+  dataExport = unavailableDataExport,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -221,7 +246,13 @@ export function createApp({
     name: "better-auth.session_token",
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
+  if (accountPolicy?.policies) api.use("/api/v1/*", createAccountPolicyMiddleware(accountPolicy.resolveSession, accountPolicy.policies));
   registerSystemRoutes(api);
+  registerAccountPolicyRoutes(api, accountPolicy ?? {});
+  registerAccountReauthenticationRoutes(api, accountReauthentication);
+  registerGoogleProofRoutes(api, googleProof);
+  registerLegalRoutes(api, legal ?? { trustedOrigins });
+  registerDataExportRoutes(api, dataExport);
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
   registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
@@ -279,6 +310,25 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
+  const accountPolicy = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
+  } satisfies AccountPolicyDependencies : undefined;
+  const accountReauthentication = configuration ? createAccountReauthenticationDependencies(configuration) : undefined;
+  const googleProof = configuration ? createGoogleProofDependencies(configuration, env) : undefined;
+  const legal = configuration ? {
+    trustedOrigins: configuration.trustedOrigins,
+    withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
+  } satisfies LegalRouteDependencies : undefined;
+  const dataExport = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    trustedOrigins: configuration.trustedOrigins,
+    // A request is accepted only when the separately bound restricted worker is
+    // enabled. Ordinary API credentials and R2 configuration cannot queue work.
+    requestsEnabled: env.DATA_EXPORT_REQUESTS_ENABLED === "true" && env.DATA_EXPORT_WORKER_ENABLED === "true" && Boolean(env.DATA_EXPORT_WORKER_HYPERDRIVE) && Boolean(r2Runtime),
+    archiveReader: r2Runtime ? createR2ExportArchiveReader(createR2Reader(r2Runtime)) : undefined,
+    withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
+  } satisfies DataExportRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -307,6 +357,11 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeConnect: realtime?.connect,
     pushDevices,
     usernameProfile,
+    accountPolicy,
+    accountReauthentication,
+    googleProof,
+    legal,
+    dataExport,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
@@ -332,6 +387,7 @@ export function createAppForEnv(env: ApiEnv) {
   return api;
 }
 
+const unavailableDataExport: DataExportRouteDependencies = { resolveSession: async () => null };
 const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
@@ -510,6 +566,13 @@ function createRealtimeDependencies(
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
 ): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
   const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
+  const policies = createHyperdriveAccountPolicyResolver(configuration.hyperdrive);
+  const resolveDeliveryEligibleSession = async (request: Request) => {
+    const session = await resolveRealtimeSession(request);
+    if (!session) return null;
+    try { return allowsAccountCapability(await policies.resolve(session.userId), "ordinary") ? session : null; }
+    catch { return null; }
+  };
   const tickets = {
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
     consume: async (ticket: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).consume(ticket)),
@@ -518,12 +581,17 @@ function createRealtimeDependencies(
   webSocketUrl.protocol = webSocketUrl.protocol === "https:" ? "wss:" : "ws:";
   const connect: RealtimeConnectRouteDependencies = {
     tickets,
-    resolveActiveSession: async (sessionId) => resolveRealtimeSessionById(configuration, sessionId),
+    resolveActiveSession: async (sessionId) => {
+      const session = await resolveRealtimeSessionById(configuration, sessionId);
+      if (!session) return null;
+      try { return allowsAccountCapability(await policies.resolve(session.userId), "ordinary") ? session : null; }
+      catch { return null; }
+    },
     userRealtime: env.USER_REALTIME!,
     trustedOrigins: configuration.trustedOrigins,
     hasUsername,
   };
-  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession: resolveDeliveryEligibleSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
 }
 
 function createPushDeviceDependencies(
@@ -543,6 +611,102 @@ function createPushDeviceDependencies(
     unregister: {
       unregister: (actorId, installationId) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createPostgresUnregisterDeviceRepository(database).unregister(actorId, installationId)),
     },
+  };
+}
+
+function createGoogleProofDependencies(configuration: RuntimeConfiguration, env: ApiEnv): GoogleProofRouteDependencies | undefined {
+  const clientId = configuration.google?.clientIds[0];
+  const clientSecret = configuration.google?.clientSecret;
+  const encryption = env.GOOGLE_PROOF_VERIFIER_ENCRYPTION_KEY;
+  const encryptionVersion = env.GOOGLE_PROOF_VERIFIER_KEY_VERSION;
+  const subjectHmac = env.GOOGLE_PROOF_SUBJECT_HMAC_KEY;
+  const subjectVersion = env.GOOGLE_PROOF_SUBJECT_KEY_VERSION;
+  const completionUrl = env.GOOGLE_PROOF_COMPLETION_URL;
+  if (!clientId || !clientSecret || !encryption || !encryptionVersion || !subjectHmac || !subjectVersion || !completionUrl) return undefined;
+  let completion: URL;
+  try {
+    completion = new URL(completionUrl);
+    if (completion.protocol !== "https:" || completion.username || completion.password || completion.hash || completion.search || !configuration.trustedOrigins.includes(completion.origin)) return undefined;
+    createGoogleProofOAuthAdapter({
+      clientId,
+      clientSecret,
+      callbackUrl: new URL("/api/v1/account/reauthenticate/google/callback", configuration.baseURL).toString(),
+      completionUrl: completion.toString(),
+      encryption: { material: encryption, version: encryptionVersion },
+      subjectHmac: { material: subjectHmac, version: subjectVersion },
+    });
+  } catch { return undefined; }
+  const oauth = {
+    clientId,
+    clientSecret,
+    callbackUrl: new URL("/api/v1/account/reauthenticate/google/callback", configuration.baseURL).toString(),
+    completionUrl: completion.toString(),
+    encryption: { material: encryption, version: encryptionVersion },
+    subjectHmac: { material: subjectHmac, version: subjectVersion },
+  };
+  const verifyIdToken = createGoogleProofDigestVerifier({ clientId });
+  const resolveSession = async (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+    const auth = createPostgresBetterAuth({ baseURL: configuration.baseURL, secret: configuration.secret, trustedOrigins: configuration.trustedOrigins, database, google: configuration.google, resend: configuration.resend });
+    const current = await auth.api.getSession({ headers: request.headers }) as { user?: { id?: string }; session?: { id?: string; expiresAt?: Date | string } } | null;
+    const userId = current?.user?.id;
+    const sessionId = current?.session?.id;
+    const expiresAt = current?.session?.expiresAt ? new Date(current.session.expiresAt) : undefined;
+    return userId && sessionId && expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt > new Date() ? { userId, sessionId } : null;
+  });
+  return {
+    trustedOrigins: configuration.trustedOrigins,
+    oauth,
+    authorizeAction: async (userId, action) => allowsManagementGrantAction((await createHyperdriveAccountPolicyResolver(configuration.hyperdrive).resolve(userId)).restriction, action),
+    resolveSession,
+    lifecycleGeneration: async (userId) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const [row] = await database.select({ generation: schema.accountLifecycles.generation }).from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId)).limit(1);
+      return row?.generation ?? 0;
+    }),
+    intents: {
+      create: (input) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).create(input)),
+      claim: (stateDigest) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).claim(stateDigest)),
+      recordVerifiedProof: (stateDigest, session, claim, subject) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).recordVerifiedProof(stateDigest, session, claim, subject)),
+      complete: (stateDigest, session, action) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).complete(stateDigest, session, action)),
+      fail: (stateDigest, claim) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createGoogleProofIntentStore(database, oauth).fail(stateDigest, claim)),
+    },
+    verifyIdToken,
+  };
+}
+
+function createAccountReauthenticationDependencies(configuration: RuntimeConfiguration): AccountReauthenticationDependencies {
+  return {
+    trustedOrigins: configuration.trustedOrigins,
+    authorizeAction: async (userId, action) => {
+      const policy = await createHyperdriveAccountPolicyResolver(configuration.hyperdrive).resolve(userId);
+      return allowsManagementGrantAction(policy.restriction, action);
+    },
+    verifyPassword: async (request, password) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      const auth = createPostgresBetterAuth({
+        baseURL: configuration.baseURL,
+        secret: configuration.secret,
+        trustedOrigins: configuration.trustedOrigins,
+        database,
+        google: configuration.google,
+        resend: configuration.resend,
+      });
+      const current = await auth.api.getSession({ headers: request.headers }) as { user?: { id?: string }; session?: { id?: string; expiresAt?: Date | string } } | null;
+      const userId = current?.user?.id;
+      const sessionId = current?.session?.id;
+      const expiresAt = current?.session?.expiresAt ? new Date(current.session.expiresAt) : undefined;
+      if (!userId || !sessionId || !expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date()) return null;
+      const headers = new Headers(request.headers);
+      headers.set("content-type", "application/json");
+      headers.delete("content-length");
+      const verified = await auth.handler(new Request(new URL("/api/auth/verify-password", configuration.baseURL), {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password }),
+      }));
+      return verified.ok ? { userId, sessionId } : null;
+    }),
+    issueGrant: (session, action) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
+      return issueAccountManagementGrant(database, session, action);
+    }),
   };
 }
 

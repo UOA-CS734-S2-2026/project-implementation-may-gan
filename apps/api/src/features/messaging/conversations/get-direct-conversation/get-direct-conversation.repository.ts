@@ -21,8 +21,8 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
               .where(and(
                 isNull(relationshipBlocks.unblockedAt),
                 or(
-                  and(eq(relationshipBlocks.blockerId, conversations.userLowId), eq(relationshipBlocks.blockedId, conversations.userHighId)),
-                  and(eq(relationshipBlocks.blockerId, conversations.userHighId), eq(relationshipBlocks.blockedId, conversations.userLowId)),
+                  and(eq(relationshipBlocks.blockerId, conversations.participantLowId), eq(relationshipBlocks.blockedId, conversations.participantHighId)),
+                  and(eq(relationshipBlocks.blockerId, conversations.participantHighId), eq(relationshipBlocks.blockedId, conversations.participantLowId)),
                 ),
               )),
           ),
@@ -30,11 +30,11 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
         .from(conversations)
         .innerJoin(conversationMembers, and(
           eq(conversationMembers.conversationId, conversations.id),
-          eq(conversationMembers.userId, actorId),
+          eq(conversationMembers.participantId, actorId),
         ))
         .where(and(
-          eq(conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
-          eq(conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+          eq(conversations.participantLowId, sql`least(${actorId}, ${recipientId})`),
+          eq(conversations.participantHighId, sql`greatest(${actorId}, ${recipientId})`),
         ))
         .limit(1);
       if (!pair) throw new MessagingError("NOT_FOUND");

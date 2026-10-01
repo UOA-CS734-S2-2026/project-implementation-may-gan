@@ -1,0 +1,6 @@
+reason: The migration sets a five-minute statement timeout for DDL execution.
+affected_data_and_clients: The function replacement fails safely instead of running indefinitely.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a separately reviewed migration if a later correction is necessary.
+reviewer: Database reviewer required.

@@ -1,0 +1,6 @@
+reason: New state and generation constraints are installed NOT VALID then validated, avoiding an unbounded initial validation lock.
+affected_data_and_clients: Draft Google proof runtime only.
+rollout_sequence: Backfill invalid legacy claims, add constraints, then validate in this migration.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Investigate and correct invalid data before retrying validation.
+reviewer: Database and privacy reviewers required.

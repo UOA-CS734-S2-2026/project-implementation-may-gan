@@ -1,0 +1,6 @@
+reason: Lifecycle generation is already bigint. This suppression applies only to bounded existing integer metadata.
+affected_data_and_clients: Additive intent table only.
+rollout_sequence: Apply before dependent code.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Use a forward migration if needed.
+reviewer: Database and privacy reviewers required.

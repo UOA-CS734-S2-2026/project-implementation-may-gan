@@ -19,14 +19,30 @@ export const messageRequestState = pgEnum("message_request_state", ["pending", "
 export const messagingOutboxChannel = pgEnum("messaging_outbox_channel", ["realtime", "push"]);
 export const messagingOutboxStatus = pgEnum("messaging_outbox_status", ["pending", "leased", "delivered", "failed"]);
 export const pushPlatform = pgEnum("push_platform", ["ios", "android"]);
+export const messagingParticipantState = pgEnum("messaging_participant_state", ["active", "deleted"]);
+
+/**
+ * Stable, profile-free messaging identity. `id` starts equal to its user's
+ * opaque ID for client compatibility, but survives account deletion while its
+ * active user link is cleared. It contains no profile or credential data.
+ */
+export const messagingParticipants = pgTable("messaging_participants", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").unique().references(() => user.id, { onDelete: "set null" }),
+  state: messagingParticipantState("state").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("messaging_participants_active_user_idx").on(table.userId),
+  check("messaging_participants_state_user_check", sql`(${table.state} = 'active' and ${table.userId} is not null) or (${table.state} = 'deleted' and ${table.userId} is null)`),
+]);
 
 /** The unordered direct pair is immutable and unique. No group representation exists in V1. */
 export const conversations = pgTable("conversations", {
   id: text("id").primaryKey(),
   kind: conversationKind("kind").notNull().default("direct"),
-  userLowId: text("user_low_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  userHighId: text("user_high_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  initiatorId: text("initiator_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  participantLowId: text("participant_low_id").notNull().references(() => messagingParticipants.id),
+  participantHighId: text("participant_high_id").notNull().references(() => messagingParticipants.id),
+  initiatorParticipantId: text("initiator_participant_id").notNull().references(() => messagingParticipants.id),
   requestState: messageRequestState("request_state").notNull(),
   lastMessageSequence: bigint("last_message_sequence", { mode: "number" }).notNull(),
   lastChangeSequence: bigint("last_change_sequence", { mode: "number" }).notNull(),
@@ -34,22 +50,22 @@ export const conversations = pgTable("conversations", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  unique("conversations_direct_pair_unique").on(table.userLowId, table.userHighId),
+  unique("conversations_direct_pair_unique").on(table.participantLowId, table.participantHighId),
   index("conversations_activity_idx").on(table.lastActivityAt, table.id),
-  check("conversations_direct_pair_order_check", sql`${table.userLowId} < ${table.userHighId}`),
-  check("conversations_initiator_member_check", sql`${table.initiatorId} in (${table.userLowId}, ${table.userHighId})`),
+  check("conversations_direct_pair_order_check", sql`${table.participantLowId} < ${table.participantHighId}`),
+  check("conversations_initiator_member_check", sql`${table.initiatorParticipantId} in (${table.participantLowId}, ${table.participantHighId})`),
 ]);
 
 export const conversationMembers = pgTable("conversation_members", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  participantId: text("participant_id").notNull().references(() => messagingParticipants.id),
   lastReadSequence: bigint("last_read_sequence", { mode: "number" }).notNull(),
   receiptSequence: bigint("receipt_sequence", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  primaryKey({ name: "conversation_members_pk", columns: [table.conversationId, table.userId] }),
-  index("conversation_members_user_conversation_idx").on(table.userId, table.conversationId),
+  primaryKey({ name: "conversation_members_pk", columns: [table.conversationId, table.participantId] }),
+  index("conversation_members_participant_conversation_idx").on(table.participantId, table.conversationId),
   check("conversation_members_receipt_read_check", sql`${table.receiptSequence} <= ${table.lastReadSequence}`),
 ]);
 
@@ -57,7 +73,7 @@ export const messages = pgTable("messages", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   sequence: bigint("sequence", { mode: "number" }).notNull(),
-  senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  senderParticipantId: text("sender_participant_id").notNull().references(() => messagingParticipants.id),
   clientMessageId: text("client_message_id").notNull(),
   requestFingerprint: text("request_fingerprint").notNull(),
   body: text("body"),
@@ -68,7 +84,7 @@ export const messages = pgTable("messages", {
   unsentAt: timestamp("unsent_at", { withTimezone: true }),
 }, (table) => [
   unique("messages_conversation_sequence_unique").on(table.conversationId, table.sequence),
-  unique("messages_sender_client_message_unique").on(table.senderId, table.clientMessageId),
+  unique("messages_sender_client_message_unique").on(table.senderParticipantId, table.clientMessageId),
   index("messages_conversation_sequence_idx").on(table.conversationId, table.sequence),
   check("messages_sequence_positive_check", sql`${table.sequence} > 0`),
   check("messages_version_positive_check", sql`${table.version} > 0`),
@@ -77,11 +93,11 @@ export const messages = pgTable("messages", {
 
 export const messageReactions = pgTable("message_reactions", {
   messageId: text("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  participantId: text("participant_id").notNull().references(() => messagingParticipants.id),
   reaction: text("reaction").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.userId] }),
+  primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.participantId] }),
   check("message_reactions_key_check", sql`${table.reaction} in ('like', 'love', 'laugh', 'surprised', 'sad', 'thanks')`),
 ]);
 
@@ -90,7 +106,7 @@ export const conversationChanges = pgTable("conversation_changes", {
   changeSequence: bigint("change_sequence", { mode: "number" }).notNull(),
   kind: text("kind").notNull(),
   messageId: text("message_id").references(() => messages.id, { onDelete: "cascade" }),
-  memberId: text("member_id").references(() => user.id, { onDelete: "cascade" }),
+  memberParticipantId: text("member_participant_id").references(() => messagingParticipants.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
   primaryKey({ name: "conversation_changes_pk", columns: [table.conversationId, table.changeSequence] }),
@@ -115,8 +131,6 @@ export const messagingOutbox = pgTable("messaging_outbox", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 }, (table) => [
-  // PostgreSQL 18 NULLS NOT DISTINCT index is declared in migration 0009.
-  // Drizzle's index builder cannot model this option yet.
   uniqueIndex("messaging_outbox_destination_unique").on(table.eventId, table.recipientId, table.channel, table.deviceRegistrationId),
   index("messaging_outbox_due_idx").on(table.status, table.availableAt),
   index("messaging_outbox_lease_idx").on(table.status, table.leaseExpiresAt),

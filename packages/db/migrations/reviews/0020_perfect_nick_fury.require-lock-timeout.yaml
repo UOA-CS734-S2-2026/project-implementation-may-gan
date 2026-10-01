@@ -1,0 +1,6 @@
+reason: The additive callback ownership and grant generation changes require brief table locks.
+affected_data_and_clients: Draft Google proof runtime only.
+rollout_sequence: Apply with a five-second lock timeout before exposing callback endpoints.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Use a later additive migration for corrections.
+reviewer: Database and privacy reviewers required.

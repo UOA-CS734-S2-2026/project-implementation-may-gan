@@ -1,0 +1,6 @@
+reason: Additive proof-state columns are required before any runtime writes; migration is reviewed as an unreleased stack.
+affected_data_and_clients: The preceding intent table is unpopulated because its parent PR is draft.
+rollout_sequence: Apply before provider proof runtime.
+backup_checkpoint: Confirm approved recovery posture.
+forward_fix_plan: Use a later forward migration for any correction.
+reviewer: Database and privacy reviewers required.

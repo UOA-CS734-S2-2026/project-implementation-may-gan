@@ -1,0 +1,6 @@
+reason: The changed checks are on additive lifecycle tables introduced by migration 0014. They have no production writers in this foundation slice, so immediate validation is required to prevent a weaker state invariant.
+affected_data_and_clients: Existing lifecycle, receipt, and export records must satisfy absolute-hour and terminal-reference rules.
+rollout_sequence: Apply before enabling any lifecycle or export writer.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a separate reviewed migration with NOT VALID and later validation if a populated future table needs another constraint change.
+reviewer: Database and privacy reviewers required before hosted migration.

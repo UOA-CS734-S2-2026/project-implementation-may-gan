@@ -204,6 +204,20 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountGetDataExport200Response':
+          return AccountGetDataExport200Response.fromJson(value);
+        case 'AccountGetDataExport200ResponseExport':
+          return AccountGetDataExport200ResponseExport.fromJson(value);
+        case 'AccountGoogleProofBegin200Response':
+          return AccountGoogleProofBegin200Response.fromJson(value);
+        case 'AccountGoogleProofBeginRequest':
+          return AccountGoogleProofBeginRequest.fromJson(value);
+        case 'AccountGoogleProofComplete200Response':
+          return AccountGoogleProofComplete200Response.fromJson(value);
+        case 'AccountGoogleProofCompleteRequest':
+          return AccountGoogleProofCompleteRequest.fromJson(value);
+        case 'AccountRequestDataExport202Response':
+          return AccountRequestDataExport202Response.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':
@@ -260,6 +274,30 @@ class ApiClient {
           return GetMessagingUnread200Response.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'LegalAcceptCurrentTerms200Response':
+          return LegalAcceptCurrentTerms200Response.fromJson(value);
+        case 'LegalAcceptCurrentTermsRequest':
+          return LegalAcceptCurrentTermsRequest.fromJson(value);
+        case 'LegalGetCurrentTerms200Response':
+          return LegalGetCurrentTerms200Response.fromJson(value);
+        case 'LegalGetCurrentTermsContent200Response':
+          return LegalGetCurrentTermsContent200Response.fromJson(value);
+        case 'LegalGetCurrentTermsContent200ResponseTerms':
+          return LegalGetCurrentTermsContent200ResponseTerms.fromJson(value);
+        case 'LegalGetPublishedTermsContent200Response':
+          return LegalGetPublishedTermsContent200Response.fromJson(value);
+        case 'LegalGetPublishedTermsContent200ResponseTerms':
+          return LegalGetPublishedTermsContent200ResponseTerms.fromJson(value);
+        case 'LegalGetTermsNotice200Response':
+          return LegalGetTermsNotice200Response.fromJson(value);
+        case 'LegalGetTermsNotice200ResponseNotice':
+          return LegalGetTermsNotice200ResponseNotice.fromJson(value);
+        case 'LegalIssueRegistrationIntent201Response':
+          return LegalIssueRegistrationIntent201Response.fromJson(value);
+        case 'LegalIssueRegistrationIntent201ResponseTerms':
+          return LegalIssueRegistrationIntent201ResponseTerms.fromJson(value);
+        case 'LegalIssueRegistrationIntentRequest':
+          return LegalIssueRegistrationIntentRequest.fromJson(value);
         case 'ListConversationChanges200Response':
           return ListConversationChanges200Response.fromJson(value);
         case 'ListConversationChanges200ResponseItemsInner':

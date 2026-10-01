@@ -15,9 +15,10 @@ import {
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
 import { schema } from "@dayli/db";
 import { eq } from "drizzle-orm";
+import { bindBrowserRegistrationIntent, readCurrentTerms } from "../legal/shared/legal.repository";
 
 const corsMethods = ["GET", "POST"];
-const corsHeaders = ["authorization", "content-type"];
+const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
 
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
@@ -190,19 +191,73 @@ function registerStrictAuthRoutes<E extends Env>(
   });
 }
 
+async function admitRegistration(request: Request, database?: import("@dayli/db").DayliDatabase): Promise<Request | Response> {
+  if (!database) return request;
+  const path = new URL(request.url).pathname;
+  const canCreate = (request.method === "POST" && (path === `${authBasePath}/sign-up/email` || path === `${authBasePath}/sign-in/social`))
+    || (request.method === "GET" && path === `${authBasePath}/callback/google`);
+  if (!canCreate || !await readCurrentTerms(database)) return request;
+  const headers = new Headers(request.headers);
+  const forwarded = () => new Request(request, { headers });
+  if (request.method === "GET") {
+    const state = new URL(request.url).searchParams.get("state");
+    if (state) headers.set("x-dayli-registration-browser-state", state);
+    return forwarded();
+  }
+  const body = await request.clone().json().catch(() => undefined) as { idToken?: unknown; additionalData?: unknown } | undefined;
+  if (path === `${authBasePath}/sign-in/social` && body?.idToken === undefined) return request;
+  // Do not consume an intent here. The insert trigger consumes it in the exact
+  // transaction that inserts the user and writes both legal records.
+  const token = request.headers.get("x-dayli-registration-intent");
+  const binding = request.headers.get("x-dayli-registration-binding");
+  if (!token || !binding) return path === `${authBasePath}/sign-up/email` ? linkFailure(403) : request;
+  if (path !== `${authBasePath}/sign-in/social`) return forwarded();
+  // Better Auth retains additionalData in the trusted endpoint context until
+  // its OAuth user-create hook. Replace, do not trust, any client value.
+  const additionalData = body && typeof body === "object" && body.additionalData && typeof body.additionalData === "object"
+    ? body.additionalData as Record<string, unknown>
+    : {};
+  headers.delete("content-length");
+  headers.set("x-dayli-native-google-admission", "1");
+  return new Request(request.url, {
+    method: request.method,
+    headers,
+    body: JSON.stringify({ ...body, additionalData: { ...additionalData, dayliRegistrationIntent: token, dayliRegistrationBinding: binding } }),
+  });
+}
+
+async function bindBrowserRegistration(request: Request, response: Response, database?: import("@dayli/db").DayliDatabase): Promise<Response> {
+  if (!database || request.method !== "POST" || new URL(request.url).pathname !== `${authBasePath}/sign-in/social`) return response;
+  const token = request.headers.get("x-dayli-registration-intent");
+  const flowBinding = request.headers.get("x-dayli-registration-binding");
+  // Better Auth consumes the request body. Native ID-token registrations are
+  // marked before dispatch, so do not attempt to clone the consumed request.
+  if (!token || !flowBinding || !response.ok || request.headers.get("x-dayli-native-google-admission") === "1") return response;
+  // Browser OAuth binds Better Auth's server-generated state before its later
+  // callback. Read the response rather than the request body, which Better Auth
+  // already used.
+  const state = await redirectState(response);
+  if (!state || !await bindBrowserRegistrationIntent(database, { token, flowBinding, oauthState: state })) return linkFailure(403);
+  return response;
+}
+
 async function handleAuthRequest(
   request: Request,
   handler: AuthHandler,
   confirmations: SocialLinkConfirmationStore,
+  database?: import("@dayli/db").DayliDatabase,
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+  const admitted = await admitRegistration(request, database);
+  if (admitted instanceof Response) return admitted;
+  request = admitted;
   if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
     return handleProtectedSocialLink(request, handler, confirmations);
   }
   if (request.method === "GET" && pathname === `${authBasePath}/callback/google`) {
     return handleOAuthCallback(request, handler, confirmations);
   }
-  return handler(request);
+  return bindBrowserRegistration(request, await handler(request), database);
 }
 
 export function registerBetterAuthCompatibilityRoutes<E extends Env>(
@@ -237,6 +292,9 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
         trustedOrigins: configuration.trustedOrigins,
         database,
         google: configuration.google,
+        googleProfileFlow: request.method === "POST" && ["/api/auth/sign-in/social", "/api/auth/link-social"].includes(new URL(request.url).pathname)
+          ? "native"
+          : "browser",
         resend: configuration.resend,
       });
       const revoke = isSessionRevocationRequest(request) && revocations
@@ -250,7 +308,7 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
           .where(eq(schema.session.userId, revoke.userId));
         sessionIds = stored.map((row) => row.id);
       }
-      const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
+      const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database), database);
       if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
       return response;
     },

@@ -1,5 +1,12 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccountGetDataExport200Response';
+export * from './AccountGetDataExport200ResponseExport';
+export * from './AccountGoogleProofBegin200Response';
+export * from './AccountGoogleProofBeginRequest';
+export * from './AccountGoogleProofComplete200Response';
+export * from './AccountGoogleProofCompleteRequest';
+export * from './AccountRequestDataExport202Response';
 export * from './ApiError';
 export * from './ApiErrorCode';
 export * from './ApiErrorError';
@@ -27,6 +34,18 @@ export * from './FeedPostAuthor';
 export * from './FeedPostPrompt';
 export * from './GetMessagingUnread200Response';
 export * from './HealthResponse';
+export * from './LegalAcceptCurrentTerms200Response';
+export * from './LegalAcceptCurrentTermsRequest';
+export * from './LegalGetCurrentTerms200Response';
+export * from './LegalGetCurrentTermsContent200Response';
+export * from './LegalGetCurrentTermsContent200ResponseTerms';
+export * from './LegalGetPublishedTermsContent200Response';
+export * from './LegalGetPublishedTermsContent200ResponseTerms';
+export * from './LegalGetTermsNotice200Response';
+export * from './LegalGetTermsNotice200ResponseNotice';
+export * from './LegalIssueRegistrationIntent201Response';
+export * from './LegalIssueRegistrationIntent201ResponseTerms';
+export * from './LegalIssueRegistrationIntentRequest';
 export * from './ListConversationChanges200Response';
 export * from './ListConversationChanges200ResponseItemsInner';
 export * from './ListConversations200Response';

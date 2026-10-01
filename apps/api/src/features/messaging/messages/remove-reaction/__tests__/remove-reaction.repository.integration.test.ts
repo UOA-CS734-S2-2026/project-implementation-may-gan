@@ -1,5 +1,4 @@
-import { createDayliDatabase, schema } from "@dayli/db";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 
@@ -17,31 +16,16 @@ suite("remove reaction Postgres repository", () => {
   const { direct, set: setReaction, remove: removeReaction } = createMessagingPersistenceServices(database.db);
 
   beforeAll(async () => {
-    const now = new Date();
-    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
-    await database.db.insert(schema.friendships).values([
-      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: now },
-      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: now },
-      { userId: users[0]!, friendId: users[3]!, state: "active", stateChangedAt: now },
-      { userId: users[3]!, friendId: users[0]!, state: "active", stateChangedAt: now },
-    ]);
+    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now()), (${users[0]!}, ${users[3]!}, 'active', now()), (${users[3]!}, ${users[0]!}, 'active', now())`;
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(schema.relationshipBlocks).where(or(
-        inArray(schema.relationshipBlocks.blockerId, users),
-        inArray(schema.relationshipBlocks.blockedId, users),
-      ));
-      await database.db.delete(schema.friendships).where(or(
-        inArray(schema.friendships.userId, users),
-        inArray(schema.friendships.friendId, users),
-      ));
-      await database.db.delete(schema.friendRequests).where(or(
-        inArray(schema.friendRequests.senderId, users),
-        inArray(schema.friendRequests.recipientId, users),
-      ));
-      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
+      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
+      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
+      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
+      await database.client`delete from public."user" where id = any(${users}::text[])`;
     } finally {
       await database.close();
     }
@@ -63,27 +47,16 @@ suite("remove reaction Postgres repository", () => {
       changed: true,
       message: { reactions: [{ reaction: "like", count: 1, reactedByActor: false }] },
     });
-    const [changedReactions] = await database.db.select({
-      reaction: schema.messageReactions.reaction,
-      userId: schema.messageReactions.userId,
-    }).from(schema.messageReactions).where(eq(schema.messageReactions.messageId, message.id));
-    const [changedChanges] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.conversationChanges)
-      .where(and(eq(schema.conversationChanges.conversationId, conversation.id), eq(schema.conversationChanges.kind, "reaction.changed")));
-    const [changedOutbox] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.messagingOutbox)
-      .where(and(eq(schema.messagingOutbox.conversationId, conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
-    expect(changedReactions).toMatchObject({ reaction: "like", userId: users[0] });
+    const [changedReactions] = await database.client`select reaction, participant_id from public.message_reactions where message_id = ${message.id}`;
+    const [changedChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversation.id} and kind = 'reaction.changed'`;
+    const [changedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversation.id} and channel = 'realtime'`;
+    expect(changedReactions).toMatchObject({ reaction: "like", participant_id: users[0] });
     expect(changedChanges?.count).toBe(3);
     expect(changedOutbox?.count).toBe(8);
 
     await expect(removeReaction.remove(users[1]!, conversation.id, message.id)).resolves.toMatchObject({ changed: false });
-    const [unchangedChanges] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.conversationChanges)
-      .where(and(eq(schema.conversationChanges.conversationId, conversation.id), eq(schema.conversationChanges.kind, "reaction.changed")));
-    const [unchangedOutbox] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.messagingOutbox)
-      .where(and(eq(schema.messagingOutbox.conversationId, conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
+    const [unchangedChanges] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversation.id} and kind = 'reaction.changed'`;
+    const [unchangedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversation.id} and channel = 'realtime'`;
     expect(unchangedChanges?.count).toBe(3);
     expect(unchangedOutbox?.count).toBe(8);
   });
@@ -95,16 +68,10 @@ suite("remove reaction Postgres repository", () => {
       text: "blocked reaction",
     });
     await setReaction.set(users[3]!, blocked.conversation.id, blocked.message.id, "sad");
-    await database.db.insert(schema.relationshipBlocks).values({
-      blockerId: users[0]!,
-      blockedId: users[3]!,
-      blockedAt: new Date(),
-    });
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${users[0]!}, ${users[3]!}, now())`;
 
     await expect(removeReaction.remove(users[3]!, blocked.conversation.id, blocked.message.id)).rejects.toMatchObject({ code: "BLOCKED" });
-    const [blockedReaction] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.messageReactions)
-      .where(and(eq(schema.messageReactions.messageId, blocked.message.id), eq(schema.messageReactions.userId, users[3]!)));
+    const [blockedReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${blocked.message.id} and participant_id = ${users[3]!}`;
     expect(blockedReaction?.count).toBe(1);
 
     const unsent = await direct.create(users[0]!, {
@@ -113,14 +80,10 @@ suite("remove reaction Postgres repository", () => {
       text: "unsent reaction",
     });
     await setReaction.set(users[1]!, unsent.conversation.id, unsent.message.id, "thanks");
-    await database.db.update(schema.messages)
-      .set({ body: null, unsentAt: new Date() })
-      .where(eq(schema.messages.id, unsent.message.id));
+    await database.client`update public.messages set body = null, unsent_at = now() where id = ${unsent.message.id}`;
 
     await expect(removeReaction.remove(users[1]!, unsent.conversation.id, unsent.message.id)).rejects.toMatchObject({ code: "CONFLICT" });
-    const [unsentReaction] = await database.db.select({ count: sql<number>`count(*)::int` })
-      .from(schema.messageReactions)
-      .where(and(eq(schema.messageReactions.messageId, unsent.message.id), eq(schema.messageReactions.userId, users[1]!)));
+    const [unsentReaction] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${unsent.message.id} and participant_id = ${users[1]!}`;
     expect(unsentReaction?.count).toBe(1);
   });
 });

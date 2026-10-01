@@ -1,0 +1,6 @@
+reason: CREATE EXTENSION IF NOT EXISTS and CREATE OR REPLACE FUNCTION are idempotent migration operations.
+affected_data_and_clients: The migration replaces only the admission function and adds an empty nullable bridge column.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a new migration for any later trigger correction.
+reviewer: Database and privacy reviewers required.

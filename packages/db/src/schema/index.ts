@@ -22,14 +22,32 @@ import {
   conversationMembers,
   conversations,
   messageReactions,
+  messagingParticipants,
   messages,
   messagingOutbox,
   pushDevices,
   socketTickets,
 } from "./messaging";
+import {
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
+  operatorCases,
+} from "./lifecycle";
+import {
+  ageDeclarations,
+  legalDocumentContents,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
 import { user } from "./users";
+import { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export { profileVisibility, tier, user } from "./users";
+export { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -305,6 +323,8 @@ export {
   conversationMembers,
   conversations,
   messageReactions,
+  messagingParticipantState,
+  messagingParticipants,
   messageRequestState,
   messages,
   messagingOutbox,
@@ -324,30 +344,70 @@ export {
   relationshipSearchQuota,
 } from "./relationships";
 
+export {
+  accountLifecycleState,
+  accountLifecycles,
+  accountManagementGrantAction,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportObjectCleanupStatus,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
+  dataExportStatus,
+  operatorCaseDecision,
+  operatorCaseStatus,
+  operatorCaseType,
+  operatorCases,
+  purgeReceiptOutcome,
+} from "./lifecycle";
+
+export {
+  ageDeclarations,
+  legalDocumentContents,
+  legalDocumentKind,
+  legalDocumentStatus,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
+
 export const schema = {
   account,
+  accountGoogleReauthenticationIntents,
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  ageDeclarations,
   conversationChanges,
   conversationMembers,
   conversations,
-  mediaReservation,
-  messageReactions,
-  messages,
-  messagingOutbox,
-  pushDevices,
-  socketTickets,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
   dailyPrompts,
   friendRequests,
   friendships,
+  legalDocumentContents,
+  legalDocumentVersions,
   legacyCloudinaryMedia,
+  mediaReservation,
+  messageReactions,
+  messagingParticipants,
+  messages,
+  messagingOutbox,
+  operatorCases,
   postIdempotencyKeys,
   postMedia,
   postRevisions,
   posts,
+  pushDevices,
   rateLimit,
+  registrationIntents,
   relationshipBlocks,
   relationshipSearchQuota,
   session,
   socialLinkConfirmation,
+  socketTickets,
+  termsAcceptances,
   tomorrowNotes,
   user,
   verification,

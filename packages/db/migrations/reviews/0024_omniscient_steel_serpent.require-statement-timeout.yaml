@@ -1,0 +1,6 @@
+reason: Constraint changes need a bounded statement timeout.
+affected_data_and_clients: Existing rows remain valid without invented notice provenance.
+rollout_sequence: Apply with the five-minute statement timeout.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Investigate and use a later additive migration if the timeout is exceeded.
+reviewer: Database and privacy reviewers required.

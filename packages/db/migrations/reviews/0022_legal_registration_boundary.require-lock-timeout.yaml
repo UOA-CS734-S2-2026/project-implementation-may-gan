@@ -1,0 +1,6 @@
+reason: Installing the additive user-insert trigger briefly locks the Better Auth user table.
+affected_data_and_clients: Current Terms enforcement activates only after an approved effective document exists.
+rollout_sequence: Apply with the five-second lock timeout before any operator-controlled publication.
+backup_checkpoint: Confirm the approved recovery posture before applying migrations.
+forward_fix_plan: Correct trigger behavior through a later additive migration.
+reviewer: Database, authentication, and privacy reviewers required.

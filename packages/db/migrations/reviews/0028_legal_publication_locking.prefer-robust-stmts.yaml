@@ -1,0 +1,6 @@
+reason: CREATE OR REPLACE FUNCTION is an idempotent correction to the legal-content trigger.
+affected_data_and_clients: Content mutations now serialize with publication and acceptance latching on their parent legal version.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a new migration for any later trigger correction.
+reviewer: Database and privacy reviewers required.

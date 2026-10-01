@@ -22,7 +22,7 @@ describe("withLockedConversationMessageTransaction", () => {
                 return {
                   async limit() {
                     events.push("pair lookup");
-                    return [{ userLowId: "amy", userHighId: "zoe" }];
+                    return [{ participantLowId: "amy", participantHighId: "zoe" }];
                   },
                 };
               },

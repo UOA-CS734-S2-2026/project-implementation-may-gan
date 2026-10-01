@@ -24,7 +24,7 @@ export async function projectConversationDto(
     id: String(row.id),
     peer: {
       id: String(row.peer_id ?? (String(row.user_low_id) === actorId ? row.user_high_id : row.user_low_id)),
-      name: typeof row.peer_name === "string" ? row.peer_name : null,
+      name: typeof row.peer_name === "string" ? row.peer_name : row.peer_deleted === true ? "Deleted account" : null,
     },
     requestState: row.request_state,
     latestMessage: latest,

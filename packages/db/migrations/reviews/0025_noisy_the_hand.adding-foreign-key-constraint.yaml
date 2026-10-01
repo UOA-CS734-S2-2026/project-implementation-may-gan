@@ -1,0 +1,6 @@
+reason: The empty canonical-content registry needs referential integrity to the legal version row.
+affected_data_and_clients: No existing data is changed and no policy content is seeded.
+rollout_sequence: Add the foreign key not valid, then validate while the new table is empty.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Apply a later additive correction if needed.
+reviewer: Database and privacy reviewers required.

@@ -1,8 +1,6 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
-import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
-import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type {
   DirectConversation,
   DirectConversationStore,
@@ -11,6 +9,45 @@ import type {
 import type { StoredMessage } from "../../shared/messaging-types";
 
 type Queryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
+
+type MessageRow = {
+  id: string;
+  conversationId: string;
+  sequence: string;
+  senderId: string;
+  clientMessageId: string;
+  requestFingerprint: string;
+  body: string | null;
+  replyToMessageId: string | null;
+  version: string;
+  createdAt: Date;
+  editedAt: Date | null;
+  unsentAt: Date | null;
+};
+
+const messageSelection = {
+  id: schema.messages.id,
+  conversationId: schema.messages.conversationId,
+  sequence: sql<string>`${schema.messages.sequence}::text`,
+  senderId: schema.messages.senderParticipantId,
+  clientMessageId: schema.messages.clientMessageId,
+  requestFingerprint: schema.messages.requestFingerprint,
+  body: schema.messages.body,
+  replyToMessageId: schema.messages.replyToMessageId,
+  version: sql<string>`${schema.messages.version}::text`,
+  createdAt: schema.messages.createdAt,
+  editedAt: schema.messages.editedAt,
+  unsentAt: schema.messages.unsentAt,
+};
+
+function storedMessage(row: MessageRow): StoredMessage {
+  return {
+    ...row,
+    sequence: BigInt(row.sequence),
+    version: Number(row.version),
+    reactions: [],
+  };
+}
 
 function relationshipPairKey(leftUserId: string, rightUserId: string): string {
   return [leftUserId, rightUserId]
@@ -47,21 +84,21 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     const [row] = await this.queryable
       .select({
         id: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
         requestState: schema.conversations.requestState,
       })
       .from(schema.conversations)
       .where(and(
-        eq(schema.conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
-        eq(schema.conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+        eq(schema.conversations.participantLowId, sql`least(${actorId}, ${recipientId})`),
+        eq(schema.conversations.participantHighId, sql`greatest(${actorId}, ${recipientId})`),
       ))
       .limit(1)
       .for("update");
     if (!row) return null;
     return {
       id: row.id,
-      peerId: row.userLowId === actorId ? row.userHighId : row.userLowId,
+      peerId: row.participantLowId === actorId ? row.participantHighId : row.participantLowId,
       requestState: row.requestState,
     };
   }
@@ -91,16 +128,16 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   async findIdempotentMessage(senderId: string, clientMessageId: string) {
     const [row] = await this.queryable
       .select({
-        ...messageProjectionSelection,
+        ...messageSelection,
         directConversationId: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
         requestState: schema.conversations.requestState,
       })
       .from(schema.messages)
       .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messages.conversationId))
       .where(and(
-        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.senderParticipantId, senderId),
         eq(schema.messages.clientMessageId, clientMessageId),
       ))
       .limit(1);
@@ -109,10 +146,10 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       requestFingerprint: row.requestFingerprint,
       conversation: {
         id: row.directConversationId,
-        peerId: row.userLowId === senderId ? row.userHighId : row.userLowId,
+        peerId: row.participantLowId === senderId ? row.participantHighId : row.participantLowId,
         requestState: row.requestState,
       },
-      message: toStoredMessage(row),
+      message: storedMessage(row),
     };
   }
 
@@ -129,9 +166,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     await this.queryable.insert(schema.conversations).values({
       id: input.conversationId,
       kind: "direct",
-      userLowId: sql`least(${input.initiatorId}, ${input.recipientId})`,
-      userHighId: sql`greatest(${input.initiatorId}, ${input.recipientId})`,
-      initiatorId: input.initiatorId,
+      participantLowId: sql`least(${input.initiatorId}, ${input.recipientId})`,
+      participantHighId: sql`greatest(${input.initiatorId}, ${input.recipientId})`,
+      initiatorParticipantId: input.initiatorId,
       requestState: input.requestState,
       lastMessageSequence: 1,
       lastChangeSequence: 0,
@@ -142,7 +179,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     await this.queryable.insert(schema.conversationMembers).values([
       {
         conversationId: input.conversationId,
-        userId: input.initiatorId,
+        participantId: input.initiatorId,
         lastReadSequence: 0,
         receiptSequence: 0,
         createdAt: input.createdAt,
@@ -150,7 +187,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       },
       {
         conversationId: input.conversationId,
-        userId: input.recipientId,
+        participantId: input.recipientId,
         lastReadSequence: 0,
         receiptSequence: 0,
         createdAt: input.createdAt,
@@ -163,18 +200,18 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         id: input.messageId,
         conversationId: input.conversationId,
         sequence: 1,
-        senderId: input.initiatorId,
+        senderParticipantId: input.initiatorId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,
         version: 1,
         createdAt: input.createdAt,
       })
-      .returning(messageProjectionSelection);
+      .returning(messageSelection);
     await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, input.createdAt);
     return {
       conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState },
-      message: toStoredMessage(message!),
+      message: storedMessage(message!),
     };
   }
 
@@ -187,25 +224,23 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         updatedAt: input.createdAt,
       })
       .where(eq(schema.conversations.id, input.conversation.id))
-      .returning({ sequence: schema.conversations.lastMessageSequence });
-    if (!allocated) throw new Error("Conversation disappeared during message insert.");
-    requireSafeSequenceBigInt(allocated.sequence);
+      .returning({ sequence: sql<string>`${schema.conversations.lastMessageSequence}::text` });
     const [message] = await this.queryable
       .insert(schema.messages)
       .values({
         id: input.messageId,
         conversationId: input.conversation.id,
-        sequence: allocated.sequence,
-        senderId: input.senderId,
+        sequence: sql`${allocated!.sequence}::bigint`,
+        senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,
         version: 1,
         createdAt: input.createdAt,
       })
-      .returning(messageProjectionSelection);
+      .returning(messageSelection);
     await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, input.createdAt);
-    return toStoredMessage(message!);
+    return storedMessage(message!);
   }
 }
 

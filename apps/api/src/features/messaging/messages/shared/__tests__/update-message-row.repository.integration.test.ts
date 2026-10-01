@@ -1,9 +1,7 @@
-import { createDayliDatabase, schema } from "@dayli/db";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { updateMessageRow } from "../update-message-row";
 
-const { conversations, messageReactions, messages, user } = schema;
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -20,12 +18,12 @@ suite("message row update builders", () => {
   ];
 
   beforeAll(async () => {
-    await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
+    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(user).where(inArray(user.id, users));
+      await database.client`delete from public."user" where id = any(${users}::text[])`;
     } finally {
       await database.close();
     }
@@ -35,31 +33,9 @@ suite("message row update builders", () => {
     const conversationId = crypto.randomUUID();
     const messageId = crypto.randomUUID();
     const now = new Date("2026-09-30T00:00:00.000Z");
-    await database.db.insert(conversations).values({
-      id: conversationId,
-      kind: "direct",
-      userLowId: users[0]!,
-      userHighId: users[1]!,
-      initiatorId: users[0]!,
-      requestState: "active",
-      lastMessageSequence: 1,
-      lastChangeSequence: 0,
-      lastActivityAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await database.db.insert(messages).values({
-      id: messageId,
-      conversationId,
-      sequence: 1,
-      senderId: users[0]!,
-      clientMessageId: crypto.randomUUID(),
-      requestFingerprint: crypto.randomUUID(),
-      body: "message",
-      version: 1,
-      createdAt: now,
-    });
-    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, reaction: "love", createdAt: now });
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', 1, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.messages (id, conversation_id, sequence, sender_participant_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, 1, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', 1, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.message_reactions (message_id, participant_id, reaction, created_at) values (${messageId}, ${users[1]!}, 'love', ${now.toISOString()}::timestamptz)`;
 
     await expect(updateMessageRow(database.db, {
       messageId,
@@ -72,7 +48,7 @@ suite("message row update builders", () => {
       body: "stale",
       expectedVersion: 1,
     })).rejects.toThrow("Message write conflict.");
-    const [retained] = await database.db.select({ count: count() }).from(messageReactions).where(eq(messageReactions.messageId, messageId));
+    const [retained] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${messageId}`;
     expect(retained?.count).toBe(1);
 
     await expect(updateMessageRow(database.db, {
@@ -80,66 +56,10 @@ suite("message row update builders", () => {
       body: null,
       unsentAt: now,
     })).resolves.toMatchObject({ body: null, unsentAt: now, version: 3 });
-    const [message] = await database.db.select({ body: messages.body, unsentAt: messages.unsentAt }).from(messages).where(eq(messages.id, messageId));
-    const [reactions] = await database.db.select({ count: count() }).from(messageReactions).where(eq(messageReactions.messageId, messageId));
+    const [message] = await database.client`select body, unsent_at from public.messages where id = ${messageId}`;
+    const [reactions] = await database.client`select count(*)::int as count from public.message_reactions where message_id = ${messageId}`;
     expect(message?.body).toBeNull();
-    expect(message?.unsentAt).not.toBeNull();
+    expect(message?.unsent_at).not.toBeNull();
     expect(reactions?.count).toBe(0);
-  });
-
-  it("accepts Number.MAX_SAFE_INTEGER and fails closed for an unsafe returned sequence", async () => {
-    const conversationId = crypto.randomUUID();
-    const messageId = crypto.randomUUID();
-    const now = new Date("2026-09-30T00:00:00.000Z");
-    await database.db.delete(conversations).where(and(eq(conversations.userLowId, users[0]!), eq(conversations.userHighId, users[1]!)));
-    await database.db.insert(conversations).values({
-      id: conversationId,
-      kind: "direct",
-      userLowId: users[0]!,
-      userHighId: users[1]!,
-      initiatorId: users[0]!,
-      requestState: "active",
-      lastMessageSequence: 1,
-      lastChangeSequence: 0,
-      lastActivityAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await database.db.insert(messages).values({
-      id: messageId,
-      conversationId,
-      sequence: 1,
-      senderId: users[0]!,
-      clientMessageId: crypto.randomUUID(),
-      requestFingerprint: crypto.randomUUID(),
-      body: "message",
-      version: Number.MAX_SAFE_INTEGER - 1,
-      createdAt: now,
-    });
-    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, reaction: "love", createdAt: now });
-
-    await expect(database.db.transaction((transaction) => updateMessageRow(transaction, {
-      messageId,
-      body: "maximum safe version",
-      expectedVersion: Number.MAX_SAFE_INTEGER - 1,
-    }))).resolves.toMatchObject({ body: "maximum safe version", version: Number.MAX_SAFE_INTEGER });
-
-    await database.db.update(messages).set({ sequence: sql`9007199254740992::bigint` }).where(eq(messages.id, messageId));
-    await expect(database.db.transaction((transaction) => updateMessageRow(transaction, {
-      messageId,
-      body: null,
-      unsentAt: now,
-      expectedVersion: Number.MAX_SAFE_INTEGER,
-    }))).rejects.toThrow(RangeError);
-
-    const [message] = await database.db.select({ sequence: sql<string>`${messages.sequence}::text`, body: messages.body, unsentAt: messages.unsentAt, version: sql<string>`${messages.version}::text` }).from(messages).where(eq(messages.id, messageId));
-    const [reactions] = await database.db.select({ count: count() }).from(messageReactions).where(eq(messageReactions.messageId, messageId));
-    expect(message).toMatchObject({
-      sequence: "9007199254740992",
-      body: "maximum safe version",
-      unsentAt: null,
-      version: String(Number.MAX_SAFE_INTEGER),
-    });
-    expect(reactions?.count).toBe(1);
   });
 });

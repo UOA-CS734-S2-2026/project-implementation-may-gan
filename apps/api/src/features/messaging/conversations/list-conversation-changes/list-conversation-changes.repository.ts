@@ -1,6 +1,6 @@
 import { and, asc, eq, gt } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { parseSequenceCursor, requireSafeSequenceBigInt } from "../../shared/safe-sequence";
+import { parseSequenceCursor, requireSafeSequenceBigInt, requireSafeSequenceText } from "../../shared/safe-sequence";
 import { requireConversationMember } from "../../shared/require-conversation-member";
 
 export interface ListConversationChangesRepository {
@@ -35,7 +35,7 @@ export function createPostgresListConversationChangesRepository(
           changeSequence: schema.conversationChanges.changeSequence,
           kind: schema.conversationChanges.kind,
           messageId: schema.conversationChanges.messageId,
-          memberId: schema.conversationChanges.memberId,
+          memberId: schema.conversationChanges.memberParticipantId,
           createdAt: schema.conversationChanges.createdAt,
         })
         .from(schema.conversationChanges)
@@ -58,7 +58,7 @@ export function createPostgresListConversationChangesRepository(
           ? requireSafeSequenceBigInt(page.at(-1)!.changeSequence).toString()
           : null,
         hasMore: result.length > limit,
-        highWatermark: requireSafeSequenceBigInt(conversation.last_change_sequence).toString(),
+        highWatermark: requireSafeSequenceText(String(conversation.last_change_sequence)),
       };
     },
   };

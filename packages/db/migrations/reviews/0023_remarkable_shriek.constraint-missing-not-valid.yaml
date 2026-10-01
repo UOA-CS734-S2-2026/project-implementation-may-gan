@@ -1,0 +1,6 @@
+reason: The new rules apply to future inserts and updates without requiring invented provenance for historical rows.
+affected_data_and_clients: Existing rows remain valid without invented notice provenance.
+rollout_sequence: Add not-valid constraints without validating historical data.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a separately reviewed historical remediation only if approved.
+reviewer: Database and privacy reviewers required.

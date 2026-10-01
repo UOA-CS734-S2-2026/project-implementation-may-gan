@@ -1,9 +1,10 @@
 CREATE ROLE migrator LOGIN PASSWORD 'migrator';
 CREATE ROLE app LOGIN PASSWORD 'app';
-GRANT CONNECT ON DATABASE dayli_test TO migrator, app;
+CREATE ROLE lifecycle_worker LOGIN PASSWORD 'lifecycle_worker';
+GRANT CONNECT ON DATABASE dayli_test TO migrator, app, lifecycle_worker;
 GRANT CREATE ON DATABASE dayli_test TO migrator;
 GRANT USAGE, CREATE ON SCHEMA public TO migrator;
-GRANT USAGE ON SCHEMA public TO app;
+GRANT USAGE ON SCHEMA public TO app, lifecycle_worker;
 ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
 ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public

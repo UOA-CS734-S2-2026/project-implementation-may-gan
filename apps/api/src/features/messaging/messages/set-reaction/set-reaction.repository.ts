@@ -32,9 +32,9 @@ class PostgresSetReactionTransaction implements SetReactionTransaction {
   async setReaction(messageId: string, actorId: string, reaction: ReactionKey): Promise<StoredMessage> {
     await this.queryable
       .insert(schema.messageReactions)
-      .values({ messageId, userId: actorId, reaction, createdAt: sql`now()` })
+      .values({ messageId, participantId: actorId, reaction, createdAt: sql`now()` })
       .onConflictDoUpdate({
-        target: [schema.messageReactions.messageId, schema.messageReactions.userId],
+        target: [schema.messageReactions.messageId, schema.messageReactions.participantId],
         set: { reaction, createdAt: sql`now()` },
       });
     const current = await this.findMessage(this.conversationId, messageId);

@@ -109,7 +109,7 @@ suite("resolve message request Postgres repository", () => {
       receiptSequence: Number(previousSequence),
     }).where(and(
       eq(conversationMembers.conversationId, created.conversation.id),
-      eq(conversationMembers.userId, users[10]!),
+      eq(conversationMembers.participantId, users[10]!),
     ));
 
     builderQueries.length = 0;

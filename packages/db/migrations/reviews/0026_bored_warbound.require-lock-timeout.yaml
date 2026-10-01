@@ -1,0 +1,6 @@
+reason: The repository migration runner serializes this additive trigger replacement under its advisory lock.
+affected_data_and_clients: New registrations use row-bound admission after migration.
+rollout_sequence: Run through the repository migration runner with its advisory lock.
+backup_checkpoint: Confirm approved recovery posture before applying migrations.
+forward_fix_plan: Add a new migration for any later trigger correction.
+reviewer: Database and privacy reviewers required.

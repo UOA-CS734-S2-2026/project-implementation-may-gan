@@ -1,9 +1,7 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { and, eq } from "drizzle-orm";
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
-import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
-import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
-import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
+import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export interface StoredIdempotentMessage {
@@ -68,14 +66,27 @@ class PostgresMessageTransaction implements SendMessageTransaction {
   }
   async findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null> {
     const [row] = await this.queryable
-      .select(messageProjectionSelection)
+      .select({
+        id: schema.messages.id,
+        conversation_id: schema.messages.conversationId,
+        sequence: sql<string>`${schema.messages.sequence}::text`,
+        sender_id: schema.messages.senderParticipantId,
+        client_message_id: schema.messages.clientMessageId,
+        request_fingerprint: schema.messages.requestFingerprint,
+        body: schema.messages.body,
+        reply_to_message_id: schema.messages.replyToMessageId,
+        version: sql<string>`${schema.messages.version}::text`,
+        created_at: schema.messages.createdAt,
+        edited_at: schema.messages.editedAt,
+        unsent_at: schema.messages.unsentAt,
+      })
       .from(schema.messages)
       .where(and(
-        eq(schema.messages.senderId, senderId),
+        eq(schema.messages.senderParticipantId, senderId),
         eq(schema.messages.clientMessageId, clientMessageId),
       ))
       .limit(1);
-    return row ? { requestFingerprint: row.requestFingerprint, message: toStoredMessage(row) } : null;
+    return row ? { requestFingerprint: row.request_fingerprint, message: mapStoredMessage(row) } : null;
   }
   async findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null> {
     return findMessage(this.queryable, this.actorId, conversationId, messageId);
@@ -89,16 +100,15 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         updatedAt: input.createdAt,
       })
       .where(eq(schema.conversations.id, input.conversationId))
-      .returning({ sequence: schema.conversations.lastMessageSequence });
+      .returning({ sequence: sql<string>`${schema.conversations.lastMessageSequence}::text` });
     if (!allocated) throw new Error("Conversation disappeared during message insert.");
-    requireSafeSequenceBigInt(allocated.sequence);
     const [message] = await this.queryable
       .insert(schema.messages)
       .values({
         id: input.id,
         conversationId: input.conversationId,
-        sequence: allocated.sequence,
-        senderId: input.senderId,
+        sequence: sql`${allocated.sequence}::bigint`,
+        senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,
         body: input.text,
@@ -106,8 +116,21 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         version: 1,
         createdAt: input.createdAt,
       })
-      .returning(messageProjectionSelection);
-    return toStoredMessage(message!);
+      .returning({
+        id: schema.messages.id,
+        conversation_id: schema.messages.conversationId,
+        sequence: sql<string>`${schema.messages.sequence}::text`,
+        sender_id: schema.messages.senderParticipantId,
+        client_message_id: schema.messages.clientMessageId,
+        request_fingerprint: schema.messages.requestFingerprint,
+        body: schema.messages.body,
+        reply_to_message_id: schema.messages.replyToMessageId,
+        version: sql<string>`${schema.messages.version}::text`,
+        created_at: schema.messages.createdAt,
+        edited_at: schema.messages.editedAt,
+        unsent_at: schema.messages.unsentAt,
+      });
+    return mapStoredMessage(message!);
   }
   async appendPeerChange(input: ConversationPeerChange): Promise<void> {
     return appendPeerChange(this.queryable, input);

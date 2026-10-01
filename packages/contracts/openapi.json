@@ -1283,6 +1283,1022 @@
         }
       }
     },
+    "/api/v1/account/reauthenticate/google/begin": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.begin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request_deletion",
+                      "cancel_deletion"
+                    ]
+                  }
+                },
+                "required": [
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A server-built Google authorization URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authorizationUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  },
+                  "required": [
+                    "authorizationUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/google/callback": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.callback",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "code",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "Fixed client completion redirect."
+          },
+          "403": {
+            "description": "Invalid continuation."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/google/complete": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.googleProof.complete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "request_deletion",
+                      "cancel_deletion"
+                    ]
+                  },
+                  "state": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "action",
+                  "state"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opaque short-lived management grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "grant": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "grant",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid session."
+          },
+          "403": {
+            "description": "Proof unavailable."
+          },
+          "503": {
+            "description": "Proof is not configured."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms/current/content": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getCurrentTermsContent",
+        "responses": {
+          "200": {
+            "description": "Digest-verified canonical Terms source, or null before publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/api/v1/legal/terms/current/content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "canonicalContent": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "canonicalContent"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms/versions/{version}/content": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getPublishedTermsContent",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": true,
+            "name": "version",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digest-verified canonical source for a notice or effective Terms version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "notice",
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "canonicalContent": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "canonicalContent"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms/current": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getCurrentTerms",
+        "responses": {
+          "200": {
+            "description": "Current effective Terms, or null before publication.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/api/v1/legal/terms/current/content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/terms/notice": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.getTermsNotice",
+        "responses": {
+          "200": {
+            "description": "Current Terms notice, or null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notice": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "materialChange": {
+                          "type": "boolean"
+                        },
+                        "noticeStartsAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "urgentChangeReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "pattern": "^\\/api\\/v1\\/legal\\/terms\\/versions\\/\\d+\\/content$"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "materialChange",
+                        "noticeStartsAt",
+                        "effectiveAt",
+                        "urgentChangeReason",
+                        "documentUrl"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "notice"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal metadata unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/legal/registration-intents": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.issueRegistrationIntent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "google_native",
+                      "google_browser"
+                    ]
+                  },
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "declareAge16OrOlder": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                },
+                "required": [
+                  "flow",
+                  "acceptTerms",
+                  "declareAge16OrOlder"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Short-lived opaque registration proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intent": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "flowBinding": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "terms": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/api/v1/legal/terms/current/content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "ageDeclarationVersion": {
+                      "type": "string",
+                      "enum": [
+                        "age-16-v1"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "intent",
+                    "flowBinding",
+                    "expiresAt",
+                    "terms",
+                    "ageDeclarationVersion"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Terms are not published."
+          },
+          "422": {
+            "description": "Unchecked Terms or age declaration."
+          },
+          "503": {
+            "description": "Legal registration unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/legal/acceptance": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.acceptCurrentTerms",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "acceptTerms": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "declareAge16OrOlder": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "termsVersionId": {
+                    "type": "string"
+                  },
+                  "contentDigest": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                },
+                "required": [
+                  "acceptTerms",
+                  "declareAge16OrOlder",
+                  "termsVersionId",
+                  "contentDigest"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current Terms acceptance recorded idempotently.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true
+                        },
+                        "contentDigest": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "effective"
+                          ]
+                        },
+                        "effectiveAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "documentUrl": {
+                          "type": "string",
+                          "enum": [
+                            "/api/v1/legal/terms/current/content"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "version",
+                        "contentDigest",
+                        "status",
+                        "effectiveAt",
+                        "documentUrl"
+                      ]
+                    },
+                    "ageDeclarationVersion": {
+                      "type": "string",
+                      "enum": [
+                        "age-16-v1"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "terms",
+                    "ageDeclarationVersion"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "409": {
+            "description": "Terms changed or not published."
+          },
+          "422": {
+            "description": "Unchecked Terms or age declaration."
+          },
+          "503": {
+            "description": "Legal acceptance unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/export": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.requestDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Existing or newly queued export.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "requested",
+                        "building",
+                        "ready",
+                        "failed",
+                        "cancelled",
+                        "expired"
+                      ]
+                    },
+                    "requestedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "readyAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date-time"
+                    },
+                    "downloadable": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "requestedAt",
+                    "readyAt",
+                    "expiresAt",
+                    "downloadable"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "403": {
+            "description": "Account cannot export."
+          },
+          "409": {
+            "description": "Export unavailable."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.getDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current export, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "export": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "requested",
+                            "building",
+                            "ready",
+                            "failed",
+                            "cancelled",
+                            "expired"
+                          ]
+                        },
+                        "requestedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "readyAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "downloadable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "requestedAt",
+                        "readyAt",
+                        "expiresAt",
+                        "downloadable"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "export"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.cancelDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queued export cancelled when it has not published an archive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "export": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "requested",
+                            "building",
+                            "ready",
+                            "failed",
+                            "cancelled",
+                            "expired"
+                          ]
+                        },
+                        "requestedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "readyAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "downloadable": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "requestedAt",
+                        "readyAt",
+                        "expiresAt",
+                        "downloadable"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "export"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/account/export/download": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.downloadDataExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated archive bytes.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No current session."
+          },
+          "403": {
+            "description": "Export is not ready or has expired."
+          },
+          "503": {
+            "description": "Export service unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/media-reservations": {
       "post": {
         "tags": [

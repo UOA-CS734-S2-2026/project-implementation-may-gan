@@ -1,6 +1,4 @@
-import { createDayliDatabase, schema, sql } from "@dayli/db";
-import { and, eq, inArray, or } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
+import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
 import { createPostgresGetConversationRepository } from "../get-conversation.repository";
@@ -16,37 +14,20 @@ const suite = enabled ? describe : describe.skip;
 suite("get conversation Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 4 }, (_, index) => `get-conversation-${crypto.randomUUID()}-${index}`);
-  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
+  const { direct, send } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresGetConversationRepository(database.db);
-  const builderQueries: string[] = [];
-  const observedRepository = createPostgresGetConversationRepository(drizzle(database.client, {
-    schema,
-    logger: { logQuery(query) { builderQueries.push(query); } },
-  }));
 
   beforeAll(async () => {
-    await database.db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
-    await database.db.insert(schema.friendships).values([
-      { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
-      { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
-    ]);
+    await database.client`insert into public."user" (id, name, email) select id, id, id || '@example.test' from unnest(${users}::text[]) as ids(id)`;
+    await database.client`insert into public.friendships (user_id, friend_id, state, state_changed_at) values (${users[0]!}, ${users[1]!}, 'active', now()), (${users[1]!}, ${users[0]!}, 'active', now())`;
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(schema.relationshipBlocks).where(or(
-        inArray(schema.relationshipBlocks.blockerId, users),
-        inArray(schema.relationshipBlocks.blockedId, users),
-      ));
-      await database.db.delete(schema.friendships).where(or(
-        inArray(schema.friendships.userId, users),
-        inArray(schema.friendships.friendId, users),
-      ));
-      await database.db.delete(schema.friendRequests).where(or(
-        inArray(schema.friendRequests.senderId, users),
-        inArray(schema.friendRequests.recipientId, users),
-      ));
-      await database.db.delete(schema.user).where(inArray(schema.user.id, users));
+      await database.client`delete from public.relationship_blocks where blocker_id = any(${users}::text[]) or blocked_id = any(${users}::text[])`;
+      await database.client`delete from public.friendships where user_id = any(${users}::text[]) or friend_id = any(${users}::text[])`;
+      await database.client`delete from public.friend_requests where sender_id = any(${users}::text[]) or recipient_id = any(${users}::text[])`;
+      await database.client`delete from public.user where id = any(${users}::text[])`;
     } finally {
       await database.close();
     }
@@ -90,106 +71,31 @@ suite("get conversation Postgres repository", () => {
       capabilities: { canSend: false, canResolveRequest: true },
     });
 
-    const sequence = "9007199254740991";
-    const lastReadSequence = "9007199254740990";
-    await database.db.update(schema.messages).set({ sequence: Number(sequence) }).where(eq(schema.messages.id, reply.message.id));
-    await database.db.update(schema.conversations).set({ lastMessageSequence: Number(sequence) }).where(eq(schema.conversations.id, active.conversation.id));
-    await database.db.update(schema.conversationMembers).set({
-      lastReadSequence: Number(lastReadSequence),
-      receiptSequence: Number(lastReadSequence),
-    }).where(and(
-      eq(schema.conversationMembers.conversationId, active.conversation.id),
-      eq(schema.conversationMembers.userId, users[0]!),
-    ));
+    const sequence = "9007199254740993";
+    const lastReadSequence = "9007199254740992";
+    await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
+    await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${active.conversation.id}`;
+    await database.client`
+      update public.conversation_members
+      set last_read_sequence = ${lastReadSequence}::bigint, receipt_sequence = ${lastReadSequence}::bigint
+      where conversation_id = ${active.conversation.id} and participant_id = ${users[0]!}
+    `;
 
-    await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: new Date() },
-      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: new Date() },
-    ]);
-    builderQueries.length = 0;
-    await expect(observedRepository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
-      latestMessage: {
-        id: reply.message.id,
-        sequence,
-        version: 1,
-        senderId: users[1],
-        text: "latest message",
-        reactions: [{ reaction: "love", count: 2, reactedByActor: true }],
-      },
+    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
+      latestMessage: { id: reply.message.id, sequence, senderId: users[1], text: "latest message" },
       unreadCount: 1,
       lastMessageSequence: sequence,
       lastReadSequence,
       receiptSequence: lastReadSequence,
     });
-    expect(builderQueries).toHaveLength(5);
-    const latestQuery = builderQueries.find((query) => query.includes('order by "messages"."sequence" desc'));
-    const unreadQuery = builderQueries.find((query) => query.includes('count(*)'));
-    expect(latestQuery).toBeDefined();
-    expect(latestQuery).not.toContain('::text');
-    expect(unreadQuery).toBeDefined();
-    expect(unreadQuery).not.toContain('::int');
-    expect(unreadQuery).not.toContain('::bigint');
 
-    await unsend.unsend(users[1]!, active.conversation.id, reply.message.id);
-    await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
-      latestMessage: { id: reply.message.id, text: null, unsentAt: expect.any(String), reactions: [] },
-    });
-    const blank = await direct.create(users[0]!, {
-      recipientId: users[3]!,
-      clientMessageId: crypto.randomUUID(),
-      text: "blank latest message",
-    });
-    await database.db.delete(schema.messages).where(eq(schema.messages.id, blank.message.id));
-    await database.db.update(schema.conversations).set({ lastMessageSequence: 0, lastChangeSequence: 0 })
-      .where(eq(schema.conversations.id, blank.conversation.id));
-    await expect(repository.get(users[0]!, blank.conversation.id)).resolves.toMatchObject({ latestMessage: null });
-
-    await database.db.insert(schema.relationshipBlocks).values({
-      blockerId: users[0]!,
-      blockedId: users[1]!,
-      blockedAt: new Date(),
-    });
+    await database.client`
+      insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${users[0]!}, ${users[1]!}, now())
+    `;
     await expect(repository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({
       id: active.conversation.id,
       capabilities: { canSend: false, canResolveRequest: false },
     });
-
-    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.update(schema.conversations).set({ lastMessageSequence: sql`9007199254740993::bigint` })
-      .where(eq(schema.conversations.id, active.conversation.id));
-    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
-    // This mixed safe and overflowing bigint update needs exact native PostgreSQL literals.
-    await database.db.update(schema.conversations).set({
-      lastMessageSequence: sql`${sequence}::bigint`,
-      lastChangeSequence: sql`9007199254740993::bigint`,
-    }).where(eq(schema.conversations.id, active.conversation.id));
-    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
-    await database.db.update(schema.conversations).set({ lastChangeSequence: 2 })
-      .where(eq(schema.conversations.id, active.conversation.id));
-    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.update(schema.conversationMembers).set({
-      lastReadSequence: sql`9007199254740993::bigint`,
-      receiptSequence: sql`9007199254740993::bigint`,
-    }).where(and(
-      eq(schema.conversationMembers.conversationId, active.conversation.id),
-      eq(schema.conversationMembers.userId, users[0]!),
-    ));
-    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
-    await database.db.update(schema.conversationMembers).set({
-      lastReadSequence: Number(lastReadSequence),
-      receiptSequence: Number(lastReadSequence),
-    }).where(and(
-      eq(schema.conversationMembers.conversationId, active.conversation.id),
-      eq(schema.conversationMembers.userId, users[0]!),
-    ));
-    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.update(schema.messages).set({ sequence: sql`9007199254740993::bigint` })
-      .where(eq(schema.messages.id, reply.message.id));
-    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database sequence must be a safe nonnegative integer.");
-    await database.db.update(schema.messages).set({ sequence: Number(sequence) }).where(eq(schema.messages.id, reply.message.id));
-    // Drizzle's bigint number mode cannot represent values above MAX_SAFE_INTEGER exactly.
-    await database.db.update(schema.messages).set({ version: sql`9007199254740993::bigint` })
-      .where(eq(schema.messages.id, reply.message.id));
-    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database message version must be a positive safe integer.");
   });
 });

@@ -96,14 +96,35 @@ function assertSameHashes(before: Map<string, string>, after: Map<string, string
   }
 }
 
+const publishedMigrationBase = "d6704a17403f31c09e78cb2a04d148f33bae8eb3";
+
+async function ensurePublishedBaseFilesAreByteIdentical(base: string): Promise<void> {
+  const files = (await run("git", ["ls-tree", "-r", "--name-only", base, "--", "packages/db/migrations"]))
+    .trim()
+    .split("\n")
+    .filter((file) => file.endsWith(".sql") || /\/meta\/\d{4}_snapshot\.json$/.test(file));
+
+  for (const file of files) {
+    const expected = await run("git", ["show", `${base}:${file}`]);
+    const actual = await readFile(repoPath(file), "utf8");
+    if (actual !== expected) {
+      fail(`Published migration file must be byte-identical to ${base}: ${file}`);
+    }
+  }
+}
+
 async function ensureHistoryIsAdditive(): Promise<void> {
-  const base = process.env.MIGRATION_BASE_REF ?? "origin/main";
+  // The candidate must compare against the reviewed main commit, not a moving
+  // remote ref or the current HEAD.
+  const base = process.env.MIGRATION_BASE_REF ?? publishedMigrationBase;
 
   try {
     await run("git", ["rev-parse", "--verify", base]);
   } catch {
     return;
   }
+
+  await ensurePublishedBaseFilesAreByteIdentical(base);
 
   const diff = await run("git", ["diff", "--name-status", `${base}...HEAD`, "--", "packages/db/migrations"]);
   for (const line of diff.trim().split("\n").filter(Boolean)) {

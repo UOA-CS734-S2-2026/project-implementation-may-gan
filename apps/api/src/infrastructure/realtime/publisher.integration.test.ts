@@ -1,8 +1,8 @@
-import { createDayliDatabase, schema } from "@dayli/db";
-import { and, eq, inArray, or } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createDayliDatabase } from "@dayli/db";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { OutboxJob } from "../jobs/outbox-store";
-import { canPublishCurrentChange } from "./publisher";
+import { canPublishCurrentChange, createDurableObjectRealtimePublisher } from "./publisher";
+import { createRealtimeDeliveryAuthorizer } from "../jobs/messaging-delivery-runtime";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -18,7 +18,7 @@ suite("Postgres realtime publisher authorization", () => {
     bob: `realtime-publisher-b-${crypto.randomUUID()}`,
     conversation: `realtime-publisher-c-${crypto.randomUUID()}`,
   };
-  const createdAt = new Date();
+  const createdAt = new Date().toISOString();
 
   function job(row: { id: string; recipientId: string; changeSequence: number; leaseToken: string }): OutboxJob {
     return {
@@ -38,64 +38,37 @@ suite("Postgres realtime publisher authorization", () => {
   async function insertChange(input: { sequence: number; senderId?: string; memberId?: string }): Promise<void> {
     const messageId = input.senderId ? `realtime-publisher-message-${crypto.randomUUID()}` : null;
     if (messageId) {
-      await database.db.insert(schema.messages).values({
-        id: messageId, conversationId: ids.conversation, sequence: input.sequence, senderId: input.senderId!,
-        clientMessageId: `client-${messageId}`, requestFingerprint: `fingerprint-${messageId}`, body: "body", createdAt,
-      });
+      await database.client`insert into public.messages (id, conversation_id, sequence, sender_participant_id, client_message_id, request_fingerprint, body, created_at) values (${messageId}, ${ids.conversation}, ${input.sequence}, ${input.senderId!}, ${`client-${messageId}`}, ${`fingerprint-${messageId}`}, 'body', ${createdAt})`;
     }
-    await database.db.insert(schema.conversationChanges).values({
-      conversationId: ids.conversation, changeSequence: input.sequence, kind: "realtime.test", messageId,
-      memberId: input.memberId ?? null, createdAt,
-    });
+    await database.client`insert into public.conversation_changes (conversation_id, change_sequence, kind, message_id, member_participant_id, created_at) values (${ids.conversation}, ${input.sequence}, 'realtime.test', ${messageId}, ${input.memberId ?? null}, ${createdAt})`;
   }
 
   async function insertLeasedJob(input: { recipientId: string; changeSequence: number; leaseToken?: string; leaseExpiresAt?: Date }): Promise<OutboxJob> {
     const id = `realtime-publisher-job-${crypto.randomUUID()}`;
     const leaseToken = input.leaseToken ?? `lease-${crypto.randomUUID()}`;
     const leaseExpiresAt = input.leaseExpiresAt ?? new Date(Date.now() + 60_000);
-    await database.db.insert(schema.messagingOutbox).values({
-      id, eventId: crypto.randomUUID(), recipientId: input.recipientId, conversationId: ids.conversation,
-      changeSequence: input.changeSequence, channel: "realtime", status: "leased", attempts: 1,
-      availableAt: createdAt, leaseToken, leaseExpiresAt, createdAt,
-    });
+    await database.client`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, lease_token, lease_expires_at, created_at) values (${id}, ${crypto.randomUUID()}, ${input.recipientId}, ${ids.conversation}, ${input.changeSequence}, 'realtime', 'leased', 1, ${createdAt}, ${leaseToken}, ${leaseExpiresAt.toISOString()}, ${createdAt})`;
     return job({ id, recipientId: input.recipientId, changeSequence: input.changeSequence, leaseToken });
   }
 
   beforeAll(async () => {
-    await database.db.insert(schema.user).values([
-      { id: ids.alice, name: ids.alice, email: `${ids.alice}@example.test` },
-      { id: ids.bob, name: ids.bob, email: `${ids.bob}@example.test` },
-    ]);
-    await database.db.insert(schema.conversations).values({
-      id: ids.conversation, kind: "direct", userLowId: ids.alice, userHighId: ids.bob, initiatorId: ids.alice,
-      requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: createdAt, createdAt, updatedAt: createdAt,
-    });
-    await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-    ]);
+    await database.client`insert into public."user" (id, name, email) values (${ids.alice}, ${ids.alice}, ${ids.alice + "@example.test"}), (${ids.bob}, ${ids.bob}, ${ids.bob + "@example.test"})`;
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${ids.conversation}, 'direct', ${ids.alice}, ${ids.bob}, ${ids.alice}, 'active', 0, 0, ${createdAt}, ${createdAt}, ${createdAt})`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
   });
 
-  const isTestUserBlock = or(
-    inArray(schema.relationshipBlocks.blockerId, [ids.alice, ids.bob]),
-    inArray(schema.relationshipBlocks.blockedId, [ids.alice, ids.bob]),
-  );
-
   afterEach(async () => {
-    await database.db.delete(schema.relationshipBlocks).where(isTestUserBlock);
-    await database.db.delete(schema.messagingOutbox).where(eq(schema.messagingOutbox.conversationId, ids.conversation));
-    await database.db.delete(schema.conversationChanges).where(eq(schema.conversationChanges.conversationId, ids.conversation));
-    await database.db.delete(schema.messages).where(eq(schema.messages.conversationId, ids.conversation));
-    await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-    ]).onConflictDoNothing({ target: [schema.conversationMembers.conversationId, schema.conversationMembers.userId] });
+    await database.client`delete from public.relationship_blocks where blocker_id in (${ids.alice}, ${ids.bob}) or blocked_id in (${ids.alice}, ${ids.bob})`;
+    await database.client`delete from public.messaging_outbox where conversation_id = ${ids.conversation}`;
+    await database.client`delete from public.conversation_changes where conversation_id = ${ids.conversation}`;
+    await database.client`delete from public.messages where conversation_id = ${ids.conversation}`;
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.alice}, 0, 0, ${createdAt}, ${createdAt}), (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt}) on conflict (conversation_id, participant_id) do nothing`;
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(schema.relationshipBlocks).where(isTestUserBlock);
-      await database.db.delete(schema.user).where(inArray(schema.user.id, [ids.alice, ids.bob]));
+      await database.client`delete from public.relationship_blocks where blocker_id in (${ids.alice}, ${ids.bob}) or blocked_id in (${ids.alice}, ${ids.bob})`;
+      await database.client`delete from public."user" where id in (${ids.alice}, ${ids.bob})`;
     } finally {
       await database.close();
     }
@@ -112,7 +85,7 @@ suite("Postgres realtime publisher authorization", () => {
     await insertChange({ sequence: 1, senderId: ids.alice });
     const actor = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
     const peer = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
-    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.alice}, ${ids.bob}, ${createdAt})`;
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, actor)).resolves.toBe(true);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, peer)).resolves.toBe(false);
@@ -122,7 +95,7 @@ suite("Postgres realtime publisher authorization", () => {
     await insertChange({ sequence: 1, memberId: ids.alice });
     const actor = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
     const peer = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
-    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.alice}, ${ids.bob}, ${createdAt})`;
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, actor)).resolves.toBe(true);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, peer)).resolves.toBe(false);
@@ -131,10 +104,7 @@ suite("Postgres realtime publisher authorization", () => {
   it("rejects a recipient whose membership was removed", async () => {
     await insertChange({ sequence: 1, senderId: ids.alice });
     const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
-    await database.db.delete(schema.conversationMembers).where(and(
-      eq(schema.conversationMembers.conversationId, ids.conversation),
-      eq(schema.conversationMembers.userId, ids.bob),
-    ));
+    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and participant_id = ${ids.bob}`;
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
   });
@@ -144,5 +114,43 @@ suite("Postgres realtime publisher authorization", () => {
     const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, { ...recipient, recipientId: ids.alice })).resolves.toBe(false);
+  });
+
+  it("composes leased-outbox authorization with recipient policy before publishing", async () => {
+    const published = vi.fn(async () => undefined);
+    const namespace = { idFromName: (userId: string) => userId, get: () => ({ publish: published, revokeSession: async () => undefined }) } as unknown as DurableObjectNamespace;
+    const hyperdrive = { connectionString: connectionString! };
+    const ordinaryPolicy = { resolve: async () => ({ restriction: "active" as const, allowed: new Set(["ordinary" as const]) }) };
+    const publisher = createDurableObjectRealtimePublisher(namespace, hyperdrive, createRealtimeDeliveryAuthorizer(hyperdrive, ordinaryPolicy));
+
+    await insertChange({ sequence: 2, senderId: ids.alice });
+    const blocked = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 2 });
+    await database.client`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at) values (${ids.alice}, ${ids.bob}, ${createdAt})`;
+    await publisher.deliver(blocked);
+    expect(published).not.toHaveBeenCalled();
+    await database.client`delete from public.relationship_blocks where blocker_id = ${ids.alice} and blocked_id = ${ids.bob}`;
+
+    await insertChange({ sequence: 3, senderId: ids.alice });
+    const removedMember = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 3 });
+    await database.client`delete from public.conversation_members where conversation_id = ${ids.conversation} and participant_id = ${ids.bob}`;
+    await publisher.deliver(removedMember);
+    expect(published).not.toHaveBeenCalled();
+    await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${ids.conversation}, ${ids.bob}, 0, 0, ${createdAt}, ${createdAt})`;
+
+    await insertChange({ sequence: 4, senderId: ids.alice });
+    const stale = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 4, leaseExpiresAt: new Date(Date.now() - 1_000) });
+    await publisher.deliver(stale);
+    expect(published).not.toHaveBeenCalled();
+
+    await insertChange({ sequence: 5, senderId: ids.alice });
+    const policyFailure = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 5 });
+    const failingPublisher = createDurableObjectRealtimePublisher(namespace, hyperdrive, createRealtimeDeliveryAuthorizer(hyperdrive, { resolve: async () => { throw new Error("unavailable"); } }));
+    await failingPublisher.deliver(policyFailure);
+    expect(published).not.toHaveBeenCalled();
+
+    await insertChange({ sequence: 6, senderId: ids.alice });
+    const authorized = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 6 });
+    await expect(publisher.deliver(authorized)).resolves.toEqual({ ok: true });
+    expect(published).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { createDayliDatabase, schema, sql, type DayliDatabase } from "@dayli/db";
-import { eq, inArray } from "drizzle-orm";
+import { createDayliDatabase, type DayliDatabase } from "@dayli/db";
 import { createPostgresOutboxStore } from "./outbox-store";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
@@ -62,53 +61,27 @@ suite("Postgres outbox leasing", () => {
     conversation: `delivery-c-${crypto.randomUUID()}`,
   };
   const now = new Date("2026-09-28T00:00:00.000Z");
+  const nowIso = now.toISOString();
   const jobIds: string[] = [];
 
   async function insertJob(id = `delivery-j-${crypto.randomUUID()}`, availableAt = now, changeSequence = "1"): Promise<string> {
-    await database.db.insert(schema.messagingOutbox).values({
-      id,
-      eventId: crypto.randomUUID(),
-      recipientId: ids.high,
-      conversationId: ids.conversation,
-      // Keep this bigint exact: Drizzle's number mode cannot represent it safely.
-      changeSequence: changeSequence === "9007199254740993" ? sql`9007199254740993` : Number(changeSequence),
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt,
-      createdAt: now,
-    });
+    await database.client`insert into public.messaging_outbox (id, event_id, recipient_id, conversation_id, change_sequence, channel, status, attempts, available_at, created_at) values (${id}, ${crypto.randomUUID()}, ${ids.high}, ${ids.conversation}, ${changeSequence}, 'realtime', 'pending', 0, ${availableAt.toISOString()}, ${nowIso})`;
     jobIds.push(id);
     return id;
   }
 
   beforeAll(async () => {
-    await database.db.insert(schema.user).values([
-      { id: ids.low, name: ids.low, email: `${ids.low}@example.test` },
-      { id: ids.high, name: ids.high, email: `${ids.high}@example.test` },
-    ]);
-    await database.db.insert(schema.conversations).values({
-      id: ids.conversation,
-      kind: "direct",
-      userLowId: ids.low,
-      userHighId: ids.high,
-      initiatorId: ids.low,
-      requestState: "active",
-      lastMessageSequence: 0,
-      lastChangeSequence: 0,
-      lastActivityAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
+    await database.client`insert into public."user" (id, name, email) values (${ids.low}, ${ids.low}, ${ids.low + "@example.test"}), (${ids.high}, ${ids.high}, ${ids.high + "@example.test"})`;
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${ids.conversation}, 'direct', ${ids.low}, ${ids.high}, ${ids.low}, 'active', 0, 0, ${nowIso}, ${nowIso}, ${nowIso})`;
   });
 
   afterEach(async () => {
-    await database.db.delete(schema.messagingOutbox).where(inArray(schema.messagingOutbox.id, jobIds.splice(0)));
+    await database.client`delete from public.messaging_outbox where id = any(${jobIds.splice(0)}::text[])`;
   });
 
   afterAll(async () => {
     try {
-      await database.db.delete(schema.user).where(inArray(schema.user.id, [ids.low, ids.high]));
+      await database.client`delete from public."user" where id = any(${[ids.low, ids.high]}::text[])`;
     } finally { await database.close(); }
   });
 
@@ -173,13 +146,9 @@ suite("Postgres outbox leasing", () => {
     let claimPromise: Promise<Awaited<ReturnType<typeof claimingStore.claimDue>>> | undefined;
 
     try {
-      lockTransaction = lockingDatabase.db.transaction(async (transaction) => {
+      lockTransaction = lockingDatabase.client.begin(async (transaction) => {
         try {
-          const [row] = await transaction
-            .select({ id: schema.messagingOutbox.id })
-            .from(schema.messagingOutbox)
-            .where(eq(schema.messagingOutbox.id, lockedId))
-            .for("update");
+          const [row] = await transaction`select id from public.messaging_outbox where id = ${lockedId} for update`;
           expect(row?.id).toBe(lockedId);
           signalLocked();
           await commitGate;
@@ -278,17 +247,7 @@ suite("Postgres outbox leasing", () => {
     const [retry] = await store.claimDue({ now: retryAt, limit: 1, leaseForMs: 1_000, maxAttempts: 3, leaseToken: () => "retry" });
     expect(retry).toMatchObject({ id: failureId, attempts: 2, leaseToken: "retry" });
     await expect(store.reschedule(retry!, { availableAt: retryAt, failureCategory: "provider_rejected", terminal: true })).resolves.toBe(true);
-    const [record] = await database.db
-      .select({
-        status: schema.messagingOutbox.status,
-        attempts: schema.messagingOutbox.attempts,
-        failureCategory: schema.messagingOutbox.failureCategory,
-        leaseToken: schema.messagingOutbox.leaseToken,
-        leaseExpiresAt: schema.messagingOutbox.leaseExpiresAt,
-        deliveredAt: schema.messagingOutbox.deliveredAt,
-      })
-      .from(schema.messagingOutbox)
-      .where(eq(schema.messagingOutbox.id, failureId));
-    expect(record).toMatchObject({ status: "failed", attempts: 2, failureCategory: "provider_rejected", leaseToken: null, leaseExpiresAt: null, deliveredAt: null });
+    const [record] = await database.client`select status, attempts, failure_category, lease_token, lease_expires_at, delivered_at from public.messaging_outbox where id = ${failureId}`;
+    expect(record).toMatchObject({ status: "failed", attempts: "2", failure_category: "provider_rejected", lease_token: null, lease_expires_at: null, delivered_at: null });
   });
 });
