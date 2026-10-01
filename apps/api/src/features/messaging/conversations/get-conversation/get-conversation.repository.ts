@@ -36,7 +36,14 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         .limit(1);
       const [user] = participant?.userId
         ? await database
-          .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
+          .select({
+            name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})`,
+            pendingDeletion: sql<boolean>`exists(
+              select 1 from ${schema.accountLifecycles}
+              where ${schema.accountLifecycles.userId} = ${schema.user.id}
+                and ${schema.accountLifecycles.state} = 'pending_deletion'
+            )`,
+          })
           .from(schema.user)
           .where(eq(schema.user.id, participant.userId))
           .limit(1)
@@ -72,8 +79,8 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
       return projectConversationDto(database, {
         ...row,
         peer_id: peer,
-        peer_name: user?.name,
-        peer_deleted: participant?.state === "deleted",
+        peer_name: user?.pendingDeletion ? null : user?.name,
+        peer_deleted: participant?.state === "deleted" || user?.pendingDeletion === true,
         unread_count: unread?.count ?? 0,
         ...(latest ? messageProjection(latest) : {}),
       }, actorId);
