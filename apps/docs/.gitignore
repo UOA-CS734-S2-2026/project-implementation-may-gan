@@ -3,6 +3,7 @@
 
 # generated content
 .source
+/.open-next/
 
 # test & build
 /coverage
