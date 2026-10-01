@@ -535,7 +535,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(blocked?.status).toBe("requested");
   });
 
-  it("physically blocks claim behind the canonical user lock without a request-first deadlock", async () => {
+  it("revalidates a lifecycle generation transition while claim is physically blocked on the user lock", async () => {
     const userId = await createUser("claim-contention");
     const exportId = `export-contention-${crypto.randomUUID()}`;
     const coordinator = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
@@ -556,12 +556,49 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         if (!blocked) await new Promise((resolve) => setTimeout(resolve, 10));
       }
       expect(blocked).toBe(true);
+      await coordinator`update public.account_lifecycles set generation=1 where user_id=${userId}`;
       await coordinator.unsafe("commit");
       const claimed = await pending;
-      expect(claimed[0]?.id).toBe(exportId);
+      expect(claimed).toEqual([]);
+      const [request] = await migrator`select status, lifecycle_generation from public.data_export_requests where id=${exportId}`;
+      expect(request).toEqual({ status: "requested", lifecycle_generation: "0" });
     } finally {
       await Promise.allSettled([coordinator.unsafe("rollback"), coordinator.end({ timeout: 5 }), contender.end({ timeout: 5 })]);
     }
+  });
+
+  it("rejects publication when a blocked canonical lifecycle transition commits first", async () => {
+    const userId = await createUser("publish-transition"); const exportId = `export-publish-${crypto.randomUUID()}`; const lease = "publish".repeat(5);
+    const coordinator = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined }); const publisher = postgres(lifecycleWorkerConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`;
+    await app`insert into public.data_export_requests (id,user_id,lifecycle_generation,status,snapshot_cutoff_at,lease_token,lease_expires_at) values (${exportId},${userId},0,'building',now(),${lease},now()+interval '5 minutes')`;
+    const [reserved] = await lifecycleWorker`select public.dayli_export_reserve_object(${exportId},${lease}) as key`;
+    try {
+      await coordinator.unsafe("begin"); await coordinator`select 1 from public."user" where id=${userId} for update`;
+      const [{ pid: blocker }] = await coordinator`select pg_backend_pid()::int as pid`; const [{ pid }] = await publisher`select pg_backend_pid()::int as pid`;
+      const pending = publisher`select public.dayli_export_publish(${exportId},${lease},0,${reserved?.key},now()) as published`.then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked = false; for (let attempt = 0; attempt < 40 && !blocked; attempt += 1) { const [state] = await migrator`select ${blocker}=any(pg_blocking_pids(${pid})) as blocked`; blocked=state?.blocked===true; if (!blocked) await new Promise((resolve) => setTimeout(resolve,10)); }
+      expect(blocked).toBe(true);
+      await coordinator`update public.account_lifecycles set state='purging',request_id=${`purge-${crypto.randomUUID()}`},idempotency_key_digest=${"b".repeat(64)},generation=1,requested_at=now()-interval '14 days',cancel_until=now()-interval '7 days',purge_due_at=now(),purge_started_at=now() where user_id=${userId}`;
+      await coordinator.unsafe("commit"); const outcome = await pending; expect(outcome.ok).toBe(true); if (outcome.ok) expect(outcome.value).toEqual([{ published: false }]);
+      const [task] = await migrator`select archive_object_key from public.data_export_object_cleanup_tasks where id=${`export-attempt-${exportId}-${lease}`}`; expect(task?.archive_object_key).toBe(reserved?.key);
+    } finally { await Promise.allSettled([coordinator.unsafe("rollback"),coordinator.end({timeout:5}),publisher.end({timeout:5})]); }
+  });
+
+  it("publication first is revoked by the actual purge cancellation procedure", async () => {
+    const userId = await createUser("publish-first"); const exportId = `export-publish-first-${crypto.randomUUID()}`; const lease = "first".repeat(8);
+    const publisher = postgres(lifecycleWorkerConnection, { max: 1, prepare: false, onnotice: () => undefined }); const transition = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`; await app`insert into public.data_export_requests (id,user_id,lifecycle_generation,status,snapshot_cutoff_at,lease_token,lease_expires_at) values (${exportId},${userId},0,'building',now(),${lease},now()+interval '5 minutes')`;
+    const [reserved] = await lifecycleWorker`select public.dayli_export_reserve_object(${exportId},${lease}) as key`;
+    try {
+      await publisher.unsafe("begin"); await publisher`select public.dayli_export_publish(${exportId},${lease},0,${reserved?.key},now()) as published`;
+      await transition.unsafe("begin"); const [{ pid: blocker }] = await publisher`select pg_backend_pid()::int as pid`; const [{ pid }] = await transition`select pg_backend_pid()::int as pid`;
+      const pending = transition`update public.account_lifecycles set state='purging',request_id=${`purge-${crypto.randomUUID()}`},idempotency_key_digest=${"c".repeat(64)},generation=1,requested_at=now()-interval '14 days',cancel_until=now()-interval '7 days',purge_due_at=now(),purge_started_at=now() where user_id=${userId}`.then((value) => ({ ok: true as const, value }), (error: unknown) => ({ ok: false as const, error }));
+      let blocked=false; for (let attempt=0;attempt<40&&!blocked;attempt+=1) { const [state]=await migrator`select ${blocker}=any(pg_blocking_pids(${pid})) as blocked`; blocked=state?.blocked===true; if(!blocked) await new Promise((resolve)=>setTimeout(resolve,10)); }
+      expect(blocked).toBe(true); await publisher.unsafe("commit"); const transitionOutcome=await pending; expect(transitionOutcome.ok).toBe(true); await transition.unsafe("commit");
+      await expect(lifecycleWorker`select public.dayli_export_cancel_for_purge(${userId}) as cancelled`).resolves.toEqual([{ cancelled: 1 }]);
+      const [expired]=await migrator`select status,archive_cleanup_task_id from public.data_export_requests where id=${exportId}`; expect(expired).toEqual({status:"expired",archive_cleanup_task_id:`export-cleanup-${exportId}`});
+    } finally { await Promise.allSettled([publisher.unsafe("rollback"),transition.unsafe("rollback"),publisher.end({timeout:5}),transition.end({timeout:5})]); }
   });
 
   it("enforces SQL record and page byte budgets while cursors retain every valid journal", async () => {
