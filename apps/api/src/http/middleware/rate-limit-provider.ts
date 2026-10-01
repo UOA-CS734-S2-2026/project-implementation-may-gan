@@ -18,8 +18,9 @@ export interface CloudflareRateLimitProviderOptions {
 
 /**
  * Cloudflare's native limiter is an infrastructure adapter. Policy code only
- * chooses a named bucket and key. Missing bindings fail closed, while a live
- * native backend error fails open and emits an identity-free alert.
+ * chooses a named bucket and key. Missing bindings and backend failures both
+ * return unavailable, allowing ingress and authenticated-route policy to fail
+ * closed without exposing a limiter error, key, credential, or request data.
  */
 export function createCloudflareRateLimitProvider(options: CloudflareRateLimitProviderOptions): RateLimitProvider {
   return {
@@ -33,7 +34,7 @@ export function createCloudflareRateLimitProvider(options: CloudflareRateLimitPr
         return (await limiter.limit({ key })).success ? "allowed" : "denied";
       } catch {
         options.onOperationalAlert?.("rate_limit_backend_unavailable");
-        return "allowed";
+        return "unavailable";
       }
     },
   };

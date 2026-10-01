@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../app";
 
 const origin = "https://web.dayli.test";
@@ -88,9 +88,87 @@ describe("application CORS", () => {
     expect(response.headers.get("vary")).toContain("Origin");
   });
 
-  it("does not grant CORS to an untrusted origin", async () => {
-    const response = await app().request("/api/v1/posting-days/current", { headers: { origin: "https://evil.test" } });
+  it("does not grant CORS to an untrusted safe request", async () => {
+    const response = await app().request("/api/v1/health", { headers: { origin: "https://evil.test" } });
 
+    expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it.each([
+    ["cross-site", "https://evil.test"],
+    ["sibling-site", "https://other.dayli.test"],
+    ["malformed", "not an origin"],
+    ["opaque", "null"],
+  ])("rejects a %s actual form POST before a cookie-authenticated relationship service runs", async (_name, requestOrigin) => {
+    const acceptRequest = vi.fn(async () => ({ userId: "user-2", status: "friends" as const, incomingRequest: null, outgoingRequest: null }));
+    const api = createApp({
+      trustedOrigins: [origin],
+      relationships: {
+        resolveSession: async () => ({ userId: "user-1" }),
+        service: { acceptRequest } as never,
+      },
+    });
+
+    const response = await api.request("/api/v1/relationships/requests/request-1/accept", {
+      method: "POST",
+      headers: {
+        origin: requestOrigin,
+        cookie: "better-auth.session_token=opaque",
+        authorization: "Bearer native-signed-token",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "ignored=form-body",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    expect(acceptRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects an origin-less browser session cookie before a relationship service runs", async () => {
+    const acceptRequest = vi.fn();
+    const api = createApp({
+      trustedOrigins: [origin],
+      relationships: {
+        resolveSession: async () => ({ userId: "user-1" }),
+        service: { acceptRequest } as never,
+      },
+    });
+
+    const response = await api.request("/api/v1/relationships/requests/request-1/accept", {
+      method: "POST",
+      headers: { cookie: "__Secure-better-auth.session_token=opaque" },
+    });
+
+    expect(response.status).toBe(403);
+    expect(acceptRequest).not.toHaveBeenCalled();
+  });
+
+  it("allows a trusted browser mutation and an origin-less native bearer mutation", async () => {
+    const acceptRequest = vi.fn(async () => ({ userId: "user-2", status: "friends" as const, incomingRequest: null, outgoingRequest: null }));
+    const api = createApp({
+      trustedOrigins: [origin],
+      relationships: {
+        resolveSession: async () => ({ userId: "user-1" }),
+        service: { acceptRequest } as never,
+      },
+    });
+
+    const browser = await api.request("/api/v1/relationships/requests/request-1/accept", {
+      method: "POST",
+      headers: { origin, cookie: "better-auth.session_token=opaque" },
+    });
+    const native = await api.request("/api/v1/relationships/requests/request-2/accept", {
+      method: "POST",
+      headers: { authorization: "Bearer native-signed-token" },
+    });
+
+    expect(browser.status).toBe(200);
+    expect(browser.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(native.status).toBe(200);
+    expect(native.headers.get("access-control-allow-origin")).toBeNull();
+    expect(acceptRequest).toHaveBeenNthCalledWith(1, "user-1", "request-1");
+    expect(acceptRequest).toHaveBeenNthCalledWith(2, "user-1", "request-2");
   });
 });

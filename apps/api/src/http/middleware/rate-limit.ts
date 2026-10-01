@@ -83,7 +83,9 @@ function key(scope: string, value: string) {
 
 /**
  * Enforce actor buckets after Better Auth established a server-verified identity.
- * A missing production binding fails closed. A transient native limiter outage fails open.
+ * Missing bindings and transient native limiter failures return unavailable, so
+ * authenticated reads, writes, and action buckets fail closed with 503. A
+ * successful exhausted bucket remains the distinct 429 response.
  */
 export function createActorRateLimiter(dependencies: ApiRateLimitDependencies): ActorRateLimiter {
   return {
@@ -105,8 +107,9 @@ export function createActorRateLimiter(dependencies: ApiRateLimitDependencies): 
 /**
  * Apply a generous shared-IP guard before authentication performs database work.
  * CF-Connecting-IP is supplied by Cloudflare at the Worker ingress, never from a
- * client-controlled forwarding header. Requests without it fail closed in deployed
- * configurations rather than sharing an anonymous bucket.
+ * client-controlled forwarding header. Missing bindings, backend failures, and
+ * requests without an IP all fail closed with 503, including /api/auth routes,
+ * rather than sharing an anonymous bucket or calling the auth provider.
  */
 export function createIngressRateLimitMiddleware<E extends Env>(dependencies: ApiRateLimitDependencies): MiddlewareHandler<E> {
   return async (context, next) => {

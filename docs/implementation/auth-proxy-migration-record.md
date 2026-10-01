@@ -354,6 +354,32 @@ This record deliberately omits raw session cookies, passwords, OAuth codes, conn
 | [#213](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/213) | Merged | Local workerd entrypoint proof in CI |
 | [#214](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/214) | Merged | Automatic forward staging migrations |
 
+## 19. Security audit follow-up, 2026-10-01
+
+A follow-up review confirmed two application-layer findings and fixed them locally. This section records the boundary of those fixes. It does not close the outstanding deployed provenance work.
+
+### Fixed P1: actual cross-origin application mutations
+
+Application CORS previously rejected untrusted preflights but allowed actual requests to continue to routing without CORS response headers. That still permitted a simple cross-origin form submission to reach a cookie-authenticated, bodyless relationship mutation. A sibling site under the same site could send the victim's cookie under the cookie's SameSite rules.
+
+The `/api/v1` middleware now reuses the strict auth-origin policy for actual unsafe methods. A non-empty untrusted `Origin`, including `null` or a malformed value, receives `403` before authentication or route services run. An unsafe request carrying a Better Auth session cookie must also carry an origin, so an origin-less cookie request is rejected. These rules apply even if an `Authorization` header accompanies a cookie, so mixed credentials cannot downgrade the check. Trusted web origins continue to work. Origin-less native bearer requests remain supported. Safe methods remain routable, but receive no CORS grant for an untrusted origin.
+
+Focused route tests cover a real bodyless relationship action from cross-site and sibling origins, malformed and `null` origins, an origin-less session cookie, trusted browser mutations, origin-less native bearer mutations, preflight handling, and an untrusted safe request. The mutation service is asserted not to run for rejected requests.
+
+### Fixed P2: Cloudflare native limiter outages
+
+The Cloudflare limiter adapter previously converted every thrown binding error into `allowed`. Missing bindings were already distinct, but an outage silently disabled ingress, auth, read, write, and action protection.
+
+The adapter now returns `unavailable` for both missing bindings and caught backend failures. Ingress, including `/api/auth`, fails closed with `503` before the auth provider runs. After a server-verified identity, authenticated reads, writes, and action-specific buckets also fail closed with `503` when their rate-limit policy cannot be evaluated. An exhausted live bucket remains `429`, and a successful live bucket remains allowed. The operational alert is the fixed `rate_limit_backend_unavailable` label only. It deliberately excludes limiter keys, IP addresses, credentials, request data, and caught exception text.
+
+Focused tests distinguish missing, unavailable, denied, and allowed decisions. They also prove an auth ingress outage does not call the auth provider and assert that alert arguments do not contain test actor or credential material.
+
+### Unresolved P1: Worker source identity
+
+This remains an external Cloudflare verification gate, not a confirmed local fix. Current Cloudflare documentation says that a same-zone Worker subrequest derives `CF-Connecting-IP` from `x-real-ip`, which the caller Worker can alter. It also says a direct browser request has `x-real-ip` stripped. The observed normal direct-browser staging traffic contains both `cf-connecting-ip` and `x-real-ip`, so rejecting `x-real-ip` would break normal users and is not a valid mitigation. Service-binding documentation establishes private invocation, but does not provide a documented origin-authentication guarantee for the source context carried by this application.
+
+No source-header filter or speculative Worker provenance change was deployed. The smallest next step needs owner approval for a no-state staging diagnostic probe: compare sanitized booleans and short-lived aggregate buckets for a normal direct browser request, a controlled same-zone Worker subrequest, and the named service-binding request. It must not retain raw IPs, cookies, authorization values, request IDs, or copied headers, and it must not make account, database, deployment, secret, or settings changes without separate authorization. The probe must establish whether a Cloudflare-owned request signal can distinguish the paths before any source-identity enforcement is designed.
+
 ## References for platform assumptions
 
 - [Cloudflare visitor-IP behavior in Worker subrequests](https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-connecting-ip-in-worker-subrequests)
