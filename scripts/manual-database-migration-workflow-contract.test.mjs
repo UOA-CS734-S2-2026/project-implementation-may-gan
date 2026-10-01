@@ -20,6 +20,8 @@ test("the hosted database migration workflow remains manual, immutable, and prot
 
   requireMatch(/- uses: actions\/checkout@v4\n {8}with:\n {10}ref: \$\{\{ github\.sha \}\}\n {10}fetch-depth: 0/, "hosted migrations must check out the immutable dispatched SHA with full history");
   requireMatch(/CONFIRM_PRODUCTION_MIGRATION: \$\{\{ inputs\.target == 'production' && 'MIGRATE production' \|\| '' \}\}\n {6}CONFIRM_NEON_BACKUP_CHECKED: \$\{\{ inputs\.target == 'production' && inputs\.production_backup_checked == 'checked' && 'true' \|\| '' \}\}/, "production confirmation and backup requirements must remain intact");
+  requireMatch(/production_messaging_0023_size_cap_bytes:\n {8}description: Optional reviewed 0023 five-table byte cap, production only, minimum 16777216\n {8}required: false\n {8}type: string/, "production must make any 0023 size-cap override explicit");
+  requireMatch(/MESSAGING_0023_SIZE_CAP_BYTES: \$\{\{ inputs\.target == 'production' && inputs\.production_messaging_0023_size_cap_bytes \|\| '' \}\}/, "the explicit production-only 0023 cap must reach the migrator");
   requireMatch(/- name: Require staging success before production\n {8}if: inputs\.target == 'production'/, "production must require a prior staging migration");
   requireMatch(/- name: Write sanitized evidence[\s\S]*?name: database-migration-evidence-\$\{\{ inputs\.target \}\}-\$\{\{ github\.sha \}\}/, "hosted migrations must retain sanitized per-commit evidence");
 });

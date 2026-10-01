@@ -1,0 +1,6 @@
+reason: The migration must replace five existing trigger functions and add the exact participant constraints as one atomic contract.
+affected_data_and_clients: A failure rolls back the functions, repairs, checks, and unique constraints together.
+rollout_sequence: Apply only through the protected transactional migrator after table-size review.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a forward-only migration after investigating an unexpected failure.
+reviewer: Database and messaging reviewers must approve the migration.

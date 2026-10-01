@@ -20,7 +20,17 @@ Migration `0021_messaging_participant_compatibility` adds nullable participant r
 
 The user-reference columns, their unique constraints, and their cascading foreign keys remain. The outbox, push devices, and socket tickets also remain user-scoped. This migration does not enable physical account deletion, alter lifecycle procedures, or make a message survive a physical user delete. Today, the existing user foreign keys still cascade messaging rows if another system deletes a user.
 
-The participant API can only read and write these references after staging has applied both `0020` and `0021`, reviewers have checked the migration evidence, and the old API has passed its compatibility checks. A later contract migration may remove legacy cascading references only after a separate deletion review proves retained history, inactive-peer projection, delivery authorization, and rollback behavior.
+The participant API can only read and write these references after staging has applied the readiness migration below, reviewers have checked the migration evidence, and the old API has passed its compatibility checks. A later contract migration may remove legacy cascading references only after a separate deletion review proves retained history, inactive-peer projection, delivery authorization, and rollback behavior.
+
+## Participant-key readiness
+
+Migration `0023_polite_sway` replaces the `0021` trigger functions without changing their names. Old Worker inserts still derive participant keys from user IDs. An unrelated old Worker update keeps the existing participant key. An explicit participant key that does not match its active legacy user fails with PostgreSQL constraint error `23514`. The migration repairs only null participant keys, validates participant presence, direct-pair order, and initiator membership, then adds participant-key uniqueness for conversations, memberships, messages, and reactions.
+
+The migration takes `ACCESS EXCLUSIVE` on `conversations` first, then takes `ACCESS EXCLUSIVE NOWAIT` locks on the dependent messaging tables before replacing triggers or repairing rows. The conversation gate blocks reads and writes. That outage is intentional: it prevents the former cross-table deadlock with a Worker that locks a conversation, writes a message or reaction, then updates the conversation. A lower-table-first Worker makes a dependent `NOWAIT` lock fail with `55P03`, and the transaction rolls back for a retry.
+
+The unique constraints build transactional indexes because the manual migrator cannot issue `CREATE INDEX CONCURRENTLY`. Before a forward staging apply with `0023` pending, the protected workflow reads `pg_total_relation_size` for `conversations`, `conversation_members`, `messages`, `message_reactions`, and `conversation_changes` in a read-only transaction. It fails closed if the migration ledger, roles, or tables are unknown, or if their combined size exceeds 16 MiB. `0023` repeats the same check after it holds all five final exclusive locks and before it repairs data or builds constraints. That closes the gap between the read-only preflight and the migration. The Actions output reports only size categories and the fixed cap, not byte counts. That cap is deliberately conservative: this first staging proof limits the duration of the required full conversation gate and four transactional unique-index builds to a small, measurable data set. Staging cannot override it. Production remains manual and must separately measure all five tables, confirm the five minute statement timeout and five second lock timeout, and obtain its existing approvals. Its optional `production_messaging_0023_size_cap_bytes` input is an explicit reviewed five-table cap that cannot be below 16 MiB. This migration has a bounded staging read outage and may fail cleanly for retry. Do not claim zero downtime from it.
+
+`0023` does not detach user foreign keys, change primary keys, enable a purge procedure, or grant either runtime role user deletion. `app` remains read-only on `messaging_participants`, and `lifecycle_worker` remains denied.
 
 A later inspection query may identify conversations with no active participant. It must remain read-only. It cannot authorize deletion, and it cannot remove a conversation while another participant survives.
 
@@ -28,7 +38,7 @@ Message bodies remain identifying content. Retaining them for the surviving part
 
 ## Hosted rollout
 
-1. Review and merge this schema-only PR.
-2. Run the already approved `0020` staging migration only from the reviewed `main` commit after merge and preflight. Do not dispatch it from this worktree or use a direct hosted connection.
-3. Review sanitized migration evidence and test the unchanged messaging API through Hyperdrive as `app`.
-4. Open the later runtime cutover only after those checks pass. Production migration needs its own approval.
+1. Review the 16 MiB cap and the intentional staging read outage before merging this schema-only PR.
+2. After green `main` CI, let the protected coordinated staging release capture the immutable commit. Its forward path checks the target and reviewed plan, then runs the read-only 0023 size preflight before `db:migrate`; the migration repeats the cap check under its final locks. Do not use a direct hosted connection or a worktree dispatch to bypass it.
+3. Review the sanitized staging migration evidence and test the unchanged messaging API through Hyperdrive as `app`.
+4. Open the later runtime cutover only after those checks pass. Production remains a separately approved manual migration with its existing confirmations and a recorded five-table size measurement.

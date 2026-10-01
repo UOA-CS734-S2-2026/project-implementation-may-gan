@@ -1,0 +1,6 @@
+reason: PostgreSQL disallows concurrent index creation inside the transactional Drizzle migrator, while UNIQUE constraints require indexes.
+affected_data_and_clients: The lock timeout is five seconds and the statement timeout is five minutes. Old user-ID writers wait or the migration aborts atomically.
+rollout_sequence: Measure conversations, conversation_members, messages, and message_reactions before production. Reschedule if the bounded transaction is unsafe for their volume.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: If the lock or statement timeout expires, investigate size and use a reviewed forward-only operational migration.
+reviewer: Database, messaging, and privacy reviewers must approve the size evidence.

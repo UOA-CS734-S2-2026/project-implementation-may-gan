@@ -1,0 +1,6 @@
+reason: This broad suppression is retained for the migration checker, but this migration adds no foreign key.
+affected_data_and_clients: Existing participant and legacy foreign keys remain unchanged.
+rollout_sequence: Apply schema before any participant runtime.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Do not alter existing foreign keys in this migration.
+reviewer: Database and privacy reviewers must approve the migration.
