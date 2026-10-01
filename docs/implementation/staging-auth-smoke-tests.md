@@ -1,6 +1,6 @@
 # Staging authentication smoke tests
 
-Status: implemented locally, awaiting the owner-approved first manual staging run. Scheduled and post-release execution remain disabled by default. No hosted smoke run or scheduled monitoring has been enabled by this document.
+Status: the first hosted manual run, [36919168053](https://github.com/agroupforcoders/dayli/actions/runs/36919168053), failed with `browser_failure` after 5 ms. Scheduled and post-release execution remain disabled by default. No hosted rerun or scheduled monitoring has been enabled by this document.
 
 The owner created a disposable staging account and reported adding `SMOKE_TEST_EMAIL` and `SMOKE_TEST_PASSWORD` as GitHub secrets. This work adds a small synthetic browser journey against the deployed site. It does not claim complete authentication security coverage.
 
@@ -73,7 +73,7 @@ Keep the process exit status failing when a step fails. Do not turn reporting fa
 
 ## Implemented controls and activation
 
-The implementation is in `.github/workflows/staging-auth-smoke.yml`, `apps/web/scripts/staging-auth-smoke.mjs`, and the local contract/privacy tests in `scripts/staging-auth-smoke.test.mjs`. The runner hard-codes `https://staging.dayli.agroupforcoders.com`, starts one headless Chromium context, blocks requests leaving that origin, and does not configure screenshots, video, tracing, HAR, storage state, or a Playwright reporter. Its only output is allowlisted fixed labels with outcome, duration, and a fixed failure category. It never prints caught browser errors, locator details, request URLs, or secret values.
+The implementation is in `.github/workflows/staging-auth-smoke.yml`, `apps/web/scripts/staging-auth-smoke.mjs`, and the local contract/privacy tests in `scripts/staging-auth-smoke.test.mjs`. The workflow installs Playwright Chromium with its Linux dependencies immediately before the credentialed smoke step. The runner hard-codes `https://staging.dayli.agroupforcoders.com`, starts one headless Chromium context, blocks requests leaving that origin, and does not configure screenshots, video, tracing, HAR, storage state, or a Playwright reporter. Its only output is allowlisted fixed labels with outcome, duration, and a fixed failure category. It never prints caught browser errors, locator details, request URLs, or secret values.
 
 The journey checks the signed-out deep-link return path, UI password sign-in, preserved settings query and Settings heading, reload, another same-context tab, the in-memory host-only session-cookie attributes, UI sign-out, and subsequent denied protected navigation in both tabs. If a failure occurs after sign-in, cleanup attempts one UI sign-out for this context only. The unexpected-origin tracker uses one immutable baseline before the journey begins and one fresh baseline before cleanup begins. Every asynchronous journey helper, locator wait, phase end, cleanup action, and closure check compares against its phase baseline. A historical blocked external request therefore preserves the journey failure without suppressing fixed-origin cleanup. A new external request during cleanup remains blocked and makes cleanup fail. Cleanup failure keeps the run failed.
 
@@ -83,7 +83,9 @@ The post-release path accepts only a successful same-repository, `main`-branch `
 
 ## Evidence to record as work proceeds
 
-Local validation passed: `pnpm test:staging-auth-smoke-contract` passed 9 realistic default-journey, privacy, cleanup, and workflow-contract tests; `pnpm test:staging-release-contract` passed 15 tests; `pnpm lint` and `pnpm --filter @dayli/web typecheck` passed; and `MIGRATION_BASE_REF=$(git rev-parse HEAD^) pnpm verify:local` passed. The explicit valid ancestor is required by the repository migration-base check and uses only the isolated local PostgreSQL fixture. This is local-only evidence, not a hosted authentication-smoke result. No hosted smoke run was attempted.
+The hosted manual run [36919168053](https://github.com/agroupforcoders/dayli/actions/runs/36919168053) installed dependencies but had no Playwright browser-install step, then reported `browser_failure` in 5 ms. That category and duration strongly point to missing Chromium provisioning. The raw browser error is intentionally suppressed by the runner's safe reporting, so it is not retained as evidence. A hosted rerun remains pending after this fix.
+
+Local validation for this repair passed: `pnpm test:staging-auth-smoke-contract` passed 9 default-journey, privacy, cleanup, and workflow-contract tests, including the browser-install ordering check; `pnpm test:staging-release-contract` passed 22 tests; and `pnpm lint` passed. Chromium launched and closed locally without credentials using the smoke runner's production environment allowlist. `MIGRATION_BASE_REF=7e2f29fa070cb252fd39fa166960f1f2e1e06d55 VERIFY_POSTGRES_PORT=55433 pnpm verify:local:full` also passed. The immutable ancestor is this branch's direct parent, and the verification uses only an isolated local PostgreSQL fixture. This is local-only evidence, not a hosted authentication-smoke result.
 
 - Implementation commit and test commands/results.
 - Independent review findings and resolutions. No independent review was performed in this implementation worktree because the owner explicitly required the selected implementor to make the change without further delegation. Obtain normal PR review before merge.

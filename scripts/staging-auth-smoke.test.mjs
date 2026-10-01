@@ -229,6 +229,11 @@ test("workflow is fixed-target, trusted, serialized, and automatic runs are inac
   assert.match(workflow, /group: staging-auth-smoke\n[ ]{2}cancel-in-progress: false/);
   assert.match(workflow, /timeout-minutes: 10/);
   assert.match(workflow, /environment: staging/);
+  const chromiumInstall = "pnpm --filter @dayli/web exec playwright install --with-deps chromium";
+  const credentialedSmoke = "SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}";
+  assert.notEqual(workflow.indexOf(chromiumInstall), -1);
+  assert.notEqual(workflow.indexOf(credentialedSmoke), -1);
+  assert.ok(workflow.indexOf(chromiumInstall) < workflow.indexOf(credentialedSmoke), "Chromium must be installed before the credentialed smoke step");
   assert.match(workflow, /SMOKE_TEST_EMAIL: \$\{\{ secrets\.SMOKE_TEST_EMAIL \}\}/);
   assert.match(workflow, /SMOKE_TEST_PASSWORD: \$\{\{ secrets\.SMOKE_TEST_PASSWORD \}\}/);
   assert.match(workflow, /ref: main/);

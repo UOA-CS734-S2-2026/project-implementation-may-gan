@@ -72,6 +72,8 @@ jobs:
       - name: Report triggering release attribution
         if: github.event_name == 'workflow_run'
         run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} triggering_release_revision=${{ steps.attribution.outputs.release_sha }} release_automation_revision=${{ steps.attribution.outputs.automation_sha }} deployed_revision=unverified"
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @dayli/web exec playwright install --with-deps chromium
       - name: Run fixed-origin browser sign-in smoke
         env:
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
