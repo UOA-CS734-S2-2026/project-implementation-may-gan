@@ -4,10 +4,10 @@ import { messagingReadinessSizeCap, messagingReadinessStagingCapBytes, validateM
 describe("messagingReadinessSizeCap", () => {
   it("keeps staging fixed and permits only an explicit non-decreasing production cap", () => {
     expect(messagingReadinessSizeCap("staging", {})).toBe(messagingReadinessStagingCapBytes);
-    expect(() => messagingReadinessSizeCap("staging", { MESSAGING_0023_SIZE_CAP_BYTES: "16777217" })).toThrow("fixed 16 MiB");
-    expect(messagingReadinessSizeCap("production", { MESSAGING_0023_SIZE_CAP_BYTES: "33554432" })).toBe(33554432);
-    expect(() => messagingReadinessSizeCap("production", { MESSAGING_0023_SIZE_CAP_BYTES: "1" })).toThrow("at least 16 MiB");
-    expect(() => messagingReadinessSizeCap("local", { MESSAGING_0023_SIZE_CAP_BYTES: "33554432" })).toThrow("only allowed for a production");
+    expect(() => messagingReadinessSizeCap("staging", { MESSAGING_0024_SIZE_CAP_BYTES: "16777217" })).toThrow("fixed 16 MiB");
+    expect(messagingReadinessSizeCap("production", { MESSAGING_0024_SIZE_CAP_BYTES: "33554432" })).toBe(33554432);
+    expect(() => messagingReadinessSizeCap("production", { MESSAGING_0024_SIZE_CAP_BYTES: "1" })).toThrow("at least 16 MiB");
+    expect(() => messagingReadinessSizeCap("local", { MESSAGING_0024_SIZE_CAP_BYTES: "33554432" })).toThrow("only allowed for a production");
   });
 });
 

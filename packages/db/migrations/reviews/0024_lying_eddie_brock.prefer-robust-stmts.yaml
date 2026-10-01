@@ -1,0 +1,6 @@
+reason: Constraint replacement and trigger rewrites must remain one atomic migration so a user deletion cannot observe partially detached messaging references.
+affected_data_and_clients: The migration blocks the five messaging tables during its bounded final-lock window and rolls back entirely on any failure.
+rollout_sequence: Run the read-only staging preflight first, then the protected migrator which repeats the combined size check after locks.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Apply only reviewed forward corrections. Do not edit this published migration.
+reviewer: Database, messaging, and privacy reviewers must approve the detachment contract.

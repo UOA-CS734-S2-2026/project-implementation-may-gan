@@ -1,0 +1,6 @@
+reason: Replacement user foreign keys are added NOT VALID and then validated in the same locked transaction, avoiding a partial validation window.
+affected_data_and_clients: Existing rows already satisfy the user references before the migration; new writes are blocked by the final locks until validation completes.
+rollout_sequence: Validate all seven replacement foreign keys before participant primary-key replacement and commit.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a reviewed forward validation or correction if a future constraint requires change.
+reviewer: Database and privacy reviewers must approve the constraint replacement.

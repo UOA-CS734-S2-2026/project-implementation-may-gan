@@ -18,7 +18,7 @@ export async function projectConversationDto(
   row: ConversationProjectionRow,
   actorId: string,
 ) {
-  const latest = row.latestMessage ? await projectMessageDto(database, row.latestMessage, actorId) : null;
+  const latest = row.latestMessage?.id ? await projectMessageDto(database, row.latestMessage, actorId) : null;
   const blocked = row.blocked === true;
   const participantsAvailable = row.participants_available === true;
   const actorParticipantId = String(row.member_participant_id ?? actorId);

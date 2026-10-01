@@ -103,8 +103,8 @@ suite("get conversation Postgres repository", () => {
     ));
 
     await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: new Date() },
-      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: new Date() },
+      { messageId: reply.message.id, userId: users[0]!, participantId: users[0]!, reaction: "love", createdAt: new Date() },
+      { messageId: reply.message.id, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: new Date() },
     ]);
     builderQueries.length = 0;
     await expect(observedRepository.get(users[0]!, active.conversation.id)).resolves.toMatchObject({

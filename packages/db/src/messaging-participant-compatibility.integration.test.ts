@@ -416,16 +416,201 @@ async function waitFor(condition: () => Promise<boolean>, message: string): Prom
       from pg_constraint
       where conname in (
         'conversations_participant_direct_pair_unique',
-        'conversation_members_participant_unique',
+        'conversation_members_legacy_user_unique',
         'messages_sender_participant_client_message_unique',
-        'message_reactions_participant_unique'
+        'message_reactions_legacy_user_unique'
       )
       order by conname
     `).resolves.toEqual([
-      { conname: 'conversation_members_participant_unique' },
+      { conname: 'conversation_members_legacy_user_unique' },
       { conname: 'conversations_participant_direct_pair_unique' },
-      { conname: 'message_reactions_participant_unique' },
+      { conname: 'message_reactions_legacy_user_unique' },
       { conname: 'messages_sender_participant_client_message_unique' },
     ]);
+
+    const detachSuffix = crypto.randomUUID();
+    const low = `a-detach-${detachSuffix}`;
+    const high = `b-detach-${detachSuffix}`;
+    const nonInitiator = `c-detach-${detachSuffix}`;
+    const detachedConversation = `conversation-detach-${detachSuffix}`;
+    const detachedMessage = `message-detach-${detachSuffix}`;
+    await app`
+      insert into public."user" (id, name, email)
+      values
+        (${low}, 'Low Detach', ${`${low}@example.test`}),
+        (${high}, 'High Detach', ${`${high}@example.test`}),
+        (${nonInitiator}, 'Noninitiator Detach', ${`${nonInitiator}@example.test`})
+    `;
+    await app`
+      insert into public.conversations
+        (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at)
+      values (${detachedConversation}, 'direct', ${low}, ${high}, ${low}, 'active', 1, 2, now(), now(), now())
+    `;
+    await app`
+      insert into public.conversation_members
+        (conversation_id, user_id, last_read_sequence, receipt_sequence, created_at, updated_at)
+      values
+        (${detachedConversation}, ${low}, 0, 0, now(), now()),
+        (${detachedConversation}, ${high}, 0, 0, now(), now()),
+        (${detachedConversation}, ${nonInitiator}, 0, 0, now(), now())
+      on conflict (conversation_id, user_id) do update set updated_at = excluded.updated_at
+    `;
+    await app`
+      insert into public.messages
+        (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, created_at)
+      values (${detachedMessage}, ${detachedConversation}, 1, ${low}, 'detachment-legacy-message', ${"d".repeat(64)}, 'Retained message', now())
+    `;
+    await app`
+      insert into public.message_reactions (message_id, user_id, reaction, created_at)
+      values (${detachedMessage}, ${nonInitiator}, 'angry', now())
+      on conflict (message_id, user_id) do update set reaction = excluded.reaction
+    `;
+    await app`
+      insert into public.conversation_changes
+        (conversation_id, change_sequence, kind, message_id, member_id, created_at)
+      values
+        (${detachedConversation}, 1, 'message_sent', ${detachedMessage}, ${low}, now()),
+        (${detachedConversation}, 2, 'member_added', null, ${nonInitiator}, now())
+    `;
+
+    await expect(migrator`
+      select conname, confdeltype
+      from pg_constraint
+      where conname in (
+        'conversations_user_low_id_user_id_fk', 'conversations_user_high_id_user_id_fk',
+        'conversations_initiator_id_user_id_fk', 'conversation_members_user_id_user_id_fk',
+        'messages_sender_id_user_id_fk', 'message_reactions_user_id_user_id_fk',
+        'conversation_changes_member_id_user_id_fk'
+      ) order by conname
+    `).resolves.toEqual([
+      { conname: 'conversation_changes_member_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'conversation_members_user_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'conversations_initiator_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'conversations_user_high_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'conversations_user_low_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'message_reactions_user_id_user_id_fk', confdeltype: 'n' },
+      { conname: 'messages_sender_id_user_id_fk', confdeltype: 'n' },
+    ]);
+    await expect(migrator`
+      select table_name, column_name, is_nullable
+      from information_schema.columns
+      where table_schema = 'public' and (table_name, column_name) in (
+        ('conversations', 'user_low_id'), ('conversations', 'user_high_id'), ('conversations', 'initiator_id'),
+        ('conversation_members', 'user_id'), ('conversation_members', 'participant_id'),
+        ('messages', 'sender_id'), ('message_reactions', 'user_id'), ('message_reactions', 'participant_id')
+      ) order by table_name, column_name
+    `).resolves.toEqual([
+      { table_name: 'conversation_members', column_name: 'participant_id', is_nullable: 'NO' },
+      { table_name: 'conversation_members', column_name: 'user_id', is_nullable: 'YES' },
+      { table_name: 'conversations', column_name: 'initiator_id', is_nullable: 'YES' },
+      { table_name: 'conversations', column_name: 'user_high_id', is_nullable: 'YES' },
+      { table_name: 'conversations', column_name: 'user_low_id', is_nullable: 'YES' },
+      { table_name: 'message_reactions', column_name: 'participant_id', is_nullable: 'NO' },
+      { table_name: 'message_reactions', column_name: 'user_id', is_nullable: 'YES' },
+      { table_name: 'messages', column_name: 'sender_id', is_nullable: 'YES' },
+    ]);
+    await expect(migrator`
+      select conname, pg_get_constraintdef(oid) as definition
+      from pg_constraint
+      where conname in ('conversation_members_pk', 'message_reactions_pk', 'conversation_members_legacy_user_unique', 'message_reactions_legacy_user_unique')
+      order by conname
+    `).resolves.toEqual([
+      { conname: 'conversation_members_legacy_user_unique', definition: 'UNIQUE (conversation_id, user_id)' },
+      { conname: 'conversation_members_pk', definition: 'PRIMARY KEY (conversation_id, participant_id)' },
+      { conname: 'message_reactions_legacy_user_unique', definition: 'UNIQUE (message_id, user_id)' },
+      { conname: 'message_reactions_pk', definition: 'PRIMARY KEY (message_id, participant_id)' },
+    ]);
+
+    // A rolling worker still uses the exact legacy conflict pairs before detach.
+    await app`
+      insert into public.message_reactions (message_id, user_id, reaction, created_at)
+      values (${detachedMessage}, ${nonInitiator}, 'angry', now())
+      on conflict (message_id, user_id) do update set reaction = excluded.reaction
+    `;
+    await expect(app`update public.conversations set participant_low_id = ${high} where id = ${detachedConversation}`).rejects.toMatchObject({ code: '23514' });
+
+    // Detach a noninitiator, then the low initiator and high participant in
+    // sequence. FK actions must null only legacy IDs and retain every durable row.
+    await migrator`delete from public."user" where id = ${nonInitiator}`;
+    await migrator`delete from public."user" where id = ${low}`;
+    await migrator`delete from public."user" where id = ${high}`;
+    await expect(migrator`
+      select
+        (select count(*)::int from public.conversations where id = ${detachedConversation}) as conversations,
+        (select count(*)::int from public.conversation_members where conversation_id = ${detachedConversation}) as members,
+        (select count(*)::int from public.messages where id = ${detachedMessage}) as messages,
+        (select count(*)::int from public.message_reactions where message_id = ${detachedMessage} and reaction = 'angry') as reactions,
+        (select count(*)::int from public.conversation_changes where conversation_id = ${detachedConversation}) as changes,
+        (select count(*)::int from public.conversation_members where conversation_id = ${detachedConversation} and participant_id is not null) as durable_members
+    `).resolves.toEqual([{ conversations: 1, members: 3, messages: 1, reactions: 1, changes: 2, durable_members: 3 }]);
+    await expect(migrator`
+      select user_low_id, user_high_id, initiator_id, participant_low_id, participant_high_id, initiator_participant_id
+      from public.conversations where id = ${detachedConversation}
+    `).resolves.toEqual([{
+      user_low_id: null, user_high_id: null, initiator_id: null,
+      participant_low_id: low, participant_high_id: high, initiator_participant_id: low,
+    }]);
+    await expect(migrator`
+      select sender_id, sender_participant_id from public.messages where id = ${detachedMessage}
+    `).resolves.toEqual([{ sender_id: null, sender_participant_id: low }]);
+    await expect(migrator`
+      select user_id, participant_id, reaction from public.message_reactions where message_id = ${detachedMessage}
+    `).resolves.toEqual([{ user_id: null, participant_id: nonInitiator, reaction: 'angry' }]);
+    await expect(migrator`
+      select member_id, member_participant_id from public.conversation_changes
+      where conversation_id = ${detachedConversation} order by change_sequence
+    `).resolves.toEqual([
+      { member_id: null, member_participant_id: low },
+      { member_id: null, member_participant_id: nonInitiator },
+    ]);
+    await app`update public.conversations set updated_at = now() where id = ${detachedConversation}`;
+    await app`update public.messages set body = 'Retained message updated' where id = ${detachedMessage}`;
+    await app`update public.conversation_members set last_read_sequence = 0 where conversation_id = ${detachedConversation}`;
+    await expect(app`update public.messages set sender_id = ${alice} where id = ${detachedMessage}`).rejects.toMatchObject({ code: '23514' });
+
+    // Exercise the database trigger as the app role explicitly, rather than
+    // relying on the migrator's ownership privileges.
+    await app`set role app`;
+    try {
+      await expect(app`
+        insert into public.conversations
+          (id, kind, user_low_id, user_high_id, initiator_id, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at)
+        values (${`forbidden-null-conversation-${detachSuffix}`}, 'direct', null, ${charlie}, ${alice}, ${alice}, ${charlie}, ${alice}, 'active', 0, 0, now(), now(), now())
+      `).rejects.toMatchObject({ code: '23514' });
+      await expect(app`
+        insert into public.conversation_members (conversation_id, user_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at)
+        values (${lateConversation}, null, ${alice}, 0, 0, now(), now())
+      `).rejects.toMatchObject({ code: '23514' });
+      await expect(app`
+        insert into public.messages (id, conversation_id, sequence, sender_id, sender_participant_id, client_message_id, request_fingerprint, body, created_at)
+        values (${`forbidden-null-message-${detachSuffix}`}, ${lateConversation}, 2, null, ${alice}, 'forbidden-null', ${"e".repeat(64)}, 'No actor', now())
+      `).rejects.toMatchObject({ code: '23514' });
+      await expect(app`
+        insert into public.message_reactions (message_id, user_id, participant_id, reaction, created_at)
+        values (${lateMessage}, null, ${alice}, 'angry', now())
+      `).rejects.toMatchObject({ code: '23514' });
+      await expect(app`
+        insert into public.conversation_changes (conversation_id, change_sequence, kind, member_id, member_participant_id, created_at)
+        values (${lateConversation}, 3, 'member_added', null, ${alice}, now())
+      `).rejects.toMatchObject({ code: '23514' });
+      await expect(app`update public.messages set sender_id = null where id = ${lateMessage}`).rejects.toMatchObject({ code: '23514' });
+    } finally {
+      await app`reset role`;
+    }
+
+    const highInitiatorConversation = `high-initiator-detach-${detachSuffix}`;
+    await app`
+      insert into public.conversations
+        (id, kind, user_low_id, user_high_id, initiator_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at)
+      values (${highInitiatorConversation}, 'direct', ${bob}, ${charlie}, ${charlie}, 'active', 0, 0, now(), now(), now())
+    `;
+    await migrator`delete from public."user" where id = ${charlie}`;
+    await expect(migrator`
+      select user_low_id, user_high_id, initiator_id, participant_low_id, participant_high_id, initiator_participant_id
+      from public.conversations where id = ${highInitiatorConversation}
+    `).resolves.toEqual([{
+      user_low_id: bob, user_high_id: null, initiator_id: null,
+      participant_low_id: bob, participant_high_id: charlie, initiator_participant_id: charlie,
+    }]);
   });
 });

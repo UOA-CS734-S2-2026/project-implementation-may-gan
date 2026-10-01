@@ -1,0 +1,6 @@
+reason: Existing generated foreign-key and participant constraint names are retained to preserve catalog and migration compatibility.
+affected_data_and_clients: No runtime identifier contract changes.
+rollout_sequence: Apply through the protected reviewed migration path only.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a reviewed forward migration if a future PostgreSQL identifier limit requires a compatibility alias.
+reviewer: Database reviewer approval required.

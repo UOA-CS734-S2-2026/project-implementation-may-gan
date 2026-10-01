@@ -1,0 +1,6 @@
+reason: Legacy user-pair uniqueness remains necessary as the exact ON CONFLICT target for deployed old workers while durable participant pairs become primary keys.
+affected_data_and_clients: Old member and reaction writes continue to conflict on their prior user pairs. After detach, null legacy IDs no longer identify retained rows.
+rollout_sequence: Create the legacy unique constraints in the same final-lock transaction as the primary-key replacement.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Remove legacy conflict targets only in a later reviewed migration after all old workers are retired.
+reviewer: Database, messaging, and privacy reviewers must approve the compatibility window.

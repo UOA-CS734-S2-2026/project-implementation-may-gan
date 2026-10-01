@@ -25,11 +25,12 @@ async function main(): Promise<void> {
   try {
     const migrations = await readLocalMigrations();
     await client`set statement_timeout = '30s'`;
-    // 0023 reads these session-scoped values under its final table locks.
-    // Staging is fixed at 16 MiB. A production change is explicit and retains
-    // the existing production confirmation and backup requirements.
+    // 0023 and 0024 read these session-scoped values under their final table
+    // locks. Staging is fixed at 16 MiB. A production change is explicit and
+    // retains the existing production confirmation and backup requirements.
     await client`select set_config('dayli.migration_target', ${target}, false)`;
     await client`select set_config('dayli.messaging_0023_size_cap_bytes', ${String(messagingReadinessCap)}, false)`;
+    await client`select set_config('dayli.messaging_0024_size_cap_bytes', ${String(messagingReadinessCap)}, false)`;
     await client`select pg_advisory_lock(${migrationLockId})`;
     await client`set lock_timeout = '5s'`;
     await client`set statement_timeout = '5min'`;
