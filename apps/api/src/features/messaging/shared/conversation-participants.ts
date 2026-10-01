@@ -64,6 +64,7 @@ export type ActiveConversationParticipants = {
   participantHighId: string;
   lowUserId: string | null;
   highUserId: string | null;
+  participantsAvailable: boolean;
 };
 
 async function activeConversationParticipants(
@@ -97,7 +98,25 @@ async function activeConversationParticipants(
     participantHighId: conversation.participantHighId,
     lowUserId: users.get(conversation.participantLowId) ?? null,
     highUserId: users.get(conversation.participantHighId) ?? null,
+    participantsAvailable: false,
   };
+}
+
+async function availabilityAfterLocks(
+  queryable: Selectable,
+  participants: ActiveConversationParticipants,
+): Promise<boolean> {
+  const rows = await queryable
+    .select({ participantId: schema.messagingParticipants.id })
+    .from(schema.messagingParticipants)
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.messagingParticipants.userId))
+    .where(and(
+      inArray(schema.messagingParticipants.id, [participants.participantLowId, participants.participantHighId]),
+      eq(schema.messagingParticipants.state, "active"),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+    ));
+  const available = new Set(rows.map((row) => row.participantId));
+  return available.has(participants.participantLowId) && available.has(participants.participantHighId);
 }
 
 /**
@@ -122,8 +141,11 @@ export async function lockActiveConversationParticipants(
       .for("update");
   }
   const after = await activeConversationParticipants(transaction, conversationId);
-  if (after?.lowUserId && after.highUserId) {
+  if (!after) return null;
+  if (after.lowUserId && after.highUserId) {
     await lockRelationshipPair(transaction, after.lowUserId, after.highUserId);
   }
-  return after;
+  // READ COMMITTED uses a statement snapshot. This distinct post-lock read
+  // observes a lifecycle transition that completed while user locks waited.
+  return { ...after, participantsAvailable: await availabilityAfterLocks(transaction, after) };
 }

@@ -78,7 +78,7 @@ export function createPostgresResolveMessageRequestRepository(
         if (!participants) throw new MessagingError("NOT_FOUND");
         // Positive activation requires both mappings to still be live after
         // canonical locks. Decline remains a safe surviving-member cleanup.
-        if (decision === "accept" && (!participants.lowUserId || !participants.highUserId)) {
+        if (decision === "accept" && !participants.participantsAvailable) {
           throw new MessagingError("FORBIDDEN");
         }
 
