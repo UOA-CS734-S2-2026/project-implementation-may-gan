@@ -73,7 +73,14 @@ async function conversationAfterResolution(
   const row = await requireConversationMember(database, actorId, conversationId);
   const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
   const [user] = await database
-    .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
+    .select({
+      name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})`,
+      pendingDeletion: sql<boolean>`exists(
+        select 1 from ${schema.accountLifecycles}
+        where ${schema.accountLifecycles.userId} = ${schema.user.id}
+          and ${schema.accountLifecycles.state} = 'pending_deletion'
+      )`,
+    })
     .from(schema.user)
     .where(eq(schema.user.id, peer))
     .limit(1);
@@ -108,7 +115,8 @@ async function conversationAfterResolution(
   return projectConversationDto(database, {
     ...row,
     peer_id: peer,
-    peer_name: user?.name,
+    peer_name: user?.pendingDeletion ? null : user?.name,
+    peer_deleted: user?.pendingDeletion === true,
     unread_count: unread?.count ?? 0,
     ...(latest ? messageProjection(latest) : {}),
   }, actorId);
@@ -134,6 +142,18 @@ export function createPostgresResolveMessageRequestRepository(
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         if (row.blocked === true) throw new MessagingError("BLOCKED");
         const state = decision === "accept" ? "active" : "declined";
+        if (decision === "accept") {
+          const peerId = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
+          // Match lifecycle's user-row lock so accepting cannot race a deletion request.
+          const [peer] = await tx.select({ id: schema.user.id }).from(schema.user)
+            .where(eq(schema.user.id, peerId)).limit(1).for("update");
+          if (!peer) throw new MessagingError("NOT_FOUND");
+          const [pending] = await tx.select({ userId: schema.accountLifecycles.userId })
+            .from(schema.accountLifecycles)
+            .where(and(eq(schema.accountLifecycles.userId, peerId), eq(schema.accountLifecycles.state, "pending_deletion")))
+            .limit(1);
+          if (pending) throw new MessagingError("NOT_FOUND");
+        }
         if (String(row.initiator_id) === actorId) throw new MessagingError("FORBIDDEN");
         if (row.request_state === state) return;
         if (row.request_state !== "pending") throw new MessagingError("FORBIDDEN");

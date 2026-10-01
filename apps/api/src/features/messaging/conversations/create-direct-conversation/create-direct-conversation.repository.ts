@@ -104,13 +104,24 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     };
   }
 
+  /** Locks the target user row, matching lifecycle transition serialization. */
   async recipientExists(recipientId: string): Promise<boolean> {
     const [row] = await this.queryable
       .select({ id: schema.user.id })
       .from(schema.user)
       .where(eq(schema.user.id, recipientId))
+      .limit(1)
+      .for("update");
+    if (!row) return false;
+    const [lifecycle] = await this.queryable
+      .select({ userId: schema.accountLifecycles.userId })
+      .from(schema.accountLifecycles)
+      .where(and(
+        eq(schema.accountLifecycles.userId, recipientId),
+        eq(schema.accountLifecycles.state, "pending_deletion"),
+      ))
       .limit(1);
-    return Boolean(row);
+    return !lifecycle;
   }
 
   async hasActiveFriendship(actorId: string, recipientId: string): Promise<boolean> {

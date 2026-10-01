@@ -30,6 +30,9 @@ export function createCreateDirectConversationService(dependencies: {
         // Check before replay so a stale retry cannot emit a peer-visible
         // result after either participant has blocked the pair.
         if (await transaction.isPairBlocked(actorId, input.recipientId)) throw new MessagingError("BLOCKED");
+        // This locks the target user row through the write. Lifecycle requests
+        // acquire the same lock before becoming pending.
+        if (!await transaction.recipientExists(input.recipientId)) throw new MessagingError("NOT_FOUND");
         const existing = await transaction.findDirectConversation(actorId, input.recipientId);
         // The direct-create request is addressed to a pair, not a prior thread ID.
         // This stable target keeps a lost first response replayable after creation.
@@ -47,7 +50,6 @@ export function createCreateDirectConversationService(dependencies: {
           const message = await transaction.appendExistingMessage({ conversation, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now(), messageId: generateId() });
           return { conversation, message: toMessageDto(message), replayed: false };
         }
-        if (!await transaction.recipientExists(input.recipientId)) throw new MessagingError("NOT_FOUND");
         const requestState = friendshipActive ? "active" as const : "pending" as const;
         const result = await transaction.createConversationWithMessage({ conversationId: generateId(), initiatorId: actorId, recipientId: input.recipientId, requestState, messageId: generateId(), clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now() });
         return { conversation: result.conversation, message: toMessageDto(result.message), replayed: false };

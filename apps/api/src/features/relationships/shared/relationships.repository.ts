@@ -95,7 +95,12 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     };
     const snapshot = async (actorId: string, subjectId: string): Promise<StoredRelationshipSnapshot> => {
       const [target, blocks, friendshipsRows, requests] = await Promise.all([
-        database.select({ id: user.id }).from(user).where(eq(user.id, subjectId)).limit(1),
+        database.select({ id: user.id }).from(user).where(and(
+          eq(user.id, subjectId),
+          sql`not exists (select 1 from ${schema.accountLifecycles}
+            where ${schema.accountLifecycles.userId} = ${user.id}
+              and ${schema.accountLifecycles.state} = 'pending_deletion')`,
+        )).limit(1),
         database
           .select({ blocker_id: relationshipBlocks.blockerId, blocked_id: relationshipBlocks.blockedId })
           .from(relationshipBlocks)
@@ -143,7 +148,11 @@ export class PostgresRelationshipsStore implements RelationshipStore {
       if (!(await targetExists(right)) || !(await targetExists(left))) throw new RelationshipStoreError("TARGET_NOT_FOUND");
     };
     const requireAvailableTarget = async (left: string, right: string) => {
-      await requireTarget(left, right);
+      // The pair lock serializes relationship writers. This compatible user lock
+      // also serializes target validation with lifecycle transitions.
+      const target = await database.select({ id: user.id }).from(user)
+        .where(eq(user.id, right)).limit(1).for("update");
+      if (target.length !== 1 || !(await targetExists(left))) throw new RelationshipStoreError("TARGET_NOT_FOUND");
       const pending = await database.select({ userId: schema.accountLifecycles.userId }).from(schema.accountLifecycles).where(and(
         eq(schema.accountLifecycles.userId, right),
         eq(schema.accountLifecycles.state, "pending_deletion"),
