@@ -1,0 +1,78 @@
+name: Staging authentication smoke
+
+# Automatic entry points remain inert until an owner sets the protected staging
+# environment variable STAGING_AUTH_SMOKE_AUTOMATION_ENABLED to true after a
+# successful manual run. Manual dispatch is main-only and has no inputs.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_run:
+    workflows: [Deploy coordinated staging release]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: staging-auth-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'schedule' && vars.STAGING_AUTH_SMOKE_AUTOMATION_ENABLED == 'true') ||
+      (github.event_name == 'workflow_run' &&
+       vars.STAGING_AUTH_SMOKE_AUTOMATION_ENABLED == 'true' &&
+       github.event.workflow_run.name == 'Deploy coordinated staging release' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'main' &&
+       (github.event.workflow_run.event == 'workflow_dispatch' || github.event.workflow_run.event == 'workflow_run') &&
+       github.event.workflow_run.conclusion == 'success')
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # workflow_run has privileged staging secrets, so always read the runner
+      # from current trusted main instead of the completed workflow's revision.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Capture trusted automation revision
+        id: automation
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Download captured staging release attribution
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/staging-auth-attribution"
+          gh run download "$UPSTREAM_RUN_ID" --repo "$GITHUB_REPOSITORY" --name staging-release-attribution --dir "$RUNNER_TEMP/staging-auth-attribution"
+      - name: Validate captured staging release attribution
+        if: github.event_name == 'workflow_run'
+        id: attribution
+        env:
+          ATTRIBUTION_FILE: ${{ runner.temp }}/staging-auth-attribution/staging-release-attribution.txt
+        run: node scripts/validate-staging-auth-attribution.mjs
+      - name: Report manual attribution limitation
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} release_attribution=unavailable_manual"
+      - name: Report captured release attribution
+        if: github.event_name == 'workflow_run'
+        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} release_revision=${{ steps.attribution.outputs.release_sha }} release_automation_revision=${{ steps.attribution.outputs.automation_sha }}"
+      - name: Run fixed-origin browser sign-in smoke
+        env:
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+        run: pnpm --filter @dayli/web exec node scripts/staging-auth-smoke.mjs

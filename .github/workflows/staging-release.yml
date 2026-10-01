@@ -15,6 +15,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
@@ -49,6 +50,20 @@ jobs:
           TOOLING_SHA: ${{ github.workflow_sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
         run: node scripts/capture-staging-release.mjs
+      - name: Capture non-sensitive deployed release attribution
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs.commit_sha }}
+          AUTOMATION_SHA: ${{ steps.release.outputs.tooling_sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/staging-release-attribution"
+          printf 'release_sha=%s\nautomation_sha=%s\n' "$RELEASE_SHA" "$AUTOMATION_SHA" > "$RUNNER_TEMP/staging-release-attribution/staging-release-attribution.txt"
+      - name: Upload staged release attribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-release-attribution
+          path: ${{ runner.temp }}/staging-release-attribution/staging-release-attribution.txt
+          if-no-files-found: error
+          retention-days: 1
 
   api:
     needs: capture
