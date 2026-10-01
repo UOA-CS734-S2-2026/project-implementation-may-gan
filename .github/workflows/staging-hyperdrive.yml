@@ -8,6 +8,9 @@ on:
       commit_sha:
         required: true
         type: string
+      migration_mode:
+        required: true
+        type: string
       browser_proxy_enabled:
         required: true
         type: string
@@ -30,11 +33,16 @@ jobs:
     environment: staging
     runs-on: ubuntu-latest
     steps:
-      - name: Validate captured browser proxy mode
+      - name: Validate captured release mode and browser proxy mode
         env:
+          CAPTURED_MIGRATION_MODE: ${{ inputs.migration_mode }}
           CAPTURED_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
         run: |
+          if [[ "$CAPTURED_MIGRATION_MODE" != "forward" && "$CAPTURED_MIGRATION_MODE" != "rollback-verify-only" ]]; then
+            echo 'Captured migration mode is invalid.' >&2
+            exit 1
+          fi
           if [[ "$CAPTURED_BROWSER_PROXY_ENABLED" != "true" && "$CAPTURED_BROWSER_PROXY_ENABLED" != "false" ]]; then
             echo 'Captured browser proxy mode must be true or false.' >&2
             exit 1
@@ -46,6 +54,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit_sha }}
+          fetch-depth: 0
       - name: Check out immutable release tooling
         uses: actions/checkout@v4
         with:
@@ -66,6 +75,29 @@ jobs:
           CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node deployment-tooling/scripts/verify-staging-schema-target.mjs
+      - name: Check captured release migrations before mutation
+        if: inputs.migration_mode == 'forward'
+        env:
+          MIGRATION_BASE_REF: ${{ format('{0}~1', inputs.commit_sha) }}
+          MIGRATION_REPOSITORY_ROOT: ${{ github.workspace }}
+          MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
+        run: pnpm --dir deployment-tooling db:check
+      - name: Plan pending reviewed migrations
+        id: migration_plan
+        if: inputs.migration_mode == 'forward'
+        env:
+          MIGRATION_TARGET: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATION_REPOSITORY_ROOT: ${{ github.workspace }}
+          MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
+        run: pnpm --dir deployment-tooling db:plan
+      - name: Apply pending reviewed migrations
+        if: inputs.migration_mode == 'forward' && steps.migration_plan.outputs.pending == 'true'
+        env:
+          MIGRATION_TARGET: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
+        run: pnpm --dir deployment-tooling db:migrate
       - name: Verify the captured release schema before deployment
         env:
           MIGRATION_TARGET: staging

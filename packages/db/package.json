@@ -7,6 +7,7 @@
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "tsx src/check-migrations.ts",
     "db:migrate": "tsx src/migrate.ts",
+    "db:plan": "tsx src/plan-migrations.ts",
     "db:verify": "tsx src/verify.ts",
     "db:smoke": "tsx src/check.ts",
     "db:test": "REQUIRE_DB_TEST=1 vitest run src/relationship-pair-lock.test.ts && REQUIRE_DB_TEST=1 vitest run src/migrations.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/transactions.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/relationships.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/privacy-foundation-preflight.integration.test.ts && REQUIRE_DB_TEST=1 vitest run src/lifecycle.integration.test.ts",

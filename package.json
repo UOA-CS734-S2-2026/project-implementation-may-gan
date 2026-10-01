@@ -22,6 +22,7 @@
     "db:generate": "pnpm --filter @dayli/db db:generate",
     "db:check": "pnpm --filter @dayli/db db:check",
     "db:migrate": "pnpm --filter @dayli/db db:migrate",
+    "db:plan": "pnpm --filter @dayli/db db:plan",
     "db:verify": "pnpm --filter @dayli/db db:verify",
     "db:smoke": "pnpm --filter @dayli/db db:smoke",
     "db:test:up": "docker compose -f packages/db/docker-compose.yml up -d --wait",

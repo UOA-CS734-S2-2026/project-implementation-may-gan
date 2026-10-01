@@ -33,6 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       commit_sha: ${{ steps.release.outputs.commit_sha }}
+      migration_mode: ${{ steps.release.outputs.migration_mode }}
       browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ steps.release.outputs.tooling_sha }}
     steps:
@@ -54,6 +55,7 @@ jobs:
     uses: ./.github/workflows/staging-hyperdrive.yml
     with:
       commit_sha: ${{ needs.capture.outputs.commit_sha }}
+      migration_mode: ${{ needs.capture.outputs.migration_mode }}
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
     secrets: inherit

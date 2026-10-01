@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Sql } from "postgres";
-import { repoPath } from "./paths";
+import { migrationsPath } from "./paths";
 
 export interface LocalMigration {
   tag: string;
@@ -14,7 +14,7 @@ interface DrizzleJournal {
   entries: Array<{ tag: string }>;
 }
 
-export const migrationsFolder = repoPath("packages/db/migrations");
+export const migrationsFolder = migrationsPath();
 export const migrationTableSchema = "drizzle";
 export const migrationTableName = "__drizzle_migrations";
 
