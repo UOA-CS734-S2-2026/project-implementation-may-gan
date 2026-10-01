@@ -45,24 +45,7 @@ jobs:
           INPUT_SHA: ${{ inputs.commit_sha }}
           DISPATCH_SHA: ${{ github.sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
-        run: |
-          set -Eeuo pipefail
-          mode="$STAGING_BROWSER_PROXY_ENABLED"
-          if [[ "$mode" != "true" && "$mode" != "false" ]]; then
-            echo 'STAGING_BROWSER_PROXY_ENABLED must be true or false.' >&2
-            exit 1
-          fi
-          sha="${EVENT_SHA:-${INPUT_SHA:-$DISPATCH_SHA}}"
-          if [[ ! "$sha" =~ ^[a-f0-9]{40}$ ]] || ! git cat-file -e "${sha}^{commit}"; then
-            echo 'Refusing release without an immutable commit SHA.' >&2
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$sha" origin/main; then
-            echo 'Refusing a commit outside main history.' >&2
-            exit 1
-          fi
-          printf 'commit_sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
-          printf 'browser_proxy_enabled=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+        run: node scripts/capture-staging-release.mjs
 
   api:
     needs: capture

@@ -35,7 +35,7 @@
     "lint": "node scripts/check-api-boundaries.mjs && node scripts/check-api-drizzle-queries.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "test:e2e:web": "bash scripts/test-web-e2e.sh",
-    "test:staging-release-contract": "node --test scripts/staging-release-contract.test.mjs",
+    "test:staging-release-contract": "node --test scripts/capture-staging-release.test.mjs scripts/staging-release-contract.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:local": "bash scripts/verify-local.sh",
     "verify:local:full": "VERIFY_LOCAL_FULL=1 bash scripts/verify-local.sh"
