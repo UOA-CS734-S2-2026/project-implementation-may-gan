@@ -24,6 +24,10 @@ export interface ApiEnv {
   R2_SECRET_ACCESS_KEY?: string;
   /** Exact opt-in for accepting new export jobs. Missing or invalid is disabled. */
   DATA_EXPORT_REQUESTS_ENABLED?: string;
+  /** Separate restricted-role Hyperdrive binding for the offline export worker. */
+  DATA_EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
+  /** Exact disabled-by-default scheduler and request readiness opt-in. */
+  DATA_EXPORT_WORKER_ENABLED?: string;
   /** Required in deployed delivery environments. Optional for DB-free and legacy test composition. */
   USER_REALTIME?: DurableObjectNamespace;
   /** Worker secret containing a Firebase service-account JSON document. */

@@ -306,8 +306,9 @@ export function createAppForEnv(env: ApiEnv) {
   const dataExport = configuration ? {
     resolveSession: createSessionResolver(configuration),
     trustedOrigins: configuration.trustedOrigins,
-    // This exact opt-in is intentionally separate from ordinary auth and R2 configuration.
-    requestsEnabled: env.DATA_EXPORT_REQUESTS_ENABLED === "true" && Boolean(r2Runtime),
+    // A request is accepted only when the separately bound restricted worker is
+    // enabled. Ordinary API credentials and R2 configuration cannot queue work.
+    requestsEnabled: env.DATA_EXPORT_REQUESTS_ENABLED === "true" && env.DATA_EXPORT_WORKER_ENABLED === "true" && Boolean(env.DATA_EXPORT_WORKER_HYPERDRIVE) && Boolean(r2Runtime),
     archiveReader: r2Runtime ? createR2ExportArchiveReader(createR2Reader(r2Runtime)) : undefined,
     withDatabase: <T>(run: (database: DayliDatabase) => Promise<T>) => withHyperdriveDatabase(configuration.hyperdrive, run),
   } satisfies DataExportRouteDependencies : undefined;
