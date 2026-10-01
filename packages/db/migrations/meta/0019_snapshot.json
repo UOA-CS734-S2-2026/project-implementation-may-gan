@@ -1,5 +1,5 @@
 {
-  "id": "e6b83587-0bc1-41cc-ad6d-11a6447a1d8e",
+  "id": "1bbb5c05-27ad-447b-95bb-943a28024a5e",
   "prevId": "5bfdcbae-36ea-401b-a0eb-c9b4a0b57657",
   "version": "7",
   "dialect": "postgresql",
@@ -336,7 +336,7 @@
       "checkConstraints": {
         "account_lifecycles_generation_check": {
           "name": "account_lifecycles_generation_check",
-          "value": "\"account_lifecycles\".\"generation\" >= 0"
+          "value": "\"account_lifecycles\".\"generation\" between 0 and 9007199254740991"
         },
         "account_lifecycles_request_id_check": {
           "name": "account_lifecycles_request_id_check",
@@ -1508,7 +1508,7 @@
       "checkConstraints": {
         "data_export_requests_generation_check": {
           "name": "data_export_requests_generation_check",
-          "value": "\"data_export_requests\".\"lifecycle_generation\" >= 0"
+          "value": "\"data_export_requests\".\"lifecycle_generation\" between 0 and 9007199254740991"
         },
         "data_export_requests_id_check": {
           "name": "data_export_requests_id_check",

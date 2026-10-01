@@ -74,7 +74,7 @@ export const accountLifecycles = pgTable("account_lifecycles", {
   index("account_lifecycles_due_idx").on(table.state, table.cancelUntil, table.purgeDueAt),
   index("account_lifecycles_retry_idx").on(table.state, table.nextAttemptAt),
   index("account_lifecycles_lease_idx").on(table.state, table.leaseExpiresAt),
-  check("account_lifecycles_generation_check", sql`${table.generation} >= 0`),
+  check("account_lifecycles_generation_check", sql`${table.generation} between 0 and 9007199254740991`),
   check("account_lifecycles_request_id_check", sql`${table.requestId} is null or char_length(${table.requestId}) between 1 and 200`),
   check("account_lifecycles_idempotency_key_digest_check", sql`${table.idempotencyKeyDigest} is null or ${table.idempotencyKeyDigest} ~ '^[0-9a-f]{64}$'`),
   check("account_lifecycles_error_category_check", sql`${table.lastErrorCategory} is null or char_length(${table.lastErrorCategory}) between 1 and 100`),
@@ -185,7 +185,7 @@ export const dataExportRequests = pgTable("data_export_requests", {
   uniqueIndex("data_export_requests_one_active_per_user_unique")
     .on(table.userId)
     .where(sql`${table.status} in ('requested', 'building', 'ready')`),
-  check("data_export_requests_generation_check", sql`${table.lifecycleGeneration} >= 0`),
+  check("data_export_requests_generation_check", sql`${table.lifecycleGeneration} between 0 and 9007199254740991`),
   check("data_export_requests_id_check", sql`char_length(${table.id}) between 1 and 200`),
   check("data_export_requests_archive_key_check", sql`${table.archiveObjectKey} is null or char_length(${table.archiveObjectKey}) between 1 and 1024`),
   check("data_export_requests_failure_category_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),

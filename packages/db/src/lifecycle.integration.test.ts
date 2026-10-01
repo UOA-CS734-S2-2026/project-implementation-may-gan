@@ -100,6 +100,38 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
+  it("accepts only JavaScript-safe lifecycle generation values and projects them exactly", async () => {
+    const lifecycleUserId = await createUser("generation-lifecycle");
+    const exportUserId = await createUser("generation-export");
+    const exportId = `export-generation-${crypto.randomUUID()}`;
+    const maximumSafeInteger = "9007199254740991";
+
+    await app`
+      insert into public.account_lifecycles (user_id, generation)
+      values (${lifecycleUserId}, ${maximumSafeInteger}::bigint)
+    `;
+    await app`
+      insert into public.data_export_requests (id, user_id, lifecycle_generation)
+      values (${exportId}, ${exportUserId}, ${maximumSafeInteger}::bigint)
+    `;
+
+    const [lifecycle] = await migrator`
+      select generation::text as generation from public.account_lifecycles where user_id = ${lifecycleUserId}
+    `;
+    const [dataExport] = await migrator`
+      select lifecycle_generation::text as generation from public.data_export_requests where id = ${exportId}
+    `;
+    expect(lifecycle).toEqual({ generation: maximumSafeInteger });
+    expect(dataExport).toEqual({ generation: maximumSafeInteger });
+
+    await expect(app.begin((tx) => tx`
+      update public.account_lifecycles set generation = 9007199254740992 where user_id = ${lifecycleUserId}
+    `)).rejects.toMatchObject({ code: "23514" });
+    await expect(app.begin((tx) => tx`
+      update public.data_export_requests set lifecycle_generation = -1 where id = ${exportId}
+    `)).rejects.toMatchObject({ code: "23514" });
+  });
+
   it("fences export generations, uses 24 absolute hours, and retains cleanup retries separately", async () => {
     const userId = await createUser("export");
     const firstId = `export-${crypto.randomUUID()}`;

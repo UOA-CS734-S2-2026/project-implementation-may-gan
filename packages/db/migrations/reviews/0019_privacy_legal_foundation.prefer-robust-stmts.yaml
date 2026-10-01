@@ -1,5 +1,5 @@
 reason: The protected migration runner uses an advisory lock and applies this forward-only migration atomically. Correcting constraints requires ordered drops and replacements, which are not safely independently rerunnable.
-affected_data_and_clients: Existing lifecycle and export rows are checked against stricter absolute-duration and terminal-reference invariants.
+affected_data_and_clients: Existing lifecycle and export rows are checked against stricter absolute-duration, safe-generation, and terminal-reference invariants.
 rollout_sequence: Apply through the protected migrator workflow before deploying code that writes cleanup tasks.
 backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
 forward_fix_plan: Correct any later defect with a new forward-only migration.
