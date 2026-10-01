@@ -46,13 +46,24 @@ export function createSafeReporter(write = (line) => process.stdout.write(`${lin
   };
 }
 
-async function checkTrustedPage(page, unexpectedHost) {
-  if (unexpectedHost.value || !isTrustedUrl(page.url())) throw failure("unexpected_host");
+function hasNewUnexpectedHost(unexpectedHost, checkpoint) {
+  return unexpectedHost.count !== checkpoint;
+}
+
+async function checkTrustedPage(page, unexpectedHost, checkpoint = unexpectedHost.count) {
+  if (hasNewUnexpectedHost(unexpectedHost, checkpoint) || !isTrustedUrl(page.url())) throw failure("unexpected_host");
 }
 
 async function visit(page, path, unexpectedHost) {
+  const checkpoint = unexpectedHost.count;
   await page.goto(`${STAGING_ORIGIN}${path}`, { waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost);
+  await checkTrustedPage(page, unexpectedHost, checkpoint);
+}
+
+async function reload(page, unexpectedHost) {
+  const checkpoint = unexpectedHost.count;
+  await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
+  await checkTrustedPage(page, unexpectedHost, checkpoint);
 }
 
 async function waitForVisible(locator) {
@@ -106,11 +117,11 @@ async function defaultJourney({ context, page, unexpectedHost, markSessionPossib
   try {
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
   } catch {
-    throw failure(unexpectedHost.value ? "unexpected_host" : "login_failed");
+    throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "login_failed");
   }
   await verifySettings(page, unexpectedHost);
 
-  await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
+  await reload(page, unexpectedHost);
   await verifySettings(page, unexpectedHost);
 
   const secondPage = await context.newPage();
@@ -118,17 +129,19 @@ async function defaultJourney({ context, page, unexpectedHost, markSessionPossib
   await verifySettings(secondPage, unexpectedHost);
   await verifySessionCookie(context);
 
+  const logoutCheckpoint = unexpectedHost.count;
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   try {
     // SignOutButton always navigates home after its request. Home alone is not
     // logout proof, so each existing tab must subsequently lose protected access.
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
+    await checkTrustedPage(page, unexpectedHost, logoutCheckpoint);
     await visit(page, PROTECTED_PATH, unexpectedHost);
     await verifySignInDestination(page, unexpectedHost);
     await visit(secondPage, PROTECTED_PATH, unexpectedHost);
     await verifySignInDestination(secondPage, unexpectedHost);
   } catch {
-    throw failure(unexpectedHost.value ? "unexpected_host" : "logout_failed");
+    throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "logout_failed");
   }
   markLoggedOut();
 }
@@ -145,8 +158,10 @@ async function bestEffortLogout(page, unexpectedHost) {
     return;
   }
   if (!isPath(page, "/settings", "?smoke=auth")) throw failure("cleanup_failed");
+  const logoutCheckpoint = unexpectedHost.count;
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
+  await checkTrustedPage(page, unexpectedHost, logoutCheckpoint);
   await confirmUnauthenticated(page, unexpectedHost);
 }
 
@@ -171,7 +186,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
   let sessionPossible = false;
   let loggedOut = false;
   let passed = false;
-  const unexpectedHost = { value: false };
+  const unexpectedHost = { count: 0 };
   const startedAt = Date.now();
 
   try {
@@ -180,7 +195,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     context = await browser.newContext();
     await context.route("**/*", async (route) => {
       if (!isTrustedUrl(route.request().url())) {
-        unexpectedHost.value = true;
+        unexpectedHost.count += 1;
         await route.abort();
         return;
       }
@@ -199,7 +214,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     reporter({ step: "journey", outcome: "passed", durationMs: Date.now() - startedAt });
     passed = true;
   } catch (error) {
-    reporter({ step: "journey", outcome: "failed", durationMs: Date.now() - startedAt, category: categoryFor(error, unexpectedHost.value ? "unexpected_host" : "browser_failure") });
+    reporter({ step: "journey", outcome: "failed", durationMs: Date.now() - startedAt, category: categoryFor(error, unexpectedHost.count > 0 ? "unexpected_host" : "browser_failure") });
   } finally {
     const cleanupStartedAt = Date.now();
     try {

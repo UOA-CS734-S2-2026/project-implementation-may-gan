@@ -10,23 +10,27 @@ const workflow = readFileSync(resolve(repositoryRoot, ".github", "workflows", "s
 const protectedUrl = `${STAGING_ORIGIN}/settings?smoke=auth`;
 
 function browserType(options = {}) {
-  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, session: false, signInAttempts: 0, signOutAttempts: 0 };
+  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, protectedVisits: 0, session: false, signInAttempts: 0, signOutAttempts: 0 };
   let routeHandler;
+
+  async function interceptUnexpected(reason) {
+    await routeHandler({
+      request: () => ({ url: () => "https://unexpected.example.test/resource" }),
+      abort: async () => { state.abortedOrigins.push(reason); },
+      continue: async () => { throw new Error(options.errorText); },
+    });
+  }
 
   function page() {
     let currentUrl = `${STAGING_ORIGIN}/`;
     return {
       url: () => currentUrl,
       goto: async (url) => {
-        if (options.unexpectedOrigin && state.abortedOrigins.length === 0) {
-          await routeHandler({
-            request: () => ({ url: () => "https://unexpected.example.test/resource" }),
-            abort: async () => { state.abortedOrigins.push("unexpected"); },
-            continue: async () => { throw new Error(options.errorText); },
-          });
-        }
+        if (options.unexpectedOrigin && state.abortedOrigins.length === 0) await interceptUnexpected("startup");
         const parsed = new URL(url);
         if (parsed.pathname === "/settings") {
+          state.protectedVisits += 1;
+          if (options.unexpectedDuringCleanup && state.protectedVisits === 3) await interceptUnexpected("cleanup");
           currentUrl = state.session
             ? `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`
             : `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
@@ -34,7 +38,7 @@ function browserType(options = {}) {
         }
         currentUrl = url;
       },
-      reload: async () => {},
+      reload: async () => { if (options.unexpectedAfterLogin) await interceptUnexpected("after-login"); },
       waitForURL: async (predicate) => {
         if (!predicate(new URL(currentUrl))) throw new Error(options.errorText ?? "navigation failed");
       },
@@ -140,10 +144,32 @@ test("a home navigation without successful sign-out fails and cleanup confirms t
   assertNoSensitiveOutput(result);
 });
 
+test("an external request after session creation preserves the journey failure and still cleans up", async () => {
+  const result = await runDefault({ unexpectedAfterLogin: true, errorText: "after-login private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.deepEqual(result.fake.state.abortedOrigins, ["after-login"]);
+  assert.equal(result.fake.state.session, false);
+  assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.match(result.output, /step=journey outcome=failed .*category=unexpected_host/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("a fresh external request during cleanup is blocked and fails safely", async () => {
+  const result = await runDefault({ cookieMismatch: true, unexpectedDuringCleanup: true, errorText: "cleanup-origin private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.deepEqual(result.fake.state.abortedOrigins, ["cleanup"]);
+  assert.equal(result.fake.state.session, true);
+  assert.equal(result.fake.state.signOutAttempts, 0);
+  assert.match(result.output, /step=journey outcome=failed .*category=session_cookie_attributes/);
+  assert.match(result.output, /step=cleanup outcome=failed .*category=cleanup_failed/);
+  assertNoSensitiveOutput(result);
+});
+
 test("unexpected-origin interception, cookie mismatches, and close failures are non-sensitive failures", async () => {
   const redirect = await runDefault({ unexpectedOrigin: true, errorText: "redirect private-password session=private-cookie" });
   assert.equal(redirect.passed, false);
-  assert.deepEqual(redirect.fake.state.abortedOrigins, ["unexpected"]);
+  assert.deepEqual(redirect.fake.state.abortedOrigins, ["startup"]);
   assert.match(redirect.output, /category=unexpected_host/);
   assertNoSensitiveOutput(redirect);
 
