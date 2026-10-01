@@ -26,6 +26,20 @@ vi.mock("./app", async () => {
 const { default: worker } = await import("./index");
 
 describe("Worker fetch entrypoint", () => {
+  it.each(["agroupforcoders.com", "external.workers.dev", ""])("rejects public Worker traffic %j before app construction", async (marker) => {
+    createAppForEnv.mockClear();
+    send.mockClear();
+    for (const path of ["/api/auth/get-session", "/api/v1/posts", "/api/v1/realtime/connect", "/health"]) {
+      const response = await worker.fetch(new Request(`https://api.example.test${path}`, {
+        headers: { "CF-Worker": marker, "cf-connecting-ip": "203.0.113.10", authorization: "Bearer native", "x-dayli-browser-source": "203.0.113.20" },
+      }), {} as import("./env").ApiEnv, {} as ExecutionContext);
+      expect(response.status).toBe(403);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toEqual({ error: { code: "WORKER_ORIGIN_NOT_ALLOWED" } });
+    }
+    expect(createAppForEnv).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
   it("forwards the execution context so a successful write retains waitUntil work", async () => {
     send.mockClear();
     dispatchImmediately.mockClear();
@@ -41,7 +55,7 @@ describe("Worker fetch entrypoint", () => {
     const response = await worker.fetch(
       new Request("https://api.example.test/api/v1/conversations/c1/messages", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-real-ip": "203.0.113.7", "cf-connecting-ip": "203.0.113.7", authorization: "Bearer native" },
         body: JSON.stringify({ clientMessageId: "client", text: "hello" }),
       }),
       environment,

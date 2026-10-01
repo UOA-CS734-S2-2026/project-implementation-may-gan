@@ -20,7 +20,7 @@ pnpm test:proxy-provenance
 pnpm exec eslint scripts/proxy-provenance.mjs scripts/proxy-provenance
 ```
 
-The command runs eight Node tests and a real workerd smoke test. CI and `verify:local` include it. These tests cover the token gate, expiry, output sanitization, HMAC separation, fixed target, redirect handling, and Worker execution. Local workerd does not establish Cloudflare edge header ownership.
+The command typechecks the Worker source and runs nine Node tests and a real workerd smoke test. CI and `verify:local` include it. These tests cover the token gate, expiry, output sanitization, HMAC separation, fixed target, redirect handling, and Worker execution. Local workerd does not establish Cloudflare edge header ownership.
 
 ## Set up an approved run
 
@@ -104,6 +104,18 @@ The owner supplied labelled PC and mobile results after receiving the Wi-Fi/mobi
 The two source fingerprints differed within the same run. Both requests included legitimate `x-real-ip` matching the selected identity. This establishes separate selected identities for these samples. It does not prove actual rate-limit enforcement, and the hash difference alone cannot establish independent physical networks because the address families also differ.
 
 After receiving these results, the assistant ran cleanup successfully. The Cloudflare API confirmed both diagnostic Workers and both custom-domain mappings were absent. Authoritative DNS returned no records for either hostname. A recursive resolver briefly retained the receiver's earlier DNS answer, consistent with caching after deletion. The local token, private link, and convenience symlink were removed. Sanitized reports remain locally; no app Worker or database was changed.
+
+## Mitigation follow-up, 2026-10-01
+
+The implementation now rejects any present `CF-Worker` header, including an empty value, before the web proxy dispatches or the public API constructs its application. Those endpoints return a no-store 403. The source selector also rejects the marker, and server-side session/profile request construction preserves it rather than laundering an incoming Worker request into a browser request. The refresh route preserves the marker too; it maps the rejected upstream result to its existing no-cookie 502 failure response. Public landing HTML may still render, but no authenticated session/profile fetch occurs for marked requests.
+
+The private `BrowserProxyEntrypoint` remains separate from the public API fetch handler. Legitimate `x-real-ip` headers are still allowed. This policy deliberately does not support public API calls from other Cloudflare Workers, including Worker-hosted monitors or integrations. There is no Worker-zone allowlist. Scheduled handlers, direct native bearer clients, and direct ticket WebSockets do not use that incoming-Worker path. R2 upload code is unchanged.
+
+A second temporary edge run exercised the patched production selector. All six same-zone cases and all six workers.dev cases were rejected by the selector, including omission and forgery of the Worker marker. Ordinary direct requests and direct marker/header forgery cases remained accepted with the edge-owned identity. The combined direct forwarding forgery still received an edge 403. The diagnostic itself returns 200 for a successfully collected observation; `selectorAccepted: false` is the rejection evidence, not an application HTTP response.
+
+The second pair of diagnostic Workers was deleted after collection. API inventory and authoritative DNS confirmed cleanup. No new phone test was requested, and the live application Workers were not deployed by this verification.
+
+Local verification passed: 461 API tests, 150 web tests, two real workerd proxy tests, and ten diagnostic tests including workerd. The proxy integration fixture now compiles the real production web proxy instead of copying its forwarding logic. The complete `pnpm verify:local` run passed, including build, generated clients, Flutter, and isolated PostgreSQL checks. Application rollout and deployed vinext/session compatibility checks remain pending.
 
 References:
 

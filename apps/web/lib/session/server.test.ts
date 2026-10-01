@@ -38,6 +38,14 @@ describe("resolveServerSession", () => {
     expect(result).toEqual({ state: "cookie-mutation-required" });
   });
 
+  it.each(["agroupforcoders.com", ""])("preserves Worker provenance %j when constructing session requests", async (marker) => {
+    const headers = new Headers(sourceHeaders);
+    headers.set("cf-worker", marker);
+    const fetch = vi.fn();
+    await expect(resolveServerSession(headers, { fetch })).resolves.toEqual({ state: "unavailable" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("does not treat a missing source proof as signed out", async () => {
     await expect(resolveServerSession(new Headers({ cookie: "session=old" }), { fetch: vi.fn() }))
       .resolves.toEqual({ state: "unavailable" });

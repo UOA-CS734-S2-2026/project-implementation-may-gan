@@ -34,14 +34,14 @@ test("unauthorized, query-bearing, and mutating requests never expose metadata",
 test("observations use the production selector and never expose raw identities or credentials", async () => {
   const rawIp = "2001:db8::1234";
   const secretCookie = "sensitive-cookie";
-  const request = sample({ "cf-connecting-ip": rawIp, "x-real-ip": rawIp, "cf-worker": env.EXPECTED_ZONE, cookie: secretCookie });
+  const request = sample({ "cf-connecting-ip": rawIp, "x-real-ip": rawIp, cookie: secretCookie });
   const r = await receiver.fetch(request, env);
   const body = await r.json() as Awaited<ReturnType<typeof observe>>;
   assert.equal(r.status, 200);
   assert.equal(r.headers.get("cache-control"), "no-store, private");
   assert.equal(r.headers.get("access-control-allow-origin"), null);
   assert.equal(body.selectorAccepted, true);
-  assert.equal(body.cfWorker, "same-zone");
+  assert.equal(body.cfWorker, "absent");
   assert.equal(body.xRealMatchesSelected, true);
   assert.equal(body.sourceKeyHash, await fingerprint(rawIp, env.HASH_KEY));
   assert.notEqual(body.sourceKeyHash, await fingerprint(rawIp, "c".repeat(64)));
@@ -54,8 +54,19 @@ test("synthetic and cross-zone identities are labelled rather than printed", asy
   const other = await observe(sample({ "cf-connecting-ip": "2a06:98c0:3600::103", "cf-worker": "external.invalid" }), env);
   assert.equal(other.fixedCrossZoneIp, true);
   assert.equal(other.cfWorker, "other");
+  assert.equal(other.selectorAccepted, false);
+  assert.equal(other.sourceKeyHash, null);
   assert.equal(JSON.stringify(other).includes("2a06:98c0:3600::103"), false);
   assert.equal((await observe(sample({ "cf-connecting-ip": "malformed" }), env)).selectorAccepted, false);
+});
+
+test("same-zone Worker metadata is observed but cannot become a selected identity", async () => {
+  for (const marker of [env.EXPECTED_ZONE, ""]) {
+    const observation = await observe(sample({ "cf-worker": marker }), env);
+    assert.equal(observation.selectorAccepted, false);
+    assert.equal(observation.selectedSynthetic, null);
+    assert.equal(observation.sourceKeyHash, null);
+  }
 });
 
 test("browser page removes the fragment, omits cookies, and has no telemetry", async () => {

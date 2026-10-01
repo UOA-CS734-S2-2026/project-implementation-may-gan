@@ -10,6 +10,12 @@ export { UserRealtime } from "./infrastructure/realtime/user-realtime";
 
 export default {
   fetch(request: Request, env: ApiEnv, context: ExecutionContext): Response | Promise<Response> {
+    // Public Worker subrequests can select their own source IP. The private
+    // BrowserProxyEntrypoint does not use this public fetch handler.
+    if (request.headers.has("cf-worker")) return Response.json({ error: { code: "WORKER_ORIGIN_NOT_ALLOWED" } }, {
+      status: 403,
+      headers: { "Cache-Control": "no-store" },
+    });
     return createAppForEnv(env).fetch(request, env, context);
   },
   scheduled(_event: ScheduledEvent, env: ApiEnv, context: ExecutionContext): void {

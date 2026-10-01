@@ -399,6 +399,20 @@ After the device results, the assistant deleted both temporary Workers. The Clou
 
 `CF-Worker` remains a candidate rejection signal, supported by these observed cases and Cloudflare documentation, but enforcement and broader compatibility testing remain separate work. See [Temporary source-provenance diagnostic](./proxy-provenance-diagnostic.md) for commands, interpretation limits, device results, and cleanup.
 
+## 21. Worker-origin rejection implementation, 2026-10-01
+
+After seeing the diagnostic and device results, the owner requested the fix. The assistant implemented it directly. The web proxy and public API fetch handler reject any present `CF-Worker` header with a no-store 403 before forwarding or constructing the application. The selector rejects the same marker. No `x-real-ip` blanket filter or Worker-zone allowlist was added.
+
+Review of the server-rendered path found that session and username helpers reconstructed requests using only cookies and `cf-connecting-ip`. Those helpers now preserve `cf-worker`, including an empty value, so they cannot remove the rejection signal before invoking the proxy. Tests also cover the existing refresh route's preservation of incoming headers and its no-cookie error response. Public landing rendering can remain available without making a session or profile request for marked traffic.
+
+The API's private named entrypoint bypasses the public fetch handler intentionally. Its source-context validation and service-binding trust boundary remain unchanged. The workerd integration fixture now compiles the real production web proxy instead of emulating it. Tests show public and web-proxy rejection while private entrypoint routing still works. This is not a deployed vinext cookie-lifecycle proof.
+
+A second temporary edge diagnostic used the patched selector. All twelve Worker-originated cases were rejected, covering six same-zone and six workers.dev variants. Direct requests still selected a source identity, and the edge stripped a directly forged Worker marker. The combined direct forwarding forgery still returned 403. These are deployed selector observations, not proof that the main staging application has received the patch.
+
+All temporary diagnostic resources and local access-token files were removed afterward. Cloudflare API inventory and authoritative DNS confirmed cleanup. The full `pnpm verify:local` suite passed, including 461 API tests, 150 web tests, two proxy workerd tests, ten diagnostic tests, builds, generated clients, Flutter checks, and isolated PostgreSQL verification.
+
+This intentionally disallows other Cloudflare Workers from calling the public API, including Worker-based monitors and integrations. Direct browsers, native bearer clients, the private service binding, and scheduled handlers remain supported by the code paths and local tests. The app rollout and deployed compatibility checks remain pending; the proxy recovery flag is retained.
+
 ## References for platform assumptions
 
 - [Cloudflare visitor-IP behavior in Worker subrequests](https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-connecting-ip-in-worker-subrequests)

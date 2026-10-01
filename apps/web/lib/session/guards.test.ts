@@ -4,6 +4,15 @@ import { hasSessionRefreshAttempt, requireUsernameReady, resolveLanding, safeRet
 const headers = new Headers({ "cf-connecting-ip": "203.0.113.7", cookie: "session=valid" });
 
 describe("server session guards", () => {
+  it.each(["agroupforcoders.com", ""])("does not fetch session or profile data for Worker-originated pages %j", async (marker) => {
+    const incoming = new Headers(headers);
+    incoming.set("cf-worker", marker);
+    const fetch = vi.fn();
+    await expect(requireUsernameReady(incoming, { fetch }, "/home")).resolves.toEqual({ state: "unavailable" });
+    await expect(resolveLanding(incoming, { fetch })).resolves.toEqual({ state: "render" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("uses only safe relative return destinations", () => {
     expect(safeReturnPath("/messages/new?draft=1")).toBe("/messages/new?draft=1");
     expect(safeReturnPath("//attacker.example")).toBe("/");

@@ -33,9 +33,9 @@ export function sessionGuard(result: ServerSessionResult, returnTo: string, refr
 
 function browserRequest(headers: Headers, path: string): Request {
   const forwarded = new Headers();
-  for (const name of ["cookie", "cf-connecting-ip"]) {
+  for (const name of ["cookie", "cf-connecting-ip", "cf-worker"]) {
     const value = headers.get(name);
-    if (value) forwarded.set(name, value);
+    if (value !== null) forwarded.set(name, value);
   }
   return new Request(`https://server-session.invalid${path}`, { headers: forwarded, cache: "no-store" });
 }

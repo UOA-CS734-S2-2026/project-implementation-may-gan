@@ -119,6 +119,17 @@ describe("browser API proxy", () => {
     expect(transport.fetch).not.toHaveBeenCalled();
   });
 
+  it.each(["agroupforcoders.com", "external.workers.dev", "", "forged.invalid"])("rejects a Worker marker %j before private transport dispatch", async (marker) => {
+    const transport = { fetch: vi.fn() };
+    const request = browserRequest({ "CF-Worker": marker, "x-real-ip": "203.0.113.10" });
+    expect(selectBrowserSource(request)).toEqual({ ok: false });
+    const response = await forwardBrowserApiRequest(request, transport);
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: { code: "WORKER_ORIGIN_NOT_ALLOWED" } });
+    expect(transport.fetch).not.toHaveBeenCalled();
+  });
+
   it("selects only the Cloudflare ingress header, not client forwarding headers", () => {
     expect(selectBrowserSource(browserRequest({
       "cf-connecting-ip": "203.0.113.8",

@@ -32,9 +32,9 @@ export async function resolveServerSession(
   transport: ApiTransport | undefined,
 ): Promise<ServerSessionResult> {
   const requestHeaders = new Headers();
-  for (const name of ["cookie", "cf-connecting-ip"]) {
+  for (const name of ["cookie", "cf-connecting-ip", "cf-worker"]) {
     const value = incomingHeaders.get(name);
-    if (value) requestHeaders.set(name, value);
+    if (value !== null) requestHeaders.set(name, value);
   }
   const request = new Request("https://server-session.invalid/api/auth/get-session?disableCookieCache=true", {
     headers: requestHeaders,
