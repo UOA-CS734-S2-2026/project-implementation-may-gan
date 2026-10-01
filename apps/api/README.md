@@ -52,7 +52,7 @@ If a secure credential tool supplies the values instead, replace the `read` comm
 
 ### Protected GitHub workflow
 
-`.github/workflows/staging-hyperdrive.yml` runs only on manual dispatch. It has no pull request or `main` push trigger. This preserves a credentialed proof path for after staging is provisioned without making it an automatic PR gate or staging deployment.
+`.github/workflows/staging-hyperdrive.yml` can run after successful same-repository `main` CI or by manual dispatch from `main`. It has no pull request or `main` push trigger. The checked-in [hosted mutation hold](../../docs/implementation/hosted-mutation-hold.md) denies both paths until an owner explicitly authorizes a reviewed commit from live main history.
 
 After provisioning, configure the full variable and secret allowlist in [the staging deployment guide](../../docs/implementation/staging-deployment.md). `STAGING_AUTH_SITE_HOST` is the reviewed shared parent hostname for the two distinct custom staging hosts, without a scheme or path. The workflow requires `main`, rejects localhost and platform-provided domains, checks both exact HTTPS origins, validates the exact service name and uncached Hyperdrive, and never targets the default `dayli-api` Worker. It synchronizes Worker secrets only after those checks. After the private tests pass, the GitHub runner writes sanitized evidence outside the Worker sandbox. It does not use `pull_request_target`.
 
