@@ -18,8 +18,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  migrate:
+  hosted-mutation-authorization:
     if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      authorized: ${{ steps.authorization.outputs.authorized }}
+      target_sha: ${{ steps.authorization.outputs.target_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+          fetch-depth: 0
+      - id: authorization
+        name: Check the live operational hold
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          TARGET_SHA="$(node scripts/check-hosted-mutation-authorization.mjs --expected-sha "$EXPECTED_SHA")"
+          echo 'authorized=true' >> "$GITHUB_OUTPUT"
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+
+  migrate:
+    needs: hosted-mutation-authorization
+    if: github.ref == 'refs/heads/main' && needs.hosted-mutation-authorization.outputs.authorized == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.target }}
     permissions:
@@ -32,6 +55,8 @@ jobs:
       CONFIRM_NEON_BACKUP_CHECKED: ${{ inputs.target == 'production' && inputs.production_backup_checked == 'checked' && 'true' || '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.hosted-mutation-authorization.outputs.target_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
