@@ -155,7 +155,7 @@ suite("send message Postgres repository", () => {
     expect(stored?.sequence).toBe("9007199254740991");
   });
 
-  it("preserves Number.MAX_SAFE_INTEGER plus one as an exact text sequence", async () => {
+  it("rejects Number.MAX_SAFE_INTEGER plus one and rolls back counter, message, change, and outbox work", async () => {
     const created = await direct.create(users[0]!, {
       recipientId: users[1]!,
       clientMessageId: crypto.randomUUID(),
@@ -166,23 +166,22 @@ suite("send message Postgres repository", () => {
     const [beforeOutboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
     await database.db.update(conversations).set({ lastMessageSequence: sql`9007199254740991::bigint` }).where(eq(conversations.id, created.conversation.id));
 
-    const result = await send.send(users[0]!, created.conversation.id, {
+    await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId: crypto.randomUUID(),
       text: "unsafe",
-    });
-    expect(result).toMatchObject({ replayed: false, message: { sequence: "9007199254740992" } });
+    })).rejects.toThrow(RangeError);
 
     const [conversation] = await database.db.select({ sequence: sql<string>`${conversations.lastMessageSequence}::text` }).from(conversations).where(eq(conversations.id, created.conversation.id));
     const [messageCount] = await database.db.select({ count: count() }).from(messages).where(eq(messages.conversationId, created.conversation.id));
     const [changeCount] = await database.db.select({ count: count() }).from(conversationChanges).where(eq(conversationChanges.conversationId, created.conversation.id));
     const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, created.conversation.id));
-    expect(conversation?.sequence).toBe("9007199254740992");
-    expect(messageCount?.count).toBe((beforeMessageCount?.count ?? 0) + 1);
-    expect(changeCount?.count).toBe((beforeChangeCount?.count ?? 0) + 1);
-    expect(outboxCount?.count).toBeGreaterThan(beforeOutboxCount?.count ?? 0);
+    expect(conversation?.sequence).toBe("9007199254740991");
+    expect(messageCount?.count).toBe(beforeMessageCount?.count);
+    expect(changeCount?.count).toBe(beforeChangeCount?.count);
+    expect(outboxCount?.count).toBe(beforeOutboxCount?.count);
   });
 
-  it("replays an existing idempotent message with an exact text sequence", async () => {
+  it("fails closed when an existing idempotent message has an unsafe sequence", async () => {
     const clientMessageId = crypto.randomUUID();
     const created = await direct.create(users[0]!, {
       recipientId: users[5]!,
@@ -196,7 +195,7 @@ suite("send message Postgres repository", () => {
     await expect(send.send(users[0]!, created.conversation.id, {
       clientMessageId,
       text: "first",
-    })).resolves.toMatchObject({ replayed: true, message: { sequence: "9007199254740992" } });
+    })).rejects.toThrow(RangeError);
 
     const [conversation] = await database.db.select({ sequence: sql<string>`${conversations.lastMessageSequence}::text` }).from(conversations).where(eq(conversations.id, created.conversation.id));
     const [message] = await database.db.select({ sequence: sql<string>`${messages.sequence}::text` }).from(messages).where(eq(messages.id, created.message.id));

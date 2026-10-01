@@ -1,6 +1,7 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
+import { requireSafeMessageVersion, requireSafeSequenceText } from "../../shared/safe-sequence";
 import type {
   DirectConversation,
   DirectConversationStore,
@@ -43,8 +44,8 @@ const messageSelection = {
 function storedMessage(row: MessageRow): StoredMessage {
   return {
     ...row,
-    sequence: BigInt(row.sequence),
-    version: Number(row.version),
+    sequence: BigInt(requireSafeSequenceText(row.sequence)),
+    version: requireSafeMessageVersion(row.version),
     reactions: [],
   };
 }
@@ -225,12 +226,14 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       })
       .where(eq(schema.conversations.id, input.conversation.id))
       .returning({ sequence: sql<string>`${schema.conversations.lastMessageSequence}::text` });
+    if (!allocated) throw new Error("Conversation disappeared during message insert.");
+    const sequence = requireSafeSequenceText(allocated.sequence);
     const [message] = await this.queryable
       .insert(schema.messages)
       .values({
         id: input.messageId,
         conversationId: input.conversation.id,
-        sequence: sql`${allocated!.sequence}::bigint`,
+        sequence: sql`${sequence}::bigint`,
         senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,

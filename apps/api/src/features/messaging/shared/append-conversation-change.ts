@@ -1,5 +1,6 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
+import { requireSafeSequenceText } from "./safe-sequence";
 
 type Queryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 
@@ -26,7 +27,8 @@ export async function appendConversationChange(
     });
   if (!change) throw new Error("Conversation disappeared during change append.");
 
-  const changeSequence = sql`${change.sequence}::bigint`;
+  const sequence = requireSafeSequenceText(change.sequence);
+  const changeSequence = sql`${sequence}::bigint`;
   await queryable.insert(schema.conversationChanges).values({
     conversationId,
     changeSequence,
