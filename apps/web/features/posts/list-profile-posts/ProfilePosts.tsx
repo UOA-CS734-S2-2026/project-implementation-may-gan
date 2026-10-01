@@ -96,6 +96,7 @@ export function ProfilePosts({ username, displayName, isMe }: { username: string
             prompt={post.prompt.text}
             promptResponse={post.reflectiveAnswer}
             createdAt={post.acceptedAt}
+            media={post.media[0] ?? null}
             label={labelFor(post)}
           />
         ))}
