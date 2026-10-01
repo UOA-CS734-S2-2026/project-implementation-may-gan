@@ -1,6 +1,6 @@
 # Media reservations
 
-`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Reading attached media is covered in [Downloads](#downloads-issue-24) (#24); cleanup of abandoned reservations is issue #25.
+`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Reading attached media is covered in [Downloads](#downloads-issue-24) (#24); cleanup of abandoned reservations is covered in [Cleanup](#cleanup-issue-25) (#25).
 
 ## How it works
 
@@ -29,6 +29,21 @@ Only after all of that does one short atomic `UPDATE ... WHERE status='pending' 
 A settled outcome (`validated` or `failed`) is terminal and idempotent: repeat calls return the stored result with zero R2 calls, since the bytes at an object key don't change. A client that wants to fix a bad upload reserves again rather than retrying `/complete`. The one non-terminal case is calling `/complete` before the object has actually landed in R2 (`HEAD` 404s) — nothing is persisted, the reservation stays `pending`, and the client can retry until the reservation's TTL expires (`409 CONFLICT` after that).
 
 A failed validation returns `200` with `{status: "failed", failureReason}` rather than a 4xx — the HTTP request to complete succeeded; the uploaded *content* failing is a normal outcome, not a malformed request. `failureReason` is one of `byte_size_mismatch`, `format_mismatch`, `duration_exceeded`, `malformed_container`, or `object_not_found` (only written for the rare case where an object existed at `HEAD` time but vanished before a following read — a genuine race, not the ordinary not-yet-uploaded case).
+
+## Cleanup (issue #25)
+
+A scheduled job deletes uploads nobody attached, so abandoned objects and rows don't pile up. It runs from the Worker's one-minute cron, after the messaging dispatcher, and never from a request. It has no HTTP surface, so there is nothing for a client to call or to authorise against.
+
+- **What is abandoned.** A reservation whose `expires_at` passed more than **24 hours** ago and that no `post_media` row has ever linked, attached or detached. The status doesn't matter: `pending`, `validated` and `failed` uploads are all removed. The 24 hours (`MEDIA_CLEANUP_GRACE_MS`) comes after the 15-minute upload TTL so a presigned PUT URL is long dead before its object goes. It also lets a draft that resumes later the same day still attach a `validated` upload. If it has gone, the client already re-uploads on `MEDIA_UNAVAILABLE`.
+- **Never attached media.** Three independent guards stop an attached upload being deleted: the claim and the retry both require no `post_media` row, the final row delete requires it again, and `post_media.reservation_id` is `ON DELETE RESTRICT`.
+- **No race with attach.** R2 can't be called inside a transaction, so the job tombstones first. In one short transaction it locks candidate rows with `FOR UPDATE SKIP LOCKED`, then in a second statement (a fresh snapshot, with the locks held) re-checks eligibility and sets `cleanup_claimed_at`. Attaching a post takes the same row lock, so an upload is either attached or claimed. An attach that holds the lock makes the job skip that row. An attach that starts after the claim sees the tombstone and answers `MEDIA_UNAVAILABLE`. After the claim, `/complete` returns `404` and `GET` reports `expired`. The claim is permanent, and only the row delete removes it.
+- **Leased and retried.** The claim also sets a 60-second lease token and increments `cleanup_attempts`. The job then sends one signed `DELETE` for the object (`404` counts as success, so a retry after a lost response is fine) and deletes the row only if its lease token still matches. A failed or timed-out delete reschedules the row with capped exponential backoff and jitter (the same `retryDelayMs` as the messaging outbox). A lease that expires without a result makes the row claimable again, and the old holder can no longer delete or reschedule it. After 8 attempts the row stays tombstoned with its due time cleared (both `cleanup_lease_expires_at` and `cleanup_available_at` are null), so it is never attached, never retried, and an operator can find it with `cleanup_claimed_at is not null and cleanup_lease_expires_at is null and cleanup_available_at is null`.
+- **Bounded.** One job at a time, at most 25 per cron run and about 20 seconds, with a 10-second timeout on each delete. Two partial indexes keep the claim query cheap as cleanup state accumulates: `media_reservation_cleanup_candidate_idx` for unclaimed uploads, and `media_reservation_cleanup_retry_idx` on the same `coalesce(cleanup_lease_expires_at, cleanup_available_at)` the retry query uses. The retry index has no entry for an exhausted row, so a dead worker's expired lease is found directly and exhausted rows are never scanned.
+- **Without R2.** If any `R2_*` binding is missing the run is skipped, so nothing is tombstoned that can't be finished.
+- **Logging.** A run that claimed anything logs its counts (claimed, deleted, rescheduled, failed, fenced). It never logs object keys, owners or errors.
+- **Quota.** Only `pending` reservations with a future `expires_at` count toward the per-owner cap, so cleanup doesn't change it.
+
+The R2 token from the setup below needs delete permission on the bucket. **Object Read & Write** includes it, but check it on staging before relying on it (see the staging checks).
 
 ## Flutter client 
 
@@ -95,6 +110,12 @@ Checked manually against the deployed staging API and `dayli-media-staging` on 2
 4. `GET /api/v1/posts/{id}/media/{mediaId}` as a non-friend gets `404`, and as a friend returns a new URL.
 5. Note which caching headers R2 sends on a signed GET. If it allows public caching, consider signing a `response-cache-control=private, no-store` override.
 
+**Cleanup (#25), still to run on staging** after migration `0018` and the API that runs the job are deployed. Use synthetic files only, and don't wait 24 hours: set `expires_at` and `created_at` on a test reservation back by more than a day, as the migrator, in the staging database.
+1. Reserve and PUT a photo, then back-date its reservation. Within a minute or two its object is gone from R2 (`HEAD` returns `404`) and its row is gone. This also shows the R2 token can delete.
+2. Do the same for a reservation that is attached to a post. Neither the object nor the row changes.
+3. Do the same for a `pending` reservation that never had an object. The row goes and the job doesn't fail.
+4. Temporarily point the Worker at a bucket name the token can't delete from, back-date a reservation, and check that its row stays tombstoned with `cleanup_attempts` rising and `/complete` returning `404`. Restore the binding afterwards.
+
 ## Quota and expiry (proposed defaults)
 
 No numeric policy exists elsewhere in these docs for reservation TTL or a per-owner pending-reservation cap. Current defaults, in `apps/api/src/features/media/shared/media-reservation-policy.ts`:
@@ -102,8 +123,9 @@ No numeric policy exists elsewhere in these docs for reservation TTL or a per-ow
 | Constant | Value | Rationale |
 | --- | --- | --- |
 | `RESERVATION_TTL_SECONDS` | 15 minutes | Matches Better Auth's own reset/verification token TTL precedent in this codebase. |
-| `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Row deletion remains separate work. |
+| `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Expired rows are deleted by [Cleanup](#cleanup-issue-25). |
 | `MAX_ATTACHMENT_BYTES` | 10 MB | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). |
+| `MEDIA_CLEANUP_GRACE_MS` | 24 hours | How long after `expires_at` an unlinked upload survives before cleanup. Must stay well above the 15-minute TTL. In `apps/api/src/infrastructure/jobs/dispatch-media-cleanup.ts`. |
 | `MAX_VIDEO_DURATION_SECONDS` | 15 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by the completion check. |
 
 Revisit these through a reviewed documentation update if the team wants different values, per the change process in [product decisions](product-decisions.md).
