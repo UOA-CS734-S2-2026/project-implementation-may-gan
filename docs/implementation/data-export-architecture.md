@@ -4,8 +4,8 @@ Status: approved engineering direction, not an implemented or enabled export ser
 
 ## Decisions
 
-- A self-service export contains the account holder's approved profile fields, owned journals and revisions, private tomorrow notes, authored messages, restorable Trash, and owned upload bytes once ownership can be proved. It excludes received message bodies and copied reply previews, other users' private data, credentials, sessions, provider tokens, secret keys, raw logs, purged data, and unreviewed fields.
-- Export is explicit and default-deny. A new database table or column, JSON key family, or object namespace does not automatically become downloadable. CI requires an ownership, export, deletion, retention, access, and test classification before the change can merge. An exclusion is an explicit classification, not a reason to skip review.
+- A self-service export contains the account holder's approved profile fields, owned journals and revisions, private tomorrow notes, authored retained messages that the requester can currently access, restorable Trash, owned upload bytes once ownership can be proved, and minimal Terms acceptance and 16+ declaration records. It excludes received message bodies and copied reply previews, other users' private data, credentials, sessions, provider tokens, secret keys, raw logs, purged data, and unreviewed fields. No date of birth or identity document is collected for the declaration.
+- Export is explicit and default-deny. A new database table or column, JSON key family, or object namespace does not automatically become downloadable. CI requires an ownership, export, deletion, retention, access, retained-other-user, Trash/restore, and test classification before the change can merge. Record `not_applicable` explicitly where a category does not apply. An exclusion is an explicit classification, not a reason to skip review.
 - The archive is a versioned ZIP with machine-readable records and a manifest. Its `selectionCutoffAt` is a selection cutoff, not an atomic historical database snapshot. Each source applies it independently, so an archive can contain a mixed-time view. Do not call it a consistent snapshot.
 - Downloads use an authenticated API route with fresh ownership and lifecycle checks, not a signed object URL. Ready archives expire after 24 hours. An export neither delays nor extends account deletion. Publication after purge begins is forbidden.
 - This self-service product archive is not a promise that it contains every piece of personal information Dayli might need to consider for a separate formal access request. Such requests need their own review path and applicable legal advice.
@@ -14,7 +14,7 @@ Status: approved engineering direction, not an implemented or enabled export ser
 
 Main currently has the lifecycle schema foundation. PR #191 is an unfinished, unmerged export implementation. In that branch, `packages/db/src/export-worker.ts` loops over `profile`, `journals`, `revisions`, `notes`, and `messages`; `packages/db/migrations/0034_export_source_budgets.sql` explicitly accepts those kinds and defines their bounded SQL projections; `apps/api/src/features/data-export/build-export/export-worker.ts` has a separate archive manifest list. These are the present allowlists, not a single extensible registry. The migration number is branch-local and must be reconciled with published main before any integration.
 
-The partial branch does not export owned upload bytes. Its `post_media` relationships do not prove which R2 key belongs in an archive. It does not yet implement the required checked-in data inventory. The later local reconciliation prototype is also unpublished and unapproved. Known review gaps include lease-fenced inventory authorization, resolution of recorded cleanup incidents after later success, broad real-role and runtime tests, complete source canaries, and authenticated client journeys. Do not merge #191 or the frozen export code in #196 as if these gaps were closed.
+The partial branch does not export owned upload bytes, Terms acceptance, age declarations, or restorable Trash. Its authored-message projection selects by the sender's participant identity but does not independently check current conversation authorization. Its `post_media` relationships do not prove which R2 key belongs in an archive. It does not yet implement the required checked-in data inventory. The later local reconciliation prototype is also unpublished and unapproved. Known review gaps include lease-fenced inventory authorization, resolution of recorded cleanup incidents after later success, broad real-role and runtime tests, complete source canaries, and authenticated client journeys. Do not merge #191 or the frozen export code in #196 as if these gaps were closed.
 
 ## Target design
 
@@ -22,7 +22,7 @@ The partial branch does not export owned upload bytes. Its `post_media` relation
 
 Keep a version-controlled inventory under `packages/db` or `docs/implementation` with machine-checked identifiers. Every Dayli-owned persistent table and column in the baseline gets an accounting entry. Straightforward columns may share a table-level decision; user content, secrets, third-party data, ownership keys, free-form JSON, and mixed-use columns need explicit field or key-family decisions. Include Better Auth storage, lifecycle records, retained messaging data, logs under Dayli's control, and object namespaces in the review. Record external provider storage and retention separately where it cannot be introspected from migrations.
 
-Each entry states its owner relationship, export treatment, deletion treatment, retention rule, access boundary, and behavioral test reference. An example of the intended shape, not an implemented API:
+Each entry states its owner relationship, export treatment, deletion treatment, retention rule, access boundary, retained-other-user behavior, Trash/restore behavior, and behavioral test reference. An example of the intended shape, not an implemented API:
 
 ```ts
 const dataInventory = {
@@ -32,6 +32,8 @@ const dataInventory = {
     deletion: "purge_with_account",
     retention: "while_owned_or_restorable",
     access: "owner_scoped_projection",
+    retainedForOthers: "not_applicable",
+    trashRestore: "include_only_while_restorable",
     tests: ["journal_export_owner_isolation"],
   },
   "public.session": {
@@ -40,6 +42,8 @@ const dataInventory = {
     deletion: "revoke_then_purge",
     retention: "auth_policy",
     access: "auth_only",
+    retainedForOthers: "not_applicable",
+    trashRestore: "not_applicable",
     tests: ["session_never_in_archive"],
   },
 } as const;
@@ -47,13 +51,13 @@ const dataInventory = {
 
 The actual schema must be inventoried in full. This snippet does not imply that the three example post fields are the complete approved projection. In particular, a table-level shorthand must never hide an unclassified new column.
 
-In CI, migrate a disposable PostgreSQL database and compare its relevant schemas, tables, and columns against the inventory. Fail on missing or stale identifiers and unclassified additions. Use an explicit registry for object key namespaces and prohibit free-form new prefixes through a repository check. Inspect JSON payload schemas and object ownership paths separately since SQL column introspection cannot reveal their contents. Check that every approved export source has a test and that every declared exclusion has a negative canary. The inventory records decisions; it must not generate SQL grants or `SELECT *` exports.
+In CI, migrate a disposable PostgreSQL database and compare its relevant schemas, tables, and columns against the inventory. Fail on missing or stale identifiers, unclassified additions, or missing retained-other-user and Trash/restore decisions. Use an explicit registry for object key namespaces and prohibit free-form new prefixes through a repository check. Inspect JSON payload schemas and object ownership paths separately since SQL column introspection cannot reveal their contents. Check that every approved export source has a test and that every declared exclusion has a negative canary. The inventory records decisions; it must not generate SQL grants or `SELECT *` exports.
 
 ### 2. Reviewed source contracts
 
 Use one typed list of approved source kinds and record types to drive worker iteration and archive-manifest declaration. Each kind still has an explicitly reviewed, versioned database projection or file adapter. CI checks the list against procedures, inventory entries, and archive tests. Do not build SQL by concatenating table names or expose a general table export endpoint.
 
-A new diary feature, for example, would classify its columns, add a `diary` kind, then add a query selecting approved fields from rows owned by the requesting user. The query uses stable keyset pagination, a bounded response, record-size limits, and the recorded selection cutoff. It never selects arbitrary columns. Add a fixture proving the owner's diary appears while another user's diary, unapproved fields, and received content do not. Derive the manifest kinds from the same source declaration to avoid the current three-list drift.
+A new diary feature, for example, would classify its columns, add a `diary` kind, then add a query selecting approved fields from rows owned by the requesting user. The query uses stable keyset pagination, a bounded response, record-size limits, and the recorded selection cutoff. It never selects arbitrary columns. For authored messages, also check current conversation authorization on each page; participant authorship alone is insufficient. Add fixtures proving the owner's accessible records appear while another user's diary, unapproved fields, received bodies, and messages in blocked, declined, revoked, or otherwise inaccessible conversations do not. Derive the manifest kinds from the same source declaration to avoid the current three-list drift.
 
 ### 3. Restricted reads and lifecycle fencing
 
@@ -67,20 +71,20 @@ Before adding binary uploads, introduce and test an authoritative relationship a
 
 ### 5. Durable cleanup and provider failure
 
-Persist cleanup ownership before creating an archive object or multipart upload. Fence every inventory operation to the current unexpired lease. Reconcile known IDs with a bounded namespace listing so late completions cannot escape a finite cleanup attempt. Keep sanitized incident evidence while unresolved; on resolution, delete it 30 days later. Do not retain archive content or raw object keys as incident evidence. Expiry and account purge both schedule archive cleanup, and a provider timeout remains retryable without reopening access. Use fault-injected HTTP locally and separate live R2 verification before release.
+Persist cleanup ownership before creating an archive object or multipart upload. Fence every inventory operation to the current unexpired lease. Reconcile known IDs with a bounded namespace listing so late completions cannot escape a finite cleanup attempt. Under the owner-approved cleanup-evidence rule, retain only digest, category, count, and timestamps while an incident remains unresolved; delete the minimal evidence 30 days after resolution. Do not retain archive content or raw object keys as incident evidence. Expiry and account purge both schedule archive cleanup, and a provider timeout remains retryable without reopening access. Use fault-injected HTTP locally and separate live R2 verification before release.
 
 ## Required implementation sequence
 
 1. Build and independently review the baseline inventory, CI schema-diff check, object namespace registry, and negative tests. Introduce no automatic data inclusion.
 2. Reconcile #191's unpublished migrations against current main. Refactor its duplicated source lists into one reviewed source declaration while preserving explicit SQL authorization. Repair pagination throughput and lease/incident findings.
-3. Complete account, journal, revision, private note, authored-message, and restorable-Trash projections. Confirm that retained messaging authorship and reply previews do not disclose received bodies. Add owned file bytes only after the object relationship is proved.
+3. Complete account, journal, revision, private note, minimal Terms/age evidence, currently authorized authored-message, and restorable-Trash projections. Check blocks and revoked or declined conversations; authorship alone does not authorize a message export. Confirm that reply previews do not disclose received bodies. Add owned file bytes only after the object relationship is proved.
 4. Prove request, claim, build, publication, authenticated download, expiry, deletion races, late provider completions, cleanup, and real restricted-role denial on disposable PostgreSQL. Test web and native account journeys separately. Keep worker activation disabled until every gate passes.
-5. Independently review each scoped PR, run the full local verifier against its actual immutable main base, require green exact-head CI, then squash merge one PR at a time. Automatic staging migrations and API/web deployment may follow green main CI under existing owner authorization. Production migrations and destructive runtime activation remain manual and unauthorized here.
+5. Independently review each scoped PR, run the full local verifier against its actual immutable main base, require green exact-head CI, then squash merge one PR at a time as explicitly directed by the owner. Admin review bypass is for independently cleared, green batches only. The existing owner authorization allows automatic staging migrations and API/web deployment after green main CI, with target, role, and migration verification safeguards. It does not enable export workers or destructive lifecycle modes. Report-only and execute modes require their separate staging reviews and approvals. Production migrations and destructive runtime activation remain manual and unauthorized here.
 
 ## Verification examples
 
 - Add an unclassified table, relevant column, or object namespace. CI fails. Classify it as excluded and CI can pass only when the stated denial and retention tests exist. Classify it as included and its positive ownership and completeness tests are required.
-- Seed two users with similar IDs, owned and received messages, reply previews, Trash, revisions, auth secrets, JSON payloads, and file objects. The archive contains all approved owned records and bytes, but none of the negative canaries. Ensure records deleted before selection are not resurrected.
+- Seed two users with similar IDs, owned and received messages, blocked and declined conversations, reply previews, Trash, revisions, Terms/age evidence, auth secrets, JSON payloads, and file objects. The archive contains all approved currently authorized owned records and bytes, but none of the negative canaries. Ensure records deleted before selection are not resurrected.
 - Run two PostgreSQL connections so cancellation, purge claim, lease expiry, publication, and download contend with export reads. Stale work must never publish or disclose bytes.
 - Inject multipart completion, abort, listing, and delete failures, including a delayed completion after an earlier successful pass. Prove the inventory catches it, incidents eventually resolve, and no unowned object is deleted.
 - Check archive version and manifest against actual emitted kinds, bounded resource use, database role permissions, and authenticated web and native downloads. Distinguish local mock results from live-provider evidence.
