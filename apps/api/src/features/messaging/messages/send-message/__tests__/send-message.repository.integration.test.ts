@@ -1,7 +1,8 @@
 import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createLifecycleContentionFixture, deferred, lifecycleContentionEnabled } from "../../../../../../test/support/lifecycle-message-contention";
 import { createMessagingPersistenceServices } from "../../../../../app";
-import { createPostgresMessageWriteStore } from "../send-message.repository";
+import { createPostgresMessageWriteStore, type SendMessageStore } from "../send-message.repository";
 import { createSendMessageService } from "../send-message.service";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
@@ -163,5 +164,103 @@ suite("send message Postgres repository", () => {
     const [blockedOutbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${blocked.conversation.id}`;
     expect({ messages: pendingMessages?.count, changes: pendingChanges?.count, outbox: pendingOutbox?.count }).toEqual({ messages: 1, changes: 1, outbox: 2 });
     expect({ messages: blockedMessages?.count, changes: blockedChanges?.count, outbox: blockedOutbox?.count }).toEqual({ messages: 1, changes: 1, outbox: 2 });
+  });
+});
+
+(lifecycleContentionEnabled ? describe : describe.skip)("send message lifecycle contention", () => {
+  it("commits an active send before a concurrent deletion becomes pending, then rejects new writes", async () => {
+    const fixture = createLifecycleContentionFixture("send-contention");
+    const writer = createDayliDatabase(fixture.writerUrl);
+    const reached = deferred<void>();
+    const release = deferred<void>();
+    const realStore = createPostgresMessageWriteStore(writer.db);
+    let paused = false;
+    const gatedStore: SendMessageStore = {
+      withConversationTransaction: (actorId, conversationId, operation) => realStore.withConversationTransaction(actorId, conversationId, async (transaction) => {
+        const realGetAccess = transaction.getAccess.bind(transaction);
+        const gatedTransaction = Object.create(transaction) as typeof transaction;
+        gatedTransaction.getAccess = async (requestedActorId, requestedConversationId) => {
+          const access = await realGetAccess(requestedActorId, requestedConversationId);
+          if (!paused) {
+            expect(access).toMatchObject({ isMember: true, peerActivityBlocked: false, requestState: "active" });
+            paused = true;
+            reached.resolve();
+            await release.promise;
+          }
+          return access;
+        };
+        return operation(gatedTransaction);
+      }),
+    };
+    const send = createSendMessageService({ store: gatedStore });
+    const users: string[] = [];
+    let pendingSend: Promise<unknown> | undefined;
+    let pendingDeletion: Promise<Response> | undefined;
+    try {
+      const alice = await fixture.signup("Alice");
+      const bob = await fixture.signup("Bob");
+      users.push(alice.id, bob.id);
+      const { conversationId } = await fixture.seedActiveConversation(alice.id, bob.id);
+      const grant = await fixture.deletionGrant(alice.token);
+
+      pendingSend = send.send(bob.id, conversationId, { clientMessageId: crypto.randomUUID(), text: "commits before deletion" });
+      await reached.promise;
+      pendingDeletion = fixture.requestDeletion(alice.token, grant);
+      await fixture.waitForDeletionBlockedBy(`${fixture.nonce}-writer`);
+
+      release.resolve();
+      await expect(pendingSend).resolves.toMatchObject({ replayed: false, message: { text: "commits before deletion" } });
+      const deletion = await pendingDeletion!;
+      expect(deletion.status).toBe(200);
+      await expect(deletion.json()).resolves.toMatchObject({ state: "pending_deletion" });
+      await expect(send.send(bob.id, conversationId, {
+        clientMessageId: crypto.randomUUID(),
+        text: "must not pass after deletion",
+      })).rejects.toMatchObject({ code: "BLOCKED" });
+    } finally {
+      release.resolve();
+      await Promise.allSettled([pendingSend, pendingDeletion].filter((value): value is Promise<unknown> => Boolean(value)));
+      await writer.close();
+      await fixture.close(users);
+    }
+  });
+
+  it("lets an active peer withdraw only their own content through HTTP after deletion is pending", async () => {
+    const fixture = createLifecycleContentionFixture("peer-retention");
+    const users: string[] = [];
+    try {
+      const alice = await fixture.signup("Alice");
+      const bob = await fixture.signup("Bob");
+      users.push(alice.id, bob.id);
+      const { aliceMessageId, bobMessageId, conversationId } = await fixture.seedActiveConversation(alice.id, bob.id);
+      await fixture.seedReaction(aliceMessageId, alice.id, "like");
+      await fixture.seedReaction(aliceMessageId, bob.id, "love");
+      const deletion = await fixture.requestDeletion(alice.token, await fixture.deletionGrant(alice.token));
+      expect(deletion.status).toBe(200);
+
+      const removeOwnReaction = await fixture.app.fetch(fixture.request(`/api/v1/conversations/${conversationId}/messages/${aliceMessageId}/reaction`, {
+        method: "DELETE", headers: fixture.bearer(bob.token),
+      }));
+      expect(removeOwnReaction.status).toBe(200);
+      const unsendOwn = await fixture.app.fetch(fixture.request(`/api/v1/conversations/${conversationId}/messages/${bobMessageId}`, {
+        method: "DELETE", headers: fixture.bearer(bob.token),
+      }));
+      expect(unsendOwn.status).toBe(200);
+      const unsendAlice = await fixture.app.fetch(fixture.request(`/api/v1/conversations/${conversationId}/messages/${aliceMessageId}`, {
+        method: "DELETE", headers: fixture.bearer(bob.token),
+      }));
+      expect(unsendAlice.status).toBe(403);
+      const retained = await fixture.app.fetch(fixture.request(`/api/v1/conversations/${conversationId}/messages/${aliceMessageId}`, {
+        headers: fixture.bearer(bob.token),
+      }));
+      expect(retained.status).toBe(200);
+      await expect(retained.json()).resolves.toMatchObject({
+        id: aliceMessageId,
+        text: "Alice retained message",
+        reactions: [{ reaction: "like", count: 1, reactedByActor: false }],
+      });
+    } finally {
+      await fixture.close(users);
+    }
   });
 });
