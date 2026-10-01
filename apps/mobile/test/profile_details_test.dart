@@ -17,6 +17,8 @@ ProfileDetails details(
   bool owner = false,
   bool isPrivate = false,
   DateTime? waitUntil,
+  PostingStreak? streak,
+  ProfileStats? stats,
 }) => ProfileDetails(
   id: 'user-$username',
   username: username,
@@ -24,6 +26,8 @@ ProfileDetails details(
   detailsVisible: visible,
   bio: visible ? bio : null,
   isOwner: owner,
+  streak: visible ? streak : null,
+  stats: visible ? stats : null,
   isPrivate: isPrivate,
   usernameChangeAvailableAt: waitUntil,
 );
@@ -247,5 +251,77 @@ void main() {
 
     expect(profiles.requested.length, reads + 1);
     expect(harness.posts.profileRequests.length, pages + 1);
+  });
+
+  testWidgets('shows a friend\'s posts, friends, and day streak', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'ada': ada}),
+      profiles: FakeProfileClient({
+        'ada': details(
+          'ada',
+          streak: const PostingStreak(
+            current: 3,
+            longest: 5,
+            postedToday: true,
+          ),
+          stats: const ProfileStats(posts: 4, friends: 13),
+        ),
+      }),
+    );
+    await openProfile(tester, harness, 'ada');
+
+    expect(find.bySemanticsLabel('4 Posts'), findsOneWidget);
+    expect(find.bySemanticsLabel('13 Friends'), findsOneWidget);
+    expect(find.bySemanticsLabel('3 Day streak'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('opens the owner\'s friends from their count', (tester) async {
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'jos': me}),
+      profiles: FakeProfileClient({
+        'jos': details(
+          'jos',
+          owner: true,
+          streak: const PostingStreak(
+            current: 0,
+            longest: 0,
+            postedToday: false,
+          ),
+          stats: const ProfileStats(posts: 0, friends: 1),
+        ),
+      }),
+    );
+    await signIn(tester, harness);
+    await tester.tap(find.byKey(const Key('shell.nav.my days')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.stats.friends')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Friends'), findsWidgets);
+    expect(find.byKey(const Key('profile.stats.friends')), findsNothing);
+  });
+
+  testWidgets('hides the streak on a private profile', (tester) async {
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'bea': bea}),
+      profiles: FakeProfileClient({
+        'bea': details(
+          'bea',
+          visible: false,
+          streak: const PostingStreak(
+            current: 3,
+            longest: 3,
+            postedToday: true,
+          ),
+        ),
+      }),
+    );
+    await openProfile(tester, harness, 'bea');
+
+    expect(find.byKey(const Key('profile.stats.streak')), findsNothing);
   });
 }

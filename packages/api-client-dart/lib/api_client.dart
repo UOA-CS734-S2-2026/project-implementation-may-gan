@@ -308,6 +308,8 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
+        case 'PostingStreak':
+          return PostingStreak.fromJson(value);
         case 'ProfileDetails':
           return ProfileDetails.fromJson(value);
         case 'ProfileOwnerSettings':
@@ -320,6 +322,8 @@ class ApiClient {
           return ProfilePostPrompt.fromJson(value);
         case 'ProfilePostsPage':
           return ProfilePostsPage.fromJson(value);
+        case 'ProfileStats':
+          return ProfileStats.fromJson(value);
         case 'ProfileVisibility':
           return ProfileVisibilityTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':

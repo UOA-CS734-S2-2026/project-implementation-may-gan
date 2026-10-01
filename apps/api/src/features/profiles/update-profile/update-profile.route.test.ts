@@ -11,6 +11,8 @@ const profile: ProfileDetails = {
   displayName: "Me",
   detailsVisible: true,
   bio: "New bio",
+  streak: null,
+  stats: null,
   owner: { profileVisibility: "private", usernameChangeAvailableAt: null },
 };
 

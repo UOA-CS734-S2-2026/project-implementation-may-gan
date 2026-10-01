@@ -20,6 +20,20 @@ import {
     ProfileOwnerSettingsToJSON,
     ProfileOwnerSettingsToJSONTyped,
 } from './ProfileOwnerSettings';
+import type { ProfileStats } from './ProfileStats';
+import {
+    ProfileStatsFromJSON,
+    ProfileStatsFromJSONTyped,
+    ProfileStatsToJSON,
+    ProfileStatsToJSONTyped,
+} from './ProfileStats';
+import type { PostingStreak } from './PostingStreak';
+import {
+    PostingStreakFromJSON,
+    PostingStreakFromJSONTyped,
+    PostingStreakToJSON,
+    PostingStreakToJSONTyped,
+} from './PostingStreak';
 
 /**
  *
@@ -50,6 +64,14 @@ export interface ProfileDetails {
     /**
      *
      */
+    streak: PostingStreak;
+    /**
+     *
+     */
+    stats: ProfileStats;
+    /**
+     *
+     */
     owner: ProfileOwnerSettings;
 }
 
@@ -62,6 +84,8 @@ export function instanceOfProfileDetails(value: object): value is ProfileDetails
     if (!('displayName' in value) || value['displayName'] === undefined) return false;
     if (!('detailsVisible' in value) || value['detailsVisible'] === undefined) return false;
     if (!('bio' in value) || value['bio'] === undefined) return false;
+    if (!('streak' in value) || value['streak'] === undefined) return false;
+    if (!('stats' in value) || value['stats'] === undefined) return false;
     if (!('owner' in value) || value['owner'] === undefined) return false;
     return true;
 }
@@ -81,6 +105,8 @@ export function ProfileDetailsFromJSONTyped(json: any, ignoreDiscriminator: bool
         'displayName': json['displayName'],
         'detailsVisible': json['detailsVisible'],
         'bio': json['bio'],
+        'streak': PostingStreakFromJSON(json['streak']),
+        'stats': ProfileStatsFromJSON(json['stats']),
         'owner': ProfileOwnerSettingsFromJSON(json['owner']),
     };
 }
@@ -101,6 +127,8 @@ export function ProfileDetailsToJSONTyped(value?: ProfileDetails | null, ignoreD
         'displayName': value['displayName'],
         'detailsVisible': value['detailsVisible'],
         'bio': value['bio'],
+        'streak': PostingStreakToJSON(value['streak']),
+        'stats': ProfileStatsToJSON(value['stats']),
         'owner': ProfileOwnerSettingsToJSON(value['owner']),
     };
 }

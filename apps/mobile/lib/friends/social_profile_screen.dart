@@ -8,6 +8,7 @@ import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
 import '../app/theme.dart';
 import '../profile/profile_posts.dart';
+import '../profile/profile_stats.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -298,6 +299,15 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     ),
                   ),
                 ],
+                if ((info.stats, info.streak) case (
+                  final stats?,
+                  final streak?,
+                ))
+                  ProfileStatsTile(
+                    stats: stats,
+                    streak: streak,
+                    onFriends: isMe ? () => context.go('/friends') : null,
+                  ),
                 const SizedBox(height: 22),
                 if (isMe)
                   SizedBox(

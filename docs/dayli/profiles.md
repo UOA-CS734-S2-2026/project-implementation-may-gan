@@ -15,6 +15,19 @@ A profile has a public name, a username, a bio, a visibility setting, and the [a
 
 Unknown, banned, and blocked (either direction) handles are all `404`, matching the relationship card at `GET /api/v1/relationships/profiles/{username}`. The owner also gets `owner.profileVisibility` and `owner.usernameChangeAvailableAt`. Posts are friends only whatever the visibility; public visibility only affects [shared links](product-decisions.md#shared-links).
 
+## Streaks
+
+The details also carry `streak`, shown under the same rule as the bio (null whenever the bio is hidden). `calculatePostingStreak` in `packages/domain` derives it from the Auckland days with an accepted post, following the rules proposed in #69:
+
+- Solo and friends posts both count; drafts and failed submissions never reach the table. Each author has at most one post per day, so a retried submission cannot count twice.
+- `current` is the run ending today, or ending yesterday while today is still open, so today never breaks a streak before its midnight. A whole missed day resets it to 0; `longest` keeps the best run.
+- `postedToday`, `lastPostDate`, and `asOf` (the Auckland day the values were calculated for) come with it.
+- Streaks are calculated on each read rather than stored, so deleting a post (#77) will lower them without a separate recalculation step.
+
+The details also carry `stats`: `posts` (accepted posts, solo ones included, since the streak already shows which days had one) and `friends` (active friendships), under the same rule.
+
+Both clients show these in the original web app's stats tile: Posts, Friends, and the current streak as an orange "Day streak". The owner's friend count opens their friends list. "Loved" returns with likes (#79). The longest streak and `postedToday` are in the API but not shown yet. Web refreshes profiles after a post is accepted; Flutter reads the profile again each time it opens. Flutter does not yet cache the last confirmed streak for offline display (#70).
+
 ## Editing
 
 `PATCH /api/v1/profile` changes any of `bio` (160 characters), `publicName` (80 characters), and `profileVisibility`. Fields left out are unchanged, and null or blank text clears a field. Better Auth's generic `/update-user` still refuses `username` and `displayUsername`, so these dedicated routes are the only way to change them.
@@ -34,4 +47,4 @@ Web shows the bio beside the profile card and edits the profile, username, and v
 
 ## Tests
 
-The Postgres tests run through the restricted `app` role: `profile-details.repository.integration.test.ts` (visibility, blocks, literal `_`), `update-profile.repository.integration.test.ts`, and `change-username.repository.integration.test.ts` (reservation, reserved-handle claims, the 30-day wait, release after the reservation ends). Route tests cover each action's validation and error mapping, and that the new `PUT` does not add a second session check to the username setup routes. Web coverage is `tests/profiles/ProfileSettings.test.tsx` and the profile page test. Flutter coverage is `profile_client_test.dart` and `profile_details_test.dart`.
+The Postgres tests run through the restricted `app` role: `profile-details.repository.integration.test.ts` (visibility, blocks, literal `_`), `update-profile.repository.integration.test.ts`, and `change-username.repository.integration.test.ts` (reservation, reserved-handle claims, the 30-day wait, release after the reservation ends). Route tests cover each action's validation and error mapping, and that the new `PUT` does not add a second session check to the username setup routes. `packages/domain/src/posting-streak.test.ts` covers runs, a missed day, duplicate days, a leap day, and both daylight-saving changes, and the profile details integration test checks a streak end to end. Web coverage is `tests/profiles/ProfileSettings.test.tsx`, `ProfileStreak.test.tsx`, and the profile page test. Flutter coverage is `profile_client_test.dart` and `profile_details_test.dart`.

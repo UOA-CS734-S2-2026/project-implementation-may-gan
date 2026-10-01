@@ -1477,6 +1477,12 @@
             "type": "string",
             "nullable": true
           },
+          "streak": {
+            "$ref": "#/components/schemas/PostingStreak"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/ProfileStats"
+          },
           "owner": {
             "$ref": "#/components/schemas/ProfileOwnerSettings"
           }
@@ -1487,8 +1493,76 @@
           "displayName",
           "detailsVisible",
           "bio",
+          "streak",
+          "stats",
           "owner"
         ]
+      },
+      "PostingStreak": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "current": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Consecutive Auckland days with an accepted post, ending today, or yesterday while today is still open."
+          },
+          "longest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastPostDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "postedToday": {
+            "type": "boolean"
+          },
+          "asOf": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the values were calculated for. They hold until that day's midnight unless a post is accepted or deleted."
+              }
+            ]
+          }
+        },
+        "required": [
+          "current",
+          "longest",
+          "lastPostDate",
+          "postedToday",
+          "asOf"
+        ],
+        "description": "Null whenever the bio is hidden. Solo and friends posts both count; drafts and failed submissions do not."
+      },
+      "ProfileStats": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "posts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Accepted posts, solo ones included; the streak already reveals which days had one."
+          },
+          "friends": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "posts",
+          "friends"
+        ],
+        "description": "Null whenever the bio is hidden."
       },
       "ProfileOwnerSettings": {
         "type": "object",

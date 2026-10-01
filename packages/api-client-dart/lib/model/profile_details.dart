@@ -18,6 +18,8 @@ class ProfileDetails {
     required this.displayName,
     required this.detailsVisible,
     required this.bio,
+    required this.streak,
+    required this.stats,
     required this.owner,
   });
 
@@ -33,6 +35,10 @@ class ProfileDetails {
 
   final String bio;
 
+  final PostingStreak streak;
+
+  final ProfileStats stats;
+
   final ProfileOwnerSettings owner;
 
   @override
@@ -44,6 +50,8 @@ class ProfileDetails {
           other.displayName == displayName &&
           other.detailsVisible == detailsVisible &&
           other.bio == bio &&
+          other.streak == streak &&
+          other.stats == stats &&
           other.owner == owner;
 
   @override
@@ -54,11 +62,13 @@ class ProfileDetails {
       (displayName.hashCode) +
       (detailsVisible.hashCode) +
       (bio.hashCode) +
+      (streak.hashCode) +
+      (stats.hashCode) +
       (owner.hashCode);
 
   @override
   String toString() =>
-      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, owner=$owner]';
+      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, streak=$streak, stats=$stats, owner=$owner]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -67,6 +77,8 @@ class ProfileDetails {
     json[r'displayName'] = this.displayName;
     json[r'detailsVisible'] = this.detailsVisible;
     json[r'bio'] = this.bio;
+    json[r'streak'] = this.streak;
+    json[r'stats'] = this.stats;
     json[r'owner'] = this.owner;
     return json;
   }
@@ -79,6 +91,8 @@ class ProfileDetails {
     String? displayName,
     bool? detailsVisible,
     String? bio,
+    PostingStreak? streak,
+    ProfileStats? stats,
     ProfileOwnerSettings? owner,
   }) =>
       ProfileDetails(
@@ -87,6 +101,8 @@ class ProfileDetails {
         displayName: displayName ?? this.displayName,
         detailsVisible: detailsVisible ?? this.detailsVisible,
         bio: bio ?? this.bio,
+        streak: streak ?? this.streak,
+        stats: stats ?? this.stats,
         owner: owner ?? this.owner,
       );
 
@@ -121,6 +137,14 @@ class ProfileDetails {
             'Required key "ProfileDetails[bio]" is missing from JSON.');
         assert(json[r'bio'] != null,
             'Required key "ProfileDetails[bio]" has a null value in JSON.');
+        assert(json.containsKey(r'streak'),
+            'Required key "ProfileDetails[streak]" is missing from JSON.');
+        assert(json[r'streak'] != null,
+            'Required key "ProfileDetails[streak]" has a null value in JSON.');
+        assert(json.containsKey(r'stats'),
+            'Required key "ProfileDetails[stats]" is missing from JSON.');
+        assert(json[r'stats'] != null,
+            'Required key "ProfileDetails[stats]" has a null value in JSON.');
         assert(json.containsKey(r'owner'),
             'Required key "ProfileDetails[owner]" is missing from JSON.');
         assert(json[r'owner'] != null,
@@ -134,6 +158,8 @@ class ProfileDetails {
         displayName: mapValueOfType<String>(json, r'displayName')!,
         detailsVisible: mapValueOfType<bool>(json, r'detailsVisible')!,
         bio: mapValueOfType<String>(json, r'bio')!,
+        streak: PostingStreak.fromJson(json[r'streak'])!,
+        stats: ProfileStats.fromJson(json[r'stats'])!,
         owner: ProfileOwnerSettings.fromJson(json[r'owner'])!,
       );
     }
@@ -196,6 +222,8 @@ class ProfileDetails {
     'displayName',
     'detailsVisible',
     'bio',
+    'streak',
+    'stats',
     'owner',
   };
 }

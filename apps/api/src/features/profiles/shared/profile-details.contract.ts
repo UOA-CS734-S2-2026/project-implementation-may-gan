@@ -1,4 +1,4 @@
-import { opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
+import { aucklandDateSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 
 export const BIO_MAX_LENGTH = 160;
@@ -21,6 +21,23 @@ export const profileDetailsSchema = z
       description: "False when the account is private and the caller is not an active friend. The bio is then null.",
     }),
     bio: z.string().nullable(),
+    streak: z.object({
+      current: z.number().int().nonnegative().openapi({
+        description: "Consecutive Auckland days with an accepted post, ending today, or yesterday while today is still open.",
+      }),
+      longest: z.number().int().nonnegative(),
+      lastPostDate: aucklandDateSchema.nullable(),
+      postedToday: z.boolean(),
+      asOf: aucklandDateSchema.openapi({
+        description: "The Auckland day the values were calculated for. They hold until that day's midnight unless a post is accepted or deleted.",
+      }),
+    }).nullable().openapi("PostingStreak", {
+      description: "Null whenever the bio is hidden. Solo and friends posts both count; drafts and failed submissions do not.",
+    }),
+    stats: z.object({
+      posts: z.number().int().nonnegative().openapi({ description: "Accepted posts, solo ones included; the streak already reveals which days had one." }),
+      friends: z.number().int().nonnegative(),
+    }).nullable().openapi("ProfileStats", { description: "Null whenever the bio is hidden." }),
     owner: z.object({
       profileVisibility: profileVisibilitySchema,
       usernameChangeAvailableAt: utcTimestampSchema.nullable().openapi({

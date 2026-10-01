@@ -7,7 +7,52 @@ import 'package:http/http.dart' as http;
 import 'api_failure.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
-/// A profile's name and, when the viewer may see it, its bio.
+/// Server-confirmed posting streak values.
+class PostingStreak {
+  const PostingStreak({
+    required this.current,
+    required this.longest,
+    required this.postedToday,
+  });
+
+  /// Consecutive days ending today, or yesterday while today is still open.
+  final int current;
+  final int longest;
+  final bool postedToday;
+
+  static PostingStreak? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final current = json['current'];
+    final longest = json['longest'];
+    final postedToday = json['postedToday'];
+    if (current is! int || longest is! int || postedToday is! bool) {
+      return null;
+    }
+    return PostingStreak(
+      current: current,
+      longest: longest,
+      postedToday: postedToday,
+    );
+  }
+}
+
+/// Counts shown on a profile.
+class ProfileStats {
+  const ProfileStats({required this.posts, required this.friends});
+
+  final int posts;
+  final int friends;
+
+  static ProfileStats? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final posts = json['posts'];
+    final friends = json['friends'];
+    if (posts is! int || friends is! int) return null;
+    return ProfileStats(posts: posts, friends: friends);
+  }
+}
+
+/// A profile's name and, when the viewer may see them, its bio and streak.
 class ProfileDetails {
   const ProfileDetails({
     required this.id,
@@ -16,6 +61,8 @@ class ProfileDetails {
     required this.detailsVisible,
     required this.bio,
     required this.isOwner,
+    this.streak,
+    this.stats,
     this.isPrivate = false,
     this.usernameChangeAvailableAt,
   });
@@ -31,6 +78,12 @@ class ProfileDetails {
   final bool detailsVisible;
   final String? bio;
   final bool isOwner;
+
+  /// Null whenever the bio is hidden.
+  final PostingStreak? streak;
+
+  /// Null whenever the bio is hidden.
+  final ProfileStats? stats;
 
   /// Owner only.
   final bool isPrivate;
@@ -63,6 +116,8 @@ class ProfileDetails {
       detailsVisible: detailsVisible,
       bio: bio as String?,
       isOwner: settings != null,
+      streak: PostingStreak.tryParse(json['streak']),
+      stats: ProfileStats.tryParse(json['stats']),
       isPrivate: settings?['profileVisibility'] == 'private',
       usernameChangeAvailableAt: availableAt is String
           ? DateTime.tryParse(availableAt)

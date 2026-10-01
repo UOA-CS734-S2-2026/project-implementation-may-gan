@@ -25,6 +25,9 @@ function me(overrides: Partial<ProfileDetails> = {}): ProfileDetails {
     displayName: "Jos",
     detailsVisible: true,
     bio: "Walks a lot.",
+    // The generated type drops nullability; the API sends null when hidden.
+    streak: null as unknown as ProfileDetails["streak"],
+    stats: null as unknown as ProfileDetails["stats"],
     owner: { profileVisibility: "public", usernameChangeAvailableAt: null as unknown as Date },
     ...overrides,
   };
