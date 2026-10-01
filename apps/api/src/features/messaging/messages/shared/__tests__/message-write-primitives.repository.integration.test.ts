@@ -36,22 +36,22 @@ suite("message write primitive builders", () => {
     const messageId = crypto.randomUUID();
     const now = new Date("2026-09-30T00:00:00.000Z");
     await database.client`delete from public.conversations where participant_low_id = ${users[0]!} and participant_high_id = ${users[1]!}`;
-    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', 9007199254740992, 9007199254740992, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.conversations (id, kind, participant_low_id, participant_high_id, initiator_participant_id, request_state, last_message_sequence, last_change_sequence, last_activity_at, created_at, updated_at) values (${conversationId}, 'direct', ${users[0]!}, ${users[1]!}, ${users[0]!}, 'active', 9007199254740991, 9007199254740990, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
     await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${conversationId}, ${users[0]!}, 0, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz), (${conversationId}, ${users[1]!}, 0, 0, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz)`;
-    await database.client`insert into public.messages (id, conversation_id, sequence, sender_participant_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, 9007199254740993, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', 1, ${now.toISOString()}::timestamptz)`;
+    await database.client`insert into public.messages (id, conversation_id, sequence, sender_participant_id, client_message_id, request_fingerprint, body, version, created_at) values (${messageId}, ${conversationId}, 9007199254740991, ${users[0]!}, ${crypto.randomUUID()}, ${crypto.randomUUID()}, 'message', 1, ${now.toISOString()}::timestamptz)`;
     await database.client`insert into public.message_reactions (message_id, participant_id, reaction, created_at) values (${messageId}, ${users[0]!}, 'like', ${now.toISOString()}::timestamptz), (${messageId}, ${users[1]!}, 'like', ${now.toISOString()}::timestamptz)`;
     return { conversationId, messageId };
   }
 
-  it("preserves bigint rows, actor-specific reactions, private membership, and change sequences", async () => {
+  it("preserves safe bigint rows, actor-specific reactions, private membership, and change sequences", async () => {
     const { conversationId, messageId } = await createConversation();
 
     await expect(findMessage(database.db, users[0]!, conversationId, messageId)).resolves.toMatchObject({
-      sequence: 9007199254740993n,
+      sequence: 9007199254740991n,
       reactions: [{ reaction: "like", count: 2, reactedByActor: true }],
     });
     await expect(findMessage(database.db, users[2]!, conversationId, messageId)).resolves.toMatchObject({
-      sequence: 9007199254740993n,
+      sequence: 9007199254740991n,
       reactions: [{ reaction: "like", count: 2, reactedByActor: false }],
     });
     await expect(getAccess(database.db, users[2]!, conversationId)).resolves.toEqual({
@@ -74,8 +74,8 @@ suite("message write primitive builders", () => {
     await appendPeerChange(database.db, { conversationId, messageId, kind: "message.created" });
     const [change] = await database.client`select change_sequence from public.conversation_changes where conversation_id = ${conversationId}`;
     const outbox = [...await database.client`select change_sequence from public.messaging_outbox where conversation_id = ${conversationId}`];
-    expect(String(change?.change_sequence)).toBe("9007199254740993");
-    expect(outbox.map((row) => String(row.change_sequence))).toEqual(["9007199254740993", "9007199254740993"]);
+    expect(String(change?.change_sequence)).toBe("9007199254740991");
+    expect(outbox.map((row) => String(row.change_sequence))).toEqual(["9007199254740991", "9007199254740991"]);
   });
 
   it("serializes concurrent access through the conversation row lock", async () => {

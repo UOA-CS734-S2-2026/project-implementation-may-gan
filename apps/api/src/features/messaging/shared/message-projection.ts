@@ -1,24 +1,24 @@
 import { and, eq } from "drizzle-orm";
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import type { MessageDto, StoredMessage } from "./messaging-types";
+import { requireSafeMessageVersion, requireSafeSequenceText } from "./safe-sequence";
 
 type Row = Record<string, unknown>;
 export type MessageProjectionRow = Row;
 type Queryable = Pick<DayliDatabase, "select">;
-const bigint = (value: unknown) => typeof value === "bigint" ? value : BigInt(String(value));
 const date = (value: unknown) => new Date(String(value));
 
 function storedMessage(row: Row): StoredMessage {
   return {
     id: String(row.id),
     conversationId: String(row.conversation_id),
-    sequence: bigint(row.sequence),
+    sequence: BigInt(requireSafeSequenceText(row.sequence)),
     senderId: String(row.sender_id),
     clientMessageId: String(row.client_message_id),
     requestFingerprint: String(row.request_fingerprint),
     body: row.body === null ? null : String(row.body),
     replyToMessageId: row.reply_to_message_id === null ? null : String(row.reply_to_message_id),
-    version: Number(row.version),
+    version: requireSafeMessageVersion(typeof row.version === "string" || typeof row.version === "number" ? row.version : ""),
     createdAt: date(row.created_at),
     editedAt: row.edited_at ? date(row.edited_at) : null,
     unsentAt: row.unsent_at ? date(row.unsent_at) : null,

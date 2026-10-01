@@ -375,10 +375,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       await publisher.unsafe("begin");
       await publisher`update public.legal_document_versions set status = 'notice', notice_starts_at = '2026-10-01T00:00:00.000Z', effective_at = '2026-11-01T00:00:00.000Z' where id = ${rekeyTargetId}`;
       const [{ pid: rekeyWriterPid }] = await writer`select pg_backend_pid()::int as pid`;
-      const blockedRekey = writer`update public.legal_document_contents set terms_version_id = ${rekeyTargetId} where terms_version_id = ${rekeySourceId}`.then((result) => result);
+      const blockedRekey = writer`update public.legal_document_contents set terms_version_id = ${rekeyTargetId} where terms_version_id = ${rekeySourceId}`
+        .then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
       await waitForLock(rekeyWriterPid);
       await publisher.unsafe("commit");
-      await expect(blockedRekey).rejects.toMatchObject({ code: "23514" });
+      const rekeyOutcome = await blockedRekey;
+      expect(rekeyOutcome.ok).toBe(false);
+      if (!rekeyOutcome.ok) expect(rekeyOutcome.error).toMatchObject({ code: "23514" });
       const [rekeySource] = await migrator`select canonical_content from public.legal_document_contents where terms_version_id = ${rekeySourceId}`;
       const [rekeyTarget] = await migrator`select count(*)::int as contents from public.legal_document_contents where terms_version_id = ${rekeyTargetId}`;
       expect(rekeySource).toEqual({ canonical_content: draftContent });

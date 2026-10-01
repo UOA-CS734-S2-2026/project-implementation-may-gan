@@ -71,8 +71,8 @@ suite("get conversation Postgres repository", () => {
       capabilities: { canSend: false, canResolveRequest: true },
     });
 
-    const sequence = "9007199254740993";
-    const lastReadSequence = "9007199254740992";
+    const sequence = "9007199254740991";
+    const lastReadSequence = "9007199254740990";
     await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
     await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${active.conversation.id}`;
     await database.client`
@@ -88,6 +88,10 @@ suite("get conversation Postgres repository", () => {
       lastReadSequence,
       receiptSequence: lastReadSequence,
     });
+
+    await database.client`update public.messages set sequence = 9007199254740993::bigint where id = ${reply.message.id}`;
+    await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow(RangeError);
+    await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
 
     await database.client`
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)

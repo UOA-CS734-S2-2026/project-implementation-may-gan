@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, mapStoredMessage, type MessageWriteQueryable } from "../shared/message-write-primitives";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
+import { requireSafeSequenceText } from "../../shared/safe-sequence";
 
 export interface StoredIdempotentMessage {
   requestFingerprint: string;
@@ -102,12 +103,13 @@ class PostgresMessageTransaction implements SendMessageTransaction {
       .where(eq(schema.conversations.id, input.conversationId))
       .returning({ sequence: sql<string>`${schema.conversations.lastMessageSequence}::text` });
     if (!allocated) throw new Error("Conversation disappeared during message insert.");
+    const sequence = requireSafeSequenceText(allocated.sequence);
     const [message] = await this.queryable
       .insert(schema.messages)
       .values({
         id: input.id,
         conversationId: input.conversationId,
-        sequence: sql`${allocated.sequence}::bigint`,
+        sequence: sql`${sequence}::bigint`,
         senderParticipantId: input.senderId,
         clientMessageId: input.clientMessageId,
         requestFingerprint: input.requestFingerprint,

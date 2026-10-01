@@ -88,7 +88,7 @@ suite("resolve message request Postgres repository", () => {
     expect(outboxCount?.count).toBe(4);
   });
 
-  it("uses native response reads at MAX_SAFE_INTEGER", async () => {
+  it("preserves exact text sequences at MAX_SAFE_INTEGER and retains required lifecycle locks", async () => {
     const created = await direct.create(users[9]!, {
       recipientId: users[10]!,
       clientMessageId: crypto.randomUUID(),
@@ -123,16 +123,20 @@ suite("resolve message request Postgres repository", () => {
       lastReadSequence: previousSequence,
       receiptSequence: previousSequence,
     });
-    expect(builderQueries).toHaveLength(12);
+    // The pair lock plus both participant user locks serialize an acceptance
+    // with pending-deletion transitions before the response reads occur.
+    expect(builderQueries).toHaveLength(15);
+    expect(builderQueries.filter((query) => query.includes("for update"))).toHaveLength(2);
+    expect(builderQueries.some((query) => query.includes("pg_advisory_xact_lock"))).toBe(true);
     const responseQueries = builderQueries.slice(-5);
     expect(responseQueries).toHaveLength(5);
     const latestQuery = responseQueries.find((query) => query.includes('order by "messages"."sequence" desc'));
     const unreadQuery = responseQueries.find((query) => query.includes("count(*)"));
     expect(latestQuery).toBeDefined();
-    expect(latestQuery).not.toContain("::text");
+    expect(latestQuery).toContain("::text");
     expect(unreadQuery).toBeDefined();
-    expect(unreadQuery).not.toContain("::int");
-    expect(unreadQuery).not.toContain("::bigint");
+    expect(unreadQuery).toContain("::int");
+    expect(unreadQuery).toContain("::bigint");
   });
 
   it("rolls back resolution state and outbox work when the change sequence overflows", async () => {

@@ -1,5 +1,6 @@
 import type { DayliDatabase } from "@dayli/db";
 import { projectMessageDto } from "./message-projection";
+import { requireSafeSequenceText } from "./safe-sequence";
 
 type Row = Record<string, unknown>;
 const date = (value: unknown) => new Date(String(value));
@@ -34,10 +35,10 @@ export async function projectConversationDto(
     requestState: row.request_state,
     latestMessage: latest,
     unreadCount: Number(row.unread_count ?? 0),
-    lastMessageSequence: String(row.last_message_sequence),
-    lastChangeSequence: String(row.last_change_sequence),
-    lastReadSequence: String(row.last_read_sequence),
-    receiptSequence: String(row.receipt_sequence),
+    lastMessageSequence: requireSafeSequenceText(row.last_message_sequence),
+    lastChangeSequence: requireSafeSequenceText(row.last_change_sequence),
+    lastReadSequence: requireSafeSequenceText(row.last_read_sequence),
+    receiptSequence: requireSafeSequenceText(row.receipt_sequence),
     capabilities: {
       canSend: row.request_state === "active" && !blocked,
       canResolveRequest: row.request_state === "pending" && String(row.initiator_id) !== actorId && !blocked,

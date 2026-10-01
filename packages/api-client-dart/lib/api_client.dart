@@ -204,6 +204,10 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountCancelDeletion200Response':
+          return AccountCancelDeletion200Response.fromJson(value);
+        case 'AccountDeletionStatus200Response':
+          return AccountDeletionStatus200Response.fromJson(value);
         case 'AccountGetDataExport200Response':
           return AccountGetDataExport200Response.fromJson(value);
         case 'AccountGetDataExport200ResponseExport':
@@ -218,6 +222,10 @@ class ApiClient {
           return AccountGoogleProofCompleteRequest.fromJson(value);
         case 'AccountRequestDataExport202Response':
           return AccountRequestDataExport202Response.fromJson(value);
+        case 'AccountRequestDeletion200Response':
+          return AccountRequestDeletion200Response.fromJson(value);
+        case 'AccountRequestDeletionRequest':
+          return AccountRequestDeletionRequest.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':

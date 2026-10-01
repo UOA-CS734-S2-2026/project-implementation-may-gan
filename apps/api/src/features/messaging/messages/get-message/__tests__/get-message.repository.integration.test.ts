@@ -46,7 +46,7 @@ suite("get message Postgres repository", () => {
     });
     await database.client`insert into public.conversation_members (conversation_id, participant_id, last_read_sequence, receipt_sequence, created_at, updated_at) values (${initial.conversation.id}, ${users[2]!}, 0, 0, now(), now())`;
     await database.client`insert into public.message_reactions (message_id, participant_id, reaction, created_at) values (${reply.message.id}, ${users[0]!}, 'love', now()), (${reply.message.id}, ${users[1]!}, 'love', now()), (${reply.message.id}, ${users[2]!}, 'laugh', now())`;
-    await database.client`update public.messages set sequence = 9007199254740993 where id = ${reply.message.id}`;
+    await database.client`update public.messages set sequence = 9007199254740991 where id = ${reply.message.id}`;
 
     await expect(repository.get(users[3]!, initial.conversation.id, reply.message.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(repository.get(users[0]!, initial.conversation.id, crypto.randomUUID())).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -54,7 +54,7 @@ suite("get message Postgres repository", () => {
     const messageForSender = await repository.get(users[0]!, initial.conversation.id, reply.message.id);
     expect(messageForSender).toMatchObject({
       id: reply.message.id,
-      sequence: "9007199254740993",
+      sequence: "9007199254740991",
       replyToMessageId: initial.message.id,
       replyPreview: { id: initial.message.id, senderId: users[0], text: "parent message", unsentAt: null },
     });

@@ -22,6 +22,8 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/account_cancel_deletion200_response.dart
+lib/model/account_deletion_status200_response.dart
 lib/model/account_get_data_export200_response.dart
 lib/model/account_get_data_export200_response_export.dart
 lib/model/account_google_proof_begin200_response.dart
@@ -29,6 +31,8 @@ lib/model/account_google_proof_begin_request.dart
 lib/model/account_google_proof_complete200_response.dart
 lib/model/account_google_proof_complete_request.dart
 lib/model/account_request_data_export202_response.dart
+lib/model/account_request_deletion200_response.dart
+lib/model/account_request_deletion_request.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart

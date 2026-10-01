@@ -14,6 +14,16 @@
 
 import * as runtime from '../runtime';
 import {
+    type AccountCancelDeletion200Response,
+    AccountCancelDeletion200ResponseFromJSON,
+    AccountCancelDeletion200ResponseToJSON,
+} from '../models/AccountCancelDeletion200Response';
+import {
+    type AccountDeletionStatus200Response,
+    AccountDeletionStatus200ResponseFromJSON,
+    AccountDeletionStatus200ResponseToJSON,
+} from '../models/AccountDeletionStatus200Response';
+import {
     type AccountGetDataExport200Response,
     AccountGetDataExport200ResponseFromJSON,
     AccountGetDataExport200ResponseToJSON,
@@ -43,6 +53,23 @@ import {
     AccountRequestDataExport202ResponseFromJSON,
     AccountRequestDataExport202ResponseToJSON,
 } from '../models/AccountRequestDataExport202Response';
+import {
+    type AccountRequestDeletion200Response,
+    AccountRequestDeletion200ResponseFromJSON,
+    AccountRequestDeletion200ResponseToJSON,
+} from '../models/AccountRequestDeletion200Response';
+import {
+    type AccountRequestDeletionRequest,
+    AccountRequestDeletionRequestFromJSON,
+    AccountRequestDeletionRequestToJSON,
+} from '../models/AccountRequestDeletionRequest';
+
+export interface AccountCancelDeletionRequest {
+    /**
+     *
+     */
+    accountRequestDeletionRequest?: AccountRequestDeletionRequest;
+}
 
 export interface AccountGoogleProofBeginOperationRequest {
     /**
@@ -67,6 +94,13 @@ export interface AccountGoogleProofCompleteOperationRequest {
      *
      */
     accountGoogleProofCompleteRequest?: AccountGoogleProofCompleteRequest;
+}
+
+export interface AccountRequestDeletionOperationRequest {
+    /**
+     *
+     */
+    accountRequestDeletionRequest?: AccountRequestDeletionRequest;
 }
 
 /**
@@ -114,6 +148,79 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountCancelDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountGetDataExport200Response> {
         const response = await this.accountCancelDataExportRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountCancelDeletion without sending the request
+     */
+    async accountCancelDeletionRequestOpts(requestParameters: AccountCancelDeletionRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/account/deletion/cancel`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AccountRequestDeletionRequestToJSON(requestParameters['accountRequestDeletionRequest']),
+        };
+    }
+
+    /**
+     */
+    async accountCancelDeletionRaw(requestParameters: AccountCancelDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountCancelDeletion200Response>> {
+        const requestOptions = await this.accountCancelDeletionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountCancelDeletion200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountCancelDeletion(requestParameters: AccountCancelDeletionRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountCancelDeletion200Response> {
+        const response = await this.accountCancelDeletionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountDeletionStatus without sending the request
+     */
+    async accountDeletionStatusRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/account/deletion`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     */
+    async accountDeletionStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountDeletionStatus200Response>> {
+        const requestOptions = await this.accountDeletionStatusRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountDeletionStatus200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountDeletionStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionStatus200Response> {
+        const response = await this.accountDeletionStatusRaw(initOverrides);
         return await response.value();
     }
 
@@ -368,6 +475,44 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountRequestDataExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountRequestDataExport202Response> {
         const response = await this.accountRequestDataExportRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountRequestDeletion without sending the request
+     */
+    async accountRequestDeletionRequestOpts(requestParameters: AccountRequestDeletionOperationRequest): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/account/deletion/request`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: AccountRequestDeletionRequestToJSON(requestParameters['accountRequestDeletionRequest']),
+        };
+    }
+
+    /**
+     */
+    async accountRequestDeletionRaw(requestParameters: AccountRequestDeletionOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountRequestDeletion200Response>> {
+        const requestOptions = await this.accountRequestDeletionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountRequestDeletion200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     */
+    async accountRequestDeletion(requestParameters: AccountRequestDeletionOperationRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountRequestDeletion200Response> {
+        const response = await this.accountRequestDeletionRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

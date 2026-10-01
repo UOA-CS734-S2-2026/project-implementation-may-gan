@@ -8,13 +8,13 @@ type Row = Record<string, unknown>;
 type MessageLookup = {
   id: string;
   conversationId: string;
-  sequence: number;
+  sequence: string;
   senderId: string;
   clientMessageId: string;
   requestFingerprint: string;
   body: string | null;
   replyToMessageId: string | null;
-  version: number;
+  version: string;
   createdAt: Date;
   editedAt: Date | null;
   unsentAt: Date | null;
@@ -52,13 +52,13 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         .select({
           id: schema.messages.id,
           conversationId: schema.messages.conversationId,
-          sequence: schema.messages.sequence,
+          sequence: sql<string>`${schema.messages.sequence}::text`,
           senderId: schema.messages.senderParticipantId,
           clientMessageId: schema.messages.clientMessageId,
           requestFingerprint: schema.messages.requestFingerprint,
           body: schema.messages.body,
           replyToMessageId: schema.messages.replyToMessageId,
-          version: schema.messages.version,
+          version: sql<string>`${schema.messages.version}::text`,
           createdAt: schema.messages.createdAt,
           editedAt: schema.messages.editedAt,
           unsentAt: schema.messages.unsentAt,

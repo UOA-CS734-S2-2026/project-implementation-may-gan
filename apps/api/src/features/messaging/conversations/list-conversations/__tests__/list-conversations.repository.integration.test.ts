@@ -64,8 +64,8 @@ suite("list conversations Postgres repository", () => {
       text: "outgoing request",
     });
 
-    const sequence = "9007199254740993";
-    const lastReadSequence = "9007199254740992";
+    const sequence = "9007199254740991";
+    const lastReadSequence = "9007199254740990";
     await database.client`update public.messages set sequence = ${sequence}::bigint where id = ${reply.message.id}`;
     await database.client`update public.conversations set last_message_sequence = ${sequence}::bigint where id = ${activeWithUnread.conversation.id}`;
     await database.client`

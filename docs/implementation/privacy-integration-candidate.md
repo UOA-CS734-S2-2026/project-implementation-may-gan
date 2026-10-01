@@ -7,7 +7,7 @@ This isolated candidate merges the reviewed privacy backend line into main commi
 Integrated sources:
 
 - Legal acceptance backend: `a65314e`
-- Account lifecycle review head: `3e2e47b`
+- Account lifecycle review head: `670e64d`
 - Self-service export review head: `67297de`
 
 The export source remains open-P1 and is not release approved. This candidate does not include the obsolete `dayli-privacy-account-deletion-requests` branch, dirty client work, unreviewed download work, uploads, purge execution, Trash, provider changes, deployment, or activation.
@@ -52,4 +52,18 @@ The first private snapshot retains its source UUID and maps its `prevId` to the 
 
 `db:check` pins its default comparison to the reviewed main SHA and compares every published SQL migration and snapshot byte-for-byte. The journal prefix check remains append-only. The verifier provisions separate disposable databases for relationship, messaging, advisory lock, lifecycle, auth, export, and migration-lineage suites. The migration-lineage suite migrates main through `0014`, inserts a populated main-only row, applies the candidate suffix, verifies re-migration idempotence, and verifies the `post_media` restrict foreign key and partial unique index.
 
-The candidate is a combined backend integration and lineage repair. It is not a claim that the privacy phase is complete. Open gates remain: export P1 review and release approval, client acceptance work, Trash and purge design and implementation, provider and hosted deployment review, and final legal approval.
+The candidate is a combined backend integration and lineage repair. The lifecycle source was replayed in source order, including relationship target concealment, direct-conversation and friend target guards, pair and user row locking around message writes, and HTTP plus PostgreSQL contention coverage:
+
+| Source commit | Candidate commit |
+| --- | --- |
+| `9371bf6` | `5aa44fd` |
+| `b23e3db` | `a2f26a5` |
+| `7fbe5a3` | `b35e197` |
+| `7f4f8fe` | `fe36197` |
+| `525e4d8` | `529f0f9` |
+| `3e2e47b` | `d1874c1` |
+| `670e64d` | `38c5e53` |
+
+Messaging public sequences and versions remain bounded by `Number.MAX_SAFE_INTEGER`. Database values are selected as text and validated before conversion, unsafe counter allocation rolls back the enclosing transaction, and unsafe stored rows fail closed rather than being rounded or treated as ordinary idempotency reuse. Valid maximum-value detail, list, ordering, and unread cases remain covered.
+
+The candidate is not a claim that the privacy phase is complete. Open gates remain: export P1 review and release approval, client acceptance work, Trash and purge design and implementation, provider and hosted deployment review, and final legal approval.

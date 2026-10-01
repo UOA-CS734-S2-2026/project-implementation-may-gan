@@ -54,41 +54,20 @@ suite("conversation change builders", () => {
     expect(outbox?.count).toBe(0);
   });
 
-  it("preserves bigint change sequences and sends only eligible peer devices", async () => {
+  it("rejects an unsafe allocated change sequence before writing changes or outbox work", async () => {
     const { conversationId, messageId, now } = await createConversation();
-    const sessionId = crypto.randomUUID();
-    await database.client`insert into public.session (id, expires_at, token, created_at, updated_at, user_id) values (${sessionId}, now() + interval '1 day', ${crypto.randomUUID()}, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz, ${users[1]!})`;
-    const validDeviceId = crypto.randomUUID();
-    const secondValidDeviceId = crypto.randomUUID();
-    await database.client`
-      insert into public.push_devices (id, user_id, session_id, installation_id, platform, token, token_ciphertext, token_key_version, token_hash, opted_in, registered_at, invalidated_at)
-      values
-        (${validDeviceId}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-valid', 'cipher-valid', 'v1', ${"a".repeat(64)}, true, ${now.toISOString()}::timestamptz, null),
-        (${secondValidDeviceId}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'android', 'token-valid-second', 'cipher-valid-second', 'v1', ${"b".repeat(64)}, true, ${now.toISOString()}::timestamptz, null),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-opted-out', 'cipher-opted-out', 'v1', ${"c".repeat(64)}, false, ${now.toISOString()}::timestamptz, null),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-invalidated', 'cipher-invalidated', 'v1', ${"d".repeat(64)}, true, ${now.toISOString()}::timestamptz, ${now.toISOString()}::timestamptz),
-        (${crypto.randomUUID()}, ${users[1]!}, ${sessionId}, ${crypto.randomUUID()}, 'ios', 'token-missing-key', 'cipher-missing-key', null, ${"e".repeat(64)}, true, ${now.toISOString()}::timestamptz, null)
-    `;
     await database.client`update public.conversations set last_change_sequence = 9007199254740992 where id = ${conversationId}`;
 
-    await appendConversationChange(database.db, conversationId, "message.created", messageId, null, now);
+    await expect(database.db.transaction((transaction) => (
+      appendConversationChange(transaction, conversationId, "message.created", messageId, null, now)
+    ))).rejects.toThrow(RangeError);
 
-    const [change] = await database.client`select change_sequence from public.conversation_changes where conversation_id = ${conversationId}`;
-    const realtime = [...await database.client`select recipient_id, event_id, change_sequence, available_at, created_at from public.messaging_outbox where conversation_id = ${conversationId} and channel = 'realtime' order by recipient_id`];
-    const push = [...await database.client`select recipient_id, event_id, change_sequence, device_registration_id, available_at, created_at from public.messaging_outbox where conversation_id = ${conversationId} and channel = 'push'`];
-    expect(String(change?.change_sequence)).toBe("9007199254740993");
-    expect(realtime).toHaveLength(2);
-    expect(realtime.map((row) => String(row.change_sequence))).toEqual(["9007199254740993", "9007199254740993"]);
-    expect(new Set(realtime.map((row) => row.event_id)).size).toBe(1);
-    expect(realtime.map((row) => new Date(String(row.available_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
-    expect(realtime.map((row) => new Date(String(row.created_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
-    expect(push).toHaveLength(2);
-    expect(push.map((row) => row.recipient_id)).toEqual([users[1], users[1]]);
-    expect(push.map((row) => row.device_registration_id).sort()).toEqual([validDeviceId, secondValidDeviceId].sort());
-    expect(push.map((row) => String(row.change_sequence))).toEqual(["9007199254740993", "9007199254740993"]);
-    expect(new Set(push.map((row) => row.event_id)).size).toBe(2);
-    expect(push.map((row) => new Date(String(row.available_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
-    expect(push.map((row) => new Date(String(row.created_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
+    const [conversation] = await database.client`select last_change_sequence from public.conversations where id = ${conversationId}`;
+    const [change] = await database.client`select count(*)::int as count from public.conversation_changes where conversation_id = ${conversationId}`;
+    const [outbox] = await database.client`select count(*)::int as count from public.messaging_outbox where conversation_id = ${conversationId}`;
+    expect(String(conversation?.last_change_sequence)).toBe("9007199254740992");
+    expect(change?.count).toBe(0);
+    expect(outbox?.count).toBe(0);
   });
 
 });
