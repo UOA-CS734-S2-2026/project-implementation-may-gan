@@ -30,7 +30,7 @@ Both clients show these in the original web app's stats tile: Posts, Friends, an
 
 ## Photos
 
-A profile photo is a JPEG, PNG, or WebP image uploaded through the [media reservation](media-reservations.md) flow: reserve, `PUT` to R2 with the signed headers, then `/complete`. `PUT /api/v1/profile/avatar` with the validated `reservationId` makes it the photo, replacing any earlier one, and `DELETE /api/v1/profile/avatar` removes it. An upload that is someone else's or missing is `404`; one that has not passed validation, or is not one of those image types, is `409`. The link lives in `profile_avatars` (migration `0015_profile_avatars`), one row per account.
+A profile photo is a JPEG, PNG, or WebP image uploaded through the [media reservation](media-reservations.md) flow: reserve, `PUT` to R2 with the signed headers, then `/complete`. `PUT /api/v1/profile/avatar` with the validated `reservationId` makes it the photo, replacing any earlier one, and `DELETE /api/v1/profile/avatar` removes it. An upload that is someone else's or missing is `404`; one that has not passed validation, or is not one of those image types, is `409`. The link lives in `profile_avatars` (migration `0017_profile_avatars`), one row per account.
 
 `avatarUrl` in the profile details is a presigned R2 `GET` link that expires after 10 minutes, signed only for a viewer who may see the bio. Without R2 configuration it is always null and the photo routes are unavailable, so local development shows initials. Provider photos, such as a Google account picture, are never used. The previous object is left in storage when a photo is replaced or removed; abandoned-upload cleanup (#163) must not delete an object still linked from `profile_avatars`.
 
