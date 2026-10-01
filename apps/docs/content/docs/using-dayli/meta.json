@@ -1,0 +1,11 @@
+{
+  "title": "Using Dayli",
+  "defaultOpen": true,
+  "pages": [
+    "getting-started",
+    "creating-your-daily-post",
+    "friends-and-the-feed",
+    "privacy-and-sharing",
+    "help-and-troubleshooting"
+  ]
+}

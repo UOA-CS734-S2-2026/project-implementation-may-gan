@@ -1,0 +1,9 @@
+{
+  "title": "Decisions and future work",
+  "defaultOpen": true,
+  "pages": [
+    "product-decisions",
+    "technical-decisions",
+    "planned-systems-and-known-gaps"
+  ]
+}
