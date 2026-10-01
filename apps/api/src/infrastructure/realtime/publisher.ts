@@ -101,15 +101,27 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       )));
     const [row] = await database.db
       .select({
-        actorId: sql<string | null>`coalesce((
-          select ${schema.messagingParticipants.userId}
-          from ${schema.messagingParticipants}
-          where ${schema.messagingParticipants.id} = coalesce(
-            ${schema.conversationChanges.memberParticipantId},
-            ${schema.messages.senderParticipantId}
+        actorId: sql<string | null>`case
+          when ${schema.conversationChanges.kind} = 'reaction.changed' then coalesce(
+            (select ${schema.messagingParticipants.userId}
+              from ${schema.messagingParticipants}
+              where ${schema.messagingParticipants.id} = ${schema.conversationChanges.memberParticipantId}
+              limit 1),
+            ${schema.conversationChanges.memberId}
           )
-          limit 1
-        ), ${schema.conversationChanges.memberId}, ${schema.messages.senderId})`,
+          else coalesce(
+            (select ${schema.messagingParticipants.userId}
+              from ${schema.messagingParticipants}
+              where ${schema.messagingParticipants.id} = ${schema.conversationChanges.memberParticipantId}
+              limit 1),
+            ${schema.conversationChanges.memberId},
+            (select ${schema.messagingParticipants.userId}
+              from ${schema.messagingParticipants}
+              where ${schema.messagingParticipants.id} = ${schema.messages.senderParticipantId}
+              limit 1),
+            ${schema.messages.senderId}
+          )
+        end`,
         kind: schema.conversationChanges.kind,
         recipientMember,
         participantsAvailable,

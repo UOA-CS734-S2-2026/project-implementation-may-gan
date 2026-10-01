@@ -171,6 +171,29 @@ suite("Postgres realtime publisher authorization", () => {
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, reactor)).resolves.toBe(true);
   });
 
+  it("does not treat an ambiguous legacy reaction as the message author's blocked invalidation", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "reaction.changed" });
+    const author = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(true);
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(false);
+  });
+
+  it("does not deliver an ambiguous legacy reaction cleanup to the message author", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "reaction.changed" });
+    const author = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: ids.bob, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "d".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, author)).resolves.toBe(false);
+  });
+
   it("resolves an old-worker user-addressed recipient through divergent participant membership", async () => {
     await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
     const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
