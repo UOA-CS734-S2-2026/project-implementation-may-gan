@@ -28,6 +28,8 @@ export interface StoredMessage {
 export interface ConversationAccess {
   conversationId: string;
   peerId: string;
+  /** Durable identity for the authenticated member, resolved under the pair lock. */
+  actorParticipantId?: string;
   requestState: ConversationRequestState;
   isMember: boolean;
   /** Both rows still map to active participants with an active lifecycle. */

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
+import { participantIdForUser } from "../../shared/participant-identity";
 import type {
   DirectConversation,
   DirectConversationStore,
@@ -44,8 +45,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     const [row] = await this.queryable
       .select({
         id: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
+        actorParticipantId: participantIdForUser(actorId),
         requestState: schema.conversations.requestState,
       })
       .from(schema.conversations)
@@ -56,11 +58,11 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       .limit(1)
       .for("update");
     if (!row) return null;
-    return {
-      id: row.id,
-      peerId: row.userLowId === actorId ? row.userHighId : row.userLowId,
-      requestState: row.requestState,
-    };
+    const peerId = row.participantLowId === row.actorParticipantId
+      ? row.participantHighId
+      : row.participantLowId;
+    if (!peerId) throw new Error("Conversation peer participant is missing.");
+    return { id: row.id, peerId, requestState: row.requestState };
   }
 
   async recipientExists(recipientId: string): Promise<boolean> {
@@ -104,8 +106,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       .select({
         ...messageProjectionSelection,
         directConversationId: schema.conversations.id,
-        userLowId: schema.conversations.userLowId,
-        userHighId: schema.conversations.userHighId,
+        participantLowId: schema.conversations.participantLowId,
+        participantHighId: schema.conversations.participantHighId,
+        senderParticipantId: participantIdForUser(senderId),
         requestState: schema.conversations.requestState,
       })
       .from(schema.messages)
@@ -116,13 +119,13 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       ))
       .limit(1);
     if (!row) return null;
+    const peerId = row.participantLowId === row.senderParticipantId
+      ? row.participantHighId
+      : row.participantLowId;
+    if (!peerId) throw new Error("Conversation peer participant is missing.");
     return {
       requestFingerprint: row.requestFingerprint,
-      conversation: {
-        id: row.directConversationId,
-        peerId: row.userLowId === senderId ? row.userHighId : row.userLowId,
-        requestState: row.requestState,
-      },
+      conversation: { id: row.directConversationId, peerId, requestState: row.requestState },
       message: toStoredMessage(row),
     };
   }
@@ -183,8 +186,14 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       })
       .returning(messageProjectionSelection);
     await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, input.createdAt);
+    const [recipient] = await this.queryable
+      .select({ id: schema.messagingParticipants.id })
+      .from(schema.messagingParticipants)
+      .where(eq(schema.messagingParticipants.userId, input.recipientId))
+      .limit(1);
+    if (!recipient) throw new Error("Conversation peer participant is missing.");
     return {
-      conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState },
+      conversation: { id: input.conversationId, peerId: recipient.id, requestState: input.requestState },
       message: toStoredMessage(message!),
     };
   }

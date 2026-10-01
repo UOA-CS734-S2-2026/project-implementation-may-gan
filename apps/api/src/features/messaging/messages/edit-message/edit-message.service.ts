@@ -19,7 +19,8 @@ export function createEditMessageService(dependencies: { store: EditMessageStore
         assertPeerActivityAllowed(access);
         const message = await transaction.findMessage(conversationId, messageId);
         if (!message) throw new MessagingError("NOT_FOUND");
-        if (message.senderId !== actorId) throw new MessagingError("FORBIDDEN");
+        // The transaction resolved this identity after its lifecycle and pair locks.
+        if (message.senderId !== (access.actorParticipantId ?? actorId)) throw new MessagingError("FORBIDDEN");
         if (message.unsentAt) throw new MessagingError("CONFLICT");
         if (message.version !== input.expectedVersion) throw new MessagingError("VERSION_CONFLICT");
         // The exact cutoff is intentionally strict: at 15 minutes it is closed.

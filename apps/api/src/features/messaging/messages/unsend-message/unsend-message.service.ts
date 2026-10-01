@@ -17,7 +17,8 @@ export function createUnsendMessageService(dependencies: { store: UnsendMessageS
         assertUnsendAllowed(access);
         const message = await transaction.findMessage(conversationId, messageId);
         if (!message) throw new MessagingError("NOT_FOUND");
-        if (message.senderId !== actorId) throw new MessagingError("FORBIDDEN");
+        // The transaction resolved this identity after its lifecycle and pair locks.
+        if (message.senderId !== (access.actorParticipantId ?? actorId)) throw new MessagingError("FORBIDDEN");
         if (message.unsentAt) return { message: toMessageDto(message), replayed: true };
         const updated = await transaction.unsendMessage({ messageId, unsentAt: now() });
         await transaction.appendPeerChange({ conversationId, messageId, actorId, kind: "message.unsent" });

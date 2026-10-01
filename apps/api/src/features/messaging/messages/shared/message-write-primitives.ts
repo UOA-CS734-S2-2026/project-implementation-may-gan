@@ -64,6 +64,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
   return {
     conversationId,
     peerId: row.participant_low_id === row.actor_participant_id ? row.user_high_id : row.user_low_id,
+    actorParticipantId: row.member ? row.actor_participant_id ?? undefined : undefined,
     requestState: row.request_state,
     isMember: row.member,
     participantsAvailable: row.participantsAvailable,
