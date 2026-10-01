@@ -59,6 +59,7 @@ suite("message write primitive builders", () => {
       peerId: users[0],
       requestState: "active",
       isMember: false,
+      peerUnavailable: false,
       peerActivityBlocked: false,
     });
     await expect(getAccess(database.db, users[0]!, crypto.randomUUID())).resolves.toEqual({
@@ -66,6 +67,7 @@ suite("message write primitive builders", () => {
       peerId: "",
       requestState: "declined",
       isMember: false,
+      peerUnavailable: false,
       peerActivityBlocked: false,
     });
 

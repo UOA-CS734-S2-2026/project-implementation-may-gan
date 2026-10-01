@@ -29,7 +29,9 @@ export interface ConversationAccess {
   peerId: string;
   requestState: ConversationRequestState;
   isMember: boolean;
-  /** True when either participant currently blocks the other. */
+  /** True when the peer has requested deletion or is a deleted stable participant. */
+  peerUnavailable?: boolean;
+  /** True when either participant blocks the other or the peer is unavailable. */
   peerActivityBlocked: boolean;
 }
 

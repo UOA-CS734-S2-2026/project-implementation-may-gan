@@ -10,14 +10,16 @@ vi.mock("@dayli/db", async (importOriginal) => ({
 describe("createHyperdriveMessageWriteStore", () => {
   it("closes its Hyperdrive database when the action callback fails", async () => {
     const callbackError = new Error("action failed");
+    let selects = 0;
     const transaction = {
       select: vi.fn((fields?: { lock?: unknown }) => {
         if (fields?.lock) return { from: vi.fn().mockResolvedValue([]) };
+        selects += 1;
         return {
           from: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: vi.fn().mockResolvedValue([{ participantLowId: "amy", participantHighId: "zoe" }]),
-            })),
+            where: vi.fn(() => selects === 1
+              ? { limit: vi.fn().mockResolvedValue([{ participantLowId: "amy", participantHighId: "zoe" }]) }
+              : { orderBy: vi.fn(() => ({ for: vi.fn().mockResolvedValue([]) })) }),
           })),
         };
       }),
@@ -38,7 +40,7 @@ describe("createHyperdriveMessageWriteStore", () => {
     })).rejects.toBe(callbackError);
 
     expect(database.db.transaction).toHaveBeenCalledOnce();
-    expect(transaction.select).toHaveBeenCalledTimes(2);
+    expect(transaction.select).toHaveBeenCalledTimes(3);
     expect(database.close).toHaveBeenCalledOnce();
   });
 });
