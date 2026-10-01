@@ -90,7 +90,20 @@ The assistant implemented and ran this diagnostic directly, without a sub-agent.
 
 The same-zone baseline also selected the fixed Cloudflare Worker address when the caller did not supply `x-real-ip`. The `fixedCrossZoneIp` flag names a known constant, not a reliable classification of the caller's zone.
 
-The Worker-origin issue is now reproduced at the edge using the real selector. `CF-Worker` is a candidate for rejecting these requests because Cloudflare restored the marker in the tested cases. This diagnostic does not implement or establish a complete rejection policy. The live app, public API, vinext adapter, named service binding, session cookies, and rate-limit decisions were not exercised by these probes. Device/network comparison remains pending until the owner supplies the phone result.
+The Worker-origin issue is now reproduced at the edge using the real selector. `CF-Worker` is a candidate for rejecting these requests because Cloudflare restored the marker in the tested cases. This diagnostic does not implement or establish a complete rejection policy. The live app, public API, vinext adapter, named service binding, session cookies, and rate-limit decisions were not exercised by these probes.
+
+### Owner device results and cleanup
+
+The owner supplied labelled PC and mobile results after receiving the Wi-Fi/mobile-data instructions:
+
+| Device | Observed at, UTC | Address family | Result |
+| --- | --- | --- | --- |
+| PC | 2026-10-01 08:27:08 | IPv6 | Accepted, no Worker marker, no synthetic or fixed Worker identity |
+| Mobile | 2026-10-01 08:28:08 | IPv4 | Accepted, no Worker marker, no synthetic or fixed Worker identity |
+
+The two source fingerprints differed within the same run. Both requests included legitimate `x-real-ip` matching the selected identity. This establishes separate selected identities for these samples. It does not prove actual rate-limit enforcement, and the hash difference alone cannot establish independent physical networks because the address families also differ.
+
+After receiving these results, the assistant ran cleanup successfully. The Cloudflare API confirmed both diagnostic Workers and both custom-domain mappings were absent. Authoritative DNS returned no records for either hostname. A recursive resolver briefly retained the receiver's earlier DNS answer, consistent with caching after deletion. The local token, private link, and convenience symlink were removed. Sanitized reports remain locally; no app Worker or database was changed.
 
 References:
 
