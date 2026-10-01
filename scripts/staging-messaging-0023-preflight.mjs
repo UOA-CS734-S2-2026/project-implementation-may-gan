@@ -152,10 +152,15 @@ async function inspectDatabase(client) {
   }
 }
 
-async function defaultClientFactory(connectionString) {
-  const require = createRequire(path.resolve("packages/db/package.json"));
-  const { default: postgres } = require("postgres");
-  return postgres(connectionString, { max: 1, prepare: false, idle_timeout: 5, connect_timeout: 10, onnotice: () => undefined });
+export async function defaultClientFactory(connectionString) {
+  try {
+    const require = createRequire(path.join(import.meta.dirname, "..", "packages", "db", "package.json"));
+    const postgres = require("postgres");
+    if (typeof postgres !== "function") throw new TypeError("postgres module is not callable");
+    return postgres(connectionString, { max: 1, prepare: false, idle_timeout: 5, connect_timeout: 10, onnotice: () => undefined });
+  } catch {
+    fail("the PostgreSQL client could not be initialized.");
+  }
 }
 
 export async function runStagingMessagingPreflight({
@@ -165,7 +170,12 @@ export async function runStagingMessagingPreflight({
 } = {}) {
   const connectionString = validateEnvironment(environment);
   const migrations = await readMigrationState(migrationDirectory(environment), readFileImpl);
-  const client = await clientFactory(connectionString);
+  let client;
+  try {
+    client = await clientFactory(connectionString);
+  } catch {
+    fail("the PostgreSQL client could not be initialized.");
+  }
   try {
     const database = await inspectDatabase(client);
     const pending = pendingMigrationTags(migrations, database.appliedHashes);
