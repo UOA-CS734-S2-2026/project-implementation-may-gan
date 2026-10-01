@@ -124,6 +124,15 @@ test("workflow_run trust checks reject fork paths and stale guard bypasses", () 
   assert.throws(() => auditHostedMutationWorkflows(root), /must fully check out the live main ref/);
 }));
 
+test("CI runs the hosted mutation hold test", () => withFixture((root) => {
+  replace(
+    workflowPath(root, "ci.yml"),
+    "        run: pnpm test:hosted-mutation-hold",
+    "        run: pnpm test",
+  );
+  assert.throws(() => auditHostedMutationWorkflows(root), /TypeScript job must run the hosted mutation hold test/);
+}));
+
 test("new workflows and jobs require an explicit classification", () => withFixture((root) => {
   writeFileSync(workflowPath(root, "unclassified.yml"), "name: unclassified\non: workflow_dispatch\njobs: {}\n");
   assert.throws(() => auditHostedMutationWorkflows(root), /Workflow files are not classified/);

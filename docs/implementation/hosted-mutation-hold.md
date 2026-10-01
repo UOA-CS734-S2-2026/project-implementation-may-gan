@@ -21,3 +21,7 @@ An owner must review the intended release commit and hosted mutation before addi
 The authorization commit must be the live `main` tip and the named release commit must be in its history. Held deployment and migration jobs check out the named release commit. This separate authorization commit avoids a circular attempt to embed its own Git SHA in its content. Any missing field, extra field, unsupported version, malformed JSON, unknown commit, or changed main tip denies the job. Restore `deny` in the next reviewed main commit when the authorized operation is complete.
 
 This process does not create an environment approval or satisfy any separate approval requirement. It only permits the workflow graph to reach the job that already owns the protected environment and its credentials.
+
+## Already-running jobs
+
+Changing the hold to `deny` or restoring it cannot stop a mutation job that already passed its guard and received credentials. Before merging a hold change, the owner must check active and queued hosted mutation runs and decide whether to cancel them separately. This hold does not cancel jobs.

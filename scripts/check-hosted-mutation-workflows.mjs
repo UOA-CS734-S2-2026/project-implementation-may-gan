@@ -115,6 +115,13 @@ function mutationSignals(job, scripts) {
   return signals;
 }
 
+function requireCiHostedMutationHoldTest(workflow, filename, errors) {
+  const steps = workflow.jobs?.typescript?.steps;
+  if (!Array.isArray(steps) || !steps.some((step) => step.run === "pnpm test:hosted-mutation-hold")) {
+    fail(errors, `${filename}: the TypeScript job must run the hosted mutation hold test.`);
+  }
+}
+
 function requireTrustedWorkflowRun(workflow, guard, mutation, filename, errors) {
   const trigger = workflow.on?.workflow_run;
   const branches = Array.isArray(trigger?.branches) ? [...trigger.branches].sort() : [];
@@ -203,6 +210,7 @@ export function auditHostedMutationWorkflows(repositoryRoot = process.cwd()) {
       }
     }
 
+    if (filename === "ci.yml") requireCiHostedMutationHoldTest(workflow, filename, errors);
     if (policy.requiresTrustedWorkflowRun) {
       requireTrustedWorkflowRun(workflow, jobs["hosted-mutation-authorization"], jobs.deploy, filename, errors);
     }

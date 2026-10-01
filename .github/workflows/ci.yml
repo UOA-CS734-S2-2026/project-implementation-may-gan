@@ -37,6 +37,8 @@ jobs:
         run: pnpm typecheck
       - name: Test all workspace packages
         run: pnpm test
+      - name: Test hosted mutation hold
+        run: pnpm test:hosted-mutation-hold
       - name: Test realtime API when present
         shell: bash
         run: |
