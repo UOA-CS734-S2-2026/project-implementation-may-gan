@@ -145,4 +145,25 @@ describe("GET /api/v1/feed", () => {
     expect(body.items[1]?.media).toEqual([]);
     expect(JSON.stringify(body)).not.toContain("objectKey");
   });
+
+  it("is unavailable for a page with media when storage isn't configured", async () => {
+    const withMedia: FeedPostRecord = {
+      ...feedPost,
+      media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
+    };
+    const app = createApp({
+      feed: dependencies({ listFeed: vi.fn(async () => ({ items: [withMedia], nextCursor: null, hasMore: false })) }),
+    });
+    const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).not.toContain("objectKey");
+  });
+
+  it("still serves a text-only page without storage", async () => {
+    const app = createApp({ feed: dependencies({}) });
+    const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
+    expect(response.status).toBe(200);
+  });
 });
