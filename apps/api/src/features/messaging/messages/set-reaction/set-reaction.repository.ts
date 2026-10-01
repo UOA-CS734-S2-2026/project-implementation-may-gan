@@ -1,6 +1,7 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withLockedConversationMessageTransaction } from "../shared/conversation-message-transaction";
 import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } from "../shared/message-write-primitives";
+import { loadReactionSummaries } from "../../shared/message-projection";
 import type { ConversationAccess, ReactionKey, StoredMessage } from "../../shared/messaging-types";
 
 export interface SetReactionTransaction {
@@ -39,6 +40,7 @@ class PostgresSetReactionTransaction implements SetReactionTransaction {
       });
     const current = await this.findMessage(this.conversationId, messageId);
     if (!current) throw new Error("Message disappeared during reaction.");
+    current.reactions = await loadReactionSummaries(this.queryable, messageId, actorId);
     return current;
   }
 

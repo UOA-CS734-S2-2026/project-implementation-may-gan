@@ -175,6 +175,15 @@ function ConversationBody({ conversationId }: { conversationId: string }) {
     }
   }
 
+  async function heart(message: MessagingMessage) {
+    if (message.reactions.some((item) => item.reaction === "love" && item.reactedByActor)) return;
+    try {
+      await setReaction.mutateAsync({ messageId: message.id, reaction: "love" });
+    } catch (error) {
+      setNotice(errorMessage(error));
+    }
+  }
+
   const mutationError = errorMessage(send.error, edit.error, unsend.error, setReaction.error, removeReaction.error, resolveRequest.error, markRead.error);
   const canInteract = Boolean(conversation?.capabilities.canSend && conversation.requestState === "active");
   const canUnsend = Boolean(conversation && conversation.requestState !== "active" ? true : conversation?.capabilities.canSend);
@@ -188,8 +197,9 @@ function ConversationBody({ conversationId }: { conversationId: string }) {
     </header>
     {conversation?.capabilities.canResolveRequest && <div className="mt-4 flex gap-2"><button type="button" onClick={() => resolveRequest.mutate("accept")} className="rounded-xl bg-foreground-accent px-4 py-2 font-serif text-sm text-white">accept request</button><button type="button" onClick={() => resolveRequest.mutate("decline")} className="rounded-xl border border-foreground/20 px-4 py-2 font-serif text-sm">decline</button></div>}
     <div className="flex-1 space-y-4 py-8" aria-live="polite">
+      {history.isLoading && !history.data && <div aria-label="Loading messages" className="space-y-4"><div className="message-skeleton message-skeleton-bubble ml-auto" /><div className="message-skeleton message-skeleton-bubble" /><div className="message-skeleton message-skeleton-bubble ml-auto" /></div>}
       {history.hasNextPage && <button type="button" onClick={() => void history.fetchNextPage()} className="mx-auto block rounded-full border border-foreground/15 px-4 py-2 font-sans text-sm hover:border-foreground-accent">load older messages</button>}
-      {messages.map((message) => <div key={message.id}>{message.delivery && <div className="mb-1 flex justify-end gap-2 font-sans text-xs text-foreground-secondary"><span>{message.delivery === "failed" ? "not sent" : "sending"}</span>{message.delivery === "failed" && <button type="button" onClick={() => void retry(message)} className="underline">retry</button>}</div>}<MessageBubble message={message} own={message.senderId === user?.id} canInteract={canInteract} canUnsend={canUnsend} canEdit={now > 0 && now < new Date(message.createdAt).getTime() + 15 * 60 * 1_000} receiptSequence={conversation?.receiptSequence ?? "0"} onReply={(selected) => { setReplyTo(selected); setEditing(null); }} onEdit={(selected) => { setEditing(selected); setReplyTo(null); setText(selected.text ?? ""); }} onUnsend={(selected) => unsend.mutate({ messageId: selected.id }, { onError: (error) => setNotice(errorMessage(error)) })} onReaction={(selected, reaction) => void react(selected, reaction)} /></div>)}
+      {messages.map((message) => <div key={message.id}>{message.delivery && <div className="mb-1 flex justify-end gap-2 font-sans text-xs text-foreground-secondary"><span>{message.delivery === "failed" ? "not sent" : "sending"}</span>{message.delivery === "failed" && <button type="button" onClick={() => void retry(message)} className="underline">retry</button>}</div>}<MessageBubble message={message} own={message.senderId === user?.id} canInteract={canInteract} canUnsend={canUnsend} canEdit={now > 0 && now < new Date(message.createdAt).getTime() + 15 * 60 * 1_000} receiptSequence={conversation?.receiptSequence ?? "0"} onReply={(selected) => { setReplyTo(selected); setEditing(null); }} onEdit={(selected) => { setEditing(selected); setReplyTo(null); setText(selected.text ?? ""); }} onUnsend={(selected) => unsend.mutate({ messageId: selected.id }, { onError: (error) => setNotice(errorMessage(error)) })} onReaction={(selected, reaction) => void react(selected, reaction)} onHeart={(selected) => void heart(selected)} /></div>)}
       {incoming && <div ref={readTarget} aria-label="Messages visible" className="h-px" />}
     </div>
     {(notice ?? mutationError ?? (history.error instanceof Error ? history.error.message : null)) && <p role="status" className="mb-3 font-sans text-sm text-foreground-secondary">{notice ?? mutationError ?? (history.error as Error).message}</p>}

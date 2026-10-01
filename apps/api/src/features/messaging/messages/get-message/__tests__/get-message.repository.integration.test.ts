@@ -98,14 +98,30 @@ suite("get message Postgres repository", () => {
     const reactionsForSender = messageForSender.reactions;
     expect(reactionsForSender).toHaveLength(2);
     expect(reactionsForSender).toEqual(expect.arrayContaining([
-      { reaction: "love", count: 2, reactedByActor: true },
-      { reaction: "laugh", count: 1, reactedByActor: false },
+      {
+        reaction: "love",
+        count: 2,
+        reactedByActor: true,
+        reactors: [
+          { id: users[0]!, name: users[0]! },
+          { id: users[1]!, name: users[1]! },
+        ],
+      },
+      { reaction: "laugh", count: 1, reactedByActor: false, reactors: [{ id: users[2]!, name: users[2]! }] },
     ]));
     const messageForThirdMember = await repository.get(users[2]!, initial.conversation.id, reply.message.id);
     expect(messageForThirdMember.reactions).toHaveLength(2);
     expect(messageForThirdMember.reactions).toEqual(expect.arrayContaining([
-      { reaction: "love", count: 2, reactedByActor: false },
-      { reaction: "laugh", count: 1, reactedByActor: true },
+      {
+        reaction: "love",
+        count: 2,
+        reactedByActor: false,
+        reactors: [
+          { id: users[0]!, name: users[0]! },
+          { id: users[1]!, name: users[1]! },
+        ],
+      },
+      { reaction: "laugh", count: 1, reactedByActor: true, reactors: [{ id: users[2]!, name: users[2]! }]},
     ]));
 
     await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);

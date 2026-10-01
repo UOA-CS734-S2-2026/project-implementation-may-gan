@@ -82,7 +82,7 @@ export const messageReactions = pgTable("message_reactions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
   primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.userId] }),
-  check("message_reactions_key_check", sql`${table.reaction} in ('like', 'love', 'laugh', 'surprised', 'sad', 'thanks')`),
+  check("message_reactions_key_check", sql`${table.reaction} in ('like', 'love', 'laugh', 'surprised', 'sad', 'angry', 'thanks')`),
 ]);
 
 export const conversationChanges = pgTable("conversation_changes", {

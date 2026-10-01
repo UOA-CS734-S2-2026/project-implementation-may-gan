@@ -58,6 +58,123 @@
     16px 16px 32px rgba(0, 0, 0, 0.03);
 }
 
+@keyframes message-badge-pop {
+  from { opacity: 0; transform: translateY(2px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes message-heart-pop {
+  from { opacity: 0; transform: translateY(-50%) scale(0.9); }
+  to { opacity: 1; transform: translateY(-50%) scale(1.08); }
+}
+
+@keyframes message-skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.message-toolbar {
+  display: none;
+}
+
+.message-icon-button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 9999px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.message-icon-button:hover {
+  background: var(--color-background-secondary);
+}
+
+.message-plus {
+  margin-left: -0.18rem;
+  margin-top: 0.42rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.message-popover {
+  transform-origin: var(--message-popover-origin, center center);
+  animation: message-badge-pop 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.message-press {
+  transition-property: transform, background-color, color, border-color;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+
+.message-press:active {
+  transform: scale(0.96);
+}
+
+.message-reaction-badge > button {
+  animation: message-badge-pop 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.message-heart-pop {
+  animation: message-heart-pop 200ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  pointer-events: none;
+}
+
+.message-skeleton {
+  border-radius: 1rem;
+  background: linear-gradient(100deg, var(--color-background-secondary) 35%, var(--color-background-tertiary) 50%, var(--color-background-secondary) 65%);
+  background-size: 200% 100%;
+  animation: message-skeleton-shimmer 1.2s linear infinite;
+}
+
+.message-skeleton-bubble {
+  width: min(16rem, 70%);
+  height: 3.75rem;
+}
+
+.message-skeleton-avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+}
+
+.message-skeleton-line {
+  height: 0.75rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .message-toolbar {
+    display: flex;
+    opacity: 0;
+    pointer-events: none;
+    transition-property: opacity;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+  }
+
+  .group\/message:hover .message-toolbar,
+  .group\/message:focus-within .message-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-popover,
+  .message-reaction-badge,
+  .message-heart-pop,
+  .message-skeleton {
+    animation: none;
+  }
+
+  .message-press,
+  .message-toolbar {
+    transition-duration: 0.01ms;
+  }
+}
+
 @keyframes arrow-anim {
   0% {
     transform: translateX(0);

@@ -31,6 +31,10 @@ function messageBubble(page: Page, text: string) {
   return page.locator("article").filter({ has: page.getByText(text, { exact: true }) });
 }
 
+function messageContent(page: Page, text: string) {
+  return messageBubble(page, text).locator("[data-message-content]");
+}
+
 async function openRecipientRequest(recipient: Page, sender: Account, firstMessage: string) {
   await recipient.goto(`${origin}/messages`);
   await expect(recipient.getByRole("tab", { name: /Requests/ })).toHaveText(/Requests\s*1/);
@@ -87,9 +91,9 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     await sendWithEnter(page, longMessage);
     const longBubble = messageBubble(page, longMessage);
     await expect(longBubble).toBeVisible();
-    const [shortBubbleWidth, longBubbleWidth] = await Promise.all([firstBubble, longBubble].map((bubble) => bubble.evaluate((element) => ({
+    const [shortBubbleWidth, longBubbleWidth] = await Promise.all([firstMessage, longMessage].map((text) => messageContent(page, text).evaluate((element) => ({
       bubble: element.getBoundingClientRect().width,
-      messageColumn: element.parentElement?.parentElement?.getBoundingClientRect().width ?? 0,
+      messageColumn: element.closest("article")?.parentElement?.parentElement?.getBoundingClientRect().width ?? 0,
     }))));
     expect(shortBubbleWidth.bubble).toBeLessThan(longBubbleWidth.bubble);
     expect(longBubbleWidth.bubble).toBeLessThanOrEqual(longBubbleWidth.messageColumn * 0.84 + 1);
@@ -100,9 +104,16 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     await expect(messageBubble(page, reply)).toBeVisible({ timeout: 15_000 });
     expect(page.url()).toBe(senderURL);
 
-    await messageBubble(recipientPage, firstMessage).getByLabel("Add reaction").click();
+    const recipientFirstBubble = messageBubble(recipientPage, firstMessage);
+    if (testInfo.project.name === "mobile-chromium") {
+      await recipientFirstBubble.dispatchEvent("pointerdown", { pointerType: "touch" });
+      await recipientPage.waitForTimeout(550);
+    } else {
+      await recipientFirstBubble.hover();
+      await recipientFirstBubble.getByLabel("Add reaction").click();
+    }
     await recipientPage.getByRole("button", { name: "React Like" }).click();
-    await expect(messageBubble(page, firstMessage).getByRole("button", { name: "Like 1" })).toBeVisible({ timeout: 15_000 });
+    await expect(messageBubble(page, firstMessage).getByLabel("View reactions")).toHaveText("👍", { timeout: 15_000 });
 
     const multiline = `line one ${sender.username}\nline two`;
     const composer = page.getByRole("textbox", { name: "Message" });

@@ -16,6 +16,7 @@ class MessageReactionsInner {
     required this.reaction,
     required this.count,
     required this.reactedByActor,
+    this.reactors = const [],
   });
 
   final MessageReactionsInnerReactionEnum reaction;
@@ -25,28 +26,35 @@ class MessageReactionsInner {
 
   final bool reactedByActor;
 
+  final List<MessageReactionsInnerReactorsInner> reactors;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is MessageReactionsInner &&
           other.reaction == reaction &&
           other.count == count &&
-          other.reactedByActor == reactedByActor;
+          other.reactedByActor == reactedByActor &&
+          _deepEquality.equals(other.reactors, reactors);
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (reaction.hashCode) + (count.hashCode) + (reactedByActor.hashCode);
+      (reaction.hashCode) +
+      (count.hashCode) +
+      (reactedByActor.hashCode) +
+      (reactors.hashCode);
 
   @override
   String toString() =>
-      'MessageReactionsInner[reaction=$reaction, count=$count, reactedByActor=$reactedByActor]';
+      'MessageReactionsInner[reaction=$reaction, count=$count, reactedByActor=$reactedByActor, reactors=$reactors]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'reaction'] = this.reaction;
     json[r'count'] = this.count;
     json[r'reactedByActor'] = this.reactedByActor;
+    json[r'reactors'] = this.reactors;
     return json;
   }
 
@@ -56,11 +64,13 @@ class MessageReactionsInner {
     MessageReactionsInnerReactionEnum? reaction,
     int? count,
     bool? reactedByActor,
+    List<MessageReactionsInnerReactorsInner>? reactors,
   }) =>
       MessageReactionsInner(
         reaction: reaction ?? this.reaction,
         count: count ?? this.count,
         reactedByActor: reactedByActor ?? this.reactedByActor,
+        reactors: reactors ?? this.reactors,
       );
 
   /// Returns a new [MessageReactionsInner] instance and imports its values from
@@ -86,6 +96,10 @@ class MessageReactionsInner {
             'Required key "MessageReactionsInner[reactedByActor]" is missing from JSON.');
         assert(json[r'reactedByActor'] != null,
             'Required key "MessageReactionsInner[reactedByActor]" has a null value in JSON.');
+        assert(json.containsKey(r'reactors'),
+            'Required key "MessageReactionsInner[reactors]" is missing from JSON.');
+        assert(json[r'reactors'] != null,
+            'Required key "MessageReactionsInner[reactors]" has a null value in JSON.');
         return true;
       }());
 
@@ -94,6 +108,8 @@ class MessageReactionsInner {
             MessageReactionsInnerReactionEnum.fromJson(json[r'reaction'])!,
         count: mapValueOfType<int>(json, r'count')!,
         reactedByActor: mapValueOfType<bool>(json, r'reactedByActor')!,
+        reactors:
+            MessageReactionsInnerReactorsInner.listFromJson(json[r'reactors']),
       );
     }
     return null;
@@ -153,6 +169,7 @@ class MessageReactionsInner {
     'reaction',
     'count',
     'reactedByActor',
+    'reactors',
   };
 }
 
@@ -162,6 +179,7 @@ enum MessageReactionsInnerReactionEnum {
   laugh._(r'laugh'),
   surprised._(r'surprised'),
   sad._(r'sad'),
+  angry._(r'angry'),
   thanks._(r'thanks'),
   ;
 
@@ -237,6 +255,8 @@ class MessageReactionsInnerReactionEnumTypeTransformer {
           return MessageReactionsInnerReactionEnum.surprised;
         case r'sad':
           return MessageReactionsInnerReactionEnum.sad;
+        case r'angry':
+          return MessageReactionsInnerReactionEnum.angry;
         case r'thanks':
           return MessageReactionsInnerReactionEnum.thanks;
         default:

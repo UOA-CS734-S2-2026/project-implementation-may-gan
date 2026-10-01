@@ -76,6 +76,7 @@ part 'model/media_reservation_upload.dart';
 part 'model/media_validation_failure_reason.dart';
 part 'model/message.dart';
 part 'model/message_reactions_inner.dart';
+part 'model/message_reactions_inner_reactors_inner.dart';
 part 'model/message_reply_preview.dart';
 part 'model/pending_relationship_request.dart';
 part 'model/pending_request_page.dart';

@@ -93,7 +93,7 @@ suite("conversation change builders", () => {
       id: sessionId,
       // Push eligibility compares against the database's real clock (now()), so
       // a fixed date would expire and silently drop every push row.
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000),
       token: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,

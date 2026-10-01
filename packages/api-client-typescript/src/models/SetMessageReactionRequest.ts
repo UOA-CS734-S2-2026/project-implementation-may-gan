@@ -35,6 +35,7 @@ export const SetMessageReactionRequestReactionEnum = {
     Laugh: 'laugh',
     Surprised: 'surprised',
     Sad: 'sad',
+    Angry: 'angry',
     Thanks: 'thanks',
 } as const;
 export type SetMessageReactionRequestReactionEnum = typeof SetMessageReactionRequestReactionEnum[keyof typeof SetMessageReactionRequestReactionEnum];

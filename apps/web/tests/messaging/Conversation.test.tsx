@@ -44,10 +44,12 @@ describe("messaging screens", () => {
     await screen.findByText("hello");
     await actor.click(screen.getByRole("button", { name: "load older messages" }));
     expect(api.messages).toHaveBeenLastCalledWith("c1", "1");
-    const reply = screen.getAllByRole("button", { name: "reply" })[0];
+    const reply = screen.getAllByRole("button", { name: "Reply" })[0];
     await actor.click(reply); await actor.type(screen.getByLabelText("Message"), "answer"); await actor.click(screen.getByRole("button", { name: "send" }));
     await waitFor(() => expect(api.send).toHaveBeenCalledWith("c1", expect.any(String), "answer", "m0"));
-    await actor.click(within(screen.getByTestId("message-m1")).getByRole("button", { name: "edit" }));
+    const ownMessage = within(screen.getByTestId("message-m1"));
+    await actor.click(ownMessage.getByRole("button", { name: "Message actions" }));
+    await actor.click(ownMessage.getByRole("button", { name: "Edit" }));
     await actor.clear(screen.getByLabelText("Message")); await actor.type(screen.getByLabelText("Message"), "changed"); await actor.click(screen.getByRole("button", { name: "save" }));
     await waitFor(() => expect(api.edit).toHaveBeenCalledWith("c1", "m1", "changed", 1));
     const bubble = within(screen.getByTestId("message-m1"));
@@ -57,7 +59,8 @@ describe("messaging screens", () => {
     await actor.click(bubble.getByRole("button", { name: "React Like" }));
     await waitFor(() => expect(api.react).toHaveBeenCalledWith("c1", "m1", "like"));
     expect(addReaction).toHaveAttribute("aria-expanded", "false");
-    await actor.click(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" }));
+    await actor.click(ownMessage.getByRole("button", { name: "Message actions" }));
+    await actor.click(ownMessage.getByRole("button", { name: "Unsend" }));
     await waitFor(() => expect(api.unsend).toHaveBeenCalledWith("c1", "m1"));
     expect(await screen.findByText("This message was unsent.")).toBeTruthy();
   });
@@ -99,21 +102,28 @@ describe("messaging screens", () => {
   });
 
   it("keeps sender unsend available for pending and declined initial requests, but not blocked active threads", async () => {
+    const actor = userEvent.setup();
     const view = render(<Conversation conversationId="c1" />); await screen.findByText("hello");
-    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+    const expectUnsend = async (present: boolean) => {
+      const bubble = within(screen.getByTestId("message-m1"));
+      await actor.click(bubble.getByRole("button", { name: "Message actions" }));
+      expect(Boolean(bubble.queryByRole("button", { name: "Unsend" }))).toBe(present);
+      await actor.click(bubble.getByRole("button", { name: "Message actions" }));
+    };
+    await expectUnsend(true);
 
     api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "pending", capabilities: { canSend: false, canResolveRequest: false } }) });
     view.rerender(<Conversation conversationId="pending" />); await screen.findByText("Message request. Actions stay private until it is accepted.");
-    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+    await expectUnsend(true);
 
     api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "declined", capabilities: { canSend: false, canResolveRequest: false } }) });
     view.rerender(<Conversation conversationId="declined" />); await waitFor(() => expect(screen.queryByText("Message request. Actions stay private until it is accepted.")).toBeNull());
     await screen.findByTestId("message-m1");
-    expect(within(screen.getByTestId("message-m1")).getByRole("button", { name: "unsend" })).toBeTruthy();
+    await expectUnsend(true);
 
     api.conversation.mockResolvedValue({ ok: true, value: conversation({ requestState: "active", capabilities: { canSend: false, canResolveRequest: false } }) });
     view.rerender(<Conversation conversationId="blocked" />); await screen.findByText("New actions are unavailable in this conversation.");
-    expect(within(screen.getByTestId("message-m1")).queryByRole("button", { name: "unsend" })).toBeNull();
+    expect(within(screen.getByTestId("message-m1")).queryByRole("button", { name: "Message actions" })).toBeNull();
   });
 
   it("reconciles parent edits and tombstones into older loaded reply previews", async () => {

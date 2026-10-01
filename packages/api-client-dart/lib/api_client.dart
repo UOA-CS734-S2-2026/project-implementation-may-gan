@@ -286,6 +286,8 @@ class ApiClient {
           return Message.fromJson(value);
         case 'MessageReactionsInner':
           return MessageReactionsInner.fromJson(value);
+        case 'MessageReactionsInnerReactorsInner':
+          return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
         case 'PendingRelationshipRequest':
