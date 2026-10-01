@@ -119,11 +119,17 @@ suite("Postgres realtime publisher authorization", () => {
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, peer)).resolves.toBe(false);
   });
 
-  it("uses memberId when a blocked change has no message sender", async () => {
-    await insertChange({ sequence: 1, memberId: ids.alice });
+  it("delivers a persisted request decline only to its actor when the sender becomes unavailable", async () => {
+    await insertChange({ sequence: 1, memberId: ids.alice, kind: "request.declined" });
     const actor = await insertLeasedJob({ recipientId: ids.alice, changeSequence: 1 });
     const peer = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
-    await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: createdAt });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: ids.alice, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "d".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, actor)).resolves.toBe(true);
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, peer)).resolves.toBe(false);

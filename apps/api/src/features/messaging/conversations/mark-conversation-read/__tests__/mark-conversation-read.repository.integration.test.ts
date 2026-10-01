@@ -13,10 +13,18 @@ if (enabled && target?.pathname !== "/dayli_messaging_test") {
 }
 const suite = enabled ? describe : describe.skip;
 
+async function waitFor(condition: () => Promise<boolean>, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
 suite("mark conversation read Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 14 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 16 }, (_, index) => `mark-conversation-read-${crypto.randomUUID()}-${index}`);
   const {
     conversationChanges,
     conversationMembers,
@@ -41,7 +49,7 @@ suite("mark conversation read Postgres repository", () => {
   beforeAll(async () => {
     await database.db.insert(user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
     await database.db.insert(friendships).values([
-      [0, 1], [1, 0], [2, 3], [3, 2], [6, 7], [7, 6], [8, 9], [9, 8], [10, 11], [11, 10], [12, 13], [13, 12],
+      [0, 1], [1, 0], [2, 3], [3, 2], [6, 7], [7, 6], [8, 9], [9, 8], [10, 11], [11, 10], [12, 13], [13, 12], [14, 15], [15, 14],
     ].map(([userIndex, friendIndex]) => ({
       userId: users[userIndex!]!,
       friendId: users[friendIndex!]!,
@@ -168,6 +176,64 @@ suite("mark conversation read Postgres repository", () => {
       const [outboxCount] = await database.db.select({ count: count() }).from(messagingOutbox).where(eq(messagingOutbox.conversationId, conversationId));
       expect(changeCount?.count).toBe(1);
       expect(outboxCount?.count).toBe(2);
+    }
+  });
+
+  it("waits for lifecycle, then advances only a private read cursor without a shared receipt", async () => {
+    const conversation = await direct.create(users[14]!, {
+      recipientId: users[15]!, clientMessageId: crypto.randomUUID(), text: "private after lifecycle",
+    });
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let lifecycleWritten: (() => void) | undefined;
+    const written = new Promise<void>((resolve) => { lifecycleWritten = resolve; });
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [contenderBackend] = await concurrentDatabase.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const contenderPid = Number(contenderBackend?.pid);
+      const transition = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${users[14]!} for update`;
+        await tx`
+          insert into public.account_lifecycles
+            (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+          values (${users[14]!}, 'pending_deletion', ${crypto.randomUUID()}, ${"e".repeat(64)}, 1, now(), now() + interval '168 hours', now() + interval '336 hours')
+        `;
+        lifecycleWritten?.();
+        await held;
+      });
+      await written;
+      const read = concurrentRepository.markRead(users[15]!, conversation.conversation.id, conversation.message.sequence);
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${contenderPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected mark-read to wait for the lifecycle user lock.");
+      release!();
+      await transition;
+      await expect(read).resolves.toEqual({
+        lastReadSequence: conversation.message.sequence,
+        receiptSequence: "0",
+        unreadCount: 0,
+      });
+      const [member] = await database.db.select({
+        lastReadSequence: conversationMembers.lastReadSequence,
+        receiptSequence: conversationMembers.receiptSequence,
+      }).from(conversationMembers).where(and(
+        eq(conversationMembers.conversationId, conversation.conversation.id),
+        eq(conversationMembers.userId, users[15]!),
+      ));
+      const [receiptCount] = await database.db.select({ count: count() }).from(conversationChanges).where(and(
+        eq(conversationChanges.conversationId, conversation.conversation.id),
+        eq(conversationChanges.kind, "read.updated"),
+      ));
+      expect(member).toMatchObject({ lastReadSequence: Number(conversation.message.sequence), receiptSequence: 0 });
+      expect(receiptCount?.count).toBe(0);
+    } finally {
+      release?.();
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[14]!));
+      await Promise.all([holder.close(), inspector.close()]);
     }
   });
 
