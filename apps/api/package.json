@@ -9,6 +9,7 @@
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
     "test:realtime": "vitest run --config vitest.realtime.config.ts",
     "test:hyperdrive:staging": "vitest run --config vitest.hyperdrive.staging.config.ts",
+    "test:proxy-integration": "bash ../../scripts/test-browser-proxy-workerd.sh",
     "typecheck": "tsc"
   },
   "dependencies": {

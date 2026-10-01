@@ -45,6 +45,8 @@ jobs:
         run: pnpm typecheck
       - name: Test all workspace packages
         run: pnpm test
+      - name: Test local workerd browser proxy boundary
+        run: pnpm --filter @dayli/api test:proxy-integration
       - name: Test staging release workflow contract
         run: pnpm test:staging-release-contract
       - name: Test realtime API when present
