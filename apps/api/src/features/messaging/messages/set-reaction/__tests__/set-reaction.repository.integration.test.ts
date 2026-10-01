@@ -1,7 +1,10 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createLifecycleContentionFixture, deferred, lifecycleContentionEnabled } from "../../../../../../test/support/lifecycle-message-contention";
 import { createMessagingPersistenceServices } from "../../../../../app";
+import { createPostgresSetReactionStore, type SetReactionStore } from "../set-reaction.repository";
+import { createSetReactionService } from "../set-reaction.service";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
 const enabled = Boolean(connectionString);
@@ -91,5 +94,61 @@ suite("set reaction Postgres repository", () => {
       .where(and(eq(schema.messagingOutbox.conversationId, conversation.id), eq(schema.messagingOutbox.channel, "realtime")));
     expect(changedChanges?.count).toBe(2);
     expect(changedOutbox?.count).toBe(6);
+  });
+});
+
+(lifecycleContentionEnabled ? describe : describe.skip)("set reaction lifecycle contention", () => {
+  it("commits an active reaction before a concurrent deletion becomes pending, then rejects a new reaction", async () => {
+    const fixture = createLifecycleContentionFixture("reaction-contention");
+    const writer = createDayliDatabase(fixture.writerUrl);
+    const reached = deferred<void>();
+    const release = deferred<void>();
+    const realStore = createPostgresSetReactionStore(writer.db);
+    let paused = false;
+    const gatedStore: SetReactionStore = {
+      withConversationTransaction: (actorId, conversationId, operation) => realStore.withConversationTransaction(actorId, conversationId, async (transaction) => {
+        const realGetAccess = transaction.getAccess.bind(transaction);
+        const gatedTransaction = Object.create(transaction) as typeof transaction;
+        gatedTransaction.getAccess = async (requestedActorId, requestedConversationId) => {
+          const access = await realGetAccess(requestedActorId, requestedConversationId);
+          if (!paused) {
+            expect(access).toMatchObject({ isMember: true, peerActivityBlocked: false, requestState: "active" });
+            paused = true;
+            reached.resolve();
+            await release.promise;
+          }
+          return access;
+        };
+        return operation(gatedTransaction);
+      }),
+    };
+    const setReaction = createSetReactionService({ store: gatedStore });
+    const users: string[] = [];
+    let pendingReaction: Promise<unknown> | undefined;
+    let pendingDeletion: Promise<Response> | undefined;
+    try {
+      const alice = await fixture.signup("Alice");
+      const bob = await fixture.signup("Bob");
+      users.push(alice.id, bob.id);
+      const { aliceMessageId, conversationId } = await fixture.seedActiveConversation(alice.id, bob.id);
+      const grant = await fixture.deletionGrant(alice.token);
+
+      pendingReaction = setReaction.set(bob.id, conversationId, aliceMessageId, "love");
+      await reached.promise;
+      pendingDeletion = fixture.requestDeletion(alice.token, grant);
+      await fixture.waitForDeletionBlockedBy(`${fixture.nonce}-writer`);
+
+      release.resolve();
+      await expect(pendingReaction).resolves.toMatchObject({ changed: true, message: { reactions: [{ reaction: "love", count: 1, reactedByActor: true }] } });
+      const deletion = await pendingDeletion!;
+      expect(deletion.status).toBe(200);
+      await expect(deletion.json()).resolves.toMatchObject({ state: "pending_deletion" });
+      await expect(setReaction.set(bob.id, conversationId, aliceMessageId, "laugh")).rejects.toMatchObject({ code: "BLOCKED" });
+    } finally {
+      release.resolve();
+      await Promise.allSettled([pendingReaction, pendingDeletion].filter((value): value is Promise<unknown> => Boolean(value)));
+      await writer.close();
+      await fixture.close(users);
+    }
   });
 });
