@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   assessMessagingSizes,
+  defaultClientFactory,
   formatPreflightResult,
   messagingReadinessMigration,
   messagingSizeCapBytes,
@@ -56,6 +60,37 @@ function clientFixture({ appliedHashes = [hashes[0]], sizes = tableRows(), roles
     async end() {},
   };
 }
+
+test("loads the callable postgres CJS export from the tooling package without hosted credentials", async () => {
+  const originalCwd = process.cwd();
+  const isolatedCwd = mkdtempSync(join(tmpdir(), "dayli-preflight-cwd-"));
+  let client;
+  try {
+    process.chdir(isolatedCwd);
+    client = await defaultClientFactory("postgresql://migrator:fixture@127.0.0.1:1/dayli?sslmode=require");
+    assert.equal(typeof client.unsafe, "function");
+  } finally {
+    await client?.end({ timeout: 0 });
+    process.chdir(originalCwd);
+    rmSync(isolatedCwd, { recursive: true, force: true });
+  }
+});
+
+test("sanitizes PostgreSQL client factory errors", async () => {
+  for (const factory of [
+    () => defaultClientFactory("postgresql://migrator:factory-secret@localhost:not-a-port/dayli"),
+    () => { throw new Error("factory-secret"); },
+  ]) {
+    await assert.rejects(
+      runStagingMessagingPreflight({
+        environment: environment(),
+        readFileImpl: readFileFixture,
+        clientFactory: factory,
+      }),
+      (error) => /PostgreSQL client could not be initialized/.test(error.message) && !error.message.includes("factory-secret"),
+    );
+  }
+});
 
 test("requires the exact 0023 pending suffix and accepts the conservative staging cap", async () => {
   const result = await runStagingMessagingPreflight({
