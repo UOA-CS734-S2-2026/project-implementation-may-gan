@@ -2,6 +2,7 @@ import "server-only";
 
 import { forwardBrowserApiRequest, type ApiTransport } from "@/lib/api/server/browser-proxy";
 import { resolveServerSession, type ServerSession, type ServerSessionResult } from "./server";
+import { safeReturnPath } from "@/lib/routing/safe-return-path";
 
 export type SessionGuard =
   | { state: "allowed"; session: ServerSession }
@@ -14,32 +15,6 @@ export type UsernameGuard =
 export type LandingGuard = { state: "render" } | { state: "redirect"; location: string };
 
 const refreshAttemptCookie = "dayli_session_refresh_attempt";
-
-/** Accept only an origin-relative destination. Query input is never auth evidence. */
-function isSafeRelativeUrl(url: URL): boolean {
-  return url.origin === "https://dayli.invalid"
-    && url.pathname.startsWith("/")
-    && !url.pathname.startsWith("//")
-    && !url.pathname.includes("\\")
-    && !/[\u0000-\u001f\u007f]/.test(`${url.pathname}${url.search}`);
-}
-
-/**
- * Validate the browser's raw and once-decoded request-target representations.
- * A browser decodes percent escapes once when it makes the next request, so a
- * second, arbitrary recursive decode would not model this redirect pipeline.
- */
-export function safeReturnPath(value: string | null | undefined, fallback = "/"): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u001f\u007f]/.test(value)) return fallback;
-  try {
-    const parsed = new URL(value, "https://dayli.invalid");
-    const normalized = `${parsed.pathname}${parsed.search}`;
-    const decoded = new URL(decodeURIComponent(normalized), "https://dayli.invalid");
-    return isSafeRelativeUrl(parsed) && isSafeRelativeUrl(decoded) ? normalized : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 export function hasSessionRefreshAttempt(headers: Headers): boolean {
   return headers.get("cookie")?.split(";").some((part) => part.trim() === `${refreshAttemptCookie}=1`) ?? false;
@@ -115,4 +90,4 @@ export async function resolveLanding(
   return { state: "render" };
 }
 
-export { refreshAttemptCookie };
+export { refreshAttemptCookie, safeReturnPath };

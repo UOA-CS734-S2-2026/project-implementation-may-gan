@@ -1,15 +1,15 @@
 "use client";
 
 import { authClient } from "@/lib/auth/client";
+import { safeReturnPath } from "@/lib/routing/safe-return-path";
 
-export function GoogleSignInButton() {
+export function GoogleSignInButton({ returnTo = "/home" }: { returnTo?: string }) {
   async function handleGoogleSignIn() {
-    // The API runs on another origin, so return to an absolute web URL.
-    await authClient.signIn.social({
-      provider: "google",
-      callbackURL: `${window.location.origin}/home`,
-      errorCallbackURL: `${window.location.origin}/sign-in`,
-    });
+    const destination = safeReturnPath(returnTo, "/home");
+    // OAuth requires an absolute callback, but its origin stays fixed to this web app.
+    const callbackURL = new URL(destination, window.location.origin).toString();
+    const errorCallbackURL = new URL(`/sign-in?next=${encodeURIComponent(destination)}`, window.location.origin).toString();
+    await authClient.signIn.social({ provider: "google", callbackURL, errorCallbackURL });
   }
 
   return (
