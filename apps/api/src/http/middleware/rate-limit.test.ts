@@ -163,14 +163,39 @@ describe("native API rate limiting", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("fails open on a native limiter outage and alerts without an actor key", async () => {
+  it("fails closed for an auth request when the ingress limiter throws", async () => {
+    const origin = "https://web.dayli.test";
     const alert = vi.fn();
-    const read = { limit: vi.fn(async () => { throw new Error("unavailable"); }) };
+    const handler = vi.fn(async () => new Response(null, { status: 200 }));
+    const auth = {
+      trustedOrigins: [origin],
+      auth: { handler },
+      socialLinkConfirmations: {},
+    } as unknown as NonNullable<AppDependencies["auth"]>;
+    const ingress = { limit: vi.fn(async () => { throw new Error("token=must-not-be-reported"); }) };
+    const api = createApp({ auth, trustedOrigins: [origin], rateLimiting: { ...dependencies(), bindings: { ...dependencies().bindings, ingress }, onOperationalAlert: alert } });
+
+    const response = await api.request("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { origin, "cf-connecting-ip": "198.51.100.19" },
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("access-control-allow-origin")).toBe(origin);
+    expect(handler).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith("rate_limit_backend_unavailable");
+    expect(JSON.stringify(alert.mock.calls)).not.toContain("token=");
+  });
+
+  it("fails closed for an authenticated route when a native limiter is unavailable and alerts without actor data", async () => {
+    const alert = vi.fn();
+    const read = { limit: vi.fn(async () => { throw new Error("credential=must-not-be-reported"); }) };
     const limiter = createActorRateLimiter({ environmentScope: "test", bindings: { ...dependencies().bindings, read }, onOperationalAlert: alert });
 
-    await expect(limiter.check(new Request("https://api.example.test/api/v1/feed"), { userId: "alice" })).resolves.toBe("allowed");
+    await expect(limiter.check(new Request("https://api.example.test/api/v1/feed"), { userId: "alice" })).resolves.toBe("unavailable");
     expect(alert).toHaveBeenCalledWith("rate_limit_backend_unavailable");
     expect(JSON.stringify(alert.mock.calls)).not.toContain("alice");
+    expect(JSON.stringify(alert.mock.calls)).not.toContain("credential=");
   });
 
   it.each([

@@ -6,6 +6,18 @@ const allowedHeaders = ["authorization", "content-type", "idempotency-key"];
 const exposedHeaders = ["idempotent-replayed", "retry-after"];
 const applicationPath = "/api/v1/*";
 
+export function hasUntrustedBrowserOrigin(origin: string | undefined, trustedOrigins: readonly string[]) {
+  return origin !== undefined && origin.length > 0 && !trustedOrigins.includes(origin);
+}
+
+function isUnsafeMethod(method: string) {
+  return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+}
+
+function hasBrowserSessionCookie(cookie: string | undefined) {
+  return /(?:^|;\s*)(?:__Secure-)?better-auth\.session_token=/.test(cookie ?? "");
+}
+
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
   values.add(value);
@@ -14,13 +26,22 @@ function appendVary(headers: Headers, value: string) {
 
 /**
  * Credentialed CORS for browser clients on exactly the trusted web origins.
- * Requests from any other origin receive no CORS headers, so browsers withhold
- * the response; non-browser clients send no Origin and are unaffected.
+ * A non-empty untrusted Origin, or an origin-less browser session cookie, on
+ * an unsafe request is rejected before routing. This includes mixed cookie and
+ * bearer credentials. Origin-less native bearer clients remain supported,
+ * while safe requests receive no CORS grant.
  */
 export function registerApplicationCors<E extends Env>(app: OpenAPIHono<E>, trustedOrigins: readonly string[]) {
   app.use(applicationPath, async (context, next) => {
     const origin = context.req.header("origin");
     const trusted = origin !== undefined && trustedOrigins.includes(origin);
+
+    if (isUnsafeMethod(context.req.method) && (
+      hasUntrustedBrowserOrigin(origin, trustedOrigins)
+      || (!origin && hasBrowserSessionCookie(context.req.header("cookie")))
+    )) {
+      return new Response(null, { status: 403 });
+    }
 
     if (context.req.method === "OPTIONS") {
       const method = context.req.header("access-control-request-method")?.toUpperCase();

@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { Env } from "hono";
 import type { ApiEnv } from "../../env";
+import { hasUntrustedBrowserOrigin } from "../../http/middleware/cors";
 import {
   authBasePath,
   createPostgresBetterAuth,
@@ -161,7 +162,7 @@ async function handleOAuthCallback(
 export function registerStrictAuthCors<E extends Env>(app: OpenAPIHono<E>, trustedOrigins: readonly string[]) {
   app.use(`${authBasePath}/*`, async (context, next) => {
     const origin = context.req.header("origin");
-    if (origin && !trustedOrigins.includes(origin)) return new Response(null, { status: 403 });
+    if (hasUntrustedBrowserOrigin(origin, trustedOrigins)) return new Response(null, { status: 403 });
     await next();
     if (origin && trustedOrigins.includes(origin)) {
       context.res.headers.set("access-control-allow-origin", origin);
@@ -184,7 +185,7 @@ function registerStrictAuthRoutes<E extends Env>(
 
   app.on(["GET", "POST"], `${authBasePath}/*`, async (context) => {
     const origin = context.req.header("origin");
-    if (origin && !trustedOrigins.includes(origin)) return new Response(null, { status: 403 });
+    if (hasUntrustedBrowserOrigin(origin, trustedOrigins)) return new Response(null, { status: 403 });
     const response = await dispatch(context.req.raw);
     return origin ? corsResponse(response, origin) : response;
   });
