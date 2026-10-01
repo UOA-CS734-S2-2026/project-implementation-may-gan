@@ -200,4 +200,45 @@ suite("list messages Postgres repository", () => {
     await expect(repository.list(users[0]!, created.conversation.id, undefined, undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
   });
+
+  it("counts a pending-deletion participant's angry reaction without leaking profile data", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "detached reaction projection",
+    });
+    await database.db.update(schema.messages).set({ version: 1 })
+      .where(eq(schema.messages.conversationId, created.conversation.id));
+    await database.db.insert(schema.messageReactions).values({
+      messageId: created.message.id,
+      userId: users[1]!,
+      reaction: "angry",
+      createdAt: new Date(),
+    });
+    await database.db.update(schema.user).set({
+      name: "private reactor name",
+      username: "privatereactor",
+      displayUsername: "private reactor display name",
+      image: "https://example.test/private-reactor-avatar.png",
+    }).where(eq(schema.user.id, users[1]!));
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[1]!,
+      state: "pending_deletion",
+      requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "a".repeat(64),
+      generation: 1,
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    const page = await repository.list(users[0]!, created.conversation.id, undefined, undefined, 10);
+    expect(page.items.find((item) => item.id === created.message.id)?.reactions).toEqual([{
+      reaction: "angry",
+      count: 1,
+      reactedByActor: false,
+      reactors: [{ id: users[1]!, name: "Deleted account" }],
+    }]);
+  });
 });

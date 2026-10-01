@@ -11,6 +11,7 @@ export type MessageProjectionRow = {
   conversationId: string;
   sequence: number;
   senderId: string;
+  senderParticipantId: string | null;
   clientMessageId: string;
   requestFingerprint: string;
   body: string | null;
@@ -27,6 +28,7 @@ export const messageProjectionSelection = {
   conversationId: schema.messages.conversationId,
   sequence: schema.messages.sequence,
   senderId: schema.messages.senderId,
+  senderParticipantId: schema.messages.senderParticipantId,
   clientMessageId: schema.messages.clientMessageId,
   requestFingerprint: schema.messages.requestFingerprint,
   body: schema.messages.body,
@@ -41,6 +43,7 @@ export const messageProjectionSelection = {
 export function toStoredMessage(row: MessageProjectionRow): StoredMessage {
   return {
     ...row,
+    senderId: row.senderParticipantId ?? row.senderId,
     sequence: requireSafeSequenceBigInt(row.sequence),
     version: requireSafeMessageVersion(row.version),
     reactions: [],
@@ -102,12 +105,18 @@ export async function loadReactionSummaries(queryable: Queryable, messageId: str
     .select({
       reaction: schema.messageReactions.reaction,
       count: sql<number>`count(*) over (partition by ${schema.messageReactions.reaction})::int`,
-      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId}) over (partition by ${schema.messageReactions.reaction})`,
-      id: schema.user.id,
-      name: sql<string>`coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''), ${schema.user.name})`,
+      reacted: sql<boolean>`bool_or(coalesce(${schema.messageReactions.participantId}, ${schema.messageReactions.userId}) = ${actorId}) over (partition by ${schema.messageReactions.reaction})`,
+      id: sql<string>`coalesce(${schema.messageReactions.participantId}, ${schema.messageReactions.userId})`,
+      name: sql<string>`case when ${schema.messagingParticipants.state} = 'active'
+          and coalesce(${schema.accountLifecycles.state}, 'active') = 'active'
+        then coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''), ${schema.user.name})
+        else 'Deleted account'
+      end`,
     })
     .from(schema.messageReactions)
-    .innerJoin(schema.user, eq(schema.user.id, schema.messageReactions.userId))
+    .leftJoin(schema.messagingParticipants, eq(schema.messagingParticipants.id, schema.messageReactions.participantId))
+    .leftJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
     .where(eq(schema.messageReactions.messageId, messageId))
     .orderBy(schema.messageReactions.createdAt);
   const summaries = new Map<StoredMessage["reactions"][number]["reaction"], StoredMessage["reactions"][number]>();

@@ -13,13 +13,26 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
   return {
     async get(actorId, conversationId) {
       const row = await requireConversationMember(database, actorId, conversationId);
-      const peer = String(row.user_low_id) === actorId ? String(row.user_high_id) : String(row.user_low_id);
+      const peerParticipantId = String(row.user_low_id) === actorId
+        ? row.participant_high_id
+        : row.participant_low_id;
+      if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
       const lastReadSequence = Number(requireSafeSequenceBigInt(row.last_read_sequence));
-      const [user] = await database
-        .select({ name: sql<string | null>`coalesce(${schema.user.displayUsername}, ${schema.user.username})` })
-        .from(schema.user)
-        .where(eq(schema.user.id, peer))
+      const [peer] = await database
+        .select({
+          id: schema.messagingParticipants.id,
+          name: sql<string | null>`case when ${schema.messagingParticipants.state} = 'active'
+              and coalesce(${schema.accountLifecycles.state}, 'active') = 'active'
+            then coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''))
+            else 'Deleted account'
+          end`,
+        })
+        .from(schema.messagingParticipants)
+        .leftJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+        .where(eq(schema.messagingParticipants.id, peerParticipantId))
         .limit(1);
+      if (!peer) throw new Error("Conversation peer participant is missing.");
       const [latest] = await database
         .select(messageProjectionSelection)
         .from(schema.messages)
@@ -37,8 +50,9 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         ));
       return projectConversationDto(database, {
         ...row,
-        peer_id: peer,
-        peer_name: user?.name,
+        peer_id: peer.id,
+        peer_name: peer.name,
+        peer_deleted: peer.name === "Deleted account",
         unread_count: unread?.count ?? 0,
         latestMessage: latest ?? null,
       }, actorId);

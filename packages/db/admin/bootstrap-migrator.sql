@@ -43,6 +43,12 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- Participant projection is read-only to the API. Keep this grant narrow
+  -- after the broad bootstrap grants above are re-applied.
+  IF to_regclass('public.messaging_participants') IS NOT NULL THEN
+    GRANT SELECT ON TABLE public.messaging_participants TO app;
+  END IF;
+
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_management_grants TO app;

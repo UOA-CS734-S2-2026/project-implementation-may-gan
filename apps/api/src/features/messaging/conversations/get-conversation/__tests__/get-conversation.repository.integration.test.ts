@@ -192,4 +192,63 @@ suite("get conversation Postgres repository", () => {
       .where(eq(schema.messages.id, reply.message.id));
     await expect(repository.get(users[0]!, active.conversation.id)).rejects.toThrow("Database message version must be a positive safe integer.");
   });
+
+  it("masks a pending-deletion peer without profile values", async () => {
+    const [conversation] = await database.db.select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(or(
+        and(eq(schema.conversations.userLowId, users[0]!), eq(schema.conversations.userHighId, users[2]!)),
+        and(eq(schema.conversations.userLowId, users[2]!), eq(schema.conversations.userHighId, users[0]!)),
+      ))
+      .limit(1);
+    if (!conversation) throw new Error("Expected a conversation for lifecycle peer projection.");
+    await database.db.update(schema.user).set({
+      name: "private lifecycle peer name",
+      username: "privatelifecyclepeer",
+      displayUsername: "private lifecycle peer display name",
+      image: "https://example.test/private-lifecycle-peer-avatar.png",
+    }).where(eq(schema.user.id, users[2]!));
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[2]!,
+      state: "pending_deletion",
+      requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "d".repeat(64),
+      generation: 1,
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+
+    await expect(repository.get(users[0]!, conversation.id)).resolves.toMatchObject({
+      peer: { id: users[2], name: "Deleted account" },
+    });
+  });
+
+  it("projects a detached peer without profile values before physical purge", async () => {
+    const [conversation] = await database.db.select({ id: schema.conversations.id })
+      .from(schema.conversations)
+      .where(or(
+        and(eq(schema.conversations.userLowId, users[0]!), eq(schema.conversations.userHighId, users[1]!)),
+        and(eq(schema.conversations.userLowId, users[1]!), eq(schema.conversations.userHighId, users[0]!)),
+      ))
+      .limit(1);
+    if (!conversation) throw new Error("Expected a conversation for detached peer projection.");
+    await database.db.update(schema.messages).set({ version: 1 })
+      .where(eq(schema.messages.conversationId, conversation.id));
+    await database.db.update(schema.user).set({
+      name: "private name",
+      username: "privatehandle",
+      displayUsername: "private display name",
+      image: "https://example.test/private-avatar.png",
+    }).where(eq(schema.user.id, users[1]!));
+    // Legacy user foreign keys still cascade on a physical DELETE. This state
+    // verifies only the pre-purge reader projection, not message retention.
+    await database.db.update(schema.messagingParticipants).set({ userId: null, state: "deleted" })
+      .where(eq(schema.messagingParticipants.id, users[1]!));
+
+    await expect(repository.get(users[0]!, conversation.id)).resolves.toMatchObject({
+      peer: { id: users[1], name: "Deleted account" },
+    });
+  });
 });

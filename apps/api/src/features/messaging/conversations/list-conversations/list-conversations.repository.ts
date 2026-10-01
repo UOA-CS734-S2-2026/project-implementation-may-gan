@@ -36,7 +36,7 @@ export function createPostgresListConversationsRepository(
     async list(actorId, folder, rawCursor, limit) {
       const cursor = cursorDecode(rawCursor);
       const state = folder === "inbox" ? "active" : "pending";
-      const { conversationMembers, conversations, messages, relationshipBlocks, user } = schema;
+      const { conversationMembers, conversations, messages, messagingParticipants, relationshipBlocks, user } = schema;
       const blocked = exists(
         database
           .select({ blockerId: relationshipBlocks.blockerId })
@@ -85,8 +85,13 @@ export function createPostgresListConversationsRepository(
           cursor_activity: sql<string>`to_char(${conversations.lastActivityAt}, 'YYYY-MM-DD"T"HH24:MI:SS.USOF')`,
           last_read_sequence: conversationMembers.lastReadSequence,
           receipt_sequence: conversationMembers.receiptSequence,
-          peer_id: user.id,
-          peer_name: sql<string | null>`coalesce(${user.displayUsername}, ${user.username})`,
+          peer_id: messagingParticipants.id,
+          peer_name: sql<string | null>`case when ${messagingParticipants.state} = 'active'
+              and coalesce(${schema.accountLifecycles.state}, 'active') = 'active'
+            then coalesce(nullif(${user.displayUsername}, ''), nullif(${user.username}, ''))
+            else 'Deleted account'
+          end`,
+          peer_deleted: sql<boolean>`${messagingParticipants.state} = 'deleted'`,
           blocked,
           unread_count: unreadCount,
           latestMessage: {
@@ -94,6 +99,7 @@ export function createPostgresListConversationsRepository(
             conversationId: latestMessage.conversationId,
             sequence: latestMessage.sequence,
             senderId: latestMessage.senderId,
+            senderParticipantId: latestMessage.senderParticipantId,
             clientMessageId: latestMessage.clientMessageId,
             requestFingerprint: latestMessage.requestFingerprint,
             body: latestMessage.body,
@@ -113,9 +119,11 @@ export function createPostgresListConversationsRepository(
           ),
         )
         .innerJoin(
-          user,
-          eq(user.id, sql`case when ${conversations.userLowId} = ${actorId} then ${conversations.userHighId} else ${conversations.userLowId} end`),
+          messagingParticipants,
+          eq(messagingParticipants.id, sql`case when ${conversations.userLowId} = ${actorId} then ${conversations.participantHighId} else ${conversations.participantLowId} end`),
         )
+        .leftJoin(user, eq(user.id, messagingParticipants.userId))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, user.id))
         .leftJoinLateral(latestMessage, sql`true`)
         .where(and(
           eq(conversations.requestState, state),
