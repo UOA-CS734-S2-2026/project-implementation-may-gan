@@ -34,6 +34,17 @@ Collections are defined with the [Macro API](https://fumadocs.dev/docs/mdx/macro
 
 Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
+## Cloudflare deployment
+
+From the repository root, run `pnpm --filter docs preview:cloudflare` to check the built Worker locally. `pnpm --filter docs deploy:cloudflare` deploys the `dayli-docs` Worker from your machine. The public docs live at `/docs`, not `/`.
+
+Merges to `main` deploy automatically after the `CI` workflow succeeds. Before merging the deployment workflow, create a GitHub environment named `docs-production`, restrict it to the `main` branch, and set:
+
+- Environment variable `CLOUDFLARE_ACCOUNT_ID`: the 32-character account ID for the Cloudflare account that owns the docs Worker.
+- Environment secret `CLOUDFLARE_API_TOKEN`: a token scoped to deploying Workers in that account. Keep it out of repository-wide secrets.
+
+The workflow checks the Worker name and bindings before deploying. It does not create an R2 bucket or attach a custom domain. After the first deploy, test the Worker URL, then attach the desired hostname under Cloudflare Workers & Pages > `dayli-docs` > Settings > Domains & Routes > Add > Custom Domain. Cloudflare manages the DNS record and certificate. Future deploys update the same Worker.
+
 ## Learn More
 
 To learn more about Next.js and Fumadocs, take a look at the following
