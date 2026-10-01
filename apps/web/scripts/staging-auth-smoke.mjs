@@ -4,6 +4,8 @@ export const STAGING_ORIGIN = "https://staging.dayli.agroupforcoders.com";
 const PROTECTED_PATH = "/settings?smoke=auth";
 const STEP_TIMEOUT_MS = 15_000;
 const SESSION_COOKIE = /^(?:__Secure-)?better-auth\.session_token$/;
+const CLOUDFLARE_ANALYTICS_HOST = "static.cloudflareinsights.com";
+const CLOUDFLARE_ANALYTICS_PATH = /^\/beacon\.min\.js\/v[0-9a-f]+$/;
 
 export class SmokeFailure extends Error {
   constructor(category) {
@@ -32,6 +34,27 @@ function isPath(page, pathname, search = "") {
   try {
     const url = new URL(page.url());
     return url.origin === STAGING_ORIGIN && url.pathname === pathname && url.search === search;
+  } catch {
+    return false;
+  }
+}
+
+// Cloudflare injects this versioned analytics loader into public staging pages.
+// Abort it without counting it as an origin failure, so no analytics code or
+// telemetry request is allowed to run. Every other off-origin request fails.
+function isInjectedCloudflareAnalyticsScript(request) {
+  try {
+    const url = new URL(request.url());
+    return (
+      url.protocol === "https:"
+      && url.hostname === CLOUDFLARE_ANALYTICS_HOST
+      && url.port === ""
+      && CLOUDFLARE_ANALYTICS_PATH.test(url.pathname)
+      && url.search === ""
+      && request.method() === "GET"
+      && request.resourceType() === "script"
+      && request.isNavigationRequest() === false
+    );
   } catch {
     return false;
   }
@@ -78,6 +101,15 @@ async function verifySettings(page, unexpectedHost, phaseBaseline) {
 }
 
 async function verifySignInDestination(page, unexpectedHost, phaseBaseline) {
+  await checkTrustedPage(page, unexpectedHost, phaseBaseline);
+  try {
+    // The protected page can finish DOM content loading before its streamed
+    // anonymous redirect updates the browser URL.
+    await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/sign-in", { timeout: STEP_TIMEOUT_MS });
+  } catch {
+    checkPhase(unexpectedHost, phaseBaseline);
+    throw failure("return_path_lost");
+  }
   await checkTrustedPage(page, unexpectedHost, phaseBaseline);
   let url;
   try {
@@ -205,7 +237,12 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
     browser = await browserType.launch({ headless: true, env: browserEnvironment(environment) });
     context = await browser.newContext();
     await context.route("**/*", async (route) => {
-      if (!isTrustedUrl(route.request().url())) {
+      const request = route.request();
+      if (isInjectedCloudflareAnalyticsScript(request)) {
+        await route.abort();
+        return;
+      }
+      if (!isTrustedUrl(request.url())) {
         unexpectedHost.count += 1;
         await route.abort();
         return;

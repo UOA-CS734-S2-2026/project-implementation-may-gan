@@ -8,45 +8,99 @@ import { readStagingReleaseAttribution } from "./validate-staging-auth-attributi
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const workflow = readFileSync(resolve(repositoryRoot, ".github", "workflows", "staging-auth-smoke.yml"), "utf8");
 const protectedUrl = `${STAGING_ORIGIN}/settings?smoke=auth`;
+const cloudflareAnalyticsUrl = "https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495";
 
 function browserType(options = {}) {
-  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, newPages: 0, protectedVisits: 0, session: false, signInAttempts: 0, signOutAttempts: 0 };
+  const state = {
+    abortedOrigins: [],
+    browserClosed: false,
+    continuedOrigins: [],
+    launchOptions: undefined,
+    newPages: 0,
+    protectedVisits: 0,
+    session: false,
+    signInAttempts: 0,
+    signOutAttempts: 0,
+    streamedRedirects: 0,
+  };
   let routeHandler;
 
-  async function interceptUnexpected(reason) {
+  async function interceptExternal(reason, details = {}) {
     await routeHandler({
-      request: () => ({ url: () => "https://unexpected.example.test/resource" }),
+      request: () => ({
+        url: () => details.url ?? "https://unexpected.example.test/resource",
+        method: () => details.method ?? "GET",
+        resourceType: () => details.resourceType ?? "script",
+        isNavigationRequest: () => details.isNavigationRequest ?? false,
+      }),
       abort: async () => { state.abortedOrigins.push(reason); },
-      continue: async () => { throw new Error(options.errorText); },
+      continue: async () => {
+        state.continuedOrigins.push(reason);
+        throw new Error(options.errorText);
+      },
     });
+  }
+
+  async function interceptUnexpected(reason) {
+    await interceptExternal(reason);
   }
 
   function page() {
     let currentUrl = `${STAGING_ORIGIN}/`;
+    let redirectPending = false;
     return {
       url: () => currentUrl,
       goto: async (url) => {
-        if (options.unexpectedOrigin && state.abortedOrigins.length === 0) await interceptUnexpected("startup");
+        if (options.unexpectedOrigin && !state.unexpectedOriginInjected) {
+          state.unexpectedOriginInjected = true;
+          await interceptUnexpected("startup");
+        }
+        if (options.cloudflareAnalytics) {
+          await interceptExternal("cloudflare-analytics", {
+            url: cloudflareAnalyticsUrl,
+            method: "GET",
+            resourceType: "script",
+            isNavigationRequest: false,
+          });
+        }
+        if (options.externalRequest && !state.externalRequestInjected) {
+          state.externalRequestInjected = true;
+          await interceptExternal("boundary", options.externalRequest);
+        }
         const parsed = new URL(url);
         if (parsed.pathname === "/settings") {
           state.protectedVisits += 1;
           if (options.unexpectedDuringCleanup && state.protectedVisits === 3) await interceptUnexpected("cleanup");
-          currentUrl = state.session
-            ? `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`
-            : `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+          if (state.session) {
+            currentUrl = `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`;
+          } else {
+            redirectPending = Boolean(options.delayedSignInRedirect);
+            currentUrl = redirectPending
+              ? `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`
+              : `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+          }
           return;
         }
         currentUrl = url;
       },
       reload: async () => { if (options.unexpectedAfterLogin) await interceptUnexpected("after-login"); },
       waitForURL: async (predicate) => {
+        if (redirectPending) {
+          redirectPending = false;
+          state.streamedRedirects += 1;
+          const parsed = new URL(currentUrl);
+          currentUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+        }
         if (!predicate(new URL(currentUrl))) throw new Error(options.errorText ?? "navigation failed");
       },
       getByLabel: () => ({ fill: async () => {} }),
       getByRole: (_role, locator) => {
         if (locator.name === "Settings") {
           return { waitFor: async () => {
-            if (options.unexpectedDuringJourneyLocator && state.session && state.abortedOrigins.length === 0) await interceptUnexpected("journey-locator");
+            if (options.unexpectedDuringJourneyLocator && state.session && !state.journeyLocatorExternalInjected) {
+              state.journeyLocatorExternalInjected = true;
+              await interceptUnexpected("journey-locator");
+            }
             if (new URL(currentUrl).pathname !== "/settings") throw new Error(options.errorText ?? "settings unavailable");
           } };
         }
@@ -130,6 +184,59 @@ test("the default journey completes and launches Chromium without runner secrets
   assert.equal(result.fake.state.signOutAttempts, 1);
   assert.equal(result.fake.state.browserClosed, true);
   assert.deepEqual(result.fake.state.launchOptions.env, { HOME: "/tmp/smoke", PATH: "/usr/bin" });
+  assertNoSensitiveOutput(result);
+});
+
+test("the verified injected Cloudflare analytics script is aborted without failing the default journey", async () => {
+  const result = await runDefault({ cloudflareAnalytics: true });
+  assert.equal(result.passed, true);
+  assert.ok(result.fake.state.abortedOrigins.length >= 2);
+  assert.ok(result.fake.state.abortedOrigins.every((reason) => reason === "cloudflare-analytics"));
+  assert.deepEqual(result.fake.state.continuedOrigins, []);
+  assertNoSensitiveOutput(result);
+});
+
+test("only the verified Cloudflare analytics request shape is non-fatal", async () => {
+  const actualRequest = {
+    url: cloudflareAnalyticsUrl,
+    method: "GET",
+    resourceType: "script",
+    isNavigationRequest: false,
+  };
+  const boundaryFailures = [
+    ["host", { ...actualRequest, url: "https://static.cloudflareinsights.invalid/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" }],
+    ["protocol", { ...actualRequest, url: "http://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" }],
+    ["port", { ...actualRequest, url: "https://static.cloudflareinsights.com:444/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" }],
+    ["path", { ...actualRequest, url: "https://static.cloudflareinsights.com/beacon.min.js" }],
+    ["query", { ...actualRequest, url: `${cloudflareAnalyticsUrl}?unexpected=1` }],
+    ["method", { ...actualRequest, method: "POST" }],
+    ["resource type", { ...actualRequest, resourceType: "fetch" }],
+    ["navigation", { ...actualRequest, isNavigationRequest: true }],
+  ];
+
+  for (const [boundary, externalRequest] of boundaryFailures) {
+    const result = await runDefault({ externalRequest, errorText: `${boundary} private-password session=private-cookie` });
+    assert.equal(result.passed, false, boundary);
+    assert.deepEqual(result.fake.state.abortedOrigins, ["boundary"], boundary);
+    assert.deepEqual(result.fake.state.continuedOrigins, [], boundary);
+    assert.match(result.output, /step=journey outcome=failed .*category=unexpected_host/, boundary);
+    assertNoSensitiveOutput(result);
+  }
+});
+
+test("a streamed anonymous redirect is awaited before checking the return path", async () => {
+  const result = await runDefault({ delayedSignInRedirect: true });
+  assert.equal(result.passed, true);
+  assert.ok(result.fake.state.streamedRedirects >= 3);
+  assertNoSensitiveOutput(result);
+});
+
+test("a Cloudflare analytics abort cannot hide a phase-race external request", async () => {
+  const result = await runDefault({ cloudflareAnalytics: true, unexpectedDuringJourneyLocator: true, errorText: "race private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.ok(result.fake.state.abortedOrigins.includes("cloudflare-analytics"));
+  assert.ok(result.fake.state.abortedOrigins.includes("journey-locator"));
+  assert.match(result.output, /step=journey outcome=failed .*category=unexpected_host/);
   assertNoSensitiveOutput(result);
 });
 
