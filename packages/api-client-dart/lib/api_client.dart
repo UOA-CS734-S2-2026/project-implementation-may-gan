@@ -276,6 +276,8 @@ class ApiClient {
           return MarkConversationRead200Response.fromJson(value);
         case 'MarkConversationReadRequest':
           return MarkConversationReadRequest.fromJson(value);
+        case 'Mbti':
+          return MbtiTypeTransformer().decode(value);
         case 'MediaContentType':
           return MediaContentTypeTypeTransformer().decode(value);
         case 'MediaReservation':

@@ -71,6 +71,7 @@ part 'model/list_conversations200_response.dart';
 part 'model/list_messages200_response.dart';
 part 'model/mark_conversation_read200_response.dart';
 part 'model/mark_conversation_read_request.dart';
+part 'model/mbti.dart';
 part 'model/media_content_type.dart';
 part 'model/media_reservation.dart';
 part 'model/media_reservation_status.dart';

@@ -61,6 +61,9 @@ class ProfileDetails {
     required this.detailsVisible,
     required this.bio,
     required this.isOwner,
+    this.mbti,
+    this.whatIDo,
+    this.listeningTo,
     this.avatarUrl,
     this.streak,
     this.stats,
@@ -79,6 +82,11 @@ class ProfileDetails {
   final bool detailsVisible;
   final String? bio;
   final bool isOwner;
+
+  /// Null when unset or when the bio is hidden, like the next two.
+  final String? mbti;
+  final String? whatIDo;
+  final String? listeningTo;
 
   /// A link to the profile photo that expires after 10 minutes; null when
   /// there is none or the bio is hidden.
@@ -121,6 +129,11 @@ class ProfileDetails {
       detailsVisible: detailsVisible,
       bio: bio as String?,
       isOwner: settings != null,
+      mbti: json['mbti'] is String ? json['mbti']! as String : null,
+      whatIDo: json['whatIDo'] is String ? json['whatIDo']! as String : null,
+      listeningTo: json['listeningTo'] is String
+          ? json['listeningTo']! as String
+          : null,
       avatarUrl: json['avatarUrl'] is String
           ? json['avatarUrl']! as String
           : null,
@@ -138,11 +151,14 @@ abstract interface class ProfileClient {
   /// [NotFound] when the profile is unknown or blocked.
   Future<ApiResult<ProfileDetails>> details(String username);
 
-  /// Sends only the fields given; blank text clears a field.
+  /// Sends only the fields given; blank text (and a blank MBTI) clears a field.
   Future<ApiResult<ProfileDetails>> update({
     String? bio,
     String? publicName,
     bool? isPrivate,
+    String? mbti,
+    String? whatIDo,
+    String? listeningTo,
   });
 
   /// Returns the current handle. A taken handle or a change within 30 days of
@@ -164,6 +180,9 @@ class UnavailableProfileClient implements ProfileClient {
     String? bio,
     String? publicName,
     bool? isPrivate,
+    String? mbti,
+    String? whatIDo,
+    String? listeningTo,
   }) async => const ApiError(ServiceUnavailable());
 
   @override
@@ -268,6 +287,9 @@ class GeneratedProfileClient implements ProfileClient {
     String? bio,
     String? publicName,
     bool? isPrivate,
+    String? mbti,
+    String? whatIDo,
+    String? listeningTo,
   }) => _send(
     (client) => client.invokeAPI(
       '/api/v1/profile',
@@ -278,6 +300,9 @@ class GeneratedProfileClient implements ProfileClient {
         'publicName': ?publicName,
         if (isPrivate != null)
           'profileVisibility': isPrivate ? 'private' : 'public',
+        'mbti': ?mbti,
+        'whatIDo': ?whatIDo,
+        'listeningTo': ?listeningTo,
       },
       {},
       {},

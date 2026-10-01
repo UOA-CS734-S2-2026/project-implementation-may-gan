@@ -1477,6 +1477,19 @@
             "type": "string",
             "nullable": true
           },
+          "mbti": {
+            "$ref": "#/components/schemas/Mbti"
+          },
+          "whatIDo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when unset or when the bio is hidden."
+          },
+          "listeningTo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when unset or when the bio is hidden."
+          },
           "avatarUrl": {
             "type": "string",
             "nullable": true,
@@ -1499,11 +1512,38 @@
           "displayName",
           "detailsVisible",
           "bio",
+          "mbti",
+          "whatIDo",
+          "listeningTo",
           "avatarUrl",
           "streak",
           "stats",
           "owner"
         ]
+      },
+      "Mbti": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "INTJ",
+          "INTP",
+          "ENTJ",
+          "ENTP",
+          "INFJ",
+          "INFP",
+          "ENFJ",
+          "ENFP",
+          "ISTJ",
+          "ISFJ",
+          "ESTJ",
+          "ESFJ",
+          "ISTP",
+          "ISFP",
+          "ESTP",
+          "ESFP",
+          null
+        ],
+        "description": "Null when unset or when the bio is hidden."
       },
       "PostingStreak": {
         "type": "object",
@@ -1622,6 +1662,35 @@
           },
           "profileVisibility": {
             "$ref": "#/components/schemas/ProfileVisibility"
+          },
+          "mbti": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mbti"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  ""
+                ]
+              },
+              {
+                "nullable": true
+              }
+            ],
+            "description": "One of the 16 types. Null or blank clears it."
+          },
+          "whatIDo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "example": "Nursing student"
+          },
+          "listeningTo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "example": "Laufey"
           }
         }
       },
@@ -7068,7 +7137,7 @@
         ],
         "operationId": "profile.update",
         "summary": "Update your profile",
-        "description": "Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.",
+        "description": "Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.",
         "security": [
           {
             "BearerAuth": []

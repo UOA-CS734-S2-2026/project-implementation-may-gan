@@ -8,6 +8,7 @@ import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
 import '../app/theme.dart';
 import '../profile/profile_posts.dart';
+import '../profile/profile_about.dart';
 import '../profile/profile_stats.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
@@ -211,6 +212,35 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     });
   }
 
+  /// Asks before removing a friend, as in the original web app.
+  Future<void> _confirmRemove(FriendCard person) async {
+    final remove = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('profile.removeFriend'),
+        title: const Text('Remove friend'),
+        content: Text(
+          'Are you sure you want to remove @${person.username} from your friends?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('profile.removeFriend.confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: DayliColors.of(context).danger,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (remove == true && mounted) await _friend(person);
+  }
+
   Future<void> _edit() async {
     await context.push('/profile/edit');
     if (mounted) await _refresh();
@@ -230,13 +260,15 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     final label = person.relationship == 'none'
         ? 'add friend'
         : person.relationship == 'friends'
-        ? 'remove friend'
+        ? 'friends'
         : person.relationship == 'incoming_pending'
         ? 'request waiting'
         : 'request sent';
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
+        // Short profiles still need to pull to refresh.
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 36, 20, 32),
         children: [
           DayliCard(
@@ -307,6 +339,12 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     ),
                   ),
                 ],
+                if (info.detailsVisible)
+                  ProfileAboutCards(
+                    mbti: info.mbti,
+                    whatIDo: info.whatIDo,
+                    listeningTo: info.listeningTo,
+                  ),
                 if ((info.stats, info.streak) case (
                   final stats?,
                   final streak?,
@@ -333,8 +371,13 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: DayliButton(
+                      key: const Key('profile.friend'),
                       label: label,
-                      onPressed: _busy ? null : () => _friend(person),
+                      onPressed: _busy
+                          ? null
+                          : () => person.relationship == 'friends'
+                                ? _confirmRemove(person)
+                                : _friend(person),
                     ),
                   )
                 else if (!isMe)
@@ -351,8 +394,14 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: DayliButton(
+                      key: const Key('profile.message'),
                       label: 'message',
-                      color: ButtonColor.foreground,
+                      color: ButtonColor.background,
+                      leading: Icon(
+                        Icons.chat_outlined,
+                        size: 16,
+                        color: colors.foreground,
+                      ),
                       onPressed: () => context.go(
                         '/messages/new/${Uri.encodeComponent(person.username)}',
                       ),

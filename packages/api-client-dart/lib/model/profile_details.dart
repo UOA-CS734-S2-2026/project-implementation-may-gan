@@ -18,6 +18,9 @@ class ProfileDetails {
     required this.displayName,
     required this.detailsVisible,
     required this.bio,
+    required this.mbti,
+    required this.whatIDo,
+    required this.listeningTo,
     required this.avatarUrl,
     required this.streak,
     required this.stats,
@@ -35,6 +38,14 @@ class ProfileDetails {
   final bool detailsVisible;
 
   final String bio;
+
+  final Mbti mbti;
+
+  /// Null when unset or when the bio is hidden.
+  final String whatIDo;
+
+  /// Null when unset or when the bio is hidden.
+  final String listeningTo;
 
   /// A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.
   final String avatarUrl;
@@ -54,6 +65,9 @@ class ProfileDetails {
           other.displayName == displayName &&
           other.detailsVisible == detailsVisible &&
           other.bio == bio &&
+          other.mbti == mbti &&
+          other.whatIDo == whatIDo &&
+          other.listeningTo == listeningTo &&
           other.avatarUrl == avatarUrl &&
           other.streak == streak &&
           other.stats == stats &&
@@ -67,6 +81,9 @@ class ProfileDetails {
       (displayName.hashCode) +
       (detailsVisible.hashCode) +
       (bio.hashCode) +
+      (mbti.hashCode) +
+      (whatIDo.hashCode) +
+      (listeningTo.hashCode) +
       (avatarUrl.hashCode) +
       (streak.hashCode) +
       (stats.hashCode) +
@@ -74,7 +91,7 @@ class ProfileDetails {
 
   @override
   String toString() =>
-      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, avatarUrl=$avatarUrl, streak=$streak, stats=$stats, owner=$owner]';
+      'ProfileDetails[id=$id, username=$username, displayName=$displayName, detailsVisible=$detailsVisible, bio=$bio, mbti=$mbti, whatIDo=$whatIDo, listeningTo=$listeningTo, avatarUrl=$avatarUrl, streak=$streak, stats=$stats, owner=$owner]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -83,6 +100,9 @@ class ProfileDetails {
     json[r'displayName'] = this.displayName;
     json[r'detailsVisible'] = this.detailsVisible;
     json[r'bio'] = this.bio;
+    json[r'mbti'] = this.mbti;
+    json[r'whatIDo'] = this.whatIDo;
+    json[r'listeningTo'] = this.listeningTo;
     json[r'avatarUrl'] = this.avatarUrl;
     json[r'streak'] = this.streak;
     json[r'stats'] = this.stats;
@@ -98,6 +118,9 @@ class ProfileDetails {
     String? displayName,
     bool? detailsVisible,
     String? bio,
+    Mbti? mbti,
+    String? whatIDo,
+    String? listeningTo,
     String? avatarUrl,
     PostingStreak? streak,
     ProfileStats? stats,
@@ -109,6 +132,9 @@ class ProfileDetails {
         displayName: displayName ?? this.displayName,
         detailsVisible: detailsVisible ?? this.detailsVisible,
         bio: bio ?? this.bio,
+        mbti: mbti ?? this.mbti,
+        whatIDo: whatIDo ?? this.whatIDo,
+        listeningTo: listeningTo ?? this.listeningTo,
         avatarUrl: avatarUrl ?? this.avatarUrl,
         streak: streak ?? this.streak,
         stats: stats ?? this.stats,
@@ -146,6 +172,18 @@ class ProfileDetails {
             'Required key "ProfileDetails[bio]" is missing from JSON.');
         assert(json[r'bio'] != null,
             'Required key "ProfileDetails[bio]" has a null value in JSON.');
+        assert(json.containsKey(r'mbti'),
+            'Required key "ProfileDetails[mbti]" is missing from JSON.');
+        assert(json[r'mbti'] != null,
+            'Required key "ProfileDetails[mbti]" has a null value in JSON.');
+        assert(json.containsKey(r'whatIDo'),
+            'Required key "ProfileDetails[whatIDo]" is missing from JSON.');
+        assert(json[r'whatIDo'] != null,
+            'Required key "ProfileDetails[whatIDo]" has a null value in JSON.');
+        assert(json.containsKey(r'listeningTo'),
+            'Required key "ProfileDetails[listeningTo]" is missing from JSON.');
+        assert(json[r'listeningTo'] != null,
+            'Required key "ProfileDetails[listeningTo]" has a null value in JSON.');
         assert(json.containsKey(r'avatarUrl'),
             'Required key "ProfileDetails[avatarUrl]" is missing from JSON.');
         assert(json[r'avatarUrl'] != null,
@@ -171,6 +209,9 @@ class ProfileDetails {
         displayName: mapValueOfType<String>(json, r'displayName')!,
         detailsVisible: mapValueOfType<bool>(json, r'detailsVisible')!,
         bio: mapValueOfType<String>(json, r'bio')!,
+        mbti: Mbti.fromJson(json[r'mbti'])!,
+        whatIDo: mapValueOfType<String>(json, r'whatIDo')!,
+        listeningTo: mapValueOfType<String>(json, r'listeningTo')!,
         avatarUrl: mapValueOfType<String>(json, r'avatarUrl')!,
         streak: PostingStreak.fromJson(json[r'streak'])!,
         stats: ProfileStats.fromJson(json[r'stats'])!,
@@ -236,6 +277,9 @@ class ProfileDetails {
     'displayName',
     'detailsVisible',
     'bio',
+    'mbti',
+    'whatIDo',
+    'listeningTo',
     'avatarUrl',
     'streak',
     'stats',

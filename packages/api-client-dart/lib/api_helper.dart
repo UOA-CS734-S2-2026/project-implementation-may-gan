@@ -68,6 +68,9 @@ String parameterToString(dynamic value) {
   if (value is ApiErrorCode) {
     return ApiErrorCodeTypeTransformer().encode(value).toString();
   }
+  if (value is Mbti) {
+    return MbtiTypeTransformer().encode(value).toString();
+  }
   if (value is MediaContentType) {
     return MediaContentTypeTypeTransformer().encode(value).toString();
   }

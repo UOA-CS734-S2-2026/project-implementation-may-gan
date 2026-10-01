@@ -41,9 +41,10 @@ function requireLocalTestUrl(value: string): string {
   beforeAll(async () => {
     for (const [key, userId] of Object.entries(users)) {
       await migrator.client`
-        insert into public."user" (id, name, email, username, display_username, bio, profile_visibility)
+        insert into public."user" (id, name, email, username, display_username, bio, profile_visibility, mbti, what_i_do)
         values (${userId}, ${key}, ${`${userId}@example.test`}, ${handle(key as keyof typeof users)},
-          ${key === "publicOwner" ? "Pub" : null}, ${`Bio of ${key}`}, ${key === "privateOwner" ? "private" : "public"})
+          ${key === "publicOwner" ? "Pub" : null}, ${`Bio of ${key}`}, ${key === "privateOwner" ? "private" : "public"},
+          ${key === "privateOwner" ? "INTJ" : "not-a-type"}, ${key === "privateOwner" ? "Nursing" : null})
       `;
     }
     const changedAt = now.toISOString();
@@ -87,6 +88,9 @@ function requireLocalTestUrl(value: string): string {
         displayName: handle("privateOwner"),
         detailsVisible: true,
         bio: "Bio of privateOwner",
+        mbti: "INTJ",
+        whatIDo: "Nursing",
+        listeningTo: null,
         avatarUrl: null,
         streak: { current: 2, longest: 2, lastPostDate: "2026-09-29", postedToday: false, asOf: "2026-09-30" },
         stats: { posts: 3, friends: 1 },
@@ -97,7 +101,8 @@ function requireLocalTestUrl(value: string): string {
     it("shows a public bio to anyone signed in, without the owner's settings", async () => {
       const profile = await findProfileDetails(app.db, users.stranger, handle("publicOwner"), now);
 
-      expect(profile).toMatchObject({ displayName: "Pub", detailsVisible: true, bio: "Bio of publicOwner", owner: null });
+      // A legacy value outside the 16 types reads as unset.
+      expect(profile).toMatchObject({ displayName: "Pub", detailsVisible: true, bio: "Bio of publicOwner", mbti: null, owner: null });
     });
 
     it("shows a private bio only to active friends", async () => {
@@ -106,7 +111,7 @@ function requireLocalTestUrl(value: string): string {
       await expect(findProfileDetails(app.db, users.friend, handle("privateOwner"), now))
         .resolves.toMatchObject({ streak: { current: 2, longest: 2 } });
       await expect(findProfileDetails(app.db, users.stranger, handle("privateOwner"), now))
-        .resolves.toMatchObject({ detailsVisible: false, bio: null, streak: null, stats: null, owner: null });
+        .resolves.toMatchObject({ detailsVisible: false, bio: null, mbti: null, whatIDo: null, streak: null, stats: null, owner: null });
     });
 
     it("hides the profile across a block, in both directions", async () => {

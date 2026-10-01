@@ -72,8 +72,17 @@ Future<void> openProfile(
 ProfilePostsPage page(List<ProfilePost> items, {String? next}) =>
     ProfilePostsPage(items: items, nextCursor: next, hasMore: next != null);
 
+/// Profile screens are long; a phone-height view keeps them built in tests.
+void testProfile(String name, Future<void> Function(WidgetTester) body) =>
+    testWidgets(name, (tester) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await body(tester);
+    });
+
 void main() {
-  testWidgets('shows a friend\'s daylies and loads the next page', (
+  testProfile('shows a friend\'s daylies and loads the next page', (
     tester,
   ) async {
     final posts = FakePostClient(null, [
@@ -88,6 +97,7 @@ void main() {
     );
     await openProfile(tester, harness, 'ada');
 
+    await tester.ensureVisible(find.text('Walked the coast.'));
     expect(find.text('Walked the coast.'), findsOneWidget);
     expect(find.byKey(const Key('profile.posts.label.1')), findsNothing);
 
@@ -101,7 +111,7 @@ void main() {
     expect(find.byKey(const Key('profile.posts.more')), findsNothing);
   });
 
-  testWidgets('opens a post from its card', (tester) async {
+  testProfile('opens a post from its card', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'ada': ada}),
       posts: FakePostClient(
@@ -122,7 +132,7 @@ void main() {
     expect(find.text('The whole answer.'), findsOneWidget);
   });
 
-  testWidgets('asks a non-friend to add them and never loads posts', (
+  testProfile('asks a non-friend to add them and never loads posts', (
     tester,
   ) async {
     final harness = TestHarness(friends: ProfileFriendsClient({'bea': bea}));
@@ -135,7 +145,7 @@ void main() {
     expect(harness.posts.profileRequests, isEmpty);
   });
 
-  testWidgets('hides the daylies after removing the friend', (tester) async {
+  testProfile('hides the daylies after removing the friend', (tester) async {
     final friends = ProfileFriendsClient({'ada': ada});
     final harness = TestHarness(
       friends: friends,
@@ -146,7 +156,9 @@ void main() {
     await openProfile(tester, harness, 'ada');
     expect(find.byKey(const Key('profile.posts.post.1')), findsOneWidget);
 
-    await tester.tap(find.text('remove friend'));
+    await tester.tap(find.byKey(const Key('profile.friend')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.removeFriend.confirm')));
     await tester.pumpAndSettle();
 
     expect(friends.removed, ['user-ada']);
@@ -154,7 +166,7 @@ void main() {
     expect(find.byKey(const Key('profile.posts.friendsOnly')), findsOneWidget);
   });
 
-  testWidgets('my days lists your own daylies with who can see them', (
+  testProfile('my days lists your own daylies with who can see them', (
     tester,
   ) async {
     final posts = FakePostClient(null, [
@@ -194,7 +206,7 @@ void main() {
     expect(find.text('add friend'), findsNothing);
   });
 
-  testWidgets('shows an empty message and a retry after a failure', (
+  testProfile('shows an empty message and a retry after a failure', (
     tester,
   ) async {
     final harness = TestHarness(
@@ -216,7 +228,7 @@ void main() {
     );
   });
 
-  testWidgets('opens a friend\'s profile from their name on a feed card', (
+  testProfile('opens a friend\'s profile from their name on a feed card', (
     tester,
   ) async {
     final harness = TestHarness(
@@ -245,7 +257,7 @@ void main() {
     expect(harness.posts.profileRequests.single.$1, 'friend_1');
   });
 
-  testWidgets('opens the author\'s profile from a post', (tester) async {
+  testProfile('opens the author\'s profile from a post', (tester) async {
     final harness = TestHarness(
       feed: FakeFeedClient([
         ApiSuccess(

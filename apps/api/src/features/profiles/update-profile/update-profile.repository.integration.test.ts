@@ -85,4 +85,12 @@ function requireLocalTestUrl(value: string): string {
     });
   });
 
+  it("saves and clears the about fields", async () => {
+    const repository = createPostgresUpdateProfileRepository(app.db);
+
+    await expect(repository.updateProfile(users.stranger, { mbti: "ENFP", whatIDo: "Nursing", listeningTo: "Laufey" }, now))
+      .resolves.toMatchObject({ profile: { mbti: "ENFP", whatIDo: "Nursing", listeningTo: "Laufey" } });
+    await expect(repository.updateProfile(users.stranger, { mbti: null, listeningTo: null }, now))
+      .resolves.toMatchObject({ profile: { mbti: null, whatIDo: "Nursing", listeningTo: null } });
+  });
 });

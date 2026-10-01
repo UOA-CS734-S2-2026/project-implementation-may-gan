@@ -27,7 +27,7 @@ const updateProfileRoute = createRoute({
   tags: ["Profile"],
   operationId: "profile.update",
   summary: "Update your profile",
-  description: "Changes any of the bio, public name, and profile visibility for the authenticated account. Fields left out are unchanged; null or blank text clears a field.",
+  description: "Changes any of the bio, public name, profile visibility, MBTI, what you do, and what you are listening to for the authenticated account. Fields left out are unchanged; null or blank text clears a field.",
   security,
   request: { body: { required: true, content: { "application/json": { schema: updateProfileRequestSchema } } } },
   responses: {

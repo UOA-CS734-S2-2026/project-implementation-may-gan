@@ -31,6 +31,9 @@ function me(overrides: Partial<ProfileDetails> = {}): ProfileDetails {
     // The generated type drops nullability; the API sends null when hidden.
     streak: null as unknown as ProfileDetails["streak"],
     stats: null as unknown as ProfileDetails["stats"],
+    mbti: null as unknown as ProfileDetails["mbti"],
+    whatIDo: null as unknown as string,
+    listeningTo: null as unknown as string,
     avatarUrl: null as unknown as string,
     owner: { profileVisibility: "public", usernameChangeAvailableAt: null as unknown as Date },
     ...overrides,
@@ -52,7 +55,7 @@ describe("EditProfileForm", () => {
     await actor.type(screen.getByLabelText(/Bio/), "  Bakes too.  ");
     await actor.click(screen.getByRole("button", { name: "save profile" }));
 
-    expect(update).toHaveBeenCalledWith({ publicName: "", bio: "Bakes too." });
+    expect(update).toHaveBeenCalledWith({ publicName: "", bio: "Bakes too.", mbti: null, whatIDo: "", listeningTo: "" });
     expect(await screen.findByRole("status")).toHaveTextContent("Saved.");
   });
 
@@ -60,6 +63,21 @@ describe("EditProfileForm", () => {
     render(<EditProfileForm profile={me({ displayName: "jos" })} />);
 
     expect((screen.getByLabelText("Public name") as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("EditProfileForm about fields", () => {
+  it("saves the MBTI, what I do, and what I'm listening to", async () => {
+    const actor = userEvent.setup();
+    update.mockResolvedValue({ ok: true, value: me() });
+    render(<EditProfileForm profile={me()} />);
+
+    await actor.selectOptions(screen.getByLabelText("MBTI"), "INTJ");
+    await actor.type(screen.getByLabelText("What I do"), "vibe while coding");
+    await actor.type(screen.getByLabelText("What I'm listening to"), "SUN KISSES");
+    await actor.click(screen.getByRole("button", { name: "save profile" }));
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ mbti: "INTJ", whatIDo: "vibe while coding", listeningTo: "SUN KISSES" }));
   });
 });
 

@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'home_feed_test.dart' show signIn;
 import 'profile_posts_test.dart'
-    show ProfileFriendsClient, ada, bea, me, openProfile;
+    show ProfileFriendsClient, ada, bea, me, openProfile, testProfile;
 import 'support/fakes.dart';
 
 ProfileDetails details(
@@ -19,6 +19,9 @@ ProfileDetails details(
   DateTime? waitUntil,
   PostingStreak? streak,
   ProfileStats? stats,
+  String? mbti,
+  String? whatIDo,
+  String? listeningTo,
 }) => ProfileDetails(
   id: 'user-$username',
   username: username,
@@ -28,6 +31,9 @@ ProfileDetails details(
   isOwner: owner,
   streak: visible ? streak : null,
   stats: visible ? stats : null,
+  mbti: visible ? mbti : null,
+  whatIDo: visible ? whatIDo : null,
+  listeningTo: visible ? listeningTo : null,
   isPrivate: isPrivate,
   usernameChangeAvailableAt: waitUntil,
 );
@@ -41,7 +47,7 @@ Future<void> openEditProfile(WidgetTester tester, TestHarness harness) async {
 }
 
 void main() {
-  testWidgets('shows a friend\'s bio', (tester) async {
+  testProfile('shows a friend\'s bio', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'ada': ada}),
       profiles: FakeProfileClient({
@@ -54,7 +60,7 @@ void main() {
     expect(find.byKey(const Key('profile.edit')), findsNothing);
   });
 
-  testWidgets('says a private profile is private', (tester) async {
+  testProfile('says a private profile is private', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'bea': bea}),
       profiles: FakeProfileClient({
@@ -67,7 +73,7 @@ void main() {
     expect(find.byKey(const Key('profile.bio')), findsNothing);
   });
 
-  testWidgets('follows an old handle to the current one', (tester) async {
+  testProfile('follows an old handle to the current one', (tester) async {
     final friends = ProfileFriendsClient({
       'ada_new': const FriendCard(
         id: 'user-ada',
@@ -87,7 +93,7 @@ void main() {
     expect(find.text('@ada_new'), findsOneWidget);
   });
 
-  testWidgets('saves the public name and bio from my days', (tester) async {
+  testProfile('saves the public name and bio from my days', (tester) async {
     final profiles = FakeProfileClient({
       'jos': details('jos', displayName: 'Jos', bio: 'Walks.', owner: true),
     });
@@ -102,6 +108,8 @@ void main() {
       find.byKey(const Key('editProfile.bio')),
       '  Walks and bakes.  ',
     );
+    await tester.ensureVisible(find.byKey(const Key('editProfile.save')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editProfile.save')));
     await tester.pumpAndSettle();
 
@@ -110,6 +118,7 @@ void main() {
       publicName: '',
       isPrivate: null,
     ));
+    await tester.ensureVisible(find.text('Saved.'));
     expect(find.text('Saved.'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Back'));
@@ -117,7 +126,7 @@ void main() {
     expect(find.text('Walks and bakes.'), findsOneWidget);
   });
 
-  testWidgets('changes the username and follows it in my days', (tester) async {
+  testProfile('changes the username and follows it in my days', (tester) async {
     final profiles = FakeProfileClient({
       'jos': details('jos', owner: true),
       'jos_walks': details('jos_walks', owner: true),
@@ -136,6 +145,8 @@ void main() {
     );
     await openEditProfile(tester, harness);
 
+    await tester.ensureVisible(find.byKey(const Key('editProfile.username')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('editProfile.username')),
       'Jos_Walks',
@@ -144,15 +155,17 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const Key('editProfile.changeUsername')),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editProfile.changeUsername')));
     await tester.pumpAndSettle();
 
     expect(profiles.usernameChanges, ['jos_walks']);
     expect(harness.session.user?.username, 'jos_walks');
+    await tester.ensureVisible(find.text('Username changed.'));
     expect(find.text('Username changed.'), findsOneWidget);
   });
 
-  testWidgets('shows why a username change was refused', (tester) async {
+  testProfile('shows why a username change was refused', (tester) async {
     final profiles = FakeProfileClient({'jos': details('jos', owner: true)})
       ..changeResult = const ApiError(
         Conflict('That username is already taken.'),
@@ -163,6 +176,8 @@ void main() {
     );
     await openEditProfile(tester, harness);
 
+    await tester.ensureVisible(find.byKey(const Key('editProfile.username')));
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('editProfile.username')),
       'ben',
@@ -171,6 +186,7 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const Key('editProfile.changeUsername')),
     );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('editProfile.changeUsername')));
     await tester.pumpAndSettle();
 
@@ -178,7 +194,7 @@ void main() {
     expect(harness.session.user?.username, 'jos');
   });
 
-  testWidgets('locks the username until the next change is allowed', (
+  testProfile('locks the username until the next change is allowed', (
     tester,
   ) async {
     final harness = TestHarness(
@@ -208,7 +224,7 @@ void main() {
     expect(button.properties.enabled, isNot(true));
   });
 
-  testWidgets('saves the privacy switch on its own', (tester) async {
+  testProfile('saves the privacy switch on its own', (tester) async {
     final profiles = FakeProfileClient({'jos': details('jos', owner: true)});
     final harness = TestHarness(
       friends: ProfileFriendsClient({'jos': me}),
@@ -232,7 +248,7 @@ void main() {
     );
   });
 
-  testWidgets('pull to refresh reloads the profile and its daylies', (
+  testProfile('pull to refresh reloads the profile and its daylies', (
     tester,
   ) async {
     final profiles = FakeProfileClient({
@@ -246,14 +262,14 @@ void main() {
     final reads = profiles.requested.length;
     final pages = harness.posts.profileRequests.length;
 
-    await tester.fling(find.text('@ada'), const Offset(0, 400), 1000);
+    await tester.fling(find.text('@ada'), const Offset(0, 1200), 1000);
     await tester.pumpAndSettle();
 
     expect(profiles.requested.length, reads + 1);
     expect(harness.posts.profileRequests.length, pages + 1);
   });
 
-  testWidgets('shows a friend\'s posts, friends, and day streak', (
+  testProfile('shows a friend\'s posts, friends, and day streak', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -279,7 +295,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('opens the owner\'s friends from their count', (tester) async {
+  testProfile('opens the owner\'s friends from their count', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'jos': me}),
       profiles: FakeProfileClient({
@@ -305,7 +321,7 @@ void main() {
     expect(find.byKey(const Key('profile.stats.friends')), findsNothing);
   });
 
-  testWidgets('hides the streak on a private profile', (tester) async {
+  testProfile('hides the streak on a private profile', (tester) async {
     final harness = TestHarness(
       friends: ProfileFriendsClient({'bea': bea}),
       profiles: FakeProfileClient({
@@ -323,5 +339,87 @@ void main() {
     await openProfile(tester, harness, 'bea');
 
     expect(find.byKey(const Key('profile.stats.streak')), findsNothing);
+  });
+
+  testProfile('shows the about cards, with a dash for anything unset', (
+    tester,
+  ) async {
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'ada': ada}),
+      profiles: FakeProfileClient({
+        'ada': details('ada', mbti: 'INTJ', listeningTo: 'SUN KISSES'),
+      }),
+    );
+    await openProfile(tester, harness, 'ada');
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('profile.about.mbti')),
+        matching: find.text('INTJ'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('profile.about.whatIDo')),
+        matching: find.text('—'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('SUN KISSES'), findsOneWidget);
+  });
+
+  testProfile('asks before removing a friend', (tester) async {
+    final friends = ProfileFriendsClient({'ada': ada});
+    final harness = TestHarness(friends: friends);
+    await openProfile(tester, harness, 'ada');
+
+    await tester.tap(find.byKey(const Key('profile.friend')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Are you sure you want to remove @ada from your friends?'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(friends.removed, isEmpty);
+
+    await tester.tap(find.byKey(const Key('profile.friend')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.removeFriend.confirm')));
+    await tester.pumpAndSettle();
+    expect(friends.removed, ['user-ada']);
+  });
+
+  testProfile('saves the about fields', (tester) async {
+    final profiles = FakeProfileClient({'jos': details('jos', owner: true)});
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'jos': me}),
+      profiles: profiles,
+    );
+    await openEditProfile(tester, harness);
+
+    await tester.tap(find.byKey(const Key('editProfile.mbti')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('INTJ').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('editProfile.whatIDo')),
+      'vibe while coding',
+    );
+    await tester.enterText(
+      find.byKey(const Key('editProfile.listeningTo')),
+      'SUN KISSES',
+    );
+    await tester.ensureVisible(find.byKey(const Key('editProfile.save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editProfile.save')));
+    await tester.pumpAndSettle();
+
+    expect(profiles.aboutUpdates.single, (
+      mbti: 'INTJ',
+      whatIDo: 'vibe while coding',
+      listeningTo: 'SUN KISSES',
+    ));
   });
 }

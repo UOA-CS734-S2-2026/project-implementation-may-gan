@@ -47,6 +47,7 @@ src/models/ListConversations200Response.ts
 src/models/ListMessages200Response.ts
 src/models/MarkConversationRead200Response.ts
 src/models/MarkConversationReadRequest.ts
+src/models/Mbti.ts
 src/models/MediaContentType.ts
 src/models/MediaReservation.ts
 src/models/MediaReservationStatus.ts

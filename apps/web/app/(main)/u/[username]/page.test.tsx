@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,6 +38,21 @@ describe("social profile actions", () => {
     profiles.profilesApi.details.mockResolvedValue(details());
   });
 
+  it("asks before removing a friend", async () => {
+    api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "friends" } });
+    const actor = userEvent.setup();
+    renderProfile();
+
+    await actor.click(await screen.findByRole("button", { name: "friends" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Are you sure you want to remove @ada from your friends?");
+    expect(api.removeFriend).not.toHaveBeenCalled();
+
+    await actor.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.removeFriend).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "message" }).getAttribute("href")).toBe("/messages/new/ada");
+  });
+
   it("shows a visible bio, or says the profile is private", async () => {
     api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "none" } });
     const open = renderProfile();
@@ -75,7 +90,8 @@ describe("social profile actions", () => {
     api.removeFriend.mockResolvedValue({ ok: false, failure: "network" });
     const actor = userEvent.setup();
     renderProfile();
-    await actor.click(await screen.findByRole("button", { name: "remove friend" }));
+    await actor.click(await screen.findByRole("button", { name: "friends" }));
+    await actor.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Friendship action failed. Please try again.");
     expect(api.removeFriend).toHaveBeenCalledWith("ada");
     expect(api.loadSocialProfile).toHaveBeenCalledTimes(1);

@@ -2,6 +2,14 @@ import { aucklandDateSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/c
 import { z } from "@hono/zod-openapi";
 
 export const BIO_MAX_LENGTH = 160;
+export const ABOUT_MAX_LENGTH = 100;
+
+export const mbtiTypes = [
+  "INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
+  "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP",
+] as const;
+
+export const mbtiSchema = z.enum(mbtiTypes).openapi("Mbti");
 
 export const usernameSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores.").openapi({ example: "alexa_park" });
 export const PUBLIC_NAME_MAX_LENGTH = 80;
@@ -21,6 +29,9 @@ export const profileDetailsSchema = z
       description: "False when the account is private and the caller is not an active friend. The bio is then null.",
     }),
     bio: z.string().nullable(),
+    mbti: mbtiSchema.nullable().openapi({ description: "Null when unset or when the bio is hidden." }),
+    whatIDo: z.string().nullable().openapi({ description: "Null when unset or when the bio is hidden." }),
+    listeningTo: z.string().nullable().openapi({ description: "Null when unset or when the bio is hidden." }),
     avatarUrl: z.url().nullable().openapi({
       description: "A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.",
     }),
