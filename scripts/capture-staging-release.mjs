@@ -47,7 +47,7 @@ function git(args, { cwd, stdio = "pipe" } = {}) {
   return typeof result === "string" ? result.trim() : "";
 }
 
-export function captureRelease({ eventSha, inputSha, dispatchSha, browserProxyEnabled, cwd = process.cwd() }) {
+export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, cwd = process.cwd() }) {
   const mainSha = git(["rev-parse", "origin/main"], { cwd });
   const hasCommit = (sha) => {
     try {
@@ -66,14 +66,17 @@ export function captureRelease({ eventSha, inputSha, dispatchSha, browserProxyEn
     }
   };
 
+  if (!validSha(toolingSha)) fail("the workflow tooling commit SHA is invalid.");
+
   return {
     commitSha: selectReleaseCommit({ eventSha, inputSha, dispatchSha, mainSha, hasCommit, isAncestor }),
+    toolingSha,
     browserProxyEnabled: validateBrowserProxyMode(browserProxyEnabled),
   };
 }
 
-function writeOutputs({ commitSha, browserProxyEnabled }, outputPath) {
-  const output = `commit_sha=${commitSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\n`;
+function writeOutputs({ commitSha, toolingSha, browserProxyEnabled }, outputPath) {
+  const output = `commit_sha=${commitSha}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\n`;
   if (outputPath) {
     appendFileSync(outputPath, output);
   } else {
@@ -86,6 +89,7 @@ function main() {
     eventSha: process.env.EVENT_SHA,
     inputSha: process.env.INPUT_SHA,
     dispatchSha: process.env.DISPATCH_SHA,
+    toolingSha: process.env.TOOLING_SHA,
     browserProxyEnabled: process.env.STAGING_BROWSER_PROXY_ENABLED,
   });
   writeOutputs(release, process.env.GITHUB_OUTPUT);

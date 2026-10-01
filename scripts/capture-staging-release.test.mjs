@@ -42,12 +42,14 @@ function withReleaseRepository(callback) {
 test("automatic staging releases accept only the current main commit", () => withReleaseRepository(({ root, previousSha, currentSha }) => {
   assert.deepEqual(captureRelease({
     eventSha: currentSha,
+    toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
-  }), { commitSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, toolingSha: currentSha, browserProxyEnabled: "false" });
 
   assert.throws(() => captureRelease({
     eventSha: previousSha,
+    toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
   }), /no longer the current main commit/);
@@ -57,18 +59,21 @@ test("manual dispatch allows a reachable explicit rollback but not a stale defau
   assert.deepEqual(captureRelease({
     inputSha: previousSha,
     dispatchSha: currentSha,
+    toolingSha: currentSha,
     browserProxyEnabled: "true",
     cwd: root,
-  }), { commitSha: previousSha, browserProxyEnabled: "true" });
+  }), { commitSha: previousSha, toolingSha: currentSha, browserProxyEnabled: "true" });
 
   assert.deepEqual(captureRelease({
     dispatchSha: currentSha,
+    toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
-  }), { commitSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, toolingSha: currentSha, browserProxyEnabled: "false" });
 
   assert.throws(() => captureRelease({
     dispatchSha: previousSha,
+    toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
   }), /main advanced before this manual dispatch was captured/);
@@ -79,3 +84,12 @@ test("captured browser proxy mode must be an explicit boolean", () => {
   assert.equal(validateBrowserProxyMode("false"), "false");
   assert.throws(() => validateBrowserProxyMode("enabled"), /must be true or false/);
 });
+
+test("release capture rejects an unpinned tooling revision", () => withReleaseRepository(({ root, currentSha }) => {
+  assert.throws(() => captureRelease({
+    dispatchSha: currentSha,
+    toolingSha: "main",
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), /workflow tooling commit SHA is invalid/);
+}));

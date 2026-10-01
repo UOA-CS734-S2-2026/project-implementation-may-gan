@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { requireDatabaseUrl, requireMigrationTarget, sanitizeDatabaseError, validateMigrationConnectionString } from "./migrations/env";
+import { assertReleaseSchemaMatches } from "./migrations/assert-release-schema";
 import { migrationTableExists, readAppliedMigrations, readLocalMigrations } from "./migrations/state";
 
 async function main(): Promise<void> {
@@ -17,31 +18,12 @@ async function main(): Promise<void> {
 
   try {
     await client`begin read only`;
-    const localMigrations = await readLocalMigrations();
+    const localMigrations = await readLocalMigrations(process.env.MIGRATIONS_DIR);
     const hasMigrationTable = await migrationTableExists(client);
     const appliedMigrations = hasMigrationTable ? await readAppliedMigrations(client) : [];
     await client`commit`;
 
-    const failures: string[] = [];
-
-    if (appliedMigrations.length < localMigrations.length) {
-      failures.push("pending local migrations exist");
-    }
-
-    if (appliedMigrations.length > localMigrations.length) {
-      failures.push("database contains migration records unknown to this checkout");
-    }
-
-    const comparedCount = Math.min(appliedMigrations.length, localMigrations.length);
-    for (let index = 0; index < comparedCount; index += 1) {
-      if (appliedMigrations[index]?.hash !== localMigrations[index]?.hash) {
-        failures.push(`applied migration hash mismatch at position ${index}`);
-      }
-    }
-
-    if (failures.length > 0) {
-      throw new Error(`Migration verification failed: ${failures.join("; ")}.`);
-    }
+    assertReleaseSchemaMatches(localMigrations, appliedMigrations, target);
 
     console.log(`Migration verification passed for ${target}.`);
   } catch (error) {

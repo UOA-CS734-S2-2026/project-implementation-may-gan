@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Optional reviewed main commit SHA for a compatible rollback
+        description: Optional reviewed main commit SHA, staging schema must exactly match it
         required: false
         type: string
 
@@ -34,6 +34,7 @@ jobs:
     outputs:
       commit_sha: ${{ steps.release.outputs.commit_sha }}
       browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
+      tooling_sha: ${{ steps.release.outputs.tooling_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +45,7 @@ jobs:
           EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
           INPUT_SHA: ${{ inputs.commit_sha }}
           DISPATCH_SHA: ${{ github.sha }}
+          TOOLING_SHA: ${{ github.workflow_sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
         run: node scripts/capture-staging-release.mjs
 
@@ -53,6 +55,7 @@ jobs:
     with:
       commit_sha: ${{ needs.capture.outputs.commit_sha }}
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
+      tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
     secrets: inherit
 
   web:
@@ -61,4 +64,5 @@ jobs:
     with:
       commit_sha: ${{ needs.capture.outputs.commit_sha }}
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
+      tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
     secrets: inherit

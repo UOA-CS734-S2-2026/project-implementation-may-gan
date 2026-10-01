@@ -13,8 +13,10 @@ on:
         required: false
         type: string
 
+# The staging value is shared with the coordinated API release job. Production
+# remains independent because no production release workflow exists yet.
 concurrency:
-  group: database-migration-${{ inputs.target }}
+  group: staging-database-state-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:

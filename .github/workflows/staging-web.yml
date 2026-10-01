@@ -11,6 +11,9 @@ on:
       browser_proxy_enabled:
         required: true
         type: string
+      tooling_sha:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -40,6 +43,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit_sha }}
+      - name: Check out immutable release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tooling_sha }}
+          path: deployment-tooling
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -91,12 +99,17 @@ jobs:
           NEXT_PUBLIC_WEB_API_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
           NEXT_PUBLIC_WEB_API_BASE_URL: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
         run: pnpm --filter @dayli/web build:vinext
+      - name: Add required observability to the generated historical release
+        run: node deployment-tooling/scripts/ensure-staging-web-observability.mjs apps/web/dist/server/wrangler.json
       - name: Validate generated deployment target
         run: |
           node <<'NODE'
           import { readFileSync } from 'node:fs';
           const config = JSON.parse(readFileSync('apps/web/dist/server/wrangler.json', 'utf8'));
           if (config.name !== 'dayli-web-staging' || config.workers_dev !== false
+            || config.observability?.enabled !== true
+            || config.observability?.logs?.enabled !== true
+            || config.observability?.logs?.invocation_logs !== true
             || config.routes?.length || config.route || config.hyperdrive?.length
             || config.assets?.binding !== 'ASSETS'
             || JSON.stringify(config.services) !== JSON.stringify([{
