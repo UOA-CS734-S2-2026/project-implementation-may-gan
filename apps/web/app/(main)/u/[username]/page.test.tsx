@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/api/friends", () => api);
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "actor" } }) }));
 
-import { Profile } from "./page";
+import { Profile } from "./ClientPage";
 
 function renderProfile() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });

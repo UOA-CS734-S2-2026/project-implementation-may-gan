@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ActorScopedNewMessage, NewMessage } from "../../app/(main)/messages/new/[username]/page";
+import { ActorScopedNewMessage, NewMessage } from "../../app/(main)/messages/new/[username]/ClientPage";
 
 let actorId = "actor-a";
 const replace = vi.fn();

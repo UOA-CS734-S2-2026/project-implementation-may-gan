@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import NewConversationPickerPage from "../../app/(main)/messages/new/page";
+import NewConversationPickerPage from "../../app/(main)/messages/new/ClientPage";
 
 const loadFriends = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "actor" } }) }));

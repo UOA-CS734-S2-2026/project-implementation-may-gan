@@ -1,13 +1,16 @@
 name: Deploy staging API and Hyperdrive proof
 
-# Deploy the exact main commit after CI succeeds. GitHub Environment approval is
-# the owner gate. Do not add push, pull_request, or pull_request_target triggers.
+# Called only by staging-release.yml. Do not add independent dispatch or CI
+# triggers because API and web must use the same captured mode and commit.
 on:
-  workflow_run:
-    workflows: [CI]
-    branches: [main]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      commit_sha:
+        required: true
+        type: string
+      browser_proxy_enabled:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,17 +21,12 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
     environment: staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.commit_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -45,6 +43,7 @@ jobs:
           STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
           STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
           STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
           STAGING_GOOGLE_WEB_CLIENT_ID: ${{ vars.STAGING_GOOGLE_WEB_CLIENT_ID }}
           STAGING_GOOGLE_IOS_CLIENT_ID: ${{ vars.STAGING_GOOGLE_IOS_CLIENT_ID }}
           STAGING_GOOGLE_ANDROID_CLIENT_ID: ${{ vars.STAGING_GOOGLE_ANDROID_CLIENT_ID }}
@@ -100,15 +99,16 @@ jobs:
       - name: Write sanitized Hyperdrive evidence
         env:
           PROOF_STEP_OUTCOME: ${{ steps.proof.outcome }}
+          DEPLOYED_COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
           node <<'NODE'
           const { readFileSync, writeFileSync } = require('node:fs');
           if (process.env.PROOF_STEP_OUTCOME !== 'success') throw new Error('Refusing evidence without a successful private Worker proof.');
-          if (!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA ?? '')) throw new Error('Refusing evidence without a valid commit SHA.');
+          if (!/^[a-f0-9]{40}$/.test(process.env.DEPLOYED_COMMIT_SHA ?? '')) throw new Error('Refusing evidence without a valid deployed commit SHA.');
           const api = JSON.parse(readFileSync('apps/api/package.json', 'utf8'));
           const root = JSON.parse(readFileSync('package.json', 'utf8'));
           writeFileSync('apps/api/hyperdrive-proof-evidence.json', JSON.stringify({
-            commitSha: process.env.GITHUB_SHA,
+            commitSha: process.env.DEPLOYED_COMMIT_SHA,
             target: 'staging', timestamp: new Date().toISOString(), pass: true,
             checks: ['select_1_through_hyperdrive', 'transaction_commit_and_rollback', 'constraint_classes_and_role_permissions', 'fresh_invocation_visibility_and_cleanup'],
             versions: { node: process.version, pnpm: root.packageManager, wrangler: api.devDependencies.wrangler, workersVitestPlugin: api.devDependencies['@cloudflare/vitest-plugin'], vitest: api.devDependencies.vitest, compatibilityDate: '2026-03-10' },
@@ -118,7 +118,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: hyperdrive-proof-${{ github.sha }}
+          name: hyperdrive-proof-${{ inputs.commit_sha }}-${{ github.run_attempt }}
           path: apps/api/hyperdrive-proof-evidence.json
           retention-days: 90
           if-no-files-found: warn

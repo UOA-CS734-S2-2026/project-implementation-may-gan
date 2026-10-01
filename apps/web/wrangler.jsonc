@@ -11,5 +11,12 @@
     "directory": "dist/client",
     "not_found_handling": "none",
     "binding": "ASSETS"
-  }
+  },
+  "services": [
+    {
+      "binding": "API_BROWSER_PROXY",
+      "service": "dayli-api-staging",
+      "entrypoint": "BrowserProxyEntrypoint"
+    }
+  ]
 }

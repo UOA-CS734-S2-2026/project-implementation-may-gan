@@ -6,6 +6,8 @@ export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
+  /** Direct API origin for native callers and issued realtime ticket URLs. */
+  PUBLIC_API_BASE_URL?: string;
   BETTER_AUTH_TRUSTED_ORIGINS: string;
   GOOGLE_WEB_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;

@@ -1,0 +1,80 @@
+name: Deploy coordinated staging release
+
+# This is the only staging deployment entry point. It captures the reviewed mode
+# once, deploys and proves API first, then builds and deploys web at the same SHA.
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Optional reviewed main commit SHA for a compatible rollback
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-release
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    environment: staging
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.release.outputs.commit_sha }}
+      browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: release
+        env:
+          EVENT_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SHA: ${{ inputs.commit_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+          STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
+        run: |
+          set -Eeuo pipefail
+          mode="$STAGING_BROWSER_PROXY_ENABLED"
+          if [[ "$mode" != "true" && "$mode" != "false" ]]; then
+            echo 'STAGING_BROWSER_PROXY_ENABLED must be true or false.' >&2
+            exit 1
+          fi
+          sha="${EVENT_SHA:-${INPUT_SHA:-$DISPATCH_SHA}}"
+          if [[ ! "$sha" =~ ^[a-f0-9]{40}$ ]] || ! git cat-file -e "${sha}^{commit}"; then
+            echo 'Refusing release without an immutable commit SHA.' >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$sha" origin/main; then
+            echo 'Refusing a commit outside main history.' >&2
+            exit 1
+          fi
+          printf 'commit_sha=%s\n' "$sha" >> "$GITHUB_OUTPUT"
+          printf 'browser_proxy_enabled=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+
+  api:
+    needs: capture
+    uses: ./.github/workflows/staging-hyperdrive.yml
+    with:
+      commit_sha: ${{ needs.capture.outputs.commit_sha }}
+      browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
+    secrets: inherit
+
+  web:
+    needs: [capture, api]
+    uses: ./.github/workflows/staging-web.yml
+    with:
+      commit_sha: ${{ needs.capture.outputs.commit_sha }}
+      browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
+    secrets: inherit

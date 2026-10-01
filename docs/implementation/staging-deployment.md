@@ -1,6 +1,6 @@
 # Staging API deployment
 
-The API staging workflow is `.github/workflows/staging-hyperdrive.yml`. It runs only through manual dispatch from `main` and references the `staging` GitHub Environment before it can read credentials, synchronize Worker secrets, or deploy.
+`.github/workflows/staging-release.yml` is the only staging deployment entry point. It runs after successful CI on `main` or through manual dispatch from `main`. It captures one immutable commit SHA and one validated `STAGING_BROWSER_PROXY_ENABLED` value from the `staging` environment, then calls the API workflow, waits for its deployment and Hyperdrive proof, and only then calls the web workflow with those same captured inputs. The API and web reusable workflows have no independent dispatch or CI triggers.
 
 This is not a PR deployment path. Do not add `push`, `pull_request`, or `pull_request_target` triggers. GitHub Environment rules are repository settings, not code. An owner must restrict `staging` to `main`, require the designated external reviewers, dismiss stale approvals, and disable administrator bypass where policy allows. This checkout cannot verify those settings or claim that reviewer approval is currently enforced.
 
@@ -33,6 +33,7 @@ Set these `staging` Environment variables:
 - `STAGING_AUTH_SITE_HOST`
 - `STAGING_AUTH_API_ORIGIN`
 - `STAGING_AUTH_WEB_ORIGIN`
+- `STAGING_BROWSER_PROXY_ENABLED`, `false` by default. Only `true` or `false` are accepted. Do not set `true` until the approved service-binding, source-IP, cookie, and OAuth proof is recorded.
 - `STAGING_GOOGLE_WEB_CLIENT_ID`, `STAGING_GOOGLE_IOS_CLIENT_ID`, and `STAGING_GOOGLE_ANDROID_CLIENT_ID` together, or leave all three blank
 - `STAGING_RESEND_FROM` only when Resend is enabled
 - `STAGING_R2_BUCKET_NAME` only when media uploads are enabled (see [media reservations](../dayli/media-reservations.md#one-time-cloudflare-setup)); the Worker's `R2_ACCOUNT_ID` is `CLOUDFLARE_ACCOUNT_ID`
@@ -56,13 +57,15 @@ The Cloudflare token needs permission to read the named Hyperdrive, list and rea
 ## Deployment and verification
 
 1. Apply reviewed PostgreSQL migrations through the database migration workflow when required.
-2. Dispatch `Deploy staging API and Hyperdrive proof` from `main`.
+2. Dispatch `Deploy coordinated staging release` from `main`, or let it run after successful `main` CI.
 3. Wait for the `staging` Environment owner approval.
 4. The workflow validates exact origins, uncached named Hyperdrive, account ID, the existing exact Worker, and the projected public-secret pairing.
 5. It generates ignored configuration and performs Wrangler dry runs for the API and proof Worker before it synchronizes secrets.
 6. It synchronizes reviewed secrets, deploys the API, and runs the private Hyperdrive check.
 7. Inspect the sanitized proof artifact. It contains commit and tool version evidence only, never configuration or secrets.
 8. Verify staging API health, auth, Durable Object connection behavior, and scheduled outbox repair with approved test accounts. Firebase and APNs physical-device delivery still need separate evidence.
+
+A failed API stage stops the web stage. A failed web stage can leave the new API version active, so this is not transactional or zero-downtime. Restore a coherent prior release by setting `STAGING_BROWSER_PROXY_ENABLED` to the prior mode, then dispatching the coordinated workflow from main with the exact reviewed prior 40-character commit SHA. The workflow accepts only commits still reachable from main. A prior commit must already contain compatible staging-release and proxy code. Do not treat this as an arbitrary historical rollback facility. Retest browser sign-in afterward. Do not deploy web alone to recover a mode transition.
 
 A failed secret synchronization can leave some values updated. Do not claim code and secret updates are atomic. Stop, review the named staging Worker and the approved source values without printing them, then rerun only after the owner decides the state is safe.
 

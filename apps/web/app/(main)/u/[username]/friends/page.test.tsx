@@ -12,7 +12,7 @@ const api: Record<string, ReturnType<typeof vi.fn>> = {
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: sessionUser, session: null, isPending: false }) }));
 vi.mock("@/lib/api/friends", () => api);
 
-const { default: FriendsPage } = await import("./page");
+const { default: FriendsPage } = await import("./ClientPage");
 
 type TestPage = { ok: true; value: { items: Array<{ id: string; [key: string]: unknown }>; hasMore: boolean; nextCursor: string | null } };
 const page = <T extends { id: string }>(items: T[], hasMore = false, nextCursor: string | null = null): TestPage => ({ ok: true, value: { items, hasMore, nextCursor } });
