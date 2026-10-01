@@ -1,8 +1,9 @@
 name: Staging authentication smoke
 
-# Automatic entry points remain inert until an owner sets the protected staging
-# environment variable STAGING_AUTH_SMOKE_AUTOMATION_ENABLED to true after a
-# successful manual run. Manual dispatch is main-only and has no inputs.
+# Automatic entry points remain inert until an owner sets the repository Actions
+# variable STAGING_AUTH_SMOKE_AUTOMATION_ENABLED to true after a successful
+# manual run. It is repository-level because job conditions run before staging
+# environment variables are available. Credentials remain staging-only.
 on:
   workflow_dispatch:
   schedule:
@@ -67,10 +68,10 @@ jobs:
         run: node scripts/validate-staging-auth-attribution.mjs
       - name: Report manual attribution limitation
         if: github.event_name == 'workflow_dispatch'
-        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} release_attribution=unavailable_manual"
-      - name: Report captured release attribution
+        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} triggering_release_revision=unavailable deployed_revision=unverified"
+      - name: Report triggering release attribution
         if: github.event_name == 'workflow_run'
-        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} release_revision=${{ steps.attribution.outputs.release_sha }} release_automation_revision=${{ steps.attribution.outputs.automation_sha }}"
+        run: echo "staging_auth_smoke automation_revision=${{ steps.automation.outputs.sha }} triggering_release_revision=${{ steps.attribution.outputs.release_sha }} release_automation_revision=${{ steps.attribution.outputs.automation_sha }} deployed_revision=unverified"
       - name: Run fixed-origin browser sign-in smoke
         env:
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}

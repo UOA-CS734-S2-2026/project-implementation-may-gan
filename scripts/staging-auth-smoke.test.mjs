@@ -2,91 +2,162 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
-import { createSafeReporter, runSmoke, SmokeFailure, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
+import { createSafeReporter, runSmoke, STAGING_ORIGIN } from "../apps/web/scripts/staging-auth-smoke.mjs";
 import { readStagingReleaseAttribution } from "./validate-staging-auth-attribution.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const workflow = readFileSync(resolve(repositoryRoot, ".github", "workflows", "staging-auth-smoke.yml"), "utf8");
+const protectedUrl = `${STAGING_ORIGIN}/settings?smoke=auth`;
 
-function browserType({ closeError } = {}) {
+function browserType(options = {}) {
+  const state = { abortedOrigins: [], browserClosed: false, launchOptions: undefined, session: false, signInAttempts: 0, signOutAttempts: 0 };
+  let routeHandler;
+
+  function page() {
+    let currentUrl = `${STAGING_ORIGIN}/`;
+    return {
+      url: () => currentUrl,
+      goto: async (url) => {
+        if (options.unexpectedOrigin && state.abortedOrigins.length === 0) {
+          await routeHandler({
+            request: () => ({ url: () => "https://unexpected.example.test/resource" }),
+            abort: async () => { state.abortedOrigins.push("unexpected"); },
+            continue: async () => { throw new Error(options.errorText); },
+          });
+        }
+        const parsed = new URL(url);
+        if (parsed.pathname === "/settings") {
+          currentUrl = state.session
+            ? `${STAGING_ORIGIN}${parsed.pathname}${parsed.search}`
+            : `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${parsed.pathname}${parsed.search}`)}`;
+          return;
+        }
+        currentUrl = url;
+      },
+      reload: async () => {},
+      waitForURL: async (predicate) => {
+        if (!predicate(new URL(currentUrl))) throw new Error(options.errorText ?? "navigation failed");
+      },
+      getByLabel: () => ({ fill: async () => {} }),
+      getByRole: (_role, locator) => {
+        if (locator.name === "Settings") {
+          return { waitFor: async () => {
+            if (new URL(currentUrl).pathname !== "/settings") throw new Error(options.errorText ?? "settings unavailable");
+          } };
+        }
+        if (locator.name === "Sign in") {
+          return { click: async () => {
+            state.signInAttempts += 1;
+            state.session = true;
+            if (!options.loginNavigationFails) currentUrl = protectedUrl;
+          } };
+        }
+        if (locator.name === "Sign out") {
+          return { click: async () => {
+            state.signOutAttempts += 1;
+            // The real button navigates home even when its sign-out request fails.
+            currentUrl = `${STAGING_ORIGIN}/`;
+            if (!options.signOutFails) state.session = false;
+          } };
+        }
+        throw new Error("unexpected locator");
+      },
+    };
+  }
+
   const context = {
-    route: async () => {},
-    newPage: async () => ({}),
-    close: async () => { if (closeError) throw closeError; },
+    route: async (_pattern, handler) => { routeHandler = handler; },
+    newPage: async () => page(),
+    cookies: async () => [{
+      name: "__Secure-better-auth.session_token",
+      secure: true,
+      httpOnly: true,
+      sameSite: options.cookieMismatch ? "Strict" : "Lax",
+      domain: new URL(STAGING_ORIGIN).hostname,
+      path: "/",
+    }],
+    close: async () => { if (options.closeError) throw new Error(options.errorText); },
   };
   return {
-    launch: async () => ({
-      newContext: async () => context,
-      close: async () => {},
-    }),
+    state,
+    browserType: {
+      launch: async (launchOptions) => {
+        state.launchOptions = launchOptions;
+        return { newContext: async () => context, close: async () => { state.browserClosed = true; } };
+      },
+    },
   };
 }
 
-function outputFor(callback) {
+async function runDefault(options = {}) {
+  const fake = browserType(options);
   const lines = [];
-  const reporter = createSafeReporter((line) => lines.push(line));
-  return callback(reporter).then(() => lines.join("\n"));
-}
-
-test("safe reporting never emits credential-bearing browser errors", async () => {
   const email = "private-account@example.test";
   const password = "private-password";
   const cookie = "session=private-cookie";
-  const output = await outputFor(async (reporter) => {
-    const passed = await runSmoke({
-      browserType: browserType(), reporter, email, password,
-      journey: async () => { throw new Error(`login rejected for ${email} ${password} ${cookie}`); },
-    });
-    assert.equal(passed, false);
+  const passed = await runSmoke({
+    browserType: fake.browserType,
+    reporter: createSafeReporter((line) => lines.push(line)),
+    email,
+    password,
+    environment: { HOME: "/tmp/smoke", PATH: "/usr/bin", GITHUB_TOKEN: "private-token", SMOKE_TEST_PASSWORD: password },
   });
+  return { fake, output: lines.join("\n"), passed, sensitive: [email, password, cookie, "private-token", options.errorText].filter(Boolean) };
+}
 
-  assert.match(output, /step=journey outcome=failed .*category=browser_failure/);
-  for (const sensitive of [email, password, cookie]) assert.doesNotMatch(output, new RegExp(sensitive));
+function assertNoSensitiveOutput({ output, sensitive }) {
+  for (const value of sensitive) assert.doesNotMatch(output, new RegExp(value));
+}
+
+test("the default journey completes and launches Chromium without runner secrets", async () => {
+  const result = await runDefault();
+  assert.equal(result.passed, true);
+  assert.equal(result.fake.state.signInAttempts, 1);
+  assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.equal(result.fake.state.browserClosed, true);
+  assert.deepEqual(result.fake.state.launchOptions.env, { HOME: "/tmp/smoke", PATH: "/usr/bin" });
+  assertNoSensitiveOutput(result);
 });
 
-test("failed sign-in and sign-out categories never include secret-bearing error text", async () => {
-  const secret = "private-password";
-  for (const category of ["login_failed", "logout_failed"]) {
-    const output = await outputFor(async (reporter) => {
-      const passed = await runSmoke({
-        browserType: browserType(), reporter, email: "private@example.test", password: secret,
-        journey: async () => {
-          const error = new SmokeFailure(category);
-          error.message = `${category} ${secret}`;
-          throw error;
-        },
-      });
-      assert.equal(passed, false);
-    });
-    assert.match(output, new RegExp(`category=${category}`));
-    assert.doesNotMatch(output, new RegExp(secret));
-  }
+test("a session created before failed sign-in navigation is cleaned up once", async () => {
+  const result = await runDefault({ loginNavigationFails: true, errorText: "login private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.session, false);
+  assert.equal(result.fake.state.signInAttempts, 1);
+  assert.equal(result.fake.state.signOutAttempts, 1);
+  assert.match(result.output, /category=login_failed/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
 });
 
-test("unexpected redirects and cleanup failures have fixed non-sensitive categories", async () => {
-  const secret = "private-password";
-  const redirectOutput = await outputFor(async (reporter) => {
-    const passed = await runSmoke({
-      browserType: browserType(), reporter, email: "private@example.test", password: secret,
-      journey: async ({ unexpectedHost }) => {
-        unexpectedHost.value = true;
-        throw new Error(`redirected with ${secret}`);
-      },
-    });
-    assert.equal(passed, false);
-  });
-  assert.match(redirectOutput, /category=unexpected_host/);
-  assert.doesNotMatch(redirectOutput, new RegExp(secret));
+test("a home navigation without successful sign-out fails and cleanup confirms the failure", async () => {
+  const result = await runDefault({ signOutFails: true, errorText: "logout private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.session, true);
+  assert.equal(result.fake.state.signOutAttempts, 2);
+  assert.match(result.output, /category=logout_failed/);
+  assert.match(result.output, /step=cleanup outcome=failed .*category=cleanup_failed/);
+  assertNoSensitiveOutput(result);
+});
 
-  const cleanupOutput = await outputFor(async (reporter) => {
-    const passed = await runSmoke({
-      browserType: browserType({ closeError: new Error(`cleanup ${secret}`) }), reporter, email: "private@example.test", password: secret,
-      journey: async () => {},
-    });
-    assert.equal(passed, false);
-  });
-  assert.match(cleanupOutput, /step=cleanup outcome=failed .*category=cleanup_failed/);
-  assert.doesNotMatch(cleanupOutput, new RegExp(secret));
+test("unexpected-origin interception, cookie mismatches, and close failures are non-sensitive failures", async () => {
+  const redirect = await runDefault({ unexpectedOrigin: true, errorText: "redirect private-password session=private-cookie" });
+  assert.equal(redirect.passed, false);
+  assert.deepEqual(redirect.fake.state.abortedOrigins, ["unexpected"]);
+  assert.match(redirect.output, /category=unexpected_host/);
+  assertNoSensitiveOutput(redirect);
+
+  const cookie = await runDefault({ cookieMismatch: true, errorText: "cookie private-password session=private-cookie" });
+  assert.equal(cookie.passed, false);
+  assert.equal(cookie.fake.state.session, false);
+  assert.match(cookie.output, /category=session_cookie_attributes/);
+  assert.match(cookie.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(cookie);
+
+  const cleanup = await runDefault({ closeError: true, errorText: "cleanup private-password session=private-cookie" });
+  assert.equal(cleanup.passed, false);
+  assert.match(cleanup.output, /step=cleanup outcome=failed .*category=cleanup_failed/);
+  assertNoSensitiveOutput(cleanup);
 });
 
 test("release attribution accepts only the two captured immutable revisions", () => {
@@ -112,6 +183,7 @@ test("workflow is fixed-target, trusted, serialized, and automatic runs are inac
   assert.match(workflow, /SMOKE_TEST_EMAIL: \$\{\{ secrets\.SMOKE_TEST_EMAIL \}\}/);
   assert.match(workflow, /SMOKE_TEST_PASSWORD: \$\{\{ secrets\.SMOKE_TEST_PASSWORD \}\}/);
   assert.match(workflow, /ref: main/);
+  assert.match(workflow, /triggering_release_revision=.*deployed_revision=unverified/);
   assert.match(workflow, /staging-release-attribution/);
   assert.doesNotMatch(workflow, /inputs:\n|pull_request|pull_request_target|\n {2}push:/);
   assert.doesNotMatch(workflow, /upload-artifact|playwright-report|trace:|video:|screenshot:|har:/i);

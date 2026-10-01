@@ -92,20 +92,22 @@ async function verifySessionCookie(context) {
   }
 }
 
-async function defaultJourney({ context, page, unexpectedHost, markSignedIn, markLoggedOut, email, password }) {
+async function defaultJourney({ context, page, unexpectedHost, markSessionPossible, markLoggedOut, email, password }) {
   await visit(page, "/", unexpectedHost);
   await visit(page, PROTECTED_PATH, unexpectedHost);
   await verifySignInDestination(page, unexpectedHost);
 
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
+  // The server can establish a cookie before this navigation becomes visible.
+  // Cleanup must therefore assume a session exists from submission onward.
+  markSessionPossible();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   try {
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
   } catch {
     throw failure(unexpectedHost.value ? "unexpected_host" : "login_failed");
   }
-  markSignedIn();
   await verifySettings(page, unexpectedHost);
 
   await page.reload({ waitUntil: "domcontentloaded", timeout: STEP_TIMEOUT_MS });
@@ -118,31 +120,46 @@ async function defaultJourney({ context, page, unexpectedHost, markSignedIn, mar
 
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   try {
+    // SignOutButton always navigates home after its request. Home alone is not
+    // logout proof, so each existing tab must subsequently lose protected access.
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
+    await visit(page, PROTECTED_PATH, unexpectedHost);
+    await verifySignInDestination(page, unexpectedHost);
+    await visit(secondPage, PROTECTED_PATH, unexpectedHost);
+    await verifySignInDestination(secondPage, unexpectedHost);
   } catch {
     throw failure(unexpectedHost.value ? "unexpected_host" : "logout_failed");
   }
   markLoggedOut();
+}
 
+async function confirmUnauthenticated(page, unexpectedHost) {
   await visit(page, PROTECTED_PATH, unexpectedHost);
   await verifySignInDestination(page, unexpectedHost);
-  await visit(secondPage, PROTECTED_PATH, unexpectedHost);
-  await verifySignInDestination(secondPage, unexpectedHost);
 }
 
 async function bestEffortLogout(page, unexpectedHost) {
   await visit(page, PROTECTED_PATH, unexpectedHost);
-  if (!isPath(page, "/settings", "?smoke=auth")) return;
+  if (isPath(page, "/sign-in")) {
+    await verifySignInDestination(page, unexpectedHost);
+    return;
+  }
+  if (!isPath(page, "/settings", "?smoke=auth")) throw failure("cleanup_failed");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/", { timeout: STEP_TIMEOUT_MS });
-  await checkTrustedPage(page, unexpectedHost);
+  await confirmUnauthenticated(page, unexpectedHost);
+}
+
+function browserEnvironment(environment = process.env) {
+  const allowed = ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME"];
+  return Object.fromEntries(allowed.flatMap((name) => environment[name] ? [[name, environment[name]]] : []));
 }
 
 /**
  * Runs the browser journey with a single context. The injected journey exists
  * only for local privacy tests, production always uses the default journey.
  */
-export async function runSmoke({ browserType, reporter = createSafeReporter(), journey = defaultJourney, email = process.env.SMOKE_TEST_EMAIL, password = process.env.SMOKE_TEST_PASSWORD }) {
+export async function runSmoke({ browserType, reporter = createSafeReporter(), journey = defaultJourney, email = process.env.SMOKE_TEST_EMAIL, password = process.env.SMOKE_TEST_PASSWORD, environment = process.env }) {
   if (!email || !password) {
     reporter({ step: "configuration", outcome: "failed", durationMs: 0, category: "credentials_missing" });
     return false;
@@ -151,14 +168,15 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
   let browser;
   let context;
   let page;
-  let signedIn = false;
+  let sessionPossible = false;
   let loggedOut = false;
   let passed = false;
   const unexpectedHost = { value: false };
   const startedAt = Date.now();
 
   try {
-    browser = await browserType.launch({ headless: true });
+    // Do not give the browser process credentials, GitHub tokens, or arbitrary runner environment values.
+    browser = await browserType.launch({ headless: true, env: browserEnvironment(environment) });
     context = await browser.newContext();
     await context.route("**/*", async (route) => {
       if (!isTrustedUrl(route.request().url())) {
@@ -173,7 +191,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
       context,
       page,
       unexpectedHost,
-      markSignedIn: () => { signedIn = true; },
+      markSessionPossible: () => { sessionPossible = true; },
       markLoggedOut: () => { loggedOut = true; },
       email,
       password,
@@ -185,7 +203,7 @@ export async function runSmoke({ browserType, reporter = createSafeReporter(), j
   } finally {
     const cleanupStartedAt = Date.now();
     try {
-      if (signedIn && !loggedOut && page) await bestEffortLogout(page, unexpectedHost);
+      if (sessionPossible && !loggedOut && page) await bestEffortLogout(page, unexpectedHost);
       if (context) await context.close();
       if (browser) await browser.close();
       reporter({ step: "cleanup", outcome: "passed", durationMs: Date.now() - cleanupStartedAt });
