@@ -139,12 +139,19 @@ describe("GET /api/v1/posts/{postId}", () => {
       expect(JSON.stringify(body.media)).not.toContain("postId");
     });
 
-    it("returns null URLs when media storage isn't configured", async () => {
+    it("is unavailable for a post with media when storage isn't configured", async () => {
       const response = await get({ repository: repository(async () => withMedia) });
-      const body = await response.json<{ media: Array<{ url: unknown; expiresAt: unknown }> }>();
 
+      // Never a media response without URLs: url and expiresAt are always set.
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
+    });
+
+    it("still serves a text-only post without storage", async () => {
+      const response = await get({ repository: repository(async () => detail) });
       expect(response.status).toBe(200);
-      expect(body.media.map((media) => [media.url, media.expiresAt])).toEqual([[null, null], [null, null]]);
+      await expect(response.json()).resolves.toMatchObject({ media: [] });
     });
 
     it("signs nothing for a post the viewer can't read", async () => {

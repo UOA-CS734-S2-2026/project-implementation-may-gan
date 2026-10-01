@@ -55,7 +55,7 @@ export const listFeedErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "The feed is temporarily unavailable.",
+    description: "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };

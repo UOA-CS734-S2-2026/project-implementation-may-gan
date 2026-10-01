@@ -40,7 +40,7 @@ export interface PostMedia {
      */
     order: number;
     /**
-     * A private download URL that expires at expiresAt. Null when media storage is unavailable.
+     * A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead.
      */
     url: string;
     /**

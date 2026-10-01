@@ -16,7 +16,7 @@ export interface PostMediaRef {
   objectKey: string;
 }
 
-/** Signs one object for download; undefined when storage isn't configured. */
+/** Signs one object for download. Routes hold none when storage isn't configured. */
 export type SignMediaDownload = (objectKey: string, now: Date) => Promise<{ url: string; expiresAt: Date }>;
 
 export function createR2MediaDownloadSigner(configuration: R2RuntimeConfiguration): SignMediaDownload {
@@ -58,20 +58,23 @@ export async function readAttachedMedia(
   return byPost;
 }
 
-/** Sign each ref for this response. Without storage, URLs are null. */
+/**
+ * Sign each ref for this response. Callers must not build a media response
+ * without storage: they return 503 instead, so url is never null.
+ */
 export async function signPostMedia(
   refs: readonly PostMediaRef[],
-  sign: SignMediaDownload | undefined,
+  sign: SignMediaDownload,
   now: Date,
 ): Promise<PostMedia[]> {
   return Promise.all(refs.map(async (ref) => {
-    const download = sign ? await sign(ref.objectKey, now) : undefined;
+    const download = await sign(ref.objectKey, now);
     return {
       id: ref.id,
       contentType: ref.contentType,
       order: ref.order,
-      url: download?.url ?? null,
-      expiresAt: download?.expiresAt.toISOString() ?? null,
+      url: download.url,
+      expiresAt: download.expiresAt.toISOString(),
     };
   }));
 }

@@ -653,9 +653,8 @@
           },
           "url": {
             "type": "string",
-            "nullable": true,
             "format": "uri",
-            "description": "A private download URL that expires at expiresAt. Null when media storage is unavailable."
+            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead."
           },
           "expiresAt": {
             "allOf": [
@@ -663,7 +662,6 @@
                 "$ref": "#/components/schemas/UtcTimestamp"
               },
               {
-                "nullable": true,
                 "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one."
               }
             ]
@@ -1854,7 +1852,7 @@
             }
           },
           "503": {
-            "description": "The feed is temporarily unavailable.",
+            "description": "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1960,7 +1958,7 @@
             }
           },
           "503": {
-            "description": "Post storage is temporarily unavailable.",
+            "description": "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {

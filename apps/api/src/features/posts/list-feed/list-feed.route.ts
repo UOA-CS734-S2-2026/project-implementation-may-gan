@@ -11,7 +11,7 @@ export interface ListFeedRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a query-supplied user. */
   resolveSession: ResolveSession;
   repository?: FeedRepository;
-  /** Absent when media storage isn't configured; media URLs are then null. */
+  /** Absent when media storage isn't configured; a page with media is then a 503. */
   signMediaDownload?: SignMediaDownload;
   now?: () => Date;
   rateLimiter?: ActorRateLimiter;
@@ -49,9 +49,13 @@ export function registerListFeedRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dep
     const now = dependencies.now?.() ?? new Date();
     try {
       const page = await dependencies.repository.listFeed(context.get("actor").userId, now, limit, cursor);
+      const sign = dependencies.signMediaDownload;
+      if (page.items.some((item) => item.media.length > 0) && !sign) {
+        return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
+      }
       const items = await Promise.all(page.items.map(async (item) => ({
         ...item,
-        media: await signPostMedia(item.media, dependencies.signMediaDownload, now),
+        media: sign ? await signPostMedia(item.media, sign, now) : [],
       })));
       return context.json({ ...page, items }, 200);
     } catch (error) {

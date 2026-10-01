@@ -27,7 +27,7 @@ class PostMedia {
   /// Minimum value: 0
   final int order;
 
-  /// A private download URL that expires at expiresAt. Null when media storage is unavailable.
+  /// A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead.
   final String url;
 
   /// When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one.

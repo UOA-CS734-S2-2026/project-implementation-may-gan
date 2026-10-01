@@ -10,10 +10,11 @@ export const postMediaSchema = z
     id: opaqueIdSchema,
     contentType: mediaContentTypeSchema,
     order: z.number().int().min(0),
-    url: z.url().nullable().openapi({
-      description: "A private download URL that expires at expiresAt. Null when media storage is unavailable.",
+    url: z.url().openapi({
+      description: "A private download URL that expires at expiresAt. When media storage is unavailable, "
+        + "a response that would include media is a 503 instead.",
     }),
-    expiresAt: utcTimestampSchema.nullable().openapi({
+    expiresAt: utcTimestampSchema.openapi({
       description: "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one.",
     }),
   })

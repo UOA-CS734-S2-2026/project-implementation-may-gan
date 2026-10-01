@@ -56,7 +56,7 @@ export const getPostErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "Post storage is temporarily unavailable.",
+    description: "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };
