@@ -4,7 +4,8 @@ import type { OutboxJob } from "../jobs/outbox-store";
 import { bodyFreeRealtimeEvent } from "../jobs/dispatch-outbox";
 
 interface UserRealtimeStub {
-  fetch(request: Request): Promise<Response>;
+  fetch?(request: Request): Promise<Response>;
+  publish?(event: ReturnType<typeof bodyFreeRealtimeEvent>): Promise<void>;
   revokeSession(sessionId: string): Promise<void>;
 }
 
@@ -20,16 +21,21 @@ export function createDurableObjectRealtimePublisher(
       if (options?.signal.aborted) return { ok: false as const, retryable: true, category: "transient" as const };
       if (job.channel !== "realtime") return { ok: false as const, retryable: false, category: "provider_rejected" as const };
       if (!await authorize(job) || options?.signal.aborted) return options?.signal.aborted ? { ok: false as const, retryable: true, category: "transient" as const } : { ok: true as const };
-      // Use the Durable Object's private fetch interface rather than RPC. This
-      // keeps delivery compatible with the WebSocket-hibernation runtime and
-      // lets a non-success response remain retryable in the outbox.
-      const response = await stubFor(job.recipientId).fetch(new Request("https://user-realtime.internal/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bodyFreeRealtimeEvent(job)),
-        signal: options?.signal,
-      }));
-      if (!response.ok) throw new Error("Realtime publish failed.");
+      const stub = stubFor(job.recipientId);
+      const event = bodyFreeRealtimeEvent(job);
+      if (stub.publish) {
+        await stub.publish(event);
+      } else if (stub.fetch) {
+        const response = await stub.fetch(new Request("https://user-realtime.internal/publish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(event),
+          signal: options?.signal,
+        }));
+        if (!response.ok) throw new Error("Realtime publish failed.");
+      } else {
+        throw new Error("Realtime publisher is unavailable.");
+      }
       return { ok: true as const };
     },
     revokeSession(userId: string, sessionId: string) {

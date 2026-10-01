@@ -22,7 +22,9 @@ function requireLocalTestUrl(value: string | undefined): string {
 }
 
 (enabled ? describe : describe.skip)("published-to-candidate migration lineage", () => {
-  const connectionString = requireLocalTestUrl(databaseUrl);
+  const connectionString = databaseUrl
+    ? requireLocalTestUrl(databaseUrl)
+    : `postgresql://migrator:migrator@localhost:${testPostgresPort}/dayli_migration_lineage_test`;
   const client = postgres(connectionString, { max: 1, prepare: false, onnotice: () => undefined });
 
   afterAll(async () => {
@@ -49,8 +51,8 @@ function requireLocalTestUrl(value: string | undefined): string {
         values ('lineage-user', 'Migration Lineage', 'lineage@example.test')
       `;
       await client`
-        insert into public.media_reservation (id, owner_id, object_key, content_type, byte_size, status, expires_at, created_at, updated_at, validated_at)
-        values ('lineage-reservation', 'lineage-user', 'private/lineage', 'image/jpeg', 1, 'validated', now() + interval '1 hour', now(), now(), now())
+        insert into public.media_reservation (id, owner_id, object_key, content_type, byte_size, status, expires_at, created_at, validated_at)
+        values ('lineage-reservation', 'lineage-user', 'private/lineage', 'image/jpeg', 1, 'validated', now() + interval '1 hour', now(), now())
       `;
 
       const localMigrations = await readLocalMigrations();

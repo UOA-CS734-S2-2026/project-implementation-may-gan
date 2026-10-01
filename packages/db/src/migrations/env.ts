@@ -11,6 +11,7 @@ const localTestDatabases = new Set([
   "/dayli_lifecycle_test",
   "/dayli_auth_test",
   "/dayli_export_test",
+  "/dayli_migration_lineage_test",
 ]);
 const localDevelopmentDatabase = "/dayli_dev";
 
@@ -60,7 +61,7 @@ export function validateMigrationConnectionString(connectionString: string, targ
   if (target === "local") {
     const port = localTestPort();
     if (parsed.hostname !== "localhost" || parsed.port !== port || !localTestDatabases.has(parsed.pathname)) {
-      throw new Error(`Local test migrations must target localhost:${port}/dayli_test, dayli_relationship_test, dayli_messaging_test, dayli_advisory_lock_ci_test, dayli_lifecycle_test, dayli_auth_test, or dayli_export_test.`);
+      throw new Error(`Local test migrations must target localhost:${port}/dayli_test, dayli_relationship_test, dayli_messaging_test, dayli_advisory_lock_ci_test, dayli_lifecycle_test, dayli_auth_test, dayli_export_test, or dayli_migration_lineage_test.`);
     }
 
     return;

@@ -345,6 +345,19 @@ export function createAppForEnv(env: ApiEnv) {
       return session?.user?.id ? { userId: session.user.id } satisfies AuthenticatedActor : null;
     }),
   } satisfies RelationshipsRouteDependencies : undefined;
+  const rateLimiting = env.API_RATE_LIMIT_SCOPE ? {
+    environmentScope: env.API_RATE_LIMIT_SCOPE,
+    bindings: {
+      ingress: env.API_INGRESS_RATE_LIMIT,
+      read: env.API_READ_RATE_LIMIT,
+      write: env.API_WRITE_RATE_LIMIT,
+      message: env.API_MESSAGE_RATE_LIMIT,
+      media: env.API_MEDIA_RATE_LIMIT,
+      realtime: env.API_REALTIME_RATE_LIMIT,
+      directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
+    },
+    onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
+  } satisfies ApiRateLimitDependencies : undefined;
   const api = createApp({
     postingDay,
     posts,
@@ -363,19 +376,7 @@ export function createAppForEnv(env: ApiEnv) {
     legal,
     dataExport,
     trustedOrigins: configuration?.trustedOrigins,
-    rateLimiting: {
-      environmentScope: env.API_RATE_LIMIT_SCOPE,
-      bindings: {
-        ingress: env.API_INGRESS_RATE_LIMIT,
-        read: env.API_READ_RATE_LIMIT,
-        write: env.API_WRITE_RATE_LIMIT,
-        message: env.API_MESSAGE_RATE_LIMIT,
-        media: env.API_MEDIA_RATE_LIMIT,
-        realtime: env.API_REALTIME_RATE_LIMIT,
-        directPush: env.API_DIRECT_PUSH_RATE_LIMIT,
-      },
-      onOperationalAlert: () => console.error("dayli rate limit backend unavailable"),
-    },
+    rateLimiting,
   });
   if (!configuration) return api;
   registerPostgresBetterAuthRoutes(api, env, env.USER_REALTIME ? {
