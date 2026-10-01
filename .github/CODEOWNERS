@@ -4,8 +4,4 @@
 /packages/db/admin/ @AntGa
 /packages/db/drizzle.config.ts @AntGa
 /drizzle.config.ts @AntGa
-/.github/hosted-mutation-authorization.json @AntGa
 /.github/workflows/ @AntGa
-/scripts/check-hosted-mutation-authorization.mjs @AntGa
-/scripts/check-hosted-mutation-workflows.mjs @AntGa
-/docs/implementation/hosted-mutation-hold.md @AntGa
