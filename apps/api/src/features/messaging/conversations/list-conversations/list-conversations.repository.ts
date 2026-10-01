@@ -3,6 +3,7 @@ import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBi
 import { projectConversationDto } from "../../shared/conversation-projection";
 import { messageProjectionSelection } from "../../shared/message-projection";
 import { MessagingError } from "../../shared/messaging-error";
+import { participantIdForUser } from "../../shared/participant-identity";
 
 export interface ListConversationsRepository {
   list(
@@ -60,7 +61,7 @@ export function createPostgresListConversationsRepository(
         .from(messages)
         .where(and(
           eq(messages.conversationId, conversations.id),
-          ne(messages.senderId, actorId),
+          ne(messages.senderParticipantId, participantIdForUser(actorId)),
           gt(messages.sequence, conversationMembers.lastReadSequence),
           isNull(messages.unsentAt),
         ))
@@ -78,6 +79,8 @@ export function createPostgresListConversationsRepository(
           user_low_id: conversations.userLowId,
           user_high_id: conversations.userHighId,
           initiator_id: conversations.initiatorId,
+          initiator_participant_id: conversations.initiatorParticipantId,
+          member_participant_id: conversationMembers.participantId,
           request_state: conversations.requestState,
           last_message_sequence: conversations.lastMessageSequence,
           last_change_sequence: conversations.lastChangeSequence,
@@ -115,19 +118,19 @@ export function createPostgresListConversationsRepository(
           conversationMembers,
           and(
             eq(conversationMembers.conversationId, conversations.id),
-            eq(conversationMembers.userId, actorId),
+            eq(conversationMembers.participantId, participantIdForUser(actorId)),
           ),
         )
         .innerJoin(
           messagingParticipants,
-          eq(messagingParticipants.id, sql`case when ${conversations.userLowId} = ${actorId} then ${conversations.participantHighId} else ${conversations.participantLowId} end`),
+          eq(messagingParticipants.id, sql`case when ${conversations.participantLowId} = ${participantIdForUser(actorId)} then ${conversations.participantHighId} else ${conversations.participantLowId} end`),
         )
         .leftJoin(user, eq(user.id, messagingParticipants.userId))
         .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, user.id))
         .leftJoinLateral(latestMessage, sql`true`)
         .where(and(
           eq(conversations.requestState, state),
-          folder === "requests" ? ne(conversations.initiatorId, actorId) : undefined,
+          folder === "requests" ? ne(conversations.initiatorParticipantId, participantIdForUser(actorId)) : undefined,
           cursor
             ? sql`(${conversations.lastActivityAt}, ${conversations.id}) < (${cursor[0]}::timestamptz, ${cursor[1]})`
             : undefined,

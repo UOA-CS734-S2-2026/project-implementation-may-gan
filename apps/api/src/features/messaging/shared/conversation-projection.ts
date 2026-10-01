@@ -20,10 +20,11 @@ export async function projectConversationDto(
 ) {
   const latest = row.latestMessage ? await projectMessageDto(database, row.latestMessage, actorId) : null;
   const blocked = row.blocked === true;
+  const actorParticipantId = String(row.member_participant_id ?? actorId);
   return {
     id: String(row.id),
     peer: {
-      id: String(row.peer_id ?? (String(row.user_low_id) === actorId ? row.user_high_id : row.user_low_id)),
+      id: String(row.peer_id ?? (String(row.participant_low_id) === actorParticipantId ? row.participant_high_id : row.participant_low_id)),
       name: typeof row.peer_name === "string" ? row.peer_name : null,
     },
     requestState: row.request_state,
@@ -35,7 +36,7 @@ export async function projectConversationDto(
     receiptSequence: sequenceText(row.receipt_sequence),
     capabilities: {
       canSend: row.request_state === "active" && !blocked,
-      canResolveRequest: row.request_state === "pending" && String(row.initiator_id) !== actorId && !blocked,
+      canResolveRequest: row.request_state === "pending" && String(row.initiator_participant_id ?? row.initiator_id) !== actorParticipantId && !blocked,
     },
     updatedAt: date(row.updated_at).toISOString(),
   };

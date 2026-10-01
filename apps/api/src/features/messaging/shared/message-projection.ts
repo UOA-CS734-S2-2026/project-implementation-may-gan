@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { requireSafeMessageVersion, requireSafeSequenceBigInt } from "./safe-sequence";
+import { participantIdForUser } from "./participant-identity";
 import type { MessageDto, StoredMessage } from "./messaging-types";
 
 type Queryable = Pick<DayliDatabase, "select">;
@@ -105,8 +106,8 @@ export async function loadReactionSummaries(queryable: Queryable, messageId: str
     .select({
       reaction: schema.messageReactions.reaction,
       count: sql<number>`count(*) over (partition by ${schema.messageReactions.reaction})::int`,
-      reacted: sql<boolean>`bool_or(coalesce(${schema.messageReactions.participantId}, ${schema.messageReactions.userId}) = ${actorId}) over (partition by ${schema.messageReactions.reaction})`,
-      id: sql<string>`coalesce(${schema.messageReactions.participantId}, ${schema.messageReactions.userId})`,
+      reacted: sql<boolean>`bool_or(${schema.messageReactions.participantId} = ${participantIdForUser(actorId)}) over (partition by ${schema.messageReactions.reaction})`,
+      id: sql<string>`${schema.messageReactions.participantId}`,
       name: sql<string>`case when ${schema.messagingParticipants.state} = 'active'
           and coalesce(${schema.accountLifecycles.state}, 'active') = 'active'
         then coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''), ${schema.user.name})

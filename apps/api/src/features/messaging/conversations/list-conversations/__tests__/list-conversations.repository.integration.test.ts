@@ -15,8 +15,11 @@ const suite = enabled ? describe : describe.skip;
 
 suite("list conversations Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 8 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
-  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
+  const users = Array.from({ length: 10 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
+  const {
+    direct, edit, findDirectConversation, getConversation, getMessagingUnread,
+    listMessages, markConversationRead, resolveMessageRequest, send, unsend,
+  } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListConversationsRepository(database.db);
   const builderQueries: string[] = [];
   const observedRepository = createPostgresListConversationsRepository(drizzle(database.client, {
@@ -121,7 +124,7 @@ suite("list conversations Postgres repository", () => {
     expect(listQuery).toMatch(/^select /);
     expect(listQuery).toContain('select count(*) as "count" from "messages"');
     expect(listQuery).toContain('"messages"."conversation_id" = "conversations"."id"');
-    expect(listQuery).toContain('"messages"."sender_id" <> $');
+    expect(listQuery).toContain('"messages"."sender_participant_id" <>');
     expect(listQuery).toContain('"messages"."sequence" > "conversation_members"."last_read_sequence"');
     expect(listQuery).toContain('"messages"."unsent_at" is null');
     expect(listQuery.match(/select count\(\*\) as "count" from "messages"/g)).toHaveLength(1);
@@ -255,6 +258,107 @@ suite("list conversations Postgres repository", () => {
         capabilities: { canSend: false, canResolveRequest: false },
       })]),
     }));
+  });
+
+  it("reads custom participant IDs through folders, history, unread counts, reactions, and membership", async () => {
+    const actor = users[8]!;
+    const peer = users[9]!;
+    // 0023 requires participant ordering to match the legacy canonical pair.
+    const actorParticipant = `${actor < peer ? "a" : "z"}-participant-${crypto.randomUUID()}`;
+    const peerParticipant = `${actor < peer ? "z" : "a"}-participant-${crypto.randomUUID()}`;
+    const requestRecipient = users[7]!;
+    const requestRecipientParticipant = peer < requestRecipient
+      ? `${peerParticipant}z`
+      : `0-participant-${crypto.randomUUID()}`;
+    await database.db.update(schema.messagingParticipants).set({ id: actorParticipant })
+      .where(eq(schema.messagingParticipants.userId, actor));
+    await database.db.update(schema.messagingParticipants).set({ id: peerParticipant })
+      .where(eq(schema.messagingParticipants.userId, peer));
+    await database.db.update(schema.messagingParticipants).set({ id: requestRecipientParticipant })
+      .where(eq(schema.messagingParticipants.userId, requestRecipient));
+    await database.db.insert(schema.friendships).values([
+      { userId: actor, friendId: peer, state: "active", stateChangedAt: new Date() },
+      { userId: peer, friendId: actor, state: "active", stateChangedAt: new Date() },
+    ]);
+
+    // These calls deliberately retain the deployed user-ID writer shape. The
+    // 0023 trigger derives the mismatched durable IDs used by all reads below.
+    const created = await direct.create(actor, {
+      recipientId: peer,
+      clientMessageId: crypto.randomUUID(),
+      text: "participant canary",
+    });
+    expect(created.conversation.peerId).toBe(peerParticipant);
+    expect(created.message.senderId).toBe(actorParticipant);
+    await expect(direct.create(actor, {
+      recipientId: peer,
+      clientMessageId: created.message.clientMessageId,
+      text: "participant canary",
+    })).resolves.toMatchObject({
+      replayed: true,
+      conversation: { id: created.conversation.id, peerId: peerParticipant },
+    });
+    await expect(edit.edit(actor, created.conversation.id, created.message.id, {
+      text: "edited participant canary",
+      expectedVersion: 1,
+    })).resolves.toMatchObject({ senderId: actorParticipant, text: "edited participant canary", version: 2 });
+    await expect(unsend.unsend(actor, created.conversation.id, created.message.id))
+      .resolves.toMatchObject({ replayed: false, message: { senderId: actorParticipant, text: null } });
+    const reply = await send.send(peer, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "old worker participant reply",
+    });
+    await database.db.insert(schema.messageReactions).values([
+      { messageId: reply.message.id, userId: actor, reaction: "angry", createdAt: new Date() },
+      { messageId: reply.message.id, userId: peer, reaction: "angry", createdAt: new Date() },
+    ]);
+
+    const list = await repository.list(actor, "inbox", undefined, 10);
+    expect(list.items).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: created.conversation.id,
+      peer: { id: peerParticipant, name: null },
+      unreadCount: 1,
+      latestMessage: expect.objectContaining({
+        senderId: peerParticipant,
+        reactions: [expect.objectContaining({
+          reaction: "angry",
+          count: 2,
+          reactedByActor: true,
+          reactors: expect.arrayContaining([
+            { id: actorParticipant, name: actor },
+            { id: peerParticipant, name: peer },
+          ]),
+        })],
+      }),
+    })]));
+    await expect(findDirectConversation.find(actor, peer))
+      .resolves.toEqual({ conversationId: created.conversation.id });
+    await expect(getConversation.get(actor, created.conversation.id))
+      .resolves.toMatchObject({ peer: { id: peerParticipant }, unreadCount: 1 });
+    await expect(getMessagingUnread.get(actor)).resolves.toEqual({ inboxCount: 1, requestCount: 0 });
+    await expect(listMessages.list(actor, created.conversation.id, undefined, undefined, 10))
+      .resolves.toMatchObject({ items: [
+        expect.objectContaining({ senderId: actorParticipant, text: null }),
+        expect.objectContaining({ senderId: peerParticipant, text: "old worker participant reply" }),
+      ] });
+    await expect(markConversationRead.markRead(actor, created.conversation.id, reply.message.sequence))
+      .resolves.toMatchObject({ lastReadSequence: reply.message.sequence, unreadCount: 0 });
+
+    const pending = await direct.create(peer, {
+      recipientId: requestRecipient,
+      clientMessageId: crypto.randomUUID(),
+      text: "participant request",
+    });
+    expect(pending.conversation.peerId).toBe(requestRecipientParticipant);
+    await expect(resolveMessageRequest.resolve(requestRecipient, pending.conversation.id, "accept"))
+      .resolves.toMatchObject({ peer: { id: peerParticipant }, requestState: "active" });
+
+    await database.db.insert(schema.relationshipBlocks).values({ blockerId: actor, blockedId: peer, blockedAt: new Date() });
+    // A block prevents new peer activity but retains both participants' history.
+    await expect(listMessages.list(actor, created.conversation.id, undefined, undefined, 10))
+      .resolves.toMatchObject({ items: expect.arrayContaining([expect.objectContaining({ senderId: actorParticipant })]) });
+    await expect(getConversation.get(users[6]!, created.conversation.id))
+      .rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("fails closed for overflowing native conversation and latest-message values", async () => {

@@ -3,6 +3,7 @@ import { and, eq, exists, gt, inArray, isNotNull, isNull, or } from "drizzle-orm
 import { loadReactionSummaries, messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
+import { participantIdForUser } from "../../shared/participant-identity";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
@@ -12,7 +13,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
     .from(schema.conversationMembers)
     .where(and(
       eq(schema.conversationMembers.conversationId, schema.conversations.id),
-      eq(schema.conversationMembers.userId, actorId),
+      eq(schema.conversationMembers.participantId, participantIdForUser(actorId)),
     )));
   const blocked = exists(queryable
     .select({ blockerId: schema.relationshipBlocks.blockerId })
@@ -47,6 +48,9 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
     .select({
       user_low_id: schema.conversations.userLowId,
       user_high_id: schema.conversations.userHighId,
+      participant_low_id: schema.conversations.participantLowId,
+      participant_high_id: schema.conversations.participantHighId,
+      actor_participant_id: participantIdForUser(actorId),
       request_state: schema.conversations.requestState,
       member: member.mapWith(Boolean),
       blocked: blocked.mapWith(Boolean),
@@ -59,7 +63,8 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
   if (!row) return { conversationId, peerId: "", requestState: "declined", isMember: false, participantsAvailable: false, peerActivityBlocked: false };
   return {
     conversationId,
-    peerId: row.user_low_id === actorId ? row.user_high_id : row.user_low_id,
+    peerId: row.participant_low_id === row.actor_participant_id ? row.user_high_id : row.user_low_id,
+    actorParticipantId: row.member ? row.actor_participant_id ?? undefined : undefined,
     requestState: row.request_state,
     isMember: row.member,
     participantsAvailable: row.participantsAvailable,

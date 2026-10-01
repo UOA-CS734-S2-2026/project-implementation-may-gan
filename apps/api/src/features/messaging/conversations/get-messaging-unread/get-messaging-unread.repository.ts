@@ -1,5 +1,6 @@
 import { and, eq, gt, isNull, ne, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { participantIdForUser } from "../../shared/participant-identity";
 
 export interface GetMessagingUnreadRepository {
   get(actorId: string): Promise<{ inboxCount: number; requestCount: number }>;
@@ -13,7 +14,7 @@ export function createPostgresGetMessagingUnreadRepository(
       const [result] = await database
         .select({
           inbox: sql<number>`count(*) filter (where ${schema.conversations.requestState} = 'active')::int`,
-          requests: sql<number>`count(*) filter (where ${schema.conversations.requestState} = 'pending' and ${schema.conversations.initiatorId} <> ${actorId})::int`,
+          requests: sql<number>`count(*) filter (where ${schema.conversations.requestState} = 'pending' and ${schema.conversations.initiatorParticipantId} <> ${participantIdForUser(actorId)})::int`,
         })
         .from(schema.conversationMembers)
         .innerJoin(
@@ -22,11 +23,11 @@ export function createPostgresGetMessagingUnreadRepository(
         )
         .innerJoin(schema.messages, and(
           eq(schema.messages.conversationId, schema.conversations.id),
-          ne(schema.messages.senderId, actorId),
+          ne(schema.messages.senderParticipantId, participantIdForUser(actorId)),
           gt(schema.messages.sequence, schema.conversationMembers.lastReadSequence),
           isNull(schema.messages.unsentAt),
         ))
-        .where(eq(schema.conversationMembers.userId, actorId));
+        .where(eq(schema.conversationMembers.participantId, participantIdForUser(actorId)));
       return { inboxCount: result?.inbox ?? 0, requestCount: result?.requests ?? 0 };
     },
   };
