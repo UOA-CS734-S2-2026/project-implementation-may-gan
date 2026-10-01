@@ -1,6 +1,7 @@
 import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { MessagingError } from "../../shared/messaging-error";
+import { participantIdForUser } from "../../shared/participant-identity";
 
 export interface GetDirectConversationRepository {
   find(actorId: string, recipientId: string): Promise<{ conversationId: string }>;
@@ -30,11 +31,11 @@ export function createPostgresGetDirectConversationRepository(database: DayliDat
         .from(conversations)
         .innerJoin(conversationMembers, and(
           eq(conversationMembers.conversationId, conversations.id),
-          eq(conversationMembers.userId, actorId),
+          eq(conversationMembers.participantId, participantIdForUser(actorId)),
         ))
         .where(and(
-          eq(conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
-          eq(conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+          eq(conversations.participantLowId, sql`least(${participantIdForUser(actorId)}, ${participantIdForUser(recipientId)})`),
+          eq(conversations.participantHighId, sql`greatest(${participantIdForUser(actorId)}, ${participantIdForUser(recipientId)})`),
         ))
         .limit(1);
       if (!pair) throw new MessagingError("NOT_FOUND");

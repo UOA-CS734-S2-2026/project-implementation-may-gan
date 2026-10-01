@@ -15,7 +15,7 @@ const suite = enabled ? describe : describe.skip;
 
 suite("list conversations Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 8 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 10 }, (_, index) => `list-conversations-${crypto.randomUUID()}-${index}`);
   const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListConversationsRepository(database.db);
   const builderQueries: string[] = [];
@@ -121,7 +121,7 @@ suite("list conversations Postgres repository", () => {
     expect(listQuery).toMatch(/^select /);
     expect(listQuery).toContain('select count(*) as "count" from "messages"');
     expect(listQuery).toContain('"messages"."conversation_id" = "conversations"."id"');
-    expect(listQuery).toContain('"messages"."sender_id" <> $');
+    expect(listQuery).toContain('"messages"."sender_participant_id" <>');
     expect(listQuery).toContain('"messages"."sequence" > "conversation_members"."last_read_sequence"');
     expect(listQuery).toContain('"messages"."unsent_at" is null');
     expect(listQuery.match(/select count\(\*\) as "count" from "messages"/g)).toHaveLength(1);
@@ -255,6 +255,59 @@ suite("list conversations Postgres repository", () => {
         capabilities: { canSend: false, canResolveRequest: false },
       })]),
     }));
+  });
+
+  it("reads custom participant IDs through folders, history, unread counts, reactions, and membership", async () => {
+    const actor = users[8]!;
+    const peer = users[9]!;
+    // 0023 requires participant ordering to match the legacy canonical pair.
+    const actorParticipant = `${actor < peer ? "a" : "z"}-participant-${crypto.randomUUID()}`;
+    const peerParticipant = `${actor < peer ? "z" : "a"}-participant-${crypto.randomUUID()}`;
+    await database.db.update(schema.messagingParticipants).set({ id: actorParticipant })
+      .where(eq(schema.messagingParticipants.userId, actor));
+    await database.db.update(schema.messagingParticipants).set({ id: peerParticipant })
+      .where(eq(schema.messagingParticipants.userId, peer));
+    await database.db.insert(schema.friendships).values([
+      { userId: actor, friendId: peer, state: "active", stateChangedAt: new Date() },
+      { userId: peer, friendId: actor, state: "active", stateChangedAt: new Date() },
+    ]);
+
+    // These calls deliberately retain the deployed user-ID writer shape. The
+    // 0023 trigger derives the mismatched durable IDs used by all reads below.
+    const created = await direct.create(actor, {
+      recipientId: peer,
+      clientMessageId: crypto.randomUUID(),
+      text: "participant canary",
+    });
+    const reply = await send.send(peer, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "old worker participant reply",
+    });
+    await database.db.insert(schema.messageReactions).values([
+      { messageId: reply.message.id, userId: actor, reaction: "angry", createdAt: new Date() },
+      { messageId: reply.message.id, userId: peer, reaction: "angry", createdAt: new Date() },
+    ]);
+
+    const list = await repository.list(actor, "inbox", undefined, 10);
+    expect(list.items).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: created.conversation.id,
+      peer: { id: peerParticipant, name: null },
+      unreadCount: 1,
+      latestMessage: expect.objectContaining({
+        senderId: peerParticipant,
+        reactions: [expect.objectContaining({
+          reaction: "angry",
+          count: 2,
+          reactedByActor: true,
+          reactors: expect.arrayContaining([
+            { id: actorParticipant, name: actor },
+            { id: peerParticipant, name: peer },
+          ]),
+        })],
+      }),
+    })]));
+    await expect(repository.list(users[7]!, "inbox", undefined, 10))
+      .resolves.toEqual({ items: [], nextCursor: null });
   });
 
   it("fails closed for overflowing native conversation and latest-message values", async () => {

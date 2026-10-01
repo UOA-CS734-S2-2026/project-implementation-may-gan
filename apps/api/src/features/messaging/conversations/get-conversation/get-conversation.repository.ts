@@ -13,7 +13,7 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
   return {
     async get(actorId, conversationId) {
       const row = await requireConversationMember(database, actorId, conversationId);
-      const peerParticipantId = String(row.user_low_id) === actorId
+      const peerParticipantId = String(row.participant_low_id) === String(row.member_participant_id)
         ? row.participant_high_id
         : row.participant_low_id;
       if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
@@ -44,7 +44,7 @@ export function createPostgresGetConversationRepository(database: DayliDatabase)
         .from(schema.messages)
         .where(and(
           eq(schema.messages.conversationId, conversationId),
-          ne(schema.messages.senderId, actorId),
+          ne(schema.messages.senderParticipantId, row.member_participant_id!),
           gt(schema.messages.sequence, lastReadSequence),
           isNull(schema.messages.unsentAt),
         ));

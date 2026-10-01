@@ -2,6 +2,7 @@ import { and, eq, exists, isNull, or } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { MessagingError } from "./messaging-error";
 import { requireSafeSequenceBigInt } from "./safe-sequence";
+import { participantIdForUser } from "./participant-identity";
 
 type Conversation = typeof schema.conversations.$inferSelect;
 type ConversationMember = typeof schema.conversationMembers.$inferSelect;
@@ -15,6 +16,8 @@ export type ConversationMemberRow = {
   participant_low_id: Conversation["participantLowId"];
   participant_high_id: Conversation["participantHighId"];
   initiator_id: Conversation["initiatorId"];
+  initiator_participant_id: Conversation["initiatorParticipantId"];
+  member_participant_id: ConversationMember["participantId"];
   request_state: Conversation["requestState"];
   last_message_sequence: Conversation["lastMessageSequence"];
   last_change_sequence: Conversation["lastChangeSequence"];
@@ -60,6 +63,8 @@ export async function requireConversationMember(
       participant_low_id: schema.conversations.participantLowId,
       participant_high_id: schema.conversations.participantHighId,
       initiator_id: schema.conversations.initiatorId,
+      initiator_participant_id: schema.conversations.initiatorParticipantId,
+      member_participant_id: schema.conversationMembers.participantId,
       request_state: schema.conversations.requestState,
       last_message_sequence: schema.conversations.lastMessageSequence,
       last_change_sequence: schema.conversations.lastChangeSequence,
@@ -75,7 +80,7 @@ export async function requireConversationMember(
       schema.conversationMembers,
       and(
         eq(schema.conversationMembers.conversationId, schema.conversations.id),
-        eq(schema.conversationMembers.userId, actorId),
+        eq(schema.conversationMembers.participantId, participantIdForUser(actorId)),
       ),
     )
     .where(eq(schema.conversations.id, conversationId))

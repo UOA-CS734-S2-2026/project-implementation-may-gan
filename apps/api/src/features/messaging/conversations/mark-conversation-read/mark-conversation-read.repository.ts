@@ -59,7 +59,7 @@ export function createPostgresMarkConversationReadRepository(
           })
           .where(and(
             eq(schema.conversationMembers.conversationId, conversationId),
-            eq(schema.conversationMembers.userId, actorId),
+            eq(schema.conversationMembers.participantId, row.member_participant_id!),
           ))
           .returning({
             lastReadSequence: schema.conversationMembers.lastReadSequence,
@@ -77,7 +77,7 @@ export function createPostgresMarkConversationReadRepository(
           .from(schema.messages)
           .where(and(
             eq(schema.messages.conversationId, conversationId),
-            ne(schema.messages.senderId, actorId),
+            ne(schema.messages.senderParticipantId, row.member_participant_id!),
             gt(schema.messages.sequence, lastReadSequence),
             isNull(schema.messages.unsentAt),
           ));

@@ -82,7 +82,7 @@ async function conversationAfterResolution(
   conversationId: string,
 ) {
   const row = await requireConversationMember(database, actorId, conversationId);
-  const peerParticipantId = String(row.user_low_id) === actorId
+  const peerParticipantId = String(row.participant_low_id) === String(row.member_participant_id)
     ? row.participant_high_id
     : row.participant_low_id;
   if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
@@ -113,7 +113,7 @@ async function conversationAfterResolution(
     .from(schema.messages)
     .where(and(
       eq(schema.messages.conversationId, conversationId),
-      ne(schema.messages.senderId, actorId),
+      ne(schema.messages.senderParticipantId, row.member_participant_id!),
       gt(schema.messages.sequence, lastReadSequence),
       isNull(schema.messages.unsentAt),
     ));
@@ -153,7 +153,7 @@ export function createPostgresResolveMessageRequestRepository(
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         if (row.blocked === true) throw new MessagingError("BLOCKED");
         const state = decision === "accept" ? "active" : "declined";
-        if (String(row.initiator_id) === actorId) throw new MessagingError("FORBIDDEN");
+        if (String(row.initiator_participant_id) === String(row.member_participant_id)) throw new MessagingError("FORBIDDEN");
         if (row.request_state === state) return;
         if (row.request_state !== "pending") throw new MessagingError("FORBIDDEN");
 
