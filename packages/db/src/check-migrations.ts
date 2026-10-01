@@ -4,21 +4,21 @@ import { cp, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/pro
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { repoPath, repoRoot } from "./migrations/paths";
+import { migrationsRepositoryPath, migrationsRepositoryRoot } from "./migrations/paths";
 import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
-import { readLocalMigrations } from "./migrations/state";
+import { migrationsFolder, readLocalMigrations } from "./migrations/state";
 
 const execFileAsync = promisify(execFile);
 
-const migrationsDir = repoPath("packages/db/migrations");
+const migrationsDir = migrationsFolder;
 const reviewsDir = path.join(migrationsDir, "reviews");
 
 function fail(message: string): never {
   throw new Error(message);
 }
 
-async function run(command: string, args: string[], cwd = repoRoot()): Promise<string> {
+async function run(command: string, args: string[], cwd = migrationsRepositoryRoot()): Promise<string> {
   try {
     const result = await execFileAsync(command, args, { cwd, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
     return `${result.stdout}${result.stderr}`;
@@ -142,7 +142,7 @@ async function ensureDriftFree(): Promise<void> {
     const tempConfig = path.join(tempDir, "drizzle.config.ts");
     await writeFile(
       tempConfig,
-      `import { defineConfig } from "drizzle-kit";\nexport default defineConfig({ schema: "${repoPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true });\n`,
+      `import { defineConfig } from "drizzle-kit";\nexport default defineConfig({ schema: "${migrationsRepositoryPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true });\n`,
     );
     await run("pnpm", ["exec", "drizzle-kit", "generate", "--config", tempConfig]);
     const after = await fileHashes(tempDir);
@@ -178,7 +178,7 @@ async function ensureSquawkReviews(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  await run("pnpm", ["exec", "drizzle-kit", "check", "--config", "drizzle.config.ts"], repoPath("packages/db"));
+  await run("pnpm", ["exec", "drizzle-kit", "check", "--config", "drizzle.config.ts"], migrationsRepositoryPath("packages/db"));
   await ensureJournalMatchesFiles();
   await ensureHistoryIsAdditive();
   await ensureDriftFree();

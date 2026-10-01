@@ -45,7 +45,7 @@ test("automatic staging releases accept only the current main commit", () => wit
     toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
-  }), { commitSha: currentSha, toolingSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false" });
 
   assert.throws(() => captureRelease({
     eventSha: previousSha,
@@ -62,14 +62,22 @@ test("manual dispatch allows a reachable explicit rollback but not a stale defau
     toolingSha: currentSha,
     browserProxyEnabled: "true",
     cwd: root,
-  }), { commitSha: previousSha, toolingSha: currentSha, browserProxyEnabled: "true" });
+  }), { commitSha: previousSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "true" });
+
+  assert.deepEqual(captureRelease({
+    inputSha: currentSha,
+    dispatchSha: currentSha,
+    toolingSha: currentSha,
+    browserProxyEnabled: "false",
+    cwd: root,
+  }), { commitSha: currentSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "false" });
 
   assert.deepEqual(captureRelease({
     dispatchSha: currentSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
     cwd: root,
-  }), { commitSha: currentSha, toolingSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false" });
 
   assert.throws(() => captureRelease({
     dispatchSha: previousSha,

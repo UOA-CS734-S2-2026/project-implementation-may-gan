@@ -35,6 +35,15 @@ export function selectReleaseCommit({ eventSha, inputSha, dispatchSha, mainSha, 
   return dispatchSha;
 }
 
+export function selectMigrationMode({ eventSha, inputSha }) {
+  // Any explicit SHA is an operator-selected historical release, including an
+  // explicit SHA equal to main. Keep it verification-only rather than trusting
+  // an input to claim it is safe to apply DDL.
+  if (inputSha) return "rollback-verify-only";
+  if (eventSha) return "forward";
+  return "forward";
+}
+
 export function validateBrowserProxyMode(mode) {
   if (mode !== "true" && mode !== "false") {
     fail("STAGING_BROWSER_PROXY_ENABLED must be true or false.");
@@ -70,13 +79,14 @@ export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, br
 
   return {
     commitSha: selectReleaseCommit({ eventSha, inputSha, dispatchSha, mainSha, hasCommit, isAncestor }),
+    migrationMode: selectMigrationMode({ eventSha, inputSha }),
     toolingSha,
     browserProxyEnabled: validateBrowserProxyMode(browserProxyEnabled),
   };
 }
 
-function writeOutputs({ commitSha, toolingSha, browserProxyEnabled }, outputPath) {
-  const output = `commit_sha=${commitSha}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\n`;
+function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled }, outputPath) {
+  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\n`;
   if (outputPath) {
     appendFileSync(outputPath, output);
   } else {
