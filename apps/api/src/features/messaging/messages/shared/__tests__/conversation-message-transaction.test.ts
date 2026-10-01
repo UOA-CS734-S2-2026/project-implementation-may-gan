@@ -5,6 +5,7 @@ import { withLockedConversationMessageTransaction } from "../conversation-messag
 describe("withLockedConversationMessageTransaction", () => {
   it("locks the looked-up relationship pair before invoking the caller callback", async () => {
     const events: string[] = [];
+    let selects = 0;
     const transaction = {
       select(fields?: { lock?: unknown }) {
         if (fields?.lock) {
@@ -15,14 +16,27 @@ describe("withLockedConversationMessageTransaction", () => {
             },
           };
         }
+        selects += 1;
         return {
           from() {
             return {
               where() {
+                if (selects === 1) {
+                  return {
+                    async limit() {
+                      events.push("pair lookup");
+                      return [{ participantLowId: "amy", participantHighId: "zoe" }];
+                    },
+                  };
+                }
                 return {
-                  async limit() {
-                    events.push("pair lookup");
-                    return [{ participantLowId: "amy", participantHighId: "zoe" }];
+                  orderBy() {
+                    return {
+                      async for() {
+                        events.push("user rows lock");
+                        return [];
+                      },
+                    };
                   },
                 };
               },
@@ -37,6 +51,6 @@ describe("withLockedConversationMessageTransaction", () => {
       events.push("callback");
     });
 
-    expect(events).toEqual(["pair lookup", "relationship pair lock", "callback"]);
+    expect(events).toEqual(["pair lookup", "relationship pair lock", "user rows lock", "callback"]);
   });
 });

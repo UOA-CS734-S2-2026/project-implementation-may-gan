@@ -1,6 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createMessagingPersistenceServices } from "../../../app";
 import { createAccountLifecycleRepository } from "./account-lifecycle.repository";
 
 const migratorUrl = process.env.LIFECYCLE_REQUEST_TEST_DATABASE_URL;
@@ -49,14 +50,20 @@ if (required && !enabled) throw new Error("Lifecycle request integration require
     return token;
   }
 
+  async function cleanFixtures() {
+    if (users.length === 0) return;
+    await migrator.db.delete(schema.friendships).where(sql`${schema.friendships.userId} in ${users} or ${schema.friendships.friendId} in ${users}`);
+    await migrator.db.delete(schema.user).where(sql`${schema.user.id} in ${users}`);
+  }
+
   beforeEach(async () => {
-    if (users.length > 0) await migrator.db.delete(schema.user).where(sql`${schema.user.id} in ${users}`);
+    await cleanFixtures();
     users.length = 0;
     sessions.length = 0;
   });
 
   afterAll(async () => {
-    if (users.length > 0) await migrator.db.delete(schema.user).where(sql`${schema.user.id} in ${users}`);
+    await cleanFixtures();
     await Promise.all([migrator.close(), appA.close(), appB.close()]);
   });
 
@@ -125,6 +132,37 @@ if (required && !enabled) throw new Error("Lifecycle request integration require
     const [storedGrant] = await migrator.db.select({ consumedAt: schema.accountManagementGrants.consumedAt }).from(schema.accountManagementGrants)
       .where(and(eq(schema.accountManagementGrants.userId, actor.userId), eq(schema.accountManagementGrants.action, "cancel_deletion")));
     expect(storedGrant?.consumedAt).toBeNull();
+  });
+
+  it("serializes cross-user existing-message writes with an actual request and cancellation", async () => {
+    const actor = await fixture("message-actor");
+    const target = await fixture("message-target");
+    await migrator.db.insert(schema.friendships).values([
+      { userId: actor.userId, friendId: target.userId, state: "active", stateChangedAt: new Date() },
+      { userId: target.userId, friendId: actor.userId, state: "active", stateChangedAt: new Date() },
+    ]);
+    const persistence = createMessagingPersistenceServices(appA.db);
+    const direct = await persistence.direct.create(actor.userId, {
+      recipientId: target.userId, clientMessageId: crypto.randomUUID(), text: "retained first message",
+    });
+    const requestProof = await grant(target.userId, target.sessionId, "request_deletion", 0);
+    expect((await createAccountLifecycleRepository(appB.db).request(target, requestProof))?.view.state).toBe("pending_deletion");
+
+    await expect(persistence.send.send(actor.userId, direct.conversation.id, {
+      clientMessageId: crypto.randomUUID(), text: "must not write after pending",
+    })).rejects.toMatchObject({ code: "BLOCKED" });
+    await expect(persistence.set.set(actor.userId, direct.conversation.id, direct.message.id, "love"))
+      .rejects.toMatchObject({ code: "BLOCKED" });
+    // The approved retention policy keeps existing message history intact.
+    await expect(persistence.getMessage.get(actor.userId, direct.conversation.id, direct.message.id))
+      .resolves.toMatchObject({ id: direct.message.id, text: "retained first message" });
+
+    const cancelProof = await grant(target.userId, target.sessionId, "cancel_deletion", 0);
+    expect((await createAccountLifecycleRepository(appB.db).cancel(target, cancelProof))?.view)
+      .toMatchObject({ state: "active", generation: 1 });
+    await expect(persistence.send.send(actor.userId, direct.conversation.id, {
+      clientMessageId: crypto.randomUUID(), text: "allowed after cancellation",
+    })).resolves.toMatchObject({ replayed: false, message: { text: "allowed after cancellation" } });
   });
 
   it("serializes two physical app connections around a one-time request proof", async () => {

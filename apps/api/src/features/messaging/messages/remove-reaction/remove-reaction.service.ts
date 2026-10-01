@@ -1,4 +1,4 @@
-import { assertPeerActivityAllowed } from "../../shared/conversation-access";
+import { assertReactionRemovalAllowed } from "../../shared/conversation-access";
 import { MessagingError } from "../../shared/messaging-error";
 import { toMessageDto } from "../../shared/message-projection";
 import type { MessageDto } from "../../shared/messaging-types";
@@ -13,7 +13,7 @@ export function createRemoveReactionService(dependencies: { store: RemoveReactio
     async remove(actorId, conversationId, messageId) {
       return dependencies.store.withConversationTransaction(actorId, conversationId, async (transaction) => {
         const access = await transaction.getAccess(actorId, conversationId);
-        assertPeerActivityAllowed(access);
+        assertReactionRemovalAllowed(access);
         const before = await transaction.findMessage(conversationId, messageId);
         if (!before) throw new MessagingError("NOT_FOUND");
         if (before.unsentAt) throw new MessagingError("CONFLICT");
