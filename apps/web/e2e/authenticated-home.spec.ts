@@ -40,8 +40,9 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/home$/);
-  await page.goto("/settings");
+  // The route guard supplies the protected destination as a validated return path.
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText(email, { exact: true }).last()).toBeVisible();

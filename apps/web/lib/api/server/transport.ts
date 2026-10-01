@@ -12,7 +12,7 @@ export interface BrowserApiTransportOptions {
 }
 
 function isCloudflareWorkerRuntime(): boolean {
-  return typeof WebSocketPair !== "undefined";
+  return "WebSocketPair" in globalThis;
 }
 
 async function loadCloudflareWorkerBindings(): Promise<WebWorkerEnv> {
