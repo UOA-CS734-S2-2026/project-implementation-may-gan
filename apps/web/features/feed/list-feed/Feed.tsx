@@ -37,7 +37,7 @@ function Message({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Released posts from friends, newest day first, loaded a page at a time. */
+/** Yesterday's posts from friends, loaded a page at a time. */
 export function Feed() {
   const router = useRouter();
   const feed = useFeedQuery();

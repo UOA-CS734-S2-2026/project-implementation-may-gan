@@ -156,4 +156,15 @@ void main() {
     expect(media.last.url, isNull);
     expect(page.items.last.media, isEmpty);
   });
+
+  test('treats a cursor from before midnight as expired', () async {
+    final result = await client(
+      (_) => http.Response(
+        '{"error":{"code":"CONFLICT","details":{"reason":"feedDayChanged"}}}',
+        409,
+      ),
+    ).page(cursor: 'c1');
+
+    expect((result as ApiError).failure, isA<Expired>());
+  });
 }

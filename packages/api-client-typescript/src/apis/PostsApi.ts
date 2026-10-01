@@ -311,8 +311,8 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
-     * List released posts from friends
+     * Returns yesterday\'s `friends` posts by the authenticated user\'s active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend\'s profile. Solo posts, the caller\'s own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List yesterday\'s posts from friends
      */
     async postsListFeedRaw(requestParameters: PostsListFeedRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<FeedPage>> {
         const requestOptions = await this.postsListFeedRequestOpts(requestParameters);
@@ -322,8 +322,8 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns released `friends` posts by the authenticated user\'s active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller\'s own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
-     * List released posts from friends
+     * Returns yesterday\'s `friends` posts by the authenticated user\'s active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend\'s profile. Solo posts, the caller\'s own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+     * List yesterday\'s posts from friends
      */
     async postsListFeed(requestParameters: PostsListFeedRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FeedPage> {
         const response = await this.postsListFeedRaw(requestParameters, initOverrides);

@@ -16,6 +16,7 @@ class FeedPage {
     this.items = const [],
     required this.nextCursor,
     required this.hasMore,
+    required this.feedDate,
   });
 
   final List<FeedPost> items;
@@ -24,28 +25,36 @@ class FeedPage {
 
   final bool hasMore;
 
+  /// The Auckland day the page shows: yesterday, released at the most recent midnight.
+  final String feedDate;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is FeedPage &&
           _deepEquality.equals(other.items, items) &&
           other.nextCursor == nextCursor &&
-          other.hasMore == hasMore;
+          other.hasMore == hasMore &&
+          other.feedDate == feedDate;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (items.hashCode) + (nextCursor.hashCode) + (hasMore.hashCode);
+      (items.hashCode) +
+      (nextCursor.hashCode) +
+      (hasMore.hashCode) +
+      (feedDate.hashCode);
 
   @override
   String toString() =>
-      'FeedPage[items=$items, nextCursor=$nextCursor, hasMore=$hasMore]';
+      'FeedPage[items=$items, nextCursor=$nextCursor, hasMore=$hasMore, feedDate=$feedDate]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
     json[r'nextCursor'] = this.nextCursor;
     json[r'hasMore'] = this.hasMore;
+    json[r'feedDate'] = this.feedDate;
     return json;
   }
 
@@ -55,11 +64,13 @@ class FeedPage {
     List<FeedPost>? items,
     String? nextCursor,
     bool? hasMore,
+    String? feedDate,
   }) =>
       FeedPage(
         items: items ?? this.items,
         nextCursor: nextCursor ?? this.nextCursor,
         hasMore: hasMore ?? this.hasMore,
+        feedDate: feedDate ?? this.feedDate,
       );
 
   /// Returns a new [FeedPage] instance and imports its values from
@@ -85,6 +96,10 @@ class FeedPage {
             'Required key "FeedPage[hasMore]" is missing from JSON.');
         assert(json[r'hasMore'] != null,
             'Required key "FeedPage[hasMore]" has a null value in JSON.');
+        assert(json.containsKey(r'feedDate'),
+            'Required key "FeedPage[feedDate]" is missing from JSON.');
+        assert(json[r'feedDate'] != null,
+            'Required key "FeedPage[feedDate]" has a null value in JSON.');
         return true;
       }());
 
@@ -92,6 +107,7 @@ class FeedPage {
         items: FeedPost.listFromJson(json[r'items']),
         nextCursor: mapValueOfType<String>(json, r'nextCursor')!,
         hasMore: mapValueOfType<bool>(json, r'hasMore')!,
+        feedDate: mapValueOfType<String>(json, r'feedDate')!,
       );
     }
     return null;
@@ -151,5 +167,6 @@ class FeedPage {
     'items',
     'nextCursor',
     'hasMore',
+    'feedDate',
   };
 }

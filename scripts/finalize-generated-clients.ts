@@ -147,6 +147,10 @@ async function finalizeGeneratedClients() {
       "localDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/feed_page.dart",
+      "feedDate",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/post_detail.dart",
       "localDate",
     ),

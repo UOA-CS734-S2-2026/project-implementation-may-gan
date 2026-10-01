@@ -1,6 +1,8 @@
 # Friends feed
 
-`GET /api/v1/feed` returns one page of released posts from the authenticated user's friends, newest Auckland day first. The web home page and the Flutter home screen both show it.
+`GET /api/v1/feed` returns one page of yesterday's posts from the authenticated user's friends: the Auckland day released at the most recent midnight, as in the original web app. Earlier days stay on each friend's profile. The web home page and the Flutter home screen both show it.
+
+Each page carries its `feedDate`. A cursor from a page loaded before the most recent midnight is refused with `409` (`details.reason = "feedDayChanged"`) rather than returning an empty page, and both clients then start again from the new day's first page. Web also refetches from the first page when the window regains focus, and Flutter reloads the home screen when the app returns to the foreground.
 
 ## Who sees what
 
@@ -12,7 +14,7 @@ A post appears only when all of these hold:
 - neither user has an active block against the other,
 - the author has a username.
 
-The caller's own posts are not in the feed; they belong on the profile archive (#81). Following [product decisions](product-decisions.md), a new friendship exposes the friend's earlier released `friends` posts, and ending or blocking the friendship removes them from the next request.
+The caller's own posts are not in the feed; they belong on the profile archive (#81). Following [product decisions](product-decisions.md), a new friendship exposes the friend's earlier released `friends` posts on their profile, and ending or blocking the friendship removes them from the next request.
 
 Visibility comes from `buildDrizzlePostVisibilityFilter` in `apps/api/src/features/permissions`, the same predicate used for post detail, and is applied before the page limit. A hidden post therefore never appears in a page and never leaves a gap.
 
@@ -34,4 +36,4 @@ Both clients load more with a "Load more" button, skip a repeated post ID, offer
 
 ## Tests
 
-`list-feed.route.test.ts` covers authentication, query validation, cursor errors, and concealed storage failures. `list-feed.repository.integration.test.ts` runs through the restricted `app` role against PostgreSQL. It covers solo, unreleased, own, stranger, ended, blocked-either-way, and username-less posts, historical posts, the edited marker, release at midnight, and stable pagination. It runs with the other post tests under `POSTS_POSTGRES_TEST=1` in `pnpm db:test`. Web coverage is `apps/web/tests/feed/Feed.test.tsx`. Flutter coverage is `feed_client_test.dart`, `feed_controller_test.dart`, and `home_feed_test.dart`.
+`list-feed.route.test.ts` covers authentication, query validation, cursor errors, and concealed storage failures. `list-feed.repository.integration.test.ts` runs through the restricted `app` role against PostgreSQL. It covers solo, unreleased, own, stranger, ended, blocked-either-way, and username-less posts, older days left out, the edited marker, the switch to the next day at midnight, and stable pagination. It runs with the other post tests under `POSTS_POSTGRES_TEST=1` in `pnpm db:test`. Web coverage is `apps/web/tests/feed/Feed.test.tsx`. Flutter coverage is `feed_client_test.dart`, `feed_controller_test.dart`, and `home_feed_test.dart`.

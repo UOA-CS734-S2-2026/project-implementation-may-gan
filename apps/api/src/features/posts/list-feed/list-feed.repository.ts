@@ -1,6 +1,7 @@
 import { aucklandDateSchema } from "@dayli/contracts";
 import { and, desc, eq, exists, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { getAucklandDay } from "@dayli/domain";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
@@ -19,6 +20,17 @@ export class InvalidFeedCursorError extends Error {
   constructor() {
     super("The feed cursor is not valid.");
     this.name = "InvalidFeedCursorError";
+  }
+}
+
+/**
+ * A cursor from an earlier feed day, such as a page loaded before midnight.
+ * Continuing it would show nothing, so the client must start again.
+ */
+export class StaleFeedCursorError extends Error {
+  constructor(readonly feedDate: string) {
+    super("The feed has moved on to a new day.");
+    this.name = "StaleFeedCursorError";
   }
 }
 
@@ -59,9 +71,16 @@ function decodeCursor(value: string | undefined): FeedCursor | undefined {
   throw new InvalidFeedCursorError();
 }
 
+/** The Auckland day before `localDate`. Calendar dates carry no zone, so UTC arithmetic is exact. */
+function previousDay(localDate: string): string {
+  const [year, month, day] = localDate.split("-").map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day! - 1)).toISOString().slice(0, 10);
+}
+
 /**
- * Lists released `friends` posts by the viewer's active, unblocked friends,
- * newest Auckland day first. Visibility comes from the shared permission
+ * Lists yesterday's `friends` posts by the viewer's active, unblocked
+ * friends: the day that was released at the most recent Auckland midnight.
+ * Earlier days stay on each friend's profile. Visibility comes from the shared permission
  * predicate and is applied before the keyset limit, so a hidden post can never
  * leave a hole in, or leak into, a page. `(local_date, id)` is immutable, so an
  * unchanged post is never repeated or skipped between pages.
@@ -71,6 +90,10 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
   return {
     async listFeed(viewerId, now, limit, rawCursor) {
       const cursor = decodeCursor(rawCursor);
+      const yesterday = previousDay(getAucklandDay(() => now).localDate);
+      // Every post in the feed is from one day, so a cursor from another day
+      // was issued before the most recent midnight.
+      if (cursor && cursor.localDate !== yesterday) throw new StaleFeedCursorError(yesterday);
       const rows = await database
         .select({
           id: posts.id,
@@ -100,6 +123,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           // The owner branch of the shared predicate is for profiles; the feed
           // is friends only, which also keeps solo posts out.
           ne(posts.authorId, viewerId),
+          eq(posts.localDate, yesterday),
           eq(posts.audience, "friends"),
           isNotNull(user.username),
           cursor
@@ -129,6 +153,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           edited: row.edited,
           media: media.get(row.id) ?? [],
         })),
+        feedDate: yesterday,
         hasMore,
         nextCursor: hasMore && last ? encodeCursor({ localDate: last.localDate, id: last.id }) : null,
       };

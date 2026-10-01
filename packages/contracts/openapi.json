@@ -528,12 +528,23 @@
           },
           "hasMore": {
             "type": "boolean"
+          },
+          "feedDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the page shows: yesterday, released at the most recent midnight."
+              }
+            ]
           }
         },
         "required": [
           "items",
           "nextCursor",
-          "hasMore"
+          "hasMore",
+          "feedDate"
         ]
       },
       "FeedPost": {
@@ -1786,8 +1797,8 @@
           "Posts"
         ],
         "operationId": "posts.listFeed",
-        "summary": "List released posts from friends",
-        "description": "Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
+        "summary": "List yesterday's posts from friends",
+        "description": "Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
         "security": [
           {
             "BearerAuth": []
@@ -1834,6 +1845,16 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The cursor is from an earlier feed day, for example a page loaded before midnight (`details.reason = \"feedDayChanged\"`, with the current `details.feedDate`). Start again without a cursor.",
             "content": {
               "application/json": {
                 "schema": {

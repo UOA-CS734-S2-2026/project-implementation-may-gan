@@ -3,13 +3,15 @@ import { apiConfiguration } from "@/lib/api/config";
 
 export type { FeedPage, FeedPost };
 
-export type FeedFailure = "unauthenticated" | "network" | "unavailable" | "invalid";
+/** `dayChanged`: the cursor is from before the most recent midnight. */
+export type FeedFailure = "unauthenticated" | "network" | "unavailable" | "invalid" | "dayChanged";
 export type FeedResult<T> = { ok: true; value: T } | { ok: false; failure: FeedFailure };
 
 async function toFailure(error: unknown): Promise<FeedFailure> {
   if (error instanceof ResponseError) {
     if (error.response.status === 401) return "unauthenticated";
     if (error.response.status === 422) return "invalid";
+    if (error.response.status === 409) return "dayChanged";
     return "unavailable";
   }
   if (error instanceof FetchError || error instanceof TypeError) return "network";

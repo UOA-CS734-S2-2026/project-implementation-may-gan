@@ -240,9 +240,9 @@ class PostsApi {
     return null;
   }
 
-  /// List released posts from friends
+  /// List yesterday's posts from friends
   ///
-  /// Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+  /// Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -288,9 +288,9 @@ class PostsApi {
     );
   }
 
-  /// List released posts from friends
+  /// List yesterday's posts from friends
   ///
-  /// Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
+  /// Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
   ///
   /// Parameters:
   ///

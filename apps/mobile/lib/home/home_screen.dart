@@ -46,7 +46,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final String _emptyMessage =
       HomeScreen.emptyMessages[(widget.random ?? Random()).nextInt(
         HomeScreen.emptyMessages.length,
@@ -64,9 +64,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _feed?.dispose();
     super.dispose();
+  }
+
+  /// The prompt and the feed both change at midnight, so reload them when the
+  /// app comes back to the foreground.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _feed != null) _load();
   }
 
   Future<void> _load() async {
@@ -86,7 +100,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshFeed() => _handleFeedFailure(_feed!.refresh());
 
-  Future<void> _loadMoreFeed() => _handleFeedFailure(_feed!.loadMore());
+  /// A page loaded before midnight belongs to the previous feed day, so start
+  /// again from the new day rather than showing the end of the old one.
+  Future<void> _loadMoreFeed() async {
+    final failure = await _feed!.loadMore();
+    if (!mounted) return;
+    if (failure is Expired) return _load();
+    await _handleFeedFailure(Future.value(failure));
+  }
 
   Future<void> _handleFeedFailure(Future<ApiFailure?> request) async {
     final session = AppScope.of(context).session;

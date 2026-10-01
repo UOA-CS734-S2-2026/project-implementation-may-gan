@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import { InvalidFeedCursorError, type FeedPostRecord, type FeedRepository } from "./list-feed.repository";
+import { InvalidFeedCursorError, StaleFeedCursorError, type FeedPostRecord, type FeedRepository } from "./list-feed.repository";
 import type { ListFeedRouteDependencies } from "./list-feed.route";
 
 const fixedNow = new Date("2026-09-26T03:00:00.000Z");
@@ -30,7 +30,7 @@ function dependencies(
       return header?.startsWith("Bearer user-") ? { userId: header.slice("Bearer ".length) } : null;
     },
     repository: repository
-      ? { listFeed: vi.fn(async () => ({ items: [feedPost], nextCursor: null, hasMore: false })), ...repository }
+      ? { listFeed: vi.fn(async () => ({ items: [feedPost], nextCursor: null, hasMore: false, feedDate: "2026-09-25" })), ...repository }
       : undefined,
     signMediaDownload,
     now: () => fixedNow,
@@ -61,17 +61,17 @@ describe("GET /api/v1/feed", () => {
   });
 
   it("reads the page for the verified actor with the default page size and server time", async () => {
-    const listFeed = vi.fn(async () => ({ items: [feedPost], nextCursor: "next", hasMore: true }));
+    const listFeed = vi.fn(async () => ({ items: [feedPost], nextCursor: "next", hasMore: true, feedDate: "2026-09-25" }));
     const response = await get(dependencies({ listFeed }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toEqual({ items: [feedPost], nextCursor: "next", hasMore: true });
+    await expect(response.json()).resolves.toEqual({ items: [feedPost], nextCursor: "next", hasMore: true, feedDate: "2026-09-25" });
     expect(listFeed).toHaveBeenCalledWith("user-viewer", fixedNow, 20, undefined);
   });
 
   it("forwards the cursor and limit", async () => {
-    const listFeed = vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false }));
+    const listFeed = vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false, feedDate: "2026-09-25" }));
     await get(dependencies({ listFeed }), "?limit=5&cursor=abc");
 
     expect(listFeed).toHaveBeenCalledWith("user-viewer", fixedNow, 5, "abc");
@@ -92,6 +92,17 @@ describe("GET /api/v1/feed", () => {
 
     expect(response.status).toBe(422);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_FAILED", details: { field: "cursor" } } });
+  });
+
+  it("tells the client to start again when the cursor is from an earlier feed day", async () => {
+    const response = await get(dependencies({
+      listFeed: async () => { throw new StaleFeedCursorError("2026-09-26"); },
+    }), "?cursor=yesterdays");
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFLICT", details: { reason: "feedDayChanged", feedDate: "2026-09-26" } },
+    });
   });
 
   it("conceals storage failures", async () => {
@@ -130,7 +141,7 @@ describe("GET /api/v1/feed", () => {
       expiresAt: new Date(now.getTime() + 300_000),
     }));
     const app = createApp({
-      feed: dependencies({ listFeed: vi.fn(async () => ({ items, nextCursor: null, hasMore: false })) }, sign),
+      feed: dependencies({ listFeed: vi.fn(async () => ({ items, nextCursor: null, hasMore: false, feedDate: "2026-09-25" })) }, sign),
     });
     const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
     const body = await response.json<{ items: Array<{ media: Array<{ url: string }> }> }>();
@@ -152,7 +163,7 @@ describe("GET /api/v1/feed", () => {
       media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
     };
     const app = createApp({
-      feed: dependencies({ listFeed: vi.fn(async () => ({ items: [withMedia], nextCursor: null, hasMore: false })) }),
+      feed: dependencies({ listFeed: vi.fn(async () => ({ items: [withMedia], nextCursor: null, hasMore: false, feedDate: "2026-09-25" })) }),
     });
     const response = await app.request("/api/v1/feed", { headers: { authorization: "Bearer user-viewer" } });
 

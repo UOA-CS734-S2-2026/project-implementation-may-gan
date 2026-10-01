@@ -42,11 +42,21 @@ export const feedPostSchema = z
     description: "A released post from an active friend. Tomorrow notes are not part of the feed projection.",
   });
 
-export const feedPageSchema = paginatedResponseSchema(feedPostSchema).openapi("FeedPage");
+export const feedPageSchema = paginatedResponseSchema(feedPostSchema)
+  .extend({
+    feedDate: aucklandDateSchema.openapi({
+      description: "The Auckland day the page shows: yesterday, released at the most recent midnight.",
+    }),
+  })
+  .openapi("FeedPage");
 
 export const listFeedErrorResponses = {
   401: {
     description: "Authentication is required.",
+    content: { "application/json": { schema: apiErrorSchema } },
+  },
+  409: {
+    description: "The cursor is from an earlier feed day, for example a page loaded before midnight (`details.reason = \"feedDayChanged\"`, with the current `details.feedDate`). Start again without a cursor.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   422: {

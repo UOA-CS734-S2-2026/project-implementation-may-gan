@@ -144,6 +144,10 @@ class GeneratedFeedClient implements FeedClient {
       return const ApiError(NetworkUnavailable());
     }
 
+    // A cursor from before the most recent midnight; the feed has moved on.
+    if (response.statusCode == HttpStatus.conflict && cursor != null) {
+      return const ApiError(Expired());
+    }
     if (response.statusCode != HttpStatus.ok) {
       return ApiError(failureForStatus(response.statusCode, null));
     }

@@ -5,7 +5,7 @@ import { createRequireSession, type ResolveSession } from "../../../http/middlew
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { feedPageSchema, feedQuerySchema, listFeedErrorResponses } from "./list-feed.contract";
-import { InvalidFeedCursorError, type FeedRepository } from "./list-feed.repository";
+import { InvalidFeedCursorError, StaleFeedCursorError, type FeedRepository } from "./list-feed.repository";
 
 export interface ListFeedRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a query-supplied user. */
@@ -24,8 +24,8 @@ const listFeedRoute = createRoute({
   path: "/api/v1/feed",
   tags: ["Posts"],
   operationId: "posts.listFeed",
-  summary: "List released posts from friends",
-  description: "Returns released `friends` posts by the authenticated user's active friends, newest Auckland day first, including posts released before the friendship began. Solo posts, the caller's own posts, unreleased posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
+  summary: "List yesterday's posts from friends",
+  description: "Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.",
   security,
   request: { query: feedQuerySchema },
   responses: {
@@ -59,6 +59,9 @@ export function registerListFeedRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dep
       })));
       return context.json({ ...page, items }, 200);
     } catch (error) {
+      if (error instanceof StaleFeedCursorError) {
+        return apiErrorResponse(context, 409, "CONFLICT", "The feed has moved on to a new day.", { reason: "feedDayChanged", feedDate: error.feedDate });
+      }
       if (error instanceof InvalidFeedCursorError) {
         return apiErrorResponse(context, 422, "VALIDATION_FAILED", "The request contains invalid values.", { field: "cursor" });
       }
