@@ -1,4 +1,18 @@
 export {
+  canCancelAccountDeletion,
+  createAccountDeletionSchedule,
+  isAccountPurgeEligible,
+  isAccountPurgeOverdue,
+  accountLifecycleStates,
+  lifecycleExecutionModes,
+  resolveLifecycleExecutionMode,
+} from "./account-lifecycle.js";
+export type {
+  AccountDeletionSchedule,
+  AccountLifecycleState,
+  LifecycleExecutionMode,
+} from "./account-lifecycle.js";
+export {
   createAucklandDayService,
   getAucklandDay,
 } from "./auckland-day.js";

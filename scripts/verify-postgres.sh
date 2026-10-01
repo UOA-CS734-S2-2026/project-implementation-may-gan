@@ -15,6 +15,8 @@ temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-verify-postgres.XXXXXX")"
 main_database="dayli_test"
 relationship_database="dayli_relationship_test"
 messaging_database="dayli_messaging_test"
+lifecycle_database="dayli_lifecycle_test"
+privacy_preflight_database="dayli_privacy_preflight_test"
 advisory_lock_database="dayli_advisory_lock_ci_test"
 
 # The test Compose file and integration guards read these values when a verifier
@@ -48,6 +50,11 @@ app_url() {
   printf 'postgresql://app:app@localhost:%s/%s' "$postgres_port" "$database_name"
 }
 
+lifecycle_worker_url() {
+  local database_name="$1"
+  printf 'postgresql://lifecycle_worker:lifecycle_worker@localhost:%s/%s' "$postgres_port" "$database_name"
+}
+
 # Signature for future isolated integration suites: provision_isolated_database <database_name>
 provision_isolated_database() {
   local database_name="$1"
@@ -65,7 +72,7 @@ SQL
   docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
     psql -v ON_ERROR_STOP=1 -U postgres -d "$database_name" <<'SQL'
 GRANT USAGE, CREATE ON SCHEMA public TO migrator;
-GRANT USAGE ON SCHEMA public TO app;
+GRANT USAGE ON SCHEMA public TO app, lifecycle_worker;
 ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app;
 ALTER DEFAULT PRIVILEGES FOR ROLE migrator IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app;
 CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator;
@@ -86,6 +93,10 @@ echo 'Provisioning isolated relationship test database'
 provision_isolated_database "$relationship_database"
 echo 'Provisioning isolated messaging test database'
 provision_isolated_database "$messaging_database"
+echo 'Provisioning isolated lifecycle and export test database'
+provision_isolated_database "$lifecycle_database"
+echo 'Provisioning populated-main privacy migration preflight database'
+provision_isolated_database "$privacy_preflight_database"
 echo 'Provisioning isolated advisory-lock test database'
 provision_isolated_database "$advisory_lock_database"
 
@@ -104,6 +115,10 @@ export MIGRATION_TARGET=local
 export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
+export TEST_LIFECYCLE_DATABASE_URL="$(migrator_url "$lifecycle_database")"
+export TEST_LIFECYCLE_APP_DATABASE_URL="$(app_url "$lifecycle_database")"
+export TEST_LIFECYCLE_WORKER_DATABASE_URL="$(lifecycle_worker_url "$lifecycle_database")"
+export TEST_PRIVACY_PREFLIGHT_DATABASE_URL="$(migrator_url "$privacy_preflight_database")"
 export RELATIONSHIP_TEST_DATABASE_URL="$(migrator_url "$relationship_database")"
 export MESSAGING_TEST_DATABASE_URL="$(migrator_url "$messaging_database")"
 export MESSAGING_DELIVERY_TEST_DATABASE_URL="$MESSAGING_TEST_DATABASE_URL"
@@ -115,6 +130,7 @@ pnpm db:check
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$TEST_LIFECYCLE_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do
@@ -125,6 +141,7 @@ pnpm db:verify
 pnpm db:migrate
 DATABASE_URL="$RELATIONSHIP_TEST_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$MESSAGING_TEST_DATABASE_URL" pnpm db:migrate
+DATABASE_URL="$TEST_LIFECYCLE_DATABASE_URL" pnpm db:migrate
 DATABASE_URL="$ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL" pnpm db:migrate
 if [[ ${#additional_databases[@]} -gt 0 ]]; then
   for database_name in "${additional_databases[@]}"; do

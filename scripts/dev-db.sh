@@ -42,6 +42,7 @@ create_credentials_if_needed() {
     printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)"
     printf 'MIGRATOR_DATABASE_PASSWORD=%s\n' "$(openssl rand -hex 24)"
     printf 'APP_DATABASE_PASSWORD=%s\n' "$(openssl rand -hex 24)"
+    printf 'LIFECYCLE_WORKER_DATABASE_PASSWORD=%s\n' "$(openssl rand -hex 24)"
   } > "$credentials_file"
 }
 

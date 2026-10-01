@@ -134,6 +134,13 @@
       "when": 1790828171446,
       "tag": "0018_media_reservation_cleanup",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790830174053,
+      "tag": "0019_privacy_legal_foundation",
+      "breakpoints": true
     }
   ]
 }

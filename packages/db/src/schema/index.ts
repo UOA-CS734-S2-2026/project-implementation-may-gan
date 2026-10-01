@@ -27,6 +27,20 @@ import {
   pushDevices,
   socketTickets,
 } from "./messaging";
+import {
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
+  operatorCases,
+} from "./lifecycle";
+import {
+  ageDeclarations,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
 import { user, usernameReservations } from "./users";
 
 export { profileVisibility, tier, user, usernameReservations } from "./users";
@@ -347,31 +361,67 @@ export {
   relationshipSearchQuota,
 } from "./relationships";
 
+export {
+  accountLifecycleState,
+  accountLifecycles,
+  accountManagementGrantAction,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  dataExportObjectCleanupStatus,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
+  dataExportStatus,
+  operatorCaseDecision,
+  operatorCaseStatus,
+  operatorCaseType,
+  operatorCases,
+  purgeReceiptOutcome,
+} from "./lifecycle";
+
+export {
+  ageDeclarations,
+  legalDocumentKind,
+  legalDocumentStatus,
+  legalDocumentVersions,
+  registrationIntents,
+  termsAcceptances,
+} from "./legal";
+
 export const schema = {
   account,
+  accountLifecycles,
+  accountManagementGrants,
+  accountPurgeReceipts,
+  ageDeclarations,
   conversationChanges,
   conversationMembers,
   conversations,
+  dataExportObjectCleanupTasks,
+  dataExportRequests,
+  dailyPrompts,
+  friendRequests,
+  friendships,
+  legalDocumentVersions,
+  legacyCloudinaryMedia,
   mediaReservation,
   messageReactions,
   messages,
   messagingOutbox,
-  pushDevices,
-  socketTickets,
-  dailyPrompts,
-  friendRequests,
-  friendships,
-  legacyCloudinaryMedia,
+  operatorCases,
   postIdempotencyKeys,
   postMedia,
   postRevisions,
   posts,
   profileAvatars,
+  pushDevices,
   rateLimit,
+  registrationIntents,
   relationshipBlocks,
   relationshipSearchQuota,
   session,
   socialLinkConfirmation,
+  socketTickets,
+  termsAcceptances,
   tomorrowNotes,
   user,
   usernameReservations,

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { repoPath, repoRoot } from "./migrations/paths";
+import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
 import { readLocalMigrations } from "./migrations/state";
 
@@ -97,13 +98,15 @@ function assertSameHashes(before: Map<string, string>, after: Map<string, string
 }
 
 async function ensureHistoryIsAdditive(): Promise<void> {
-  const base = process.env.MIGRATION_BASE_REF ?? "origin/main";
-
-  try {
-    await run("git", ["rev-parse", "--verify", base]);
-  } catch {
-    return;
-  }
+  const baseRef = await resolveMigrationBaseRef(async (ref) => {
+    await run("git", ["rev-parse", "--verify", `${ref}^{commit}`]);
+  });
+  const base = (await run("git", ["rev-parse", "--verify", `${baseRef}^{commit}`])).trim();
+  const head = (await run("git", ["rev-parse", "--verify", "HEAD^{commit}"])).trim();
+  assertMigrationBasePrecedesHead(base, head);
+  await assertMigrationBaseIsAncestor(base, head, async (candidate, reference) => {
+    await run("git", ["merge-base", "--is-ancestor", candidate, reference]);
+  });
 
   const diff = await run("git", ["diff", "--name-status", `${base}...HEAD`, "--", "packages/db/migrations"]);
   for (const line of diff.trim().split("\n").filter(Boolean)) {
@@ -122,13 +125,11 @@ async function ensureHistoryIsAdditive(): Promise<void> {
   }
 
   const currentJournal = await readFile(path.join(migrationsDir, "meta", "_journal.json"), "utf8");
-  const previousJournal = await run("git", ["show", `${base}:packages/db/migrations/meta/_journal.json`]).catch(() => "");
-  if (previousJournal) {
-    const currentEntries = JSON.parse(currentJournal).entries;
-    const previousEntries = JSON.parse(previousJournal).entries;
-    if (JSON.stringify(currentEntries.slice(0, previousEntries.length)) !== JSON.stringify(previousEntries)) {
-      fail("Drizzle journal must be append-only.");
-    }
+  const previousJournal = await run("git", ["show", `${base}:packages/db/migrations/meta/_journal.json`]);
+  const currentEntries = JSON.parse(currentJournal).entries;
+  const previousEntries = JSON.parse(previousJournal).entries;
+  if (JSON.stringify(currentEntries.slice(0, previousEntries.length)) !== JSON.stringify(previousEntries)) {
+    fail("Drizzle journal must be append-only.");
   }
 }
 

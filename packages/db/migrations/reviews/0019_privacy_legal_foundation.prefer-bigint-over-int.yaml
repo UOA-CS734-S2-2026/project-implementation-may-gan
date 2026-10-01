@@ -1,0 +1,6 @@
+reason: Cleanup attempt counts are operationally bounded. A 32-bit value cannot be exhausted under the intended bounded retry policy. Lifecycle generation bigint columns are constrained to the JavaScript safe-integer range before number-mode ORM projections are introduced.
+affected_data_and_clients: Only the new private cleanup-task table and lifecycle/export generation fields use these counters.
+rollout_sequence: Apply before future cleanup orchestration is introduced.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use string-mode bigint projections in a separately reviewed migration if a future fencing protocol needs values above 9007199254740991.
+reviewer: Database and privacy reviewers required before hosted migration.

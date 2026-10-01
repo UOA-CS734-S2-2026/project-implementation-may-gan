@@ -3,10 +3,10 @@
 
 SELECT
   bool_and(rolcanlogin)
-    FILTER (WHERE rolname IN ('migrator', 'app')) AS roles_can_login,
+    FILTER (WHERE rolname IN ('migrator', 'app', 'lifecycle_worker')) AS roles_can_login,
   bool_and(NOT rolsuper AND NOT rolcreaterole AND NOT rolcreatedb AND NOT rolreplication AND NOT rolbypassrls)
-    FILTER (WHERE rolname IN ('migrator', 'app')) AS roles_are_restricted,
-  count(*) FILTER (WHERE rolname IN ('migrator', 'app')) = 2 AS all_roles_exist
+    FILTER (WHERE rolname IN ('migrator', 'app', 'lifecycle_worker')) AS roles_are_restricted,
+  count(*) FILTER (WHERE rolname IN ('migrator', 'app', 'lifecycle_worker')) = 3 AS all_roles_exist
 FROM pg_roles;
 
 SELECT
@@ -17,11 +17,14 @@ SELECT
   has_schema_privilege('app', 'public', 'USAGE') AS app_public_usage,
   NOT has_schema_privilege('app', 'public', 'CREATE') AS app_public_create,
   NOT pg_has_role('app', 'migrator', 'member') AS app_not_migrator_member,
+  has_database_privilege('lifecycle_worker', current_database(), 'CONNECT') AS lifecycle_worker_connect,
+  has_schema_privilege('lifecycle_worker', 'public', 'USAGE') AS lifecycle_worker_public_usage,
+  NOT has_schema_privilege('lifecycle_worker', 'public', 'CREATE') AS lifecycle_worker_public_create,
   NOT EXISTS (
     SELECT 1
     FROM pg_auth_members memberships
     JOIN pg_roles member ON member.oid = memberships.member
-    WHERE member.rolname IN ('migrator', 'app')
+    WHERE member.rolname IN ('migrator', 'app', 'lifecycle_worker')
   ) AS roles_have_no_memberships;
 
 SELECT
@@ -31,7 +34,9 @@ SELECT
     WHERE nspname = 'drizzle' AND nspowner = 'migrator'::regrole
   ) AS drizzle_owned_by_migrator,
   NOT has_schema_privilege('app', 'drizzle', 'USAGE') AS app_cannot_use_drizzle,
-  NOT has_schema_privilege('app', 'drizzle', 'CREATE') AS app_cannot_create_in_drizzle;
+  NOT has_schema_privilege('app', 'drizzle', 'CREATE') AS app_cannot_create_in_drizzle,
+  NOT has_schema_privilege('lifecycle_worker', 'drizzle', 'USAGE') AS lifecycle_worker_cannot_use_drizzle,
+  NOT has_schema_privilege('lifecycle_worker', 'drizzle', 'CREATE') AS lifecycle_worker_cannot_create_in_drizzle;
 
 SELECT
   count(DISTINCT privilege_type) FILTER (
