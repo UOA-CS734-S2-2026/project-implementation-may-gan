@@ -102,9 +102,17 @@ export async function forwardBrowserApiRequest(request: Request, transport: ApiT
   const source = selectBrowserSource(request);
   if (!source.ok) return unavailableResponse();
 
-  const upstreamRequest = new Request(request, {
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
     headers: proxyHeaders(request, source.sourceIp),
     redirect: "manual",
-  });
+    signal: request.signal,
+  };
+  if (request.method !== "GET" && request.method !== "HEAD" && request.body) {
+    init.body = request.body;
+    init.duplex = "half";
+  }
+
+  const upstreamRequest = new Request(request.url, init);
   return noStoreResponse(await transport.fetch(upstreamRequest));
 }
