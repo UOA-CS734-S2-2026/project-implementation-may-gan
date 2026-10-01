@@ -4,6 +4,8 @@
 # generated content
 .source
 /.open-next/
+/.wrangler/
+.dev.vars*
 
 # test & build
 /coverage
