@@ -91,7 +91,7 @@ suite("conversation change builders", () => {
     const sessionId = crypto.randomUUID();
     await database.db.insert(schema.session).values({
       id: sessionId,
-      expiresAt: new Date("2026-10-01T00:00:00.000Z"),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1_000),
       token: crypto.randomUUID(),
       createdAt: now,
       updatedAt: now,

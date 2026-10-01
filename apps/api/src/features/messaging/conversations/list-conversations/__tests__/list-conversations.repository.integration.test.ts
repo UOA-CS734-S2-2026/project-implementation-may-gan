@@ -189,7 +189,18 @@ suite("list conversations Postgres repository", () => {
     await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
       items: expect.arrayContaining([expect.objectContaining({
         id: activeWithUnread.conversation.id,
-        latestMessage: expect.objectContaining({ version: 1, reactions: [{ reaction: "love", count: 2, reactedByActor: true }] }),
+        latestMessage: expect.objectContaining({
+          version: 1,
+          reactions: [{
+            reaction: "love",
+            count: 2,
+            reactedByActor: true,
+            reactors: [
+              { id: users[0]!, name: users[0]! },
+              { id: users[1]!, name: users[1]! },
+            ],
+          }],
+        }),
       })]),
     });
     await unsend.unsend(users[1]!, activeWithUnread.conversation.id, reply.message.id);

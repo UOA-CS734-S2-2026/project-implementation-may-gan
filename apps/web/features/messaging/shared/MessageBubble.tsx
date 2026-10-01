@@ -122,7 +122,7 @@ export function MessageBubble({ message, own, canInteract, canUnsend, canEdit, r
       onScrollCapture={cancelHold}
       onDoubleClick={unsent || !canInteract ? undefined : addHeart}
     >
-      <div className={`relative w-fit max-w-[84%] ${own ? "message-own" : "message-received"}`}>
+      <div data-message-content className={`relative w-fit max-w-[84%] ${own ? "message-own" : "message-received"}`}>
         <div className={`relative rounded-2xl px-4 py-3 font-sans text-sm ${own ? "bg-foreground-accent text-white" : "bg-background-secondary text-foreground"}`}>
           {message.replyPreview && <p className="mb-2 border-l-2 border-current/35 pl-2 text-xs opacity-75">Replying to: {message.replyPreview.text ?? "Message removed"}</p>}
           <p className={unsent ? "italic opacity-70" : "whitespace-pre-wrap"}>{message.text ?? "This message was unsent."}</p>

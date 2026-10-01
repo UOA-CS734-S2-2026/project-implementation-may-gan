@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { requireSafeMessageVersion, requireSafeSequenceBigInt } from "./safe-sequence";
 import type { MessageDto, StoredMessage } from "./messaging-types";
@@ -98,18 +98,11 @@ async function projectStoredMessageDto(
 
 /** Resolves the shared reply and actor-specific reaction portions of a message DTO. */
 export async function loadReactionSummaries(queryable: Queryable, messageId: string, actorId: string): Promise<StoredMessage["reactions"]> {
-  const reactions = await queryable
+  const rows = await queryable
     .select({
       reaction: schema.messageReactions.reaction,
-      count: count(),
-      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId})`,
-    })
-    .from(schema.messageReactions)
-    .where(eq(schema.messageReactions.messageId, messageId))
-    .groupBy(schema.messageReactions.reaction);
-  const reactors = await queryable
-    .select({
-      reaction: schema.messageReactions.reaction,
+      count: sql<number>`count(*) over (partition by ${schema.messageReactions.reaction})::int`,
+      reacted: sql<boolean>`bool_or(${schema.messageReactions.userId} = ${actorId}) over (partition by ${schema.messageReactions.reaction})`,
       id: schema.user.id,
       name: sql<string>`coalesce(nullif(${schema.user.displayUsername}, ''), nullif(${schema.user.username}, ''), ${schema.user.name})`,
     })
@@ -117,12 +110,19 @@ export async function loadReactionSummaries(queryable: Queryable, messageId: str
     .innerJoin(schema.user, eq(schema.user.id, schema.messageReactions.userId))
     .where(eq(schema.messageReactions.messageId, messageId))
     .orderBy(schema.messageReactions.createdAt);
-  return reactions.map((item) => ({
-    reaction: item.reaction as StoredMessage["reactions"][number]["reaction"],
-    count: item.count,
-    reactedByActor: item.reacted,
-    reactors: reactors.filter((reactor) => reactor.reaction === item.reaction).map((reactor) => ({ id: reactor.id, name: reactor.name })),
-  }));
+  const summaries = new Map<StoredMessage["reactions"][number]["reaction"], StoredMessage["reactions"][number]>();
+  for (const row of rows) {
+    const reaction = row.reaction as StoredMessage["reactions"][number]["reaction"];
+    const summary = summaries.get(reaction) ?? {
+      reaction,
+      count: row.count,
+      reactedByActor: row.reacted,
+      reactors: [],
+    };
+    summary.reactors.push({ id: row.id, name: row.name });
+    summaries.set(reaction, summary);
+  }
+  return [...summaries.values()];
 }
 
 export async function projectMessageDto(

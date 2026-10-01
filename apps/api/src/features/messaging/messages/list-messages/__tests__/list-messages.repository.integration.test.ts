@@ -110,8 +110,16 @@ suite("list messages Postgres repository", () => {
     const reactionsForSender = pageForSender.items[1]!.reactions;
     expect(reactionsForSender).toHaveLength(2);
     expect(reactionsForSender).toEqual(expect.arrayContaining([
-      { reaction: "love", count: 2, reactedByActor: true },
-      { reaction: "laugh", count: 1, reactedByActor: false },
+      {
+        reaction: "love",
+        count: 2,
+        reactedByActor: true,
+        reactors: [
+          { id: users[0]!, name: users[0]! },
+          { id: users[1]!, name: users[1]! },
+        ],
+      },
+      { reaction: "laugh", count: 1, reactedByActor: false, reactors: [{ id: users[2]!, name: users[2]! }]},
     ]));
     await expect(repository.list(users[0]!, initial.conversation.id, undefined, "1", 2)).resolves.toMatchObject({
       items: [{ sequence: "2" }, { sequence: "3" }],
@@ -131,8 +139,16 @@ suite("list messages Postgres repository", () => {
     const reactionsForThirdMember = pageForThirdMember.items[0]!.reactions;
     expect(reactionsForThirdMember).toHaveLength(2);
     expect(reactionsForThirdMember).toEqual(expect.arrayContaining([
-      { reaction: "love", count: 2, reactedByActor: false },
-      { reaction: "laugh", count: 1, reactedByActor: true },
+      {
+        reaction: "love",
+        count: 2,
+        reactedByActor: false,
+        reactors: [
+          { id: users[0]!, name: users[0]! },
+          { id: users[1]!, name: users[1]! },
+        ],
+      },
+      { reaction: "laugh", count: 1, reactedByActor: true, reactors: [{ id: users[2]!, name: users[2]! }] },
     ]));
 
     await unsend.unsend(users[0]!, initial.conversation.id, initial.message.id);
