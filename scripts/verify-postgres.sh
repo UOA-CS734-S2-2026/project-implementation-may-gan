@@ -18,6 +18,7 @@ messaging_database="dayli_messaging_test"
 lifecycle_database="dayli_lifecycle_test"
 privacy_preflight_database="dayli_privacy_preflight_test"
 messaging_participant_race_database="dayli_messaging_participant_race_test"
+messaging_participant_compatibility_database="dayli_messaging_participant_compatibility_test"
 advisory_lock_database="dayli_advisory_lock_ci_test"
 
 # The test Compose file and integration guards read these values when a verifier
@@ -100,6 +101,8 @@ echo 'Provisioning populated-main privacy migration preflight database'
 provision_isolated_database "$privacy_preflight_database"
 echo 'Provisioning isolated messaging participant migration-race database'
 provision_isolated_database "$messaging_participant_race_database"
+echo 'Provisioning isolated messaging participant compatibility database'
+provision_isolated_database "$messaging_participant_compatibility_database"
 echo 'Provisioning isolated advisory-lock test database'
 provision_isolated_database "$advisory_lock_database"
 
@@ -124,6 +127,8 @@ export TEST_LIFECYCLE_WORKER_DATABASE_URL="$(lifecycle_worker_url "$lifecycle_da
 export TEST_PRIVACY_PREFLIGHT_DATABASE_URL="$(migrator_url "$privacy_preflight_database")"
 export TEST_MESSAGING_PARTICIPANT_RACE_DATABASE_URL="$(migrator_url "$messaging_participant_race_database")"
 export TEST_MESSAGING_PARTICIPANT_RACE_APP_DATABASE_URL="$(app_url "$messaging_participant_race_database")"
+export TEST_MESSAGING_PARTICIPANT_COMPATIBILITY_DATABASE_URL="$(migrator_url "$messaging_participant_compatibility_database")"
+export TEST_MESSAGING_PARTICIPANT_COMPATIBILITY_APP_DATABASE_URL="$(app_url "$messaging_participant_compatibility_database")"
 export RELATIONSHIP_TEST_DATABASE_URL="$(migrator_url "$relationship_database")"
 export MESSAGING_TEST_DATABASE_URL="$(migrator_url "$messaging_database")"
 export MESSAGING_DELIVERY_TEST_DATABASE_URL="$MESSAGING_TEST_DATABASE_URL"

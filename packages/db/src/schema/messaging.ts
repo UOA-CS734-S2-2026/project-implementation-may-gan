@@ -43,6 +43,10 @@ export const conversations = pgTable("conversations", {
   userLowId: text("user_low_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   userHighId: text("user_high_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   initiatorId: text("initiator_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Populated by database triggers while deployed writers still use user IDs. */
+  participantLowId: text("participant_low_id").references(() => messagingParticipants.id),
+  participantHighId: text("participant_high_id").references(() => messagingParticipants.id),
+  initiatorParticipantId: text("initiator_participant_id").references(() => messagingParticipants.id),
   requestState: messageRequestState("request_state").notNull(),
   lastMessageSequence: bigint("last_message_sequence", { mode: "number" }).notNull(),
   lastChangeSequence: bigint("last_change_sequence", { mode: "number" }).notNull(),
@@ -59,6 +63,8 @@ export const conversations = pgTable("conversations", {
 export const conversationMembers = pgTable("conversation_members", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Populated by database triggers while deployed writers still use user IDs. */
+  participantId: text("participant_id").references(() => messagingParticipants.id),
   lastReadSequence: bigint("last_read_sequence", { mode: "number" }).notNull(),
   receiptSequence: bigint("receipt_sequence", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
@@ -74,6 +80,8 @@ export const messages = pgTable("messages", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   sequence: bigint("sequence", { mode: "number" }).notNull(),
   senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Populated by database triggers while deployed writers still use user IDs. */
+  senderParticipantId: text("sender_participant_id").references(() => messagingParticipants.id),
   clientMessageId: text("client_message_id").notNull(),
   requestFingerprint: text("request_fingerprint").notNull(),
   body: text("body"),
@@ -94,6 +102,8 @@ export const messages = pgTable("messages", {
 export const messageReactions = pgTable("message_reactions", {
   messageId: text("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Populated by database triggers while deployed writers still use user IDs. */
+  participantId: text("participant_id").references(() => messagingParticipants.id),
   reaction: text("reaction").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
@@ -107,6 +117,8 @@ export const conversationChanges = pgTable("conversation_changes", {
   kind: text("kind").notNull(),
   messageId: text("message_id").references(() => messages.id, { onDelete: "cascade" }),
   memberId: text("member_id").references(() => user.id, { onDelete: "cascade" }),
+  /** Populated by database triggers while deployed writers still use user IDs. */
+  memberParticipantId: text("member_participant_id").references(() => messagingParticipants.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
   primaryKey({ name: "conversation_changes_pk", columns: [table.conversationId, table.changeSequence] }),

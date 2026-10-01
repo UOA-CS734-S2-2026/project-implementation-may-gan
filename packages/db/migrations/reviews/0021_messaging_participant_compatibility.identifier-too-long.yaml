@@ -1,0 +1,6 @@
+reason: Drizzle generated these foreign-key names from the participating tables and columns. PostgreSQL truncates them deterministically, and the migration journal snapshot preserves the generated names.
+affected_data_and_clients: Constraint names are not part of the deployed application contract.
+rollout_sequence: Apply only through the protected migrator workflow.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use shorter names for future constraints if a name collision is reported. Do not alter published migration SQL.
+reviewer: Database reviewers must approve this naming exception.

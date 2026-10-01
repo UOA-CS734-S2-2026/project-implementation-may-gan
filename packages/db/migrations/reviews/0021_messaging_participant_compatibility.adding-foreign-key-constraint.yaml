@@ -1,0 +1,6 @@
+reason: Participant foreign keys preserve the mapping added beside legacy user references. They are installed NOT VALID, backfilled under trigger protection, then validated before commit.
+affected_data_and_clients: Existing user references and their cascading behavior remain unchanged. Old Workers wait for the short transactional migration and then write both forms through database triggers.
+rollout_sequence: Apply only through the protected staging migrator after migration 0020 evidence is reviewed. Do not deploy participant-dependent runtime code in this phase.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add a forward-only repair migration if validation or mapping checks fail. Do not drop legacy references.
+reviewer: Database, messaging, and privacy reviewers must approve the foreign-key transition.
