@@ -393,7 +393,11 @@ The initial system-resolver run could not resolve the new caller hostname. The c
 
 Eight Node tests, a real workerd smoke test, focused lint, and strict Worker-source typechecking passed. The deployed Chromium check confirmed that the page removes its token fragment and returns a sanitized sample. No login, cookie lifecycle, named-entrypoint, application mutation, database, or actual rate-limit-bucket test occurred. The app's source-selection policy was not changed.
 
-The Wi-Fi/mobile-data comparison is still pending owner participation. `CF-Worker` is a candidate rejection signal, supported by these observed cases and Cloudflare documentation, but enforcement and broader compatibility testing remain separate work. See [Temporary source-provenance diagnostic](./proxy-provenance-diagnostic.md) for commands, interpretation limits, and cleanup.
+The owner then supplied labelled PC and mobile samples at 08:27 and 08:28 UTC. Both were accepted as direct requests without a Worker marker. Their source fingerprints differed, with IPv6 on the PC and IPv4 on mobile. These samples establish distinct selected identities, not rate-limit enforcement. The differing address families also mean hash inequality alone does not establish independent physical networks.
+
+After the device results, the assistant deleted both temporary Workers. The Cloudflare API confirmed no remaining diagnostic Workers or custom-domain mappings, and authoritative DNS returned no records for either hostname. Local access-token files and the private-link symlink were removed. Sanitized reports remain locally. The app and database were not changed.
+
+`CF-Worker` remains a candidate rejection signal, supported by these observed cases and Cloudflare documentation, but enforcement and broader compatibility testing remain separate work. See [Temporary source-provenance diagnostic](./proxy-provenance-diagnostic.md) for commands, interpretation limits, device results, and cleanup.
 
 ## References for platform assumptions
 
