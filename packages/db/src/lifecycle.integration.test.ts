@@ -521,6 +521,20 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status) values (${`export-fresh-${crypto.randomUUID()}`}, ${userId}, 0, 'requested')`;
   });
 
+  it("skips an oldest purging request and claims a later legacy request", async () => {
+    const blockedUser = await createUser("queue-purging");
+    const legacyUser = await createUser("queue-legacy");
+    const blockedId = `export-queue-blocked-${crypto.randomUUID()}`;
+    const legacyId = `export-queue-legacy-${crypto.randomUUID()}`;
+    await app`insert into public.account_lifecycles (user_id) values (${blockedUser})`;
+    await app`update public.account_lifecycles set state='purging', request_id=${`purge-${crypto.randomUUID()}`}, idempotency_key_digest=${"a".repeat(64)}, generation=1, requested_at=now()-interval '14 days', cancel_until=now()-interval '7 days', purge_due_at=now(), purge_started_at=now() where user_id=${blockedUser}`;
+    await app`insert into public.data_export_requests (id,user_id,lifecycle_generation,status,requested_at) values (${blockedId},${blockedUser},0,'requested',now()-interval '2 hours'),(${legacyId},${legacyUser},0,'requested',now()-interval '1 hour')`;
+    const claimed = await lifecycleWorker`select * from public.dayli_export_claim(${'queue'.repeat(8)},300)`;
+    expect(claimed[0]?.id).toBe(legacyId);
+    const [blocked] = await migrator`select status from public.data_export_requests where id=${blockedId}`;
+    expect(blocked?.status).toBe("requested");
+  });
+
   it("physically blocks claim behind the canonical user lock without a request-first deadlock", async () => {
     const userId = await createUser("claim-contention");
     const exportId = `export-contention-${crypto.randomUUID()}`;
