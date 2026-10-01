@@ -350,10 +350,12 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       await publisher.unsafe("begin");
       await publisher`update public.legal_document_versions set status = 'notice', notice_starts_at = '2026-09-01T00:00:00.000Z', effective_at = '2026-10-01T00:00:00.000Z' where id = ${publicationId}`;
       const [{ pid: writerPid }] = await writer`select pg_backend_pid()::int as pid`;
-      const blockedContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${publicationId}`.then((result) => result);
+      const blockedContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${publicationId}`.then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
       await waitForLock(writerPid);
       await publisher.unsafe("commit");
-      await expect(blockedContent).rejects.toMatchObject({ code: "23514" });
+      const contentOutcome = await blockedContent;
+      expect(contentOutcome.ok).toBe(false);
+      if (!contentOutcome.ok) expect(contentOutcome.error).toMatchObject({ code: "23514" });
       const [published] = await migrator`select canonical_content, publication_latched from public.legal_document_contents c join public.legal_document_versions v on v.id = c.terms_version_id where v.id = ${publicationId}`;
       expect(published).toEqual({ canonical_content: draftContent, publication_latched: true });
 
@@ -362,10 +364,12 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       await acceptor.unsafe("begin");
       await acceptor`insert into public.terms_acceptances (user_id, terms_version_id) values (${acceptanceUser}, ${acceptanceId})`;
       const [{ pid: acceptanceWriterPid }] = await writer`select pg_backend_pid()::int as pid`;
-      const blockedAcceptanceContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${acceptanceId}`.then((result) => result);
+      const blockedAcceptanceContent = writer`update public.legal_document_contents set canonical_content = ${updatedContent} where terms_version_id = ${acceptanceId}`.then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
       await waitForLock(acceptanceWriterPid);
       await acceptor.unsafe("commit");
-      await expect(blockedAcceptanceContent).rejects.toMatchObject({ code: "23514" });
+      const acceptanceOutcome = await blockedAcceptanceContent;
+      expect(acceptanceOutcome.ok).toBe(false);
+      if (!acceptanceOutcome.ok) expect(acceptanceOutcome.error).toMatchObject({ code: "23514" });
       const [accepted] = await migrator`select canonical_content, publication_latched from public.legal_document_contents c join public.legal_document_versions v on v.id = c.terms_version_id where v.id = ${acceptanceId}`;
       expect(accepted).toEqual({ canonical_content: draftContent, publication_latched: true });
 
@@ -515,6 +519,60 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(cleanup?.archive_object_key).toBe(key);
     await expect(lifecycleWorker`select public.dayli_export_cleanup_complete(${cleanup?.id}, ${cleanup?.lease_token}) as completed`).resolves.toEqual([{ completed: true }]);
     await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status) values (${`export-fresh-${crypto.randomUUID()}`}, ${userId}, 0, 'requested')`;
+  });
+
+  it("physically blocks claim behind the canonical user lock without a request-first deadlock", async () => {
+    const userId = await createUser("claim-contention");
+    const exportId = `export-contention-${crypto.randomUUID()}`;
+    const coordinator = postgres(migratorConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    const contender = postgres(lifecycleWorkerConnection, { max: 1, prepare: false, onnotice: () => undefined });
+    await migrator`update public.data_export_requests set status='cancelled', snapshot_cutoff_at=null, archive_object_key=null, ready_at=null, expires_at=null, archive_cleanup_task_id=null, failure_category=null, lease_token=null, lease_expires_at=null where status='requested'`;
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`;
+    await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status) values (${exportId}, ${userId}, 0, 'requested')`;
+    try {
+      await coordinator.unsafe("begin");
+      await coordinator`select 1 from public."user" where id=${userId} for update`;
+      const [{ pid: coordinatorPid }] = await coordinator`select pg_backend_pid()::int as pid`;
+      const [{ pid }] = await contender`select pg_backend_pid()::int as pid`;
+      const pending = contender`select * from public.dayli_export_claim(${'contention'.repeat(4)}, 300)`.then((result) => result);
+      let blocked = false;
+      for (let attempt = 0; attempt < 40 && !blocked; attempt += 1) {
+        const [state] = await migrator`select ${coordinatorPid} = any(pg_blocking_pids(${pid})) as blocked`;
+        blocked = state?.blocked === true;
+        if (!blocked) await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      await coordinator.unsafe("commit");
+      const claimed = await pending;
+      expect(claimed[0]?.id).toBe(exportId);
+    } finally {
+      await Promise.allSettled([coordinator.unsafe("rollback"), coordinator.end({ timeout: 5 }), contender.end({ timeout: 5 })]);
+    }
+  });
+
+  it("enforces SQL record and page byte budgets while cursors retain every valid journal", async () => {
+    const userId = await createUser("export-page-budget");
+    const exportId = `export-page-${crypto.randomUUID()}`;
+    const lease = "page".repeat(8);
+    const postIds = Array.from({ length: 9 }, (_, index) => `export-page-post-${String(index).padStart(2, "0")}-${crypto.randomUUID()}`);
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`;
+    await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status, snapshot_cutoff_at, lease_token, lease_expires_at) values (${exportId}, ${userId}, 0, 'building', now(), ${lease}, now() + interval '5 minutes')`;
+    try {
+      for (const [index, postId] of postIds.entries()) await migrator`insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at, created_at, updated_at) values (${postId}, ${userId}, ${`2026-01-${String(index + 1).padStart(2, "0")}`}, 'prompt-01-01', ${`\\"`.repeat(1000)}, null, 5, 'solo', now() - interval '1 hour', now(), now() - interval '1 hour', now())`;
+      const seen: string[] = []; let cursor = "";
+      for (;;) {
+        const page = await lifecycleWorker`select record, octet_length(record::text) as bytes from public.dayli_export_source_page(${exportId}, ${lease}, 'journals', ${cursor})`;
+        if (!page.length) break;
+        expect(page.reduce((total, row) => total + Number(row.bytes), 0)).toBeLessThanOrEqual(128 * 1024);
+        seen.push(...page.map((row) => (row.record as { id: string }).id));
+        cursor = (page.at(-1)?.record as { id: string }).id;
+      }
+      expect(seen).toEqual(postIds);
+      const oversizedId = `x${"x".repeat(16 * 1024)}`;
+      await migrator`insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, caption, rating, audience, accepted_at, released_at, created_at, updated_at) values (${oversizedId}, ${userId}, '2026-02-01', 'prompt-01-01', 'valid', null, 5, 'solo', now() - interval '1 hour', now(), now() - interval '1 hour', now())`;
+      await expect(lifecycleWorker`select record from public.dayli_export_source_page(${exportId}, ${lease}, 'journals', ${cursor})`).rejects.toMatchObject({ code: "P0001" });
+      await migrator`delete from public.posts where author_id=${userId}`;
+    } finally { await migrator`delete from public.posts where author_id=${userId}`; }
   });
 
   it("reclaims expired cleanup leases and rejects stale completion tokens", async () => {

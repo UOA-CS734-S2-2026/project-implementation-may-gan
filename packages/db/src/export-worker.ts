@@ -19,7 +19,7 @@ export function createRestrictedDataExportSource(database: DayliDatabase) {
           const result = await database.execute(sql`select record from public.dayli_export_source_page(${job.id}, ${job.leaseToken}, ${kind}, ${cursor})`);
           const rows = Array.isArray(result) ? result as unknown as Array<{ record: Record<string, unknown> | string }> : (result as unknown as { rows: Array<{ record: Record<string, unknown> | string }> }).rows;
           for (const row of rows) yield typeof row.record === "string" ? JSON.parse(row.record) as Record<string, unknown> : row.record;
-          if (kind === "profile" || rows.length < 100) break;
+          if (kind === "profile" || rows.length === 0) break;
           const last = rows.at(-1)?.record;
           const record = typeof last === "string" ? JSON.parse(last) as { id?: unknown } : last;
           if (typeof record?.id !== "string") throw new Error("Export source returned an invalid cursor.");
