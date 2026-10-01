@@ -105,6 +105,7 @@ part 'model/relationship_user_page.dart';
 part 'model/resolve_message_request_request.dart';
 part 'model/send_message_request.dart';
 part 'model/send_relationship_request.dart';
+part 'model/set_avatar_request.dart';
 part 'model/set_message_reaction_request.dart';
 part 'model/test_response.dart';
 part 'model/update_profile_request.dart';

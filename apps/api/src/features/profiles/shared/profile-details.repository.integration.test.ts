@@ -87,6 +87,7 @@ function requireLocalTestUrl(value: string): string {
         displayName: handle("privateOwner"),
         detailsVisible: true,
         bio: "Bio of privateOwner",
+        avatarUrl: null,
         streak: { current: 2, longest: 2, lastPostDate: "2026-09-29", postedToday: false, asOf: "2026-09-30" },
         stats: { posts: 3, friends: 1 },
         owner: { profileVisibility: "private", usernameChangeAvailableAt: null },

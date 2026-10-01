@@ -58,7 +58,7 @@ import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createPresignedDownloadUrl, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import {
   createActorRateLimiter,
@@ -155,6 +155,10 @@ import type { UpdateProfileRouteDependencies } from "./features/profiles/update-
 import { createHyperdriveUpdateProfileRepository } from "./features/profiles/update-profile/update-profile.repository";
 import type { ChangeUsernameRouteDependencies } from "./features/profiles/change-username/change-username.route";
 import { createHyperdriveChangeUsernameRepository } from "./features/profiles/change-username/change-username.repository";
+import type { SetAvatarRouteDependencies } from "./features/profiles/set-avatar/set-avatar.route";
+import { createHyperdriveSetAvatarRepository } from "./features/profiles/set-avatar/set-avatar.repository";
+import type { RemoveAvatarRouteDependencies } from "./features/profiles/remove-avatar/remove-avatar.route";
+import { createHyperdriveRemoveAvatarRepository } from "./features/profiles/remove-avatar/remove-avatar.repository";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
@@ -177,6 +181,8 @@ export interface AppDependencies {
   profileDetails?: GetProfileDetailsRouteDependencies;
   profileUpdate?: UpdateProfileRouteDependencies;
   usernameChange?: ChangeUsernameRouteDependencies;
+  avatarSet?: SetAvatarRouteDependencies;
+  avatarRemove?: RemoveAvatarRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -201,6 +207,8 @@ export function createApp({
   profileDetails,
   profileUpdate,
   usernameChange,
+  avatarSet,
+  avatarRemove,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -267,6 +275,8 @@ export function createApp({
     details: { ...(profileDetails ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(profileUpdate ?? { resolveSession: async () => null }), rateLimiter },
     changeUsername: { ...(usernameChange ?? { resolveSession: async () => null }), rateLimiter },
+    setAvatar: { ...(avatarSet ?? { resolveSession: async () => null }), rateLimiter },
+    removeAvatar: { ...(avatarRemove ?? { resolveSession: async () => null }), rateLimiter },
   });
 
   api.doc("/api/v1/openapi.json", {
@@ -322,14 +332,27 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
+  // Profile photos are shown through links that expire after ten minutes.
+  const signAvatar = r2Runtime
+    ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
+    : undefined;
   const profileDetails = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive),
+    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive, signAvatar),
   } satisfies GetProfileDetailsRouteDependencies : undefined;
   const profileUpdate = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    repository: createHyperdriveUpdateProfileRepository(configuration.hyperdrive),
+    repository: createHyperdriveUpdateProfileRepository(configuration.hyperdrive, signAvatar),
   } satisfies UpdateProfileRouteDependencies : undefined;
+  // Without R2 there is nothing to link, so the photo routes stay unavailable.
+  const avatarSet = configuration && r2Runtime ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveSetAvatarRepository(configuration.hyperdrive, signAvatar),
+  } satisfies SetAvatarRouteDependencies : undefined;
+  const avatarRemove = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveRemoveAvatarRepository(configuration.hyperdrive, signAvatar),
+  } satisfies RemoveAvatarRouteDependencies : undefined;
   const usernameChange = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveChangeUsernameRepository(configuration.hyperdrive),
@@ -367,6 +390,8 @@ export function createAppForEnv(env: ApiEnv) {
     profileDetails,
     profileUpdate,
     usernameChange,
+    avatarSet,
+    avatarRemove,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,

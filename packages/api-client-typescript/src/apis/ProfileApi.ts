@@ -34,6 +34,11 @@ import {
     ProfileDetailsToJSON,
 } from '../models/ProfileDetails';
 import {
+    type SetAvatarRequest,
+    SetAvatarRequestFromJSON,
+    SetAvatarRequestToJSON,
+} from '../models/SetAvatarRequest';
+import {
     type UpdateProfileRequest,
     UpdateProfileRequestFromJSON,
     UpdateProfileRequestToJSON,
@@ -68,6 +73,13 @@ export interface ProfileGetDetailsRequest {
      *
      */
     username: string;
+}
+
+export interface ProfileSetAvatarRequest {
+    /**
+     *
+     */
+    setAvatarRequest: SetAvatarRequest;
 }
 
 export interface ProfileUpdateRequest {
@@ -293,6 +305,110 @@ export class ProfileApi extends runtime.BaseAPI {
      */
     async profileGetUsername(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsernameProfile> {
         const response = await this.profileGetUsernameRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for profileRemoveAvatar without sending the request
+     */
+    async profileRemoveAvatarRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profile/avatar`;
+
+        return {
+            path: urlPath,
+            method: 'DELETE',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Removes the profile photo. Profiles then show the first letter of the name.
+     * Remove your profile photo
+     */
+    async profileRemoveAvatarRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+        const requestOptions = await this.profileRemoveAvatarRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+    }
+
+    /**
+     * Removes the profile photo. Profiles then show the first letter of the name.
+     * Remove your profile photo
+     */
+    async profileRemoveAvatar(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+        const response = await this.profileRemoveAvatarRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for profileSetAvatar without sending the request
+     */
+    async profileSetAvatarRequestOpts(requestParameters: ProfileSetAvatarRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['setAvatarRequest'] == null) {
+            throw new runtime.RequiredError(
+                'setAvatarRequest',
+                'Required parameter "setAvatarRequest" was null or undefined when calling profileSetAvatar().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profile/avatar`;
+
+        return {
+            path: urlPath,
+            method: 'PUT',
+            headers: headerParameters,
+            query: queryParameters,
+            body: SetAvatarRequestToJSON(requestParameters['setAvatarRequest']),
+        };
+    }
+
+    /**
+     * Uses one of your validated JPEG, PNG, or WebP uploads as your profile photo, replacing any previous one. Upload it first through the media reservation flow.
+     * Set your profile photo
+     */
+    async profileSetAvatarRaw(requestParameters: ProfileSetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+        const requestOptions = await this.profileSetAvatarRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+    }
+
+    /**
+     * Uses one of your validated JPEG, PNG, or WebP uploads as your profile photo, replacing any previous one. Upload it first through the media reservation flow.
+     * Set your profile photo
+     */
+    async profileSetAvatar(requestParameters: ProfileSetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+        const response = await this.profileSetAvatarRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -12,6 +12,7 @@ Map<String, Object?> body({Map<String, Object?>? owner}) => {
   'displayName': 'Jos',
   'detailsVisible': true,
   'bio': 'Walks.',
+  'avatarUrl': 'https://r2.example.test/photo?signed',
   'streak': {
     'current': 2,
     'longest': 4,
@@ -62,6 +63,7 @@ void main() {
     expect(profile.isOwner, isTrue);
     expect(profile.isPrivate, isTrue);
     expect(profile.usernameChangeAvailableAt, DateTime.utc(2026, 10, 30, 3));
+    expect(profile.avatarUrl, 'https://r2.example.test/photo?signed');
     expect(profile.streak?.current, 2);
     expect(profile.stats?.posts, 4);
     expect(profile.stats?.friends, 13);

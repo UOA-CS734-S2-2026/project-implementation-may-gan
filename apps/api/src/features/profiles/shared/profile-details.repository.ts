@@ -4,6 +4,9 @@ import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
 import type { ProfileDetails } from "./profile-details.contract";
 
+/** Signs a short-lived link to a stored object the caller may see. */
+export type AvatarSigner = (objectKey: string) => Promise<string>;
+
 /** How long a changed username must wait, and how long the old handle stays reserved. */
 export const USERNAME_CHANGE_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -54,6 +57,18 @@ function activeFriends(database: DayliDatabase, viewerId: string, otherId: SQLWr
   ).mapWith(Boolean);
 }
 
+async function findAvatarUrl(database: DayliDatabase, userId: string, signAvatar?: AvatarSigner) {
+  if (!signAvatar) return null;
+  const { profileAvatars, mediaReservation } = schema;
+  const [avatar] = await database
+    .select({ objectKey: mediaReservation.objectKey })
+    .from(profileAvatars)
+    .innerJoin(mediaReservation, eq(profileAvatars.reservationId, mediaReservation.id))
+    .where(eq(profileAvatars.userId, userId))
+    .limit(1);
+  return avatar ? signAvatar(avatar.objectKey) : null;
+}
+
 /**
  * One author has at most one post per Auckland day, so this reads one short
  * date per day they have posted. Streaks are derived on read, so a deleted
@@ -84,13 +99,15 @@ async function countFriends(database: DayliDatabase, userId: string) {
  * Reads a profile the way the profile card does: a case-insensitive handle
  * that matches exactly one account, not currently banned, and not blocked
  * either way. A handle the owner gave up within the reservation window
- * resolves to their current profile, so old links keep working.
+ * resolves to their current profile, so old links keep working. The photo
+ * follows the bio's visibility and is only signed for a viewer who may see it.
  */
 export async function findProfileDetails(
   database: DayliDatabase,
   viewerId: string,
   username: string,
   now: Date,
+  signAvatar?: AvatarSigner,
 ): Promise<ProfileDetails | null> {
   const { user, usernameReservations } = schema;
   const visible = and(notCurrentlyBanned(now), notBlockedEitherWay(database, viewerId, user.id));
@@ -126,9 +143,9 @@ export async function findProfileDetails(
 
   const isOwner = row.id === viewerId;
   const detailsVisible = isOwner || row.profileVisibility === "public" || row.friends;
-  const [activity, friends] = detailsVisible
-    ? await Promise.all([findPostingStreak(database, row.id, now), countFriends(database, row.id)])
-    : [null, null];
+  const [activity, friends, avatarUrl] = detailsVisible
+    ? await Promise.all([findPostingStreak(database, row.id, now), countFriends(database, row.id), findAvatarUrl(database, row.id, signAvatar)])
+    : [null, null, null];
   const changeAvailableAt = row.usernameChangedAt
     ? new Date(row.usernameChangedAt.getTime() + USERNAME_CHANGE_INTERVAL_MS)
     : null;
@@ -138,6 +155,7 @@ export async function findProfileDetails(
     displayName: row.displayUsername ?? row.username,
     detailsVisible,
     bio: detailsVisible ? row.bio : null,
+    avatarUrl,
     streak: activity?.streak ?? null,
     stats: activity ? { posts: activity.posts, friends: friends ?? 0 } : null,
     owner: isOwner

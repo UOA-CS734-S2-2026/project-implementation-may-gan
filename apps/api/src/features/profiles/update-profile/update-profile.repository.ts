@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import type { ProfileDetails } from "../shared/profile-details.contract";
-import { findProfileDetails } from "../shared/profile-details.repository";
+import { findProfileDetails, type AvatarSigner } from "../shared/profile-details.repository";
 import type { UpdateProfileInput } from "./update-profile.contract";
 
 export type UpdateProfileOutcome =
@@ -15,7 +15,7 @@ export interface UpdateProfileRepository {
 }
 
 /** Writes only the fields the caller sent, then reads the profile back as its owner. */
-export function createPostgresUpdateProfileRepository(database: DayliDatabase): UpdateProfileRepository {
+export function createPostgresUpdateProfileRepository(database: DayliDatabase, signAvatar?: AvatarSigner): UpdateProfileRepository {
   const { user } = schema;
   return {
     async updateProfile(userId, input, now) {
@@ -31,17 +31,17 @@ export function createPostgresUpdateProfileRepository(database: DayliDatabase): 
         .returning({ username: user.username });
       if (!updated) return { kind: "missing" };
       if (!updated.username) return { kind: "needsUsername" };
-      const profile = await findProfileDetails(database, userId, updated.username, now);
+      const profile = await findProfileDetails(database, userId, updated.username, now, signAvatar);
       return profile ? { kind: "updated", profile } : { kind: "missing" };
     },
   };
 }
 
 /** Workers close the request-scoped Hyperdrive client after each write. */
-export function createHyperdriveUpdateProfileRepository(hyperdrive: HyperdriveBinding): UpdateProfileRepository {
+export function createHyperdriveUpdateProfileRepository(hyperdrive: HyperdriveBinding, signAvatar?: AvatarSigner): UpdateProfileRepository {
   return {
     updateProfile: (userId, input, now) => withHyperdriveDatabase(hyperdrive, (database) => (
-      createPostgresUpdateProfileRepository(database).updateProfile(userId, input, now)
+      createPostgresUpdateProfileRepository(database, signAvatar).updateProfile(userId, input, now)
     )),
   };
 }

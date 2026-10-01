@@ -26,6 +26,8 @@ export function profileSaveMessage(failure: ProfileFailure): string {
       return "You seem to be offline. Try again.";
     case "needsUsername":
       return "Choose a username first.";
+    case "photoRejected":
+      return "That photo couldn't be used. Try a JPEG, PNG, or WebP image under 10 MB.";
     default:
       return "That couldn't be saved. Try again.";
   }

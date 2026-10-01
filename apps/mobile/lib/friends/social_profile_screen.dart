@@ -245,8 +245,16 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
             child: Column(
               children: [
                 CircleAvatar(
+                  key: const Key('profile.avatar'),
                   radius: 56,
                   backgroundColor: colors.backgroundAccent,
+                  foregroundImage: info.avatarUrl == null
+                      ? null
+                      : NetworkImage(info.avatarUrl!),
+                  // The letter shows while the photo loads, and if it fails.
+                  onForegroundImageError: info.avatarUrl == null
+                      ? null
+                      : (_, _) {},
                   child: Text(
                     person.displayName.substring(0, 1).toUpperCase(),
                     style: DayliText.serif(
