@@ -11,6 +11,7 @@ import { authClient } from "@/lib/auth/client";
 import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { safeReturnPath } from "@/lib/routing/safe-return-path";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -37,8 +38,9 @@ function GoogleSignInError() {
   );
 }
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
+  const returnTo = safeReturnPath(useSearchParams().get("next"), "/home");
 
   const {
     control,
@@ -58,7 +60,7 @@ export default function SignInPage() {
       return;
     }
 
-    router.push("/home");
+    router.push(returnTo);
   };
 
   return (
@@ -72,7 +74,7 @@ export default function SignInPage() {
       </p>
 
       <div className="flex flex-col gap-4">
-        <GoogleSignInButton />
+        <GoogleSignInButton returnTo={returnTo} />
         <Suspense fallback={null}><GoogleSignInError /></Suspense>
 
         <div className="relative flex items-center">
@@ -133,4 +135,8 @@ export default function SignInPage() {
       </div>
     </form>
   );
+}
+
+export default function SignInPage() {
+  return <Suspense fallback={null}><SignInForm /></Suspense>;
 }
