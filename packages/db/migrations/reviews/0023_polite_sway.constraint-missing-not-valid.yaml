@@ -1,0 +1,6 @@
+reason: PostgreSQL cannot add a UNIQUE constraint as NOT VALID. The transaction validates the participant checks before each required unique index is built.
+affected_data_and_clients: Existing user-ID writers remain supported by the replaced triggers. A five second lock timeout aborts before any partial migration commits.
+rollout_sequence: Measure the four affected table sizes before the protected production migration. Apply schema before any participant runtime.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Investigate a timeout or duplicate key and add a forward-only repair. Do not remove legacy user constraints or enable deletion.
+reviewer: Database, messaging, and privacy reviewers must approve this migration and its size evidence.

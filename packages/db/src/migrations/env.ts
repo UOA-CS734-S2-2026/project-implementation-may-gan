@@ -11,6 +11,7 @@ const localTestDatabases = new Set([
   "/dayli_advisory_lock_ci_test",
 ]);
 const localDevelopmentDatabase = "/dayli_dev";
+export const messagingReadinessStagingCapBytes = 16 * 1024 * 1024;
 
 function localTestPort(): string {
   const value = process.env.LOCAL_TEST_POSTGRES_PORT ?? process.env.VERIFY_POSTGRES_PORT ?? "5433";
@@ -84,6 +85,31 @@ export function validateMigrationConnectionString(connectionString: string, targ
   if (!sslMode || !["require", "verify-ca", "verify-full"].includes(sslMode)) {
     throw new Error("Neon migrations require sslmode=require or stricter.");
   }
+}
+
+export function messagingReadinessSizeCap(target: MigrationTarget, environment = process.env): number {
+  const configured = environment.MESSAGING_0023_SIZE_CAP_BYTES;
+  if (target === "staging") {
+    if (configured && configured !== String(messagingReadinessStagingCapBytes)) {
+      throw new Error("Staging must use the fixed 16 MiB messaging readiness size cap.");
+    }
+    return messagingReadinessStagingCapBytes;
+  }
+
+  if (target !== "production") {
+    if (configured) throw new Error("MESSAGING_0023_SIZE_CAP_BYTES is only allowed for a production migration.");
+    return messagingReadinessStagingCapBytes;
+  }
+
+  if (!configured) return messagingReadinessStagingCapBytes;
+  if (!/^[0-9]+$/.test(configured)) {
+    throw new Error("MESSAGING_0023_SIZE_CAP_BYTES must be a whole number of bytes.");
+  }
+  const cap = Number(configured);
+  if (!Number.isSafeInteger(cap) || cap < messagingReadinessStagingCapBytes) {
+    throw new Error("MESSAGING_0023_SIZE_CAP_BYTES must be at least 16 MiB.");
+  }
+  return cap;
 }
 
 export function requireProductionConfirmations(target: MigrationTarget): void {

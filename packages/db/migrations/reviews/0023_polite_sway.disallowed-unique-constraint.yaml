@@ -1,0 +1,6 @@
+reason: Participant-key uniqueness is required before a later runtime can use participant keys as durable conflict targets.
+affected_data_and_clients: Legacy unique constraints and primary keys remain unchanged. Old writers still use the legacy keys.
+rollout_sequence: Validate participant presence and direct-pair invariants before creating the participant unique constraints.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Repair duplicate participant data with a forward-only reviewed migration. Do not remove legacy constraints.
+reviewer: Database and messaging reviewers must approve the participant ownership contract.

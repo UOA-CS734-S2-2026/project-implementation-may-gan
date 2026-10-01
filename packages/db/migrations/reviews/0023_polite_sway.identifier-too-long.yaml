@@ -1,0 +1,6 @@
+reason: Constraint names include their table and participant-key meaning so later detachment work can identify them safely.
+affected_data_and_clients: Names are database metadata only and do not change runtime API shapes.
+rollout_sequence: Apply with the protected schema migration before participant runtime deployment.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Retain names in forward migrations unless a reviewed rename is required.
+reviewer: Database and messaging reviewers must approve the migration.

@@ -43,7 +43,7 @@ export const conversations = pgTable("conversations", {
   userLowId: text("user_low_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   userHighId: text("user_high_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   initiatorId: text("initiator_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  /** Populated by database triggers while deployed writers still use user IDs. */
+  /** Database triggers derive this durable identity while deployed writers use user IDs. */
   participantLowId: text("participant_low_id").references(() => messagingParticipants.id),
   participantHighId: text("participant_high_id").references(() => messagingParticipants.id),
   initiatorParticipantId: text("initiator_participant_id").references(() => messagingParticipants.id),
@@ -56,14 +56,18 @@ export const conversations = pgTable("conversations", {
 }, (table) => [
   unique("conversations_direct_pair_unique").on(table.userLowId, table.userHighId),
   index("conversations_activity_idx").on(table.lastActivityAt, table.id),
+  unique("conversations_participant_direct_pair_unique").on(table.participantLowId, table.participantHighId),
   check("conversations_direct_pair_order_check", sql`${table.userLowId} < ${table.userHighId}`),
   check("conversations_initiator_member_check", sql`${table.initiatorId} in (${table.userLowId}, ${table.userHighId})`),
+  check("conversations_participant_presence_check", sql`${table.participantLowId} is not null and ${table.participantHighId} is not null and ${table.initiatorParticipantId} is not null`),
+  check("conversations_participant_direct_pair_order_check", sql`${table.participantLowId} < ${table.participantHighId}`),
+  check("conversations_participant_initiator_member_check", sql`${table.initiatorParticipantId} in (${table.participantLowId}, ${table.participantHighId})`),
 ]);
 
 export const conversationMembers = pgTable("conversation_members", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  /** Populated by database triggers while deployed writers still use user IDs. */
+  /** Database triggers derive this durable identity while deployed writers use user IDs. */
   participantId: text("participant_id").references(() => messagingParticipants.id),
   lastReadSequence: bigint("last_read_sequence", { mode: "number" }).notNull(),
   receiptSequence: bigint("receipt_sequence", { mode: "number" }).notNull(),
@@ -71,7 +75,9 @@ export const conversationMembers = pgTable("conversation_members", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => [
   primaryKey({ name: "conversation_members_pk", columns: [table.conversationId, table.userId] }),
+  unique("conversation_members_participant_unique").on(table.conversationId, table.participantId),
   index("conversation_members_user_conversation_idx").on(table.userId, table.conversationId),
+  check("conversation_members_participant_presence_check", sql`${table.participantId} is not null`),
   check("conversation_members_receipt_read_check", sql`${table.receiptSequence} <= ${table.lastReadSequence}`),
 ]);
 
@@ -80,7 +86,7 @@ export const messages = pgTable("messages", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   sequence: bigint("sequence", { mode: "number" }).notNull(),
   senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  /** Populated by database triggers while deployed writers still use user IDs. */
+  /** Database triggers derive this durable identity while deployed writers use user IDs. */
   senderParticipantId: text("sender_participant_id").references(() => messagingParticipants.id),
   clientMessageId: text("client_message_id").notNull(),
   requestFingerprint: text("request_fingerprint").notNull(),
@@ -93,7 +99,9 @@ export const messages = pgTable("messages", {
 }, (table) => [
   unique("messages_conversation_sequence_unique").on(table.conversationId, table.sequence),
   unique("messages_sender_client_message_unique").on(table.senderId, table.clientMessageId),
+  unique("messages_sender_participant_client_message_unique").on(table.senderParticipantId, table.clientMessageId),
   index("messages_conversation_sequence_idx").on(table.conversationId, table.sequence),
+  check("messages_sender_participant_presence_check", sql`${table.senderParticipantId} is not null`),
   check("messages_sequence_positive_check", sql`${table.sequence} > 0`),
   check("messages_version_positive_check", sql`${table.version} > 0`),
   check("messages_body_or_tombstone_check", sql`(${table.body} is not null and ${table.unsentAt} is null) or (${table.body} is null and ${table.unsentAt} is not null)`),
@@ -102,12 +110,14 @@ export const messages = pgTable("messages", {
 export const messageReactions = pgTable("message_reactions", {
   messageId: text("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  /** Populated by database triggers while deployed writers still use user IDs. */
+  /** Database triggers derive this durable identity while deployed writers use user IDs. */
   participantId: text("participant_id").references(() => messagingParticipants.id),
   reaction: text("reaction").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
   primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.userId] }),
+  unique("message_reactions_participant_unique").on(table.messageId, table.participantId),
+  check("message_reactions_participant_presence_check", sql`${table.participantId} is not null`),
   check("message_reactions_key_check", sql`${table.reaction} in ('like', 'love', 'laugh', 'surprised', 'sad', 'angry', 'thanks')`),
 ]);
 

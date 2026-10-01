@@ -91,6 +91,13 @@ jobs:
           MIGRATION_REPOSITORY_ROOT: ${{ github.workspace }}
           MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
         run: pnpm --dir deployment-tooling db:plan
+      - name: Preflight pending messaging readiness migration size
+        if: inputs.migration_mode == 'forward'
+        env:
+          MIGRATION_TARGET: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
+        run: node deployment-tooling/scripts/staging-messaging-0023-preflight.mjs
       - name: Apply pending reviewed migrations
         if: inputs.migration_mode == 'forward' && steps.migration_plan.outputs.pending == 'true'
         env:

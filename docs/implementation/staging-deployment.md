@@ -11,6 +11,9 @@ This is not a PR deployment path. Do not add `push`, `pull_request`, or `pull_re
 ```text
 GitHub staging `DATABASE_URL` with direct `migrator` access
   -> read-only Cloudflare Hyperdrive lookup compares host, database, and port with the direct target
+  -> pnpm db:check and pnpm db:plan validate the captured forward release
+  -> 0023 pending only: read-only five-table size preflight checks the 16 MiB staging cap
+  -> pnpm db:migrate repeats that 16 MiB check after final exclusive table locks, then applies the reviewed pending suffix
   -> pnpm db:verify compares applied migration hashes with the captured release checkout in a read-only transaction
   -> scripts/run-staging-api-deploy.mjs validates and generates ignored Wrangler configuration
   -> Wrangler dry-runs
@@ -63,12 +66,13 @@ The Cloudflare token needs permission to read the named Hyperdrive, list and rea
 
 ## Deployment and verification
 
-1. Apply reviewed PostgreSQL migrations through the database migration workflow when required.
-2. Dispatch `Deploy coordinated staging release` from `main`, or let it run after successful `main` CI.
-3. Wait for the `staging` Environment owner approval.
-4. The API job checks out the captured application commit and the separate immutable tooling commit. The trusted tooling reads the configured Hyperdrive by its fixed secret ID, and compares its direct Neon host, database, and port with `DATABASE_URL`. It accepts `migrator` for the direct connection and requires `app` for Hyperdrive. It rejects pooler hosts, absent origin fields, or a mismatch without logging the connection string, hostname, database name, or port.
-5. It then uses `pnpm db:verify` to compare the captured commit's ordered migration hashes with staging in a read-only transaction. Both checks must pass before configuration generation, secret synchronization, either Worker deployment, the private proof, or web deployment. The job never applies migrations.
-6. A pending migration record means run the reviewed staging migration workflow, inspect its sanitized evidence, then retry. A changed hash means investigate the migration ledger. Do not edit applied migrations or apply anything automatically. An unknown or newer record means choose a compatible release or a reviewed forward fix. Do not perform a destructive downgrade.
+1. Let `Deploy coordinated staging release` run after successful `main` CI, or dispatch it from `main` without `commit_sha`.
+2. Wait for the `staging` Environment owner approval.
+3. The API job checks out the captured application commit and the separate immutable tooling commit. The trusted tooling reads the configured Hyperdrive by its fixed secret ID, and compares its direct Neon host, database, and port with `DATABASE_URL`. It accepts `migrator` for the direct connection and requires `app` for Hyperdrive. It rejects pooler hosts, absent origin fields, or a mismatch without logging the connection string, hostname, database name, or port.
+4. A forward release runs `pnpm db:check`, then `pnpm db:plan`. When `0023_polite_sway` is pending, the protected read-only preflight requires known migrator, app, and lifecycle roles, all five messaging tables, a known prefix ledger, and a combined 16 MiB maximum from `pg_total_relation_size`. It fails closed before `db:migrate` for any unknown state, query failure, or cap breach. Its Actions output reports only table and combined size categories plus the fixed cap, never byte counts.
+5. `0023` repeats the cap check after it holds final `ACCESS EXCLUSIVE` locks on all five tables and before it repairs data or builds constraints and indexes. This locked check closes the interval between the read-only preflight and migration. A breach aborts the migration transaction before partial data or schema changes commit.
+6. It applies only the reviewed pending suffix and uses `pnpm db:verify` to compare the captured commit's ordered migration hashes with staging in a read-only transaction. These checks must pass before configuration generation, secret synchronization, either Worker deployment, the private proof, or web deployment.
+7. A staging size-cap failure does not authorize a direct apply or a staging cap override. Record only sanitized categories and the fixed-cap outcome, choose a reviewed rollout change, and rerun the protected release. Production remains manual. Its optional `production_messaging_0023_size_cap_bytes` dispatch input is an explicit reviewed five-table byte cap, production-only, and never lowers the 16 MiB floor. A changed hash, unknown, or newer record requires a compatible release or a reviewed forward fix. Do not perform a destructive downgrade.
 7. The workflow validates exact origins, uncached named Hyperdrive, account ID, the existing exact Worker, and the projected public-secret pairing.
 8. It generates ignored configuration and performs Wrangler dry runs for the API and proof Worker before it synchronizes secrets.
 9. It synchronizes reviewed secrets, deploys the API, and runs the private Hyperdrive check.
@@ -77,7 +81,7 @@ The Cloudflare token needs permission to read the named Hyperdrive, list and rea
 
 A failed API stage stops the web stage. A failed web stage can leave the new API version active, so this is not transactional or zero-downtime. Restore a coherent prior release by setting `STAGING_BROWSER_PROXY_ENABLED` to the prior mode, then dispatching the coordinated workflow from main with the exact reviewed prior 40-character commit SHA. The workflow accepts only commits still reachable from main and only when staging has the same ordered migration hashes as that checkout. It rejects an older rollback release after a newer migration has reached staging, even when the old application code could appear compatible. Use a reviewed forward fix or a release with matching schema history instead. Do not restore the database or bypass the gate to force a historical Worker deploy. Retest browser sign-in afterward. Do not deploy web alone to recover a mode transition.
 
-The staging API job and the staging branch of the manual migration workflow share one GitHub Actions concurrency group. That prevents a normal workflow migration from starting after the gate and before the API proof finishes. The lock ends before the dependent web job starts. GitHub Actions keeps at most one pending run per concurrency group and a newer request replaces an older pending request, so do not assume queued staging migrations or releases run in FIFO order. It does not prevent an owner or break-glass actor from changing the database outside Actions, and it does not continuously prove the schema after the read-only check. Do not claim that this gate protects against out-of-band DDL or changes after the workflow ends.
+The staging API job and the staging branch of the manual migration workflow share one GitHub Actions concurrency group. That prevents a normal workflow migration from starting after the gate and before the API proof finishes. The lock ends before the dependent web job starts. GitHub Actions keeps at most one pending run per concurrency group and a newer request replaces an older pending request, so do not assume queued staging migrations or releases run in FIFO order. It does not prevent an owner or break-glass actor from changing the database outside Actions, and it does not continuously prove the schema after the locked migration check. Do not claim that this gate protects against out-of-band DDL or changes after the workflow ends.
 
 A failed secret synchronization can leave some values updated. Do not claim code and secret updates are atomic. Stop, review the named staging Worker and the approved source values without printing them, then rerun only after the owner decides the state is safe.
 
