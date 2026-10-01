@@ -9,15 +9,23 @@ type Selectable = Pick<DayliDatabase, "select">;
  * no current user identity.
  */
 export function activeUserIdForParticipant(participantId: SQLWrapper): SQL<string | null> {
+  // SQL fragments passed as participantId can contain a correlated expression.
+  // Keep these subquery columns explicitly qualified so PostgreSQL never binds
+  // them to that expression's outer query.
+  const participantUserId = sql.raw('"messaging_participants"."user_id"');
+  const participantIdColumn = sql.raw('"messaging_participants"."id"');
+  const participantState = sql.raw('"messaging_participants"."state"');
+  const lifecycleUserId = sql.raw('"account_lifecycles"."user_id"');
+  const lifecycleState = sql.raw('"account_lifecycles"."state"');
   return sql<string | null>`(
-    select ${schema.messagingParticipants.userId}
+    select ${participantUserId}
     from ${schema.messagingParticipants}
     left join ${schema.accountLifecycles}
-      on ${schema.accountLifecycles.userId} = ${schema.messagingParticipants.userId}
-    where ${schema.messagingParticipants.id} = ${participantId}
-      and ${schema.messagingParticipants.state} = 'active'
-      and ${schema.messagingParticipants.userId} is not null
-      and (${schema.accountLifecycles.state} is null or ${schema.accountLifecycles.state} = 'active')
+      on ${lifecycleUserId} = ${participantUserId}
+    where ${participantIdColumn} = ${participantId}
+      and ${participantState} = 'active'
+      and ${participantUserId} is not null
+      and (${lifecycleState} is null or ${lifecycleState} = 'active')
     limit 1
   )`;
 }
