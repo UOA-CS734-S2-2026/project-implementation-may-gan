@@ -30,6 +30,10 @@ export function createRestrictedDataExportSource(database: DayliDatabase) {
   };
 }
 
+function resultRows<T>(result: unknown): T[] {
+  return Array.isArray(result) ? result as T[] : (result as { rows: T[] }).rows;
+}
+
 export function createRestrictedDataExportWorkerStore(database: DayliDatabase) {
   return {
     async claim(): Promise<ClaimedDataExport | null> {
@@ -51,8 +55,21 @@ export function createRestrictedDataExportWorkerStore(database: DayliDatabase) {
     },
     async fail(input: { id: string; leaseToken: string; category: "size_limit" | "storage" | "source" }): Promise<boolean> {
       const result = await database.execute(sql`select public.dayli_export_fail(${input.id}, ${input.leaseToken}, ${input.category}) as failed`);
-      const rows = Array.isArray(result) ? result as unknown as Array<{ failed: boolean }> : (result as unknown as { rows: Array<{ failed: boolean }> }).rows;
-      return rows[0]?.failed === true;
+      return resultRows<{ failed: boolean }>(result)[0]?.failed === true;
+    },
+    async claimCleanup(): Promise<{ id: string; objectKey: string; leaseToken: string } | null> {
+      const token = crypto.randomUUID();
+      const result = await database.execute(sql`select * from public.dayli_export_cleanup_claim(${token}, 300)`);
+      const row = resultRows<{ id: string; archive_object_key: string; lease_token: string }>(result)[0];
+      return row ? { id: row.id, objectKey: row.archive_object_key, leaseToken: row.lease_token } : null;
+    },
+    async completeCleanup(id: string, leaseToken: string): Promise<boolean> {
+      const result = await database.execute(sql`select public.dayli_export_cleanup_complete(${id}, ${leaseToken}) as completed`);
+      return resultRows<{ completed: boolean }>(result)[0]?.completed === true;
+    },
+    async retryCleanup(id: string, leaseToken: string): Promise<boolean> {
+      const result = await database.execute(sql`select public.dayli_export_cleanup_retry(${id}, ${leaseToken}) as retried`);
+      return resultRows<{ retried: boolean }>(result)[0]?.retried === true;
     },
   };
 }

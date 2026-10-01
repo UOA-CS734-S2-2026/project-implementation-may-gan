@@ -36,6 +36,8 @@ describe("offline export archive", () => {
     } };
     expect(await buildExportArchive({ job, store, objects, source, now: () => new Date("2026-10-01T00:00:00.000Z") })).toBe("published");
     const archive = new Uint8Array(parts.reduce((size, part) => size + part.byteLength, 0)); let offset = 0; for (const part of parts) { archive.set(part, offset); offset += part.byteLength; }
+    expect(independentZipEntry(archive)).toContain('"archiveVersion":1');
+    expect(independentZipEntry(archive)).toContain('"selectionCutoffAt":"2026-10-01T00:00:00.000Z"');
     expect(independentZipEntry(archive)).toContain("sent by owner");
     expect(independentZipEntry(archive)).toContain("https://legitimate.example/path");
     expect(independentZipEntry(archive)).not.toContain("received reply preview");

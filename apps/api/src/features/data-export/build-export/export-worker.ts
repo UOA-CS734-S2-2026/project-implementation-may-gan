@@ -75,6 +75,14 @@ export async function buildExportArchive(input: { job: ExportBuildJob; store: Ex
       parts.push({ partNumber: parts.length + 1, etag: (await input.objects.uploadPart({ key, uploadId: upload!.uploadId, partNumber: parts.length + 1, bytes })).etag });
     };
     try {
+      const manifest = { type: "manifest", archiveVersion: exportArchiveVersion, format: "ndjson", selectionCutoffAt: input.job.snapshotCutoffAt.toISOString(), sourceKinds: ["account_profile", "journal", "journal_revision", "private_note", "authored_message"] };
+      const manifestBytes = encoder.encode(`${JSON.stringify(manifest)}\n`);
+      entryBytes += manifestBytes.byteLength;
+      archiveBytes += manifestBytes.byteLength;
+      crc = crc32(manifestBytes, crc);
+      pending.push(manifestBytes);
+      pendingBytes += manifestBytes.byteLength;
+      await flush();
       for await (const projection of input.source.records(input.job)) {
         const serialized = JSON.stringify(projection);
         // The source functions project bounded database columns. This additional

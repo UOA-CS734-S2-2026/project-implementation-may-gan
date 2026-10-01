@@ -483,6 +483,9 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await expect(lifecycleWorker`select * from public.data_export_requests`).rejects.toMatchObject({ code: "42501" });
     await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'wrong'.repeat(8)}, 0, 'private/forged.zip', now())`).resolves.toEqual([{ dayli_export_publish: false }]);
     const key = `private/data-exports/${exportId}/${"a".repeat(32)}.zip`;
+    await expect(lifecycleWorker`select public.dayli_export_reserve_object(${exportId}, ${'a'.repeat(32)})`).resolves.toEqual([{ dayli_export_reserve_object: key }]);
+    const [reservation] = await migrator`select next_attempt_at > now() as deferred from public.data_export_object_cleanup_tasks where id = ${`export-attempt-${exportId}-${"a".repeat(32)}`}`;
+    expect(reservation).toEqual({ deferred: true });
     const [{ snapshot_cutoff_at: cutoff }] = await migrator`select snapshot_cutoff_at from public.data_export_requests where id = ${exportId}`;
     await expect(lifecycleWorker`select public.dayli_export_publish(${exportId}, ${'a'.repeat(32)}, 0, ${key}, ${cutoff})`).resolves.toEqual([{ dayli_export_publish: true }]);
     const ready = await migrator`select status, archive_object_key, expires_at = ready_at + interval '24 hours' as exact_expiry from public.data_export_requests where id = ${exportId}`;
