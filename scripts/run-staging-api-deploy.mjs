@@ -2,7 +2,7 @@ import { writeFileSync } from "node:fs";
 import { validateStagingOrigins } from "./staging-origins.mjs";
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
 import { assertStagingR2BucketAccess, readStagingMediaBindings } from "./staging-media-bindings.mjs";
-import { createStagingWorkerConfigs, serializeWranglerConfig } from "./staging-worker-config.mjs";
+import { createStagingWorkerConfigs, readStagingBrowserProxyMode, serializeWranglerConfig } from "./staging-worker-config.mjs";
 import {
   assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
@@ -48,6 +48,7 @@ const { apiOrigin, webOrigin } = validateStagingOrigins({
   apiOrigin: required("STAGING_AUTH_API_ORIGIN"),
   webOrigin: required("STAGING_AUTH_WEB_ORIGIN"),
 });
+const browserProxyEnabled = readStagingBrowserProxyMode(process.env.STAGING_BROWSER_PROXY_ENABLED);
 const authBindings = readStagingAuthBindings(process.env);
 const mediaBindings = readStagingMediaBindings(process.env, accountId);
 const requiredSecretNames = [...authBindings.requiredSecrets, ...mediaBindings.requiredSecrets];
@@ -84,6 +85,7 @@ const { api, probe } = createStagingWorkerConfigs({
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,
   mediaVars: mediaBindings.vars,
+  browserProxyEnabled,
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));

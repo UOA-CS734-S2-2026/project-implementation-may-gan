@@ -1,70 +1,7 @@
-"use client";
+import ClientPage from "./ClientPage";
+import { ServerUsernameGuard } from "@/components/auth/ServerUsernameGuard";
+import { routeReturnPath, type RouteSearchParams } from "@/lib/routing/route-return-path";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useSession } from "@/lib/session/hooks";
-import { SignOutButton } from "./_components/SignOutButton";
-import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
-import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
-import { getUsernameProfile } from "@/lib/profile/username";
-
-export default function SettingsPage() {
-  const router = useRouter();
-  const { user, isPending } = useSession();
-  const [username, setUsername] = useState<string>();
-
-  useEffect(() => {
-    if (!isPending && !user) router.replace("/sign-in");
-  }, [isPending, router, user]);
-
-  useEffect(() => {
-    if (!user) return;
-    void getUsernameProfile().then((profile) => setUsername(profile.username ?? undefined));
-  }, [user]);
-
-  if (isPending || !user) return null;
-
-  const visibility = "public" as const;
-
-  return (
-    <div className="mx-auto max-w-md px-4 py-16">
-      <div className="space-y-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-foreground/60">Your account details.</p>
-        </div>
-
-        <div className="space-y-3 rounded-lg border border-foreground/10 p-4">
-          <Row label="Username" value={username ? `@${username}` : "Loading…"} />
-          <Row label="Name" value={user.name} />
-          <Row label="Email" value={user.email} />
-          {/* Paid features — hidden until billing is wired up */}
-          {/* <Row label="Plan" value={user.tier ?? "free"} /> */}
-          {/* <Row label="Role" value={user.role ?? "user"} /> */}
-        </div>
-
-        <ProfileVisibilityToggle initialVisibility={visibility} />
-
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium">Sign-in methods</h2>
-          <p className="text-xs text-foreground/60">Google is connected only when you choose it here. Matching emails are never connected automatically.</p>
-          <LinkGoogleAccount />
-        </section>
-
-        {/* Paid features — hidden until billing is wired up */}
-        {/* <ProfileGateDemo /> */}
-
-        <SignOutButton />
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-foreground/60">{label}</span>
-      <span className="font-medium capitalize">{value}</span>
-    </div>
-  );
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<RouteSearchParams> }) {
+  return <ServerUsernameGuard returnTo={routeReturnPath("/settings", await searchParams)}><ClientPage /></ServerUsernameGuard>;
 }

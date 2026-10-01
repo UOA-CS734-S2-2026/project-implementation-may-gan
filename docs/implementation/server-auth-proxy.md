@@ -175,7 +175,17 @@ Browser REST and Better Auth still use the public API unless `NEXT_PUBLIC_WEB_AP
 
 The native Cloudflare limiter is now an adapter behind `RateLimitProvider`. Policies retain ownership of bucket choice and key construction. The server-session helper supports the local opt-in guarded paths. It reports cookie mutation explicitly, then only the browser-facing refresh route can apply the API response cookie.
 
-No binding, callers, deployed variables, OAuth registrations, or cookie migration settings have been enabled by this work.
+The service binding is checked into the staging web Worker configuration, but no deployed binding, proxy mode variable, OAuth registration, or cookie migration setting has been enabled by this work.
+
+## Staging hookup
+
+Staging is the only deployment target. The checked-in web Worker configuration binds `API_BROWSER_PROXY` to the same-account `dayli-api-staging` Worker entrypoint `BrowserProxyEntrypoint`. `STAGING_BROWSER_PROXY_ENABLED` is the single reviewed staging switch. It defaults to false when absent and accepts only `true` or `false`. Both API generation and the web build consume it. False keeps the public route and browser callers inactive. True moves Better Auth to the web origin while retaining the direct API origin for mobile and realtime tickets. Its generated Wrangler configuration assertion rejects a missing, renamed, or widened service binding.
+
+GitHub staging variables supply the direct API origin, web origin, service name, and public provider IDs. Secrets remain in the existing GitHub Environment secrets and Worker secret sync. This wiring adds no secret. The generated API config sets `PUBLIC_API_BASE_URL` to the direct API origin, preserving native bearer callers and realtime ticket WebSockets. It leaves `BETTER_AUTH_BASE_URL` on that API origin until an approved coordinated browser-auth cutover.
+
+Before setting the switch to true or deploying either stage in proxy mode, register the exact web origin plus `/api/auth/callback/google` on the staging Google web OAuth client if Google is configured. Keep both API and web callback URIs registered throughout testing and rollback. Registration is a prerequisite, not a post-deployment step. After the required deployed proof and origin review are approved, enable the switch and run the coordinated release. It deploys and proves API before deploying web with the same captured commit and mode. The API generator and web workflow reject any mode other than true or false. Use a new test-browser sign-in because host-only cookies do not move domains. A rollback changes the API and web settings together and may require another sign-in. The coordinated staging-release workflow captures one mode and commit, deploys API plus proof before web, and is subject to its environment gate. A failed web stage can leave the API updated, so rollback uses the same coordinated workflow and the prior mode. No production setup is required.
+
+The binding does not prove visitor identity. Before activation, run the approved staging source-IP, forged-forwarding-header, cookie serialization, OAuth, and browser-session tests. Do not disable ingress protections to make that proof pass.
 
 ## Verification and completion criteria
 

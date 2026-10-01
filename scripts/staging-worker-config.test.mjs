@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { createStagingWorkerConfigs, rateLimitConfig, serializeWranglerConfig } from "./staging-worker-config.mjs";
+import { createStagingWorkerConfigs, rateLimitConfig, readStagingBrowserProxyMode, serializeWranglerConfig } from "./staging-worker-config.mjs";
 
 const input = {
   workerName: "dayli-api-staging",
@@ -19,8 +19,20 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.hyperdrive, [{ binding: "HYPERDRIVE", id: "a".repeat(32) }]);
   assert.deepEqual(api.ratelimits, rateLimitConfig);
   assert.equal(api.vars.API_RATE_LIMIT_SCOPE, "staging");
+  assert.equal(api.vars.BETTER_AUTH_BASE_URL, "https://api.staging.example.test");
+  assert.equal(api.vars.PUBLIC_API_BASE_URL, "https://api.staging.example.test");
   assert.equal(api.vars.PUSH_TOKEN_ENCRYPTION_KEY_VERSION, undefined);
   assert.equal(JSON.parse(serializeWranglerConfig(api)).name, "dayli-api-staging");
+});
+
+test("selects direct or proxied Better Auth origin only through the validated staging mode", () => {
+  assert.equal(readStagingBrowserProxyMode(undefined), false);
+  assert.equal(readStagingBrowserProxyMode("false"), false);
+  assert.equal(readStagingBrowserProxyMode("true"), true);
+  assert.throws(() => readStagingBrowserProxyMode("enabled"));
+  const { api } = createStagingWorkerConfigs({ ...input, browserProxyEnabled: true });
+  assert.equal(api.vars.BETTER_AUTH_BASE_URL, "https://staging.example.test");
+  assert.equal(api.vars.PUBLIC_API_BASE_URL, "https://api.staging.example.test");
 });
 
 test("keeps native rate-limit mappings and environment scopes aligned", () => {

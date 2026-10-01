@@ -1,13 +1,16 @@
 name: Deploy staging web
 
-# Deploy the exact main commit after CI succeeds. Manual deployment remains available
-# only from main.
+# Called only by staging-release.yml after its API proof succeeds. Do not add
+# independent triggers because API and web must use one captured release mode.
 on:
-  workflow_run:
-    workflows: [CI]
-    branches: [main]
-    types: [completed]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      commit_sha:
+        required: true
+        type: string
+      browser_proxy_enabled:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -18,17 +21,12 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_run' &&
-       github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
     environment: staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ inputs.commit_sha }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -41,6 +39,7 @@ jobs:
           STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
           STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
           STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+          STAGING_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
         run: |
           node <<'NODE'
           import { readFileSync } from 'node:fs';
@@ -59,17 +58,25 @@ jobs:
             apiOrigin: required('STAGING_AUTH_API_ORIGIN'),
             webOrigin: required('STAGING_AUTH_WEB_ORIGIN'),
           });
+          if (!['true', 'false'].includes(required('STAGING_BROWSER_PROXY_ENABLED'))) {
+            throw new Error('STAGING_BROWSER_PROXY_ENABLED must be true or false.');
+          }
           const config = JSON.parse(readFileSync('apps/web/wrangler.jsonc', 'utf8'));
           if (config.name !== 'dayli-web-staging' || config.workers_dev !== false
             || config.main !== 'vinext/server/fetch-handler'
             || config.routes || config.route || config.account_id || config.hyperdrive
-            || config.assets?.binding !== 'ASSETS') {
+            || config.assets?.binding !== 'ASSETS'
+            || JSON.stringify(config.services) !== JSON.stringify([{
+              binding: 'API_BROWSER_PROXY', service: 'dayli-api-staging', entrypoint: 'BrowserProxyEntrypoint',
+            }])) {
             throw new Error('Refusing unexpected staging web Worker configuration.');
           }
           NODE
       - name: Build vinext with the staging API origin
         env:
           NEXT_PUBLIC_API_BASE_URL: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+          NEXT_PUBLIC_WEB_API_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
+          NEXT_PUBLIC_WEB_API_BASE_URL: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
         run: pnpm --filter @dayli/web build:vinext
       - name: Validate generated deployment target
         run: |
@@ -78,7 +85,10 @@ jobs:
           const config = JSON.parse(readFileSync('apps/web/dist/server/wrangler.json', 'utf8'));
           if (config.name !== 'dayli-web-staging' || config.workers_dev !== false
             || config.routes?.length || config.route || config.hyperdrive?.length
-            || config.assets?.binding !== 'ASSETS') {
+            || config.assets?.binding !== 'ASSETS'
+            || JSON.stringify(config.services) !== JSON.stringify([{
+              binding: 'API_BROWSER_PROXY', service: 'dayli-api-staging', entrypoint: 'BrowserProxyEntrypoint',
+            }])) {
             throw new Error('Refusing an unexpected generated web Worker target or binding.');
           }
           NODE
