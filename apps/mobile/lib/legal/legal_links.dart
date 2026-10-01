@@ -4,9 +4,17 @@ import 'package:go_router/go_router.dart';
 import '../app/theme.dart';
 
 class LegalLinks extends StatelessWidget {
-  const LegalLinks({super.key, this.notice = true, this.center = false});
+  const LegalLinks({
+    super.key,
+    this.notice = true,
+    this.draftMarker = false,
+    this.compact = false,
+    this.center = false,
+  });
 
   final bool notice;
+  final bool draftMarker;
+  final bool compact;
   final bool center;
 
   @override
@@ -24,7 +32,7 @@ class LegalLinks extends StatelessWidget {
             TextButton(
               key: const Key('legal.openPrivacy'),
               onPressed: () => context.push('/privacy'),
-              style: _style(colors),
+              style: _style(context, colors),
               child: const Text('Privacy Policy'),
             ),
             Text(
@@ -38,9 +46,18 @@ class LegalLinks extends StatelessWidget {
             TextButton(
               key: const Key('legal.openTerms'),
               onPressed: () => context.push('/terms'),
-              style: _style(colors),
+              style: _style(context, colors),
               child: const Text('Terms of Service'),
             ),
+            if (draftMarker)
+              Text(
+                '(draft)',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.xs,
+                  color: colors.foregroundTertiary,
+                ),
+              ),
           ],
         ),
         if (notice) ...[
@@ -59,9 +76,17 @@ class LegalLinks extends StatelessWidget {
     );
   }
 
-  ButtonStyle _style(DayliColors colors) => TextButton.styleFrom(
-    foregroundColor: colors.foregroundAccent,
-    minimumSize: const Size(48, 48),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-  );
+  ButtonStyle _style(BuildContext context, DayliColors colors) =>
+      TextButton.styleFrom(
+        foregroundColor: colors.foregroundAccent,
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        textStyle: compact
+            ? DayliText.sans(
+                context,
+                size: DayliTextSize.xs,
+                weight: FontWeight.w500,
+              )
+            : null,
+      );
 }

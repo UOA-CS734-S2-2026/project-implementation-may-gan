@@ -18,6 +18,10 @@ export function LegalLinks({ className = "" }: LegalLinksProps) {
   );
 }
 
+export function LegalDraftMarker() {
+  return <span className="text-[11px] leading-4 text-foreground-tertiary">(draft)</span>;
+}
+
 export function LegalDraftNotice() {
   return (
     <p className="text-xs leading-5 text-foreground-secondary">

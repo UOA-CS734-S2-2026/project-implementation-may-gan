@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession } from "@/lib/session/hooks";
 import { getUsernameProfile } from "@/lib/profile/username";
-import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 
 import GallerySquiggle1 from "@/assets/GallerySquiggle01";
 import GallerySquiggle2 from "@/assets/GallerySquiggle02";
@@ -68,8 +68,10 @@ export default function App() {
         </p>
         <div className="absolute bottom-4 z-30 flex max-w-[calc(100%-2rem)] flex-col items-center gap-1 text-center">
           <p className="text-lg font-medium opacity-50">one post, every day.</p>
-          <LegalLinks className="text-xs text-foreground-secondary" />
-          <LegalDraftNotice />
+          <div className="flex flex-wrap items-baseline justify-center gap-x-1 text-xs leading-5 text-foreground-secondary">
+            <LegalLinks />
+            <LegalDraftMarker />
+          </div>
         </div>
       </div>
 
