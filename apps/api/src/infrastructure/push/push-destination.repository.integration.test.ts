@@ -126,6 +126,16 @@ suite("Postgres push destination authorization", () => {
       eq(schema.relationshipBlocks.blockedId, ids.alice),
     ));
 
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: ids.alice, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "f".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+    await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
+    await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, ids.alice));
+
     await resolver.invalidate(ids.bobDevice);
     await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });

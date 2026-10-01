@@ -25,8 +25,8 @@ export function sendMessageMemory(initial = storedMessage()) {
   const idempotency = new Map<string, StoredMessage>();
   const changes: string[] = [];
   const transaction: SendMessageTransaction = {
-    getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
-    activateForFriendship: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
+    getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, participantsAvailable: true, peerActivityBlocked: false }),
+    activateForFriendship: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, participantsAvailable: true, peerActivityBlocked: false }),
     findIdempotentMessage: async (senderId, clientMessageId) => {
       const found = idempotency.get(`${senderId}:${clientMessageId}`);
       return found ? { requestFingerprint: found.requestFingerprint, message: found } : null;

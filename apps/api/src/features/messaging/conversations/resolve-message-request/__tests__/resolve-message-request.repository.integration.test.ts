@@ -293,7 +293,7 @@ suite("resolve message request Postgres repository", () => {
       lastReadSequence: previousSequence,
       receiptSequence: previousSequence,
     });
-    expect(builderQueries).toHaveLength(15);
+    expect(builderQueries).toHaveLength(16);
     const responseQueries = builderQueries.slice(-5);
     expect(responseQueries).toHaveLength(5);
     const latestQuery = responseQueries.find((query) => query.includes('order by "messages"."sequence" desc'));

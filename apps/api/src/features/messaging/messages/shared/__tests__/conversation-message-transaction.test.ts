@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest";
 import { withLockedConversationMessageTransaction } from "../conversation-message-transaction";
 
 describe("withLockedConversationMessageTransaction", () => {
-  it("locks the looked-up relationship pair before invoking the caller callback", async () => {
+  it("locks canonical user rows before the relationship pair and callback", async () => {
     const events: string[] = [];
+    let ordinarySelects = 0;
     const transaction = {
       select(fields?: { lock?: unknown }) {
         if (fields?.lock) {
@@ -15,14 +16,35 @@ describe("withLockedConversationMessageTransaction", () => {
             },
           };
         }
+        ordinarySelects += 1;
+        if (ordinarySelects === 1) {
+          return {
+            from() {
+              return {
+                where() {
+                  return {
+                    async limit() {
+                      events.push("pair lookup");
+                      return [{ userLowId: "amy", userHighId: "zoe" }];
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
         return {
           from() {
             return {
               where() {
                 return {
-                  async limit() {
-                    events.push("pair lookup");
-                    return [{ userLowId: "amy", userHighId: "zoe" }];
+                  orderBy() {
+                    return {
+                      async for() {
+                        events.push("canonical user locks");
+                        return [];
+                      },
+                    };
                   },
                 };
               },
@@ -37,6 +59,6 @@ describe("withLockedConversationMessageTransaction", () => {
       events.push("callback");
     });
 
-    expect(events).toEqual(["pair lookup", "relationship pair lock", "callback"]);
+    expect(events).toEqual(["pair lookup", "canonical user locks", "relationship pair lock", "callback"]);
   });
 });

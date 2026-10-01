@@ -8,7 +8,7 @@ export interface SetReactionTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
   setReaction(messageId: string, actorId: string, reaction: ReactionKey): Promise<StoredMessage>;
-  appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "reaction.changed" }): Promise<void>;
+  appendPeerChange(input: { conversationId: string; messageId: string | null; actorId?: string; kind: "reaction.changed" }): Promise<void>;
 }
 
 export interface SetReactionStore {
@@ -44,7 +44,7 @@ class PostgresSetReactionTransaction implements SetReactionTransaction {
     return current;
   }
 
-  async appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "reaction.changed" }): Promise<void> {
+  async appendPeerChange(input: { conversationId: string; messageId: string | null; actorId?: string; kind: "reaction.changed" }): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
 }

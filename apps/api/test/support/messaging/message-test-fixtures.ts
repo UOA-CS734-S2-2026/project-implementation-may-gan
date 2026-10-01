@@ -51,7 +51,7 @@ export function messageMemory(initial = message()) {
     return updated;
   };
   const transaction: MessageMemoryTransaction = {
-    getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, peerActivityBlocked: false }),
+    getAccess: async () => ({ conversationId: "conversation-1", peerId: "bob", requestState: "active", isMember: true, participantsAvailable: true, peerActivityBlocked: false }),
     findMessage: async (_conversationId, id) => messages.get(id) ?? null,
     appendPeerChange: async (input) => {
       changes.push(input.kind);
@@ -76,7 +76,7 @@ export function messageMemory(initial = message()) {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof unsendMessageTransaction) => Promise<T>) => action(unsendMessageTransaction),
   };
   const setReactionTransaction = {
-    getAccess: transaction.getAccess,
+    getAccess: (actorId: string, conversationId: string) => transaction.getAccess(actorId, conversationId),
     findMessage: transaction.findMessage,
     setReaction: async (id: string, _actor: string, reaction: StoredMessage["reactions"][number]["reaction"]) => {
       const old = messages.get(id)!;
@@ -90,7 +90,7 @@ export function messageMemory(initial = message()) {
     withConversationTransaction: async <T>(_actor: string, _conversation: string, action: (transaction: typeof setReactionTransaction) => Promise<T>) => action(setReactionTransaction),
   };
   const removeReactionTransaction = {
-    getAccess: transaction.getAccess,
+    getAccess: (actorId: string, conversationId: string) => transaction.getAccess(actorId, conversationId),
     findMessage: transaction.findMessage,
     removeReaction: async (id: string) => {
       const old = messages.get(id)!;

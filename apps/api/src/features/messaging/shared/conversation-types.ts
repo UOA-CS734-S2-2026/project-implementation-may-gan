@@ -15,6 +15,8 @@ export interface DirectConversationTransaction {
   /** Acquires the relationship-pair lock before resolving either participant. */
   findDirectConversation(actorId: string, recipientId: string): Promise<DirectConversation | null>;
   recipientExists(recipientId: string): Promise<boolean>;
+  /** Reads the post-lock lifecycle and participant state for this direct pair. */
+  participantsAvailable(): Promise<boolean>;
   hasActiveFriendship(actorId: string, recipientId: string): Promise<boolean>;
   findIdempotentMessage(senderId: string, clientMessageId: string): Promise<{
     requestFingerprint: string;

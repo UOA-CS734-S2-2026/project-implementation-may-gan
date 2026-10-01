@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { appendPeerChange, findMessage, getAccess } from "../message-write-primitives";
 
 const {
+  accountLifecycles,
   conversationChanges,
   conversationMembers,
   conversations,
@@ -97,6 +98,7 @@ suite("message write primitive builders", () => {
       peerId: users[0],
       requestState: "active",
       isMember: false,
+      participantsAvailable: true,
       peerActivityBlocked: false,
     });
     await expect(getAccess(database.db, users[0]!, crypto.randomUUID())).resolves.toEqual({
@@ -104,6 +106,7 @@ suite("message write primitive builders", () => {
       peerId: "",
       requestState: "declined",
       isMember: false,
+      participantsAvailable: false,
       peerActivityBlocked: false,
     });
 
@@ -127,6 +130,24 @@ suite("message write primitive builders", () => {
     await database.db.update(messages).set({ sequence: sql`9007199254740992::bigint` }).where(eq(messages.id, messageId));
 
     await expect(findMessage(database.db, users[0]!, conversationId, messageId)).rejects.toThrow(RangeError);
+  });
+
+  it("does not queue peer delivery after a participant becomes unavailable", async () => {
+    const { conversationId, messageId } = await createConversation();
+    const requestedAt = new Date();
+    await database.db.insert(accountLifecycles).values({
+      userId: users[1]!, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "f".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+    await database.db.transaction((transaction) => appendPeerChange(transaction, {
+      conversationId, messageId, kind: "message.created",
+    }));
+    const outbox = await database.db.select({ recipientId: messagingOutbox.recipientId })
+      .from(messagingOutbox)
+      .where(eq(messagingOutbox.conversationId, conversationId));
+    expect(outbox.map((row) => row.recipientId)).toEqual([users[0]]);
   });
 
   it("serializes concurrent access through the conversation row lock", async () => {

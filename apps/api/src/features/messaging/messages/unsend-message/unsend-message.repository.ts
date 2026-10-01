@@ -8,7 +8,7 @@ export interface UnsendMessageTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
   unsendMessage(input: { messageId: string; unsentAt: Date }): Promise<StoredMessage>;
-  appendPeerChange(input: { conversationId: string; messageId: string; kind: "message.unsent" }): Promise<void>;
+  appendPeerChange(input: { conversationId: string; messageId: string; actorId?: string; kind: "message.unsent" }): Promise<void>;
 }
 
 export interface UnsendMessageStore {
@@ -34,7 +34,7 @@ class PostgresUnsendMessageTransaction implements UnsendMessageTransaction {
     return updateMessageRow(this.queryable, { messageId: input.messageId, body: null, unsentAt: input.unsentAt });
   }
 
-  async appendPeerChange(input: { conversationId: string; messageId: string; kind: "message.unsent" }): Promise<void> {
+  async appendPeerChange(input: { conversationId: string; messageId: string; actorId?: string; kind: "message.unsent" }): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
 }

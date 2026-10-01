@@ -8,7 +8,7 @@ export interface RemoveReactionTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
   removeReaction(messageId: string, actorId: string): Promise<StoredMessage>;
-  appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "reaction.changed" }): Promise<void>;
+  appendPeerChange(input: { conversationId: string; messageId: string | null; actorId?: string; kind: "reaction.changed" }): Promise<void>;
 }
 
 export interface RemoveReactionStore {
@@ -42,7 +42,7 @@ class PostgresRemoveReactionTransaction implements RemoveReactionTransaction {
     return current;
   }
 
-  async appendPeerChange(input: { conversationId: string; messageId: string | null; kind: "reaction.changed" }): Promise<void> {
+  async appendPeerChange(input: { conversationId: string; messageId: string | null; actorId?: string; kind: "reaction.changed" }): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
 }

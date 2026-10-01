@@ -8,7 +8,7 @@ export interface EditMessageTransaction {
   getAccess(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
   editMessage(input: { messageId: string; body: string; editedAt: Date; expectedVersion: number }): Promise<StoredMessage>;
-  appendPeerChange(input: { conversationId: string; messageId: string; kind: "message.edited" }): Promise<void>;
+  appendPeerChange(input: { conversationId: string; messageId: string; actorId?: string; kind: "message.edited" }): Promise<void>;
 }
 
 export interface EditMessageStore {
@@ -34,7 +34,7 @@ class PostgresEditMessageTransaction implements EditMessageTransaction {
     return updateMessageRow(this.queryable, input);
   }
 
-  async appendPeerChange(input: { conversationId: string; messageId: string; kind: "message.edited" }): Promise<void> {
+  async appendPeerChange(input: { conversationId: string; messageId: string; actorId?: string; kind: "message.edited" }): Promise<void> {
     return appendPeerChange(this.queryable, input);
   }
 }

@@ -32,7 +32,7 @@ export function createEditMessageService(dependencies: { store: EditMessageStore
           editedAt: now(),
           expectedVersion: input.expectedVersion,
         });
-        await transaction.appendPeerChange({ conversationId, messageId, kind: "message.edited" });
+        await transaction.appendPeerChange({ conversationId, messageId, actorId, kind: "message.edited" });
         return toMessageDto(updated);
       });
     },

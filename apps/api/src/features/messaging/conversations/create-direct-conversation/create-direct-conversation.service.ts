@@ -30,6 +30,7 @@ export function createCreateDirectConversationService(dependencies: {
         // Check before replay so a stale retry cannot emit a peer-visible
         // result after either participant has blocked the pair.
         if (await transaction.isPairBlocked(actorId, input.recipientId)) throw new MessagingError("BLOCKED");
+        if (!await transaction.participantsAvailable()) throw new MessagingError("FORBIDDEN");
         const existing = await transaction.findDirectConversation(actorId, input.recipientId);
         // The direct-create request is addressed to a pair, not a prior thread ID.
         // This stable target keeps a lost first response replayable after creation.

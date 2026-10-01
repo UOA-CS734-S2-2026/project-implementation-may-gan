@@ -12,13 +12,21 @@ if (enabled && target?.hostname === "localhost" && target.port === "5433" && tar
 }
 const suite = enabled ? describe : describe.skip;
 
+async function waitFor(condition: () => Promise<boolean>, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
 suite("create direct conversation Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const concurrentDatabase = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const mixedCasePrefix = `create-direct-conversation-${crypto.randomUUID()}-`;
   const mixedCaseUsers = [`${mixedCasePrefix}a`, `${mixedCasePrefix}B`] as const;
   const users = [
-    ...Array.from({ length: 10 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
+    ...Array.from({ length: 14 }, (_, index) => `create-direct-conversation-${crypto.randomUUID()}-${index}`),
     ...mixedCaseUsers,
   ];
   const builderQueries: string[] = [];
@@ -226,6 +234,74 @@ suite("create direct conversation Postgres repository", () => {
     expect(message?.sequence).toBe("9007199254740992");
     expect(changeCount?.count).toBe(beforeChanges?.count);
     expect(outboxCount?.count).toBe(beforeOutbox?.count);
+  });
+
+  it("waits for a lifecycle transition before refusing direct creation", async () => {
+    const actorId = users[10]!;
+    const recipientId = users[11]!;
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let lifecycleWritten: (() => void) | undefined;
+    const written = new Promise<void>((resolve) => { lifecycleWritten = resolve; });
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [contenderBackend] = await concurrentDatabase.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const contenderPid = Number(contenderBackend?.pid);
+      const transition = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${recipientId} for update`;
+        await tx`
+          insert into public.account_lifecycles
+            (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+          values (${recipientId}, 'pending_deletion', ${crypto.randomUUID()}, ${"e".repeat(64)}, 1, now(), now() + interval '168 hours', now() + interval '336 hours')
+        `;
+        lifecycleWritten?.();
+        await held;
+      });
+      await written;
+      const created = concurrentDirect.create(actorId, { recipientId, clientMessageId: crypto.randomUUID(), text: "must wait for lifecycle" });
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${contenderPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected direct creation to wait for the lifecycle user lock.");
+      release!();
+      await transition;
+      await expect(created).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const [createdCount] = await database.db.select({ count: count() }).from(conversations).where(and(
+        eq(conversations.userLowId, sql`least(${actorId}, ${recipientId})`),
+        eq(conversations.userHighId, sql`greatest(${actorId}, ${recipientId})`),
+      ));
+      expect(createdCount?.count).toBe(0);
+    } finally {
+      release?.();
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, recipientId));
+      await Promise.all([holder.close(), inspector.close()]);
+    }
+  });
+
+  it("rejects a lifecycle-unavailable direct creation replay without duplicating persistence", async () => {
+    const actorId = users[12]!;
+    const recipientId = users[13]!;
+    const clientMessageId = crypto.randomUUID();
+    const created = await direct.create(actorId, { recipientId, clientMessageId, text: "replay after lifecycle" });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: recipientId, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "e".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+    try {
+      await expect(direct.create(actorId, { recipientId, clientMessageId, text: "replay after lifecycle" }))
+        .rejects.toMatchObject({ code: "FORBIDDEN" });
+      const [messageCount] = await database.db.select({ count: count() }).from(messages)
+        .where(eq(messages.conversationId, created.conversation.id));
+      expect(messageCount?.count).toBe(1);
+    } finally {
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, recipientId));
+    }
   });
 
   it("rejects creation after either-direction blocks", async () => {

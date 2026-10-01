@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, isNull, or } from "drizzle-orm";
 
 type Queryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 
@@ -39,33 +39,31 @@ export async function appendConversationChange(
     createdAt: now,
   });
 
-  const eventId = crypto.randomUUID();
-  await queryable.insert(schema.messagingOutbox).values([
-    {
+  const recipients = await queryable
+    .select({ id: schema.user.id })
+    .from(schema.user)
+    .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+    .where(and(
+      inArray(schema.user.id, [change.userLowId, change.userHighId]),
+      eq(schema.messagingParticipants.state, "active"),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+    ));
+  if (recipients.length > 0) {
+    const eventId = crypto.randomUUID();
+    await queryable.insert(schema.messagingOutbox).values(recipients.map((recipient) => ({
       id: crypto.randomUUID(),
       eventId,
-      recipientId: change.userLowId,
+      recipientId: recipient.id,
       conversationId,
       changeSequence,
-      channel: "realtime",
-      status: "pending",
+      channel: "realtime" as const,
+      status: "pending" as const,
       attempts: 0,
       availableAt: now,
       createdAt: now,
-    },
-    {
-      id: crypto.randomUUID(),
-      eventId,
-      recipientId: change.userHighId,
-      conversationId,
-      changeSequence,
-      channel: "realtime",
-      status: "pending",
-      attempts: 0,
-      availableAt: now,
-      createdAt: now,
-    },
-  ]);
+    })));
+  }
 
   if (kind !== "message.created" || !messageId) return;
 
@@ -77,6 +75,11 @@ export async function appendConversationChange(
   const devices = await queryable
     .select({ id: schema.pushDevices.id })
     .from(schema.pushDevices)
+    .innerJoin(schema.messagingParticipants, and(
+      eq(schema.messagingParticipants.userId, schema.pushDevices.userId),
+      eq(schema.messagingParticipants.state, "active"),
+    ))
+    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.pushDevices.userId))
     .innerJoin(schema.session, and(
       eq(schema.session.id, schema.pushDevices.sessionId),
       eq(schema.session.userId, schema.pushDevices.userId),
@@ -85,6 +88,7 @@ export async function appendConversationChange(
     .where(and(
       eq(schema.pushDevices.userId, peerId),
       eq(schema.pushDevices.optedIn, true),
+      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
       isNotNull(schema.pushDevices.tokenKeyVersion),

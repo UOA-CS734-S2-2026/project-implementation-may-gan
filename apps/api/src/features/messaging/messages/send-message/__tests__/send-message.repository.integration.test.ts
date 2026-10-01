@@ -23,10 +23,18 @@ if (enabled && target?.hostname === "localhost" && target.port === "5433" && tar
 }
 const suite = enabled ? describe : describe.skip;
 
+async function waitFor(condition: () => Promise<boolean>, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await condition()) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error(message);
+}
+
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 8 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 10 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const { direct } = createMessagingPersistenceServices(database.db);
   const send = createSendMessageService({ store: createPostgresMessageWriteStore(database.db) });
   const contenderSend = createSendMessageService({ store: createPostgresMessageWriteStore(contender.db) });
@@ -42,6 +50,8 @@ suite("send message Postgres repository", () => {
       { userId: users[5]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
       { userId: users[6]!, friendId: users[7]!, state: "active", stateChangedAt: new Date() },
       { userId: users[7]!, friendId: users[6]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[8]!, friendId: users[9]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[9]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
     ]);
   });
 
@@ -137,6 +147,56 @@ suite("send message Postgres repository", () => {
     expect(outbox?.count).toBe((beforeOutbox?.count ?? 0) + 4);
   });
 
+  it("waits for a concurrent lifecycle transition, then rejects the positive send", async () => {
+    const created = await direct.create(users[0]!, {
+      recipientId: users[1]!, clientMessageId: crypto.randomUUID(), text: "lifecycle contender",
+    });
+    const [beforeMessageCount] = await database.db.select({ count: count() }).from(messages)
+      .where(eq(messages.conversationId, created.conversation.id));
+    const holder = createDayliDatabase(connectionString!);
+    const inspector = createDayliDatabase(connectionString!);
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let lifecycleWritten: (() => void) | undefined;
+    const written = new Promise<void>((resolve) => { lifecycleWritten = resolve; });
+    try {
+      const [holderBackend] = await holder.client`select pg_backend_pid() as pid`;
+      const [contenderBackend] = await contender.client`select pg_backend_pid() as pid`;
+      const holderPid = Number(holderBackend?.pid);
+      const contenderPid = Number(contenderBackend?.pid);
+      const requestId = crypto.randomUUID();
+      const transition = holder.client.begin(async (tx) => {
+        await tx`select id from public."user" where id = ${users[1]!} for update`;
+        await tx`
+          insert into public.account_lifecycles
+            (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+          values (${users[1]!}, 'pending_deletion', ${requestId}, ${"e".repeat(64)}, 1, now(), now() + interval '168 hours', now() + interval '336 hours')
+        `;
+        lifecycleWritten?.();
+        await held;
+      });
+      await written;
+      const outcome = contenderSend.send(users[0]!, created.conversation.id, {
+        clientMessageId: crypto.randomUUID(), text: "must not follow lifecycle transition",
+      });
+      await waitFor(async () => {
+        const [row] = await inspector.client`select ${holderPid} = any(pg_blocking_pids(${contenderPid})) as blocked`;
+        return row?.blocked === true;
+      }, "Expected send to wait for the lifecycle user lock.");
+      release!();
+      await transition;
+      await expect(outcome).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const [messageCount] = await database.db.select({ count: count() }).from(messages)
+        .where(eq(messages.conversationId, created.conversation.id));
+      expect(messageCount?.count).toBe(beforeMessageCount?.count);
+    } finally {
+      release?.();
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[1]!));
+      await database.db.delete(schema.conversations).where(eq(schema.conversations.id, created.conversation.id));
+      await Promise.all([holder.close(), inspector.close()]);
+    }
+  });
+
   it("allocates Number.MAX_SAFE_INTEGER without changing the public sequence string", async () => {
     const created = await direct.create(users[6]!, {
       recipientId: users[7]!,
@@ -205,6 +265,29 @@ suite("send message Postgres repository", () => {
     expect(message?.sequence).toBe("9007199254740992");
     expect(changeCount?.count).toBe(beforeChangeCount?.count);
     expect(outboxCount?.count).toBe(beforeOutboxCount?.count);
+  });
+
+  it("rejects a lifecycle-unavailable idempotent send replay without new persistence", async () => {
+    const created = await direct.create(users[8]!, {
+      recipientId: users[9]!, clientMessageId: crypto.randomUUID(), text: "replay after lifecycle",
+    });
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[9]!, state: "pending_deletion", requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "e".repeat(64), generation: 1, requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60 * 1000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60 * 1000),
+    });
+    try {
+      await expect(send.send(users[8]!, created.conversation.id, {
+        clientMessageId: created.message.clientMessageId, text: "replay after lifecycle",
+      })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const [messageCount] = await database.db.select({ count: count() }).from(messages)
+        .where(eq(messages.conversationId, created.conversation.id));
+      expect(messageCount?.count).toBe(1);
+    } finally {
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users[9]!));
+    }
   });
 
   it("rejects pending and blocked sends without additional messages, changes, or outbox work", async () => {

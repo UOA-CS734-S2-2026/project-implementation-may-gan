@@ -50,9 +50,15 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       database.db
         .select({ conversationId: schema.conversationMembers.conversationId })
         .from(schema.conversationMembers)
+        .innerJoin(schema.messagingParticipants, and(
+          eq(schema.messagingParticipants.userId, schema.conversationMembers.userId),
+          eq(schema.messagingParticipants.state, "active"),
+        ))
+        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.conversationMembers.userId))
         .where(and(
           eq(schema.conversationMembers.conversationId, schema.conversations.id),
           eq(schema.conversationMembers.userId, job.recipientId),
+          or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
         )),
     );
     const blocked = exists(
@@ -73,11 +79,34 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
           ),
         )),
     );
+    const availableParticipant = (
+      userId: typeof schema.conversations.userLowId | typeof schema.conversations.userHighId,
+    ) => exists(database.db
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
+      .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
+      .where(and(
+        eq(schema.user.id, userId),
+        eq(schema.messagingParticipants.state, "active"),
+        or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
+      )));
+    const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.userLowId)} and ${availableParticipant(schema.conversations.userHighId)}`;
+    const reactionStillPresent = exists(database.db
+      .select({ messageId: schema.messageReactions.messageId })
+      .from(schema.messageReactions)
+      .where(and(
+        eq(schema.messageReactions.messageId, schema.conversationChanges.messageId),
+        eq(schema.messageReactions.userId, schema.conversationChanges.memberId),
+      )));
     const [row] = await database.db
       .select({
         senderId: schema.messages.senderId,
         memberId: schema.conversationChanges.memberId,
+        kind: schema.conversationChanges.kind,
         recipientMember,
+        participantsAvailable,
+        reactionStillPresent,
         blocked,
       })
       .from(schema.messagingOutbox)
@@ -96,10 +125,22 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       ))
       .limit(1);
     if (!row || !row.recipientMember) return false;
+    // New writers persist the actual actor. Old message-created jobs can derive
+    // it from the immutable message sender. Other ambiguous old queued changes
+    // may be delivered only when neither availability nor blocks changed.
+    const actorId = row.memberId ?? (row.kind === "reaction.changed" ? null : row.senderId);
+    const positive = row.kind === "message.created"
+      || row.kind === "message.edited"
+      || row.kind === "request.active"
+      || (row.kind === "reaction.changed" && row.reactionStillPresent);
+    const cleanup = row.kind === "message.unsent"
+      || row.kind === "request.declined"
+      || (row.kind === "reaction.changed" && !row.reactionStillPresent);
+    if (positive && !row.participantsAvailable) return false;
+    if (!row.participantsAvailable) return cleanup && actorId === job.recipientId;
     if (!row.blocked) return true;
-    // Private actor invalidations do not expose new peer activity. The actor is
-    // derived from the persisted change, never from an outbox caller.
-    const actorId = row.senderId ?? row.memberId;
+    // A block may invalidate only its actual actor. In particular, a reaction
+    // change must never fall back to the message sender.
     return actorId === job.recipientId;
   } finally {
     await database.close();
