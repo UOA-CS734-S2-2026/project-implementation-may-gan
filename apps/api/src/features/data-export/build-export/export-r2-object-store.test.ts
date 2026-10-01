@@ -42,6 +42,15 @@ describe("R2 export multipart adapter", () => {
     await store.abort({ key: "private/key", uploadId: "one" });
   });
 
+  it("parses namespaced multipart pages with intervening provider fields", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(response('<?xml version="1.0"?><s3:ListMultipartUploadsResult xmlns:s3="urn:s3"><s3:IsTruncated>true</s3:IsTruncated><s3:Upload><s3:Key>private/key</s3:Key><s3:Owner><s3:ID>owner</s3:ID></s3:Owner><s3:Initiated>now</s3:Initiated><s3:UploadId>one</s3:UploadId></s3:Upload><s3:NextKeyMarker>private/key</s3:NextKeyMarker><s3:NextUploadIdMarker>one</s3:NextUploadIdMarker></s3:ListMultipartUploadsResult>'))
+      .mockResolvedValueOnce(response('<ListMultipartUploadsResult><IsTruncated>false</IsTruncated><Upload><Key>private/key</Key><StorageClass>STANDARD</StorageClass><UploadId>two</UploadId></Upload></ListMultipartUploadsResult>'));
+    vi.stubGlobal("fetch", fetch);
+    expect(await createR2ExportObjectStore(config).listMultipartUploads("private/key")).toEqual(["one", "two"]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it("maps timeouts and network failures to sanitized errors", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network credentials private/key")));
     await expect(createR2ExportObjectStore(config).begin("private/key")).rejects.toThrow("R2 request failed.");

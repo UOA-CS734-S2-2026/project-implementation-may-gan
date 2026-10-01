@@ -375,10 +375,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       await publisher.unsafe("begin");
       await publisher`update public.legal_document_versions set status = 'notice', notice_starts_at = '2026-10-01T00:00:00.000Z', effective_at = '2026-11-01T00:00:00.000Z' where id = ${rekeyTargetId}`;
       const [{ pid: rekeyWriterPid }] = await writer`select pg_backend_pid()::int as pid`;
-      const blockedRekey = writer`update public.legal_document_contents set terms_version_id = ${rekeyTargetId} where terms_version_id = ${rekeySourceId}`.then((result) => result);
+      const blockedRekey = writer`update public.legal_document_contents set terms_version_id = ${rekeyTargetId} where terms_version_id = ${rekeySourceId}`
+        .then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
       await waitForLock(rekeyWriterPid);
       await publisher.unsafe("commit");
-      await expect(blockedRekey).rejects.toMatchObject({ code: "23514" });
+      const rekeyOutcome = await blockedRekey;
+      expect(rekeyOutcome.ok).toBe(false);
+      if (!rekeyOutcome.ok) expect(rekeyOutcome.error).toMatchObject({ code: "23514" });
       const [rekeySource] = await migrator`select canonical_content from public.legal_document_contents where terms_version_id = ${rekeySourceId}`;
       const [rekeyTarget] = await migrator`select count(*)::int as contents from public.legal_document_contents where terms_version_id = ${rekeyTargetId}`;
       expect(rekeySource).toEqual({ canonical_content: draftContent });
@@ -495,6 +498,23 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     expect(expired[0]?.status).toBe("expired");
     expect(expired[0]?.archive_object_key).toBeNull();
     expect(expired[0]?.archive_cleanup_task_id).toBe(`export-cleanup-${exportId}`);
+  });
+
+  it("expires ready archives by the database clock before durable cleanup and releases a fresh-request fence", async () => {
+    const userId = await createUser("export-expiry");
+    const exportId = `export-expiry-${crypto.randomUUID()}`;
+    const key = `private/data-exports/${exportId}/ready.zip`;
+    await app`insert into public.account_lifecycles (user_id) values (${userId})`;
+    await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status, snapshot_cutoff_at, archive_object_key, ready_at, expires_at) values (${exportId}, ${userId}, 0, 'ready', now() - interval '25 hours', ${key}, now() - interval '25 hours', now() - interval '1 hour')`;
+    await expect(lifecycleWorker`select public.dayli_export_expire_one() as expired`).resolves.toEqual([{ expired: true }]);
+    await expect(lifecycleWorker`select public.dayli_export_expire_one() as expired`).resolves.toEqual([{ expired: false }]);
+    const [expired] = await migrator`select status, archive_object_key, archive_cleanup_task_id from public.data_export_requests where id=${exportId}`;
+    expect(expired).toEqual({ status: "expired", archive_object_key: null, archive_cleanup_task_id: `export-cleanup-${exportId}` });
+    await migrator`update public.data_export_object_cleanup_tasks set next_attempt_at=now() + interval '1 hour' where status in ('pending', 'failed') and id <> ${`export-cleanup-${exportId}`}`;
+    const [cleanup] = await lifecycleWorker`select * from public.dayli_export_cleanup_claim(${'expiry'.repeat(8)}, 300)`;
+    expect(cleanup?.archive_object_key).toBe(key);
+    await expect(lifecycleWorker`select public.dayli_export_cleanup_complete(${cleanup?.id}, ${cleanup?.lease_token}) as completed`).resolves.toEqual([{ completed: true }]);
+    await app`insert into public.data_export_requests (id, user_id, lifecycle_generation, status) values (${`export-fresh-${crypto.randomUUID()}`}, ${userId}, 0, 'requested')`;
   });
 
   it("reclaims expired cleanup leases and rejects stale completion tokens", async () => {

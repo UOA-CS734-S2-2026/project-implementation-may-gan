@@ -6,6 +6,7 @@ import { readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { createR2ExportObjectStore } from "./features/data-export/build-export/export-r2-object-store";
 import { runOneDataExport } from "./features/data-export/build-export/export-worker.runtime";
 import { runOneDataExportCleanup } from "./features/data-export/build-export/export-cleanup.runtime";
+import { runOneDataExportExpiry } from "./features/data-export/build-export/export-expiry.runtime";
 
 export { app };
 export { HyperdriveIntegrationEntrypoint } from "./features/system/hyperdrive/integration-entrypoint";
@@ -23,6 +24,7 @@ export default {
       const objects = createR2ExportObjectStore(r2);
       // Cleanup has its own connection and invocation. A hung archive build
       // cannot consume the only scheduled cleanup opportunity.
+      context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, (database) => runOneDataExportExpiry(database)));
       context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, (database) => runOneDataExportCleanup(database, objects)));
       context.waitUntil(withHyperdriveDatabase(env.DATA_EXPORT_WORKER_HYPERDRIVE, (database) => runOneDataExport(database, objects)));
     }

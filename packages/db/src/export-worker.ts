@@ -61,6 +61,10 @@ export function createRestrictedDataExportWorkerStore(database: DayliDatabase) {
       const result = await database.execute(sql`select public.dayli_export_fail(${input.id}, ${input.leaseToken}, ${input.category}) as failed`);
       return resultRows<{ failed: boolean }>(result)[0]?.failed === true;
     },
+    async expireReadyExport(): Promise<boolean> {
+      const result = await database.execute(sql`select public.dayli_export_expire_one() as expired`);
+      return resultRows<{ expired: boolean }>(result)[0]?.expired === true;
+    },
     async claimCleanup(): Promise<{ id: string; objectKey: string; leaseToken: string; multipartUploadId: string | null } | null> {
       const token = crypto.randomUUID();
       const result = await database.execute(sql`select * from public.dayli_export_cleanup_claim(${token}, 300)`);
