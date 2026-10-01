@@ -5,20 +5,21 @@ import { runOneDataExport } from "./export-worker.runtime";
 import type { ExportObjectStore } from "./export-worker";
 import { createPostgresDataExportStore } from "../shared/data-export.repository";
 
-const appUrl = process.env.TEST_APP_DATABASE_URL;
-const workerUrl = process.env.TEST_LIFECYCLE_WORKER_DATABASE_URL;
-const migratorUrl = process.env.TEST_DATABASE_URL;
+const appUrl = process.env.DATA_EXPORT_TEST_APP_DATABASE_URL;
+const workerUrl = process.env.DATA_EXPORT_TEST_WORKER_DATABASE_URL;
+const migratorUrl = process.env.DATA_EXPORT_TEST_DATABASE_URL;
 const enabled = Boolean(appUrl && workerUrl && migratorUrl);
 const port = process.env.VERIFY_POSTGRES_PORT ?? "5433";
 
 function local(url: string | undefined, role: string) {
-  if (!url) throw new Error(`${role} database URL is required.`);
+  if (!url) return "";
   const value = new URL(url);
-  if (value.hostname !== "localhost" || value.port !== port || value.pathname !== "/dayli_test" || value.username !== role) throw new Error(`Expected local ${role} test database URL.`);
+  if (value.hostname !== "localhost" || value.port !== port || value.pathname !== "/dayli_export_test" || value.username !== role) throw new Error(`Expected local ${role} export test database URL.`);
   return url;
 }
 
 (enabled ? describe : describe.skip)("data export runtime PostgreSQL pipeline", () => {
+  if (!enabled) return;
   const appDatabase = createDayliDatabase(local(appUrl, "app"));
   const workerDatabase = createDayliDatabase(local(workerUrl, "lifecycle_worker"));
   const migratorDatabase = createDayliDatabase(local(migratorUrl, "migrator"));
