@@ -7,6 +7,9 @@ import { SignOutButton } from "./_components/SignOutButton";
 import { ProfileVisibilityToggle } from "./_components/ProfileVisibilityToggle";
 import { LinkGoogleAccount } from "./_components/LinkGoogleAccount";
 import { getUsernameProfile } from "@/lib/profile/username";
+import { useProfileDetailsQuery } from "@/features/profiles/get-profile-details/use-profile-details-query";
+import { EditProfileForm } from "@/features/profiles/update-profile/EditProfileForm";
+import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUsernameForm";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -21,10 +24,9 @@ export default function SettingsPage() {
     if (!user) return;
     void getUsernameProfile().then((profile) => setUsername(profile.username ?? undefined));
   }, [user]);
+  const profile = useProfileDetailsQuery(username);
 
   if (isPending || !user) return null;
-
-  const visibility = "public" as const;
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">
@@ -34,8 +36,7 @@ export default function SettingsPage() {
           <p className="text-sm text-foreground/60">Your account details.</p>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-foreground/10 p-4">
-          <Row label="Username" value={username ? `@${username}` : "Loading…"} />
+        <div className="space-y-3 rounded-2xl bg-background p-5 shadow-card">
           <Row label="Name" value={user.name} />
           <Row label="Email" value={user.email} />
           {/* Paid features — hidden until billing is wired up */}
@@ -43,7 +44,16 @@ export default function SettingsPage() {
           {/* <Row label="Role" value={user.role ?? "user"} /> */}
         </div>
 
-        <ProfileVisibilityToggle initialVisibility={visibility} />
+        {profile.data?.owner ? (
+          <>
+            {/* Keyed so the forms start from the saved values after each change. */}
+            <EditProfileForm key={`${profile.data.displayName}|${profile.data.bio ?? ""}`} profile={profile.data} />
+            <ChangeUsernameForm key={profile.data.username} profile={profile.data} />
+            <ProfileVisibilityToggle visibility={profile.data.owner.profileVisibility} />
+          </>
+        ) : (
+          <p className="text-sm text-foreground/60">{profile.isError ? "Your profile couldn't be loaded." : "Loading your profile…"}</p>
+        )}
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium">Sign-in methods</h2>

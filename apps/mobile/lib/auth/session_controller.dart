@@ -204,6 +204,20 @@ class SessionController extends ChangeNotifier {
     _set(SessionStatus.signedIn, completed);
   }
 
+  /// Records a username change so screens keyed on the handle follow it.
+  Future<void> usernameChanged(String username) async {
+    final user = _user;
+    if (user == null || user.username == username) return;
+    final renamed = SessionUser(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      username: username,
+    );
+    await _userCache.write(renamed);
+    _set(SessionStatus.signedIn, renamed);
+  }
+
   Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
     await _beforeCredentialReplacement();
     await _session.signInWithGoogle(provider);

@@ -23,6 +23,8 @@ lib/auth/oauth.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
+lib/model/change_username_request.dart
+lib/model/change_username_response.dart
 lib/model/conversation.dart
 lib/model/conversation_capabilities.dart
 lib/model/create_daily_post_request.dart
@@ -69,10 +71,13 @@ lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
+lib/model/profile_details.dart
+lib/model/profile_owner_settings.dart
 lib/model/profile_post.dart
 lib/model/profile_post_author.dart
 lib/model/profile_post_prompt.dart
 lib/model/profile_posts_page.dart
+lib/model/profile_visibility.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_profile.dart
 lib/model/relationship_state.dart
@@ -84,6 +89,7 @@ lib/model/send_message_request.dart
 lib/model/send_relationship_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
+lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart
 pubspec.yaml

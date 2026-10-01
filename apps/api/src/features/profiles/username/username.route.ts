@@ -34,7 +34,8 @@ function unavailable(context: Context) {
 }
 
 export function registerUsernameProfileRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: UsernameProfileRouteDependencies) {
-  app.use(path, createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+  // Username changes (`PUT`) are a separate action with their own session check.
+  app.on(["GET", "POST"], path, createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getUsernameProfileRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.store) return unavailable(context);

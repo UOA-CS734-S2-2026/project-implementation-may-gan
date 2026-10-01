@@ -27,9 +27,9 @@ import {
   pushDevices,
   socketTickets,
 } from "./messaging";
-import { user } from "./users";
+import { user, usernameReservations } from "./users";
 
-export { profileVisibility, tier, user } from "./users";
+export { profileVisibility, tier, user, usernameReservations } from "./users";
 
 /**
  * Legacy profile values remain nullable for new Better Auth registrations.
@@ -350,5 +350,6 @@ export const schema = {
   socialLinkConfirmation,
   tomorrowNotes,
   user,
+  usernameReservations,
   verification,
 };

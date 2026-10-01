@@ -5,6 +5,7 @@ import '../api/friends_client.dart';
 import '../api/media_upload_client.dart';
 import '../api/post_client.dart';
 import '../api/posting_day_client.dart';
+import '../api/profile_client.dart';
 import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
 import '../compose/media_compressor.dart';
@@ -26,6 +27,7 @@ class AppServices {
     required this.drafts,
     required this.submitter,
     MessagingController? messaging,
+    this.profiles = const UnavailableProfileClient(),
     this.notifications,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
@@ -44,6 +46,7 @@ class AppServices {
   final DraftStore drafts;
   final DailyPostSubmitter submitter;
   final MessagingController messaging;
+  final ProfileClient profiles;
   final FirebasePushLifecycle? notifications;
 
   /// Null when this build has no Google client ID configured.

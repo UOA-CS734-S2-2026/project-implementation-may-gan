@@ -82,6 +82,9 @@ String parameterToString(dynamic value) {
   if (value is PostAudience) {
     return PostAudienceTypeTransformer().encode(value).toString();
   }
+  if (value is ProfileVisibility) {
+    return ProfileVisibilityTypeTransformer().encode(value).toString();
+  }
   if (value is RelationshipState) {
     return RelationshipStateTypeTransformer().encode(value).toString();
   }

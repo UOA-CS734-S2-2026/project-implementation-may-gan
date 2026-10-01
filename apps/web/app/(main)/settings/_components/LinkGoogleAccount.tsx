@@ -44,7 +44,7 @@ export function LinkGoogleAccount() {
       <button
         type="button"
         onClick={() => setIsOpen(true)}
-        className="w-full rounded-lg border border-foreground/10 px-4 py-3 text-left text-sm font-medium transition-colors hover:bg-foreground/5"
+        className="w-full rounded-2xl bg-background px-5 py-4 text-left text-sm font-medium shadow-card transition-colors hover:bg-background-secondary"
       >
         Connect Google
       </button>
@@ -52,7 +52,7 @@ export function LinkGoogleAccount() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-lg border border-foreground/10 p-4">
+    <form onSubmit={submit} className="space-y-3 rounded-2xl bg-background p-5 shadow-card">
       <div className="space-y-1">
         <p className="text-sm font-medium">Connect Google</p>
         <p className="text-xs text-foreground/60">Enter your current password. The Google account must use the same email as your Dayli account.</p>

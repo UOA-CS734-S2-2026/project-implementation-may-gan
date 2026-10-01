@@ -64,7 +64,7 @@ Only the data layer is missing features:
 
 - Feed cards show the first photo, or a still tile for a video. The post screen shows every photo and plays a video muted and looping (#24). Likes and comments arrive with #79/#80.
 - My days is your own profile: every dayli you have posted, labelled when it is solo or not released yet. See [profile archive](../../docs/dayli/profile-archive.md).
-- Accounts have no username until #68. Email is the only supported account identifier, and the privacy switch is disabled.
+- Edit profile (from my days or Settings) changes the public name, bio, username, and privacy. See [profiles](../../docs/dayli/profiles.md).
 - Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media is compressed and uploaded in the background (#22), and the post links the validated uploads. Feed cards and post detail can't show it until downloads are authorised (#24). Photos are not cropped.
 
 ## Structure

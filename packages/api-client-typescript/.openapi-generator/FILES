@@ -15,6 +15,8 @@ src/index.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts
+src/models/ChangeUsernameRequest.ts
+src/models/ChangeUsernameResponse.ts
 src/models/Conversation.ts
 src/models/ConversationCapabilities.ts
 src/models/CreateDailyPostRequest.ts
@@ -61,10 +63,13 @@ src/models/PostDetail.ts
 src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
+src/models/ProfileDetails.ts
+src/models/ProfileOwnerSettings.ts
 src/models/ProfilePost.ts
 src/models/ProfilePostAuthor.ts
 src/models/ProfilePostPrompt.ts
 src/models/ProfilePostsPage.ts
+src/models/ProfileVisibility.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RelationshipProfile.ts
 src/models/RelationshipState.ts
@@ -76,6 +81,7 @@ src/models/SendMessageRequest.ts
 src/models/SendRelationshipRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
+src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts
 src/models/index.ts
