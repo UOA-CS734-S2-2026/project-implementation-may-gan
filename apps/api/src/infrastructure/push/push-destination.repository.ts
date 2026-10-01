@@ -1,27 +1,24 @@
 import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, eq, exists, gt, isNotNull, isNull, lte, notExists, or } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lte, not, or } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
+import { conversationPairBlocked, conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
 
 /** Rechecks registration, current session, membership and blocks immediately before FCM. */
 export function createPostgresPushDestinationResolver(database: DayliDatabase, protector: PushTokenProtector): PushDestinationResolver {
   return {
     async resolve(job: OutboxJob) {
       if (!job.deviceRegistrationId) return null;
-      const availableParticipant = (
-        participantId: typeof schema.conversations.participantLowId | typeof schema.conversations.participantHighId,
-      ) => exists(database
-        .select({ id: schema.messagingParticipants.id })
-        .from(schema.messagingParticipants)
-        .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
-        .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
-        .where(and(
-          eq(schema.messagingParticipants.id, participantId),
-          eq(schema.messagingParticipants.state, "active"),
-          or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
-        )));
-      const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.participantLowId)} and ${availableParticipant(schema.conversations.participantHighId)}`;
+      const participantsAvailable = conversationParticipantsAvailable(
+        schema.conversations.participantLowId,
+        schema.conversations.participantHighId,
+      );
+      const blocked = conversationPairBlocked(
+        database,
+        schema.conversations.participantLowId,
+        schema.conversations.participantHighId,
+      );
       const [row] = await database
         .select({
           tokenCiphertext: schema.pushDevices.tokenCiphertext,
@@ -59,21 +56,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           eq(schema.pushDevices.optedIn, true),
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
           isNull(schema.pushDevices.invalidatedAt),
-          notExists(
-            database.select({ blockerId: schema.relationshipBlocks.blockerId }).from(schema.relationshipBlocks).where(and(
-              isNull(schema.relationshipBlocks.unblockedAt),
-              or(
-                and(
-                  eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-                  eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
-                ),
-                and(
-                  eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-                  eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
-                ),
-              ),
-            )),
-          ),
+          not(blocked),
         ))
         .limit(1);
       if (!row || !row.participantsAvailable || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;

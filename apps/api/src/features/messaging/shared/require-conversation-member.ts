@@ -1,8 +1,9 @@
-import { and, eq, exists, isNull, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { MessagingError } from "./messaging-error";
 import { requireSafeSequenceBigInt } from "./safe-sequence";
 import { participantIdForUser } from "./participant-identity";
+import { conversationPairBlocked, conversationParticipantsAvailable } from "./conversation-participants";
 
 type Conversation = typeof schema.conversations.$inferSelect;
 type ConversationMember = typeof schema.conversationMembers.$inferSelect;
@@ -27,6 +28,7 @@ export type ConversationMemberRow = {
   last_read_sequence: ConversationMember["lastReadSequence"];
   receipt_sequence: ConversationMember["receiptSequence"];
   blocked: boolean;
+  participants_available: boolean;
 };
 
 /** Requires actor membership while keeping private conversations indistinguishable from absent ones. */
@@ -36,24 +38,15 @@ export async function requireConversationMember(
   conversationId: string,
   lock = false,
 ): Promise<ConversationMemberRow> {
-  const blocked = exists(
-    queryable
-      .select({ blockerId: schema.relationshipBlocks.blockerId })
-      .from(schema.relationshipBlocks)
-      .where(and(
-        isNull(schema.relationshipBlocks.unblockedAt),
-        or(
-          and(
-            eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-            eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
-          ),
-          and(
-            eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-            eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
-          ),
-        ),
-      )),
-  ).mapWith(Boolean);
+  const blocked = conversationPairBlocked(
+    queryable,
+    schema.conversations.participantLowId,
+    schema.conversations.participantHighId,
+  );
+  const participantsAvailable = conversationParticipantsAvailable(
+    schema.conversations.participantLowId,
+    schema.conversations.participantHighId,
+  );
   const query = queryable
     .select({
       id: schema.conversations.id,
@@ -74,6 +67,7 @@ export async function requireConversationMember(
       last_read_sequence: schema.conversationMembers.lastReadSequence,
       receipt_sequence: schema.conversationMembers.receiptSequence,
       blocked,
+      participants_available: participantsAvailable,
     })
     .from(schema.conversations)
     .innerJoin(

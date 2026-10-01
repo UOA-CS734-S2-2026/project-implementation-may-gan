@@ -1,9 +1,10 @@
-import { createHyperdriveDatabase, lockRelationshipPair, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import { and, asc, count, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
+import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
+import { and, count, eq, gt, isNull, ne } from "drizzle-orm";
 import { appendConversationChange } from "../../shared/append-conversation-change";
 import { MessagingError } from "../../shared/messaging-error";
 import { requireConversationMember } from "../../shared/require-conversation-member";
 import { parseSequenceCursor, requireSafeSequenceBigInt, toSafeSequenceNumber } from "../../shared/safe-sequence";
+import { lockActiveConversationParticipants } from "../../shared/conversation-participants";
 
 export interface MarkConversationReadRepository {
   markRead(
@@ -19,37 +20,12 @@ export function createPostgresMarkConversationReadRepository(
   return {
     async markRead(actorId, conversationId, through) {
       return database.transaction(async (tx) => {
-        const [pair] = await tx
-          .select({
-            userLowId: schema.conversations.userLowId,
-            userHighId: schema.conversations.userHighId,
-          })
-          .from(schema.conversations)
-          .where(eq(schema.conversations.id, conversationId))
-          .limit(1);
-        if (!pair) throw new MessagingError("NOT_FOUND");
-        await tx
-          .select({ id: schema.user.id })
-          .from(schema.user)
-          .where(inArray(schema.user.id, [pair.userLowId, pair.userHighId]))
-          .orderBy(asc(schema.user.id))
-          .for("update");
-        await lockRelationshipPair(tx, pair.userLowId, pair.userHighId);
-        // This separate statement runs after waiting on lifecycle locks.
-        const available = await tx
-          .select({ id: schema.user.id })
-          .from(schema.user)
-          .innerJoin(schema.messagingParticipants, eq(schema.messagingParticipants.userId, schema.user.id))
-          .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
-          .where(and(
-            inArray(schema.user.id, [pair.userLowId, pair.userHighId]),
-            eq(schema.messagingParticipants.state, "active"),
-            or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
-          ));
+        const participants = await lockActiveConversationParticipants(tx, conversationId);
+        if (!participants) throw new MessagingError("NOT_FOUND");
 
         const row = await requireConversationMember(tx, actorId, conversationId, true);
         const target = Math.min(parseSequenceCursor(through), row.last_message_sequence);
-        const allowedReceipt = available.length === 2 && row.request_state === "active" && row.blocked !== true;
+        const allowedReceipt = row.participants_available && row.request_state === "active" && row.blocked !== true;
         const [updated] = await tx
           .update(schema.conversationMembers)
           .set({

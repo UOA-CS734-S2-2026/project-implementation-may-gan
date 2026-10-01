@@ -1,7 +1,8 @@
-import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createHyperdriveDatabase, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { MessagingError } from "../../shared/messaging-error";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { conversationPairBlocked } from "../../shared/conversation-participants";
 
 export interface GetDirectConversationRepository {
   find(actorId: string, recipientId: string): Promise<{ conversationId: string }>;
@@ -9,24 +10,13 @@ export interface GetDirectConversationRepository {
 
 /** Only the authenticated conversation member may discover this pair's thread. */
 export function createPostgresGetDirectConversationRepository(database: DayliDatabase): GetDirectConversationRepository {
-  const { conversationMembers, conversations, relationshipBlocks } = schema;
+  const { conversationMembers, conversations } = schema;
   return {
     async find(actorId, recipientId) {
       const [pair] = await database
         .select({
           id: conversations.id,
-          blocked: exists(
-            database
-              .select({ blockerId: relationshipBlocks.blockerId })
-              .from(relationshipBlocks)
-              .where(and(
-                isNull(relationshipBlocks.unblockedAt),
-                or(
-                  and(eq(relationshipBlocks.blockerId, conversations.userLowId), eq(relationshipBlocks.blockedId, conversations.userHighId)),
-                  and(eq(relationshipBlocks.blockerId, conversations.userHighId), eq(relationshipBlocks.blockedId, conversations.userLowId)),
-                ),
-              )),
-          ),
+          blocked: conversationPairBlocked(database, conversations.participantLowId, conversations.participantHighId),
         })
         .from(conversations)
         .innerJoin(conversationMembers, and(
