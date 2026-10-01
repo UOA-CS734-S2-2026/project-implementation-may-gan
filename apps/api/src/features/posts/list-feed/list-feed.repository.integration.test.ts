@@ -153,6 +153,7 @@ function requireLocalTestUrl(value: string): string {
       acceptedAt: "2026-09-22T03:00:00.000Z",
       releasedAt: "2026-09-22T12:00:00.000Z",
       edited: false,
+      media: [],
     });
   });
 

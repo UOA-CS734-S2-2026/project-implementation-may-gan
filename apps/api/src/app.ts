@@ -48,7 +48,10 @@ import type { CreateDailyPostRouteDependencies } from "./features/posts/create-p
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
+import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
+import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
 import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
+import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
@@ -153,6 +156,7 @@ export interface AppDependencies {
   posts?: CreateDailyPostRouteDependencies;
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
+  postMedia?: GetPostMediaRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -172,6 +176,7 @@ export function createApp({
   posts,
   feed,
   postDetail,
+  postMedia,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -228,6 +233,7 @@ export function createApp({
     create: { ...(posts ?? { resolveSession: async () => null }), rateLimiter },
     feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
+    media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -263,14 +269,22 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
+  const signMediaDownload = r2Runtime ? createR2MediaDownloadSigner(r2Runtime) : undefined;
   const feed = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveFeedRepository(configuration.hyperdrive),
+    signMediaDownload,
   } satisfies ListFeedRouteDependencies : undefined;
   const postDetail = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdrivePostDetailRepository(configuration.hyperdrive),
+    signMediaDownload,
   } satisfies GetPostRouteDependencies : undefined;
+  const postMedia = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies GetPostMediaRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
@@ -300,6 +314,7 @@ export function createAppForEnv(env: ApiEnv) {
     posts,
     feed,
     postDetail,
+    postMedia,
     media,
     relationships,
     messaging,

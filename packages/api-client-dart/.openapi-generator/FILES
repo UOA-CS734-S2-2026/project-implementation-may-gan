@@ -68,6 +68,7 @@ lib/model/post_audience.dart
 lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
+lib/model/post_media.dart
 lib/model/register_push_device_request.dart
 lib/model/relationship_profile.dart
 lib/model/relationship_state.dart

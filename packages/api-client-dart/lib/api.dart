@@ -84,6 +84,7 @@ part 'model/post_audience.dart';
 part 'model/post_detail.dart';
 part 'model/post_detail_author.dart';
 part 'model/post_detail_prompt.dart';
+part 'model/post_media.dart';
 part 'model/register_push_device_request.dart';
 part 'model/relationship_profile.dart';
 part 'model/relationship_state.dart';

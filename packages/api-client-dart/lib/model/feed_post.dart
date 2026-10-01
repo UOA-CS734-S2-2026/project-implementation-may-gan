@@ -24,6 +24,7 @@ class FeedPost {
     required this.acceptedAt,
     required this.releasedAt,
     required this.edited,
+    this.media = const [],
   });
 
   final String id;
@@ -50,6 +51,9 @@ class FeedPost {
   /// True when the author has edited the post since it was accepted.
   final bool edited;
 
+  /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
+  final List<PostMedia> media;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -64,7 +68,8 @@ class FeedPost {
           other.audience == audience &&
           other.acceptedAt == acceptedAt &&
           other.releasedAt == releasedAt &&
-          other.edited == edited;
+          other.edited == edited &&
+          _deepEquality.equals(other.media, media);
 
   @override
   int get hashCode =>
@@ -79,11 +84,12 @@ class FeedPost {
       (audience.hashCode) +
       (acceptedAt.hashCode) +
       (releasedAt.hashCode) +
-      (edited.hashCode);
+      (edited.hashCode) +
+      (media.hashCode);
 
   @override
   String toString() =>
-      'FeedPost[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited]';
+      'FeedPost[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, media=$media]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -98,6 +104,7 @@ class FeedPost {
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'edited'] = this.edited;
+    json[r'media'] = this.media;
     return json;
   }
 
@@ -115,6 +122,7 @@ class FeedPost {
     DateTime? acceptedAt,
     DateTime? releasedAt,
     bool? edited,
+    List<PostMedia>? media,
   }) =>
       FeedPost(
         id: id ?? this.id,
@@ -128,6 +136,7 @@ class FeedPost {
         acceptedAt: acceptedAt ?? this.acceptedAt,
         releasedAt: releasedAt ?? this.releasedAt,
         edited: edited ?? this.edited,
+        media: media ?? this.media,
       );
 
   /// Returns a new [FeedPost] instance and imports its values from
@@ -185,6 +194,10 @@ class FeedPost {
             'Required key "FeedPost[edited]" is missing from JSON.');
         assert(json[r'edited'] != null,
             'Required key "FeedPost[edited]" has a null value in JSON.');
+        assert(json.containsKey(r'media'),
+            'Required key "FeedPost[media]" is missing from JSON.');
+        assert(json[r'media'] != null,
+            'Required key "FeedPost[media]" has a null value in JSON.');
         return true;
       }());
 
@@ -200,6 +213,7 @@ class FeedPost {
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         edited: mapValueOfType<bool>(json, r'edited')!,
+        media: PostMedia.listFromJson(json[r'media']),
       );
     }
     return null;
@@ -267,6 +281,7 @@ class FeedPost {
     'acceptedAt',
     'releasedAt',
     'edited',
+    'media',
   };
 }
 

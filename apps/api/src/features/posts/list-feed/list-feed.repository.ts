@@ -3,10 +3,15 @@ import { and, desc, eq, exists, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
+import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
 import type { FeedPage, FeedPost } from "./list-feed.contract";
 
+/** A feed item with its media not yet signed; the route signs it for the response. */
+export type FeedPostRecord = Omit<FeedPost, "media"> & { media: PostMediaRef[] };
+export type FeedPageRecord = Omit<FeedPage, "items"> & { items: FeedPostRecord[] };
+
 export interface FeedRepository {
-  listFeed(viewerId: string, now: Date, limit: number, cursor?: string): Promise<FeedPage>;
+  listFeed(viewerId: string, now: Date, limit: number, cursor?: string): Promise<FeedPageRecord>;
 }
 
 /** A cursor the client altered or kept from another endpoint. */
@@ -107,8 +112,10 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
       const hasMore = rows.length > limit;
       const page = rows.slice(0, limit);
       const last = page.at(-1);
+      // One query for the whole page, only for posts the filter allowed.
+      const media = await readAttachedMedia(database, page.map((row) => row.id));
       return {
-        items: page.map((row): FeedPost => ({
+        items: page.map((row): FeedPostRecord => ({
           id: row.id,
           author: { id: row.authorId, username: row.username!, displayName: row.displayName },
           localDate: row.localDate,
@@ -120,6 +127,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           acceptedAt: row.acceptedAt.toISOString(),
           releasedAt: row.releasedAt.toISOString(),
           edited: row.edited,
+          media: media.get(row.id) ?? [],
         })),
         hasMore,
         nextCursor: hasMore && last ? encodeCursor({ localDate: last.localDate, id: last.id }) : null,

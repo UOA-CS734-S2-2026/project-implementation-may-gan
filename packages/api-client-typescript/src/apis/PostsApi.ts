@@ -38,6 +38,11 @@ import {
     PostDetailFromJSON,
     PostDetailToJSON,
 } from '../models/PostDetail';
+import {
+    type PostMedia,
+    PostMediaFromJSON,
+    PostMediaToJSON,
+} from '../models/PostMedia';
 
 export interface PostsCreateRequest {
     /**
@@ -55,6 +60,17 @@ export interface PostsGetRequest {
      *
      */
     postId: string;
+}
+
+export interface PostsGetMediaRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     *
+     */
+    mediaId: string;
 }
 
 export interface PostsListFeedRequest {
@@ -193,6 +209,69 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsGet(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
         const response = await this.postsGetRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGetMedia without sending the request
+     */
+    async postsGetMediaRequestOpts(requestParameters: PostsGetMediaRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetMedia().'
+            );
+        }
+
+        if (requestParameters['mediaId'] == null) {
+            throw new runtime.RequiredError(
+                'mediaId',
+                'Required parameter "mediaId" was null or undefined when calling postsGetMedia().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/media/{mediaId}`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+        urlPath = urlPath.replace('{mediaId}', encodeURIComponent(String(requestParameters['mediaId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the media must still be attached to it.
+     * Get a fresh download URL for one attached photo or video
+     */
+    async postsGetMediaRaw(requestParameters: PostsGetMediaRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostMedia>> {
+        const requestOptions = await this.postsGetMediaRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostMediaFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the media must still be attached to it.
+     * Get a fresh download URL for one attached photo or video
+     */
+    async postsGetMedia(requestParameters: PostsGetMediaRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostMedia> {
+        const response = await this.postsGetMediaRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

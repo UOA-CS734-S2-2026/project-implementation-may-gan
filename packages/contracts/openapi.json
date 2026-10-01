@@ -577,6 +577,13 @@
           "edited": {
             "type": "boolean",
             "description": "True when the author has edited the post since it was accepted."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
           }
         },
         "required": [
@@ -590,9 +597,10 @@
           "audience",
           "acceptedAt",
           "releasedAt",
-          "edited"
+          "edited",
+          "media"
         ],
-        "description": "A released post from an active friend. Tomorrow notes and media are not part of the feed projection."
+        "description": "A released post from an active friend. Tomorrow notes are not part of the feed projection."
       },
       "FeedPostAuthor": {
         "type": "object",
@@ -628,6 +636,43 @@
         "required": [
           "id",
           "text"
+        ]
+      },
+      "PostMedia": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/MediaContentType"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead."
+          },
+          "expiresAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one."
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "order",
+          "url",
+          "expiresAt"
         ]
       },
       "PostDetail": {
@@ -674,6 +719,13 @@
           },
           "viewerIsAuthor": {
             "type": "boolean"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
           }
         },
         "required": [
@@ -688,9 +740,10 @@
           "acceptedAt",
           "releasedAt",
           "edited",
-          "viewerIsAuthor"
+          "viewerIsAuthor",
+          "media"
         ],
-        "description": "One post the caller may read. Tomorrow notes and media are not part of this projection."
+        "description": "One post the caller may read. Tomorrow notes are not part of this projection."
       },
       "PostDetailAuthor": {
         "type": "object",
@@ -1819,7 +1872,7 @@
             }
           },
           "503": {
-            "description": "The feed is temporarily unavailable.",
+            "description": "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1925,7 +1978,128 @@
             }
           },
           "503": {
-            "description": "Post storage is temporarily unavailable.",
+            "description": "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/media/{mediaId}": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getMedia",
+        "summary": "Get a fresh download URL for one attached photo or video",
+        "description": "Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the media must still be attached to it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "media-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "mediaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The media with a fresh download URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostMedia"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The media is missing, detached, or on a post the caller may not read. These cases are not distinguished.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post or media storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

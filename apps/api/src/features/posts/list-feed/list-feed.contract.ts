@@ -8,6 +8,7 @@ import {
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { postMediaSchema } from "../shared/post-media.contract";
 
 export const feedQuerySchema = cursorPaginationQuerySchema.openapi("FeedQuery");
 
@@ -33,9 +34,12 @@ export const feedPostSchema = z
     acceptedAt: utcTimestampSchema,
     releasedAt: utcTimestampSchema,
     edited: z.boolean().openapi({ description: "True when the author has edited the post since it was accepted." }),
+    media: z.array(postMediaSchema).openapi({
+      description: "Attached photos or video in display order, each with a private download URL that expires after 5 minutes.",
+    }),
   })
   .openapi("FeedPost", {
-    description: "A released post from an active friend. Tomorrow notes and media are not part of the feed projection.",
+    description: "A released post from an active friend. Tomorrow notes are not part of the feed projection.",
   });
 
 export const feedPageSchema = paginatedResponseSchema(feedPostSchema).openapi("FeedPage");
@@ -51,7 +55,7 @@ export const listFeedErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "The feed is temporarily unavailable.",
+    description: "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };

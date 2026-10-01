@@ -6,6 +6,7 @@ import {
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { postMediaSchema } from "../shared/post-media.contract";
 
 export const postIdParamsSchema = z.object({
   postId: opaqueIdSchema.openapi({ param: { name: "postId", in: "path" }, example: "post-1" }),
@@ -32,9 +33,12 @@ export const postDetailSchema = z
     releasedAt: utcTimestampSchema,
     edited: z.boolean().openapi({ description: "True when the author has edited the post since it was accepted." }),
     viewerIsAuthor: z.boolean(),
+    media: z.array(postMediaSchema).openapi({
+      description: "Attached photos or video in display order, each with a private download URL that expires after 5 minutes.",
+    }),
   })
   .openapi("PostDetail", {
-    description: "One post the caller may read. Tomorrow notes and media are not part of this projection.",
+    description: "One post the caller may read. Tomorrow notes are not part of this projection.",
   });
 
 export const getPostErrorResponses = {
@@ -52,7 +56,7 @@ export const getPostErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "Post storage is temporarily unavailable.",
+    description: "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };
