@@ -31,12 +31,21 @@ import { createPostgresPostCommentsRepository } from "./list-post-comments.repos
       comment("reply-to-first", users.author, 5, "first"),
       comment("by-blocker", users.blocker, 6),
       comment("reply-by-blocker", users.blocker, 7, "by-other"),
+      comment("by-no-username", users.noUsername, 8),
+      comment("under-no-username", users.friend, 9, "by-no-username"),
     ]);
   });
   afterAll(() => fixture.tearDown());
 
   it("lists comments and replies oldest first, leaving out deleted threads", async () => {
     await expect(texts(users.author)).resolves.toEqual(["first", "by-other", "reply-to-first", "by-blocker", "reply-by-blocker"]);
+  });
+
+  it("leaves out comments by someone without a username, and replies under them", async () => {
+    const texts = (await repo().listComments(users.author, posts.shared, fixtureNow, 50))?.items.map((comment) => comment.text);
+
+    expect(texts).not.toContain("by-no-username");
+    expect(texts).not.toContain("under-no-username");
   });
 
   it("hides people across a block, and replies under a hidden comment", async () => {

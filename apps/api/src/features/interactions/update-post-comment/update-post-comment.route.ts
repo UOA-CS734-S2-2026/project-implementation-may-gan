@@ -2,14 +2,17 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import { createRequireUsername, type HasUsername } from "../../../http/middleware/require-username";
+import { commentErrorResponses, commentParamsSchema, postCommentSchema, USERNAME_REQUIRED } from "../shared/interactions.contract";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { commentErrorResponses, commentParamsSchema, postCommentSchema } from "../shared/interactions.contract";
 import { updatePostCommentRequestSchema } from "./update-post-comment.contract";
 import type { UpdatePostCommentRepository } from "./update-post-comment.repository";
 
 export interface UpdatePostCommentRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a request-supplied user. */
   resolveSession: ResolveSession;
+  /** Likes and comments need a public username, like messaging. */
+  hasUsername?: HasUsername;
   repository?: UpdatePostCommentRepository;
   now?: () => Date;
   rateLimiter?: ActorRateLimiter;
@@ -40,6 +43,7 @@ const updatePostCommentRoute = createRoute({
 
 export function registerUpdatePostCommentRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: UpdatePostCommentRouteDependencies) {
   app.on("PATCH", "/api/v1/posts/:postId/comments/:commentId", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+  app.on("PATCH", "/api/v1/posts/:postId/comments/:commentId", createRequireUsername(dependencies.hasUsername, USERNAME_REQUIRED));
   app.openapi(updatePostCommentRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {

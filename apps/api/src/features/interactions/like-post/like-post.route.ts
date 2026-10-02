@@ -2,13 +2,16 @@ import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import { createRequireUsername, type HasUsername } from "../../../http/middleware/require-username";
+import { interactionErrorResponses, interactionPostParamsSchema, postLikeSummarySchema, USERNAME_REQUIRED } from "../shared/interactions.contract";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { interactionErrorResponses, interactionPostParamsSchema, postLikeSummarySchema } from "../shared/interactions.contract";
 import type { PostLikeRepository } from "../shared/post-like.repository";
 
 export interface LikePostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a request-supplied user. */
   resolveSession: ResolveSession;
+  /** Likes and comments need a public username, like messaging. */
+  hasUsername?: HasUsername;
   repository?: PostLikeRepository;
   now?: () => Date;
   rateLimiter?: ActorRateLimiter;
@@ -36,6 +39,7 @@ const likePostRoute = createRoute({
 
 export function registerLikePostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: LikePostRouteDependencies) {
   app.on("PUT", "/api/v1/posts/:postId/like", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+  app.on("PUT", "/api/v1/posts/:postId/like", createRequireUsername(dependencies.hasUsername, USERNAME_REQUIRED));
   app.openapi(likePostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {

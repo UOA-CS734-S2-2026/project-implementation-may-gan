@@ -26,8 +26,13 @@ function repository(outcome: CreatePostCommentOutcome): CreatePostCommentReposit
   return { createComment: vi.fn(async () => outcome) };
 }
 
-function post(repo: CreatePostCommentRepository | undefined, body: unknown, user: string | null = "user-friend") {
-  return createApp({ interactions: { createComment: { resolveSession, now: () => fixedNow, repository: repo } } })
+function post(
+  repo: CreatePostCommentRepository | undefined,
+  body: unknown,
+  user: string | null = "user-friend",
+  hasUsername?: (userId: string) => Promise<boolean>,
+) {
+  return createApp({ interactions: { createComment: { resolveSession, now: () => fixedNow, repository: repo, hasUsername } } })
     .request("/api/v1/posts/post-1/comments", {
       method: "POST",
       headers: { "content-type": "application/json", ...(user ? { authorization: `Bearer ${user}` } : {}) },
@@ -43,6 +48,14 @@ describe("POST /api/v1/posts/{postId}/comments", () => {
     const response = await post(repo, valid, null);
 
     expect(response.status).toBe(401);
+    expect(repo.createComment).not.toHaveBeenCalled();
+  });
+
+  it("waits for username setup before commenting", async () => {
+    const repo = repository({ kind: "created", comment });
+    const response = await post(repo, valid, "user-new", async () => false);
+
+    expect(response.status).toBe(403);
     expect(repo.createComment).not.toHaveBeenCalled();
   });
 

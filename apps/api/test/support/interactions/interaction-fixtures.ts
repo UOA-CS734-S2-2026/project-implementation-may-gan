@@ -36,6 +36,8 @@ export function createInteractionFixture(prefix: string) {
     blocker: id("blocker"),
     blockedByAuthor: id("blockedbyauthor"),
     stranger: id("stranger"),
+    /** A friend who hasn't chosen a username yet. */
+    noUsername: id("nousername"),
   };
   const posts = { shared: id("shared"), solo: id("solo"), deleted: id("deleted") };
   const userIds = Object.values(users);
@@ -46,11 +48,11 @@ export function createInteractionFixture(prefix: string) {
         id: userId,
         name: key,
         email: `${userId}@example.test`,
-        username: `${prefix.slice(0, 3)}${run}${key}`.toLowerCase().slice(0, 30),
+        username: key === "noUsername" ? null : `${prefix.slice(0, 3)}${run}${key}`.toLowerCase().slice(0, 30),
         displayUsername: key === "friend" ? "Friendly" : null,
       });
     }
-    for (const friend of [users.friend, users.otherFriend, users.blocker, users.blockedByAuthor]) {
+    for (const friend of [users.friend, users.otherFriend, users.blocker, users.blockedByAuthor, users.noUsername]) {
       await migrator.db.insert(schema.friendships).values([
         { userId: users.author, friendId: friend, state: "active", stateChangedAt: fixtureNow },
         { userId: friend, friendId: users.author, state: "active", stateChangedAt: fixtureNow },

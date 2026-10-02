@@ -14,8 +14,14 @@ function repository(setLike: PostLikeRepository["setLike"]): PostLikeRepository 
   return { setLike: vi.fn(setLike) };
 }
 
-function send(method: "PUT" | "DELETE", repo?: PostLikeRepository, user: string | null = "user-friend", path = "/api/v1/posts/post-1/like") {
-  const deps = { resolveSession, now: () => fixedNow, repository: repo };
+function send(
+  method: "PUT" | "DELETE",
+  repo?: PostLikeRepository,
+  user: string | null = "user-friend",
+  path = "/api/v1/posts/post-1/like",
+  hasUsername?: (userId: string) => Promise<boolean>,
+) {
+  const deps = { resolveSession, now: () => fixedNow, repository: repo, hasUsername };
   return createApp({ interactions: { like: deps, unlike: deps } }).request(path, {
     method,
     headers: user ? { authorization: `Bearer ${user}` } : {},
@@ -43,6 +49,17 @@ describe("PUT and DELETE /api/v1/posts/{postId}/like", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual(summary);
     expect(repo.setLike).toHaveBeenCalledWith("user-friend", "post-1", liked, fixedNow);
+  });
+
+  it("waits for username setup before liking", async () => {
+    const repo = repository(async () => ({ likeCount: 1, viewerHasLiked: true }));
+    const missing = await send("PUT", repo, "user-new", undefined, async () => false);
+    const outage = await send("PUT", repo, "user-new", undefined, async () => { throw new Error("down"); });
+
+    expect(missing.status).toBe(403);
+    await expect(missing.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN", message: "Choose a username before liking or commenting." } });
+    expect(outage.status).toBe(503);
+    expect(repo.setLike).not.toHaveBeenCalled();
   });
 
   it("conceals a post the actor may not read as 404", async () => {

@@ -2,6 +2,9 @@ import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contr
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
+/** Likes and comments show a public username, so they wait for username setup. */
+export const USERNAME_REQUIRED = "Choose a username before liking or commenting.";
+
 /** Mirrors the post_comments body check, which stays authoritative. */
 export const COMMENT_MAX_CODE_POINTS = 1_000;
 
@@ -69,6 +72,7 @@ const json = (description: string) => ({ description, content: { "application/js
 /** Responses every interaction route shares. Routes add their own 409 or 422 detail. */
 export const interactionErrorResponses = {
   401: json("Authentication is required."),
+  403: json("The caller hasn't chosen a username yet."),
   404: json("The post does not exist or the caller may not read it. The two cases are indistinguishable."),
   422: json("The request contains invalid values."),
   429: rateLimitErrorResponse,

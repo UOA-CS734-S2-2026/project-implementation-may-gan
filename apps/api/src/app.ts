@@ -422,15 +422,16 @@ export function createAppForEnv(env: ApiEnv) {
   } satisfies ListPostRevisionsRouteDependencies : undefined;
   const interactions: Partial<InteractionsRouteDependencies> = configuration ? (() => {
     const resolveSession = createSessionResolver(configuration);
+    const hasUsername = createUsernameChecker(configuration);
     const likeRepository = createHyperdrivePostLikeRepository(configuration.hyperdrive);
     return {
-      like: { resolveSession, repository: likeRepository },
-      unlike: { resolveSession, repository: likeRepository },
-      likes: { resolveSession, repository: createHyperdrivePostLikesRepository(configuration.hyperdrive) },
-      comments: { resolveSession, repository: createHyperdrivePostCommentsRepository(configuration.hyperdrive) },
-      createComment: { resolveSession, repository: createHyperdriveCreatePostCommentRepository(configuration.hyperdrive) },
-      updateComment: { resolveSession, repository: createHyperdriveUpdatePostCommentRepository(configuration.hyperdrive) },
-      deleteComment: { resolveSession, repository: createHyperdriveDeletePostCommentRepository(configuration.hyperdrive) },
+      like: { resolveSession, hasUsername, repository: likeRepository },
+      unlike: { resolveSession, hasUsername, repository: likeRepository },
+      likes: { resolveSession, hasUsername, repository: createHyperdrivePostLikesRepository(configuration.hyperdrive) },
+      comments: { resolveSession, hasUsername, repository: createHyperdrivePostCommentsRepository(configuration.hyperdrive) },
+      createComment: { resolveSession, hasUsername, repository: createHyperdriveCreatePostCommentRepository(configuration.hyperdrive) },
+      updateComment: { resolveSession, hasUsername, repository: createHyperdriveUpdatePostCommentRepository(configuration.hyperdrive) },
+      deleteComment: { resolveSession, hasUsername, repository: createHyperdriveDeletePostCommentRepository(configuration.hyperdrive) },
     };
   })() : {};
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;

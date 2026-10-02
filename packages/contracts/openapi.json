@@ -4797,6 +4797,16 @@
               }
             }
           },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
             "content": {
@@ -4893,6 +4903,16 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5030,6 +5050,16 @@
               }
             }
           },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
             "content": {
@@ -5159,6 +5189,16 @@
               }
             }
           },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
             "content": {
@@ -5275,6 +5315,16 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5424,6 +5474,16 @@
               }
             }
           },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "404": {
             "description": "The post or comment does not exist, or the caller may not read or change it. The cases are indistinguishable.",
             "content": {
@@ -5528,6 +5588,16 @@
           },
           "401": {
             "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
             "content": {
               "application/json": {
                 "schema": {

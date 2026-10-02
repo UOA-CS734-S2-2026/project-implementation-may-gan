@@ -6,6 +6,8 @@ Anyone who can read a post can like it and comment on it, including its author. 
 
 Every read and write starts with `findReadablePost`, which uses the shared `detail` visibility predicate. Likes and comments therefore follow the post exactly: solo posts are the author's alone, unreleased posts open at midnight, and deleted, blocked, and unfriended posts return `404 NOT_FOUND` for every interaction route, including edits and deletes. The check runs on every request, so lost access takes effect immediately.
 
+Likes and comments show a public username, so every interaction route also uses `createRequireUsername`, the same check as messaging. Someone still choosing a username gets `403 FORBIDDEN`. Comments by an account without a username are left out of lists and counts.
+
 ## Likes
 
 - `PUT /api/v1/posts/{postId}/like` likes the post. `DELETE` on the same path unlikes it. Both return `{ likeCount, viewerHasLiked }`, and repeating either changes nothing, so retries are safe. `post_likes` has one row per person per post.
