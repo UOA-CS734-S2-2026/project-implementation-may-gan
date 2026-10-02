@@ -48,6 +48,8 @@ export * from './Message';
 export * from './MessageReactionsInner';
 export * from './MessageReactionsInnerReactorsInner';
 export * from './MessageReplyPreview';
+export * from './PasswordReauthenticationGrant';
+export * from './PasswordReauthenticationRequest';
 export * from './PendingRelationshipRequest';
 export * from './PendingRequestPage';
 export * from './PostAudience';

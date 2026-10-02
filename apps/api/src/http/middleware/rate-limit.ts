@@ -39,6 +39,7 @@ const retryAfterSeconds = Math.max(...Object.values(rateLimitBindings).map((bind
 export function rateLimitActionFor(request: Request): ActionRateLimitPolicy | undefined {
   const { pathname } = new URL(request.url);
   const method = request.method.toUpperCase();
+  if (method === "POST" && pathname === "/api/v1/account/reauthenticate/password") return { action: "reauthenticate_password", binding: "directPush" };
   if (method === "POST" && /^\/api\/v1\/conversations\/[^/]+\/messages$/.test(pathname)) return { action: "send_message", binding: "message" };
   if (method === "POST" && pathname === "/api/v1/conversations/direct") return { action: "create_direct_conversation", binding: "directPush" };
   if (method === "POST" && pathname === "/api/v1/realtime/tickets") return { action: "create_realtime_ticket", binding: "realtime" };

@@ -164,6 +164,8 @@ import { createAccountPolicyMiddleware } from "./features/account-policy/shared/
 import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
+import { issuePasswordManagementGrant } from "./features/account-policy/reauthenticate/password/password.repository";
 import { registerLegalAcceptanceRoute, type LegalAcceptanceRouteDependencies } from "./features/legal/record-acceptance/acceptance.route";
 import { recordExplicitLegalAcceptance, type ExplicitLegalAcceptance } from "./features/legal/record-acceptance/acceptance.repository";
 import { registerRegistrationIntentRoutes, type RegistrationIntentRouteDependencies } from "./features/legal/registration-intent/registration-intent.route";
@@ -195,6 +197,7 @@ export interface AppDependencies {
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
+  passwordReauthentication?: PasswordReauthenticationDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
   legalRegistration?: RegistrationIntentRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
@@ -224,6 +227,7 @@ export function createApp({
   avatarSet,
   avatarRemove,
   accountPolicy,
+  passwordReauthentication,
   legalAcceptance,
   legalRegistration,
   trustedOrigins = [],
@@ -274,6 +278,7 @@ export function createApp({
   }
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
+  registerPasswordReauthenticationRoute(api, { ...(passwordReauthentication ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? passwordReauthentication?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
   registerRegistrationIntentRoutes(api, legalRegistration ?? {});
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
@@ -359,6 +364,12 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
+  const passwordReauthentication = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    issue: (input: Parameters<typeof issuePasswordManagementGrant>[1]) => withHyperdriveDatabase(
+      configuration.hyperdrive, (database) => issuePasswordManagementGrant(database, input),
+    ),
+  } satisfies PasswordReauthenticationDependencies : undefined;
   const legalAcceptance = configuration ? {
     resolveSession: createSessionResolver(configuration),
     record: async (userId: string, input: ExplicitLegalAcceptance) => {
@@ -430,6 +441,7 @@ export function createAppForEnv(env: ApiEnv) {
     pushDevices,
     usernameProfile,
     accountPolicy,
+    passwordReauthentication,
     legalAcceptance,
     legalRegistration,
     profileDetails,

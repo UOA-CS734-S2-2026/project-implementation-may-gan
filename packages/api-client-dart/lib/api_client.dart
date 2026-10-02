@@ -302,6 +302,10 @@ class ApiClient {
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'PasswordReauthenticationGrant':
+          return PasswordReauthenticationGrant.fromJson(value);
+        case 'PasswordReauthenticationRequest':
+          return PasswordReauthenticationRequest.fromJson(value);
         case 'PendingRelationshipRequest':
           return PendingRelationshipRequest.fromJson(value);
         case 'PendingRequestPage':
