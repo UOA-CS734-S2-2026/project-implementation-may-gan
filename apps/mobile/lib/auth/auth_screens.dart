@@ -43,7 +43,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_signUp && !_startedTermsLoad) {
+    if (!_startedTermsLoad) {
       _startedTermsLoad = true;
       _loadTerms();
     }
@@ -253,10 +253,10 @@ class _AuthScreenState extends State<AuthScreen> {
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
         const SizedBox(height: 8),
-        const LegalLinks(
+        LegalLinks(
           center: true,
           compact: true,
-          draftMarker: true,
+          draftMarker: _terms == null,
           notice: false,
         ),
         const SizedBox(height: 20),
