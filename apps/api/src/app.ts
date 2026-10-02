@@ -55,7 +55,11 @@ import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-me
 import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
 import type { GetPostVoiceMemoRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo.route";
 import { createHyperdrivePostVoiceMemoRepository } from "./features/posts/get-post-voice-memo/get-post-voice-memo.repository";
-import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
+import { createHyperdrivePostDetailRepository } from "./features/posts/shared/post-detail.repository";
+import type { UpdatePostRouteDependencies } from "./features/posts/update-post/update-post.route";
+import { createHyperdriveUpdatePostRepository } from "./features/posts/update-post/update-post.repository";
+import type { ListPostRevisionsRouteDependencies } from "./features/posts/list-post-revisions/list-post-revisions.route";
+import { createHyperdrivePostRevisionsRepository } from "./features/posts/list-post-revisions/list-post-revisions.repository";
 import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
@@ -195,6 +199,8 @@ export interface AppDependencies {
   postMedia?: GetPostMediaRouteDependencies;
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
+  postUpdate?: UpdatePostRouteDependencies;
+  postRevisions?: ListPostRevisionsRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -229,6 +235,8 @@ export function createApp({
   postMedia,
   postVoiceMemo,
   profilePosts,
+  postUpdate,
+  postRevisions,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -309,6 +317,8 @@ export function createApp({
     voiceMemo: { ...(postVoiceMemo ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
+    update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
+    revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -377,6 +387,16 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdriveProfilePostsRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies ListProfilePostsRouteDependencies : undefined;
+  const postUpdate = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveUpdatePostRepository(configuration.hyperdrive),
+    detail: createHyperdrivePostDetailRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies UpdatePostRouteDependencies : undefined;
+  const postRevisions = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostRevisionsRepository(configuration.hyperdrive),
+  } satisfies ListPostRevisionsRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
@@ -481,6 +501,8 @@ export function createAppForEnv(env: ApiEnv) {
     postMedia,
     postVoiceMemo,
     profilePosts,
+    postUpdate,
+      postRevisions,
     media,
     relationships,
     messaging,

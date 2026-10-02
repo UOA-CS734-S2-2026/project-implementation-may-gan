@@ -485,6 +485,98 @@ class PostsApi {
     return null;
   }
 
+  /// List a post's earlier versions
+  ///
+  /// Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<Response> postsListRevisionsWithHttpInfo(
+    String postId, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/revisions'
+        .replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List a post's earlier versions
+  ///
+  /// Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<PostRevisionsPage?> postsListRevisions(
+    String postId, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListRevisionsWithHttpInfo(
+      postId,
+      cursor: cursor,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostRevisionsPage',
+      ) as PostRevisionsPage;
+    }
+    return null;
+  }
+
   /// List the authenticated owner's trashed posts
   ///
   /// Note: This method returns the HTTP [Response].
@@ -663,6 +755,82 @@ class PostsApi {
         await _decodeBodyBytes(response),
         'TrashedPostStatus',
       ) as TrashedPostStatus;
+    }
+    return null;
+  }
+
+  /// Edit a post
+  ///
+  /// Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [UpdatePostRequest] updatePostRequest (required):
+  Future<Response> postsUpdateWithHttpInfo(
+    String postId,
+    UpdatePostRequest updatePostRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/posts/{postId}'.replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = updatePostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Edit a post
+  ///
+  /// Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [UpdatePostRequest] updatePostRequest (required):
+  Future<PostDetail?> postsUpdate(
+    String postId,
+    UpdatePostRequest updatePostRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsUpdateWithHttpInfo(
+      postId,
+      updatePostRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostDetail',
+      ) as PostDetail;
     }
     return null;
   }

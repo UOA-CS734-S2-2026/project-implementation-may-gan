@@ -67,6 +67,14 @@ function requireLocalTestUrl(value: string): string {
           ${localDate === "2026-09-28" ? "solo" : "friends"}, ${`${localDate}T03:00:00.000Z`}, ${`${localDate}T12:00:00.000Z`})
       `;
     }
+    // A post in Trash on the missed day doesn't fill the gap or count as a post.
+    await migrator.client`
+      insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at,
+        trashed_at, restore_until, trash_purge_due_at)
+      values (${id("post-deleted")}, ${users.privateOwner}, '2026-09-27', 'prompt-09-27', 'An answer', 7, 'friends',
+        '2026-09-27T03:00:00.000Z', '2026-09-27T12:00:00.000Z',
+        '2026-09-27T04:00:00.000Z', '2026-10-04T04:00:00.000Z', '2026-10-11T04:00:00.000Z')
+    `;
   });
 
   afterAll(async () => {

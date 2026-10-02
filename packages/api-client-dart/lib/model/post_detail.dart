@@ -24,6 +24,7 @@ class PostDetail {
     required this.acceptedAt,
     required this.releasedAt,
     required this.edited,
+    required this.revisionCount,
     required this.viewerIsAuthor,
     this.media = const [],
     required this.voiceMemo,
@@ -49,8 +50,13 @@ class PostDetail {
 
   final DateTime releasedAt;
 
-  /// True when the author has edited the post since it was accepted.
+  /// True when the caller can read an earlier version of the post.
   final bool edited;
+
+  /// Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends.
+  ///
+  /// Minimum value: 0
+  final int revisionCount;
 
   final bool viewerIsAuthor;
 
@@ -75,6 +81,7 @@ class PostDetail {
           other.acceptedAt == acceptedAt &&
           other.releasedAt == releasedAt &&
           other.edited == edited &&
+          other.revisionCount == revisionCount &&
           other.viewerIsAuthor == viewerIsAuthor &&
           _deepEquality.equals(other.media, media) &&
           other.voiceMemo == voiceMemo;
@@ -93,13 +100,14 @@ class PostDetail {
       (acceptedAt.hashCode) +
       (releasedAt.hashCode) +
       (edited.hashCode) +
+      (revisionCount.hashCode) +
       (viewerIsAuthor.hashCode) +
       (media.hashCode) +
       (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
-      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
+      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, revisionCount=$revisionCount, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -118,6 +126,7 @@ class PostDetail {
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'edited'] = this.edited;
+    json[r'revisionCount'] = this.revisionCount;
     json[r'viewerIsAuthor'] = this.viewerIsAuthor;
     json[r'media'] = this.media;
     if (this.voiceMemo != null) {
@@ -143,6 +152,7 @@ class PostDetail {
     DateTime? acceptedAt,
     DateTime? releasedAt,
     bool? edited,
+    int? revisionCount,
     bool? viewerIsAuthor,
     List<PostMedia>? media,
     PostVoiceMemo? voiceMemo,
@@ -160,6 +170,7 @@ class PostDetail {
         acceptedAt: acceptedAt ?? this.acceptedAt,
         releasedAt: releasedAt ?? this.releasedAt,
         edited: edited ?? this.edited,
+        revisionCount: revisionCount ?? this.revisionCount,
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
         voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
@@ -218,6 +229,10 @@ class PostDetail {
             'Required key "PostDetail[edited]" is missing from JSON.');
         assert(json[r'edited'] != null,
             'Required key "PostDetail[edited]" has a null value in JSON.');
+        assert(json.containsKey(r'revisionCount'),
+            'Required key "PostDetail[revisionCount]" is missing from JSON.');
+        assert(json[r'revisionCount'] != null,
+            'Required key "PostDetail[revisionCount]" has a null value in JSON.');
         assert(json.containsKey(r'viewerIsAuthor'),
             'Required key "PostDetail[viewerIsAuthor]" is missing from JSON.');
         assert(json[r'viewerIsAuthor'] != null,
@@ -243,6 +258,7 @@ class PostDetail {
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         edited: mapValueOfType<bool>(json, r'edited')!,
+        revisionCount: mapValueOfType<int>(json, r'revisionCount')!,
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
         voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo']),
@@ -313,6 +329,7 @@ class PostDetail {
     'acceptedAt',
     'releasedAt',
     'edited',
+    'revisionCount',
     'viewerIsAuthor',
     'media',
     'voiceMemo',

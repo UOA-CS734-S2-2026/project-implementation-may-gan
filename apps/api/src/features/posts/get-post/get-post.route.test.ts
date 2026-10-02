@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import type { PostDetailRecord, PostDetailRepository } from "./get-post.repository";
+import type { PostDetailRecord, PostDetailRepository } from "../shared/post-detail.repository";
 import type { GetPostRouteDependencies } from "./get-post.route";
 
 const fixedNow = new Date("2026-09-26T03:00:00.000Z");
@@ -17,6 +17,7 @@ const detail: PostDetailRecord = {
   acceptedAt: "2026-09-25T03:00:00.000Z",
   releasedAt: "2026-09-25T12:00:00.000Z",
   edited: false,
+  revisionCount: 0,
   viewerIsAuthor: false,
   media: [],
   voiceMemo: null,

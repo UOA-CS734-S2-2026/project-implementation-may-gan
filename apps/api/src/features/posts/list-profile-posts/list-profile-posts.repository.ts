@@ -83,7 +83,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
           audience: posts.audience,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
-          edited: postEdited(),
+          edited: postEdited(viewerId),
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))

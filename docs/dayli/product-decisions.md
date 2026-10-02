@@ -8,6 +8,12 @@ When a friendship becomes active, both users can read all previously released po
 
 Authors may edit released posts. Each edit creates an immutable revision. Readers see an `Edited` marker and can inspect earlier versions when they still have permission to read the post.
 
+## Editing and deleting posts
+
+Agreed in October 2026 for #76–#78. Authors can edit the reflective answer, caption, rating, and audience of their own post, before or after release. The prompt, day, media, and tomorrow note stay as posted. Anyone other than the author sees only earlier versions that were shared with friends; a version written while the post was solo stays with its author.
+
+Authors can delete a post at any time. It disappears for everyone at once. If that Auckland day hasn't ended, they can post again for it; a past day can never be reposted. Deletion is a soft delete until the Trash, restore, and purge work in #163 lands, which follows the [deletion rules](#deletion-backups-and-recovery) below.
+
 ## Daily prompt versions and tomorrow notes
 
 The server owns the daily prompt for each Auckland calendar day. Version-one reference data reuses the 366 prompts and stable `prompt-MM-DD` IDs from `732-workspace/group-project-wdcc` at source commit `7d2dfd6`. Prompt rows are immutable. A changed prompt is a new versioned row with a new ID and an Auckland effective date; historical posts continue to reference the original prompt row and text.

@@ -1,7 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPostgresPostDetailRepository } from "./get-post.repository";
+import { createPostgresPostDetailRepository } from "../shared/post-detail.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -77,6 +77,8 @@ function requireLocalTestUrl(value: string): string {
     await insertPost("released", "2026-09-24", "friends", true);
     await insertPost("solo", "2026-09-23", "solo", true);
     await insertPost("unreleased", "2026-09-26", "friends", false);
+    await insertPost("deleted", "2026-09-22", "friends", true);
+    await migrator.db.update(schema.posts).set({ trashedAt: now, restoreUntil: new Date(now.getTime() + 168 * 3_600_000), trashPurgeDueAt: new Date(now.getTime() + 336 * 3_600_000) }).where(eq(schema.posts.id, id("deleted")));
     await migrator.db.insert(schema.postRevisions).values({
       id: id("rev-1"),
       postId: id("released"),
@@ -117,10 +119,27 @@ function requireLocalTestUrl(value: string): string {
       acceptedAt: "2026-09-24T03:00:00.000Z",
       releasedAt: "2026-09-24T12:00:00.000Z",
       edited: true,
+      revisionCount: 1,
       viewerIsAuthor: false,
       media: [],
       voiceMemo: null,
     });
+  });
+
+  it("doesn't count a version written while the post was solo for friends", async () => {
+    await migrator.db.insert(schema.postRevisions).values({
+      id: id("rev-2"),
+      postId: id("released"),
+      revisionNumber: 2,
+      previousReflectiveAnswer: "Written while solo",
+      previousRating: 5,
+      previousAudience: "solo",
+      previousPromptId: "prompt-09-24",
+      previousAttachmentRefs: [],
+    });
+
+    await expect(repo().findPost(users.friend, id("released"), now)).resolves.toMatchObject({ edited: true, revisionCount: 1 });
+    await expect(repo().findPost(users.author, id("released"), now)).resolves.toMatchObject({ edited: true, revisionCount: 2 });
   });
 
   it("lets the author read their solo and unreleased posts", async () => {
@@ -138,6 +157,8 @@ function requireLocalTestUrl(value: string): string {
     ["an ended friendship", "ended", "released"],
     ["a blocked friend", "blocked", "released"],
     ["an unknown post", "friend", "missing"],
+    ["the author reading a deleted post", "author", "deleted"],
+    ["a friend reading a deleted post", "friend", "deleted"],
   ] as const)("conceals the post from %s", async (_, viewer, post) => {
     await expect(repo().findPost(users[viewer], id(post), now)).resolves.toBeNull();
   });

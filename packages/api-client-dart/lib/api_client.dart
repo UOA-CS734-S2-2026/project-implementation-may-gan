@@ -336,6 +336,10 @@ class ApiClient {
           return PostMedia.fromJson(value);
         case 'PostMediaContentType':
           return PostMediaContentTypeTypeTransformer().decode(value);
+        case 'PostRevision':
+          return PostRevision.fromJson(value);
+        case 'PostRevisionsPage':
+          return PostRevisionsPage.fromJson(value);
         case 'PostVoiceMemo':
           return PostVoiceMemo.fromJson(value);
         case 'PostingStreak':
@@ -390,6 +394,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdatePostRequest':
+          return UpdatePostRequest.fromJson(value);
         case 'UpdateProfileRequest':
           return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':

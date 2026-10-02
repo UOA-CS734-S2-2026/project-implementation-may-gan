@@ -31,6 +31,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Daily post creation](daily-posts.md): the idempotent `POST /api/v1/posts` contract, deadline checks, and conflict reasons.
 - [Friends feed](friends-feed.md): who can see which posts in `GET /api/v1/feed`, and its pagination.
 - [Post detail](post-detail.md): `GET /api/v1/posts/{postId}`, who can read one post, and 404 concealment.
+- [Editing and deleting posts](post-editing.md): `PATCH` and `DELETE /api/v1/posts/{postId}`, revision history, and posting again after a delete.
 - [Profiles](profiles.md): profile details, who sees the bio, editing, and username changes.
 - [Profile archive](profile-archive.md): `GET /api/v1/profiles/{username}/posts`, who sees which posts on a profile.
 

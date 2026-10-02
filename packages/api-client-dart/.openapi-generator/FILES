@@ -87,6 +87,8 @@ lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
 lib/model/post_media_content_type.dart
+lib/model/post_revision.dart
+lib/model/post_revisions_page.dart
 lib/model/post_voice_memo.dart
 lib/model/posting_streak.dart
 lib/model/posts_list_trash200_response.dart
@@ -114,6 +116,7 @@ lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
+lib/model/update_post_request.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart
