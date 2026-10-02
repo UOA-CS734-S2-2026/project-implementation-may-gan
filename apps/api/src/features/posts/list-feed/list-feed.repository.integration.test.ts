@@ -188,6 +188,8 @@ function requireLocalTestUrl(value: string): string {
       comment("comment-1", "c-25", users.friendA),
       comment("comment-2", "c-25", users.viewer),
       comment("comment-gone", "c-25", users.friendB, true),
+      // The comment list hides authors without a username, so the count must too.
+      comment("comment-no-username", "c-25", users.noUsername),
     ]);
 
     const page = await feed().listFeed(users.viewer, now, 20);
