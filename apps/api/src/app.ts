@@ -160,8 +160,14 @@ import { createHyperdriveSetAvatarRepository } from "./features/profiles/set-ava
 import type { RemoveAvatarRouteDependencies } from "./features/profiles/remove-avatar/remove-avatar.route";
 import { createHyperdriveRemoveAvatarRepository } from "./features/profiles/remove-avatar/remove-avatar.repository";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
+import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
+import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
+import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
+import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import type { ResolveSession } from "./http/middleware/require-session";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
+type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
 
 export interface AppDependencies {
   auth?: BetterAuthCompatibilitySlice;
@@ -183,6 +189,7 @@ export interface AppDependencies {
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
+  accountPolicy?: AccountPolicyDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -209,6 +216,7 @@ export function createApp({
   usernameChange,
   avatarSet,
   avatarRemove,
+  accountPolicy,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -252,7 +260,11 @@ export function createApp({
     name: "better-auth.session_token",
     description: "Browser clients may authenticate with the Better Auth secure session cookie.",
   });
+  if (accountPolicy?.policies) {
+    api.use("/api/v1/*", createAccountPolicyMiddleware(accountPolicy.resolveSession, accountPolicy.policies));
+  }
   registerSystemRoutes(api);
+  registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
   registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
@@ -332,6 +344,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     store: withHyperdriveUsernameProfileStore(configuration),
   } satisfies UsernameProfileRouteDependencies : undefined;
+  const accountPolicy = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
+  } satisfies AccountPolicyDependencies : undefined;
   // Profile photos are shown through links that expire after ten minutes.
   const signAvatar = r2Runtime
     ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
@@ -387,6 +403,7 @@ export function createAppForEnv(env: ApiEnv) {
     realtimeConnect: realtime?.connect,
     pushDevices,
     usernameProfile,
+    accountPolicy,
     profileDetails,
     profileUpdate,
     usernameChange,
@@ -425,6 +442,7 @@ const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,
   resolveRealtimeSession: async () => null,
   webSocketUrl: "wss://realtime.invalid/api/v1/realtime/connect",
+  policyAllowsOrdinary: async () => false,
 };
 const unavailablePushDevices: PushDeviceDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
 
@@ -596,6 +614,8 @@ function createRealtimeDependencies(
   env: ApiEnv,
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
 ): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
+  const policies = createHyperdriveAccountPolicyResolver(configuration.hyperdrive);
+  const policyAllowsOrdinary = async (userId: string) => allowsAccountCapability(await policies.resolve(userId), "ordinary");
   const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
   const tickets = {
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
@@ -609,8 +629,9 @@ function createRealtimeDependencies(
     userRealtime: env.USER_REALTIME!,
     trustedOrigins: configuration.trustedOrigins,
     hasUsername,
+    policyAllowsOrdinary,
   };
-  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername, policyAllowsOrdinary }, connect };
 }
 
 function createPushDeviceDependencies(

@@ -4,6 +4,8 @@ import type { OutboxJob } from "../jobs/outbox-store";
 import type { PushDestinationResolver } from "./push-dispatcher";
 import type { PushTokenProtector } from "./token-encryption";
 import { conversationPairBlocked, conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
+import { allowsAccountCapability } from "../../features/account-policy/shared/account-policy";
+import { readAccountPolicy } from "../../features/account-policy/shared/account-policy.repository";
 
 /** Rechecks registration, current session, membership and blocks immediately before FCM. */
 export function createPostgresPushDestinationResolver(database: DayliDatabase, protector: PushTokenProtector): PushDestinationResolver {
@@ -60,6 +62,11 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         ))
         .limit(1);
       if (!row || !row.participantsAvailable || typeof row.tokenCiphertext !== "string" || typeof row.tokenKeyVersion !== "string") return null;
+      try {
+        if (!allowsAccountCapability(await readAccountPolicy(database, job.recipientId), "ordinary")) return null;
+      } catch {
+        return null;
+      }
       const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
       return token ? { token, valid: true } : null;
     },

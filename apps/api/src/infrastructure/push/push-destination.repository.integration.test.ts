@@ -34,6 +34,7 @@ suite("Postgres push destination authorization", () => {
   const now = new Date();
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
   const tokenHash = (value: string) => value.repeat(64).slice(0, 64);
+  let effectiveTermsId: string | undefined;
 
   function job(recipientId: string, deviceRegistrationId: string) {
     return {
@@ -77,6 +78,7 @@ suite("Postgres push destination authorization", () => {
 
   afterAll(async () => {
     try {
+      if (effectiveTermsId) await database.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, effectiveTermsId));
       await database.db.delete(schema.user).where(inArray(schema.user.id, [ids.alice, ids.bob]));
     } finally { await database.close(); }
   });
@@ -141,6 +143,19 @@ suite("Postgres push destination authorization", () => {
     });
     await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
     await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, ids.alice));
+
+    effectiveTermsId = `push-policy-terms-${crypto.randomUUID()}`;
+    await database.db.insert(schema.legalDocumentVersions).values({
+      id: effectiveTermsId,
+      kind: "terms",
+      version: 1_000_000_002,
+      contentDigest: "f".repeat(64),
+      status: "effective",
+      effectiveAt: new Date("2020-01-01T00:00:00.000Z"),
+    });
+    await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
+    await database.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, effectiveTermsId));
+    effectiveTermsId = undefined;
 
     await resolver.invalidate(ids.bobDevice);
     await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();

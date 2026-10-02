@@ -9,6 +9,8 @@ export interface RealtimeConnectDependencies {
   userRealtime: DurableObjectNamespace;
   trustedOrigins: readonly string[];
   hasUsername?: HasUsername;
+  /** Fresh policy check after ticket consumption and before the upgrade. */
+  policyAllowsOrdinary(userId: string): Promise<boolean>;
   rateLimiter?: ActorRateLimiter;
 }
 
@@ -29,6 +31,13 @@ export async function connectRealtime(request: Request, dependencies: RealtimeCo
   const session = await dependencies.resolveActiveSession(consumed.sessionId);
   if (!session || session.userId !== consumed.userId || session.expiresAt.getTime() <= Date.now()) {
     return new Response("Unauthorized.", { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  try {
+    if (!await dependencies.policyAllowsOrdinary(session.userId)) {
+      return new Response("Forbidden.", { status: 403, headers: { "Cache-Control": "no-store" } });
+    }
+  } catch {
+    return new Response("Account policy is temporarily unavailable.", { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   if (dependencies.rateLimiter) {
     const decision = await dependencies.rateLimiter.check(request, { userId: session.userId });
