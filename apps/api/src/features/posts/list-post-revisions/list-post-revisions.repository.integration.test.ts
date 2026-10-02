@@ -112,6 +112,11 @@ function requireLocalTestUrl(value: string): string {
     expect(second?.items.map((item) => item.revisionNumber)).toEqual([1]);
     expect(second).toMatchObject({ nextCursor: null, hasMore: false });
     await expect(repo().listRevisions(users.author, postId, now, 2, "not-a-cursor")).rejects.toBeInstanceOf(InvalidRevisionCursorError);
+    // Beyond PostgreSQL's integer range: a 422 before any query, not a failed query.
+    const outOfRange = btoa(JSON.stringify(["revision", 2_147_483_648])).replaceAll("=", "");
+    await expect(repo().listRevisions(users.author, postId, now, 2, outOfRange)).rejects.toBeInstanceOf(InvalidRevisionCursorError);
+    const largest = btoa(JSON.stringify(["revision", 2_147_483_647])).replaceAll("=", "");
+    await expect(repo().listRevisions(users.author, postId, now, 2, largest)).resolves.toMatchObject({ items: [{ revisionNumber: 3 }, { revisionNumber: 2 }] });
   });
 
   it.each([

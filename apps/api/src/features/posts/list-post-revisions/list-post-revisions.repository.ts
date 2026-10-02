@@ -13,6 +13,9 @@ export class InvalidRevisionCursorError extends Error {
   }
 }
 
+/** `post_revisions.revision_number` is a PostgreSQL `integer`. */
+const MAX_REVISION_NUMBER = 2_147_483_647;
+
 function encodeRevisionCursor(revisionNumber: number): string {
   return btoa(JSON.stringify(["revision", revisionNumber]))
     .replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
@@ -25,7 +28,7 @@ function decodeRevisionCursor(value: string | undefined): number | undefined {
     const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
     const parsed: unknown = JSON.parse(atob(base64 + "=".repeat((4 - base64.length % 4) % 4)));
     if (Array.isArray(parsed) && parsed.length === 2 && parsed[0] === "revision"
-      && Number.isSafeInteger(parsed[1]) && parsed[1] > 1) {
+      && Number.isSafeInteger(parsed[1]) && parsed[1] > 1 && parsed[1] <= MAX_REVISION_NUMBER) {
       return parsed[1];
     }
   } catch {

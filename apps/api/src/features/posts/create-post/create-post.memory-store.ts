@@ -18,7 +18,8 @@ export interface MemoryReservation {
 
 /** An in-memory store that serialises each author's transactions like the advisory lock. */
 export function createMemoryDailyPostStore(prompts: Record<string, string> = {}) {
-  const posts: NewDailyPost[] = [];
+  /** `deleted` marks a post its author deleted. */
+  const posts: Array<NewDailyPost & { deleted?: boolean }> = [];
   const reservations: MemoryReservation[] = [];
   const locks = new Map<string, Promise<unknown>>();
   const promptText = (id: string) => prompts[id] ?? "What made you smile today?";
@@ -49,10 +50,11 @@ export function createMemoryDailyPostStore(prompts: Record<string, string> = {})
       const next = previous.catch(() => undefined).then(() => operation({
         async findIdempotentOutcome(author, key) {
           const post = posts.find((candidate) => candidate.authorId === author && candidate.idempotencyKey === key);
-          return post ? { requestFingerprint: post.requestFingerprint, post: toStored(post) } : null;
+          if (!post) return null;
+          return { requestFingerprint: post.requestFingerprint, post: post.deleted ? null : toStored(post) };
         },
         async hasPostForDay(author, localDate) {
-          return posts.some((candidate) => candidate.authorId === author && candidate.localDate === localDate);
+          return posts.some((candidate) => candidate.authorId === author && candidate.localDate === localDate && !candidate.deleted);
         },
         async findActivePrompt(localDate) {
           const id = `prompt-${localDate.slice(5)}`;
@@ -72,7 +74,7 @@ export function createMemoryDailyPostStore(prompts: Record<string, string> = {})
             }));
         },
         async insertPost(post) {
-          if (posts.some((candidate) => candidate.authorId === post.authorId && candidate.localDate === post.localDate)) {
+          if (posts.some((candidate) => candidate.authorId === post.authorId && candidate.localDate === post.localDate && !candidate.deleted)) {
             throw new CreateDailyPostError("ALREADY_POSTED");
           }
           const linked = linkedReservationIds();

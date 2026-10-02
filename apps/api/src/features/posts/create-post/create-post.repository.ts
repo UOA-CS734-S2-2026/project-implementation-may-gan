@@ -99,14 +99,17 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .select({
           requestFingerprint: schema.postIdempotencyKeys.requestFingerprint,
           postId: schema.postIdempotencyKeys.postId,
+          deletedAt: schema.posts.deletedAt,
         })
         .from(schema.postIdempotencyKeys)
+        .innerJoin(schema.posts, eq(schema.posts.id, schema.postIdempotencyKeys.postId))
         .where(and(
           eq(schema.postIdempotencyKeys.authorId, authorId),
           eq(schema.postIdempotencyKeys.idempotencyKey, idempotencyKey),
         ))
         .limit(1);
       if (!record) return null;
+      if (record.deletedAt) return { requestFingerprint: record.requestFingerprint, post: null };
       const post = await readPost(queryable, record.postId);
       // A retained key for a trashed post cannot replay hidden content or be
       // reused for a replacement. Purge removes the key with its post.

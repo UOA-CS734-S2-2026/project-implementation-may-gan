@@ -25,6 +25,9 @@ enum SubmissionConflict {
   /// The idempotency key was already used for a different submission.
   idempotencyKeyReused('IDEMPOTENCY_KEY_REUSED'),
 
+  /// This submission was posted, and the author has since deleted the post.
+  postDeleted('POST_DELETED'),
+
   /// An attachment is still uploading on the server's side.
   mediaNotReady('MEDIA_NOT_READY'),
 

@@ -26,7 +26,7 @@ function requireLocalTestUrl(value: string): string {
 (enabled ? describe : describe.skip)("PostgreSQL daily post creation", () => {
   const migrator = createDayliDatabase(requireLocalTestUrl(migratorUrl ?? "postgresql://localhost:5433/dayli_test"));
   const app = createDayliDatabase(requireLocalTestUrl(appUrl ?? "postgresql://localhost:5433/dayli_test"));
-  const users = Array.from({ length: 3 }, (_, index) => `post-create-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 4 }, (_, index) => `post-create-${crypto.randomUUID()}-${index}`);
   const now = new Date("2026-09-25T03:00:00.000Z");
   const clock = () => now;
   const input: CreateDailyPostInput = {
@@ -85,6 +85,18 @@ function requireLocalTestUrl(value: string): string {
       keys: sql<number>`(select count(*) from ${schema.postIdempotencyKeys} where ${schema.postIdempotencyKeys.authorId} = ${users[0]!})::int`,
     }).from(sql`(values (1)) as query_source`);
     expect(row).toEqual({ posts: 1, notes: 1, keys: 1 });
+  });
+
+  it("keeps a deleted post's key used and returns no content on replay", async () => {
+    const created = await service().createDailyPost(users[3]!, "key-deleted", input);
+    await migrator.db.update(schema.posts).set({ deletedAt: new Date("2026-09-25T04:00:00.000Z") })
+      .where(eq(schema.posts.id, created.post.id));
+
+    await expect(service().createDailyPost(users[3]!, "key-deleted", input))
+      .rejects.toMatchObject({ reason: "POST_DELETED" });
+    await expect(service().createDailyPost(users[3]!, "key-deleted", { ...input, rating: 2 }))
+      .rejects.toMatchObject({ reason: "IDEMPOTENCY_KEY_REUSED" });
+    await expect(service().createDailyPost(users[3]!, "key-again", input)).resolves.toMatchObject({ replayed: false });
   });
 
   it("serialises concurrent submissions across connections into exactly one post", async () => {

@@ -30,7 +30,7 @@ One post per author per day is enforced by the partial unique index `posts_autho
 
 Rows, revisions, and media stay in the database and R2 after deletion. A seven-day Trash with restore, and the job that purges deleted posts and their media, belong to #163. A restore will have to refuse when the author has already posted again that day.
 
-Retrying a post-creation request with the idempotency key of a post that was later deleted replays the original outcome, the deleted post. Clients use a new key for each submission, so this only affects a retry of the original request.
+Retrying a post-creation request with the idempotency key of a post that was later deleted returns `409 CONFLICT` with `details.reason` `POST_DELETED` and no post content. The key stays used, so the retry can't create a second post; posting again needs a new key.
 
 ## Tests
 

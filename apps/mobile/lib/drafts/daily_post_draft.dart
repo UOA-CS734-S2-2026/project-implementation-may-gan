@@ -221,6 +221,7 @@ class DailyPostDraft {
   DailyPostDraft copyWith({
     String? promptId,
     String? promptText,
+    String? idempotencyKey,
     DateTime? updatedAt,
     String? reflectiveAnswer,
     String? caption,
@@ -233,7 +234,7 @@ class DailyPostDraft {
     localDate: localDate,
     promptId: promptId ?? this.promptId,
     promptText: promptText ?? this.promptText,
-    idempotencyKey: idempotencyKey,
+    idempotencyKey: idempotencyKey ?? this.idempotencyKey,
     updatedAt: updatedAt ?? this.updatedAt,
     reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
     caption: caption ?? this.caption,

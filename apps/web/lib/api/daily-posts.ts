@@ -41,6 +41,7 @@ export type DailyPostConflictReason =
   | "PROMPT_CHANGED"
   | "ALREADY_POSTED"
   | "IDEMPOTENCY_KEY_REUSED"
+  | "POST_DELETED"
   | "UNKNOWN";
 
 export type ApiResult<T> = { ok: true; value: T } | { ok: false; failure: ApiFailure };
@@ -51,6 +52,7 @@ const conflictReasons = new Set<DailyPostConflictReason>([
   "PROMPT_CHANGED",
   "ALREADY_POSTED",
   "IDEMPOTENCY_KEY_REUSED",
+  "POST_DELETED",
 ]);
 
 async function toFailure(error: unknown): Promise<ApiFailure> {
