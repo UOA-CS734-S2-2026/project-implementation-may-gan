@@ -38,4 +38,5 @@ ALTER TABLE "post_likes" ADD CONSTRAINT "post_likes_post_id_posts_id_fk" FOREIGN
 ALTER TABLE "post_likes" ADD CONSTRAINT "post_likes_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "post_comments_post_created_idx" ON "post_comments" USING btree ("post_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "post_comments_author_id_idx" ON "post_comments" USING btree ("author_id");--> statement-breakpoint
+CREATE INDEX "post_likes_post_created_idx" ON "post_likes" USING btree ("post_id","created_at","user_id");--> statement-breakpoint
 CREATE INDEX "post_likes_user_id_idx" ON "post_likes" USING btree ("user_id");

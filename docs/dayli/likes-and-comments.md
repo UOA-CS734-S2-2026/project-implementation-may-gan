@@ -11,7 +11,7 @@ Likes and comments show a public username, so every interaction route also uses 
 ## Likes
 
 - `PUT /api/v1/posts/{postId}/like` likes the post. `DELETE` on the same path unlikes it. Both return `{ likeCount, viewerHasLiked }`, and repeating either changes nothing, so retries are safe. `post_likes` has one row per person per post.
-- `GET /api/v1/posts/{postId}/likes` lists who liked the post, newest first, with cursor pagination. People across a block from the viewer, in either direction, are left out of the list. `likeCount` counts every like.
+- `GET /api/v1/posts/{postId}/likes` lists who liked the post, newest first, with cursor pagination. The index `post_likes_post_created_idx` on `(post_id, created_at, user_id)` matches that order, so each page seeks from its cursor. People across a block from the viewer, in either direction, are left out of the list. `likeCount` counts every like.
 
 ## Comments
 

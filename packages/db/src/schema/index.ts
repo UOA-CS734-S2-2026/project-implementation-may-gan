@@ -268,6 +268,8 @@ export const postLikes = pgTable("post_likes", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   primaryKey({ name: "post_likes_pkey", columns: [table.postId, table.userId] }),
+  // Matches the likers list: one post, newest first, user_id as tie-breaker.
+  index("post_likes_post_created_idx").on(table.postId, table.createdAt, table.userId),
   index("post_likes_user_id_idx").on(table.userId),
 ]);
 

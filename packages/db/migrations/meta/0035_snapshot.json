@@ -1,5 +1,5 @@
 {
-  "id": "2f1883cb-03af-4324-b37e-a99410983a0a",
+  "id": "3c0a5a4f-dae4-4456-9d82-431cf81e4e6d",
   "prevId": "05d15877-8e69-4b58-b58b-397a48f044f8",
   "version": "7",
   "dialect": "postgresql",
@@ -3614,6 +3614,33 @@
         }
       },
       "indexes": {
+        "post_likes_post_created_idx": {
+          "name": "post_likes_post_created_idx",
+          "columns": [
+            {
+              "expression": "post_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "post_likes_user_id_idx": {
           "name": "post_likes_user_id_idx",
           "columns": [
