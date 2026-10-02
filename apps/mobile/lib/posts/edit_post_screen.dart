@@ -38,6 +38,10 @@ class _EditPostScreenState extends State<EditPostScreen> {
   bool _saving = false;
   bool _reloading = false;
   ApiFailure? _failure;
+
+  /// Why the latest version couldn't be read after a conflict. The conflict
+  /// itself stays in [_failure] until a newer version loads.
+  ApiFailure? _reloadFailure;
   String? _notice;
 
   @override
@@ -111,11 +115,13 @@ class _EditPostScreenState extends State<EditPostScreen> {
         case ApiSuccess(:final value):
           _base = value;
           _failure = null;
+          _reloadFailure = null;
           _notice =
               'Loaded the latest version. Your changes are still here; '
               'check them and save again.';
         case ApiError(:final failure):
-          _failure = failure;
+          // Saving against the stale version would only conflict again.
+          _reloadFailure = failure;
       }
     });
   }
@@ -298,6 +304,19 @@ class _EditPostScreenState extends State<EditPostScreen> {
                           onPressed: _reloading ? null : _reloadLatest,
                         ),
                         const SizedBox(height: 8),
+                        if (_reloadFailure case final reloadFailure?) ...[
+                          Text(
+                            reloadFailure is NetworkUnavailable
+                                ? "You're offline, so the latest version "
+                                      "couldn't be loaded. Try again when "
+                                      "you're back online."
+                                : "The latest version couldn't be loaded. "
+                                      'Try again.',
+                            key: const Key('editPost.reloadError'),
+                            style: muted,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                       ],
                     ],
                     DayliButton(

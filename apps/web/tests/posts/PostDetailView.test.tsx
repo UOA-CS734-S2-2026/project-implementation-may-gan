@@ -179,6 +179,23 @@ describe("PostDetailView", () => {
       expect(remove).toHaveBeenCalledWith("post-1");
     });
 
+    it("ignores clicks outside while deleting, so a failure stays visible", async () => {
+      const actor = userEvent.setup();
+      get.mockResolvedValue({ ok: true, value: detail({ viewerIsAuthor: true }) });
+      let answer: (value: unknown) => void = () => {};
+      remove.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+      render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+      await actor.click(await screen.findByRole("button", { name: "Delete" }));
+      const dialog = screen.getByRole("alertdialog");
+      await actor.click(within(dialog).getByRole("button", { name: "Delete" }));
+      await actor.click(dialog.parentElement!);
+      expect(screen.getByRole("alertdialog")).toBeTruthy();
+
+      answer({ ok: false, failure: "unavailable" });
+      expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be deleted/);
+    });
+
     it("stays open with an error when deletion fails", async () => {
       const actor = userEvent.setup();
       get.mockResolvedValue({ ok: true, value: detail({ viewerIsAuthor: true }) });

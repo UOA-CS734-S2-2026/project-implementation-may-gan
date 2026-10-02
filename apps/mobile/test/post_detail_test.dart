@@ -2,6 +2,7 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_page.dart';
+import 'package:dayli_mobile/ui/dayli_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
@@ -227,6 +228,47 @@ void main() {
       expect(posts.edits.last.$2.expectedRevisionCount, 1);
       expect(find.text('Mine.'), findsOneWidget);
       expect(find.byKey(const Key('editPost.save')), findsNothing);
+    });
+
+    testWidgets('keeps the conflict when the latest version fails to load', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', viewerIsAuthor: true)),
+        const ApiError(NetworkUnavailable()),
+        ApiSuccess(postDetail('1', viewerIsAuthor: true, revisionCount: 1)),
+      ]);
+      posts.updateResults
+        ..clear()
+        ..add(const ApiError(Conflict('edited elsewhere')));
+      final harness = harnessWith(posts);
+      await openEditor(tester, harness);
+
+      await tester.enterText(find.byKey(const Key('editPost.answer')), 'Mine.');
+      await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editPost.reload')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.reload')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('editPost.reloadError')), findsOneWidget);
+      expect(find.byKey(const Key('editPost.reload')), findsOneWidget);
+      expect(
+        tester
+            .widget<DayliButton>(find.byKey(const Key('editPost.save')))
+            .onPressed,
+        isNull,
+      );
+
+      await tester.tap(find.byKey(const Key('editPost.reload')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('editPost.reloadError')), findsNothing);
+      expect(find.byKey(const Key('editPost.notice')), findsOneWidget);
+      expect(find.text('Mine.'), findsOneWidget);
     });
 
     testWidgets('keeps the changes when offline', (tester) async {
