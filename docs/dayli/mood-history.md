@@ -24,7 +24,7 @@ Ratings come through `buildDrizzlePostVisibilityFilter` with the `list` action, 
 | `days` | One `{ localDate, rating }` per rated day the caller can see, oldest first |
 | `hiddenDays` | Days in the range with a post the caller can't see, such as a solo post. They are neither rated nor missing, so a friend's view agrees with the streak |
 | `current` | Summary of the range: `trackedDays`, `postedDays` (visible ratings), `missingDays`, `average` (one decimal place), `lowest`, `highest` |
-| `previous` | The same summary for the same-length range just before, so clients can compare the two |
+| `previous` | The same summary for the same-length range just before. The clients don't show either summary yet |
 | `trackedFrom` | The account's first Auckland day, or its earliest post if an imported post is older |
 
 Days before `trackedFrom` are not tracked, so a new account isn't shown months of missing data. Today is not missing while it is still open. `average`, `lowest` and `highest` are `null` when a range has no visible ratings.
@@ -33,7 +33,7 @@ The summary logic is `summarizeMoodHistory` in `packages/domain`. The repository
 
 ## Clients
 
-Both clients follow the original web app's weekly mood graph: a card with a 30 days, 90 days or Year control, a stats strip (average with its post count, the change from the range before with that range's average and post count, and days without a post), and a chart with an accent line, `foreground-accent` dots and an empty baseline circle for each day without any post. The line only joins consecutive days, so a missed day shows as a gap rather than an invented value. Over 90 days, only days with no posted neighbour keep a dot. Hovering, tapping, dragging or the arrow keys read out a day. The section only describes what was posted; it does not label moods or suggest causes.
+Both clients follow the original web app's weekly mood graph: a card with a 30 days, 90 days or Year control and a chart with an accent line, `foreground-accent` dots and an empty baseline circle for each day without any post. The line only joins consecutive days, so a missed day shows as a gap rather than an invented value. Over 90 days, only days with no posted neighbour keep a dot. Hovering, tapping, dragging or the arrow keys read out a day. The section only describes what was posted; it does not label moods or suggest causes.
 
 Posting invalidates every `["profiles", userId]` query on web, which includes this one. Flutter reloads it on pull to refresh.
 

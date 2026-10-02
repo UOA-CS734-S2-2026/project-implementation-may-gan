@@ -149,17 +149,14 @@ class ProfileDetails {
 
 /// The ranges a mood history covers, each ending today in Auckland.
 enum MoodRange {
-  days30('30d', '30 days', '30 days'),
-  days90('90d', '90 days', '90 days'),
-  year('1y', 'Year', 'year');
+  days30('30d', '30 days'),
+  days90('90d', '90 days'),
+  year('1y', 'Year');
 
-  const MoodRange(this.wire, this.label, this.period);
+  const MoodRange(this.wire, this.label);
 
   final String wire;
   final String label;
-
-  /// How the range reads in "vs the … before".
-  final String period;
 }
 
 /// One posted day and its rating.

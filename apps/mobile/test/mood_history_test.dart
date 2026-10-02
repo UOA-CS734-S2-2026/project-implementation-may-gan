@@ -127,10 +127,9 @@ void main() {
     await openMyDays(tester, harness);
 
     expect(find.byKey(const Key('profile.mood')), findsOneWidget);
-    expect(find.text('7.0'), findsOneWidget);
-    expect(find.text('From 3 posts'), findsOneWidget);
-    expect(find.text('+0.4'), findsOneWidget);
-    expect(find.text('6.6 from 18 posts'), findsOneWidget);
+    expect(find.byKey(const Key('profile.mood.chart')), findsOneWidget);
+    expect(find.text('Average rating'), findsNothing);
+    expect(find.text('Days without a post'), findsNothing);
     expect(profiles.moodRequests, [('jos', MoodRange.days30)]);
   });
 
@@ -150,7 +149,6 @@ void main() {
       ('jos', MoodRange.days30),
       ('jos', MoodRange.year),
     ]);
-    expect(find.text('vs the year before'), findsOneWidget);
 
     final chart = find.byKey(const Key('profile.mood.chart'));
     await tester.ensureVisible(chart);
@@ -161,9 +159,7 @@ void main() {
     expect(find.text('30 Sept 2026: Rating of 7'), findsOneWidget);
   });
 
-  testProfile('does not count days before joining or invent a comparison', (
-    tester,
-  ) async {
+  testProfile('does not count days before joining', (tester) async {
     final profiles =
         FakeProfileClient({
             'jos': details('jos', displayName: 'Jos', owner: true),
@@ -187,7 +183,6 @@ void main() {
     );
     await openMyDays(tester, harness);
 
-    expect(find.text('No posts then'), findsOneWidget);
     expect(find.textContaining('You joined on 21 Sept 2026'), findsOneWidget);
   });
 

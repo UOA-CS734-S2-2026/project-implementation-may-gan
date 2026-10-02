@@ -30,7 +30,7 @@ String formatMoodDate(String date, {bool short = false}) {
 /// A profile's ratings over time, in the style of the web app's mood
 /// section. It reaches the same people as the profile's posts: the owner and
 /// their friends. It describes what was posted and makes no claim about why;
-/// gaps and sample sizes stay visible.
+/// missing days stay visible.
 class MoodHistoryCard extends StatefulWidget {
   const MoodHistoryCard({
     super.key,
@@ -178,7 +178,6 @@ class _MoodHistoryCardState extends State<MoodHistoryCard> {
                 duration: const Duration(milliseconds: 150),
                 child: _MoodBody(
                   history: history,
-                  range: _range,
                   owner: widget.isMe ? null : widget.displayName,
                 ),
               ),
@@ -190,117 +189,22 @@ class _MoodHistoryCardState extends State<MoodHistoryCard> {
 }
 
 class _MoodBody extends StatelessWidget {
-  const _MoodBody({required this.history, required this.range, this.owner});
+  const _MoodBody({required this.history, this.owner});
 
   final MoodHistory history;
-  final MoodRange range;
 
   /// The profile's public name, or null on your own profile.
   final String? owner;
-
-  String _plural(int count, String one) =>
-      '$count ${count == 1 ? one : '${one}s'}';
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
     final current = history.current;
-    final previous = history.previous;
-    final change = current.average != null && previous.average != null
-        ? ((current.average! - previous.average!) * 10).round() / 10
-        : null;
     final joinedInRange = history.trackedFrom.compareTo(current.from) > 0;
-
-    Widget stat(String key, String value, String label, String detail) =>
-        Semantics(
-          key: Key('profile.mood.$key'),
-          container: true,
-          label: '$value $label, $detail',
-          excludeSemantics: true,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 88),
-            child: Column(
-              children: [
-                Text(
-                  value,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.xl,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.xs,
-                    color: colors.foregroundSecondary,
-                  ),
-                ),
-                Text(
-                  detail,
-                  textAlign: TextAlign.center,
-                  style: DayliText.sans(
-                    context,
-                    fontSize: 11,
-                    color: colors.foregroundTertiary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          decoration: BoxDecoration(
-            color: colors.backgroundSecondary,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Wrap(
-            alignment: WrapAlignment.center,
-            spacing: 24,
-            runSpacing: 12,
-            children: [
-              stat(
-                'average',
-                current.average?.toStringAsFixed(1) ?? '–',
-                'Average rating',
-                current.postedDays == 0
-                    ? 'No posts yet'
-                    : 'From ${_plural(current.postedDays, 'post')}',
-              ),
-              stat(
-                'change',
-                change == null
-                    ? '–'
-                    : '${change > 0
-                          ? '+'
-                          : change < 0
-                          ? '−'
-                          : '±'}${change.abs().toStringAsFixed(1)}',
-                'vs the ${range.period} before',
-                previous.postedDays == 0
-                    ? 'No posts then'
-                    : '${previous.average!.toStringAsFixed(1)} from ${_plural(previous.postedDays, 'post')}',
-              ),
-              stat(
-                'missing',
-                '${current.missingDays}',
-                'Days without a post',
-                joinedInRange
-                    ? 'Of ${_plural(current.trackedDays, 'day')} since ${owner == null ? 'you' : 'they'} joined'
-                    : 'Of ${_plural(current.trackedDays, 'day')}',
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
         if (history.days.isEmpty)
           Text(
             owner == null
