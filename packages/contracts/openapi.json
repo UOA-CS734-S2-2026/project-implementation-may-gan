@@ -126,6 +126,133 @@
           "SERVICE_UNAVAILABLE"
         ]
       },
+      "LegalAcceptanceResponse": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "declaredAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "acceptedAt",
+          "declaredAt"
+        ]
+      },
+      "LegalAcceptanceRequest": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "acceptedTermsAndDeclaredAge16": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "termsContentDigest",
+          "acceptedTermsAndDeclaredAge16"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentLegalRegistrationTerms": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "effective"
+            ]
+          },
+          "termsVersionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageDeclarationVersion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "termsVersionId",
+          "termsContentDigest",
+          "ageDeclarationVersion"
+        ]
+      },
+      "RegistrationIntentResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "termsVersionId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "token",
+          "binding",
+          "termsVersionId",
+          "expiresAt"
+        ]
+      },
+      "RegistrationIntentRequest": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "enum": [
+              "email",
+              "google_native",
+              "google_browser"
+            ]
+          },
+          "termsVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "acceptedTermsAndDeclaredAge16": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flow",
+          "termsVersionId",
+          "termsContentDigest",
+          "acceptedTermsAndDeclaredAge16"
+        ],
+        "additionalProperties": false
+      },
       "CreateMediaReservationResponse": {
         "type": "object",
         "properties": {
@@ -1782,6 +1909,199 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/acceptance": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.recordAcceptance",
+        "summary": "Record an explicit current Terms and 16+ action",
+        "description": "Available only for an effective Terms version. The Privacy Policy is a notice, not consent. No draft document can be accepted.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalAcceptanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server-recorded Terms and age declaration timestamps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalAcceptanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account cannot accept Terms in its current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The requested Terms are stale or no Terms are effective.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit confirmation and an exact current Terms digest are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal acceptance is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/current": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.currentRegistrationTerms",
+        "summary": "Read current published signup Terms metadata",
+        "responses": {
+          "200": {
+            "description": "Draft documents are not available for acceptance. The response has no private data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentLegalRegistrationTerms"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The legal version cannot be verified.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/registration-intent": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.issueRegistrationIntent",
+        "summary": "Start one explicit email or Google registration action",
+        "description": "Requires current approved documents and one affirmative Terms, Privacy notice, and 16+ action before account creation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationIntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opaque, short-lived, one-use registration proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationIntentResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No current approved Terms or the selected version changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit acceptance and a valid flow are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many registration attempts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The legal version cannot be verified.",
             "content": {
               "application/json": {
                 "schema": {

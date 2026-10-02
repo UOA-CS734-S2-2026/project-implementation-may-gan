@@ -27,12 +27,18 @@ describe("account policy", () => {
     expect(allowsAccountCapability(policy, "ordinary")).toBe(false);
     expect(allowsAccountCapability(policy, "restricted_cleanup")).toBe(true);
     expect(allowsAccountCapability(resolveAccountPolicy({ lifecycleState: "purge_failed" }), "restricted_cleanup")).toBe(false);
+    expect(allowsAccountCapability(resolveAccountPolicy({ termsRequired: true }), "legal_acceptance")).toBe(true);
+    expect(allowsAccountCapability(resolveAccountPolicy({ ageDeclarationRequired: true }), "legal_acceptance")).toBe(true);
+    expect(allowsAccountCapability(resolveAccountPolicy({ temporarilyRestricted: true }), "legal_acceptance")).toBe(false);
+    expect(allowsAccountCapability(policy, "legal_acceptance")).toBe(false);
   });
 
   it("uses exact public and cleanup route matching, with request acceptance still ordinary", async () => {
     await expect(classify("GET", "/api/v1/test")).resolves.toBeUndefined();
     await expect(classify("GET", "/api/v1/test-contracts")).resolves.toBe("ordinary");
     await expect(classify("GET", "/api/v1/account/status")).resolves.toBe("policy_read");
+    await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
+    await expect(classify("POST", "/api/v1/legal/acceptance/fake")).resolves.toBe("ordinary");
     await expect(classify("DELETE", "/api/v1/conversations/c/messages/m")).resolves.toBe("restricted_cleanup");
     await expect(classify("DELETE", "/api/v1/conversations/c/messages/m/reaction")).resolves.toBe("restricted_cleanup");
     await expect(classify("POST", "/api/v1/relationships/requests/r/decline")).resolves.toBe("restricted_cleanup");

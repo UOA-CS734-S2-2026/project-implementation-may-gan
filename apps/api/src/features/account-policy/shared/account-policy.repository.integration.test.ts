@@ -82,6 +82,9 @@ function localUrl(value: string | undefined, name: string) {
     await expect(readAccountPolicy(app.db, userId)).resolves.toMatchObject({ restriction: "age_declaration_blocked" });
 
     await migrator.db.insert(schema.ageDeclarations).values({ userId, declarationVersion: "age-v1" });
+    await expect(readAccountPolicy(app.db, userId)).resolves.toMatchObject({ restriction: "age_declaration_blocked" });
+
+    await migrator.db.insert(schema.ageDeclarations).values({ userId, declarationVersion: "age-16-v1" });
     await expect(readAccountPolicy(app.db, userId)).resolves.toMatchObject({ restriction: "active" });
   });
 

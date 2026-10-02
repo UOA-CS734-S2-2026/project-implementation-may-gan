@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { privacyDocument, termsDocument } from "@dayli/legal-content";
 
 type LegalLinksProps = {
   className?: string;
@@ -19,6 +20,7 @@ export function LegalLinks({ className = "" }: LegalLinksProps) {
 }
 
 export function LegalDraftMarker() {
+  if (privacyDocument.status === "approved" && termsDocument.status === "approved") return null;
   return <span className="text-[11px] leading-4 text-foreground-tertiary">(draft)</span>;
 }
 

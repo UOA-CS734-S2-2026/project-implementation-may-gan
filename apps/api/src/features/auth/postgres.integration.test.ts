@@ -1,6 +1,7 @@
 import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { count, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { createApp, createAppForEnv } from "../../app";
 import { registerPostgresBetterAuthRoutes, type SessionRevocationHook } from "./route";
 
@@ -193,6 +194,246 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       headers: { authorization: `Bearer ${expiryToken}` },
     }));
     await expect(expired.json()).resolves.toBeNull();
+  });
+
+  it("records explicit acceptance for an existing signed-in user without inferring it from login", async () => {
+    const app = createProductionApp();
+    const token = nativeToken(await signUp(app, "legal-existing@example.test"));
+    const termsId = `auth-legal-${crypto.randomUUID()}`;
+    const contentDigest = "c".repeat(64);
+    const [owner] = await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, "legal-existing@example.test"));
+    if (!owner) throw new Error("Expected registered user.");
+    try {
+      await migrator.db.insert(schema.legalDocumentVersions).values({
+        id: termsId, kind: "terms", version: 1024, contentDigest,
+        status: "effective", effectiveAt: new Date("2026-01-01T00:00:00Z"),
+      });
+      const freshSignup = await signUp(app, "legal-unproved@example.test");
+      expect(freshSignup.ok).toBe(false);
+      expect(await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, "legal-unproved@example.test"))).toEqual([]);
+      const admissionToken = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const admissionBinding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      await migrator.db.insert(schema.registrationIntents).values({
+        tokenDigest: await hash(admissionToken),
+        flowBindingDigest: await hash(`email:${admissionBinding}`),
+        termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+      });
+      const admitted = await app.fetch(request("/api/auth/sign-up/email", {
+        method: "POST", headers: {
+          "content-type": "application/json", "x-dayli-registration-intent": admissionToken, "x-dayli-registration-binding": admissionBinding,
+        },
+        body: JSON.stringify({ name: "Admitted User", username: "legal_admitted", email: "legal-admitted@example.test", password: "not-a-real-password" }),
+      }));
+      expect(admitted.status).toBe(200);
+      expect(JSON.stringify(await admitted.json())).not.toContain(admissionToken);
+      const [admittedUser] = await migrator.db.select({ id: schema.user.id, admission: schema.user.legal_registration_admission })
+        .from(schema.user).where(eq(schema.user.email, "legal-admitted@example.test"));
+      expect(admittedUser?.admission).toBeNull();
+      await migrator.db.update(schema.user).set({ legal_registration_admission: admissionToken }).where(eq(schema.user.id, admittedUser!.id));
+      const [protectedUser] = await migrator.db.select({ bridge: schema.user.legal_registration_admission }).from(schema.user).where(eq(schema.user.id, admittedUser!.id));
+      expect(protectedUser?.bridge).toBeNull();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, admittedUser!.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, admittedUser!.id))).toHaveLength(1);
+      expect((await app.fetch(request("/api/auth/sign-up/email", {
+        method: "POST", headers: {
+          "content-type": "application/json", "x-dayli-registration-intent": admissionToken, "x-dayli-registration-binding": admissionBinding,
+        },
+        body: JSON.stringify({ name: "Replay User", username: "legal_replay", email: "legal-replay@example.test", password: "not-a-real-password" }),
+      }))).ok).toBe(false);
+      const blocked = await app.fetch(request("/api/v1/account/status", { headers: { authorization: `Bearer ${token}` } }));
+      await expect(blocked.json()).resolves.toMatchObject({ restriction: "terms_blocked" });
+      const signInAgain = await app.fetch(request("/api/auth/sign-in/email", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "legal-existing@example.test", password: "not-a-real-password" }),
+      }));
+      expect(signInAgain.status).toBe(200);
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, owner.id))).toEqual([]);
+
+      const acceptance = await app.fetch(request("/api/v1/legal/acceptance", {
+        method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ termsVersionId: termsId, termsContentDigest: contentDigest, acceptedTermsAndDeclaredAge16: true }),
+      }));
+      // Database activation alone is insufficient while bundled documents
+      // remain drafts. No production path may record this synthetic policy.
+      expect(acceptance.status).toBe(409);
+      const stillBlocked = await app.fetch(request("/api/v1/account/status", { headers: { authorization: `Bearer ${token}` } }));
+      await expect(stillBlocked.json()).resolves.toMatchObject({ restriction: "terms_blocked" });
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, owner.id))).toEqual([]);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, owner.id))).toEqual([]);
+    } finally {
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, "legal-admitted@example.test"));
+      await migrator.db.delete(schema.user).where(eq(schema.user.id, owner.id));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
+  });
+
+  it("rolls back the user, legal records, and proof if Better Auth fails after the user INSERT", async () => {
+    const termsId = `rollback-registration-${crypto.randomUUID()}`;
+    const email = "rollback-registration@example.test";
+    await migrator.db.insert(schema.legalDocumentVersions).values({
+      id: termsId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1, contentDigest: "a".repeat(64),
+    });
+    await migrator.db.execute(sql`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${termsId}`);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const binding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await migrator.db.insert(schema.registrationIntents).values({
+      tokenDigest: await hash(token), flowBindingDigest: await hash(`email:${binding}`),
+      termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+    });
+    const signupRequest = () => request("/api/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json", "x-dayli-registration-intent": token, "x-dayli-registration-binding": binding },
+      body: JSON.stringify({ name: "Retry Registrant", username: "legal_retry", email, password: "not-a-real-password" }),
+    });
+    await migrator.db.execute(sql.raw(`CREATE FUNCTION public.test_fail_registration_account() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM public."user" WHERE id = NEW.user_id AND email = 'rollback-registration@example.test') THEN
+          RAISE EXCEPTION 'test account insertion failure';
+        END IF;
+        RETURN NEW;
+      END;
+    $$;`));
+    await migrator.db.execute(sql.raw(`CREATE TRIGGER test_fail_registration_account BEFORE INSERT ON public.account
+      FOR EACH ROW EXECUTE FUNCTION public.test_fail_registration_account();`));
+    try {
+      const failed = await createProductionApp().fetch(signupRequest());
+      expect(failed.ok).toBe(false);
+      expect(await migrator.db.select().from(schema.user).where(eq(schema.user.email, email))).toEqual([]);
+      const [unused] = await migrator.db.select({ consumedAt: schema.registrationIntents.consumedAt }).from(schema.registrationIntents)
+        .where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(unused?.consumedAt).toBeNull();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.termsVersionId, termsId))).toEqual([]);
+      await migrator.db.execute(sql.raw("DROP TRIGGER test_fail_registration_account ON public.account"));
+      const retried = await createProductionApp().fetch(signupRequest());
+      expect(retried.status).toBe(200);
+      const [created] = await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
+      expect(created?.id).toBeTruthy();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, created!.id))).toHaveLength(1);
+    } finally {
+      await migrator.db.execute(sql.raw("DROP TRIGGER IF EXISTS test_fail_registration_account ON public.account"));
+      await migrator.db.execute(sql.raw("DROP FUNCTION public.test_fail_registration_account()"));
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, email));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
+  });
+
+  it("admits a verified native Google user only with the correct fresh registration flow", async () => {
+    const termsId = `native-registration-${crypto.randomUUID()}`;
+    const email = "native-registration@example.test";
+    await migrator.db.insert(schema.legalDocumentVersions).values({
+      id: termsId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1, contentDigest: "a".repeat(64),
+    });
+    await migrator.db.execute(sql`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${termsId}`);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const binding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await migrator.db.insert(schema.registrationIntents).values({
+      tokenDigest: await hash(token), flowBindingDigest: await hash(`google_native:${binding}`),
+      termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+    });
+    try {
+      const { privateKey, publicKey } = await generateKeyPair("RS256");
+      const jwk = await exportJWK(publicKey);
+      jwk.kid = "native-registration-test-key";
+      const idToken = await new SignJWT({ name: "Native Registrant", email, email_verified: true })
+        .setProtectedHeader({ alg: "RS256", kid: jwk.kid })
+        .setIssuer("https://accounts.google.com").setAudience("ios-client-id")
+        .setSubject(`native-${crypto.randomUUID()}`).setIssuedAt().setExpirationTime("5m").sign(privateKey);
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ keys: [jwk] }), { status: 200, headers: { "content-type": "application/json" } })));
+      const app = createAppForEnv({
+        ...productionAuthEnvironment(), GOOGLE_WEB_CLIENT_ID: "web-client-id", GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+        GOOGLE_ANDROID_CLIENT_ID: "android-client-id", GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+      });
+      const signInGoogle = (headers: Record<string, string>) => app.fetch(request("/api/auth/sign-in/social", {
+        method: "POST", headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify({ provider: "google", idToken: { token: idToken, accessToken: "test-access-token" } }),
+      }));
+      expect((await signInGoogle({})).ok).toBe(false);
+      expect((await signInGoogle({ "x-dayli-registration-intent": token, "x-dayli-registration-binding": "0".repeat(64) })).ok).toBe(false);
+      const [unused] = await migrator.db.select({ consumedAt: schema.registrationIntents.consumedAt }).from(schema.registrationIntents)
+        .where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(unused?.consumedAt).toBeNull();
+      expect(await migrator.db.select().from(schema.user).where(eq(schema.user.email, email))).toEqual([]);
+      const admitted = await signInGoogle({ "x-dayli-registration-intent": token, "x-dayli-registration-binding": binding });
+      expect(admitted.status).toBe(200);
+      const body = await admitted.json() as { user: { id: string } };
+      expect(JSON.stringify(body)).not.toContain(token);
+      const [user] = await migrator.db.select({ id: schema.user.id, bridge: schema.user.legal_registration_admission }).from(schema.user).where(eq(schema.user.email, email));
+      expect(user?.id).toBe(body.user.id);
+      expect(user?.bridge).toBeNull();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, user!.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, user!.id))).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, email));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
+  });
+
+  it("binds a Google browser intent to Better Auth state and consumes it only after a successful callback", async () => {
+    const termsId = `google-registration-${crypto.randomUUID()}`;
+    const email = "google-registration@example.test";
+    await migrator.db.insert(schema.legalDocumentVersions).values({
+      id: termsId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1, contentDigest: "a".repeat(64),
+    });
+    await migrator.db.execute(sql`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${termsId}`);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const binding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await migrator.db.insert(schema.registrationIntents).values({
+      tokenDigest: await hash(token), flowBindingDigest: await hash(`google_browser:${binding}`),
+      termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+    });
+    try {
+      const { privateKey, publicKey } = await generateKeyPair("RS256");
+      const jwk = await exportJWK(publicKey);
+      jwk.kid = "google-registration-test-key";
+      const idToken = await new SignJWT({ name: "Google Registrant", email, email_verified: true })
+        .setProtectedHeader({ alg: "RS256", kid: jwk.kid })
+        .setIssuer("https://accounts.google.com").setAudience("web-client-id")
+        .setSubject(`registration-${crypto.randomUUID()}`).setIssuedAt().setExpirationTime("5m").sign(privateKey);
+      vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+        access_token: "browser-access-token", token_type: "Bearer", expires_in: 300, id_token: idToken, keys: [jwk],
+      }), { status: 200, headers: { "content-type": "application/json" } })));
+      const app = createAppForEnv({
+        ...productionAuthEnvironment(), GOOGLE_WEB_CLIENT_ID: "web-client-id", GOOGLE_IOS_CLIENT_ID: "ios-client-id",
+        GOOGLE_ANDROID_CLIENT_ID: "android-client-id", GOOGLE_CLIENT_SECRET: "test-google-client-secret",
+      });
+      const started = await app.fetch(request("/api/auth/sign-in/social", {
+        method: "POST", headers: { "content-type": "application/json", "x-dayli-registration-intent": token, "x-dayli-registration-binding": binding },
+        body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome?error=previous-value`, disableRedirect: true }),
+      }));
+      expect(started.status).toBe(200);
+      const { url } = await started.json() as { url: string };
+      const state = new URL(url).searchParams.get("state");
+      expect(state).toBeTruthy();
+      const cookie = started.headers.get("set-cookie");
+      expect(cookie).toBeTruthy();
+      expect(cookie).not.toContain(token);
+      const [bound] = await migrator.db.select({ stateDigest: schema.registrationIntents.flowBindingDigest })
+        .from(schema.registrationIntents).where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(bound?.stateDigest).toBe(await hash(`google_browser:${state}`));
+      const callback = await app.fetch(request(`/api/auth/callback/google?state=${encodeURIComponent(state!)}&code=test-code`, { headers: { cookie: cookie! } }));
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get("location")).toContain("/welcome?error=previous-value");
+      expect(callback.headers.get("location")).not.toContain(token);
+      const [user] = await migrator.db.select({ id: schema.user.id, bridge: schema.user.legal_registration_admission }).from(schema.user).where(eq(schema.user.email, email));
+      expect(user?.bridge).toBeNull();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, user!.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, user!.id))).toHaveLength(1);
+      const [consumed] = await migrator.db.select({ consumedAt: schema.registrationIntents.consumedAt }).from(schema.registrationIntents)
+        .where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(consumed?.consumedAt).toBeInstanceOf(Date);
+    } finally {
+      vi.unstubAllGlobals();
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, email));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
   });
 
   it("reads account policy only for the authenticated session owner and cannot bypass a pending deletion", async () => {

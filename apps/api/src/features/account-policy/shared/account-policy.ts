@@ -2,6 +2,7 @@ export const accountCapabilities = [
   "ordinary",
   "restricted_cleanup",
   "policy_read",
+  "legal_acceptance",
   "lifecycle_status",
   "cancel_deletion_verification",
   "request_deletion",
@@ -40,7 +41,7 @@ export interface AccountPolicy {
 const active = new Set<AccountCapability>(accountCapabilities);
 const restricted = new Set<AccountCapability>(["restricted_cleanup", "policy_read", "lifecycle_status", "appeal", "signout"]);
 const terminal = new Set<AccountCapability>(["policy_read", "signout"]);
-const actionable = new Set<AccountCapability>(["ordinary", "restricted_cleanup", "policy_read", "signout"]);
+const actionable = new Set<AccountCapability>(["ordinary", "restricted_cleanup", "policy_read", "legal_acceptance", "signout"]);
 const pendingDeletion = new Set<AccountCapability>([
   "restricted_cleanup",
   "policy_read",
@@ -52,12 +53,15 @@ const pendingDeletion = new Set<AccountCapability>([
 const management = new Set<AccountCapability>([
   "restricted_cleanup",
   "policy_read",
+  "legal_acceptance",
   "lifecycle_status",
   "request_deletion",
   "export",
   "appeal",
   "signout",
 ]);
+
+const underageManagement = new Set<AccountCapability>([...management].filter((capability) => capability !== "legal_acceptance"));
 
 /**
  * Policy precedence is deterministic. A ban is never weakened by lifecycle or
@@ -79,7 +83,7 @@ export function resolveAccountPolicy(state: Partial<AccountPolicyState> | undefi
   if (normalized.banned) return { restriction: "banned", allowed: restricted };
   if (normalized.lifecycleState === "purging") return { restriction: "purging", allowed: terminal };
   if (normalized.lifecycleState === "purge_failed") return { restriction: "purge_failed", allowed: terminal };
-  if (normalized.temporarilyRestricted) return { restriction: "underage_restricted", allowed: management };
+  if (normalized.temporarilyRestricted) return { restriction: "underage_restricted", allowed: underageManagement };
   if (normalized.lifecycleState === "pending_deletion") return { restriction: "pending_deletion", allowed: pendingDeletion };
   if (normalized.termsRequired && !normalized.termsAccepted) return { restriction: "terms_blocked", allowed: management };
   if (normalized.ageDeclarationRequired && !normalized.ageDeclared) return { restriction: "age_declaration_blocked", allowed: management };

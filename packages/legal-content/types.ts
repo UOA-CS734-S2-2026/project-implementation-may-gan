@@ -48,6 +48,9 @@ export function validateLegalDocument(value: unknown): LegalDocument {
   if (value.status === "approved" && value.effectiveDate === null) {
     throw new Error("Approved legal documents need an effective date.");
   }
+  if (value.status === "draft" && value.effectiveDate !== null) {
+    throw new Error("Draft legal documents cannot have an effective date.");
+  }
   if (!Array.isArray(value.sections) || value.sections.length === 0) {
     throw new Error("Legal document needs sections.");
   }

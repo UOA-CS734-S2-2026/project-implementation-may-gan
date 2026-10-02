@@ -1,3 +1,4 @@
+import { age16DeclarationVersion } from "@dayli/contracts";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
@@ -33,7 +34,7 @@ export async function readAccountPolicy(database: DayliDatabase, userId: string)
       .limit(1),
     database.select({ userId: schema.ageDeclarations.userId })
       .from(schema.ageDeclarations)
-      .where(eq(schema.ageDeclarations.userId, userId))
+      .where(and(eq(schema.ageDeclarations.userId, userId), eq(schema.ageDeclarations.declarationVersion, age16DeclarationVersion)))
       .limit(1),
   ]);
 

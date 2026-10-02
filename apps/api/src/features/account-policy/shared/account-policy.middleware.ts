@@ -12,6 +12,8 @@ export interface AccountPolicyResolver {
 const publicApiRoutes = new Set([
   "GET /api/v1/health",
   "GET /api/v1/openapi.json",
+  "GET /api/v1/legal/current",
+  "POST /api/v1/legal/registration-intent",
   "GET /api/v1/test",
   // The opaque ticket is authenticated and policy-checked after consumption by
   // connectRealtime. The HTTP session middleware cannot see that credential.
@@ -20,6 +22,7 @@ const publicApiRoutes = new Set([
 const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/status", "policy_read"],
   ["GET /api/v1/account/policy", "policy_read"],
+  ["POST /api/v1/legal/acceptance", "legal_acceptance"],
 ]);
 
 function pathSegments(pathname: string): string[] {

@@ -3,6 +3,7 @@
 .openapi-generator-ignore
 README.md
 package.json
+src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
 src/apis/PostingDaysApi.ts
@@ -27,6 +28,7 @@ src/models/CreateDirectConversationRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
 src/models/CreateRealtimeTicket201Response.ts
+src/models/CurrentLegalRegistrationTerms.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPost.ts
 src/models/DailyPostMedia.ts
@@ -41,6 +43,8 @@ src/models/FeedPostAuthor.ts
 src/models/FeedPostPrompt.ts
 src/models/GetMessagingUnread200Response.ts
 src/models/HealthResponse.ts
+src/models/LegalAcceptanceRequest.ts
+src/models/LegalAcceptanceResponse.ts
 src/models/ListConversationChanges200Response.ts
 src/models/ListConversationChanges200ResponseItemsInner.ts
 src/models/ListConversations200Response.ts
@@ -74,6 +78,8 @@ src/models/ProfilePostsPage.ts
 src/models/ProfileStats.ts
 src/models/ProfileVisibility.ts
 src/models/RegisterPushDeviceRequest.ts
+src/models/RegistrationIntentRequest.ts
+src/models/RegistrationIntentResponse.ts
 src/models/RelationshipProfile.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts

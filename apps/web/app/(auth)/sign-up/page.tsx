@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/core/Button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,6 +12,7 @@ import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
+import { issueRegistrationProof, readCurrentRegistrationTerms, registrationHeaders, type CurrentRegistrationTerms } from "@/lib/legal/registration";
 
 const signUpSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores."),
@@ -22,6 +25,19 @@ type SignUpValues = z.infer<typeof signUpSchema>;
 
 export default function SignUpPage() {
   const router = useRouter();
+  const [terms, setTerms] = useState<CurrentRegistrationTerms | null>(null);
+  const [termsError, setTermsError] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    readCurrentRegistrationTerms().then((current) => {
+      if (active) setTerms(current);
+    }).catch(() => {
+      if (active) setTermsError(true);
+    });
+    return () => { active = false; };
+  }, []);
 
   const {
     control,
@@ -33,16 +49,32 @@ export default function SignUpPage() {
     defaultValues: { username: "", publicName: "", email: "", password: "" },
   });
 
-  const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
-    // Better Auth requires name, but the handle remains the public fallback.
-    const { error } = await authClient.signUp.email({ name: publicName || username, username, displayUsername: publicName || undefined, email, password } as Parameters<typeof authClient.signUp.email>[0]);
-
-    if (error) {
-      setError("root", { message: error.message ?? "Something went wrong." });
-      return;
+  async function prepareRegistration(flow: "email" | "google_browser") {
+    if (!terms || termsError) throw new Error("Registration terms cannot be verified right now.");
+    if (terms.status === "effective" && !accepted) throw new Error("Confirm the Terms and that you are 16 or older.");
+    try {
+      return await issueRegistrationProof(flow, terms);
+    } catch {
+      setAccepted(false);
+      setTerms(null);
+      readCurrentRegistrationTerms().then(setTerms).catch(() => setTermsError(true));
+      throw new Error("Registration terms changed. Check the documents and try again.");
     }
+  }
 
-    router.push("/home");
+  const onSubmit = async ({ username, publicName, email, password }: SignUpValues) => {
+    try {
+      const proof = await prepareRegistration("email");
+      // Better Auth requires name, but the handle remains the public fallback.
+      const { error } = await authClient.signUp.email({
+        name: publicName || username, username, displayUsername: publicName || undefined, email, password,
+        fetchOptions: { headers: registrationHeaders(proof) },
+      } as Parameters<typeof authClient.signUp.email>[0]);
+      if (error) throw new Error(error.message ?? "Registration failed.");
+      router.push("/home");
+    } catch (error) {
+      setError("root", { message: error instanceof Error ? error.message : "Registration failed." });
+    }
   };
 
   return (
@@ -60,7 +92,11 @@ export default function SignUpPage() {
           <LegalLinks />
           <LegalDraftMarker />
         </div>
-        <GoogleSignInButton />
+        <GoogleSignInButton
+          disabled={!terms || termsError}
+          prepareRegistration={() => prepareRegistration("google_browser")}
+          onRegistrationError={(message) => setError("root", { message })}
+        />
 
         <div className="relative flex items-center">
           <div className="flex-grow border-t border-foreground/10" />
@@ -94,6 +130,28 @@ export default function SignUpPage() {
           type="password"
           autoComplete="new-password"
         />
+        {terms?.status === "effective" && (
+          <div className="flex items-start gap-3 text-xs leading-5 text-foreground-secondary">
+            <input
+              id="registration-legal-action"
+              type="checkbox"
+              checked={accepted}
+              onChange={(event) => setAccepted(event.target.checked)}
+              className="mt-1 size-4 shrink-0 accent-foreground"
+            />
+            <div>
+              <label htmlFor="registration-legal-action">
+                I agree to the Terms of Service, acknowledge the Privacy Policy, and confirm I am 16 or older.
+              </label>
+              <p>
+                <Link href="/terms" className="underline underline-offset-2">Terms of Service</Link>
+                {" · "}
+                <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>
+              </p>
+            </div>
+          </div>
+        )}
+        {termsError && <p role="alert" className="text-sm text-danger">Registration terms cannot be verified right now.</p>}
         {errors.root && (
           <p className="text-sm text-danger">{errors.root.message}</p>
         )}
@@ -104,7 +162,7 @@ export default function SignUpPage() {
         <div className="flex items-center gap-3">
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !terms || termsError}
             variant={{ weight: "secondary", size: "sm", color: "accent" }}
             arrow
           >
