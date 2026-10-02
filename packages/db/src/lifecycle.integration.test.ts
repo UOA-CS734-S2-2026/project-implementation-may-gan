@@ -258,6 +258,42 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
+  it("reapplies role bootstrap before and after 0025 without restoring inactive proof or grant access", async () => {
+    const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
+    const rollback = new Error("rollback pre-0025 bootstrap fixture");
+    await expect(migrator.begin(async (transaction) => {
+      await transaction`drop table public.account_google_reauthentication_intents`;
+      await transaction.unsafe(bootstrap);
+      const [grants] = await transaction`
+        select has_table_privilege('app', 'public.account_management_grants', 'INSERT') as can_insert,
+               has_table_privilege('app', 'public.account_management_grants', 'UPDATE') as can_update,
+               has_table_privilege('app', 'public.account_management_grants', 'DELETE') as can_delete
+      `;
+      expect(grants).toEqual({ can_insert: false, can_update: false, can_delete: false });
+      throw rollback;
+    })).rejects.toBe(rollback);
+
+    await migrator.unsafe(bootstrap);
+    const privileges = await migrator`
+      select table_name, role_name,
+        has_table_privilege(role_name, format('public.%I', table_name), 'SELECT') as can_select,
+        has_table_privilege(role_name, format('public.%I', table_name), 'INSERT') as can_insert,
+        has_table_privilege(role_name, format('public.%I', table_name), 'UPDATE') as can_update,
+        has_table_privilege(role_name, format('public.%I', table_name), 'DELETE') as can_delete
+      from (values ('account_google_reauthentication_intents'), ('account_management_grants')) as tables(table_name)
+      cross join (values ('app'), ('lifecycle_worker')) as roles(role_name)
+      order by table_name, role_name
+    `;
+    expect(privileges).toEqual([
+      { table_name: "account_google_reauthentication_intents", role_name: "app", can_select: false, can_insert: false, can_update: false, can_delete: false },
+      { table_name: "account_google_reauthentication_intents", role_name: "lifecycle_worker", can_select: false, can_insert: false, can_update: false, can_delete: false },
+      { table_name: "account_management_grants", role_name: "app", can_select: false, can_insert: false, can_update: false, can_delete: false },
+      { table_name: "account_management_grants", role_name: "lifecycle_worker", can_select: false, can_insert: false, can_update: false, can_delete: false },
+    ]);
+    await expect(app`select * from public.account_google_reauthentication_intents`).rejects.toMatchObject({ code: "42501" });
+    await expect(app`insert into public.account_management_grants default values`).rejects.toMatchObject({ code: "42501" });
+  });
+
   it("denies app and lifecycle_worker direct physical purge access", async () => {
     const userId = await createUser("privileges");
 

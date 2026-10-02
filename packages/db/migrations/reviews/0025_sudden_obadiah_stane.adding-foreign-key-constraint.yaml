@@ -1,0 +1,6 @@
+reason: The inactive intent metadata must be deleted with its user or session, and the new table is empty when constraints are created.
+affected_data_and_clients: No existing application data is scanned or rewritten.
+rollout_sequence: Create the table and cascading foreign keys before denying app access.
+backup_checkpoint: Confirm approved migration recovery posture.
+forward_fix_plan: Add any future constraint change in a later additive migration.
+reviewer: Database and privacy reviewers required.

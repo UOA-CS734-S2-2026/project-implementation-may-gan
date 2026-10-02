@@ -176,6 +176,13 @@
       "when": 1790893608930,
       "tag": "0024_lying_eddie_brock",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1790914256305,
+      "tag": "0025_sudden_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

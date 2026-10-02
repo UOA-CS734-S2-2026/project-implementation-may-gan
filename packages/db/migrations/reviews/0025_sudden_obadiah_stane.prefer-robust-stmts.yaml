@@ -1,0 +1,6 @@
+reason: The additive schema and privilege revocations run together with explicit timeouts under the protected migrator lock.
+affected_data_and_clients: No application role can read or write the new table after migration.
+rollout_sequence: Apply the schema before any future OIDC runtime is reviewed.
+backup_checkpoint: Confirm approved migration recovery posture.
+forward_fix_plan: Use a later additive migration for any trusted runtime integration.
+reviewer: Database and privacy reviewers required.

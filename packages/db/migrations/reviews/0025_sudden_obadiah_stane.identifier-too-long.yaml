@@ -1,0 +1,6 @@
+reason: Drizzle generated the foreign-key name. PostgreSQL truncates it deterministically and no client relies on the name.
+affected_data_and_clients: The new table is empty when its constraints are installed.
+rollout_sequence: Apply with the new intent table before future runtime work.
+backup_checkpoint: Confirm approved migration recovery posture.
+forward_fix_plan: Use a later additive migration if a named constraint change is required.
+reviewer: Database and privacy reviewers required.

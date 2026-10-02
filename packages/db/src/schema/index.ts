@@ -43,6 +43,7 @@ import {
   termsAcceptances,
 } from "./legal";
 import { user, usernameReservations } from "./users";
+import { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export { profileVisibility, tier, user, usernameReservations } from "./users";
 
@@ -364,6 +365,8 @@ export {
   relationshipSearchQuota,
 } from "./relationships";
 
+export { accountGoogleReauthenticationIntents } from "./google-reauth";
+
 export {
   accountLifecycleState,
   accountLifecycles,
@@ -392,6 +395,7 @@ export {
 
 export const schema = {
   account,
+  accountGoogleReauthenticationIntents,
   accountLifecycles,
   accountManagementGrants,
   accountPurgeReceipts,
