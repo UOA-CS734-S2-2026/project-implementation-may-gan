@@ -10,18 +10,17 @@
 
 part of openapi.api;
 
-enum MediaContentType {
+enum PostMediaContentType {
   imageSlashJpeg._(r'image/jpeg'),
   imageSlashPng._(r'image/png'),
   imageSlashWebp._(r'image/webp'),
   imageSlashHeic._(r'image/heic'),
   videoSlashMp4._(r'video/mp4'),
   videoSlashQuicktime._(r'video/quicktime'),
-  audioSlashMp4._(r'audio/mp4'),
   ;
 
   /// Instantiate a new enum with the provided value.
-  const MediaContentType._(this._value);
+  const PostMediaContentType._(this._value);
 
   /// The underlying value of this enum member.
   final String _value;
@@ -32,21 +31,21 @@ enum MediaContentType {
   /// Encodes this enum as a value suitable for JSON.
   String toJson() => _value;
 
-  /// Returns the instance of [MediaContentType] that was successfully decoded
+  /// Returns the instance of [PostMediaContentType] that was successfully decoded
   /// from the passed [value] on success, null otherwise.
-  static MediaContentType? fromJson(dynamic value) =>
-      MediaContentTypeTypeTransformer().decode(value);
+  static PostMediaContentType? fromJson(dynamic value) =>
+      PostMediaContentTypeTypeTransformer().decode(value);
 
-  /// Returns a [List] containing instances of [MediaContentType]
+  /// Returns a [List] containing instances of [PostMediaContentType]
   /// that were successfully decoded from the passed [JSON][json].
-  static List<MediaContentType> listFromJson(
+  static List<PostMediaContentType> listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <MediaContentType>[];
+    final result = <PostMediaContentType>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = MediaContentType.fromJson(row);
+        final value = PostMediaContentType.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -56,18 +55,18 @@ enum MediaContentType {
   }
 }
 
-/// Transformation class that can [encode] an instance of [MediaContentType] to String,
-/// and [decode] dynamic data back to [MediaContentType].
-class MediaContentTypeTypeTransformer {
-  factory MediaContentTypeTypeTransformer() =>
-      _instance ??= const MediaContentTypeTypeTransformer._();
+/// Transformation class that can [encode] an instance of [PostMediaContentType] to String,
+/// and [decode] dynamic data back to [PostMediaContentType].
+class PostMediaContentTypeTypeTransformer {
+  factory PostMediaContentTypeTypeTransformer() =>
+      _instance ??= const PostMediaContentTypeTypeTransformer._();
 
-  const MediaContentTypeTypeTransformer._();
+  const PostMediaContentTypeTypeTransformer._();
 
   /// Encodes this enum as a value suitable for JSON.
-  String encode(MediaContentType data) => data._value;
+  String encode(PostMediaContentType data) => data._value;
 
-  /// Returns the instance of [MediaContentType] that was successfully decoded
+  /// Returns the instance of [PostMediaContentType] that was successfully decoded
   /// from the passed [data] value on success, null otherwise.
   ///
   /// If [allowNull] is true and the [dynamic value][data] cannot be decoded successfully,
@@ -76,26 +75,24 @@ class MediaContentTypeTypeTransformer {
   ///
   /// The [allowNull] is very handy when an API changes and a new enum value is added or removed,
   /// and users are still using an old app with the old code.
-  MediaContentType? decode(dynamic data, {bool allowNull = true}) {
-    if (data is MediaContentType) {
+  PostMediaContentType? decode(dynamic data, {bool allowNull = true}) {
+    if (data is PostMediaContentType) {
       return data;
     }
     if (data != null) {
       switch (data) {
         case r'image/jpeg':
-          return MediaContentType.imageSlashJpeg;
+          return PostMediaContentType.imageSlashJpeg;
         case r'image/png':
-          return MediaContentType.imageSlashPng;
+          return PostMediaContentType.imageSlashPng;
         case r'image/webp':
-          return MediaContentType.imageSlashWebp;
+          return PostMediaContentType.imageSlashWebp;
         case r'image/heic':
-          return MediaContentType.imageSlashHeic;
+          return PostMediaContentType.imageSlashHeic;
         case r'video/mp4':
-          return MediaContentType.videoSlashMp4;
+          return PostMediaContentType.videoSlashMp4;
         case r'video/quicktime':
-          return MediaContentType.videoSlashQuicktime;
-        case r'audio/mp4':
-          return MediaContentType.audioSlashMp4;
+          return PostMediaContentType.videoSlashQuicktime;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');
@@ -106,5 +103,5 @@ class MediaContentTypeTypeTransformer {
   }
 
   /// The singleton instance of this transformer.
-  static MediaContentTypeTypeTransformer? _instance;
+  static PostMediaContentTypeTypeTransformer? _instance;
 }

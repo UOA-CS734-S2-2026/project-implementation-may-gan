@@ -27,6 +27,13 @@ import {
     DailyPostMediaToJSON,
     DailyPostMediaToJSONTyped,
 } from './DailyPostMedia';
+import type { DailyPostVoiceMemo } from './DailyPostVoiceMemo';
+import {
+    DailyPostVoiceMemoFromJSON,
+    DailyPostVoiceMemoFromJSONTyped,
+    DailyPostVoiceMemoToJSON,
+    DailyPostVoiceMemoToJSONTyped,
+} from './DailyPostVoiceMemo';
 import type { PostAudience } from './PostAudience';
 import {
     PostAudienceFromJSON,
@@ -96,6 +103,10 @@ export interface DailyPost {
      * The attached photos or video in display order. Empty for a text-only post.
      */
     media: Array<DailyPostMedia>;
+    /**
+     *
+     */
+    voiceMemo: DailyPostVoiceMemo;
 }
 
 
@@ -116,6 +127,7 @@ export function instanceOfDailyPost(value: object): value is DailyPost {
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('tomorrowNote' in value) || value['tomorrowNote'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
+    if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
     return true;
 }
 
@@ -141,6 +153,7 @@ export function DailyPostFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'tomorrowNote': DailyPostTomorrowNoteFromJSON(json['tomorrowNote']),
         'media': ((json['media'] as Array<any>).map(DailyPostMediaFromJSON)),
+        'voiceMemo': DailyPostVoiceMemoFromJSON(json['voiceMemo']),
     };
 }
 
@@ -167,5 +180,6 @@ export function DailyPostToJSONTyped(value?: DailyPost | null, ignoreDiscriminat
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'tomorrowNote': DailyPostTomorrowNoteToJSON(value['tomorrowNote']),
         'media': ((value['media'] as Array<any>).map(DailyPostMediaToJSON)),
+        'voiceMemo': DailyPostVoiceMemoToJSON(value['voiceMemo']),
     };
 }

@@ -505,7 +505,8 @@
           "image/webp",
           "image/heic",
           "video/mp4",
-          "video/quicktime"
+          "video/quicktime",
+          "audio/mp4"
         ]
       },
       "MediaReservationStatus": {
@@ -714,6 +715,9 @@
               "$ref": "#/components/schemas/DailyPostMedia"
             },
             "description": "The attached photos or video in display order. Empty for a text-only post."
+          },
+          "voiceMemo": {
+            "$ref": "#/components/schemas/DailyPostVoiceMemo"
           }
         },
         "required": [
@@ -728,7 +732,8 @@
           "acceptedAt",
           "releasedAt",
           "tomorrowNote",
-          "media"
+          "media",
+          "voiceMemo"
         ]
       },
       "DailyPostPrompt": {
@@ -761,7 +766,7 @@
             "$ref": "#/components/schemas/OpaqueId"
           },
           "contentType": {
-            "$ref": "#/components/schemas/MediaContentType"
+            "$ref": "#/components/schemas/PostMediaContentType"
           },
           "order": {
             "type": "integer",
@@ -772,6 +777,40 @@
           "id",
           "contentType",
           "order"
+        ]
+      },
+      "PostMediaContentType": {
+        "type": "string",
+        "enum": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "video/mp4",
+          "video/quicktime"
+        ]
+      },
+      "DailyPostVoiceMemo": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/VoiceMemoContentType"
+          }
+        },
+        "required": [
+          "id",
+          "contentType"
+        ],
+        "description": "The attached voice memo, or null when the post has none."
+      },
+      "VoiceMemoContentType": {
+        "type": "string",
+        "enum": [
+          "audio/mp4"
         ]
       },
       "CreateDailyPostRequest": {
@@ -825,8 +864,8 @@
             "items": {
               "$ref": "#/components/schemas/OpaqueId"
             },
-            "maxItems": 3,
-            "description": "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
+            "maxItems": 4,
+            "description": "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
             "example": [
               "0f8fad5b-d9cb-469f-a165-70867728950e"
             ]
@@ -984,7 +1023,7 @@
             "$ref": "#/components/schemas/OpaqueId"
           },
           "contentType": {
-            "$ref": "#/components/schemas/MediaContentType"
+            "$ref": "#/components/schemas/PostMediaContentType"
           },
           "order": {
             "type": "integer",
@@ -1106,6 +1145,9 @@
               "$ref": "#/components/schemas/PostMedia"
             },
             "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          },
+          "voiceMemo": {
+            "$ref": "#/components/schemas/PostVoiceMemo"
           }
         },
         "required": [
@@ -1121,7 +1163,8 @@
           "releasedAt",
           "edited",
           "viewerIsAuthor",
-          "media"
+          "media",
+          "voiceMemo"
         ],
         "description": "One post the caller may read. Tomorrow notes are not part of this projection."
       },
@@ -1161,6 +1204,40 @@
           "text"
         ],
         "description": "The prompt stored with the post, not the current day's prompt."
+      },
+      "PostVoiceMemo": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/VoiceMemoContentType"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead."
+          },
+          "expiresAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one."
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "url",
+          "expiresAt"
+        ],
+        "description": "The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not."
       },
       "ProfilePostsPage": {
         "type": "object",
@@ -3790,6 +3867,112 @@
           },
           "404": {
             "description": "The media is missing, detached, or on a post the caller may not read. These cases are not distinguished.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/voice-memo": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getVoiceMemo",
+        "summary": "Get a fresh download URL for a post's voice memo",
+        "description": "Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The voice memo with a fresh download URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostVoiceMemo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post has no voice memo, or the caller may not read the post. These cases are not distinguished.",
             "content": {
               "application/json": {
                 "schema": {

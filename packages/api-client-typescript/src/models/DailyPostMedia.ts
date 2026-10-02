@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
-import type { MediaContentType } from './MediaContentType';
+import type { PostMediaContentType } from './PostMediaContentType';
 import {
-    MediaContentTypeFromJSON,
-    MediaContentTypeFromJSONTyped,
-    MediaContentTypeToJSON,
-    MediaContentTypeToJSONTyped,
-} from './MediaContentType';
+    PostMediaContentTypeFromJSON,
+    PostMediaContentTypeFromJSONTyped,
+    PostMediaContentTypeToJSON,
+    PostMediaContentTypeToJSONTyped,
+} from './PostMediaContentType';
 
 /**
  *
@@ -34,7 +34,7 @@ export interface DailyPostMedia {
     /**
      *
      */
-    contentType: MediaContentType;
+    contentType: PostMediaContentType;
     /**
      *
      */
@@ -64,7 +64,7 @@ export function DailyPostMediaFromJSONTyped(json: any, ignoreDiscriminator: bool
     return {
 
         'id': json['id'],
-        'contentType': MediaContentTypeFromJSON(json['contentType']),
+        'contentType': PostMediaContentTypeFromJSON(json['contentType']),
         'order': json['order'],
     };
 }
@@ -81,7 +81,7 @@ export function DailyPostMediaToJSONTyped(value?: DailyPostMedia | null, ignoreD
     return {
 
         'id': value['id'],
-        'contentType': MediaContentTypeToJSON(value['contentType']),
+        'contentType': PostMediaContentTypeToJSON(value['contentType']),
         'order': value['order'],
     };
 }

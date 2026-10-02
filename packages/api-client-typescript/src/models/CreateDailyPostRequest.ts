@@ -56,7 +56,7 @@ export interface CreateDailyPostRequest {
      */
     tomorrowNote?: string;
     /**
-     * Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.
+     * Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. Omit it or send an empty list for a text-only post.
      */
     attachments?: Array<string>;
 }
