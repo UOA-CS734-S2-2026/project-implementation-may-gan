@@ -10,6 +10,8 @@ import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 
 import 'edit_post_screen.dart';
+import 'post_comments.dart';
+import 'post_likers_screen.dart';
 import 'post_revisions_screen.dart';
 import 'private_media.dart';
 
@@ -33,6 +35,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// list that opened the post, so that list can refresh.
   bool _changed = false;
 
+  /// Changes on every load, so the comments reload with the post.
+  int _loads = 0;
+  bool _liking = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -49,6 +55,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
     setState(() {
       _result = result;
+      _loads++;
       switch (result) {
         case ApiSuccess(:final value):
           _post = value;
@@ -59,6 +66,61 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           break;
       }
     });
+  }
+
+  /// Shows the like at once, then keeps the server's count, or puts it back.
+  Future<void> _toggleLike(PostDetail post) async {
+    final liked = !post.viewerHasLiked;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _liking = true;
+      _post = post.copyWith(
+        likeCount: (post.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 31),
+        viewerHasLiked: liked,
+      );
+    });
+    final result = await AppScope.of(
+      context,
+    ).interactions.setLike(post.id, liked: liked);
+    if (!mounted) return;
+    setState(() {
+      _liking = false;
+      final current = _post;
+      switch (result) {
+        case ApiSuccess(:final value):
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: value.likeCount,
+              viewerHasLiked: value.viewerHasLiked,
+            );
+          }
+        case ApiError():
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: post.likeCount,
+              viewerHasLiked: post.viewerHasLiked,
+            );
+          }
+      }
+    });
+    if (result is ApiError) {
+      messenger.showSnackBar(
+        const SnackBar(
+          key: Key('post.likeFailed'),
+          content: Text("Your like couldn't be saved. Try again."),
+        ),
+      );
+    }
+  }
+
+  void _commentsChanged(int delta) {
+    final post = _post;
+    if (post == null || delta == 0) return;
+    setState(
+      () => _post = post.copyWith(
+        commentCount: (post.commentCount + delta).clamp(0, 1 << 31),
+      ),
+    );
   }
 
   Future<void> _edit(PostDetail post) async {
@@ -413,8 +475,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  IconButton(
+                    key: const Key('post.like'),
+                    tooltip: post.viewerHasLiked ? 'Unlike' : 'Like',
+                    isSelected: post.viewerHasLiked,
+                    onPressed: _liking || stale
+                        ? null
+                        : () => _toggleLike(post),
+                    icon: Icon(
+                      post.viewerHasLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: colors.foregroundAccent,
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('post.likes'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.foregroundSecondary,
+                    ),
+                    onPressed: post.likeCount == 0
+                        ? null
+                        : () => Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (_) => PostLikersScreen(postId: post.id),
+                            ),
+                          ),
+                    child: Text(
+                      post.likeCount == 1
+                          ? '1 like'
+                          : '${post.likeCount} likes',
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    post.commentCount == 1
+                        ? '1 comment'
+                        : '${post.commentCount} comments',
+                    key: const Key('post.commentCount'),
+                    style: muted,
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+        const SizedBox(height: 16),
+        PostComments(
+          key: ValueKey('comments.$_loads'),
+          postId: post.id,
+          onCountChanged: _commentsChanged,
         ),
       ],
     );

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/core/Button";
+import { PostLikeBar } from "@/features/interactions/like-post/PostLikeBar";
+import { PostComments } from "@/features/interactions/post-comments/PostComments";
 import { DeletePostDialog } from "@/features/posts/delete-post/DeletePostDialog";
 import { useDeletePostMutation } from "@/features/posts/delete-post/use-delete-post-mutation";
 import { PostRevisions } from "@/features/posts/list-post-revisions/PostRevisions";
@@ -209,6 +211,9 @@ export function PostDetailView({ username, postId }: { username: string; postId:
       )}
 
       {showingHistory && post.edited && <PostRevisions postId={post.id} viewerIsAuthor={post.viewerIsAuthor} />}
+
+      <PostLikeBar post={post} />
+      <PostComments postId={post.id} commentCount={post.commentCount} />
 
       <DeletePostDialog
         open={confirmingDelete}

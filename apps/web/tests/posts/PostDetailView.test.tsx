@@ -9,6 +9,14 @@ let userId = "me";
 const replace = vi.fn();
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
+vi.mock("@/features/interactions/shared/interactions.api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/interactions/shared/interactions.api")>()),
+  interactionsApi: {
+    comments: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null, hasMore: false } })),
+    setLike: vi.fn(),
+    likes: vi.fn(),
+  },
+}));
 vi.mock("@/features/posts/shared/posts.api", () => ({
   postsApi: { get: vi.fn(), media: vi.fn(), update: vi.fn(), remove: vi.fn(), revisions: vi.fn() },
 }));
@@ -38,6 +46,9 @@ function detail(overrides: Record<string, unknown> = {}) {
     releasedAt: "2026-09-29T11:00:00.000Z",
     edited: false,
     revisionCount: 0,
+    likeCount: 0,
+    viewerHasLiked: false,
+    commentCount: 0,
     viewerIsAuthor: false,
     media: [],
     ...overrides,
