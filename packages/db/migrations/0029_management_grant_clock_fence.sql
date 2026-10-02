@@ -17,6 +17,7 @@ DECLARE
   stored_password text;
   linked_subject text;
   consumed_digest text;
+  decision_time timestamptz;
 BEGIN
   IF p_user_id IS NULL OR p_session_id IS NULL OR p_action IS NULL
     OR p_token_digest IS NULL OR p_token_digest !~ '^[0-9a-f]{64}$' THEN RETURN false; END IF;
@@ -49,15 +50,18 @@ BEGIN
       AND encode(sha256(convert_to(account_id, 'UTF8')), 'hex') = grant_google_digest FOR SHARE;
     IF linked_subject IS NULL THEN RETURN false; END IF;
   END IF;
-  UPDATE public.account_management_grants SET consumed_at = clock_timestamp()
-  WHERE token_digest = p_token_digest AND consumed_at IS NULL AND expires_at > clock_timestamp()
+  -- The grant and account rows are locked. One wall-clock value must govern
+  -- both authorization and consumed_at to preserve the expiry constraint.
+  decision_time := clock_timestamp();
+  UPDATE public.account_management_grants SET consumed_at = decision_time
+  WHERE token_digest = p_token_digest AND consumed_at IS NULL AND expires_at > decision_time
     AND EXISTS (
       SELECT 1 FROM public.session
-      WHERE id = p_session_id AND user_id = p_user_id AND expires_at > clock_timestamp()
+      WHERE id = p_session_id AND user_id = p_user_id AND expires_at > decision_time
     )
     AND (p_action <> 'cancel_deletion' OR EXISTS (
       SELECT 1 FROM public.account_lifecycles
-      WHERE user_id = p_user_id AND state = 'pending_deletion' AND cancel_until > clock_timestamp()
+      WHERE user_id = p_user_id AND state = 'pending_deletion' AND cancel_until > decision_time
     ))
   RETURNING token_digest INTO consumed_digest;
   RETURN consumed_digest IS NOT NULL;

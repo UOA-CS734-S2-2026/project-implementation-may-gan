@@ -132,12 +132,15 @@ function localUrl(value: string | undefined) {
     expect(row?.state).toBe("pending_deletion");
 
     const [futureDeadline] = await migrator.db.update(schema.accountLifecycles).set({
-      requestedAt: sql`clock_timestamp() - interval '168 hours' + interval '2500 milliseconds'`,
-      cancelUntil: sql`clock_timestamp() + interval '2500 milliseconds'`,
-      purgeDueAt: sql`clock_timestamp() + interval '168 hours' + interval '2500 milliseconds'`,
+      requestedAt: sql`statement_timestamp() - interval '168 hours' + interval '2500 milliseconds'`,
+      cancelUntil: sql`statement_timestamp() + interval '2500 milliseconds'`,
+      purgeDueAt: sql`statement_timestamp() + interval '168 hours' + interval '2500 milliseconds'`,
     }).where(eq(schema.accountLifecycles.userId, userId))
       .returning({ cancelUntil: schema.accountLifecycles.cancelUntil });
-    expect(futureDeadline?.cancelUntil?.getTime() ?? 0).toBeGreaterThan(Date.now() + 1500);
+    if (!futureDeadline?.cancelUntil) throw new Error("Expected a database cancellation deadline.");
+    const [waitingBackend] = await app.db.select({ pid: sql<number>`pg_backend_pid()` })
+      .from(sql`(values (1)) as backend_probe`);
+    if (!waitingBackend) throw new Error("Expected an app database connection.");
 
     const blocker = createDayliDatabase(localUrl(process.env.TEST_APP_DATABASE_URL));
     let releaseLock = () => {};
@@ -150,15 +153,42 @@ function localUrl(value: string | undefined) {
       signalLocked();
       await released;
     });
+    let waitingCancellation: ReturnType<typeof cancelAccountDeletion> | undefined;
     try {
       await Promise.race([
         locked,
         blockerTransaction.then(() => { throw new Error("The user lock was not held."); }),
       ]);
-      const waitingCancellation = cancelAccountDeletion(app.db, {
+      waitingCancellation = cancelAccountDeletion(app.db, {
         userId, sessionId: pendingSessionId, grantToken: cancelGrant,
       });
-      await new Promise((resolve) => setTimeout(resolve, 2800));
+      let blockedBeforeDeadline = false;
+      for (let attempt = 0; attempt < 75; attempt += 1) {
+        const [probe] = await migrator.db.select({
+          waiting: sql<boolean>`cardinality(pg_blocking_pids(${waitingBackend.pid})) > 0`,
+          beforeDeadline: sql<boolean>`clock_timestamp() < ${futureDeadline.cancelUntil}`,
+        }).from(sql`(values (1)) as lock_probe`);
+        if (probe?.waiting) {
+          expect(probe.beforeDeadline).toBe(true);
+          blockedBeforeDeadline = true;
+          break;
+        }
+        if (!probe?.beforeDeadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(blockedBeforeDeadline).toBe(true);
+      let passedDeadline = false;
+      for (let attempt = 0; attempt < 175; attempt += 1) {
+        const [probe] = await migrator.db.select({
+          passed: sql<boolean>`clock_timestamp() >= ${futureDeadline.cancelUntil}`,
+        }).from(sql`(values (1)) as deadline_probe`);
+        if (probe?.passed) {
+          passedDeadline = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(passedDeadline).toBe(true);
       releaseLock();
       expect(await waitingCancellation).toEqual({ status: "expired" });
       const [unchanged] = await migrator.db.select().from(schema.accountLifecycles)
@@ -166,6 +196,7 @@ function localUrl(value: string | undefined) {
       expect(unchanged?.state).toBe("pending_deletion");
     } finally {
       releaseLock();
+      if (waitingCancellation) await waitingCancellation.catch(() => {});
       await blockerTransaction;
       await blocker.close();
     }
