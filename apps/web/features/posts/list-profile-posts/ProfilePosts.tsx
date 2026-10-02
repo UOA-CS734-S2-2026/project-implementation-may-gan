@@ -98,6 +98,9 @@ export function ProfilePosts({ username, displayName, isMe }: { username: string
             createdAt={post.acceptedAt}
             media={post.media[0] ?? null}
             label={labelFor(post)}
+            likeCount={post.likeCount}
+            viewerHasLiked={post.viewerHasLiked}
+            commentCount={post.commentCount}
           />
         ))}
       </div>

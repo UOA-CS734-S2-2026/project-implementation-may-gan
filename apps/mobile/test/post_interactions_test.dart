@@ -107,6 +107,35 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('shows likes and comments on feed cards', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(
+            items: [
+              feedPost(
+                '1',
+                likeCount: 3,
+                viewerHasLiked: true,
+                commentCount: 1,
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]),
+    );
+    await signIn(tester, harness);
+
+    expect(
+      find.bySemanticsLabel('3 likes, including yours, 1 comment'),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
   group('likes', () {
     testWidgets('likes at once and keeps the server count', (tester) async {
       final interactions = FakeInteractionsClient()

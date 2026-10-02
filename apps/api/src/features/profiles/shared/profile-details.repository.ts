@@ -90,6 +90,17 @@ async function findPostingStreak(database: DayliDatabase, authorId: string, now:
   return { streak: { ...calculatePostingStreak(localDates, today), asOf: today }, posts: localDates.length };
 }
 
+/** Likes on the author's posts that haven't been deleted. */
+async function countLoved(database: DayliDatabase, authorId: string) {
+  const { posts, postLikes } = schema;
+  const [row] = await database
+    .select({ loved: count() })
+    .from(postLikes)
+    .innerJoin(posts, eq(postLikes.postId, posts.id))
+    .where(and(eq(posts.authorId, authorId), isNull(posts.deletedAt)));
+  return row?.loved ?? 0;
+}
+
 /** Friendships are stored as reciprocal pairs, so one direction counts each friend once. */
 async function countFriends(database: DayliDatabase, userId: string) {
   const { friendships } = schema;
@@ -155,9 +166,14 @@ export async function findProfileDetails(
 
   const isOwner = row.id === viewerId;
   const detailsVisible = isOwner || row.profileVisibility === "public" || row.friends;
-  const [activity, friends, avatarUrl] = detailsVisible
-    ? await Promise.all([findPostingStreak(database, row.id, now), countFriends(database, row.id), findAvatarUrl(database, row.id, signAvatar)])
-    : [null, null, null];
+  const [activity, friends, loved, avatarUrl] = detailsVisible
+    ? await Promise.all([
+      findPostingStreak(database, row.id, now),
+      countFriends(database, row.id),
+      countLoved(database, row.id),
+      findAvatarUrl(database, row.id, signAvatar),
+    ])
+    : [null, null, null, null];
   const changeAvailableAt = row.usernameChangedAt
     ? new Date(row.usernameChangedAt.getTime() + USERNAME_CHANGE_INTERVAL_MS)
     : null;
@@ -173,7 +189,7 @@ export async function findProfileDetails(
     listeningTo: detailsVisible ? row.listeningTo : null,
     avatarUrl,
     streak: activity?.streak ?? null,
-    stats: activity ? { posts: activity.posts, friends: friends ?? 0 } : null,
+    stats: activity ? { posts: activity.posts, friends: friends ?? 0, loved: loved ?? 0 } : null,
     owner: isOwner
       ? {
         profileVisibility: row.profileVisibility,

@@ -51,6 +51,7 @@ export const profileDetailsSchema = z
     stats: z.object({
       posts: z.number().int().nonnegative().openapi({ description: "Accepted posts, solo ones included; the streak already reveals which days had one." }),
       friends: z.number().int().nonnegative(),
+      loved: z.number().int().nonnegative().openapi({ description: "Likes on the person's posts that haven't been deleted." }),
     }).nullable().openapi("ProfileStats", { description: "Null whenever the bio is hidden." }),
     owner: z.object({
       profileVisibility: profileVisibilitySchema,

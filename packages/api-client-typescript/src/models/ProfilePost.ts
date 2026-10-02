@@ -90,6 +90,18 @@ export interface ProfilePost {
      */
     edited: boolean;
     /**
+     *
+     */
+    likeCount: number;
+    /**
+     *
+     */
+    viewerHasLiked: boolean;
+    /**
+     * Comments and replies the caller can see, leaving out deleted ones and people across a block.
+     */
+    commentCount: number;
+    /**
      * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
      */
     media: Array<PostMedia>;
@@ -122,6 +134,9 @@ export function instanceOfProfilePost(value: object): value is ProfilePost {
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('released' in value) || value['released'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
+    if (!('likeCount' in value) || value['likeCount'] === undefined) return false;
+    if (!('viewerHasLiked' in value) || value['viewerHasLiked'] === undefined) return false;
+    if (!('commentCount' in value) || value['commentCount'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     return true;
 }
@@ -148,6 +163,9 @@ export function ProfilePostFromJSONTyped(json: any, ignoreDiscriminator: boolean
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'released': json['released'],
         'edited': json['edited'],
+        'likeCount': json['likeCount'],
+        'viewerHasLiked': json['viewerHasLiked'],
+        'commentCount': json['commentCount'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
     };
 }
@@ -175,6 +193,9 @@ export function ProfilePostToJSONTyped(value?: ProfilePost | null, ignoreDiscrim
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'released': value['released'],
         'edited': value['edited'],
+        'likeCount': value['likeCount'],
+        'viewerHasLiked': value['viewerHasLiked'],
+        'commentCount': value['commentCount'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
     };
 }

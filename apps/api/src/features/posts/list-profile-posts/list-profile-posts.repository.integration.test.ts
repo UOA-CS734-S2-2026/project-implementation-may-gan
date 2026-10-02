@@ -133,6 +133,9 @@ function requireLocalTestUrl(value: string): string {
       releasedAt: "2026-09-24T12:00:00.000Z",
       released: true,
       edited: true,
+      likeCount: 0,
+      viewerHasLiked: false,
+      commentCount: 0,
       media: [],
     });
   });
