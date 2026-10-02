@@ -116,6 +116,16 @@ const longAgo = new Date(now.getTime() - graceMs - hour);
     await store.complete(claimed[2]!);
   });
 
+  it("claims an abandoned voice memo like any other upload, and keeps a linked one", async () => {
+    const abandoned = await upload({ contentType: "audio/mp4", byteSize: 500_000 });
+    const linked = await upload({ contentType: "audio/mp4", byteSize: 500_000 });
+    await attach(linked);
+    const claimed = await claim();
+    expect(claimed.map((job) => job.id)).toEqual([abandoned]);
+    await store.complete(claimed[0]!);
+    expect(await row(linked)).toBeDefined();
+  });
+
   it("never claims uploads inside the grace period", async () => {
     const recent = await upload({ expiresAt: new Date(now.getTime() - graceMs + hour) });
     const live = await upload({ status: "pending", expiresAt: new Date(now.getTime() + 15 * 60_000) });

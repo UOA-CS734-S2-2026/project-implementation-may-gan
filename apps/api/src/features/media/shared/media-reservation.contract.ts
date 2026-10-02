@@ -1,6 +1,6 @@
 import { apiErrorSchema, mediaContentTypeSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
-import { MAX_ATTACHMENT_BYTES } from "./media-reservation-policy";
+import { isAudioContentType, MAX_ATTACHMENT_BYTES, MAX_VOICE_MEMO_BYTES } from "./media-reservation-policy";
 
 export { apiErrorSchema, mediaContentTypeSchema };
 
@@ -16,6 +16,10 @@ export const createMediaReservationRequestSchema = z
   .object({
     contentType: mediaContentTypeSchema,
     byteSize: z.number().int().positive().max(MAX_ATTACHMENT_BYTES),
+  })
+  .refine((request) => !isAudioContentType(request.contentType) || request.byteSize <= MAX_VOICE_MEMO_BYTES, {
+    path: ["byteSize"],
+    message: `A voice memo can be at most ${MAX_VOICE_MEMO_BYTES} bytes.`,
   })
   .openapi("CreateMediaReservationRequest");
 

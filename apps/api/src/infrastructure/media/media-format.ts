@@ -95,6 +95,20 @@ export function checkMagicBytes(declaredContentType: AllowedContentType, window:
       return !isQuickTime && !isHeic ? "match" : "mismatch";
     }
 
+    case "audio/mp4": {
+      const boxSize = readUint32BE(window, 0);
+      if (boxSize === undefined) return "mismatch";
+      const ftyp = parseFtypBrands(window, boxSize);
+      if (!ftyp) return "mismatch";
+      const brands = [ftyp.majorBrand, ...ftyp.compatibleBrands];
+      // Same bounded negative check as video/mp4: audio MP4 brands (M4A, M4B, mp42,
+      // isom…) are vendor-extensible. Whether the file really holds audio and no
+      // video is decided by the track walk in extractIsoBmffDurationSeconds.
+      const isQuickTime = brands.includes(QUICKTIME_BRAND);
+      const isHeic = brands.some((brand) => HEIC_BRANDS.has(brand));
+      return !isQuickTime && !isHeic ? "match" : "mismatch";
+    }
+
     case "video/quicktime": {
       const boxSize = readUint32BE(window, 0);
       if (boxSize !== undefined) {
@@ -363,6 +377,7 @@ export async function checkEssentialStructure(
 
     case "video/mp4":
     case "video/quicktime":
+    case "audio/mp4":
       return "match";
 
     default:
@@ -405,16 +420,23 @@ async function parseDurationBoxSeconds(
   return duration / timescale;
 }
 
+/** The track kind a file must be built around: `vide` for a video, `soun` for audio. */
+export type IsoBmffHandlerType = "vide" | "soun";
+
 /**
  * Bounded ISO-BMFF (MP4/QuickTime share this container format) duration reader.
  * Walks box *headers* only, jumping by each box's own declared size — never reads
  * a skipped box's body, so a well-formed file costs only a handful of tiny ranged
  * reads regardless of where `moov` sits (some encoders write `mdat` first). Fails
  * closed — never treats "couldn't determine duration" as a pass.
+ *
+ * `handlerType` names the track the duration is read from. Audio
+ * (`soun`) must also contain no video track, so a video can't be passed off as a voice memo.
  */
 export async function extractIsoBmffDurationSeconds(
   source: BoxSource,
   budget: DurationBudget = DEFAULT_DURATION_BUDGET,
+  handlerType: IsoBmffHandlerType = "vide",
 ): Promise<ExtractDurationResult> {
   try {
     const tracker = new BudgetTracker(budget);
@@ -425,7 +447,7 @@ export async function extractIsoBmffDurationSeconds(
     if (!mvhd) return { outcome: "malformed" };
 
     // A real capture always has at least one track — this alone is what keeps a
-    // fabricated ftyp+moov+mvhd (no actual video content at all) from validating.
+    // fabricated ftyp+moov+mvhd (no actual media content at all) from validating.
     const traks = await findAllBoxesInRange(source, moov.bodyStart, moov.boxEnd, "trak", tracker);
     if (traks.length === 0) return { outcome: "malformed" };
 
@@ -439,17 +461,21 @@ export async function extractIsoBmffDurationSeconds(
     if (movieSeconds === undefined || !Number.isFinite(movieSeconds)) return { outcome: "malformed" };
 
     // mvhd's duration alone is just a declared header field with no structural
-    // tie to the actual media — cross-check it against a video track's OWN media
+    // tie to the actual media — cross-check it against a matching track's OWN media
     // header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so both
-    // would have to be faked together. Only `vide` tracks count: an audio or
-    // other track's duration can legitimately diverge from mvhd, and the first
-    // trak isn't necessarily the video one. Empty/junk traks are skipped too.
-    let videoSeconds: number | undefined;
+    // would have to be faked together. Only tracks of the wanted handler type
+    // count: another track's duration can legitimately diverge from mvhd, and the
+    // first trak isn't necessarily the one we want. Empty/junk traks are skipped too.
+    let trackSecondsMax: number | undefined;
     for (const trak of traks) {
       const mdia = await findBoxInRange(source, trak.bodyStart, trak.boxEnd, "mdia", tracker);
       if (!mdia) continue;
       const hdlr = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "hdlr", tracker);
-      if (!hdlr || (await readHandlerType(source, hdlr, tracker)) !== "vide") continue;
+      if (!hdlr) continue;
+      const trackHandler = await readHandlerType(source, hdlr, tracker);
+      // A video hidden inside an audio file is rejected outright.
+      if (handlerType === "soun" && trackHandler === "vide") return { outcome: "malformed" };
+      if (trackHandler !== handlerType) continue;
       const mdhd = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "mdhd", tracker);
       if (!mdhd) continue;
       const trackSeconds = await parseDurationBoxSeconds(source, mdhd, tracker);
@@ -458,13 +484,13 @@ export async function extractIsoBmffDurationSeconds(
       const larger = Math.max(movieSeconds, trackSeconds);
       const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
       if (larger - Math.min(movieSeconds, trackSeconds) > tolerance) continue;
-      videoSeconds = Math.max(videoSeconds ?? 0, trackSeconds);
+      trackSecondsMax = Math.max(trackSecondsMax ?? 0, trackSeconds);
     }
-    if (videoSeconds === undefined) return { outcome: "malformed" };
+    if (trackSecondsMax === undefined) return { outcome: "malformed" };
 
-    // The larger of mvhd and the agreeing video track(s): never let one falsified
-    // field alone understate the real duration relative to MAX_VIDEO_DURATION_SECONDS.
-    return { outcome: "duration", seconds: Math.max(movieSeconds, videoSeconds) };
+    // The larger of mvhd and the agreeing track(s): never let one falsified
+    // field alone understate the real duration relative to the duration limit.
+    return { outcome: "duration", seconds: Math.max(movieSeconds, trackSecondsMax) };
   } catch (error) {
     if (error instanceof BudgetExceededError) return { outcome: "malformed" };
     throw error;

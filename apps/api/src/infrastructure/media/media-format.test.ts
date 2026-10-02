@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFtypBox,
+  buildMinimalM4a,
   buildMinimalMp4,
   buildMoovBox,
   buildMvhdBoxV0,
@@ -101,6 +102,14 @@ describe("checkMagicBytes", () => {
     expect(checkMagicBytes("video/mp4", buildFtypBox("qt  "))).toBe("mismatch");
     expect(checkMagicBytes("video/mp4", buildFtypBox("heic", ["mif1"]))).toBe("mismatch");
     expect(checkMagicBytes("video/mp4", validJpegBytes)).toBe("mismatch");
+  });
+
+  it("matches audio MP4 by excluding QuickTime and HEIC brands, like MP4", () => {
+    expect(checkMagicBytes("audio/mp4", buildFtypBox("M4A ", ["M4A ", "mp42", "isom"]))).toBe("match");
+    expect(checkMagicBytes("audio/mp4", buildFtypBox("qt  "))).toBe("mismatch");
+    expect(checkMagicBytes("audio/mp4", buildFtypBox("heic", ["mif1"]))).toBe("mismatch");
+    expect(checkMagicBytes("audio/mp4", validJpegBytes)).toBe("mismatch");
+    expect(checkMagicBytes("audio/mp4", new Uint8Array([0x49, 0x44, 0x33, 0x04]))).toBe("mismatch"); // an MP3's ID3 tag
   });
 
   it("matches QuickTime via the qt brand, and via legacy pre-ftyp box types", () => {
@@ -255,10 +264,53 @@ describe("checkEssentialStructure", () => {
     await expect(checkEssentialStructure("image/heic", new Uint8Array(20), throwingSource)).rejects.toBe(boom);
   });
 
-  it("defers video/mp4 and video/quicktime to extractIsoBmffDurationSeconds's own trak/mdat check", async () => {
+  it("defers video/mp4, video/quicktime and audio/mp4 to extractIsoBmffDurationSeconds's own trak/mdat check", async () => {
     const anything = new Uint8Array([1, 2, 3]);
+    expect(await checkEssentialStructure("audio/mp4", anything, boxSourceFor(anything))).toBe("match");
     expect(await checkEssentialStructure("video/mp4", anything, boxSourceFor(anything))).toBe("match");
     expect(await checkEssentialStructure("video/quicktime", anything, boxSourceFor(anything))).toBe("match");
+  });
+});
+
+describe("extractIsoBmffDurationSeconds for voice memos", () => {
+  it("reads the duration from the soun track", async () => {
+    const file = buildMinimalM4a(42);
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(file), undefined, "soun")).toEqual({
+      outcome: "duration",
+      seconds: 42,
+    });
+  });
+
+  it("is malformed for a video, which has no soun track", async () => {
+    const file = buildMinimalMp4(5);
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(file), undefined, "soun")).toEqual({ outcome: "malformed" });
+  });
+
+  it("is malformed for an audio file when asked for a video, and for any file that also holds video", async () => {
+    const audio = buildMinimalM4a(5);
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(audio))).toEqual({ outcome: "malformed" });
+
+    const both = concatBoxes(
+      buildFtypBox("M4A ", ["M4A ", "isom"]),
+      buildMoovBox([
+        buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
+        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
+        buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "vide" }),
+      ]),
+      wrapBox("mdat", new Uint8Array([1])),
+    );
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(both), undefined, "soun")).toEqual({ outcome: "malformed" });
+  });
+
+  it("is malformed with no mdat payload", async () => {
+    const file = concatBoxes(
+      buildFtypBox("M4A ", ["M4A "]),
+      buildMoovBox([
+        buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
+        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
+      ]),
+    );
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(file), undefined, "soun")).toEqual({ outcome: "malformed" });
   });
 });
 
