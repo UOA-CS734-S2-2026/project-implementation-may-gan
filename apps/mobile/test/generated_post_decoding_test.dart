@@ -10,39 +10,39 @@ import 'package:flutter_test/flutter_test.dart';
 // `pnpm generate:clients` deletes and rebuilds that whole package.
 
 Map<String, dynamic> _postDetail(Map<String, dynamic> extra) => {
-      'id': 'post-1',
-      'author': {'id': 'user-1', 'username': 'friend', 'displayName': 'Friend'},
-      'localDate': '2026-09-25',
-      'prompt': {'id': 'prompt-1', 'text': 'What made you smile today?'},
-      'reflectiveAnswer': 'Walked to the harbour.',
-      'caption': 'Sunset',
-      'rating': 7,
-      'audience': 'friends',
-      'acceptedAt': '2026-09-25T03:00:00.000Z',
-      'releasedAt': '2026-09-25T12:00:00.000Z',
-      'edited': false,
-      'viewerIsAuthor': false,
-      'media': <Object>[],
-      'voiceMemo': null,
-      ...extra,
-    };
+  'id': 'post-1',
+  'author': {'id': 'user-1', 'username': 'friend', 'displayName': 'Friend'},
+  'localDate': '2026-09-25',
+  'prompt': {'id': 'prompt-1', 'text': 'What made you smile today?'},
+  'reflectiveAnswer': 'Walked to the harbour.',
+  'caption': 'Sunset',
+  'rating': 7,
+  'audience': 'friends',
+  'acceptedAt': '2026-09-25T03:00:00.000Z',
+  'releasedAt': '2026-09-25T12:00:00.000Z',
+  'edited': false,
+  'viewerIsAuthor': false,
+  'media': <Object>[],
+  'voiceMemo': null,
+  ...extra,
+};
 
 Map<String, dynamic> _dailyPost(Map<String, dynamic> extra) => {
-      'id': 'post-1',
-      'authorId': 'user-1',
-      'localDate': '2026-09-25',
-      'prompt': {'id': 'prompt-1', 'text': 'What made you smile today?'},
-      'reflectiveAnswer': 'Walked to the harbour.',
-      'caption': 'Sunset',
-      'rating': 7,
-      'audience': 'friends',
-      'acceptedAt': '2026-09-25T03:00:00.000Z',
-      'releasedAt': '2026-09-25T12:00:00.000Z',
-      'tomorrowNote': {'availableOn': '2026-09-26'},
-      'media': <Object>[],
-      'voiceMemo': null,
-      ...extra,
-    };
+  'id': 'post-1',
+  'authorId': 'user-1',
+  'localDate': '2026-09-25',
+  'prompt': {'id': 'prompt-1', 'text': 'What made you smile today?'},
+  'reflectiveAnswer': 'Walked to the harbour.',
+  'caption': 'Sunset',
+  'rating': 7,
+  'audience': 'friends',
+  'acceptedAt': '2026-09-25T03:00:00.000Z',
+  'releasedAt': '2026-09-25T12:00:00.000Z',
+  'tomorrowNote': {'availableOn': '2026-09-26'},
+  'media': <Object>[],
+  'voiceMemo': null,
+  ...extra,
+};
 
 void main() {
   group('PostDetail voiceMemo', () {
@@ -62,19 +62,23 @@ void main() {
     });
 
     test('decodes a post with a voice memo', () {
-      final post = generated.PostDetail.fromJson(_postDetail({
-        'voiceMemo': {
-          'id': 'media-9',
-          'contentType': 'audio/mp4',
-          'url': 'https://storage.example.test/memo?signature=abc',
-          'expiresAt': '2026-09-26T03:05:00.000Z',
-        },
-      }));
+      final post = generated.PostDetail.fromJson(
+        _postDetail({
+          'voiceMemo': {
+            'id': 'media-9',
+            'contentType': 'audio/mp4',
+            'url': 'https://storage.example.test/memo?signature=abc',
+            'expiresAt': '2026-09-26T03:05:00.000Z',
+          },
+        }),
+      );
 
       expect(post!.voiceMemo, isNotNull);
       expect(post.voiceMemo!.id, 'media-9');
-      expect(post.voiceMemo!.contentType,
-          generated.VoiceMemoContentType.audioSlashMp4);
+      expect(
+        post.voiceMemo!.contentType,
+        generated.VoiceMemoContentType.audioSlashMp4,
+      );
     });
   });
 
@@ -87,9 +91,11 @@ void main() {
     });
 
     test('decodes a created post with a voice memo', () {
-      final post = generated.DailyPost.fromJson(_dailyPost({
-        'voiceMemo': {'id': 'media-9', 'contentType': 'audio/mp4'},
-      }));
+      final post = generated.DailyPost.fromJson(
+        _dailyPost({
+          'voiceMemo': {'id': 'media-9', 'contentType': 'audio/mp4'},
+        }),
+      );
 
       expect(post!.voiceMemo!.id, 'media-9');
     });
