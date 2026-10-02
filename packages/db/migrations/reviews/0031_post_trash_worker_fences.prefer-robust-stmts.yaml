@@ -1,0 +1,6 @@
+reason: The worker procedures, grants, and role revocations are one security boundary and must install atomically. The migration runner wraps the file in a transaction.
+affected_data_and_clients: No rows are changed during migration. Post Trash remains disabled until an explicit runtime activation and worker credential rollout.
+rollout_sequence: Apply after 0030, verify procedure ownership and app and lifecycle_worker execute grants, then exercise synthetic leased cleanup before considering report-only operation.
+backup_checkpoint: Record a staging backup and validate recovery before any production migration.
+forward_fix_plan: Add a reviewed forward migration for procedure changes. Never edit 0030 or this file after application.
+reviewer: Database, privacy, storage, and availability reviewers required.

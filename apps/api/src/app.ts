@@ -45,6 +45,7 @@ import { createAucklandDayService } from "@dayli/domain";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { and, eq, gt, sql } from "drizzle-orm";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
+import type { PostTrashRouteDependencies } from "./features/posts/trash-post/trash-post.route";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
@@ -186,6 +187,7 @@ export interface AppDependencies {
   media?: MediaReservationRouteDependencies;
   postingDay?: CurrentPostingDayRouteDependencies;
   posts?: CreateDailyPostRouteDependencies;
+  postTrash?: PostTrashRouteDependencies;
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
   postMedia?: GetPostMediaRouteDependencies;
@@ -218,6 +220,7 @@ export function createApp({
   media,
   postingDay,
   posts,
+  postTrash,
   feed,
   postDetail,
   postMedia,
@@ -300,6 +303,7 @@ export function createApp({
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
     media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
+    trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {

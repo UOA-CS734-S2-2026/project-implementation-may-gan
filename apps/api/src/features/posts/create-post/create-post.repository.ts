@@ -154,7 +154,11 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .select({ reservationId: schema.postMedia.reservationId })
         .from(schema.postMedia)
         .where(inArray(schema.postMedia.reservationId, reservations.map((row) => row.reservationId)));
-      const linkedIds = new Set(linked.map((row) => row.reservationId));
+      const avatarLinks = await queryable
+        .select({ reservationId: schema.profileAvatars.reservationId })
+        .from(schema.profileAvatars)
+        .where(inArray(schema.profileAvatars.reservationId, reservations.map((row) => row.reservationId)));
+      const linkedIds = new Set([...linked, ...avatarLinks].map((row) => row.reservationId));
       return reservations.map(({ cleanupClaimedAt, ...row }) => ({
         ...row,
         // Cleanup tombstones the upload under this same row lock, so a claimed
@@ -226,6 +230,18 @@ export function createPostgresDailyPostStore(database: DayliDatabase): DailyPost
         await tx
           .select({ locked: sql`pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))` })
           .from(sql`(values (1)) as lock_source`);
+        // This matches the Trash command lock order. A pending deletion that
+        // commits while the submission waits must not admit another post.
+        const [author] = await tx.select({ id: schema.user.id })
+          .from(schema.user).where(eq(schema.user.id, authorId)).for("update");
+        const [lifecycle] = author
+          ? await tx.select({ state: schema.accountLifecycles.state })
+            .from(schema.accountLifecycles)
+            .where(eq(schema.accountLifecycles.userId, authorId)).for("share")
+          : [];
+        if (!author || (lifecycle && lifecycle.state !== "active")) {
+          throw new CreateDailyPostError("ACCOUNT_RESTRICTED");
+        }
         return operation(createTransaction(tx));
       });
     },

@@ -102,6 +102,7 @@ export interface DailyPostStore {
 export type CreateDailyPostErrorReason =
   | "POSTING_DAY_CLOSED"
   | "POSTING_DAY_NOT_OPEN"
+  | "ACCOUNT_RESTRICTED"
   | "PROMPT_CHANGED"
   | "ALREADY_POSTED"
   | "IDEMPOTENCY_KEY_REUSED"
@@ -113,6 +114,7 @@ export type CreateDailyPostErrorReason =
 const messages: Record<CreateDailyPostErrorReason, string> = {
   POSTING_DAY_CLOSED: "The posting day for this draft has ended.",
   POSTING_DAY_NOT_OPEN: "The posting day for this draft has not started.",
+  ACCOUNT_RESTRICTED: "Posting is unavailable while account deletion is pending.",
   PROMPT_CHANGED: "The prompt does not match the prompt for this posting day.",
   ALREADY_POSTED: "A post already exists for this posting day.",
   IDEMPOTENCY_KEY_REUSED: "This idempotency key was already used for a different request.",

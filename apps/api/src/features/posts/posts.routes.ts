@@ -5,6 +5,7 @@ import { registerGetPostRoute, type GetPostRouteDependencies } from "./get-post/
 import { registerGetPostMediaRoute, type GetPostMediaRouteDependencies } from "./get-post-media/get-post-media.route";
 import { registerListFeedRoute, type ListFeedRouteDependencies } from "./list-feed/list-feed.route";
 import { registerListProfilePostsRoute, type ListProfilePostsRouteDependencies } from "./list-profile-posts/list-profile-posts.route";
+import { registerPostTrashRoutes, type PostTrashRouteDependencies } from "./trash-post/trash-post.route";
 
 export interface PostsRouteDependencies {
   create: CreateDailyPostRouteDependencies;
@@ -12,6 +13,7 @@ export interface PostsRouteDependencies {
   detail: GetPostRouteDependencies;
   media: GetPostMediaRouteDependencies;
   profilePosts: ListProfilePostsRouteDependencies;
+  trash: PostTrashRouteDependencies;
 }
 
 /** Register post actions without embedding post policy in the composition root. */
@@ -21,4 +23,5 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   registerGetPostRoute(app, dependencies.detail);
   registerGetPostMediaRoute(app, dependencies.media);
   registerListProfilePostsRoute(app, dependencies.profilePosts);
+  registerPostTrashRoutes(app, dependencies.trash);
 }

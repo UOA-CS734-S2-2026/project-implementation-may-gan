@@ -274,12 +274,14 @@ export async function findVisibleTomorrowNote(
   currentAucklandDate: string,
 ) {
   const [row] = await database
-    .select()
+    .select({ note: schema.tomorrowNotes })
     .from(schema.tomorrowNotes)
+    .innerJoin(schema.posts, eq(schema.tomorrowNotes.postId, schema.posts.id))
     .where(and(
       eq(schema.tomorrowNotes.id, noteId),
+      isNull(schema.posts.trashedAt),
       buildTomorrowNoteVisibilityFilter(viewer, currentAucklandDate),
     ))
     .limit(1);
-  return row ?? null;
+  return row?.note ?? null;
 }
