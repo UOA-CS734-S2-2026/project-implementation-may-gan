@@ -68,15 +68,16 @@ suite("get message Postgres repository", () => {
     await database.db.insert(schema.conversationMembers).values({
       conversationId: initial.conversation.id,
       userId: users[2]!,
+      participantId: users[2]!,
       lastReadSequence: 0,
       receiptSequence: 0,
       createdAt: now,
       updatedAt: now,
     });
     await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: now },
-      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: now },
-      { messageId: reply.message.id, userId: users[2]!, reaction: "laugh", createdAt: now },
+      { messageId: reply.message.id, userId: users[0]!, participantId: users[0]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[2]!, participantId: users[2]!, reaction: "laugh", createdAt: now },
     ]);
     await database.db.update(schema.messages)
       .set({ sequence: Number.MAX_SAFE_INTEGER })

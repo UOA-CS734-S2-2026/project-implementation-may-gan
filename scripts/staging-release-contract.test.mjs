@@ -54,7 +54,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
   requireMatch(api, /Verify direct migrator target matches configured Hyperdrive\n {8}env:\n {10}CLOUDFLARE_ACCOUNT_ID: \$\{\{ vars\.CLOUDFLARE_ACCOUNT_ID \}\}\n {10}CLOUDFLARE_API_TOKEN: \$\{\{ secrets\.CLOUDFLARE_API_TOKEN \}\}\n {10}CLOUDFLARE_STAGING_HYPERDRIVE_ID: \$\{\{ secrets\.CLOUDFLARE_STAGING_HYPERDRIVE_ID \}\}\n {10}DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}\n {8}run: node deployment-tooling\/scripts\/verify-staging-schema-target\.mjs/, "target gate must use immutable tooling, the fixed Hyperdrive ID, and protected direct migrator secret");
   const migrationCheck = "Check captured release migrations before mutation";
   const migrationPlan = "Plan pending reviewed migrations";
-  const messagingPreflight = "Preflight pending messaging readiness migration size";
+  const messagingPreflight = "Preflight pending messaging FK detachment migration size";
   const migrationApply = "Apply pending reviewed migrations";
   const schemaGate = "Verify the captured release schema before deployment";
   const migrationCheckIndex = api.indexOf(migrationCheck);
@@ -65,7 +65,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
   assert.ok(migrationCheckIndex >= 0 && migrationPlanIndex >= 0 && messagingPreflightIndex >= 0 && migrationApplyIndex >= 0 && schemaGateIndex >= 0, "API must check, plan, preflight, conditionally apply, and verify captured migrations");
   requireMatch(api, /Check captured release migrations before mutation\n {8}if: inputs\.migration_mode == 'forward'[\s\S]*?MIGRATION_REPOSITORY_ROOT: \$\{\{ github\.workspace \}\}[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: pnpm --dir deployment-tooling db:check/, "trusted tooling must check the captured release before database access");
   requireMatch(api, /Plan pending reviewed migrations\n {8}id: migration_plan\n {8}if: inputs\.migration_mode == 'forward'[\s\S]*?run: pnpm --dir deployment-tooling db:plan/, "a forward release must plan pending migrations read-only");
-  requireMatch(api, /Preflight pending messaging readiness migration size\n {8}if: inputs\.migration_mode == 'forward'[\s\S]*?MIGRATION_TARGET: staging[\s\S]*?DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: node deployment-tooling\/scripts\/staging-messaging-0023-preflight\.mjs/, "a forward release must use immutable tooling to preflight pending 0023 table sizes");
+  requireMatch(api, /Preflight pending messaging FK detachment migration size\n {8}if: inputs\.migration_mode == 'forward'[\s\S]*?MIGRATION_TARGET: staging[\s\S]*?DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: node deployment-tooling\/scripts\/staging-messaging-0024-preflight\.mjs/, "a forward release must use immutable tooling to preflight pending 0024 table sizes");
   requireMatch(api, /Apply pending reviewed migrations\n {8}if: inputs\.migration_mode == 'forward' && steps\.migration_plan\.outputs\.pending == 'true'[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: pnpm --dir deployment-tooling db:migrate/, "only a forward release with pending reviewed migrations may apply them");
   requireMatch(api, /Verify the captured release schema before deployment\n {8}env:\n {10}MIGRATION_TARGET: staging\n {10}DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}\n {10}MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: pnpm --dir deployment-tooling db:verify/, "schema gate must use immutable tooling against captured release migrations and the protected direct migrator secret");
   assert.ok(api.indexOf("ref: ${{ inputs.commit_sha }}") < targetGateIndex, "target gate must run after the captured release checkout");
@@ -86,7 +86,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
   requireMatch(migrations, /group: staging-database-state-\$\{\{ inputs\.target \}\}\n[ ]{2}cancel-in-progress: false/, "staging migrations must share the API database-state lock");
   requireMatch(migrations, /migrate:\n {4}if: github\.ref == 'refs\/heads\/main'[\s\S]*?environment: \$\{\{ inputs\.target \}\}/, "database migrations must remain main-only and protected");
   requireMatch(migrations, /Plan staging migrations before mutation\n {8}id: staging_migration_plan\n {8}if: inputs\.target == 'staging'\n {8}run: pnpm db:plan/, "manual staging migrations must plan before mutation");
-  requireMatch(migrations, /Preflight pending messaging readiness migration size\n {8}if: inputs\.target == 'staging'[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: node scripts\/staging-messaging-0023-preflight\.mjs/, "manual staging migrations must preflight 0023 sizes");
+  requireMatch(migrations, /Preflight pending messaging FK detachment migration size\n {8}if: inputs\.target == 'staging'[\s\S]*?MIGRATIONS_DIR: \$\{\{ github\.workspace \}\}\/packages\/db\/migrations\n {8}run: node scripts\/staging-messaging-0024-preflight\.mjs/, "manual staging migrations must preflight 0024 sizes");
   requireMatch(migrations, /Apply migrations\n {8}id: apply\n {8}if: inputs\.target != 'staging' \|\| steps\.staging_migration_plan\.outputs\.pending == 'true'\n {8}run: pnpm db:migrate/, "manual staging apply must depend on the reviewed plan while production remains unchanged");
   requireMatch(cleanup, /cleanup:\n {4}[\s\S]*?if: github\.ref == 'refs\/heads\/main'\n {4}environment: staging/, "preview cleanup must remain main-only and protected");
   requireMatch(cleanup, /pull\.head\.repo\?\.full_name !== repository \|\|\n {14}pull\.head\.repo\?\.fork !== false/, "preview cleanup must reject fork PRs");
@@ -120,8 +120,8 @@ test("staging workflows retain their release and security contract", () => {
   assert.doesNotThrow(() => assertStagingReleaseContract(workflows()));
   assert.match(
     packageScripts()["test:staging-release-contract"],
-    /scripts\/staging-messaging-0023-preflight\.test\.mjs/,
-    "the staging release contract command must run the 0023 preflight tests",
+    /scripts\/staging-messaging-0024-preflight\.test\.mjs/,
+    "the staging release contract command must run the 0024 preflight tests",
   );
 });
 
@@ -165,23 +165,23 @@ test("the contract rejects an untrusted source, changed release order, or uncapt
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,
-    api: current.api.replace("node deployment-tooling/scripts/staging-messaging-0023-preflight.mjs", "true"),
-  }), /preflight pending 0023 table sizes/);
+    api: current.api.replace("node deployment-tooling/scripts/staging-messaging-0024-preflight.mjs", "true"),
+  }), /preflight pending 0024 table sizes/);
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,
-    api: current.api.replace("Preflight pending messaging readiness migration size\n        if: inputs.migration_mode == 'forward'", "Preflight pending messaging readiness migration size\n        if: true"),
-  }), /preflight pending 0023 table sizes/);
+    api: current.api.replace("Preflight pending messaging FK detachment migration size\n        if: inputs.migration_mode == 'forward'", "Preflight pending messaging FK detachment migration size\n        if: true"),
+  }), /preflight pending 0024 table sizes/);
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,
-    api: current.api.replace("Preflight pending messaging readiness migration size", "Apply pending reviewed migrations"),
+    api: current.api.replace("Preflight pending messaging FK detachment migration size", "Apply pending reviewed migrations"),
   }), /check, plan, preflight, conditionally apply, and verify/);
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,
-    migrations: current.migrations.replace("node scripts/staging-messaging-0023-preflight.mjs", "true"),
-  }), /manual staging migrations must preflight 0023 sizes/);
+    migrations: current.migrations.replace("node scripts/staging-messaging-0024-preflight.mjs", "true"),
+  }), /manual staging migrations must preflight 0024 sizes/);
 
   assert.throws(() => assertStagingReleaseContract({
     ...current,

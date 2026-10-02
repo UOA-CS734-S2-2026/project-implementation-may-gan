@@ -1,0 +1,6 @@
+reason: The six legacy user-ID columns must become nullable before their direct user foreign keys can use SET NULL on user deletion. Durable participant checks and primary keys remain required.
+affected_data_and_clients: Rolling old workers may still insert and conflict on legacy user pairs. Detached rows retain participant identities and have null legacy user IDs.
+rollout_sequence: Run the mandatory read-only five-table staging preflight, then apply only through the reviewed migrator with its locked size recheck.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a reviewed forward migration for any later legacy-column policy change. Do not restore cascades or remove participant identity constraints.
+reviewer: Database, messaging, and privacy reviewers must approve the detachment contract.

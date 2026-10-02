@@ -186,8 +186,8 @@ suite("list conversations Postgres repository", () => {
     await expect(repository.list(users[7]!, "requests", undefined, 10)).resolves.toEqual({ items: [], nextCursor: null });
 
     await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: new Date() },
-      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: new Date() },
+      { messageId: reply.message.id, userId: users[0]!, participantId: users[0]!, reaction: "love", createdAt: new Date() },
+      { messageId: reply.message.id, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: new Date() },
     ]);
     await expect(repository.list(users[0]!, "inbox", undefined, 10)).resolves.toMatchObject({
       items: expect.arrayContaining([expect.objectContaining({
@@ -309,8 +309,8 @@ suite("list conversations Postgres repository", () => {
       text: "old worker participant reply",
     });
     await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: actor, reaction: "angry", createdAt: new Date() },
-      { messageId: reply.message.id, userId: peer, reaction: "angry", createdAt: new Date() },
+      { messageId: reply.message.id, userId: actor, participantId: actorParticipant, reaction: "angry", createdAt: new Date() },
+      { messageId: reply.message.id, userId: peer, participantId: peerParticipant, reaction: "angry", createdAt: new Date() },
     ]);
 
     const list = await repository.list(actor, "inbox", undefined, 10);

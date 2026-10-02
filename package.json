@@ -41,7 +41,7 @@
     "test": "pnpm -r --if-present test",
     "test:e2e:web": "bash scripts/test-web-e2e.sh",
     "test:proxy-provenance": "pnpm --filter @dayli/api exec tsc -p ../../scripts/proxy-provenance/tsconfig.json && tsx --test scripts/proxy-provenance/diagnostic.test.ts && node --test scripts/proxy-provenance/workerd-smoke.mjs",
-    "test:staging-release-contract": "node --test scripts/capture-staging-release.test.mjs scripts/ensure-staging-web-observability.test.mjs scripts/manual-database-migration-workflow-contract.test.mjs scripts/staging-messaging-0023-preflight.test.mjs scripts/staging-release-contract.test.mjs scripts/verify-staging-schema-target.test.mjs",
+    "test:staging-release-contract": "node --test scripts/capture-staging-release.test.mjs scripts/ensure-staging-web-observability.test.mjs scripts/manual-database-migration-workflow-contract.test.mjs scripts/staging-messaging-0024-preflight.test.mjs scripts/staging-release-contract.test.mjs scripts/verify-staging-schema-target.test.mjs",
     "test:staging-auth-smoke-contract": "node --test scripts/staging-auth-smoke.test.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "verify:local": "bash scripts/verify-local.sh",

@@ -1,0 +1,6 @@
+reason: Participant-pair primary keys and legacy conflict-target unique constraints are built transactionally while final access-exclusive locks already stop the affected writers.
+affected_data_and_clients: The bounded five-table staging cap limits the expected lock outage. No application-visible partial index is introduced.
+rollout_sequence: Run only after the mandatory read-only preflight and the repeated locked size check pass.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Add any future nonblocking index through a separate reviewed migration after production measurement.
+reviewer: Database and messaging reviewers must approve the lock budget.

@@ -77,8 +77,8 @@ suite("Postgres realtime publisher authorization", () => {
       requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: createdAt, createdAt, updatedAt: createdAt,
     });
     await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
     ]);
   });
 
@@ -94,8 +94,8 @@ suite("Postgres realtime publisher authorization", () => {
     await database.db.delete(schema.conversationChanges).where(eq(schema.conversationChanges.conversationId, ids.conversation));
     await database.db.delete(schema.messages).where(eq(schema.messages.conversationId, ids.conversation));
     await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
     ]).onConflictDoNothing({ target: [schema.conversationMembers.conversationId, schema.conversationMembers.userId] });
   });
 

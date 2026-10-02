@@ -12,8 +12,8 @@ on:
         description: Type 'checked' after confirming a recent Neon restore point/backup for production
         required: false
         type: string
-      production_messaging_0023_size_cap_bytes:
-        description: Optional reviewed 0023 five-table byte cap, production only, minimum 16777216
+      production_messaging_0024_size_cap_bytes:
+        description: Optional reviewed 0024 five-table byte cap, production only, minimum 16777216
         required: false
         type: string
 
@@ -37,7 +37,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       CONFIRM_PRODUCTION_MIGRATION: ${{ inputs.target == 'production' && 'MIGRATE production' || '' }}
       CONFIRM_NEON_BACKUP_CHECKED: ${{ inputs.target == 'production' && inputs.production_backup_checked == 'checked' && 'true' || '' }}
-      MESSAGING_0023_SIZE_CAP_BYTES: ${{ inputs.target == 'production' && inputs.production_messaging_0023_size_cap_bytes || '' }}
+      MESSAGING_0024_SIZE_CAP_BYTES: ${{ inputs.target == 'production' && inputs.production_messaging_0024_size_cap_bytes || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,11 +79,11 @@ jobs:
         id: staging_migration_plan
         if: inputs.target == 'staging'
         run: pnpm db:plan
-      - name: Preflight pending messaging readiness migration size
+      - name: Preflight pending messaging FK detachment migration size
         if: inputs.target == 'staging'
         env:
           MIGRATIONS_DIR: ${{ github.workspace }}/packages/db/migrations
-        run: node scripts/staging-messaging-0023-preflight.mjs
+        run: node scripts/staging-messaging-0024-preflight.mjs
       - name: Apply migrations
         id: apply
         if: inputs.target != 'staging' || steps.staging_migration_plan.outputs.pending == 'true'

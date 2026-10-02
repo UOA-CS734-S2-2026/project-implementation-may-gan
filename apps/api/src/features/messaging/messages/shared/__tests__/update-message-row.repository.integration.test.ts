@@ -59,7 +59,7 @@ suite("message row update builders", () => {
       version: 1,
       createdAt: now,
     });
-    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, reaction: "love", createdAt: now });
+    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: now });
 
     await expect(updateMessageRow(database.db, {
       messageId,
@@ -116,7 +116,7 @@ suite("message row update builders", () => {
       version: Number.MAX_SAFE_INTEGER - 1,
       createdAt: now,
     });
-    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, reaction: "love", createdAt: now });
+    await database.db.insert(messageReactions).values({ messageId, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: now });
 
     await expect(database.db.transaction((transaction) => updateMessageRow(transaction, {
       messageId,

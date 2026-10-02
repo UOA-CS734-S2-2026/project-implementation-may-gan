@@ -68,8 +68,8 @@ suite("Postgres push destination authorization", () => {
       requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: now, createdAt: now, updatedAt: now,
     });
     await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+      { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+      { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
     ]);
     await devices.register({ id: ids.aliceDevice, userId: ids.alice, sessionId: ids.aliceSession, installationId: "alice-installation", platform: "ios", tokenCiphertext: "alice-token", tokenKeyVersion: "test", tokenHash: tokenHash("a"), optedIn: true, now: new Date() });
     await devices.register({ id: ids.bobDevice, userId: ids.bob, sessionId: ids.bobSession, installationId: "bob-installation", platform: "android", tokenCiphertext: "bob-token", tokenKeyVersion: "test", tokenHash: tokenHash("b"), optedIn: true, now: new Date() });
@@ -113,7 +113,7 @@ suite("Postgres push destination authorization", () => {
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledTimes(3);
     await database.db.insert(schema.conversationMembers).values({
-      conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now,
+      conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now,
     });
 
     await database.db.insert(schema.relationshipBlocks).values({ blockerId: ids.alice, blockedId: ids.bob, blockedAt: now });
