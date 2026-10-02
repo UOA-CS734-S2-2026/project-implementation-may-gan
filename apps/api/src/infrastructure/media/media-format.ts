@@ -22,6 +22,11 @@ function readUint32BE(bytes: Uint8Array, offset: number): number | undefined {
   );
 }
 
+function readUint16BE(bytes: Uint8Array, offset: number): number | undefined {
+  if (offset < 0 || offset + 2 > bytes.byteLength) return undefined;
+  return (bytes[offset]! << 8) | bytes[offset + 1]!;
+}
+
 /** RIFF/WEBP fields are little-endian, unlike ISO-BMFF's big-endian box sizes. */
 function readUint32LE(bytes: Uint8Array, offset: number): number | undefined {
   if (offset < 0 || offset + 4 > bytes.byteLength) return undefined;
@@ -192,6 +197,14 @@ export type ExtractDurationResult = { outcome: "duration"; seconds: number } | {
  */
 export const DEFAULT_DURATION_BUDGET: DurationBudget = { maxBoxesWalked: 64, maxTotalBytesRead: 256 * 1024 };
 
+/**
+ * An audio recording also walks minf/stbl and reads its sample tables (at most
+ * ~100 KB: sample sizes, chunk offsets, sample-to-chunk and time-to-sample), so
+ * it gets more box reads than a video's header-only walk. Still a fixed circuit
+ * breaker, not a size that grows with the file.
+ */
+export const AUDIO_DURATION_BUDGET: DurationBudget = { maxBoxesWalked: 160, maxTotalBytesRead: 256 * 1024 };
+
 class BudgetExceededError extends Error {}
 
 class BudgetTracker {
@@ -285,6 +298,25 @@ async function findAllBoxesInRange(
     const header = await readBoxHeader(source, offset, rangeEnd, tracker);
     if (!header) break;
     if (header.type === targetType) found.push(header);
+    offset = header.boxEnd;
+  }
+  return found;
+}
+
+/** The first box of each wanted type directly inside the range, in one pass; stops at the first unreadable header. */
+async function collectBoxes(
+  source: BoxSource,
+  rangeStart: number,
+  rangeEnd: number,
+  targetTypes: readonly string[],
+  tracker: BudgetTracker,
+): Promise<Map<string, BoxHeader>> {
+  const found = new Map<string, BoxHeader>();
+  let offset = rangeStart;
+  while (offset < rangeEnd) {
+    const header = await readBoxHeader(source, offset, rangeEnd, tracker);
+    if (!header) break;
+    if (targetTypes.includes(header.type) && !found.has(header.type)) found.set(header.type, header);
     offset = header.boxEnd;
   }
   return found;
@@ -390,11 +422,11 @@ export async function checkEssentialStructure(
  * (a track's own media header) — byte-identical version 0/1 layouts — handling
  * both the v0 (32-bit) and v1 (64-bit) forms.
  */
-async function parseDurationBoxSeconds(
+async function parseDurationBoxTimes(
   source: BoxSource,
   box: BoxHeader,
   tracker: BudgetTracker,
-): Promise<number | undefined> {
+): Promise<{ timescale: number; duration: number } | undefined> {
   const probeEnd = Math.min(box.bodyStart + 39, box.boxEnd - 1);
   if (probeEnd < box.bodyStart) return undefined;
   const body = await tracker.read(source, box.bodyStart, probeEnd);
@@ -417,7 +449,239 @@ async function parseDurationBoxSeconds(
   }
 
   if (!timescale || timescale <= 0 || duration === undefined || duration < 0) return undefined;
-  return duration / timescale;
+  return { timescale, duration };
+}
+
+async function parseDurationBoxSeconds(
+  source: BoxSource,
+  box: BoxHeader,
+  tracker: BudgetTracker,
+): Promise<number | undefined> {
+  const times = await parseDurationBoxTimes(source, box, tracker);
+  return times ? times.duration / times.timescale : undefined;
+}
+
+/** A raw AAC frame is far smaller than this; a bigger "sample" is not AAC. */
+const MAX_AAC_SAMPLE_BYTES = 16 * 1024;
+/** A minute of AAC at the highest rate holds ~5,600 frames; this leaves headroom and bounds the reads. */
+const MAX_AUDIO_SAMPLES = 8192;
+const MAX_AUDIO_CHUNKS = 4096;
+const MAX_STTS_ENTRIES = 1024;
+const MAX_STSC_ENTRIES = 256;
+const AUDIO_SAMPLE_DESCRIPTION_PROBE_BYTES = 256;
+const MPEG4_AUDIO_OBJECT_TYPE_INDICATION = 0x40;
+const AUDIO_STREAM_TYPE = 0x05;
+/** AAC-LC, and the HE-AAC signalling objects (SBR, PS) some encoders write first. */
+const AAC_AUDIO_OBJECT_TYPES = new Set([2, 5, 29]);
+
+/** One MPEG-4 descriptor's tag and body range inside `bytes`, or undefined if it overruns. */
+function readDescriptor(bytes: Uint8Array, offset: number): { tag: number; bodyStart: number; end: number } | undefined {
+  const tag = bytes[offset];
+  if (tag === undefined) return undefined;
+  let length = 0;
+  let cursor = offset + 1;
+  for (let step = 0; step < 4; step += 1) {
+    const byte = bytes[cursor];
+    if (byte === undefined) return undefined;
+    cursor += 1;
+    length = (length << 7) | (byte & 0x7f);
+    if ((byte & 0x80) === 0) {
+      const end = cursor + length;
+      return end <= bytes.byteLength ? { tag, bodyStart: cursor, end } : undefined;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Checks the decoder configuration inside an `esds` body is AAC audio: MPEG-4
+ * audio object type 0x40, an audio stream, and an AudioSpecificConfig naming a
+ * real AAC profile, sample-rate index and channel layout.
+ */
+function isAacEsds(body: Uint8Array): boolean {
+  // version/flags(4), then the ES_Descriptor (tag 0x03).
+  const es = readDescriptor(body, 4);
+  if (!es || es.tag !== 0x03) return false;
+  let cursor = es.bodyStart + 2; // ES_ID
+  const flags = body[cursor];
+  if (flags === undefined) return false;
+  cursor += 1;
+  if (flags & 0x80) cursor += 2; // streamDependenceFlag: dependsOn_ES_ID
+  if (flags & 0x40) return false; // URL_flag: an external stream is not our upload
+  if (flags & 0x20) cursor += 2; // OCRstreamFlag
+
+  const config = readDescriptor(body, cursor);
+  if (!config || config.tag !== 0x04 || config.end - config.bodyStart < 13) return false;
+  if (body[config.bodyStart] !== MPEG4_AUDIO_OBJECT_TYPE_INDICATION) return false;
+  if (((body[config.bodyStart + 1] ?? 0) >> 2) !== AUDIO_STREAM_TYPE) return false;
+
+  // objectTypeIndication(1) streamType(1) bufferSizeDB(3) maxBitrate(4) avgBitrate(4)
+  const specific = readDescriptor(body, config.bodyStart + 13);
+  if (!specific || specific.tag !== 0x05 || specific.end - specific.bodyStart < 2) return false;
+  const first = body[specific.bodyStart]!;
+  const second = body[specific.bodyStart + 1]!;
+  const audioObjectType = first >> 3;
+  const samplingFrequencyIndex = ((first & 0x07) << 1) | (second >> 7);
+  const channelConfiguration = (second >> 3) & 0x0f;
+  return AAC_AUDIO_OBJECT_TYPES.has(audioObjectType)
+    && samplingFrequencyIndex <= 12
+    && channelConfiguration >= 1
+    && channelConfiguration <= 7;
+}
+
+/** stsd: exactly one `mp4a` sample entry that carries an AAC `esds`. */
+function isAacSampleDescription(body: Uint8Array): boolean {
+  if (readUint32BE(body, 4) !== 1) return false; // entry_count
+  const entrySize = readUint32BE(body, 8);
+  if (entrySize === undefined || entrySize < 44 - 8 + 8 || readAscii(body, 12, 4) !== "mp4a") return false;
+  if (readUint16BE(body, 22) !== 1) return false; // data_reference_index
+  const channels = readUint16BE(body, 32);
+  if (channels === undefined || channels < 1 || channels > 8) return false;
+  if (readUint16BE(body, 34) !== 16) return false; // sample size in bits
+
+  const entryEnd = Math.min(8 + entrySize, body.byteLength);
+  let offset = 8 + 36; // the entry's child boxes follow its fixed audio fields
+  while (offset + 8 <= entryEnd) {
+    const size = readUint32BE(body, offset);
+    if (size === undefined || size < 8 || offset + size > entryEnd) return false;
+    if (readAscii(body, offset + 4, 4) === "esds") return isAacEsds(body.subarray(offset + 8, offset + size));
+    offset += size;
+  }
+  return false;
+}
+
+/** Reads a whole box body of at most `maxBytes`; undefined when it is empty, too large, or unreadable. */
+async function readBoxBody(
+  source: BoxSource,
+  box: BoxHeader,
+  tracker: BudgetTracker,
+  maxBytes: number,
+): Promise<Uint8Array | undefined> {
+  const length = box.boxEnd - box.bodyStart;
+  if (length <= 0 || length > maxBytes) return undefined;
+  const body = await tracker.read(source, box.bodyStart, box.boxEnd - 1);
+  return body && body.byteLength === length ? body : undefined;
+}
+
+/**
+ * Verifies an audio track really describes AAC samples that exist in the file:
+ * an `mp4a` sample entry with an AAC decoder config, and a sample table
+ * (sample sizes, sample-to-chunk, chunk offsets, time-to-sample) that agrees
+ * with itself and places every sample inside a non-empty `mdat`. Returns the
+ * duration the sample table implies, or undefined when anything is off. Bounded:
+ * every table is size-capped before it is read, and nothing but table bytes is read.
+ */
+async function verifyAacSampleTable(
+  source: BoxSource,
+  mdia: BoxHeader,
+  timescale: number,
+  mediaData: readonly BoxHeader[],
+  tracker: BudgetTracker,
+): Promise<number | undefined> {
+  const minf = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "minf", tracker);
+  if (!minf) return undefined;
+  const stbl = await findBoxInRange(source, minf.bodyStart, minf.boxEnd, "stbl", tracker);
+  if (!stbl) return undefined;
+  const tables = await collectBoxes(source, stbl.bodyStart, stbl.boxEnd, ["stsd", "stts", "stsc", "stsz", "stco", "co64"], tracker);
+  const stsd = tables.get("stsd");
+  const stts = tables.get("stts");
+  const stsc = tables.get("stsc");
+  const stsz = tables.get("stsz");
+  const chunkOffsets = tables.get("stco") ?? tables.get("co64");
+  if (!stsd || !stts || !stsc || !stsz || !chunkOffsets) return undefined;
+
+  // Sample description: AAC, not some other codec or an empty placeholder.
+  const probeEnd = Math.min(stsd.bodyStart + AUDIO_SAMPLE_DESCRIPTION_PROBE_BYTES, stsd.boxEnd) - 1;
+  if (probeEnd < stsd.bodyStart) return undefined;
+  const description = await tracker.read(source, stsd.bodyStart, probeEnd);
+  if (!description || !isAacSampleDescription(description)) return undefined;
+
+  // stsz: every sample has a real, AAC-sized length.
+  const sizeBody = await tracker.read(source, stsz.bodyStart, Math.min(stsz.bodyStart + 11, stsz.boxEnd - 1));
+  const uniformSize = sizeBody ? readUint32BE(sizeBody, 4) : undefined;
+  const sampleCount = sizeBody ? readUint32BE(sizeBody, 8) : undefined;
+  if (uniformSize === undefined || sampleCount === undefined || sampleCount < 1 || sampleCount > MAX_AUDIO_SAMPLES) {
+    return undefined;
+  }
+  let sizes: number[];
+  if (uniformSize > 0) {
+    sizes = Array.from({ length: sampleCount }, () => uniformSize);
+  } else {
+    if (stsz.boxEnd - stsz.bodyStart < 12 + 4 * sampleCount) return undefined;
+    const table = await tracker.read(source, stsz.bodyStart + 12, stsz.bodyStart + 12 + 4 * sampleCount - 1);
+    if (!table || table.byteLength !== 4 * sampleCount) return undefined;
+    sizes = Array.from({ length: sampleCount }, (_, index) => readUint32BE(table, index * 4)!);
+  }
+  if (sizes.some((size) => size < 1 || size > MAX_AAC_SAMPLE_BYTES)) return undefined;
+
+  // stts: the sample count and the total ticks the table claims.
+  const timeBody = await readBoxBody(source, stts, tracker, 8 + 8 * MAX_STTS_ENTRIES);
+  const timeEntries = timeBody ? readUint32BE(timeBody, 4) : undefined;
+  if (!timeBody || timeEntries === undefined || timeEntries < 1 || timeBody.byteLength < 8 + 8 * timeEntries) {
+    return undefined;
+  }
+  let timedSamples = 0;
+  let ticks = 0;
+  for (let index = 0; index < timeEntries; index += 1) {
+    const count = readUint32BE(timeBody, 8 + index * 8)!;
+    const delta = readUint32BE(timeBody, 12 + index * 8)!;
+    if (count < 1 || delta < 1) return undefined;
+    timedSamples += count;
+    ticks += count * delta;
+  }
+  if (timedSamples !== sampleCount) return undefined;
+
+  // stsc: how many samples each run of chunks holds (one sample description only).
+  const mapBody = await readBoxBody(source, stsc, tracker, 8 + 12 * MAX_STSC_ENTRIES);
+  const mapEntries = mapBody ? readUint32BE(mapBody, 4) : undefined;
+  if (!mapBody || mapEntries === undefined || mapEntries < 1 || mapBody.byteLength < 8 + 12 * mapEntries) {
+    return undefined;
+  }
+  const runs: Array<{ firstChunk: number; samplesPerChunk: number }> = [];
+  for (let index = 0; index < mapEntries; index += 1) {
+    const firstChunk = readUint32BE(mapBody, 8 + index * 12)!;
+    const samplesPerChunk = readUint32BE(mapBody, 12 + index * 12)!;
+    const descriptionIndex = readUint32BE(mapBody, 16 + index * 12)!;
+    const previous = runs[index - 1];
+    if (samplesPerChunk < 1 || descriptionIndex !== 1) return undefined;
+    if (index === 0 ? firstChunk !== 1 : firstChunk <= previous!.firstChunk) return undefined;
+    runs.push({ firstChunk, samplesPerChunk });
+  }
+
+  // stco / co64: where each chunk starts.
+  const wide = chunkOffsets === tables.get("co64");
+  const width = wide ? 8 : 4;
+  const offsetBody = await readBoxBody(source, chunkOffsets, tracker, 8 + width * MAX_AUDIO_CHUNKS);
+  const chunkCount = offsetBody ? readUint32BE(offsetBody, 4) : undefined;
+  if (!offsetBody || chunkCount === undefined || chunkCount < 1 || offsetBody.byteLength < 8 + width * chunkCount) {
+    return undefined;
+  }
+
+  // Every chunk's samples must lie wholly inside one non-empty mdat, and the
+  // chunks must account for exactly the samples the size table lists.
+  let sampleIndex = 0;
+  let run = 0;
+  for (let chunk = 1; chunk <= chunkCount; chunk += 1) {
+    while (run + 1 < runs.length && runs[run + 1]!.firstChunk <= chunk) run += 1;
+    const samplesInChunk = runs[run]!.samplesPerChunk;
+    if (sampleIndex + samplesInChunk > sampleCount) return undefined;
+
+    const entry = 8 + (chunk - 1) * width;
+    const start = wide
+      ? readUint32BE(offsetBody, entry)! * 2 ** 32 + readUint32BE(offsetBody, entry + 4)!
+      : readUint32BE(offsetBody, entry)!;
+    let length = 0;
+    for (let sample = 0; sample < samplesInChunk; sample += 1) length += sizes[sampleIndex + sample]!;
+    sampleIndex += samplesInChunk;
+
+    const end = start + length;
+    if (!Number.isSafeInteger(end) || !mediaData.some((data) => start >= data.bodyStart && end <= data.boxEnd)) {
+      return undefined;
+    }
+  }
+  if (sampleIndex !== sampleCount) return undefined;
+
+  return ticks / timescale;
 }
 
 /** The track kind a file must be built around: `vide` for a video, `soun` for audio. */
@@ -435,11 +699,13 @@ export type IsoBmffHandlerType = "vide" | "soun";
  */
 export async function extractIsoBmffDurationSeconds(
   source: BoxSource,
-  budget: DurationBudget = DEFAULT_DURATION_BUDGET,
+  budget?: DurationBudget,
   handlerType: IsoBmffHandlerType = "vide",
 ): Promise<ExtractDurationResult> {
   try {
-    const tracker = new BudgetTracker(budget);
+    const tracker = new BudgetTracker(
+      budget ?? (handlerType === "soun" ? AUDIO_DURATION_BUDGET : DEFAULT_DURATION_BUDGET),
+    );
     const moov = await findBoxInRange(source, 0, source.fileSize, "moov", tracker);
     if (!moov) return { outcome: "malformed" };
 
@@ -454,18 +720,28 @@ export async function extractIsoBmffDurationSeconds(
     // ...and its media payload actually exists somewhere: a non-empty top-level
     // `mdat`. Box-header-only, so this costs nothing beyond the handful of tiny
     // reads already budgeted for this walk.
-    const mdat = await findBoxInRange(source, 0, source.fileSize, "mdat", tracker);
+    // An audio recording's sample table must point inside real media data, so it
+    // needs every mdat; a video only needs one to exist.
+    const mediaData = handlerType === "soun"
+      ? (await findAllBoxesInRange(source, 0, source.fileSize, "mdat", tracker)).filter((box) => box.boxEnd > box.bodyStart)
+      : [];
+    const mdat = handlerType === "soun" ? mediaData[0] : await findBoxInRange(source, 0, source.fileSize, "mdat", tracker);
     if (!mdat || mdat.boxEnd <= mdat.bodyStart) return { outcome: "malformed" };
 
     const movieSeconds = await parseDurationBoxSeconds(source, mvhd, tracker);
     if (movieSeconds === undefined || !Number.isFinite(movieSeconds)) return { outcome: "malformed" };
 
     // mvhd's duration alone is just a declared header field with no structural
-    // tie to the actual media — cross-check it against a matching track's OWN media
-    // header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so both
-    // would have to be faked together. Only tracks of the wanted handler type
-    // count: another track's duration can legitimately diverge from mvhd, and the
-    // first trak isn't necessarily the one we want. Empty/junk traks are skipped too.
+    // tie to the actual media — cross-check it against each matching track's OWN
+    // media header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so
+    // both would have to be faked together. Only tracks of the wanted handler type
+    // are judged: another kind of track's duration can legitimately diverge from
+    // mvhd, and the first trak isn't necessarily the one we want.
+    // Every track of the wanted kind has to check out, not just the first: a
+    // second one that disagrees with the movie header, or can't be read, would
+    // otherwise be skipped and could run past the duration limit unseen. Tracks of
+    // other kinds (sound under a video, timecode, metadata) are not ours to judge,
+    // and a track with no media header can't be told apart from them.
     let trackSecondsMax: number | undefined;
     for (const trak of traks) {
       const mdia = await findBoxInRange(source, trak.bodyStart, trak.boxEnd, "mdia", tracker);
@@ -476,15 +752,33 @@ export async function extractIsoBmffDurationSeconds(
       // A video hidden inside an audio file is rejected outright.
       if (handlerType === "soun" && trackHandler === "vide") return { outcome: "malformed" };
       if (trackHandler !== handlerType) continue;
+
       const mdhd = await findBoxInRange(source, mdia.bodyStart, mdia.boxEnd, "mdhd", tracker);
-      if (!mdhd) continue;
-      const trackSeconds = await parseDurationBoxSeconds(source, mdhd, tracker);
-      if (trackSeconds === undefined || !Number.isFinite(trackSeconds)) continue;
+      if (!mdhd) return { outcome: "malformed" };
+      const times = await parseDurationBoxTimes(source, mdhd, tracker);
+      if (!times) return { outcome: "malformed" };
+      const trackSeconds = times.duration / times.timescale;
+      if (!Number.isFinite(trackSeconds)) return { outcome: "malformed" };
 
       const larger = Math.max(movieSeconds, trackSeconds);
       const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
-      if (larger - Math.min(movieSeconds, trackSeconds) > tolerance) continue;
-      trackSecondsMax = Math.max(trackSecondsMax ?? 0, trackSeconds);
+      if (larger - Math.min(movieSeconds, trackSeconds) > tolerance) return { outcome: "malformed" };
+
+      let acceptedSeconds = trackSeconds;
+      if (handlerType === "soun") {
+        // The headers agreeing proves nothing about the audio. The track must be
+        // AAC and its sample table must account for real samples inside mdat, and
+        // the duration that table implies must agree too; the longest wins, so a
+        // header can't understate it.
+        const sampleSeconds = await verifyAacSampleTable(source, mdia, times.timescale, mediaData, tracker);
+        if (sampleSeconds === undefined || !Number.isFinite(sampleSeconds)) return { outcome: "malformed" };
+        const sampleLarger = Math.max(trackSeconds, sampleSeconds);
+        if (sampleLarger - Math.min(trackSeconds, sampleSeconds) > Math.max(1, sampleLarger * 0.05)) {
+          return { outcome: "malformed" };
+        }
+        acceptedSeconds = sampleLarger;
+      }
+      trackSecondsMax = Math.max(trackSecondsMax ?? 0, acceptedSeconds);
     }
     if (trackSecondsMax === undefined) return { outcome: "malformed" };
 

@@ -104,9 +104,9 @@ export interface DailyPost {
      */
     media: Array<DailyPostMedia>;
     /**
-     *
+     * The attached voice memo, or null when the post has none.
      */
-    voiceMemo: DailyPostVoiceMemo;
+    voiceMemo: DailyPostVoiceMemo | null;
 }
 
 

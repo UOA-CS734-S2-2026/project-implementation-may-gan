@@ -717,7 +717,15 @@
             "description": "The attached photos or video in display order. Empty for a text-only post."
           },
           "voiceMemo": {
-            "$ref": "#/components/schemas/DailyPostVoiceMemo"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyPostVoiceMemo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The attached voice memo, or null when the post has none."
           }
         },
         "required": [
@@ -792,7 +800,6 @@
       },
       "DailyPostVoiceMemo": {
         "type": "object",
-        "nullable": true,
         "properties": {
           "id": {
             "$ref": "#/components/schemas/OpaqueId"
@@ -805,7 +812,7 @@
           "id",
           "contentType"
         ],
-        "description": "The attached voice memo, or null when the post has none."
+        "description": "The post's voice memo."
       },
       "VoiceMemoContentType": {
         "type": "string",
@@ -1147,7 +1154,15 @@
             "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
           },
           "voiceMemo": {
-            "$ref": "#/components/schemas/PostVoiceMemo"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostVoiceMemo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not."
           }
         },
         "required": [
@@ -1207,7 +1222,6 @@
       },
       "PostVoiceMemo": {
         "type": "object",
-        "nullable": true,
         "properties": {
           "id": {
             "$ref": "#/components/schemas/OpaqueId"
@@ -1236,8 +1250,7 @@
           "contentType",
           "url",
           "expiresAt"
-        ],
-        "description": "The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not."
+        ]
       },
       "ProfilePostsPage": {
         "type": "object",

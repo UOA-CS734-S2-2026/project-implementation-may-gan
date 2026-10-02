@@ -88,6 +88,29 @@ describe("GET /api/v1/posts/{postId}", () => {
     expect(response.status).toBe(503);
   });
 
+  it("documents voiceMemo as a required union with null, and keeps the shared components non-null", async () => {
+    type Branch = { $ref?: string; type?: string; nullable?: boolean };
+    type Schema = { nullable?: boolean; required?: string[]; properties?: Record<string, { anyOf?: Branch[] }> };
+    const document = await (await createApp().request("/api/v1/openapi.json")).json<{
+      components: { schemas: Record<string, Schema> };
+    }>();
+    const { schemas } = document.components;
+
+    // The document is OpenAPI 3.1, whose generators read nullability from a union with
+    // `null` and ignore the 3.0 `nullable: true`. Without it they generate a required,
+    // non-null field and fail to decode `voiceMemo: null`, which every post without a memo sends.
+    const expected = { PostDetail: "PostVoiceMemo", DailyPost: "DailyPostVoiceMemo" };
+    for (const [name, component] of Object.entries(expected)) {
+      const property = schemas[name]?.properties?.voiceMemo;
+      expect(property?.anyOf, name).toEqual([{ $ref: `#/components/schemas/${component}` }, { type: "null" }]);
+      // A bare `{ nullable: true }` branch would match anything in 3.1.
+      expect(property?.anyOf?.some((branch) => branch.nullable), name).toBeFalsy();
+      expect(schemas[name]?.required, name).toContain("voiceMemo");
+      // The shared component, which the refresh route returns, stays a plain object.
+      expect(schemas[component]?.nullable, component).toBeUndefined();
+    }
+  });
+
   it("does not add a second session check to post creation", async () => {
     const detailSession = vi.fn(resolveSession);
     const response = await createApp({ postDetail: { resolveSession: detailSession } }).request("/api/v1/posts", {

@@ -57,7 +57,8 @@ class PostDetail {
   /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
   final List<PostMedia> media;
 
-  final PostVoiceMemo voiceMemo;
+  /// The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
+  final PostVoiceMemo? voiceMemo;
 
   @override
   bool operator ==(Object other) =>
@@ -94,7 +95,7 @@ class PostDetail {
       (edited.hashCode) +
       (viewerIsAuthor.hashCode) +
       (media.hashCode) +
-      (voiceMemo.hashCode);
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
@@ -115,7 +116,11 @@ class PostDetail {
     json[r'edited'] = this.edited;
     json[r'viewerIsAuthor'] = this.viewerIsAuthor;
     json[r'media'] = this.media;
-    json[r'voiceMemo'] = this.voiceMemo;
+    if (this.voiceMemo != null) {
+      json[r'voiceMemo'] = this.voiceMemo;
+    } else {
+      json[r'voiceMemo'] = null;
+    }
     return json;
   }
 
@@ -136,6 +141,7 @@ class PostDetail {
     bool? viewerIsAuthor,
     List<PostMedia>? media,
     PostVoiceMemo? voiceMemo,
+    bool voiceMemoSetToNull = false,
   }) =>
       PostDetail(
         id: id ?? this.id,
@@ -151,7 +157,7 @@ class PostDetail {
         edited: edited ?? this.edited,
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
-        voiceMemo: voiceMemo ?? this.voiceMemo,
+        voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [PostDetail] instance and imports its values from
@@ -219,8 +225,6 @@ class PostDetail {
             'Required key "PostDetail[media]" has a null value in JSON.');
         assert(json.containsKey(r'voiceMemo'),
             'Required key "PostDetail[voiceMemo]" is missing from JSON.');
-        assert(json[r'voiceMemo'] != null,
-            'Required key "PostDetail[voiceMemo]" has a null value in JSON.');
         return true;
       }());
 
@@ -238,7 +242,7 @@ class PostDetail {
         edited: mapValueOfType<bool>(json, r'edited')!,
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
-        voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo'])!,
+        voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo']),
       );
     }
     return null;

@@ -108,33 +108,235 @@ export function buildTrakBox({
  * non-empty media-data box, which is exactly what keeps a fabricated
  * ftyp+moov+mvhd (no real track or media data) from validating.
  */
-export function buildMinimalMp4(durationSeconds: number, timescale = 1000): Uint8Array {
+export function buildMinimalMp4(durationSeconds: number, timescale = 1000, extraTracks: Uint8Array[] = []): Uint8Array {
   const ftyp = buildFtypBox("isom", ["isom"]);
   const duration = Math.round(durationSeconds * timescale);
   const mvhd = buildMvhdBoxV0({ timescale, duration });
   const trak = buildTrakBox({ timescale, duration });
-  const moov = buildMoovBox([mvhd, trak]);
+  const moov = buildMoovBox([mvhd, trak, ...extraTracks]);
   const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
   return concatBoxes(ftyp, moov, mdat);
 }
 
+function uint32BE(value: number): number[] {
+  return [(value >>> 24) & 0xff, (value >>> 16) & 0xff, (value >>> 8) & 0xff, value & 0xff];
+}
+
+/** An MPEG-4 descriptor with a one-byte length, enough for every descriptor a test builds. */
+function descriptor(tag: number, body: number[]): number[] {
+  return [tag, body.length, ...body];
+}
+
+export interface EsdsOptions {
+  objectTypeIndication?: number;
+  /** The streamType byte: audio is 0x15 (type 5 in the high six bits). */
+  streamType?: number;
+  audioObjectType?: number;
+  samplingFrequencyIndex?: number;
+  channelConfiguration?: number;
+}
+
+/** esds: ES_Descriptor > DecoderConfigDescriptor > DecoderSpecificInfo (AudioSpecificConfig). Defaults are AAC-LC, 44.1 kHz, stereo. */
+export function buildEsdsBox({
+  objectTypeIndication = 0x40,
+  streamType = 0x15,
+  audioObjectType = 2,
+  samplingFrequencyIndex = 4,
+  channelConfiguration = 2,
+}: EsdsOptions = {}): Uint8Array {
+  const config = [
+    (audioObjectType << 3) | (samplingFrequencyIndex >> 1),
+    ((samplingFrequencyIndex & 1) << 7) | (channelConfiguration << 3),
+  ];
+  const decoderConfig = descriptor(0x04, [
+    objectTypeIndication,
+    streamType,
+    0, 0, 0, // bufferSizeDB
+    0, 0, 0, 0, // maxBitrate
+    0, 0, 0, 0, // avgBitrate
+    ...descriptor(0x05, config),
+  ]);
+  const esDescriptor = descriptor(0x03, [0, 1, 0, ...decoderConfig, ...descriptor(0x06, [2])]);
+  return wrapBox("esds", new Uint8Array([0, 0, 0, 0, ...esDescriptor]));
+}
+
+/** An audio sample entry (`mp4a` unless overridden) followed by its child boxes. */
+export function buildAudioSampleEntry(
+  type: string,
+  { channelCount = 2, sampleBits = 16 }: { channelCount?: number; sampleBits?: number },
+  children: Uint8Array[],
+): Uint8Array {
+  const fields = new Uint8Array(28);
+  fields[7] = 1; // data_reference_index, after six reserved bytes
+  fields[17] = channelCount;
+  fields[19] = sampleBits;
+  fields[24] = 44_100 >> 8;
+  fields[25] = 44_100 & 0xff; // sample rate, integer part of the 16.16 field
+  return wrapBox(type, concatBoxes(fields, ...children));
+}
+
+export function buildStsdBox(entry: Uint8Array): Uint8Array {
+  return wrapBox("stsd", concatBoxes(new Uint8Array([0, 0, 0, 0, ...uint32BE(1)]), entry));
+}
+
+export function buildSttsBox(entries: Array<{ count: number; delta: number }>): Uint8Array {
+  return wrapBox("stts", new Uint8Array([
+    0, 0, 0, 0,
+    ...uint32BE(entries.length),
+    ...entries.flatMap(({ count, delta }) => [...uint32BE(count), ...uint32BE(delta)]),
+  ]));
+}
+
+export function buildStscBox(runs: Array<{ firstChunk: number; samplesPerChunk: number; descriptionIndex?: number }>): Uint8Array {
+  return wrapBox("stsc", new Uint8Array([
+    0, 0, 0, 0,
+    ...uint32BE(runs.length),
+    ...runs.flatMap((run) => [...uint32BE(run.firstChunk), ...uint32BE(run.samplesPerChunk), ...uint32BE(run.descriptionIndex ?? 1)]),
+  ]));
+}
+
+/** A uniform sample size, or an explicit table of per-sample sizes. */
+export function buildStszBox(sizes: { uniform: number; count: number } | number[]): Uint8Array {
+  if (Array.isArray(sizes)) {
+    return wrapBox("stsz", new Uint8Array([0, 0, 0, 0, ...uint32BE(0), ...uint32BE(sizes.length), ...sizes.flatMap(uint32BE)]));
+  }
+  return wrapBox("stsz", new Uint8Array([0, 0, 0, 0, ...uint32BE(sizes.uniform), ...uint32BE(sizes.count)]));
+}
+
+export function buildStcoBox(offsets: number[]): Uint8Array {
+  return wrapBox("stco", new Uint8Array([0, 0, 0, 0, ...uint32BE(offsets.length), ...offsets.flatMap(uint32BE)]));
+}
+
+export function buildCo64Box(offsets: number[]): Uint8Array {
+  return wrapBox("co64", new Uint8Array([
+    0, 0, 0, 0,
+    ...uint32BE(offsets.length),
+    ...offsets.flatMap((offset) => [...uint32BE(Math.floor(offset / 2 ** 32)), ...uint32BE(offset % 2 ** 32)]),
+  ]));
+}
+
+/** trak(mdia(mdhd, hdlr=soun, minf(stbl(...tables)))) — a track whose sample tables a test supplies. */
+export function buildAudioTrakBox({
+  timescale,
+  duration,
+  tables,
+}: {
+  timescale: number;
+  duration: number;
+  tables: Uint8Array[];
+}): Uint8Array {
+  const minf = wrapContainerBox("minf", [wrapContainerBox("stbl", tables)]);
+  const mdia = wrapContainerBox("mdia", [buildMdhdBoxV0({ timescale, duration }), buildHdlrBox("soun"), minf]);
+  return wrapContainerBox("trak", [mdia]);
+}
+
+export interface M4aOptions {
+  /** Sample entry type; anything but `mp4a` is not AAC. */
+  sampleEntryType?: string;
+  /** The esds box; `null` leaves the sample entry without one. */
+  esds?: Uint8Array | null;
+  channelCount?: number;
+  sampleBits?: number;
+  /** Bytes per sample (default 16), or one size per sample. */
+  sampleSize?: number | number[];
+  /** Samples in each chunk, in order (default: one chunk holding every sample). */
+  chunks?: number[];
+  /** Write 64-bit chunk offsets (`co64`) instead of `stco`. */
+  wideOffsets?: boolean;
+  /** Added to every chunk offset, to point outside the media data. */
+  chunkOffsetShift?: number;
+  /** Bytes in `mdat` (default: exactly the samples' bytes). */
+  mdatBytes?: number;
+  /** Total ticks `stts` claims (default: the track's duration). */
+  sttsTicks?: number;
+  /** Sample count `stts` claims (default: the real count). */
+  sttsSamples?: number;
+  /** Sample count `stsz` claims when sizes are uniform (default: the real count). */
+  stszCount?: number;
+  /** Tables to leave out of the sample table. */
+  omit?: Array<"stsd" | "stts" | "stsc" | "stsz" | "stco">;
+  /** What the movie header (mvhd) claims, when it should differ from the track. */
+  movieSeconds?: number;
+  /** Further tracks written after the audio track, such as a video track. */
+  extraTracks?: Uint8Array[];
+  /** How many identical audio tracks to write (default 1); each points at the same samples. */
+  audioTrackCount?: number;
+}
+
 /**
- * ftyp(M4A) + moov(mvhd, trak(mdia(mdhd, hdlr=soun))) + mdat — a minimal but
- * structurally complete audio MP4 of a given duration. The track runs in an
- * audio sample-rate timescale, like a real AAC capture, while the movie header
- * keeps its own millisecond timescale.
+ * ftyp(M4A) + moov(mvhd, trak(mdia(mdhd, hdlr=soun, minf(stbl)))) + mdat — a
+ * structurally complete AAC audio MP4 of a given duration: an `mp4a` sample
+ * entry with an AAC `esds`, sample tables that agree with each other, and an
+ * `mdat` that holds every sample they place. The payload bytes are filler, not
+ * decodable audio. Options each break one part, to test that it is checked.
  */
-export function buildMinimalM4a(durationSeconds: number, trackTimescale = 44_100): Uint8Array {
+export function buildMinimalM4a(durationSeconds: number, trackTimescale = 44_100, options: M4aOptions = {}): Uint8Array {
+  const frameTicks = 1024;
+  const ticks = Math.round(durationSeconds * trackTimescale);
+  const sampleCount = Math.max(1, Math.ceil(ticks / frameTicks));
+  const sizes = Array.isArray(options.sampleSize)
+    ? options.sampleSize
+    : Array.from({ length: sampleCount }, () => (options.sampleSize as number | undefined) ?? 16);
+  const chunks = options.chunks ?? [sampleCount];
+  const mdatBytes = options.mdatBytes ?? sizes.reduce((sum, size) => sum + size, 0);
+
+  const buildTables = (firstChunkOffset: number): Uint8Array[] => {
+    const entry = buildAudioSampleEntry(
+      options.sampleEntryType ?? "mp4a",
+      { channelCount: options.channelCount, sampleBits: options.sampleBits },
+      options.esds === null ? [] : [options.esds ?? buildEsdsBox()],
+    );
+    let sample = 0;
+    let offset = firstChunkOffset;
+    const chunkOffsets = chunks.map((samples) => {
+      const start = offset + (options.chunkOffsetShift ?? 0);
+      for (let index = 0; index < samples; index += 1) offset += sizes[sample + index] ?? 0;
+      sample += samples;
+      return start;
+    });
+    // One run per change in samples-per-chunk, as encoders write it.
+    const runs: Array<{ firstChunk: number; samplesPerChunk: number }> = [];
+    chunks.forEach((samples, index) => {
+      if (runs.at(-1)?.samplesPerChunk !== samples) runs.push({ firstChunk: index + 1, samplesPerChunk: samples });
+    });
+    const claimedSamples = options.sttsSamples ?? sampleCount;
+    const claimedTicks = options.sttsTicks ?? ticks;
+    const tail = claimedTicks - (claimedSamples - 1) * frameTicks;
+    const time = claimedSamples > 1
+      ? [{ count: claimedSamples - 1, delta: frameTicks }, { count: 1, delta: Math.max(1, tail) }]
+      : [{ count: 1, delta: Math.max(1, claimedTicks) }];
+
+    const tables: Record<string, Uint8Array> = {
+      stsd: buildStsdBox(entry),
+      stts: buildSttsBox(time),
+      stsc: buildStscBox(runs),
+      stsz: Array.isArray(options.sampleSize)
+        ? buildStszBox(options.sampleSize)
+        : buildStszBox({ uniform: (options.sampleSize as number | undefined) ?? 16, count: options.stszCount ?? sampleCount }),
+      stco: options.wideOffsets ? buildCo64Box(chunkOffsets) : buildStcoBox(chunkOffsets),
+    };
+    return Object.entries(tables)
+      .filter(([name]) => !(options.omit as string[] | undefined)?.includes(name))
+      .map(([, box]) => box);
+  };
+
   const ftyp = buildFtypBox("M4A ", ["M4A ", "mp42", "isom"]);
-  const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: Math.round(durationSeconds * 1000) });
-  const trak = buildTrakBox({
-    timescale: trackTimescale,
-    duration: Math.round(durationSeconds * trackTimescale),
-    handlerType: "soun",
+  const mvhd = buildMvhdBoxV0({
+    timescale: 1000,
+    duration: Math.round((options.movieSeconds ?? durationSeconds) * 1000),
   });
-  const moov = buildMoovBox([mvhd, trak]);
-  const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
-  return concatBoxes(ftyp, moov, mdat);
+  const buildMoov = (firstChunkOffset: number) => buildMoovBox([
+    mvhd,
+    ...Array.from({ length: options.audioTrackCount ?? 1 }, () => (
+      buildAudioTrakBox({ timescale: trackTimescale, duration: ticks, tables: buildTables(firstChunkOffset) })
+    )),
+    ...(options.extraTracks ?? []),
+  ]);
+  // The chunk offsets are absolute, and the moov that holds them sits before mdat
+  // but has the same length whatever they are, so one trial build fixes the layout.
+  const firstChunkOffset = ftyp.byteLength + buildMoov(0).byteLength + 8;
+  const payload = new Uint8Array(mdatBytes).fill(0x21);
+  return concatBoxes(ftyp, buildMoov(firstChunkOffset), wrapBox("mdat", payload));
 }
 
 /** SOI...EOI — a real JPEG has both; a payload that only starts with the marker doesn't. */

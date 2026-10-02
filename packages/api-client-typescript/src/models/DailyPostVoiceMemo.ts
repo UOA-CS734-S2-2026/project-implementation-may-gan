@@ -22,7 +22,7 @@ import {
 } from './VoiceMemoContentType';
 
 /**
- * The attached voice memo, or null when the post has none.
+ * The post's voice memo.
  * @export
  * @interface DailyPostVoiceMemo
  */

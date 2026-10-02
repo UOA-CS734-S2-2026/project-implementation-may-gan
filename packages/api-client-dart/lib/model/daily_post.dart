@@ -53,7 +53,8 @@ class DailyPost {
   /// The attached photos or video in display order. Empty for a text-only post.
   final List<DailyPostMedia> media;
 
-  final DailyPostVoiceMemo voiceMemo;
+  /// The attached voice memo, or null when the post has none.
+  final DailyPostVoiceMemo? voiceMemo;
 
   @override
   bool operator ==(Object other) =>
@@ -88,7 +89,7 @@ class DailyPost {
       (releasedAt.hashCode) +
       (tomorrowNote.hashCode) +
       (media.hashCode) +
-      (voiceMemo.hashCode);
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
@@ -108,7 +109,11 @@ class DailyPost {
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'tomorrowNote'] = this.tomorrowNote;
     json[r'media'] = this.media;
-    json[r'voiceMemo'] = this.voiceMemo;
+    if (this.voiceMemo != null) {
+      json[r'voiceMemo'] = this.voiceMemo;
+    } else {
+      json[r'voiceMemo'] = null;
+    }
     return json;
   }
 
@@ -128,6 +133,7 @@ class DailyPost {
     DailyPostTomorrowNote? tomorrowNote,
     List<DailyPostMedia>? media,
     DailyPostVoiceMemo? voiceMemo,
+    bool voiceMemoSetToNull = false,
   }) =>
       DailyPost(
         id: id ?? this.id,
@@ -142,7 +148,7 @@ class DailyPost {
         releasedAt: releasedAt ?? this.releasedAt,
         tomorrowNote: tomorrowNote ?? this.tomorrowNote,
         media: media ?? this.media,
-        voiceMemo: voiceMemo ?? this.voiceMemo,
+        voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [DailyPost] instance and imports its values from
@@ -206,8 +212,6 @@ class DailyPost {
             'Required key "DailyPost[media]" has a null value in JSON.');
         assert(json.containsKey(r'voiceMemo'),
             'Required key "DailyPost[voiceMemo]" is missing from JSON.');
-        assert(json[r'voiceMemo'] != null,
-            'Required key "DailyPost[voiceMemo]" has a null value in JSON.');
         return true;
       }());
 
@@ -224,7 +228,7 @@ class DailyPost {
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         tomorrowNote: DailyPostTomorrowNote.fromJson(json[r'tomorrowNote'])!,
         media: DailyPostMedia.listFromJson(json[r'media']),
-        voiceMemo: DailyPostVoiceMemo.fromJson(json[r'voiceMemo'])!,
+        voiceMemo: DailyPostVoiceMemo.fromJson(json[r'voiceMemo']),
       );
     }
     return null;
