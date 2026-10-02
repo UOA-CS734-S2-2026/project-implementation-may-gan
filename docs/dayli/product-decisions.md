@@ -38,6 +38,8 @@ A profile shows the owner every post they have written, including solo posts and
 
 The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
 
+Mood history is owner-only and sits on the owner's own profile. It covers the last 30 days, 90 days, or year, and compares that range with the same-length range before it. It shows how many days had a post and how many didn't, starts counting from the day the account joined, and makes no diagnostic claims.
+
 ## Public post access
 
 Account visibility is the only anonymous journal-read grant. A released `friends` post from a public account is readable through its profile and direct URL without signing in. Changing the account to private, changing the post to `solo`, making it unreleased, deleting it, or moving it to Trash removes that access immediately. Private-account posts still require the owner or an active friend. `solo` and unreleased posts remain owner-only. There are no opaque share links or per-post public tokens.

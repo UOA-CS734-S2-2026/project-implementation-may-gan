@@ -290,6 +290,80 @@ class ProfileApi {
     return null;
   }
 
+  /// Read your mood history
+  ///
+  /// Returns the caller's own daily ratings over the last 30 days, 90 days or year, with a summary of that range and of the same-length range before it. Only the owner can read their history; there is no way to ask for anyone else's.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] range:
+  ///   The last 30 days, 90 days, or 365 days, ending today in Auckland.
+  Future<Response> profileGetMoodHistoryWithHttpInfo({
+    String? range,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/profile/mood';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (range != null) {
+      queryParams.addAll(_queryParams('', 'range', range));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read your mood history
+  ///
+  /// Returns the caller's own daily ratings over the last 30 days, 90 days or year, with a summary of that range and of the same-length range before it. Only the owner can read their history; there is no way to ask for anyone else's.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] range:
+  ///   The last 30 days, 90 days, or 365 days, ending today in Auckland.
+  Future<MoodHistory?> profileGetMoodHistory({
+    String? range,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await profileGetMoodHistoryWithHttpInfo(
+      range: range,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MoodHistory',
+      ) as MoodHistory;
+    }
+    return null;
+  }
+
   /// Get username setup state
   ///
   /// Note: This method returns the HTTP [Response].

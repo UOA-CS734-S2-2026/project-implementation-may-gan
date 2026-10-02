@@ -34,6 +34,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Editing and deleting posts](post-editing.md): `PATCH /api/v1/posts/{postId}`, revision history, and deleting through post Trash.
 - [Profiles](profiles.md): profile details, who sees the bio, editing, and username changes.
 - [Profile archive](profile-archive.md): `GET /api/v1/profiles/{username}/posts`, who sees which posts on a profile.
+- [Mood history](mood-history.md): `GET /api/v1/profile/mood`, your own ratings over 30 days, 90 days or a year, compared with the range before.
 
 ## Fixed rules
 
