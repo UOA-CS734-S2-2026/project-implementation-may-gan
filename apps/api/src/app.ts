@@ -587,7 +587,9 @@ function createSessionResolver(configuration: RuntimeConfiguration) {
       resend: configuration.resend,
     });
     const session = await auth.api.getSession({ headers: request.headers });
-    return session?.user?.id ? { userId: session.user.id } : null;
+    return session?.user?.id && session.session?.id
+      ? { userId: session.user.id, sessionId: session.session.id }
+      : null;
   });
 }
 

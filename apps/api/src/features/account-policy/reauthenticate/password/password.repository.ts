@@ -35,12 +35,13 @@ export async function issuePasswordManagementGrant(
   if (!matches) return { status: "invalid_password" };
 
   const token = randomToken();
-  const rows = await database.select({ expiresAt: sql<Date | null>`public.issue_password_account_management_grant(
+  const rows = await database.select({ expiresAt: sql<Date | string | null>`public.issue_password_account_management_grant(
     ${input.userId}, ${input.sessionId}, ${input.action}::public.account_management_grant_action,
     ${await tokenDigest(token)}, ${credential.password}
   )` }).from(sql`(values (1)) as grant_request`);
-  const expiresAt = rows[0]?.expiresAt;
-  return expiresAt instanceof Date
+  const value = rows[0]?.expiresAt;
+  const expiresAt = value instanceof Date ? value : typeof value === "string" ? new Date(value) : null;
+  return expiresAt && Number.isFinite(expiresAt.getTime())
     ? { status: "issued", token, expiresAt }
     : { status: "restricted" };
 }

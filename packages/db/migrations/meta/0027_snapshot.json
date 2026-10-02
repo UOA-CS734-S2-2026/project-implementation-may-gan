@@ -539,6 +539,12 @@
           "notNull": true,
           "default": 0
         },
+        "credential_hash_digest": {
+          "name": "credential_hash_digest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "expires_at": {
           "name": "expires_at",
           "type": "timestamp with time zone",
@@ -642,6 +648,10 @@
         "account_management_grants_generation_check": {
           "name": "account_management_grants_generation_check",
           "value": "\"account_management_grants\".\"lifecycle_generation\" between 0 and 9007199254740991"
+        },
+        "account_management_grants_credential_digest_check": {
+          "name": "account_management_grants_credential_digest_check",
+          "value": "\"account_management_grants\".\"credential_hash_digest\" is null or \"account_management_grants\".\"credential_hash_digest\" ~ '^[0-9a-f]{64}$'"
         },
         "account_management_grants_expiry_check": {
           "name": "account_management_grants_expiry_check",

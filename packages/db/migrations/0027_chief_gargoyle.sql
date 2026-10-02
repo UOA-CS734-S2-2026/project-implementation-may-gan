@@ -5,7 +5,11 @@
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
 ALTER TABLE "account_management_grants" ADD COLUMN "lifecycle_generation" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
-ALTER TABLE "account_management_grants" ADD CONSTRAINT "account_management_grants_generation_check" CHECK ("account_management_grants"."lifecycle_generation" between 0 and 9007199254740991);--> statement-breakpoint
+ALTER TABLE "account_management_grants" ADD COLUMN "credential_hash_digest" text;--> statement-breakpoint
+ALTER TABLE "account_management_grants" ADD CONSTRAINT "account_management_grants_credential_digest_check" CHECK ("account_management_grants"."credential_hash_digest" is null or "account_management_grants"."credential_hash_digest" ~ '^[0-9a-f]{64}$') NOT VALID;--> statement-breakpoint
+ALTER TABLE "account_management_grants" VALIDATE CONSTRAINT "account_management_grants_credential_digest_check";--> statement-breakpoint
+ALTER TABLE "account_management_grants" ADD CONSTRAINT "account_management_grants_generation_check" CHECK ("account_management_grants"."lifecycle_generation" between 0 and 9007199254740991) NOT VALID;--> statement-breakpoint
+ALTER TABLE "account_management_grants" VALIDATE CONSTRAINT "account_management_grants_generation_check";--> statement-breakpoint
 CREATE FUNCTION public.issue_password_account_management_grant(
   p_user_id text,
   p_session_id text,
@@ -54,8 +58,9 @@ BEGIN
 
   issued_expiry := now() + interval '5 minutes';
   INSERT INTO public.account_management_grants
-    (token_digest, user_id, session_id, action, lifecycle_generation, expires_at)
-  VALUES (p_token_digest, p_user_id, p_session_id, p_action, current_generation, issued_expiry);
+    (token_digest, user_id, session_id, action, lifecycle_generation, credential_hash_digest, expires_at)
+  VALUES (p_token_digest, p_user_id, p_session_id, p_action, current_generation,
+    encode(sha256(convert_to(stored_password, 'UTF8')), 'hex'), issued_expiry);
   RETURN issued_expiry;
 END;
 $$;--> statement-breakpoint
@@ -78,6 +83,7 @@ DECLARE
   current_generation bigint;
   lifecycle_state public.account_lifecycle_state;
   cancellation_deadline timestamptz;
+  stored_password text;
   consumed_digest text;
 BEGIN
   IF p_user_id IS NULL OR p_session_id IS NULL OR p_action IS NULL
@@ -88,6 +94,9 @@ BEGIN
   IF NOT FOUND THEN RETURN false; END IF;
   PERFORM 1 FROM public.session WHERE id = p_session_id AND user_id = p_user_id AND expires_at > now() FOR SHARE;
   IF NOT FOUND THEN RETURN false; END IF;
+  SELECT password INTO stored_password FROM public.account
+  WHERE user_id = p_user_id AND provider_id = 'credential' AND password IS NOT NULL FOR SHARE;
+  IF stored_password IS NULL THEN RETURN false; END IF;
   SELECT state, generation, cancel_until INTO lifecycle_state, current_generation, cancellation_deadline
   FROM public.account_lifecycles WHERE user_id = p_user_id FOR SHARE;
   lifecycle_state := coalesce(lifecycle_state, 'active');
@@ -100,6 +109,7 @@ BEGIN
   SET consumed_at = now()
   WHERE token_digest = p_token_digest AND user_id = p_user_id AND session_id = p_session_id
     AND action = p_action AND lifecycle_generation = current_generation
+    AND credential_hash_digest = encode(sha256(convert_to(stored_password, 'UTF8')), 'hex')
     AND consumed_at IS NULL AND expires_at > now()
   RETURNING token_digest INTO consumed_digest;
   RETURN consumed_digest IS NOT NULL;

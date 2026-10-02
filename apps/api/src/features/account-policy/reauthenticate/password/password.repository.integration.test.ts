@@ -65,11 +65,22 @@ function localUrl(value: string | undefined) {
     expect(issued.expiresAt.getTime()).toBeGreaterThan(Date.now());
     expect(issued.expiresAt.getTime()).toBeLessThan(Date.now() + 6 * 60_000);
     await expect(app.db.select().from(schema.accountManagementGrants)).rejects.toThrow();
+    await expect(app.db.insert(schema.accountManagementGrants).values({
+      tokenDigest: "f".repeat(64), userId: ownerId, sessionId: ownerSessionId,
+      action: "request_deletion", expiresAt: new Date(Date.now() + 60_000),
+    })).rejects.toThrow();
+    const [permissions] = await migrator.db.select({
+      appIssuer: sql<boolean>`has_function_privilege('app', 'public.issue_password_account_management_grant(text, text, public.account_management_grant_action, text, text)', 'EXECUTE')`,
+      workerIssuer: sql<boolean>`has_function_privilege('lifecycle_worker', 'public.issue_password_account_management_grant(text, text, public.account_management_grant_action, text, text)', 'EXECUTE')`,
+    }).from(sql`(values (1)) as grant_request`);
+    expect(permissions).toEqual({ appIssuer: true, workerIssuer: false });
     const [stored] = await migrator.db.select().from(schema.accountManagementGrants)
       .where(eq(schema.accountManagementGrants.userId, ownerId));
     expect(stored?.tokenDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(stored?.tokenDigest).not.toBe(issued.token);
     expect(stored?.lifecycleGeneration).toBe(0);
+    expect(stored?.credentialHashDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(stored?.credentialHashDigest).not.toBe(credentialHash);
   });
 
   it("fences the current session, action, generation and single-use replay", async () => {
@@ -89,6 +100,33 @@ function localUrl(value: string | undefined) {
     ]);
     expect([first, second].sort()).toEqual([false, true]);
     expect(await consume(ownerId, ownerSessionId, "request_deletion")).toBe(false);
+  });
+
+  it("fences a changed credential and an expired session after password verification", async () => {
+    const issued = await issuePasswordManagementGrant(app.db, { userId: ownerId, sessionId: ownerSessionId, action: "request_deletion", password });
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") throw new Error("Expected a password grant.");
+    const issuedDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(issued.token))),
+      (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const observedHash = credentialHash;
+    await migrator.db.update(schema.account).set({ password: await hashPassword("new-password") })
+      .where(eq(schema.account.id, `credential-${id}`));
+    const staleHashDigest = "b".repeat(64);
+    const [changed] = await app.db.select({ expiry: sql<Date | null>`public.issue_password_account_management_grant(
+      ${ownerId}, ${ownerSessionId}, 'request_deletion'::public.account_management_grant_action,
+      ${staleHashDigest}, ${observedHash}
+    )` }).from(sql`(values (1)) as grant_request`);
+    expect(changed?.expiry).toBeNull();
+    const [staleGrant] = await app.db.select({ accepted: sql<boolean>`public.consume_account_management_grant(
+      ${ownerId}, ${ownerSessionId}, 'request_deletion'::public.account_management_grant_action, ${issuedDigest}
+    )` }).from(sql`(values (1)) as grant_request`);
+    expect(staleGrant?.accepted).toBe(false);
+    await migrator.db.update(schema.account).set({ password: observedHash }).where(eq(schema.account.id, `credential-${id}`));
+    await migrator.db.update(schema.session).set({ expiresAt: new Date(Date.now() - 60_000) }).where(eq(schema.session.id, ownerSessionId));
+    expect(await issuePasswordManagementGrant(app.db, { userId: ownerId, sessionId: ownerSessionId, action: "request_deletion", password }))
+      .toEqual({ status: "restricted" });
+    await migrator.db.update(schema.session).set({ expiresAt: new Date(Date.now() + 10 * 60_000) })
+      .where(eq(schema.session.id, ownerSessionId));
   });
 
   it("does not allow a grant from an earlier lifecycle generation", async () => {
