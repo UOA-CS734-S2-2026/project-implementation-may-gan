@@ -195,6 +195,37 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(expired.json()).resolves.toBeNull();
   });
 
+  it("reads account policy only for the authenticated session owner and cannot bypass a pending deletion", async () => {
+    const app = createProductionApp();
+    const ownerToken = nativeToken(await signUp(app, "policy-owner@example.test"));
+    const otherToken = nativeToken(await signUp(app, "policy-other@example.test"));
+    const ownerSession = await app.fetch(request("/api/auth/get-session", { headers: { authorization: `Bearer ${ownerToken}` } }));
+    const owner = await ownerSession.json() as { user: { id: string } };
+    const requestedAt = new Date("2026-09-01T00:00:00.000Z");
+    await migrator.db.insert(schema.accountLifecycles).values({
+      userId: owner.user.id,
+      state: "pending_deletion",
+      requestId: "policy-owner-request",
+      idempotencyKeyDigest: "a".repeat(64),
+      requestedAt,
+      cancelUntil: new Date("2026-09-08T00:00:00.000Z"),
+      purgeDueAt: new Date("2026-09-15T00:00:00.000Z"),
+    });
+
+    const ownerStatus = await app.fetch(request("/api/v1/account/status", { headers: { authorization: `Bearer ${ownerToken}` } }));
+    expect(ownerStatus.status).toBe(200);
+    expect(ownerStatus.headers.get("cache-control")).toBe("no-store");
+    await expect(ownerStatus.json()).resolves.toMatchObject({ restriction: "pending_deletion" });
+
+    const otherStatus = await app.fetch(request("/api/v1/account/policy", { headers: { authorization: `Bearer ${otherToken}` } }));
+    expect(otherStatus.status).toBe(200);
+    await expect(otherStatus.json()).resolves.toMatchObject({ restriction: "active" });
+
+    const blocked = await app.fetch(request("/api/v1/feed", { headers: { authorization: `Bearer ${ownerToken}` } }));
+    expect(blocked.status).toBe(403);
+    await expect(blocked.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN", details: { restriction: "pending_deletion" } } });
+  });
+
   it("notifies Worker revocation for every session before Better Auth removes them", async () => {
     const revokeSessions = vi.fn(async () => undefined);
     const app = createProductionAuthApp({ revokeSessions });
