@@ -200,4 +200,96 @@ void main() {
       expect(requests, isEmpty);
     });
   });
+
+  group('editing', () {
+    const edit = PostEdit(
+      expectedRevisionCount: 2,
+      reflectiveAnswer: 'Walked further.',
+      caption: null,
+      rating: 9,
+      audience: 'friends',
+    );
+
+    test('sends every field and returns the saved post', () async {
+      final result = await client(
+        (_) => http.Response(jsonEncode({...body(), 'revisionCount': 3}), 200),
+      ).update('post-1', edit);
+
+      final request = requests.single;
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/v1/posts/post-1');
+      expect(jsonDecode(request.body), {
+        'expectedRevisionCount': 2,
+        'reflectiveAnswer': 'Walked further.',
+        'caption': null,
+        'rating': 9,
+        'audience': 'friends',
+      });
+      expect((result as ApiSuccess<PostDetail>).value.revisionCount, 3);
+    });
+
+    test('reports a stale revision count as a conflict', () async {
+      final result = await client(
+        (_) => http.Response('{}', 409),
+      ).update('post-1', edit);
+
+      expect((result as ApiError).failure, isA<Conflict>());
+    });
+
+    test('treats someone else\'s or a deleted post as not found', () async {
+      final result = await client(
+        (_) => http.Response('{}', 404),
+      ).update('post-1', edit);
+
+      expect((result as ApiError).failure, isA<NotFound>());
+    });
+  });
+
+  test('deletes a post and treats a missing one as not found', () async {
+    final deleted = await client(
+      (_) => http.Response('', 204),
+    ).delete('post-1');
+    expect(requests.single.method, 'DELETE');
+    expect(requests.single.url.path, '/api/v1/posts/post-1');
+    expect(deleted, isA<ApiSuccess<void>>());
+
+    final missing = await client(
+      (_) => http.Response('{}', 404),
+    ).delete('post-1');
+    expect((missing as ApiError).failure, isA<NotFound>());
+  });
+
+  test('reads a page of earlier versions with its cursor', () async {
+    final result = await client(
+      (_) => http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'revisionNumber': 2,
+              'reflectiveAnswer': 'Second try.',
+              'caption': null,
+              'rating': 6,
+              'audience': 'friends',
+              'replacedAt': '2026-09-29T08:00:00.000Z',
+            },
+          ],
+          'nextCursor': 'next',
+          'hasMore': true,
+        }),
+        200,
+      ),
+    ).revisions('post-1', cursor: 'abc');
+
+    expect(requests.single.url.path, '/api/v1/posts/post-1/revisions');
+    expect(requests.single.url.queryParameters['cursor'], 'abc');
+    final page = (result as ApiSuccess).value;
+    expect(page.items.single.reflectiveAnswer, 'Second try.');
+    expect(page.items.single.replacedAt, DateTime.utc(2026, 9, 29, 8));
+    expect(page.nextCursor, 'next');
+
+    final hidden = await client(
+      (_) => http.Response('{}', 404),
+    ).revisions('post-1');
+    expect((hidden as ApiError).failure, isA<NotFound>());
+  });
 }
