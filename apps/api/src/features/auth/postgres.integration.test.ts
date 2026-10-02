@@ -269,6 +269,57 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     }
   });
 
+  it("rolls back the user, legal records, and proof if Better Auth fails after the user INSERT", async () => {
+    const termsId = `rollback-registration-${crypto.randomUUID()}`;
+    const email = "rollback-registration@example.test";
+    await migrator.db.insert(schema.legalDocumentVersions).values({
+      id: termsId, kind: "terms", version: Math.floor(Math.random() * 1_000_000_000) + 1, contentDigest: "a".repeat(64),
+    });
+    await migrator.db.execute(sql`update public.legal_document_versions set status = 'effective', effective_at = now() - interval '1 second' where id = ${termsId}`);
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const binding = Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const hash = async (text: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await migrator.db.insert(schema.registrationIntents).values({
+      tokenDigest: await hash(token), flowBindingDigest: await hash(`email:${binding}`),
+      termsVersionId: termsId, ageDeclarationVersion: "age-16-v1", expiresAt: sql`now() + interval '10 minutes'`,
+    });
+    const signupRequest = () => request("/api/auth/sign-up/email", {
+      method: "POST", headers: { "content-type": "application/json", "x-dayli-registration-intent": token, "x-dayli-registration-binding": binding },
+      body: JSON.stringify({ name: "Retry Registrant", username: "legal_retry", email, password: "not-a-real-password" }),
+    });
+    await migrator.db.execute(sql.raw(`CREATE FUNCTION public.test_fail_registration_account() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM public."user" WHERE id = NEW.user_id AND email = 'rollback-registration@example.test') THEN
+          RAISE EXCEPTION 'test account insertion failure';
+        END IF;
+        RETURN NEW;
+      END;
+    $$;`));
+    await migrator.db.execute(sql.raw(`CREATE TRIGGER test_fail_registration_account BEFORE INSERT ON public.account
+      FOR EACH ROW EXECUTE FUNCTION public.test_fail_registration_account();`));
+    try {
+      const failed = await createProductionApp().fetch(signupRequest());
+      expect(failed.ok).toBe(false);
+      expect(await migrator.db.select().from(schema.user).where(eq(schema.user.email, email))).toEqual([]);
+      const [unused] = await migrator.db.select({ consumedAt: schema.registrationIntents.consumedAt }).from(schema.registrationIntents)
+        .where(eq(schema.registrationIntents.tokenDigest, await hash(token)));
+      expect(unused?.consumedAt).toBeNull();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.termsVersionId, termsId))).toEqual([]);
+      await migrator.db.execute(sql.raw("DROP TRIGGER test_fail_registration_account ON public.account"));
+      const retried = await createProductionApp().fetch(signupRequest());
+      expect(retried.status).toBe(200);
+      const [created] = await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
+      expect(created?.id).toBeTruthy();
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, created!.id))).toHaveLength(1);
+    } finally {
+      await migrator.db.execute(sql.raw("DROP TRIGGER IF EXISTS test_fail_registration_account ON public.account"));
+      await migrator.db.execute(sql.raw("DROP FUNCTION public.test_fail_registration_account()"));
+      await migrator.db.delete(schema.user).where(eq(schema.user.email, email));
+      await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
+  });
+
   it("admits a verified native Google user only with the correct fresh registration flow", async () => {
     const termsId = `native-registration-${crypto.randomUUID()}`;
     const email = "native-registration@example.test";

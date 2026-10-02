@@ -258,6 +258,27 @@ function isSessionRevocationRequest(request: Request): boolean {
   return request.method === "POST" && (path === `${authBasePath}/sign-out` || path === `${authBasePath}/revoke-sessions`);
 }
 
+class RollbackRegistrationResponse extends Error {
+  constructor(readonly response: Response) {
+    super("Registration did not complete.");
+  }
+}
+
+function isRegistrationAuthRequest(request: Request): boolean {
+  const path = new URL(request.url).pathname;
+  return (request.method === "POST" && path === `${authBasePath}/sign-up/email`)
+    || (request.method === "POST" && path === `${authBasePath}/sign-in/social` && request.headers.get("x-dayli-native-google-admission") === "1")
+    || (request.method === "GET" && path === `${authBasePath}/callback/google`);
+}
+
+function registrationAuthSucceeded(request: Request, response: Response): boolean {
+  if (request.method !== "GET") return response.ok;
+  const location = response.headers.get("location");
+  if (!location || response.status < 300 || response.status >= 400) return false;
+  const destination = new URL(location, request.url);
+  return !destination.searchParams.has("error") && destination.pathname !== `${authBasePath}/error`;
+}
+
 /** Register the production authority only after all Worker bindings validate. */
 export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono<E>, env: ApiEnv, revocations?: SessionRevocationHook) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
@@ -267,28 +288,43 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
     configuration.hyperdrive,
     async (database) => {
       const prepared = await prepareRegistrationRequest(request);
-      const auth = createPostgresBetterAuth({
-        baseURL: configuration.baseURL,
-        secret: configuration.secret,
-        trustedOrigins: configuration.trustedOrigins,
-        database,
-        google: configuration.google,
-        resend: configuration.resend,
-      });
-      const revoke = isSessionRevocationRequest(request) && revocations
-        ? await readAuthoritativeSession(request, auth.handler)
-        : undefined;
-      let sessionIds: string[] = [];
-      if (revoke) {
-        const stored = await database
-          .select({ id: schema.session.id })
-          .from(schema.session)
-          .where(eq(schema.session.userId, revoke.userId));
-        sessionIds = stored.map((row) => row.id);
+      const dispatch = async (authDatabase: DayliDatabase) => {
+        const auth = createPostgresBetterAuth({
+          baseURL: configuration.baseURL,
+          secret: configuration.secret,
+          trustedOrigins: configuration.trustedOrigins,
+          database: authDatabase,
+          google: configuration.google,
+          resend: configuration.resend,
+        });
+        const revoke = isSessionRevocationRequest(request) && revocations
+          ? await readAuthoritativeSession(request, auth.handler)
+          : undefined;
+        let sessionIds: string[] = [];
+        if (revoke) {
+          const stored = await authDatabase
+            .select({ id: schema.session.id })
+            .from(schema.session)
+            .where(eq(schema.session.userId, revoke.userId));
+          sessionIds = stored.map((row) => row.id);
+        }
+        const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(authDatabase));
+        if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
+        return bindBrowserSignupResponse(prepared, response, authDatabase);
+      };
+      if (!isRegistrationAuthRequest(prepared)) return dispatch(database);
+      // Better Auth inserts the user, account, and session in separate calls.
+      // Keep all three, plus trigger-owned legal evidence, in one transaction.
+      try {
+        return await database.transaction(async (tx) => {
+          const response = await dispatch(tx as DayliDatabase);
+          if (!registrationAuthSucceeded(prepared, response)) throw new RollbackRegistrationResponse(response);
+          return response;
+        });
+      } catch (error) {
+        if (error instanceof RollbackRegistrationResponse) return error.response;
+        throw error;
       }
-      const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
-      if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
-      return bindBrowserSignupResponse(prepared, response, database);
     },
   ));
   return true;
