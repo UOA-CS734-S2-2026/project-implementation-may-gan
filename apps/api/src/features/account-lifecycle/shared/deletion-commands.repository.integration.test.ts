@@ -138,6 +138,7 @@ function localUrl(value: string | undefined) {
     }).where(eq(schema.accountLifecycles.userId, userId))
       .returning({ cancelUntil: schema.accountLifecycles.cancelUntil });
     if (!futureDeadline?.cancelUntil) throw new Error("Expected a database cancellation deadline.");
+    const deadlineIso = futureDeadline.cancelUntil.toISOString();
     const [waitingBackend] = await app.db.select({ pid: sql<number>`pg_backend_pid()` })
       .from(sql`(values (1)) as backend_probe`);
     if (!waitingBackend) throw new Error("Expected an app database connection.");
@@ -166,7 +167,7 @@ function localUrl(value: string | undefined) {
       for (let attempt = 0; attempt < 75; attempt += 1) {
         const [probe] = await migrator.db.select({
           waiting: sql<boolean>`cardinality(pg_blocking_pids(${waitingBackend.pid})) > 0`,
-          beforeDeadline: sql<boolean>`clock_timestamp() < ${futureDeadline.cancelUntil}`,
+          beforeDeadline: sql<boolean>`clock_timestamp() < ${deadlineIso}::timestamptz`,
         }).from(sql`(values (1)) as lock_probe`);
         if (probe?.waiting) {
           expect(probe.beforeDeadline).toBe(true);
@@ -180,7 +181,7 @@ function localUrl(value: string | undefined) {
       let passedDeadline = false;
       for (let attempt = 0; attempt < 175; attempt += 1) {
         const [probe] = await migrator.db.select({
-          passed: sql<boolean>`clock_timestamp() >= ${futureDeadline.cancelUntil}`,
+          passed: sql<boolean>`clock_timestamp() >= ${deadlineIso}::timestamptz`,
         }).from(sql`(values (1)) as deadline_probe`);
         if (probe?.passed) {
           passedDeadline = true;
