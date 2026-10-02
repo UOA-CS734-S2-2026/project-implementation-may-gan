@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,10 +8,12 @@ import '../api/friends_client.dart';
 import '../api/profile_client.dart';
 import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
+import '../posts/post_activity.dart';
 import '../app/theme.dart';
 import '../profile/profile_posts.dart';
 import '../profile/profile_about.dart';
 import '../profile/profile_stats.dart';
+import '../profile/streak_cache.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -32,7 +36,13 @@ class SocialProfileScreen extends StatefulWidget {
 /// The relationship card and the profile details, read together.
 typedef _LoadedProfile = (FriendCard, ProfileDetails);
 
-class _SocialProfileScreenState extends State<SocialProfileScreen> {
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec',
+];
+
+class _SocialProfileScreenState extends State<SocialProfileScreen>
+    with WidgetsBindingObserver {
   Future<ApiResult<_LoadedProfile>>? _profile;
   String? _accountId;
   String? _loadedUsername;
@@ -40,6 +50,18 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   bool _busy = false;
   String? _notice;
   String? _authorizedProfileId;
+  PostActivity? _activity;
+
+  /// The last profile the server returned for this account and handle, and
+  /// when. A reload that fails offline keeps showing it, marked as stale.
+  _LoadedProfile? _last;
+  DateTime? _lastConfirmedAt;
+
+  /// When the profile on screen was last confirmed, if a reload since failed.
+  DateTime? _staleSince;
+
+  /// Your own streak from the device, when your profile can't load offline.
+  CachedStreak? _offlineStreak;
 
   /// Posts for the profile on screen, for the account that loaded them.
   ProfilePostsController? _posts;
@@ -49,6 +71,46 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   /// relationship card is then read for the current one.
   Future<ApiResult<_LoadedProfile>> _load() async {
     final services = AppScope.of(context);
+    final accountId = _accountId;
+    final username = widget.username;
+    final result = await _fetch(services);
+    // The account or profile changed while this was loading.
+    if (!mounted || accountId != _accountId || username != _loadedUsername) {
+      return result;
+    }
+    switch (result) {
+      case ApiSuccess(value: final loaded):
+        final now = services.clock();
+        _last = loaded;
+        _lastConfirmedAt = now;
+        _staleSince = null;
+        _offlineStreak = null;
+        final (_, info) = loaded;
+        if (info.streak case final streak? when info.isOwner) {
+          if (accountId != null) {
+            unawaited(
+              services.streakCache.write(accountId, CachedStreak(streak, now)),
+            );
+          }
+        }
+      case ApiError(failure: NetworkUnavailable()):
+        if (_last case final last?) {
+          _staleSince = _lastConfirmedAt;
+          return ApiSuccess(last);
+        }
+        if (accountId != null && _isOwnHandle(username)) {
+          _offlineStreak = await services.streakCache.read(accountId);
+        }
+      case ApiError():
+        break;
+    }
+    return result;
+  }
+
+  bool _isOwnHandle(String username) =>
+      _session?.user?.username?.toLowerCase() == username.toLowerCase();
+
+  Future<ApiResult<_LoadedProfile>> _fetch(AppServices services) async {
     final details = await services.profiles.details(widget.username);
     switch (details) {
       case ApiError(:final failure):
@@ -87,6 +149,12 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
       _session = session;
       _session!.addListener(_onSessionChanged);
     }
+    final activity = AppScope.of(context).postActivity;
+    if (_activity != activity) {
+      _activity?.removeListener(_onPostActivity);
+      _activity = activity;
+      _activity!.addListener(_onPostActivity);
+    }
     _syncActor();
   }
 
@@ -94,6 +162,32 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   void didUpdateWidget(covariant SocialProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.username != widget.username) _syncActor();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// The streak and today's mark move with the date, so check again when the
+  /// app returns to the foreground.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reload();
+  }
+
+  /// Your own post was accepted or deleted, which can change your streak.
+  void _onPostActivity() {
+    if (_last?.$2.isOwner == true || _isOwnHandle(widget.username)) _reload();
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _profile = _load();
+    });
+    unawaited(_posts?.refresh());
   }
 
   void _onSessionChanged() {
@@ -111,13 +205,19 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
       _loadedUsername = widget.username;
       _notice = null;
       _authorizedProfileId = null;
+      _last = null;
+      _lastConfirmedAt = null;
+      _staleSince = null;
+      _offlineStreak = null;
       _profile = _load();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session?.removeListener(_onSessionChanged);
+    _activity?.removeListener(_onPostActivity);
     _posts?.dispose();
     super.dispose();
   }
@@ -169,6 +269,12 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
           _authorizedProfileId = person.id;
           _followRename(info);
           return _profileCard(context, person, info);
+        }
+        if ((snapshot.data, _offlineStreak) case (
+          ApiError(failure: NetworkUnavailable()),
+          final cached?,
+        )) {
+          return _offlineCard(context, cached);
         }
         return Center(
           child: DayliCard(
@@ -244,6 +350,52 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Future<void> _edit() async {
     await context.push('/profile/edit');
     if (mounted) await _refresh();
+  }
+
+  String _confirmedNote(DateTime at) {
+    final local = at.toLocal();
+    final now = AppScope.of(context).clock().toLocal();
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = local.minute.toString().padLeft(2, '0');
+      return 'Last confirmed at $hour:$minute ${local.hour < 12 ? 'am' : 'pm'}';
+    }
+    return 'Last confirmed ${local.day} ${_months[local.month - 1]}';
+  }
+
+  /// Your own profile when it can't load offline: only the streak this
+  /// device last had confirmed, clearly marked. Pull to try again.
+  Widget _offlineCard(BuildContext context, CachedStreak cached) {
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 36, 20, 32),
+        children: [
+          DayliCard(
+            key: const Key('profile.offline'),
+            padding: const EdgeInsets.all(24),
+            radius: 22,
+            child: Column(
+              children: [
+                Text(
+                  "You're offline, so your profile couldn't be loaded.",
+                  textAlign: TextAlign.center,
+                  style: DayliText.serif(context),
+                ),
+                ProfileStatsTile(
+                  stats: null,
+                  streak: cached.streak,
+                  staleNote: _confirmedNote(cached.confirmedAt),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _profileCard(
@@ -353,6 +505,10 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                     stats: stats,
                     streak: streak,
                     onFriends: isMe ? () => context.go('/friends') : null,
+                    showToday: isMe,
+                    staleNote: _staleSince == null
+                        ? null
+                        : _confirmedNote(_staleSince!),
                   ),
                 const SizedBox(height: 22),
                 if (isMe)

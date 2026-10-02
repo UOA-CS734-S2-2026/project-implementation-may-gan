@@ -15,7 +15,9 @@ import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
+import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
+import '../profile/streak_cache.dart';
 
 /// Application-wide services, provided once above the router.
 class AppServices {
@@ -35,8 +37,12 @@ class AppServices {
     this.mediaPicker = const DeviceMediaPicker(),
     this.mediaUploads,
     MediaCompressor? mediaCompressor,
+    StreakCache? streakCache,
+    PostActivity? postActivity,
     this.clock = DateTime.now,
-  }) : messaging =
+  }) : streakCache = streakCache ?? MemoryStreakCache(),
+       postActivity = postActivity ?? PostActivity(),
+       messaging =
            messaging ?? MessagingController(const UnavailableMessagingClient()),
        mediaCompressor = mediaCompressor ?? DeviceMediaCompressor();
 
@@ -59,6 +65,12 @@ class AppServices {
   /// Null keeps picked media on the device without uploading it.
   final MediaUploadClient? mediaUploads;
   final MediaCompressor mediaCompressor;
+
+  /// The owner's last confirmed streak, for showing offline.
+  final StreakCache streakCache;
+
+  /// Fires when the server accepts or deletes one of the user's posts.
+  final PostActivity postActivity;
   final DateTime Function() clock;
 }
 

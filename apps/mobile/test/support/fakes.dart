@@ -19,7 +19,9 @@ import 'package:dayli_mobile/compose/media_compressor.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
+import 'package:dayli_mobile/posts/post_activity.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:dayli_mobile/profile/streak_cache.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
@@ -592,6 +594,8 @@ class TestHarness {
   final tokens = MemoryTokenStore();
   final users = MemoryUserCache();
   final drafts = MemoryDraftStore();
+  final streakCache = MemoryStreakCache();
+  final postActivity = PostActivity();
   final FakePostingDayClient postingDays;
   final FakeFeedClient feed;
   final FakePostClient posts;
@@ -623,6 +627,8 @@ class TestHarness {
     mediaPicker: mediaPicker,
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
+    streakCache: streakCache,
+    postActivity: postActivity,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }
@@ -738,9 +744,13 @@ class FakeProfileClient implements ProfileClient {
         isOwner: username == 'jos',
       );
 
+  /// When set, profile reads fail with it, as when the device is offline.
+  ApiFailure? detailsFailure;
+
   @override
   Future<ApiResult<ProfileDetails>> details(String username) async {
     requested.add(username);
+    if (detailsFailure case final failure?) return ApiError(failure);
     return ApiSuccess(_profile(username));
   }
 
