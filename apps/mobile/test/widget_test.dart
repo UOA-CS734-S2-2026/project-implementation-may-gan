@@ -676,6 +676,54 @@ void main() {
     expect(find.text('Username'), findsOneWidget);
   });
 
+  testWidgets(
+    'requires one unchecked legal action before mobile signup issues or sends proof',
+    (tester) async {
+      final harness = TestHarness(effectiveTerms: true);
+      await tester.pumpWidget(
+        DayliApp(services: harness.services, useGoogleFonts: false),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('landing.sign-up')));
+      await tester.pumpAndSettle();
+
+      final action = find.byKey(const Key('auth.legalAction'));
+      expect(action, findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(action).value, isFalse);
+      expect(find.textContaining('confirm I am 16 or older'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('auth.username')),
+        'legal_mobile',
+      );
+      await tester.enterText(
+        find.byKey(const Key('auth.email')),
+        'mobile@example.test',
+      );
+      await tester.enterText(
+        find.byKey(const Key('auth.password')),
+        'correct-password',
+      );
+      await tester.ensureVisible(find.byKey(const Key('auth.submit')));
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Confirm the Terms and that you are 16 or older.'),
+        findsOneWidget,
+      );
+      expect(harness.legalProofRequests, 0);
+      expect(harness.signupProofHeaders, isNull);
+
+      await tester.ensureVisible(action);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('auth.submit')));
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await tester.pumpAndSettle();
+      expect(harness.legalProofRequests, 1);
+      expect(harness.signupProofHeaders, ['b' * 64, 'c' * 64]);
+    },
+  );
+
   for (final (name, email, signUp, message) in [
     (
       'a taken sign-up email',

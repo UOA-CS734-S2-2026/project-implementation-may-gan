@@ -166,12 +166,21 @@ class SessionController extends ChangeNotifier {
     await _afterAuthentication();
   }
 
+  Future<RegistrationTerms?> currentRegistrationTerms() =>
+      _session.currentRegistrationTerms();
+
+  Future<RegistrationProof?> issueRegistrationProof({
+    required String flow,
+    required RegistrationTerms? terms,
+  }) => _session.issueRegistrationProof(flow: flow, terms: terms);
+
   Future<void> signUp({
     required String name,
     required String username,
     required String? publicName,
     required String email,
     required String password,
+    RegistrationProof? registrationProof,
   }) async {
     await _beforeCredentialReplacement();
     await _session.signUp(
@@ -180,6 +189,7 @@ class SessionController extends ChangeNotifier {
       publicName: publicName,
       email: email,
       password: password,
+      registrationProof: registrationProof,
     );
     await _afterAuthentication();
   }
@@ -218,9 +228,15 @@ class SessionController extends ChangeNotifier {
     _set(SessionStatus.signedIn, renamed);
   }
 
-  Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+  Future<void> signInWithGoogle(
+    GoogleIdTokenProvider provider, {
+    RegistrationProof? registrationProof,
+  }) async {
     await _beforeCredentialReplacement();
-    await _session.signInWithGoogle(provider);
+    await _session.signInWithGoogle(
+      provider,
+      registrationProof: registrationProof,
+    );
     await _afterAuthentication();
   }
 

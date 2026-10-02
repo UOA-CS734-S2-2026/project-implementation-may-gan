@@ -4859,6 +4859,12 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "legal_registration_admission": {
+          "name": "legal_registration_admission",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},

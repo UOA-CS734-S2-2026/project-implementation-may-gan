@@ -14,11 +14,12 @@ import {
   type SocialLinkConfirmationStore,
 } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
-import { schema } from "@dayli/db";
+import { schema, type DayliDatabase } from "@dayli/db";
+import { bindBrowserRegistrationIntent } from "../legal/shared/registration-intent.repository";
 import { eq } from "drizzle-orm";
 
 const corsMethods = ["GET", "POST"];
-const corsHeaders = ["authorization", "content-type"];
+const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
 
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
@@ -191,6 +192,39 @@ function registerStrictAuthRoutes<E extends Env>(
   });
 }
 
+async function prepareRegistrationRequest(request: Request): Promise<Request> {
+  const path = new URL(request.url).pathname;
+  const headers = new Headers(request.headers);
+  // Internal proof markers cannot be supplied by a browser or native caller.
+  headers.delete("x-dayli-native-google-admission");
+  headers.delete("x-dayli-registration-browser-state");
+  if (request.method === "GET" && path === `${authBasePath}/callback/google`) {
+    const state = new URL(request.url).searchParams.get("state");
+    if (state && state.length >= 8 && state.length <= 256 && !state.includes("|")) headers.set("x-dayli-registration-browser-state", state);
+  }
+  if (request.method === "POST" && path === `${authBasePath}/sign-in/social`) {
+    const body: unknown = await request.clone().json().catch(() => undefined);
+    if (body && typeof body === "object" && !Array.isArray(body) && (body as { provider?: unknown }).provider === "google") {
+      const idToken = (body as { idToken?: unknown }).idToken;
+      if (idToken && typeof idToken === "object" && typeof (idToken as { token?: unknown }).token === "string") {
+        headers.set("x-dayli-native-google-admission", "1");
+      }
+    }
+  }
+  return new Request(request, { headers });
+}
+
+async function bindBrowserSignupResponse(request: Request, response: Response, database: DayliDatabase): Promise<Response> {
+  if (request.method !== "POST" || new URL(request.url).pathname !== `${authBasePath}/sign-in/social` || !response.ok) return response;
+  if (request.headers.get("x-dayli-native-google-admission") === "1") return response;
+  const token = request.headers.get("x-dayli-registration-intent");
+  const binding = request.headers.get("x-dayli-registration-binding");
+  if (!token && !binding) return response;
+  const state = await redirectState(response);
+  return token && binding && state && await bindBrowserRegistrationIntent(database, token, binding, state)
+    ? response : linkFailure(403);
+}
+
 async function handleAuthRequest(
   request: Request,
   handler: AuthHandler,
@@ -232,6 +266,7 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
   registerStrictAuthRoutes(app, configuration.trustedOrigins, (request) => withHyperdriveDatabase(
     configuration.hyperdrive,
     async (database) => {
+      const prepared = await prepareRegistrationRequest(request);
       const auth = createPostgresBetterAuth({
         baseURL: configuration.baseURL,
         secret: configuration.secret,
@@ -251,9 +286,9 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
           .where(eq(schema.session.userId, revoke.userId));
         sessionIds = stored.map((row) => row.id);
       }
-      const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
+      const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
       if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
-      return response;
+      return bindBrowserSignupResponse(prepared, response, database);
     },
   ));
   return true;

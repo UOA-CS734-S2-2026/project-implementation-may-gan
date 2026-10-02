@@ -427,6 +427,7 @@ class TestHarness {
     FakeFeedClient? feed,
     FakePostClient? posts,
     this.uploadMedia = true,
+    this.effectiveTerms = false,
     FakeProfileClient? profiles,
   }) : friends = friends ?? FakeFriendsClient(),
        profiles = profiles ?? FakeProfileClient(),
@@ -439,7 +440,40 @@ class TestHarness {
        ) {
     final client = MockClient((request) async {
       final path = request.url.path;
+      if (path.endsWith('/api/v1/legal/current')) {
+        return http.Response(
+          effectiveTerms
+              ? jsonEncode({
+                  'status': 'effective',
+                  'termsVersionId': 'test-terms',
+                  'termsContentDigest': 'a' * 64,
+                  'ageDeclarationVersion': 'age-16-v1',
+                })
+              : '{"status":"unavailable","termsVersionId":null,"termsContentDigest":null,"ageDeclarationVersion":null}',
+          200,
+        );
+      }
+      if (path.endsWith('/api/v1/legal/registration-intent')) {
+        legalProofRequests++;
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (body['acceptedTermsAndDeclaredAge16'] != true ||
+            body['termsVersionId'] != 'test-terms')
+          return http.Response('{}', 409);
+        return http.Response(
+          jsonEncode({
+            'termsVersionId': 'test-terms',
+            'token': 'b' * 64,
+            'binding': 'c' * 64,
+            'expiresAt': '2026-10-02T01:00:00Z',
+          }),
+          200,
+        );
+      }
       if (path.endsWith('/sign-up/email')) {
+        signupProofHeaders = [
+          request.headers['x-dayli-registration-intent'],
+          request.headers['x-dayli-registration-binding'],
+        ];
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         // Better Auth's responses for a taken email and its attempt limit.
         return switch (body['email']) {
@@ -508,6 +542,9 @@ class TestHarness {
 
   /// False gives the app no upload client, so picked media stays on the device.
   final bool uploadMedia;
+  final bool effectiveTerms;
+  int legalProofRequests = 0;
+  List<String?>? signupProofHeaders;
   late final SessionController session;
 
   AppServices get services => AppServices(

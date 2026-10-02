@@ -129,6 +129,28 @@ class SessionUser {
   final String? username;
 }
 
+class RegistrationTerms {
+  const RegistrationTerms({
+    required this.versionId,
+    required this.contentDigest,
+  });
+
+  final String versionId;
+  final String contentDigest;
+}
+
+class RegistrationProof {
+  const RegistrationProof({required this.token, required this.binding});
+
+  final String token;
+  final String binding;
+
+  Map<String, String> get headers => {
+    'x-dayli-registration-intent': token,
+    'x-dayli-registration-binding': binding,
+  };
+}
+
 class BetterAuthNativeSession {
   BetterAuthNativeSession({
     required String baseUrl,
@@ -153,17 +175,76 @@ class BetterAuthNativeSession {
     await _storeNativeToken(response, 'sign-in');
   }
 
+  Future<RegistrationTerms?> currentRegistrationTerms() async {
+    final response = await _client.get(_uri('/api/v1/legal/current'));
+    if (response.statusCode != 200) {
+      throw AuthenticationFailure('registration-terms', response.statusCode);
+    }
+    final value = jsonDecode(response.body);
+    if (value is! Map<String, dynamic>) {
+      throw const AuthenticationFailure('registration-terms', 502);
+    }
+    if (value['status'] == 'unavailable') return null;
+    final version = value['termsVersionId'];
+    final digest = value['termsContentDigest'];
+    if (value['status'] != 'effective' ||
+        version is! String ||
+        digest is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(digest) ||
+        value['ageDeclarationVersion'] != 'age-16-v1') {
+      throw const AuthenticationFailure('registration-terms', 502);
+    }
+    return RegistrationTerms(versionId: version, contentDigest: digest);
+  }
+
+  Future<RegistrationProof?> issueRegistrationProof({
+    required String flow,
+    required RegistrationTerms? terms,
+  }) async {
+    if (terms == null) return null;
+    final response = await _client.post(
+      _uri('/api/v1/legal/registration-intent'),
+      headers: const {'content-type': 'application/json'},
+      body: jsonEncode({
+        'flow': flow,
+        'termsVersionId': terms.versionId,
+        'termsContentDigest': terms.contentDigest,
+        'acceptedTermsAndDeclaredAge16': true,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw AuthenticationFailure('registration-proof', response.statusCode);
+    }
+    final value = jsonDecode(response.body);
+    if (value is! Map<String, dynamic> ||
+        value['termsVersionId'] != terms.versionId ||
+        value['token'] is! String ||
+        value['binding'] is! String ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(value['token'] as String) ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(value['binding'] as String)) {
+      throw const AuthenticationFailure('registration-proof', 502);
+    }
+    return RegistrationProof(
+      token: value['token'] as String,
+      binding: value['binding'] as String,
+    );
+  }
+
   Future<void> signUp({
     required String name,
     required String username,
     required String? publicName,
     required String email,
     required String password,
+    RegistrationProof? registrationProof,
   }) async {
     await _ensureNoPendingRevocation();
     final response = await _client.post(
       _uri('/api/auth/sign-up/email'),
-      headers: const {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        ...?registrationProof?.headers,
+      },
       body: jsonEncode({
         'name': name,
         'username': username,
@@ -175,12 +256,18 @@ class BetterAuthNativeSession {
     await _storeNativeToken(response, 'sign-up');
   }
 
-  Future<void> signInWithGoogle(GoogleIdTokenProvider provider) async {
+  Future<void> signInWithGoogle(
+    GoogleIdTokenProvider provider, {
+    RegistrationProof? registrationProof,
+  }) async {
     await _ensureNoPendingRevocation();
     final idToken = await provider.authenticate();
     final response = await _client.post(
       _uri('/api/auth/sign-in/social'),
-      headers: const {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        ...?registrationProof?.headers,
+      },
       body: jsonEncode({
         'provider': 'google',
         'idToken': {'token': idToken},

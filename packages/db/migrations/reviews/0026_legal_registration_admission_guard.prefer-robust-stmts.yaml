@@ -1,0 +1,6 @@
+reason: The bridge column and trigger pair must be installed together under the protected migrator transaction. Re-running a partially applied migration without inspection would hide a broken admission boundary.
+affected_data_and_clients: Existing draft-only registration is unchanged. If Terms become effective, direct app-role user creation is denied unless a valid intent is consumed in the same transaction.
+rollout_sequence: Keep documents in draft. Apply in staging only after review and green main CI. Verify direct bypass and registered email and Google paths before any effective policy is published.
+backup_checkpoint: Confirm the approved migration recovery posture before a protected rollout.
+forward_fix_plan: Use a reviewed additive migration if an already-applied installation needs repair. Do not disable the trigger to restore signups.
+reviewer: Database, authentication, and privacy reviewers required.

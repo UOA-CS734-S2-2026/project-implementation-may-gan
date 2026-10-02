@@ -236,6 +236,8 @@ class ApiClient {
           return CreateMediaReservationResponse.fromJson(value);
         case 'CreateRealtimeTicket201Response':
           return CreateRealtimeTicket201Response.fromJson(value);
+        case 'CurrentLegalRegistrationTerms':
+          return CurrentLegalRegistrationTerms.fromJson(value);
         case 'CurrentPostingDayResponse':
           return CurrentPostingDayResponse.fromJson(value);
         case 'DailyPost':
@@ -334,6 +336,10 @@ class ApiClient {
           return ProfileVisibilityTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
+        case 'RegistrationIntentRequest':
+          return RegistrationIntentRequest.fromJson(value);
+        case 'RegistrationIntentResponse':
+          return RegistrationIntentResponse.fromJson(value);
         case 'RelationshipProfile':
           return RelationshipProfile.fromJson(value);
         case 'RelationshipState':

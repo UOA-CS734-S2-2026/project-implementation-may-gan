@@ -2,20 +2,38 @@
 
 import { authClient } from "@/lib/auth/client";
 import { safeReturnPath } from "@/lib/routing/safe-return-path";
+import { registrationHeaders, type RegistrationProof } from "@/lib/legal/registration";
 
-export function GoogleSignInButton({ returnTo = "/home" }: { returnTo?: string }) {
+export function GoogleSignInButton({
+  returnTo = "/home", prepareRegistration, onRegistrationError, disabled = false,
+}: {
+  returnTo?: string;
+  prepareRegistration?: () => Promise<RegistrationProof | null>;
+  onRegistrationError?: (message: string) => void;
+  disabled?: boolean;
+}) {
   async function handleGoogleSignIn() {
-    const destination = safeReturnPath(returnTo, "/home");
-    // OAuth requires an absolute callback, but its origin stays fixed to this web app.
-    const callbackURL = new URL(destination, window.location.origin).toString();
-    const errorCallbackURL = new URL(`/sign-in?next=${encodeURIComponent(destination)}`, window.location.origin).toString();
-    await authClient.signIn.social({ provider: "google", callbackURL, errorCallbackURL });
+    try {
+      const proof = await prepareRegistration?.() ?? null;
+      const destination = safeReturnPath(returnTo, "/home");
+      // OAuth requires an absolute callback, but its origin stays fixed to this web app.
+      const callbackURL = new URL(destination, window.location.origin).toString();
+      const errorCallbackURL = new URL(`/sign-in?next=${encodeURIComponent(destination)}`, window.location.origin).toString();
+      const result = await authClient.signIn.social({
+        provider: "google", callbackURL, errorCallbackURL,
+        fetchOptions: { headers: registrationHeaders(proof) },
+      });
+      if (result.error) onRegistrationError?.(result.error.message ?? "Google sign-in failed.");
+    } catch (error) {
+      onRegistrationError?.(error instanceof Error ? error.message : "Registration terms could not be verified. Try again.");
+    }
   }
 
   return (
     <button
       type="button"
       onClick={handleGoogleSignIn}
+      disabled={disabled}
       className="w-full bg-background-secondary rounded-lg pt-[10px] pb-[9px] font-sans text-sm text-foreground-secondary tracking-tight transition-opacity hover:opacity-80 hover:cursor-pointer flex items-center justify-center gap-2"
     >
       <svg viewBox="0 0 24 24" className="size-4 shrink-0" aria-hidden="true">

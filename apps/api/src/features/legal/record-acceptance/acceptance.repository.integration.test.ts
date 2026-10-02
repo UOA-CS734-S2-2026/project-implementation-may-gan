@@ -2,6 +2,7 @@ import { createDayliDatabase, schema } from "@dayli/db";
 import { and, eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { recordExplicitLegalAcceptance } from "./acceptance.repository";
+import { bindBrowserRegistrationIntent, issueRegistrationIntent, readPublishedRegistrationTerms } from "../shared/registration-intent.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -28,6 +29,7 @@ function localUrl(value: string | undefined, name: string) {
 
   afterAll(async () => {
     await migrator.db.delete(schema.user).where(eq(schema.user.id, userId));
+    await migrator.db.delete(schema.registrationIntents).where(eq(schema.registrationIntents.termsVersionId, termsId));
     await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
     await app.close();
     await migrator.close();
@@ -75,6 +77,71 @@ function localUrl(value: string | undefined, name: string) {
     }
     await migrator.db.insert(schema.user).values({ id: blockedId, name: "Migrated User", email: `${blockedId}@example.test` });
     await migrator.db.delete(schema.user).where(eq(schema.user.id, blockedId));
+  });
+
+  it("consumes a proof in the same user transaction and clears the insertion bridge", async () => {
+    const issued = await issueRegistrationIntent(app.db, {
+      flow: "email", termsVersionId: termsId, termsContentDigest: digest, acceptedTermsAndDeclaredAge16: true,
+    }, digest);
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") throw new Error("Expected an issued registration intent.");
+    const registrantId = `${userId}-registered`;
+    try {
+      await app.db.insert(schema.user).values({
+        id: registrantId, name: "Registrant", email: `${registrantId}@example.test`,
+        legal_registration_admission: `email|${issued.token}|${issued.binding}`,
+      });
+      const [created] = await app.db.select({ admission: schema.user.legal_registration_admission })
+        .from(schema.user).where(eq(schema.user.id, registrantId));
+      expect(created?.admission).toBeNull();
+      expect(await app.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, registrantId))).toHaveLength(1);
+      expect(await app.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, registrantId))).toEqual([
+        expect.objectContaining({ declarationVersion: "age-16-v1" }),
+      ]);
+      const replayId = `${userId}-replay`;
+      await expect(app.db.insert(schema.user).values({
+        id: replayId, name: "Replay", email: `${replayId}@example.test`,
+        legal_registration_admission: `email|${issued.token}|${issued.binding}`,
+      })).rejects.toThrow();
+      expect(await app.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.id, replayId))).toEqual([]);
+    } finally {
+      await migrator.db.delete(schema.user).where(eq(schema.user.id, registrantId));
+    }
+  });
+
+  it("refuses stale content and binds one browser intent to exactly one OAuth state", async () => {
+    await expect(readPublishedRegistrationTerms(app.db, "b".repeat(64))).resolves.toBeNull();
+    await expect(readPublishedRegistrationTerms(app.db, digest)).resolves.toEqual({ termsVersionId: termsId, termsContentDigest: digest });
+    await expect(issueRegistrationIntent(app.db, { ...input, flow: "google_browser", termsContentDigest: "b".repeat(64) }, digest))
+      .resolves.toEqual({ status: "stale" });
+    await expect(issueRegistrationIntent(app.db, { ...input, flow: "google_browser" }, "b".repeat(64)))
+      .resolves.toEqual({ status: "unavailable" });
+    const issued = await issueRegistrationIntent(app.db, { ...input, flow: "google_browser" }, digest);
+    expect(issued.status).toBe("issued");
+    if (issued.status !== "issued") throw new Error("Expected a browser registration intent.");
+    const state = `browser-state-${crypto.randomUUID()}`;
+    const registrantId = `${userId}-browser`;
+    expect(await bindBrowserRegistrationIntent(app.db, issued.token, "0".repeat(64), state)).toBe(false);
+    expect(await bindBrowserRegistrationIntent(app.db, issued.token, issued.binding, state)).toBe(true);
+    expect(await bindBrowserRegistrationIntent(app.db, issued.token, issued.binding, `${state}-other`)).toBe(false);
+    await expect(app.db.insert(schema.user).values({
+      id: registrantId, name: "Unbound", email: `${registrantId}@example.test`,
+      legal_registration_admission: `google_browser||${state}-other`,
+    })).rejects.toThrow();
+    try {
+      await app.db.insert(schema.user).values({
+        id: registrantId, name: "Bound", email: `${registrantId}@example.test`,
+        legal_registration_admission: `google_browser||${state}`,
+      });
+      expect(await app.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, registrantId))).toHaveLength(1);
+      const stateDigest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`google_browser:${state}`))),
+        (byte) => byte.toString(16).padStart(2, "0")).join("");
+      const [consumed] = await app.db.select({ consumedAt: schema.registrationIntents.consumedAt }).from(schema.registrationIntents)
+        .where(eq(schema.registrationIntents.flowBindingDigest, stateDigest));
+      expect(consumed?.consumedAt).toBeInstanceOf(Date);
+    } finally {
+      await migrator.db.delete(schema.user).where(eq(schema.user.id, registrantId));
+    }
   });
 
   it("refuses a banned or pending account without changing recorded evidence", async () => {

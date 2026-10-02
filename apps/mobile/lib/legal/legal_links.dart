@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/theme.dart';
+import 'legal_document.dart';
+
+Future<bool>? _draftStatus;
+Future<bool> _documentsAreDraft() => _draftStatus ??=
+    Future.wait([loadLegalDocument('terms'), loadLegalDocument('privacy')])
+        .then((documents) => documents.any((document) => document.isDraft))
+        .catchError((Object _) => true);
 
 class LegalLinks extends StatelessWidget {
   const LegalLinks({
@@ -50,28 +57,39 @@ class LegalLinks extends StatelessWidget {
               child: const Text('Terms of Service'),
             ),
             if (draftMarker)
-              Text(
-                '(draft)',
-                style: DayliText.sans(
-                  context,
-                  size: DayliTextSize.xs,
-                  color: colors.foregroundTertiary,
-                ),
+              FutureBuilder<bool>(
+                future: _documentsAreDraft(),
+                builder: (context, snapshot) => snapshot.data == false
+                    ? const SizedBox.shrink()
+                    : Text(
+                        '(draft)',
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.xs,
+                          color: colors.foregroundTertiary,
+                        ),
+                      ),
               ),
           ],
         ),
-        if (notice) ...[
-          const SizedBox(height: 2),
-          Text(
-            'Draft documents for review. They are not approved terms or privacy notices.',
-            textAlign: center ? TextAlign.center : TextAlign.start,
-            style: DayliText.sans(
-              context,
-              size: DayliTextSize.xs,
-              color: colors.foregroundTertiary,
-            ),
+        if (notice)
+          FutureBuilder<bool>(
+            future: _documentsAreDraft(),
+            builder: (context, snapshot) => snapshot.data == false
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Draft documents for review. They are not approved terms or privacy notices.',
+                      textAlign: center ? TextAlign.center : TextAlign.start,
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.xs,
+                        color: colors.foregroundTertiary,
+                      ),
+                    ),
+                  ),
           ),
-        ],
       ],
     );
   }

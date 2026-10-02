@@ -26,6 +26,8 @@ export const user = pgTable("user", {
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
+  /** Insertion-only Better Auth bridge, cleared inside the user INSERT trigger. */
+  legal_registration_admission: text("legal_registration_admission"),
 });
 
 /**

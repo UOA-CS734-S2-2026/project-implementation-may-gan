@@ -28,6 +28,7 @@ src/models/CreateDirectConversationRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
 src/models/CreateRealtimeTicket201Response.ts
+src/models/CurrentLegalRegistrationTerms.ts
 src/models/CurrentPostingDayResponse.ts
 src/models/DailyPost.ts
 src/models/DailyPostMedia.ts
@@ -77,6 +78,8 @@ src/models/ProfilePostsPage.ts
 src/models/ProfileStats.ts
 src/models/ProfileVisibility.ts
 src/models/RegisterPushDeviceRequest.ts
+src/models/RegistrationIntentRequest.ts
+src/models/RegistrationIntentResponse.ts
 src/models/RelationshipProfile.ts
 src/models/RelationshipState.ts
 src/models/RelationshipStatus.ts

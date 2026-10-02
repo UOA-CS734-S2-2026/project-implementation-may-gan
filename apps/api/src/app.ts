@@ -166,6 +166,9 @@ import { createHyperdriveAccountPolicyResolver } from "./features/account-policy
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerLegalAcceptanceRoute, type LegalAcceptanceRouteDependencies } from "./features/legal/record-acceptance/acceptance.route";
 import { recordExplicitLegalAcceptance, type ExplicitLegalAcceptance } from "./features/legal/record-acceptance/acceptance.repository";
+import { registerRegistrationIntentRoutes, type RegistrationIntentRouteDependencies } from "./features/legal/registration-intent/registration-intent.route";
+import { issueRegistrationIntent, readPublishedRegistrationTerms } from "./features/legal/shared/registration-intent.repository";
+import { approvedTermsDigest } from "./features/legal/shared/legal-publication";
 import type { ResolveSession } from "./http/middleware/require-session";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
@@ -193,6 +196,7 @@ export interface AppDependencies {
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
+  legalRegistration?: RegistrationIntentRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -221,6 +225,7 @@ export function createApp({
   avatarRemove,
   accountPolicy,
   legalAcceptance,
+  legalRegistration,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -270,6 +275,7 @@ export function createApp({
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
+  registerRegistrationIntentRoutes(api, legalRegistration ?? {});
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
   registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
@@ -355,10 +361,19 @@ export function createAppForEnv(env: ApiEnv) {
   } satisfies AccountPolicyDependencies : undefined;
   const legalAcceptance = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    record: (userId: string, input: ExplicitLegalAcceptance) => withHyperdriveDatabase(
-      configuration.hyperdrive, (database) => recordExplicitLegalAcceptance(database, userId, input),
-    ),
+    record: async (userId: string, input: ExplicitLegalAcceptance) => {
+      if (await approvedTermsDigest() !== input.termsContentDigest) return { status: "unavailable" as const };
+      return withHyperdriveDatabase(configuration.hyperdrive, (database) => recordExplicitLegalAcceptance(database, userId, input));
+    },
   } satisfies LegalAcceptanceRouteDependencies : undefined;
+  const legalRegistration = configuration ? {
+    current: async () => withHyperdriveDatabase(configuration.hyperdrive, async (database) => (
+      readPublishedRegistrationTerms(database, await approvedTermsDigest())
+    )),
+    issue: async (input: import("./features/legal/shared/registration-intent.repository").RegistrationIntentRequest) => withHyperdriveDatabase(
+      configuration.hyperdrive, async (database) => issueRegistrationIntent(database, input, await approvedTermsDigest()),
+    ),
+  } satisfies RegistrationIntentRouteDependencies : undefined;
   // Profile photos are shown through links that expire after ten minutes.
   const signAvatar = r2Runtime
     ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
@@ -416,6 +431,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameProfile,
     accountPolicy,
     legalAcceptance,
+    legalRegistration,
     profileDetails,
     profileUpdate,
     usernameChange,

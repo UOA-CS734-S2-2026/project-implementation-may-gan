@@ -19,6 +19,11 @@ import {
     ApiErrorToJSON,
 } from '../models/ApiError';
 import {
+    type CurrentLegalRegistrationTerms,
+    CurrentLegalRegistrationTermsFromJSON,
+    CurrentLegalRegistrationTermsToJSON,
+} from '../models/CurrentLegalRegistrationTerms';
+import {
     type LegalAcceptanceRequest,
     LegalAcceptanceRequestFromJSON,
     LegalAcceptanceRequestToJSON,
@@ -28,6 +33,23 @@ import {
     LegalAcceptanceResponseFromJSON,
     LegalAcceptanceResponseToJSON,
 } from '../models/LegalAcceptanceResponse';
+import {
+    type RegistrationIntentRequest,
+    RegistrationIntentRequestFromJSON,
+    RegistrationIntentRequestToJSON,
+} from '../models/RegistrationIntentRequest';
+import {
+    type RegistrationIntentResponse,
+    RegistrationIntentResponseFromJSON,
+    RegistrationIntentResponseToJSON,
+} from '../models/RegistrationIntentResponse';
+
+export interface LegalIssueRegistrationIntentRequest {
+    /**
+     *
+     */
+    registrationIntentRequest: RegistrationIntentRequest;
+}
 
 export interface LegalRecordAcceptanceRequest {
     /**
@@ -40,6 +62,92 @@ export interface LegalRecordAcceptanceRequest {
  *
  */
 export class LegalApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for legalCurrentRegistrationTerms without sending the request
+     */
+    async legalCurrentRegistrationTermsRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/api/v1/legal/current`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Read current published signup Terms metadata
+     */
+    async legalCurrentRegistrationTermsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CurrentLegalRegistrationTerms>> {
+        const requestOptions = await this.legalCurrentRegistrationTermsRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => CurrentLegalRegistrationTermsFromJSON(jsonValue));
+    }
+
+    /**
+     * Read current published signup Terms metadata
+     */
+    async legalCurrentRegistrationTerms(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CurrentLegalRegistrationTerms> {
+        const response = await this.legalCurrentRegistrationTermsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for legalIssueRegistrationIntent without sending the request
+     */
+    async legalIssueRegistrationIntentRequestOpts(requestParameters: LegalIssueRegistrationIntentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['registrationIntentRequest'] == null) {
+            throw new runtime.RequiredError(
+                'registrationIntentRequest',
+                'Required parameter "registrationIntentRequest" was null or undefined when calling legalIssueRegistrationIntent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/api/v1/legal/registration-intent`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: RegistrationIntentRequestToJSON(requestParameters['registrationIntentRequest']),
+        };
+    }
+
+    /**
+     * Requires current approved documents and one affirmative Terms, Privacy notice, and 16+ action before account creation.
+     * Start one explicit email or Google registration action
+     */
+    async legalIssueRegistrationIntentRaw(requestParameters: LegalIssueRegistrationIntentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<RegistrationIntentResponse>> {
+        const requestOptions = await this.legalIssueRegistrationIntentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => RegistrationIntentResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Requires current approved documents and one affirmative Terms, Privacy notice, and 16+ action before account creation.
+     * Start one explicit email or Google registration action
+     */
+    async legalIssueRegistrationIntent(requestParameters: LegalIssueRegistrationIntentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<RegistrationIntentResponse> {
+        const response = await this.legalIssueRegistrationIntentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for legalRecordAcceptance without sending the request

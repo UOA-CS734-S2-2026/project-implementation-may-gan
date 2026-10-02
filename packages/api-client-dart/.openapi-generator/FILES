@@ -36,6 +36,7 @@ lib/model/create_direct_conversation_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
 lib/model/create_realtime_ticket201_response.dart
+lib/model/current_legal_registration_terms.dart
 lib/model/current_posting_day_response.dart
 lib/model/daily_post.dart
 lib/model/daily_post_media.dart
@@ -85,6 +86,8 @@ lib/model/profile_posts_page.dart
 lib/model/profile_stats.dart
 lib/model/profile_visibility.dart
 lib/model/register_push_device_request.dart
+lib/model/registration_intent_request.dart
+lib/model/registration_intent_response.dart
 lib/model/relationship_profile.dart
 lib/model/relationship_state.dart
 lib/model/relationship_status.dart
