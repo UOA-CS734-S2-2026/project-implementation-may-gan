@@ -32,15 +32,17 @@ class MoodPeriodSummary {
   /// Minimum value: 0
   final int trackedDays;
 
+  /// Days with a rating the caller can see.
+  ///
   /// Minimum value: 0
   final int postedDays;
 
-  /// Tracked days that ended without a post. Today is not missing while it is still open.
+  /// Tracked days that ended without any post. A post the caller can't see is not missing, and today is not missing while it is still open.
   ///
   /// Minimum value: 0
   final int missingDays;
 
-  /// Mean rating to one decimal place, or null with no posts.
+  /// Mean visible rating to one decimal place, or null with none.
   final num? average;
 
   /// Minimum value: 1
@@ -82,8 +84,8 @@ class MoodPeriodSummary {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'from'] = _dateFormatter.format(this.from);
-    json[r'to'] = _dateFormatter.format(this.to);
+    json[r'from'] = this.from;
+    json[r'to'] = this.to;
     json[r'trackedDays'] = this.trackedDays;
     json[r'postedDays'] = this.postedDays;
     json[r'missingDays'] = this.missingDays;
@@ -172,8 +174,8 @@ class MoodPeriodSummary {
       }());
 
       return MoodPeriodSummary(
-        from: mapDateTime(json, r'from', r'')!,
-        to: mapDateTime(json, r'to', r'')!,
+        from: mapValueOfType<String>(json, r'from')!,
+        to: mapValueOfType<String>(json, r'to')!,
         trackedDays: mapValueOfType<int>(json, r'trackedDays')!,
         postedDays: mapValueOfType<int>(json, r'postedDays')!,
         missingDays: mapValueOfType<int>(json, r'missingDays')!,

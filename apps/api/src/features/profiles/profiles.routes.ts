@@ -1,7 +1,6 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv, OptionalAuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { registerChangeUsernameRoute, type ChangeUsernameRouteDependencies } from "./change-username/change-username.route";
-import { registerGetMoodHistoryRoute, type GetMoodHistoryRouteDependencies } from "./get-mood-history/get-mood-history.route";
 import { registerGetProfileDetailsRoute, type GetProfileDetailsRouteDependencies } from "./get-profile-details/get-profile-details.route";
 import { registerGetAvatarRoute, type GetAvatarRouteDependencies } from "./get-avatar/get-avatar.route";
 import { registerRemoveAvatarRoute, type RemoveAvatarRouteDependencies } from "./remove-avatar/remove-avatar.route";
@@ -17,7 +16,6 @@ export interface ProfilesRouteDependencies {
   changeUsername: ChangeUsernameRouteDependencies;
   setAvatar: SetAvatarRouteDependencies;
   removeAvatar: RemoveAvatarRouteDependencies;
-  moodHistory: GetMoodHistoryRouteDependencies;
 }
 
 /** Register profile actions without embedding profile policy in the composition root. */
@@ -31,5 +29,4 @@ export function registerProfilesRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, de
   registerUpdateProfileRoute(app, dependencies.update);
   registerSetAvatarRoute(app, dependencies.setAvatar);
   registerRemoveAvatarRoute(app, dependencies.removeAvatar);
-  registerGetMoodHistoryRoute(app, dependencies.moodHistory);
 }

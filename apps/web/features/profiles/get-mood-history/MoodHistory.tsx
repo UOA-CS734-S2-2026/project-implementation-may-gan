@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { moodRanges, type MoodHistory as MoodHistoryData, type MoodRange } from "@/features/profiles/shared/profiles.api";
+import { Button } from "@/components/ui/core/Button";
+import type { MoodHistory as MoodHistoryData, MoodRange } from "@/features/profiles/shared/profiles.api";
 import { formatMoodDate, MoodChart } from "./MoodChart";
 import { useMoodHistoryQuery } from "./use-mood-history-query";
+
+const moodRanges: readonly MoodRange[] = ["30d", "90d", "1y"];
 
 const rangeLabels: Record<MoodRange, { button: string; period: string }> = {
   "30d": { button: "30 days", period: "30 days" },
@@ -15,118 +18,98 @@ function plural(count: number, one: string, many = `${one}s`) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-function Tile({ label, value, detail }: { label: string; value: string; detail: string }) {
+/** One figure in the strip, laid out like the profile's own stats. */
+function Stat({ value, label, detail }: { value: string; label: string; detail: string }) {
   return (
-    <div className="rounded-2xl bg-gray-100/80 px-5 py-4">
-      <p className="font-sans text-xs text-foreground-secondary">{label}</p>
-      <p className="mt-1 font-sans text-2xl font-semibold text-foreground">{value}</p>
-      <p className="mt-1 font-sans text-xs text-foreground-tertiary">{detail}</p>
+    <div className="min-w-24 flex-1 text-center">
+      <p className="text-xl font-bold">{value}</p>
+      <p className="text-xs text-foreground-secondary">{label}</p>
+      <p className="mt-1 text-[11px] text-foreground-tertiary">{detail}</p>
     </div>
   );
 }
 
-function Summaries({ history, range }: { history: MoodHistoryData; range: MoodRange }) {
+function Summaries({ history, range, isMe }: { history: MoodHistoryData; range: MoodRange; isMe: boolean }) {
   const { current, previous } = history;
   const period = rangeLabels[range].period;
   const change = current.average !== null && previous.average !== null
     ? Math.round((current.average - previous.average) * 10) / 10
     : null;
+  const joinedInRange = history.trackedFrom > current.from;
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <Tile
+    <div className="flex flex-wrap items-start justify-center gap-6 rounded-2xl bg-gray-100/80 px-6 py-4">
+      <Stat
+        value={current.average === null ? "–" : current.average.toFixed(1)}
         label="Average rating"
-        value={current.average === null ? "–" : `${current.average.toFixed(1)}/10`}
-        detail={current.postedDays === 0 ? "No posts yet in this range" : `From ${plural(current.postedDays, "post")}`}
+        detail={current.postedDays === 0 ? "No posts yet" : `From ${plural(current.postedDays, "post")}`}
       />
-      <Tile
-        label={`Compared with the ${period} before`}
+      <Stat
         value={change === null ? "–" : `${change > 0 ? "+" : change < 0 ? "−" : "±"}${Math.abs(change).toFixed(1)}`}
+        label={`vs the ${period} before`}
         detail={previous.postedDays === 0
-          ? `No posts in the ${period} before`
-          : `${previous.average!.toFixed(1)}/10 from ${plural(previous.postedDays, "post")}`}
+          ? "No posts then"
+          : `${previous.average!.toFixed(1)} from ${plural(previous.postedDays, "post")}`}
       />
-      <Tile
-        label="Days without a post"
+      <Stat
         value={String(current.missingDays)}
-        detail={current.trackedDays < dayCount(current.from, current.to)
-          ? `Of ${plural(current.trackedDays, "day")} since you joined`
-          : `Of ${plural(current.trackedDays, "day")}`}
+        label="Days without a post"
+        detail={joinedInRange ? `Of ${plural(current.trackedDays, "day")} since ${isMe ? "you" : "they"} joined` : `Of ${plural(current.trackedDays, "day")}`}
       />
     </div>
   );
 }
 
-function dayCount(from: string, to: string) {
-  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
-}
-
 /**
- * The owner's ratings over time, on their own profile only. It describes what
- * was posted and makes no claim about why; gaps and sample sizes stay visible.
+ * A profile's ratings over time, in the place and style of the original web
+ * app's weekly mood graph. It reaches the same people as the profile's posts:
+ * the owner and their friends. It describes what was posted and makes no
+ * claim about why; gaps and sample sizes stay visible.
  */
-export function MoodHistory() {
+export function MoodHistory({ username, displayName, isMe }: { username: string; displayName: string; isMe: boolean }) {
   const [range, setRange] = useState<MoodRange>("30d");
-  const query = useMoodHistoryQuery(range);
+  const query = useMoodHistoryQuery(username, range);
   const history = query.data;
 
   return (
-    <section aria-labelledby="mood-history-heading" className="mx-auto mt-8 max-w-4xl rounded-2xl bg-background p-6 shadow-card sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section aria-labelledby="mood-history-heading" className="mx-auto mt-8 max-w-4xl space-y-4 rounded-2xl bg-background p-6 shadow-card sm:p-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 id="mood-history-heading" className="font-serif text-2xl font-semibold tracking-tighter">Your mood</h2>
-          <p className="mt-1 font-sans text-sm text-foreground-secondary">Your daily ratings. Only you can see this.</p>
+          <h2 id="mood-history-heading" className="text-lg font-semibold tracking-tight">Mood</h2>
+          <p className="text-xs text-foreground-secondary">
+            {history ? `${formatMoodDate(history.current.from)} to ${formatMoodDate(history.current.to)} · ` : ""}
+            {isMe ? "You and your friends can see this." : `Only ${displayName}'s friends can see this.`}
+          </p>
         </div>
-        <div role="radiogroup" aria-label="Time range" className="flex rounded-full bg-gray-100/80 p-1">
+        <div role="radiogroup" aria-label="Time range" className="flex flex-wrap items-center gap-2">
           {moodRanges.map((option) => (
-            <button
+            <Button
               key={option}
               type="button"
               role="radio"
               aria-checked={range === option}
               onClick={() => setRange(option)}
-              className={`rounded-full px-3 py-1 font-sans text-sm transition ${range === option ? "bg-background font-semibold text-foreground shadow-sm" : "text-foreground-secondary hover:text-foreground"}`}
+              variant={{ weight: range === option ? "primary" : "secondary", color: "accent", size: "sm" }}
             >
               {rangeLabels[option].button}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {query.isError && !history && (
-        <p role="status" className="mt-6 font-sans text-sm text-foreground-secondary">Your mood history couldn&apos;t be loaded. Try again later.</p>
+        <p role="status" className="text-sm text-foreground-secondary">This mood history couldn&apos;t be loaded. Try again later.</p>
       )}
-      {query.isPending && <p className="mt-6 font-sans text-sm text-foreground-tertiary">Loading your mood…</p>}
+      {query.isPending && <p className="text-sm text-foreground-tertiary">Loading mood…</p>}
       {history && (
-        <div className={`mt-6 flex flex-col gap-6 transition-opacity ${query.isPlaceholderData ? "opacity-60" : ""}`} aria-busy={query.isPlaceholderData}>
-          <Summaries history={history} range={range} />
+        <div className={`flex flex-col gap-6 transition-opacity ${query.isPlaceholderData ? "opacity-60" : ""}`} aria-busy={query.isPlaceholderData}>
+          <Summaries history={history} range={range} isMe={isMe} />
           {history.days.length > 0 ? (
-            <MoodChart from={history.current.from} to={history.current.to} days={history.days} />
+            <MoodChart from={history.current.from} to={history.current.to} trackedFrom={history.trackedFrom} days={history.days} hiddenDays={history.hiddenDays} />
           ) : (
-            <p className="font-sans text-sm text-foreground-tertiary">Post a dayli and your rating will show up here.</p>
+            <p className="text-sm text-foreground-tertiary">{isMe ? "Post a dayli and your rating will show up here." : "No ratings to show in this range yet."}</p>
           )}
           {history.trackedFrom > history.current.from && (
-            <p className="font-sans text-xs text-foreground-tertiary">You joined on {formatMoodDate(history.trackedFrom, "long")}, so earlier days aren&apos;t counted as missing.</p>
-          )}
-          {history.days.length > 0 && (
-            <details className="font-sans text-sm">
-              <summary className="cursor-pointer text-foreground-secondary">Show as a table</summary>
-              <table className="mt-3 w-full max-w-sm text-left">
-                <thead>
-                  <tr className="text-xs text-foreground-tertiary">
-                    <th scope="col" className="py-1 font-normal">Day</th>
-                    <th scope="col" className="py-1 text-right font-normal">Rating</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...history.days].reverse().map((day) => (
-                    <tr key={day.localDate} className="border-t border-foreground/10">
-                      <td className="py-1">{formatMoodDate(day.localDate, "long")}</td>
-                      <td className="py-1 text-right tabular-nums">{day.rating}/10</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
+            <p className="text-xs text-foreground-tertiary">{isMe ? "You" : displayName} joined on {formatMoodDate(history.trackedFrom)}, so earlier days aren&apos;t counted as missing.</p>
           )}
         </div>
       )}

@@ -34,6 +34,11 @@ import {
     FeedPageToJSON,
 } from '../models/FeedPage';
 import {
+    type MoodHistory,
+    MoodHistoryFromJSON,
+    MoodHistoryToJSON,
+} from '../models/MoodHistory';
+import {
     type PostDetail,
     PostDetailFromJSON,
     PostDetailToJSON,
@@ -117,6 +122,17 @@ export interface PostsGetMediaContentRequest {
      *
      */
     mediaId: string;
+}
+
+export interface PostsGetProfileMoodRequest {
+    /**
+     *
+     */
+    username: string;
+    /**
+     * The last 30 days, 90 days, or 365 days, ending today in Auckland.
+     */
+    range?: PostsGetProfileMoodRangeEnum;
 }
 
 export interface PostsGetVoiceMemoRequest {
@@ -450,6 +466,65 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsGetMediaContent(requestParameters: PostsGetMediaContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
         const response = await this.postsGetMediaContentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGetProfileMood without sending the request
+     */
+    async postsGetProfileMoodRequestOpts(requestParameters: PostsGetProfileMoodRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling postsGetProfileMood().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['range'] != null) {
+            queryParameters['range'] = requestParameters['range'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profiles/{username}/mood`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns one person\'s daily ratings over the last 30 days, 90 days or year, with a summary of that range and of the same-length range before it. It reaches the same people as their posts: the owner, including solo and unreleased posts, and active friends, who see released `friends` posts only. Anyone else gets 403. Unknown, banned and blocked profiles all return 404.
+     * Read a profile\'s mood history
+     */
+    async postsGetProfileMoodRaw(requestParameters: PostsGetProfileMoodRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<MoodHistory>> {
+        const requestOptions = await this.postsGetProfileMoodRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => MoodHistoryFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns one person\'s daily ratings over the last 30 days, 90 days or year, with a summary of that range and of the same-length range before it. It reaches the same people as their posts: the owner, including solo and unreleased posts, and active friends, who see released `friends` posts only. Anyone else gets 403. Unknown, banned and blocked profiles all return 404.
+     * Read a profile\'s mood history
+     */
+    async postsGetProfileMood(requestParameters: PostsGetProfileMoodRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<MoodHistory> {
+        const response = await this.postsGetProfileMoodRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -961,3 +1036,13 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const PostsGetProfileMoodRangeEnum = {
+    _30d: '30d',
+    _90d: '90d',
+    _1y: '1y',
+} as const;
+export type PostsGetProfileMoodRangeEnum = typeof PostsGetProfileMoodRangeEnum[keyof typeof PostsGetProfileMoodRangeEnum];
