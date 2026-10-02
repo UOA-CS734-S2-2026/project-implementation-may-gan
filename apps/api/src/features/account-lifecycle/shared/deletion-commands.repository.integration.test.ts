@@ -130,5 +130,44 @@ function localUrl(value: string | undefined) {
       .toEqual({ status: "expired" });
     const [row] = await migrator.db.select().from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId));
     expect(row?.state).toBe("pending_deletion");
-  });
+
+    const [futureDeadline] = await migrator.db.update(schema.accountLifecycles).set({
+      requestedAt: sql`clock_timestamp() - interval '168 hours' + interval '2500 milliseconds'`,
+      cancelUntil: sql`clock_timestamp() + interval '2500 milliseconds'`,
+      purgeDueAt: sql`clock_timestamp() + interval '168 hours' + interval '2500 milliseconds'`,
+    }).where(eq(schema.accountLifecycles.userId, userId))
+      .returning({ cancelUntil: schema.accountLifecycles.cancelUntil });
+    expect(futureDeadline?.cancelUntil?.getTime() ?? 0).toBeGreaterThan(Date.now() + 1500);
+
+    const blocker = createDayliDatabase(localUrl(process.env.TEST_APP_DATABASE_URL));
+    let releaseLock = () => {};
+    let signalLocked = () => {};
+    const released = new Promise<void>((resolve) => { releaseLock = resolve; });
+    const locked = new Promise<void>((resolve) => { signalLocked = resolve; });
+    const blockerTransaction = blocker.db.transaction(async (transaction) => {
+      await transaction.select({ id: schema.user.id }).from(schema.user)
+        .where(eq(schema.user.id, userId)).for("update");
+      signalLocked();
+      await released;
+    });
+    try {
+      await Promise.race([
+        locked,
+        blockerTransaction.then(() => { throw new Error("The user lock was not held."); }),
+      ]);
+      const waitingCancellation = cancelAccountDeletion(app.db, {
+        userId, sessionId: pendingSessionId, grantToken: cancelGrant,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2800));
+      releaseLock();
+      expect(await waitingCancellation).toEqual({ status: "expired" });
+      const [unchanged] = await migrator.db.select().from(schema.accountLifecycles)
+        .where(eq(schema.accountLifecycles.userId, userId));
+      expect(unchanged?.state).toBe("pending_deletion");
+    } finally {
+      releaseLock();
+      await blockerTransaction;
+      await blocker.close();
+    }
+  }, 10_000);
 });

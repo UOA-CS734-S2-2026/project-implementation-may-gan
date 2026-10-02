@@ -36,7 +36,7 @@ export async function requestAccountDeletion(database: DayliDatabase, input: {
     const [session] = await db.select({ id: schema.session.id }).from(schema.session)
       .where(and(
         eq(schema.session.id, input.sessionId), eq(schema.session.userId, input.userId),
-        gt(schema.session.expiresAt, sql`now()`),
+        gt(schema.session.expiresAt, sql`clock_timestamp()`),
       )).for("share");
     if (!session) return { status: "invalid_grant" } as const;
     const [lifecycle] = await db.select().from(schema.accountLifecycles)
@@ -68,15 +68,15 @@ export async function requestAccountDeletion(database: DayliDatabase, input: {
       requestId,
       idempotencyKeyDigest: keyDigest,
       generation: (lifecycle?.generation ?? 0) + 1,
-      requestedAt: sql`now()`,
-      cancelUntil: sql`now() + interval '168 hours'`,
-      purgeDueAt: sql`now() + interval '336 hours'`,
+      requestedAt: sql`statement_timestamp()`,
+      cancelUntil: sql`statement_timestamp() + interval '168 hours'`,
+      purgeDueAt: sql`statement_timestamp() + interval '336 hours'`,
       purgeStartedAt: null,
       lastErrorCategory: null,
       nextAttemptAt: null,
       leaseToken: null,
       leaseExpiresAt: null,
-      updatedAt: sql`now()`,
+      updatedAt: sql`statement_timestamp()`,
     };
     const [pending] = lifecycle
       ? await db.update(schema.accountLifecycles).set(fields)
@@ -120,7 +120,7 @@ export async function cancelAccountDeletion(database: DayliDatabase, input: {
     if (lifecycle?.state !== "pending_deletion" || lifecycle.generation >= Number.MAX_SAFE_INTEGER) {
       return { status: "conflict" } as const;
     }
-    const [deadline] = await db.select({ withinWindow: sql<boolean>`${schema.accountLifecycles.cancelUntil} > now()` })
+    const [deadline] = await db.select({ withinWindow: sql<boolean>`${schema.accountLifecycles.cancelUntil} > clock_timestamp()` })
       .from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, input.userId));
     if (!deadline?.withinWindow) return { status: "expired" } as const;
     const [consumed] = await db.select({ accepted: sql<boolean>`public.consume_account_management_grant(
@@ -134,11 +134,11 @@ export async function cancelAccountDeletion(database: DayliDatabase, input: {
       purgeStartedAt: null, lastErrorCategory: null, nextAttemptAt: null,
       leaseToken: null, leaseExpiresAt: null,
       generation: lifecycle.generation + 1,
-      updatedAt: sql`now()`,
+      updatedAt: sql`clock_timestamp()`,
     }).where(and(
       eq(schema.accountLifecycles.userId, input.userId),
       eq(schema.accountLifecycles.state, "pending_deletion"),
-      gt(schema.accountLifecycles.cancelUntil, sql`now()`),
+      gt(schema.accountLifecycles.cancelUntil, sql`clock_timestamp()`),
     )).returning({ generation: schema.accountLifecycles.generation });
     if (!restored) throw new Error("The cancellation did not commit.");
     return { status: "cancelled" as const, generation: restored.generation };
