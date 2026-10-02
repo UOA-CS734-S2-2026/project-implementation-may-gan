@@ -106,6 +106,25 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(row).toMatchObject({ sessions: 0, verifications: 0 });
   });
 
+  it("verifies the current password without creating a new session or starting deletion", async () => {
+    const app = createProductionApp();
+    const token = nativeToken(await signUp(app, "password-grant@example.test"));
+    const reauthenticate = (password: string) => app.fetch(request("/api/v1/account/reauthenticate/password", {
+      method: "POST", headers: { "authorization": `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ action: "request_deletion", password }),
+    }));
+    expect((await reauthenticate("wrong-password")).status).toBe(401);
+    const allowed = await reauthenticate("not-a-real-password");
+    expect(allowed.status).toBe(200);
+    expect(allowed.headers.get("cache-control")).toBe("no-store");
+    const body = await allowed.json() as { token: string; action: string; expiresAt: string };
+    expect(body).toMatchObject({ action: "request_deletion", token: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(body.expiresAt).toBeTruthy();
+    expect(await migrator.db.select().from(schema.accountLifecycles)).toEqual([]);
+    expect(await migrator.db.select().from(schema.session)).toHaveLength(1);
+    expect(await migrator.db.select().from(schema.accountManagementGrants)).toHaveLength(1);
+  });
+
   it("preserves stable text IDs, profile fields, and account record shape", async () => {
     await migrator.db.insert(schema.user).values({
       id: "schema-user-id",

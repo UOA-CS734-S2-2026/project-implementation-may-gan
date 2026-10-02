@@ -126,6 +126,52 @@
           "SERVICE_UNAVAILABLE"
         ]
       },
+      "PasswordReauthenticationGrant": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_deletion",
+              "cancel_deletion"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt",
+          "action"
+        ]
+      },
+      "PasswordReauthenticationRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_deletion",
+              "cancel_deletion"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "action",
+          "password"
+        ],
+        "additionalProperties": false
+      },
       "LegalAcceptanceResponse": {
         "type": "object",
         "properties": {
@@ -1909,6 +1955,106 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/password": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.reauthenticatePassword",
+        "summary": "Verify a password for one account management action",
+        "description": "Issues a session-bound, single-use five-minute grant. This does not request or cancel deletion. Google-only accounts require a separate verified Google action.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReauthenticationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Short-lived action grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordReauthenticationGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication or password verification failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies the action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The account has no password or its lifecycle changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed action or password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The actor's reauthentication rate limit was reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Verification or rate limiting is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

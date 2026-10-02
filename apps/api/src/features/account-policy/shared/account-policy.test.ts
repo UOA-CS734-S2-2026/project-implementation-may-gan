@@ -38,6 +38,9 @@ describe("account policy", () => {
     await expect(classify("GET", "/api/v1/test-contracts")).resolves.toBe("ordinary");
     await expect(classify("GET", "/api/v1/account/status")).resolves.toBe("policy_read");
     await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
+    await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "request_deletion" })).resolves.toBe("request_deletion");
+    await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "cancel_deletion" })).resolves.toBe("cancel_deletion_verification");
+    await expect(classify("POST", "/api/v1/account/reauthenticate/password/fake", { action: "cancel_deletion" })).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/legal/acceptance/fake")).resolves.toBe("ordinary");
     await expect(classify("DELETE", "/api/v1/conversations/c/messages/m")).resolves.toBe("restricted_cleanup");
     await expect(classify("DELETE", "/api/v1/conversations/c/messages/m/reaction")).resolves.toBe("restricted_cleanup");

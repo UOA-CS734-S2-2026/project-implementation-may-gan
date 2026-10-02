@@ -28,6 +28,7 @@ part 'auth/oauth.dart';
 part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
+part 'api/account_api.dart';
 part 'api/legal_api.dart';
 part 'api/media_api.dart';
 part 'api/messaging_api.dart';
@@ -85,6 +86,8 @@ part 'model/message.dart';
 part 'model/message_reactions_inner.dart';
 part 'model/message_reactions_inner_reactors_inner.dart';
 part 'model/message_reply_preview.dart';
+part 'model/password_reauthentication_grant.dart';
+part 'model/password_reauthentication_request.dart';
 part 'model/pending_relationship_request.dart';
 part 'model/pending_request_page.dart';
 part 'model/post_audience.dart';

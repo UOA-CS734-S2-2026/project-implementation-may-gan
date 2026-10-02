@@ -199,6 +199,7 @@ describe("native API rate limiting", () => {
   });
 
   it.each([
+    ["POST", "/api/v1/account/reauthenticate/password", { action: "reauthenticate_password", binding: "directPush" }],
     ["POST", "/api/v1/conversations/c1/messages", { action: "send_message", binding: "message" }],
     ["POST", "/api/v1/conversations/direct", { action: "create_direct_conversation", binding: "directPush" }],
     ["POST", "/api/v1/realtime/tickets", { action: "create_realtime_ticket", binding: "realtime" }],

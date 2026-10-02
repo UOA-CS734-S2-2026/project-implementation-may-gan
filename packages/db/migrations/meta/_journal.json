@@ -190,6 +190,13 @@
       "when": 1790923357424,
       "tag": "0026_legal_registration_admission_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790931092615,
+      "tag": "0027_chief_gargoyle",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@
 .openapi-generator-ignore
 README.md
 package.json
+src/apis/AccountApi.ts
 src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
@@ -61,6 +62,8 @@ src/models/Message.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/PasswordReauthenticationGrant.ts
+src/models/PasswordReauthenticationRequest.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts

@@ -5,6 +5,7 @@ README.md
 analysis_options.yaml
 git_push.sh
 lib/api.dart
+lib/api/account_api.dart
 lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
@@ -69,6 +70,8 @@ lib/model/message.dart
 lib/model/message_reactions_inner.dart
 lib/model/message_reactions_inner_reactors_inner.dart
 lib/model/message_reply_preview.dart
+lib/model/password_reauthentication_grant.dart
+lib/model/password_reauthentication_request.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
