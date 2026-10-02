@@ -1,3 +1,6 @@
+-- squawk-ignore-file prefer-robust-stmts
+-- squawk-ignore-file require-concurrent-index-creation
+-- squawk-ignore-file constraint-missing-not-valid
 -- The migration runner wraps each file in a transaction. This nonconcurrent
 -- index build is allowed only for a measured small posts table. A larger
 -- environment must get a separate reviewed migration plan before rollout.

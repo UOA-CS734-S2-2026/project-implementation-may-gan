@@ -1,0 +1,6 @@
+reason: The existing posts table is capped at 16 MiB for this coordinated transaction. Initial Trash columns are all null, so each new constraint holds for the existing rows. The transaction installs the constraints and the active-day index together before any Trash writer is enabled.
+affected_data_and_clients: Brief exclusive locking can delay post writes during the constraint scans. The five-second lock acquisition limit and five-minute statement timeout fail the migration rather than bypassing its invariants.
+rollout_sequence: Measure the table and inspect the backup checkpoint, apply the migration on synthetic staging, verify each constraint is validated, and only then consider separately approved route activation.
+backup_checkpoint: Confirm a restorable staging backup. A production rollout requires separate owner approval.
+forward_fix_plan: If size or lock risk exceeds the cap, stop. Use a reviewed nonblocking constraint validation migration instead of editing an applied migration.
+reviewer: Database and availability reviewers required.
