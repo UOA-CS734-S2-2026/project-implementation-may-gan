@@ -23,8 +23,9 @@ export function PostRevisions({ postId, viewerIsAuthor }: { postId: string; view
   const revisions = query.data?.pages.flatMap((page) => page.items) ?? [];
 
   if (query.isPending) return <p role="status" className="text-sm text-foreground-secondary">Loading earlier versions...</p>;
-  if (query.isError && revisions.length === 0) {
-    const notFound = query.error instanceof PostApiError && query.error.failure === "notFound";
+  // A 404 means access ended, so history loaded earlier must not stay on screen.
+  const notFound = query.error instanceof PostApiError && query.error.failure === "notFound";
+  if (notFound || (query.isError && revisions.length === 0)) {
     return (
       <p role="alert" className="text-sm text-foreground-secondary">
         {notFound ? "Earlier versions aren't available." : "Earlier versions couldn't be loaded right now."}

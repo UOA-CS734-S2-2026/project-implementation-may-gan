@@ -48,12 +48,16 @@ export function EditPostForm({
 }: {
   post: PostDetail;
   onDone: () => void;
-  /** Reads the post again; the form keeps its values and saves against the new version. */
-  onReload: () => Promise<unknown>;
+  /**
+   * Reads the post again and says whether that worked. The form keeps its
+   * values and saves against the new version.
+   */
+  onReload: () => Promise<boolean>;
 }) {
   const save = useUpdatePostMutation(post.id);
   const [reloading, setReloading] = useState(false);
   const [reloaded, setReloaded] = useState(false);
+  const [reloadFailed, setReloadFailed] = useState(false);
   const { control, handleSubmit } = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
@@ -98,8 +102,11 @@ export function EditPostForm({
               disabled={reloading}
               onClick={async () => {
                 setReloading(true);
-                await onReload();
+                const loaded = await onReload();
                 setReloading(false);
+                setReloadFailed(!loaded);
+                // Keep the conflict until the newer version is actually here.
+                if (!loaded) return;
                 save.reset();
                 setReloaded(true);
               }}
@@ -107,6 +114,9 @@ export function EditPostForm({
             >
               {reloading ? "Loading..." : "Load the latest version"}
             </Button>
+          )}
+          {failure === "conflict" && reloadFailed && (
+            <p>The latest version couldn&apos;t be loaded. Check your connection and try again.</p>
           )}
         </div>
       )}

@@ -29,6 +29,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
 
+  /// True once the post was edited or deleted here. It is returned to the
+  /// list that opened the post, so that list can refresh.
+  bool _changed = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -63,6 +67,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
     if (saved == null || !mounted) return;
     setState(() {
+      _changed = true;
       _post = saved;
       _result = ApiSuccess(saved);
     });
@@ -118,7 +123,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             content: Text('Dayli deleted.'),
           ),
         );
-        context.go('/me');
+        _changed = true;
+        _leave();
       case ApiError(failure: Unauthenticated()):
         await services.session.sessionExpired();
       case ApiError(:final failure):
@@ -135,42 +141,49 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: colors.foregroundAccent,
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () =>
-                        context.canPop() ? context.pop() : context.go('/'),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  Text(
-                    'dayli',
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.xl,
-                      weight: FontWeight.w600,
-                      tracking: DayliTracking.tight,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: colors.foregroundAccent,
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: _leave,
+                      icon: const Icon(Icons.arrow_back_rounded),
                     ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _body(context),
-              ),
-            ],
+                    Text(
+                      'dayli',
+                      style: DayliText.serif(
+                        context,
+                        size: DayliTextSize.xl,
+                        weight: FontWeight.w600,
+                        tracking: DayliTracking.tight,
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _body(context),
+                ),
+              ],
+            ),
           ),
         ),
       ),

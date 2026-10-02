@@ -142,6 +142,45 @@ void main() {
       expect(find.byKey(const Key('post.history')), findsOneWidget);
     });
 
+    testWidgets('refreshes the feed after going back from an edit', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', viewerIsAuthor: true)),
+      ]);
+      posts.updateResults
+        ..clear()
+        ..add(
+          ApiSuccess(postDetail('1', viewerIsAuthor: true, answer: 'New.')),
+        );
+      final harness = harnessWith(posts);
+      await openEditor(tester, harness);
+      await tester.enterText(find.byKey(const Key('editPost.answer')), 'New.');
+      await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      expect(harness.feed.cursors, [null]);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(harness.feed.cursors, [null, null]);
+    });
+
+    testWidgets('doesn\'t refresh the feed when nothing changed', (
+      tester,
+    ) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
+      );
+      await openPost(tester, harness);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(harness.feed.cursors, [null]);
+    });
+
     testWidgets('keeps the changes after a conflict and loads the latest', (
       tester,
     ) async {
@@ -247,7 +286,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('asks first, then deletes and leaves the post', (tester) async {
+    testWidgets('asks first, deletes, and refreshes the feed it came from', (
+      tester,
+    ) async {
       final harness = harnessWith(
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
       );
@@ -255,7 +296,9 @@ void main() {
 
       expect(harness.posts.deleted, ['1']);
       expect(find.byKey(const Key('post.deleted')), findsOneWidget);
-      expect(find.text('Walked to the harbour.'), findsNothing);
+      expect(find.byKey(const Key('post.menu')), findsNothing);
+      expect(find.byKey(const Key('home.feed.post.1')), findsOneWidget);
+      expect(harness.feed.cursors, [null, null]);
     });
 
     testWidgets('stays on the post when deletion fails', (tester) async {

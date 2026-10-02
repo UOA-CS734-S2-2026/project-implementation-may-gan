@@ -190,7 +190,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         <EditPostForm
           post={post}
           onDone={() => setEditing(false)}
-          onReload={() => query.refetch()}
+          onReload={async () => (await query.refetch()).status === "success"}
         />
       ) : (
         <>

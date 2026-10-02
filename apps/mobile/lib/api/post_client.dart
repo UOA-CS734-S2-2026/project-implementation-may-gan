@@ -421,7 +421,7 @@ class GeneratedPostClient implements PostClient {
           reflectiveAnswer: edit.reflectiveAnswer,
           caption: edit.caption,
           rating: edit.rating,
-          audience: generated.PostAudience.fromJson(edit.audience),
+          audience: generated.PostAudience.fromJson(edit.audience)!,
         ),
       ),
     );

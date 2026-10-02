@@ -132,6 +132,23 @@ describe("PostDetailView", () => {
       await waitFor(() => expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull());
     });
 
+    it("keeps the conflict when the latest version can't be loaded", async () => {
+      const actor = userEvent.setup();
+      get.mockResolvedValueOnce({ ok: true, value: detail({ viewerIsAuthor: true }) })
+        .mockResolvedValue({ ok: false, failure: "network" });
+      update.mockResolvedValue({ ok: false, failure: "conflict" });
+      render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+      await actor.click(await screen.findByRole("button", { name: "Edit" }));
+      await actor.type(screen.getByLabelText("What made you smile today?"), " Then home.");
+      await actor.click(screen.getByRole("button", { name: "Save changes" }));
+      await actor.click(await screen.findByRole("button", { name: "Load the latest version" }));
+
+      expect(await screen.findByText(/latest version couldn't be loaded/)).toBeTruthy();
+      expect(screen.getByRole("alert").textContent).toMatch(/edited somewhere else/);
+      expect(screen.queryByText(/Your changes are still here/)).toBeNull();
+    });
+
     it("cancels without saving", async () => {
       const actor = userEvent.setup();
       get.mockResolvedValue({ ok: true, value: detail({ viewerIsAuthor: true }) });
@@ -174,6 +191,30 @@ describe("PostDetailView", () => {
       expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be deleted/);
       expect(replace).not.toHaveBeenCalled();
     });
+  });
+
+  it("stops showing earlier versions once the server refuses them", async () => {
+    const actor = userEvent.setup();
+    get.mockResolvedValue({ ok: true, value: detail({ edited: true, revisionCount: 1 }) });
+    revisions
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          items: [{ revisionNumber: 1, reflectiveAnswer: "Walked the track.", caption: null, rating: 6, audience: "friends", replacedAt: new Date("2026-09-29T08:00:00.000Z") }],
+          nextCursor: null,
+          hasMore: false,
+        },
+      })
+      .mockResolvedValue({ ok: false, failure: "notFound" });
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    await actor.click(await screen.findByRole("button", { name: "Edited · see earlier versions" }));
+    expect(await screen.findByText("Walked the track.")).toBeTruthy();
+    await actor.click(screen.getByRole("button", { name: "Hide earlier versions" }));
+    await actor.click(screen.getByRole("button", { name: "Edited · see earlier versions" }));
+
+    expect(await screen.findByText("Earlier versions aren't available.")).toBeTruthy();
+    expect(screen.queryByText("Walked the track.")).toBeNull();
   });
 
   it("opens earlier versions from the edited marker", async () => {
