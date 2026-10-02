@@ -67,6 +67,8 @@ part 'model/feed_post.dart';
 part 'model/feed_post_author.dart';
 part 'model/feed_post_prompt.dart';
 part 'model/get_messaging_unread200_response.dart';
+part 'model/google_reauthentication_intent.dart';
+part 'model/google_reauthentication_request.dart';
 part 'model/health_response.dart';
 part 'model/legal_acceptance_request.dart';
 part 'model/legal_acceptance_response.dart';

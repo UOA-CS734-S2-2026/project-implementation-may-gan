@@ -17,6 +17,8 @@ import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive
 import { schema, type DayliDatabase } from "@dayli/db";
 import { bindBrowserRegistrationIntent } from "../legal/shared/registration-intent.repository";
 import { eq } from "drizzle-orm";
+import { handleGoogleManagementCallback, isGoogleManagementCallback, type GoogleManagementCallbackDependencies } from "../account-policy/reauthenticate/google/google-proof-callback";
+import { claimGoogleManagementIntent, completeGoogleManagementIntent } from "../account-policy/reauthenticate/google/google-proof.repository";
 
 const corsMethods = ["GET", "POST"];
 const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
@@ -198,7 +200,7 @@ async function prepareRegistrationRequest(request: Request): Promise<Request> {
   // Internal proof markers cannot be supplied by a browser or native caller.
   headers.delete("x-dayli-native-google-admission");
   headers.delete("x-dayli-registration-browser-state");
-  if (request.method === "GET" && path === `${authBasePath}/callback/google`) {
+  if (request.method === "GET" && path === `${authBasePath}/callback/google` && !isGoogleManagementCallback(request)) {
     const state = new URL(request.url).searchParams.get("state");
     if (state && state.length >= 8 && state.length <= 256 && !state.includes("|")) headers.set("x-dayli-registration-browser-state", state);
   }
@@ -229,7 +231,13 @@ async function handleAuthRequest(
   request: Request,
   handler: AuthHandler,
   confirmations: SocialLinkConfirmationStore,
+  googleManagement?: GoogleManagementCallbackDependencies,
 ): Promise<Response> {
+  if (isGoogleManagementCallback(request)) {
+    return googleManagement
+      ? handleGoogleManagementCallback(request, googleManagement)
+      : new Response(null, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
   const pathname = new URL(request.url).pathname;
   if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
     return handleProtectedSocialLink(request, handler, confirmations);
@@ -310,11 +318,21 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
             .where(eq(schema.session.userId, revoke.userId));
           sessionIds = stored.map((row) => row.id);
         }
-        const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(authDatabase));
+        const googleManagement: GoogleManagementCallbackDependencies | undefined = configuration.google ? {
+          configuration: {
+            clientId: configuration.google.clientIds[0],
+            clientSecret: configuration.google.clientSecret,
+            redirectUri: new URL(`${authBasePath}/callback/google`, configuration.baseURL).href,
+          },
+          resolveSession: async (inner) => (await readAuthoritativeSession(inner, auth.handler)) ?? null,
+          claim: (input) => claimGoogleManagementIntent(authDatabase, input),
+          complete: (input) => completeGoogleManagementIntent(authDatabase, input),
+        } : undefined;
+        const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(authDatabase), googleManagement);
         if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
         return bindBrowserSignupResponse(prepared, response, authDatabase);
       };
-      if (!isRegistrationAuthRequest(prepared)) return dispatch(database);
+      if (!isRegistrationAuthRequest(prepared) || isGoogleManagementCallback(prepared)) return dispatch(database);
       // Better Auth inserts the user, account, and session in separate calls.
       // Keep all three, plus trigger-owned legal evidence, in one transaction.
       try {

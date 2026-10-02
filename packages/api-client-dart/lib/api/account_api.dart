@@ -16,6 +16,74 @@ class AccountApi {
 
   final ApiClient apiClient;
 
+  /// Start browser Google verification for one account action
+  ///
+  /// A browser-only authorization-code flow. It does not sign in, link an account, or request deletion. The callback requires the original live session and a fresh signed Google authentication time.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [GoogleReauthenticationRequest] googleReauthenticationRequest (required):
+  Future<Response> accountBeginGoogleReauthenticationWithHttpInfo(
+    GoogleReauthenticationRequest googleReauthenticationRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/reauthenticate/google';
+
+    // ignore: prefer_final_locals
+    Object? postBody = googleReauthenticationRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Start browser Google verification for one account action
+  ///
+  /// A browser-only authorization-code flow. It does not sign in, link an account, or request deletion. The callback requires the original live session and a fresh signed Google authentication time.
+  ///
+  /// Parameters:
+  ///
+  /// * [GoogleReauthenticationRequest] googleReauthenticationRequest (required):
+  Future<GoogleReauthenticationIntent?> accountBeginGoogleReauthentication(
+    GoogleReauthenticationRequest googleReauthenticationRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountBeginGoogleReauthenticationWithHttpInfo(
+      googleReauthenticationRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'GoogleReauthenticationIntent',
+      ) as GoogleReauthenticationIntent;
+    }
+    return null;
+  }
+
   /// Verify a password for one account management action
   ///
   /// Issues a session-bound, single-use five-minute grant. This does not request or cancel deletion. Google-only accounts require a separate verified Google action.

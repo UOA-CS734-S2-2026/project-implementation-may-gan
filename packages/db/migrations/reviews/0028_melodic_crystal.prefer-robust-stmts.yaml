@@ -1,0 +1,6 @@
+reason: The intent claim and grant completion procedures must install together with credential-aware consumption. A partial migration must not leave Google grants usable without session, subject, action, and lifecycle fencing.
+affected_data_and_clients: This adds nullable metadata to existing restricted tables. Password grants retain their credential check. Google issuance stays unavailable unless the new functions and API route are both deployed.
+rollout_sequence: Verify the intent table is unused and empty, apply this forward migration, test actual app-role grants and procedure race behavior, then enable the separately reviewed API route. Keep deletion and cleanup execution disabled.
+backup_checkpoint: Confirm staging migration recovery and restricted app and lifecycle_worker table permissions before installation.
+forward_fix_plan: If already applied, add a reviewed forward migration. Do not grant direct runtime access to grant or intent tables.
+reviewer: Database, authentication, and privacy reviewers required.

@@ -63,7 +63,7 @@ export async function accountCapabilityForRequest(request: Request): Promise<Acc
   const url = new URL(request.url);
   const key = `${request.method.toUpperCase()} ${url.pathname}`;
   if (publicApiRoutes.has(key)) return undefined;
-  if (key === "POST /api/v1/account/reauthenticate/password") {
+  if (key === "POST /api/v1/account/reauthenticate/password" || key === "POST /api/v1/account/reauthenticate/google") {
     const body: unknown = await request.clone().json().catch(() => undefined);
     return body && typeof body === "object" && !Array.isArray(body) && (body as { action?: unknown }).action === "cancel_deletion"
       ? "cancel_deletion_verification" : "request_deletion";

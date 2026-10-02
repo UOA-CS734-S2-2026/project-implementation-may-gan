@@ -29,6 +29,8 @@ export * from './FeedPost';
 export * from './FeedPostAuthor';
 export * from './FeedPostPrompt';
 export * from './GetMessagingUnread200Response';
+export * from './GoogleReauthenticationIntent';
+export * from './GoogleReauthenticationRequest';
 export * from './HealthResponse';
 export * from './LegalAcceptanceRequest';
 export * from './LegalAcceptanceResponse';
