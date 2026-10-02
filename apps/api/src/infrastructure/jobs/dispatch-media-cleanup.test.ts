@@ -35,7 +35,7 @@ describe("media cleanup dispatcher", () => {
     expect(store.claimDue).toHaveBeenCalledWith(expect.objectContaining({
       now: start, limit: 1, graceMs: MEDIA_CLEANUP_GRACE_MS, leaseForMs: 60_000, maxAttempts: 8,
     }));
-    expect(MEDIA_CLEANUP_GRACE_MS).toBe(24 * 60 * 60 * 1000);
+    expect(MEDIA_CLEANUP_GRACE_MS).toBe(7 * 24 * 60 * 60 * 1000);
   });
 
   it("keeps the row and reschedules with backoff when R2 fails", async () => {

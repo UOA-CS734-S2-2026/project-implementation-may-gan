@@ -158,7 +158,9 @@ export function buildDrizzlePostVisibilityFilter(
   const activeAccount = input.action === "export"
     ? sql`true`
     : buildDrizzleActiveAccountFilter(database, posts.authorId);
-  return and(activeAccount, media, notBlocked, access);
+  // Export uses a separate owner-scoped Trash projection for restorable items.
+  // Normal post, media, revision, and active-export reads never include Trash.
+  return and(isNull(posts.trashedAt), activeAccount, media, notBlocked, access);
 }
 
 /** List filtering is applied before limit/offset, preventing page holes/leaks. */

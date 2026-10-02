@@ -87,7 +87,7 @@ async function readPost(queryable: Queryable, postId: string): Promise<StoredDai
     .from(schema.posts)
     .innerJoin(schema.dailyPrompts, eq(schema.dailyPrompts.id, schema.posts.promptId))
     .leftJoin(schema.tomorrowNotes, eq(schema.tomorrowNotes.postId, schema.posts.id))
-    .where(eq(schema.posts.id, postId))
+    .where(and(eq(schema.posts.id, postId), isNull(schema.posts.trashedAt)))
     .limit(1);
   return row ? toStoredPost(await readPostMedia(queryable, postId), row) : null;
 }
@@ -108,16 +108,21 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .limit(1);
       if (!record) return null;
       const post = await readPost(queryable, record.postId);
-      // The idempotency row cascades with its post, so a missing post means
-      // cleanup is mid-flight; treat the key as unused rather than replaying.
-      return post ? { requestFingerprint: record.requestFingerprint, post } : null;
+      // A retained key for a trashed post cannot replay hidden content or be
+      // reused for a replacement. Purge removes the key with its post.
+      if (!post) throw new CreateDailyPostError("IDEMPOTENCY_KEY_REUSED");
+      return { requestFingerprint: record.requestFingerprint, post };
     },
 
     async hasPostForDay(authorId, localDate) {
       const rows = await queryable
         .select({ id: schema.posts.id })
         .from(schema.posts)
-        .where(and(eq(schema.posts.authorId, authorId), eq(schema.posts.localDate, localDate)))
+        .where(and(
+          eq(schema.posts.authorId, authorId),
+          eq(schema.posts.localDate, localDate),
+          isNull(schema.posts.trashedAt),
+        ))
         .limit(1);
       return rows.length > 0;
     },

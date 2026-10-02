@@ -50,6 +50,7 @@ function requireLocalTestUrl(value: string): string {
       `;
     }
     await reserve("photo", users.owner, "image/jpeg", "validated");
+    await reserve("claimed", users.owner, "image/jpeg", "validated");
     await reserve("second", users.owner, "image/webp", "validated");
     await reserve("pending", users.owner, "image/png", "pending");
     await reserve("video", users.owner, "video/mp4", "validated");
@@ -85,6 +86,31 @@ function requireLocalTestUrl(value: string): string {
     await expect(setAvatar().setAvatar(users.owner, id("missing"), now)).resolves.toEqual({ kind: "notFound" });
     await expect(setAvatar().setAvatar(users.owner, id("pending"), now)).resolves.toEqual({ kind: "notReady" });
     await expect(setAvatar().setAvatar(users.owner, id("video"), now)).resolves.toEqual({ kind: "notImage" });
+  });
+
+  it("refuses an upload already claimed for cleanup", async () => {
+    await migrator.client`
+      update public.media_reservation set cleanup_claimed_at = ${now.toISOString()}
+      where id = ${id("claimed")}
+    `;
+    await expect(setAvatar().setAvatar(users.owner, id("claimed"), now)).resolves.toEqual({ kind: "notReady" });
+  });
+
+  it("refuses avatar writes after account deletion starts", async () => {
+    const requestedAt = new Date();
+    await migrator.client`
+      insert into public.account_lifecycles
+        (user_id, state, generation, request_id, idempotency_key_digest, requested_at, cancel_until, purge_due_at)
+      values (${users.owner}, 'pending_deletion', 1, ${id("delete")}, ${"a".repeat(64)},
+        ${requestedAt.toISOString()},
+        ${new Date(requestedAt.getTime() + 168 * 60 * 60_000).toISOString()},
+        ${new Date(requestedAt.getTime() + 336 * 60 * 60_000).toISOString()})
+    `;
+    try {
+      await expect(setAvatar().setAvatar(users.owner, id("photo"), now)).resolves.toEqual({ kind: "notFound" });
+    } finally {
+      await migrator.client`delete from public.account_lifecycles where user_id = ${users.owner}`;
+    }
   });
 
   it("keeps a private account's photo from non-friends", async () => {

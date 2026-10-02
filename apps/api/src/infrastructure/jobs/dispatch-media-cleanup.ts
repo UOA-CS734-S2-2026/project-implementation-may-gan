@@ -3,7 +3,7 @@ import type { MediaCleanupStore } from "./media-cleanup-store";
 import { retryDelayMs } from "./dispatch-outbox";
 
 /** Must stay well above the 15-minute upload TTL, so a signed PUT URL is dead before its upload is deleted. */
-export const MEDIA_CLEANUP_GRACE_MS = 24 * 60 * 60 * 1000;
+export const MEDIA_CLEANUP_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface MediaCleanupSummary {
   claimed: number;

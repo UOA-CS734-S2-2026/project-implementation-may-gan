@@ -147,10 +147,20 @@ export const posts = pgTable("posts", {
   audience: postAudience("audience").notNull(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
   releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
+  trashedAt: timestamp("trashed_at", { withTimezone: true }),
+  restoreUntil: timestamp("restore_until", { withTimezone: true }),
+  trashPurgeDueAt: timestamp("trash_purge_due_at", { withTimezone: true }),
+  trashGeneration: bigint("trash_generation", { mode: "number" }).notNull().default(0),
+  trashLeaseToken: text("trash_lease_token"),
+  trashLeaseExpiresAt: timestamp("trash_lease_expires_at", { withTimezone: true }),
+  trashFailureCategory: text("trash_failure_category"),
+  trashNextAttemptAt: timestamp("trash_next_attempt_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  unique("posts_author_local_date_unique").on(table.authorId, table.localDate),
+  uniqueIndex("posts_author_local_date_active_unique")
+    .on(table.authorId, table.localDate)
+    .where(sql`${table.trashedAt} is null`),
   unique("posts_id_author_unique").on(table.id, table.authorId),
   check("posts_rating_check", sql`${table.rating} between 1 and 10`),
   check(
@@ -162,6 +172,16 @@ export const posts = pgTable("posts", {
     sql`${table.caption} is null or char_length(${table.caption}) <= 1000`,
   ),
   check("posts_release_after_acceptance_check", sql`${table.releasedAt} > ${table.acceptedAt}`),
+  check("posts_trash_generation_check", sql`${table.trashGeneration} between 0 and 9007199254740991`),
+  check("posts_trash_deadlines_check", sql`
+    (${table.trashedAt} is null and ${table.restoreUntil} is null and ${table.trashPurgeDueAt} is null and
+      ${table.trashLeaseToken} is null and ${table.trashLeaseExpiresAt} is null and
+      ${table.trashFailureCategory} is null and ${table.trashNextAttemptAt} is null) or
+    (${table.trashedAt} is not null and ${table.restoreUntil} = ${table.trashedAt} + interval '168 hours' and
+      ${table.trashPurgeDueAt} = ${table.trashedAt} + interval '336 hours')
+  `),
+  check("posts_trash_lease_pair_check", sql`(${table.trashLeaseToken} is null) = (${table.trashLeaseExpiresAt} is null)`),
+  check("posts_trash_failure_category_check", sql`${table.trashFailureCategory} is null or char_length(${table.trashFailureCategory}) between 1 and 100`),
 ]);
 
 /** Rows in this table represent accepted attachments only; download
