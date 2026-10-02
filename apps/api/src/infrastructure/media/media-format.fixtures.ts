@@ -118,6 +118,25 @@ export function buildMinimalMp4(durationSeconds: number, timescale = 1000): Uint
   return concatBoxes(ftyp, moov, mdat);
 }
 
+/**
+ * ftyp(M4A) + moov(mvhd, trak(mdia(mdhd, hdlr=soun))) + mdat — a minimal but
+ * structurally complete audio MP4 of a given duration. The track runs in an
+ * audio sample-rate timescale, like a real AAC capture, while the movie header
+ * keeps its own millisecond timescale.
+ */
+export function buildMinimalM4a(durationSeconds: number, trackTimescale = 44_100): Uint8Array {
+  const ftyp = buildFtypBox("M4A ", ["M4A ", "mp42", "isom"]);
+  const mvhd = buildMvhdBoxV0({ timescale: 1000, duration: Math.round(durationSeconds * 1000) });
+  const trak = buildTrakBox({
+    timescale: trackTimescale,
+    duration: Math.round(durationSeconds * trackTimescale),
+    handlerType: "soun",
+  });
+  const moov = buildMoovBox([mvhd, trak]);
+  const mdat = wrapBox("mdat", new Uint8Array([0, 1, 2, 3]));
+  return concatBoxes(ftyp, moov, mdat);
+}
+
 /** SOI...EOI — a real JPEG has both; a payload that only starts with the marker doesn't. */
 export const validJpegBytes = new Uint8Array([
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0xff, 0xd9,
