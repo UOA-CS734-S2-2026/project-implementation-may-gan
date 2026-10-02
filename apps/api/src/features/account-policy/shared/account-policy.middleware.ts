@@ -12,22 +12,55 @@ export interface AccountPolicyResolver {
 const publicApiRoutes = new Set([
   "GET /api/v1/health",
   "GET /api/v1/openapi.json",
-  "GET /api/v1/test-contracts",
+  "GET /api/v1/test",
+  // The opaque ticket is authenticated and policy-checked after consumption by
+  // connectRealtime. The HTTP session middleware cannot see that credential.
+  "GET /api/v1/realtime/connect",
 ]);
 const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/status", "policy_read"],
   ["GET /api/v1/account/policy", "policy_read"],
 ]);
 
+function pathSegments(pathname: string): string[] {
+  return pathname.split("/").filter(Boolean);
+}
+
+function matches(segments: readonly string[], expected: readonly string[]): boolean {
+  return segments.length === expected.length && expected.every((segment, index) => segment === "*" || segments[index] === segment);
+}
+
+async function cleanupCapability(request: Request, pathname: string): Promise<AccountCapability | undefined> {
+  const method = request.method.toUpperCase();
+  const segments = pathSegments(pathname);
+  if (method === "DELETE" && (
+    matches(segments, ["api", "v1", "conversations", "*", "messages", "*"])
+    || matches(segments, ["api", "v1", "conversations", "*", "messages", "*", "reaction"])
+    || matches(segments, ["api", "v1", "push", "devices", "*"])
+    || matches(segments, ["api", "v1", "profile", "avatar"])
+    || matches(segments, ["api", "v1", "relationships", "*", "friendship"])
+    || matches(segments, ["api", "v1", "relationships", "*", "block"])
+  )) return "restricted_cleanup";
+  if (method === "POST" && matches(segments, ["api", "v1", "relationships", "requests", "*", "decline"])) return "restricted_cleanup";
+  if (method === "POST" && matches(segments, ["api", "v1", "relationships", "requests", "*", "cancel"])) return "restricted_cleanup";
+  if (method !== "PUT" || !matches(segments, ["api", "v1", "conversations", "*", "request"])) return undefined;
+
+  const body = await request.clone().json().catch(() => undefined);
+  return body && typeof body === "object" && !Array.isArray(body) && (body as { decision?: unknown }).decision === "decline"
+    ? "restricted_cleanup"
+    : undefined;
+}
+
 /**
- * Exact method and path matching prevents a future, unreviewed route or a
- * lookalike path from inheriting restricted-account access.
+ * Exact method and path matching prevents an unreviewed route or lookalike
+ * path from inheriting restricted-account access. The only body-sensitive
+ * exception is the existing request-decline operation, not request acceptance.
  */
-export function accountCapabilityForRequest(request: Request): AccountCapability | undefined {
+export async function accountCapabilityForRequest(request: Request): Promise<AccountCapability | undefined> {
   const url = new URL(request.url);
   const key = `${request.method.toUpperCase()} ${url.pathname}`;
   if (publicApiRoutes.has(key)) return undefined;
-  return managementApiRoutes.get(key) ?? "ordinary";
+  return managementApiRoutes.get(key) ?? await cleanupCapability(request, url.pathname) ?? "ordinary";
 }
 
 function restrictedResponse(context: Parameters<MiddlewareHandler<AuthenticatedApiEnv>>[0], policy: AccountPolicy) {
@@ -41,17 +74,18 @@ function restrictedResponse(context: Parameters<MiddlewareHandler<AuthenticatedA
 }
 
 /**
- * A policy lookup failure is unavailable, never an allow decision. Credential
- * failures continue to the feature's session middleware so existing 401 API
- * contracts remain unchanged.
+ * Policy lookup failures are unavailable, never allow decisions. Every
+ * non-public v1 route authenticates here, so future routes cannot become guest
+ * accessible merely by omitting their own session middleware.
  */
 export function createAccountPolicyMiddleware(
   resolveSession: ResolveSession,
   policies: AccountPolicyResolver,
 ): MiddlewareHandler<AuthenticatedApiEnv> {
   return async (context, next) => {
-    const capability = accountCapabilityForRequest(context.req.raw);
+    const capability = await accountCapabilityForRequest(context.req.raw);
     if (!capability) return next();
+    context.header("Cache-Control", "no-store");
 
     let actor: AuthenticatedActor | null | undefined;
     try {
@@ -59,7 +93,7 @@ export function createAccountPolicyMiddleware(
     } catch {
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     }
-    if (!actor?.userId) return next();
+    if (!actor?.userId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.");
 
     let policy: AccountPolicy;
     try {

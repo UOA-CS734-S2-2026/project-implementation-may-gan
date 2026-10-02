@@ -2,6 +2,8 @@ import { createHyperdriveDatabase, schema, sql, type HyperdriveBinding } from "@
 import { and, eq, exists, gt, isNull, or } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
 import { conversationPairBlocked, conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
+import { allowsAccountCapability } from "../../features/account-policy/shared/account-policy";
+import { readAccountPolicy } from "../../features/account-policy/shared/account-policy.repository";
 import { bodyFreeRealtimeEvent } from "../jobs/dispatch-outbox";
 
 interface UserRealtimeStub {
@@ -123,6 +125,11 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       ))
       .limit(1);
     if (!row || !row.recipientMember) return false;
+    try {
+      if (!allowsAccountCapability(await readAccountPolicy(database.db, job.recipientId), "ordinary")) return false;
+    } catch {
+      return false;
+    }
     // New writers persist the actual actor. Old message-created jobs can derive
     // it from the immutable message sender. Other ambiguous old queued changes
     // may be delivered only when neither availability nor blocks changed.

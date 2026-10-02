@@ -161,6 +161,7 @@ import type { RemoveAvatarRouteDependencies } from "./features/profiles/remove-a
 import { createHyperdriveRemoveAvatarRepository } from "./features/profiles/remove-avatar/remove-avatar.repository";
 import { createPostgresUsernameProfileStore } from "./features/profiles/username/username.repository";
 import { createAccountPolicyMiddleware } from "./features/account-policy/shared/account-policy.middleware";
+import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import type { ResolveSession } from "./http/middleware/require-session";
@@ -441,6 +442,7 @@ const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,
   resolveRealtimeSession: async () => null,
   webSocketUrl: "wss://realtime.invalid/api/v1/realtime/connect",
+  policyAllowsOrdinary: async () => false,
 };
 const unavailablePushDevices: PushDeviceDependencies = { resolveSession: async () => null, resolvePushSession: async () => null };
 
@@ -612,6 +614,8 @@ function createRealtimeDependencies(
   env: ApiEnv,
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
 ): { ticket: RealtimeTicketRouteDependencies; connect: RealtimeConnectRouteDependencies } {
+  const policies = createHyperdriveAccountPolicyResolver(configuration.hyperdrive);
+  const policyAllowsOrdinary = async (userId: string) => allowsAccountCapability(await policies.resolve(userId), "ordinary");
   const resolveRealtimeSession = createVerifiedRealtimeSessionResolver(configuration);
   const tickets = {
     issue: async (session: VerifiedRealtimeSession) => withHyperdriveDatabase(configuration.hyperdrive, (database) => createRealtimeTicketService({ store: createPostgresRealtimeTicketStore(database) }).issue(session)),
@@ -625,8 +629,9 @@ function createRealtimeDependencies(
     userRealtime: env.USER_REALTIME!,
     trustedOrigins: configuration.trustedOrigins,
     hasUsername,
+    policyAllowsOrdinary,
   };
-  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername }, connect };
+  return { ticket: { resolveSession: createSessionResolver(configuration), resolveRealtimeSession, tickets, webSocketUrl: webSocketUrl.toString(), hasUsername, policyAllowsOrdinary }, connect };
 }
 
 function createPushDeviceDependencies(

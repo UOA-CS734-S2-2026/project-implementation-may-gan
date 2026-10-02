@@ -221,6 +221,11 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(otherStatus.status).toBe(200);
     await expect(otherStatus.json()).resolves.toMatchObject({ restriction: "active" });
 
+    const publicGuest = await app.fetch(request("/api/v1/test"));
+    expect(publicGuest.status).toBe(200);
+    const publicRestricted = await app.fetch(request("/api/v1/test", { headers: { authorization: `Bearer ${ownerToken}` } }));
+    expect(publicRestricted.status).toBe(200);
+
     const blocked = await app.fetch(request("/api/v1/feed", { headers: { authorization: `Bearer ${ownerToken}` } }));
     expect(blocked.status).toBe(403);
     await expect(blocked.json()).resolves.toMatchObject({ error: { code: "FORBIDDEN", details: { restriction: "pending_deletion" } } });

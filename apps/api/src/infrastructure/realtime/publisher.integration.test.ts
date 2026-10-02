@@ -21,6 +21,7 @@ suite("Postgres realtime publisher authorization", () => {
     conversation: `realtime-publisher-c-${crypto.randomUUID()}`,
   };
   const createdAt = new Date();
+  let effectiveTermsId: string | undefined;
 
   function job(row: { id: string; recipientId: string; changeSequence: number; leaseToken: string }): OutboxJob {
     return {
@@ -88,6 +89,11 @@ suite("Postgres realtime publisher authorization", () => {
   );
 
   afterEach(async () => {
+    if (effectiveTermsId) {
+      await database.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, effectiveTermsId));
+      effectiveTermsId = undefined;
+    }
+    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(inArray(schema.user.id, [ids.alice, ids.bob]));
     await database.db.delete(schema.relationshipBlocks).where(isTestUserBlock);
     await database.db.delete(schema.accountLifecycles).where(inArray(schema.accountLifecycles.userId, [ids.alice, ids.bob]));
     await database.db.delete(schema.messagingOutbox).where(eq(schema.messagingOutbox.conversationId, ids.conversation));
@@ -213,6 +219,25 @@ suite("Postgres realtime publisher authorization", () => {
     });
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, job)).resolves.toBe(false);
+  });
+
+  it("fails closed for an active ban and an effective Terms gate before body-free delivery", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+    await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
+
+    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(eq(schema.user.id, ids.bob));
+    effectiveTermsId = `realtime-policy-terms-${crypto.randomUUID()}`;
+    await database.db.insert(schema.legalDocumentVersions).values({
+      id: effectiveTermsId,
+      kind: "terms",
+      version: 1_000_000_001,
+      contentDigest: "e".repeat(64),
+      status: "effective",
+      effectiveAt: new Date("2020-01-01T00:00:00.000Z"),
+    });
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
   });
 
   it("rejects a recipient whose membership was removed", async () => {

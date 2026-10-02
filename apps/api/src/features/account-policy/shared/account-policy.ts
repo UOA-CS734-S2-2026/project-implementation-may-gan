@@ -1,5 +1,6 @@
 export const accountCapabilities = [
   "ordinary",
+  "restricted_cleanup",
   "policy_read",
   "lifecycle_status",
   "cancel_deletion_verification",
@@ -37,8 +38,9 @@ export interface AccountPolicy {
 }
 
 const active = new Set<AccountCapability>(accountCapabilities);
-const restricted = new Set<AccountCapability>(["policy_read", "lifecycle_status", "appeal", "signout"]);
+const restricted = new Set<AccountCapability>(["restricted_cleanup", "policy_read", "lifecycle_status", "appeal", "signout"]);
 const pendingDeletion = new Set<AccountCapability>([
+  "restricted_cleanup",
   "policy_read",
   "lifecycle_status",
   "cancel_deletion_verification",
@@ -46,6 +48,7 @@ const pendingDeletion = new Set<AccountCapability>([
   "signout",
 ]);
 const management = new Set<AccountCapability>([
+  "restricted_cleanup",
   "policy_read",
   "lifecycle_status",
   "request_deletion",
