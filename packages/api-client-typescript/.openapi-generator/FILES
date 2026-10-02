@@ -3,6 +3,7 @@
 .openapi-generator-ignore
 README.md
 package.json
+src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
 src/apis/PostingDaysApi.ts
@@ -41,6 +42,8 @@ src/models/FeedPostAuthor.ts
 src/models/FeedPostPrompt.ts
 src/models/GetMessagingUnread200Response.ts
 src/models/HealthResponse.ts
+src/models/LegalAcceptanceRequest.ts
+src/models/LegalAcceptanceResponse.ts
 src/models/ListConversationChanges200Response.ts
 src/models/ListConversationChanges200ResponseItemsInner.ts
 src/models/ListConversations200Response.ts

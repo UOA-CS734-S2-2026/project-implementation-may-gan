@@ -195,6 +195,46 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     await expect(expired.json()).resolves.toBeNull();
   });
 
+  it("records explicit acceptance for an existing signed-in user without inferring it from login", async () => {
+    const app = createProductionApp();
+    const token = nativeToken(await signUp(app, "legal-existing@example.test"));
+    const termsId = `auth-legal-${crypto.randomUUID()}`;
+    const contentDigest = "c".repeat(64);
+    const [owner] = await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, "legal-existing@example.test"));
+    if (!owner) throw new Error("Expected registered user.");
+    try {
+      await migrator.db.insert(schema.legalDocumentVersions).values({
+        id: termsId, kind: "terms", version: 1024, contentDigest,
+        status: "effective", effectiveAt: new Date("2026-01-01T00:00:00Z"),
+      });
+      const freshSignup = await signUp(app, "legal-unproved@example.test");
+      expect(freshSignup.ok).toBe(false);
+      expect(await migrator.db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, "legal-unproved@example.test"))).toEqual([]);
+      const blocked = await app.fetch(request("/api/v1/account/status", { headers: { authorization: `Bearer ${token}` } }));
+      await expect(blocked.json()).resolves.toMatchObject({ restriction: "terms_blocked" });
+      const signInAgain = await app.fetch(request("/api/auth/sign-in/email", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "legal-existing@example.test", password: "not-a-real-password" }),
+      }));
+      expect(signInAgain.status).toBe(200);
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, owner.id))).toEqual([]);
+
+      const acceptance = await app.fetch(request("/api/v1/legal/acceptance", {
+        method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ termsVersionId: termsId, termsContentDigest: contentDigest, acceptedTermsAndDeclaredAge16: true }),
+      }));
+      expect(acceptance.status).toBe(200);
+      await expect(acceptance.json()).resolves.toMatchObject({ termsVersionId: termsId });
+      const active = await app.fetch(request("/api/v1/account/status", { headers: { authorization: `Bearer ${token}` } }));
+      await expect(active.json()).resolves.toMatchObject({ restriction: "active" });
+      expect(await migrator.db.select().from(schema.termsAcceptances).where(eq(schema.termsAcceptances.userId, owner.id))).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.ageDeclarations).where(eq(schema.ageDeclarations.userId, owner.id))).toHaveLength(1);
+    } finally {
+      await migrator.db.delete(schema.user).where(eq(schema.user.id, owner.id));
+      await migrator.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, termsId));
+    }
+  });
+
   it("reads account policy only for the authenticated session owner and cannot bypass a pending deletion", async () => {
     const app = createProductionApp();
     const ownerToken = nativeToken(await signUp(app, "policy-owner@example.test"));

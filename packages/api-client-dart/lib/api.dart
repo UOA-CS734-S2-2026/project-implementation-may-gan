@@ -28,6 +28,7 @@ part 'auth/oauth.dart';
 part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
+part 'api/legal_api.dart';
 part 'api/media_api.dart';
 part 'api/messaging_api.dart';
 part 'api/posting_days_api.dart';
@@ -65,6 +66,8 @@ part 'model/feed_post_author.dart';
 part 'model/feed_post_prompt.dart';
 part 'model/get_messaging_unread200_response.dart';
 part 'model/health_response.dart';
+part 'model/legal_acceptance_request.dart';
+part 'model/legal_acceptance_response.dart';
 part 'model/list_conversation_changes200_response.dart';
 part 'model/list_conversation_changes200_response_items_inner.dart';
 part 'model/list_conversations200_response.dart';

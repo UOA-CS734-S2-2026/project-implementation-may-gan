@@ -126,6 +126,48 @@
           "SERVICE_UNAVAILABLE"
         ]
       },
+      "LegalAcceptanceResponse": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "declaredAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "acceptedAt",
+          "declaredAt"
+        ]
+      },
+      "LegalAcceptanceRequest": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "acceptedTermsAndDeclaredAge16": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "termsContentDigest",
+          "acceptedTermsAndDeclaredAge16"
+        ],
+        "additionalProperties": false
+      },
       "CreateMediaReservationResponse": {
         "type": "object",
         "properties": {
@@ -1782,6 +1824,96 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/acceptance": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.recordAcceptance",
+        "summary": "Record an explicit current Terms and 16+ action",
+        "description": "Available only for an effective Terms version. The Privacy Policy is a notice, not consent. No draft document can be accepted.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalAcceptanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server-recorded Terms and age declaration timestamps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalAcceptanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account cannot accept Terms in its current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The requested Terms are stale or no Terms are effective.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit confirmation and an exact current Terms digest are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal acceptance is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

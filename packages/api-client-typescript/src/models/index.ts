@@ -29,6 +29,8 @@ export * from './FeedPostAuthor';
 export * from './FeedPostPrompt';
 export * from './GetMessagingUnread200Response';
 export * from './HealthResponse';
+export * from './LegalAcceptanceRequest';
+export * from './LegalAcceptanceResponse';
 export * from './ListConversationChanges200Response';
 export * from './ListConversationChanges200ResponseItemsInner';
 export * from './ListConversations200Response';

@@ -264,6 +264,10 @@ class ApiClient {
           return GetMessagingUnread200Response.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'LegalAcceptanceRequest':
+          return LegalAcceptanceRequest.fromJson(value);
+        case 'LegalAcceptanceResponse':
+          return LegalAcceptanceResponse.fromJson(value);
         case 'ListConversationChanges200Response':
           return ListConversationChanges200Response.fromJson(value);
         case 'ListConversationChanges200ResponseItemsInner':
