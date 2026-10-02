@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
+import { actionableAccountCapabilities } from "./shared/account-policy";
 import type { AccountPolicyResolver } from "./shared/account-policy.middleware";
 
 export interface AccountPolicyRouteDependencies {
@@ -9,7 +10,8 @@ export interface AccountPolicyRouteDependencies {
 
 /**
  * Content-free restricted-state reads. They intentionally disclose no deadline,
- * legal document, operator case, profile, or another account's state.
+ * legal document, operator case, profile, another account's state, or deferred
+ * capabilities that do not yet have a registered action.
  */
 export function registerAccountPolicyRoutes(
   app: OpenAPIHono<AuthenticatedApiEnv>,
@@ -22,7 +24,7 @@ export function registerAccountPolicyRoutes(
     if (!dependencies.policies) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     try {
       const policy = await dependencies.policies.resolve(actor.userId);
-      return context.json({ restriction: policy.restriction, allowed: [...policy.allowed].sort() }, 200);
+      return context.json({ restriction: policy.restriction, allowed: actionableAccountCapabilities(policy) }, 200);
     } catch {
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     }
@@ -35,7 +37,7 @@ export function registerAccountPolicyRoutes(
     if (!dependencies.policies) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     try {
       const policy = await dependencies.policies.resolve(actor.userId);
-      return context.json({ restriction: policy.restriction, allowed: [...policy.allowed].sort() }, 200);
+      return context.json({ restriction: policy.restriction, allowed: actionableAccountCapabilities(policy) }, 200);
     } catch {
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.");
     }

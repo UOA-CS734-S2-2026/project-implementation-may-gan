@@ -39,6 +39,8 @@ export interface AccountPolicy {
 
 const active = new Set<AccountCapability>(accountCapabilities);
 const restricted = new Set<AccountCapability>(["restricted_cleanup", "policy_read", "lifecycle_status", "appeal", "signout"]);
+const terminal = new Set<AccountCapability>(["policy_read", "signout"]);
+const actionable = new Set<AccountCapability>(["ordinary", "restricted_cleanup", "policy_read", "signout"]);
 const pendingDeletion = new Set<AccountCapability>([
   "restricted_cleanup",
   "policy_read",
@@ -75,8 +77,8 @@ export function resolveAccountPolicy(state: Partial<AccountPolicyState> | undefi
   };
 
   if (normalized.banned) return { restriction: "banned", allowed: restricted };
-  if (normalized.lifecycleState === "purging") return { restriction: "purging", allowed: restricted };
-  if (normalized.lifecycleState === "purge_failed") return { restriction: "purge_failed", allowed: restricted };
+  if (normalized.lifecycleState === "purging") return { restriction: "purging", allowed: terminal };
+  if (normalized.lifecycleState === "purge_failed") return { restriction: "purge_failed", allowed: terminal };
   if (normalized.temporarilyRestricted) return { restriction: "underage_restricted", allowed: management };
   if (normalized.lifecycleState === "pending_deletion") return { restriction: "pending_deletion", allowed: pendingDeletion };
   if (normalized.termsRequired && !normalized.termsAccepted) return { restriction: "terms_blocked", allowed: management };
@@ -86,4 +88,9 @@ export function resolveAccountPolicy(state: Partial<AccountPolicyState> | undefi
 
 export function allowsAccountCapability(policy: AccountPolicy, capability: AccountCapability): boolean {
   return policy.allowed.has(capability);
+}
+
+/** Only labels backed by a currently registered account action reach clients. */
+export function actionableAccountCapabilities(policy: AccountPolicy): AccountCapability[] {
+  return [...policy.allowed].filter((capability) => actionable.has(capability)).sort();
 }

@@ -1,8 +1,9 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { OutboxJob } from "../jobs/outbox-store";
-import { canPublishCurrentChange } from "./publisher";
+import { createOutboxDispatcher } from "../jobs/dispatch-outbox";
+import { createPostgresOutboxStore, type OutboxJob } from "../jobs/outbox-store";
+import { canPublishCurrentChange, createDurableObjectRealtimePublisher } from "./publisher";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -49,6 +50,21 @@ suite("Postgres realtime publisher authorization", () => {
     await database.db.insert(schema.conversationChanges).values({
       conversationId: ids.conversation, changeSequence: input.sequence, kind: input.kind ?? "realtime.test", messageId,
       memberId: input.memberId ?? null, createdAt,
+    });
+  }
+
+  async function insertPendingJob(recipientId: string, changeSequence: number) {
+    await database.db.insert(schema.messagingOutbox).values({
+      id: `realtime-publisher-pending-${crypto.randomUUID()}`,
+      eventId: crypto.randomUUID(),
+      recipientId,
+      conversationId: ids.conversation,
+      changeSequence,
+      channel: "realtime",
+      status: "pending",
+      attempts: 0,
+      availableAt: new Date(Date.now() - 1_000),
+      createdAt,
     });
   }
 
@@ -112,6 +128,40 @@ suite("Postgres realtime publisher authorization", () => {
     } finally {
       await database.close();
     }
+  });
+
+  it("dispatches one leased body-free frame to an allowed endpoint and none to a banned endpoint", async () => {
+    const frames = new Map<string, unknown[]>([[ids.alice, []], [ids.bob, []]]);
+    const namespace = {
+      idFromName: (userId: string) => userId,
+      get: (userId: string) => ({
+        fetch: async (request: Request) => {
+          frames.get(userId)?.push(await request.json());
+          return new Response(null, { status: 204 });
+        },
+        revokeSession: async () => undefined,
+      }),
+    } as unknown as DurableObjectNamespace;
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    await insertPendingJob(ids.alice, 1);
+    await insertPendingJob(ids.bob, 1);
+    await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
+
+    const publisher = createDurableObjectRealtimePublisher(namespace, { connectionString: connectionString! });
+    const dispatcher = createOutboxDispatcher({
+      store: createPostgresOutboxStore(database.db),
+      handlers: { realtime: publisher.deliver, push: async () => ({ ok: true as const }) },
+      scheduledBatchSize: 2,
+    });
+    await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({ claimed: 2, delivered: 2 });
+    expect(frames.get(ids.alice)).toEqual([{
+      version: 1,
+      eventId: expect.any(String),
+      type: "conversation.changed",
+      conversationId: ids.conversation,
+      changeSequence: "1",
+    }]);
+    expect(frames.get(ids.bob)).toEqual([]);
   });
 
   it("rejects a stale lease even when the token still matches", async () => {

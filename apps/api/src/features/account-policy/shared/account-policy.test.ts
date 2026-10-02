@@ -26,6 +26,7 @@ describe("account policy", () => {
     const policy = resolveAccountPolicy({ lifecycleState: "pending_deletion" });
     expect(allowsAccountCapability(policy, "ordinary")).toBe(false);
     expect(allowsAccountCapability(policy, "restricted_cleanup")).toBe(true);
+    expect(allowsAccountCapability(resolveAccountPolicy({ lifecycleState: "purge_failed" }), "restricted_cleanup")).toBe(false);
   });
 
   it("uses exact public and cleanup route matching, with request acceptance still ordinary", async () => {
@@ -61,6 +62,11 @@ describe("account policy", () => {
     const cleanup = await api.request("https://api.example.test/api/v1/push/devices/owned-installation", { method: "DELETE" });
     expect(cleanup.status).toBe(204);
     expect(unregister).toHaveBeenCalledWith("pending-user", "owned-installation");
+    const status = await api.request("https://api.example.test/api/v1/account/status");
+    await expect(status.json()).resolves.toEqual({
+      restriction: "pending_deletion",
+      allowed: ["policy_read", "restricted_cleanup", "signout"],
+    });
 
     const positive = await api.request("https://api.example.test/api/v1/conversations/c/request", {
       method: "PUT",
@@ -68,6 +74,35 @@ describe("account policy", () => {
       body: JSON.stringify({ decision: "accept" }),
     });
     expect(positive.status).toBe(403);
+  });
+
+  it("denies terminal cleanup while retaining only actionable status labels", async () => {
+    const unregister = vi.fn(async () => undefined);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => ({ userId: "purging-user" }),
+        policies: { resolve: async () => resolveAccountPolicy({ lifecycleState: "purging" }) },
+      },
+      pushDevices: {
+        resolveSession: async () => ({ userId: "purging-user" }),
+        resolvePushSession: async () => ({ userId: "purging-user", sessionId: "session", expiresAt: new Date("2099-01-01") }),
+        hasUsername: async () => true,
+        unregister: { unregister },
+      },
+    });
+    const cleanup = await api.request("https://api.example.test/api/v1/push/devices/owned-installation", { method: "DELETE" });
+    expect(cleanup.status).toBe(403);
+    expect(unregister).not.toHaveBeenCalled();
+    const status = await api.request("https://api.example.test/api/v1/account/status");
+    await expect(status.json()).resolves.toEqual({ restriction: "purging", allowed: ["policy_read", "signout"] });
+
+    const banned = createApp({
+      accountPolicy: {
+        resolveSession: async () => ({ userId: "banned-user" }),
+        policies: { resolve: async () => resolveAccountPolicy({ banned: true }) },
+      },
+    });
+    expect((await banned.request("https://api.example.test/api/v1/feed")).status).toBe(403);
   });
 
   it("returns no-store policy errors and denies unauthenticated future routes", async () => {

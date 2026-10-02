@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import type { ResolveSession } from "../../../http/middleware/require-session";
-import { allowsAccountCapability, type AccountCapability, type AccountPolicy } from "./account-policy";
+import { actionableAccountCapabilities, allowsAccountCapability, type AccountCapability, type AccountPolicy } from "./account-policy";
 
 export interface AccountPolicyResolver {
   resolve(userId: string): Promise<AccountPolicy>;
@@ -69,7 +69,7 @@ function restrictedResponse(context: Parameters<MiddlewareHandler<AuthenticatedA
     403,
     "FORBIDDEN",
     "This account is currently restricted.",
-    { restriction: policy.restriction, allowed: [...policy.allowed].sort() },
+    { restriction: policy.restriction, allowed: actionableAccountCapabilities(policy) },
   );
 }
 
