@@ -125,6 +125,75 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
     expect(await migrator.db.select().from(schema.accountManagementGrants)).toHaveLength(1);
   });
 
+  it("isolates a fresh Google management callback from sign-in and account linking", async () => {
+    const app = createAppForEnv({
+      ...productionAuthEnvironment(),
+      GOOGLE_WEB_CLIENT_ID: "web-management-test-client",
+      GOOGLE_IOS_CLIENT_ID: "ios-management-test-client",
+      GOOGLE_ANDROID_CLIENT_ID: "android-management-test-client",
+      GOOGLE_CLIENT_SECRET: "test-only-google-client-secret-at-least-32-characters",
+    });
+    const bearerToken = nativeToken(await signUp(app, "google-management@example.test"));
+    const [owner] = await migrator.db.select({ id: schema.user.id }).from(schema.user)
+      .where(eq(schema.user.email, "google-management@example.test"));
+    await migrator.db.insert(schema.account).values({
+      id: "linked-google-management-test", userId: owner!.id,
+      providerId: "google", accountId: "linked-google-subject",
+    });
+    const started = await app.fetch(request("/api/v1/account/reauthenticate/google", {
+      method: "POST",
+      headers: { authorization: `Bearer ${bearerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ action: "request_deletion" }),
+    }));
+    expect(started.status).toBe(200);
+    const { authorizationUrl } = await started.json() as { authorizationUrl: string };
+    const url = new URL(authorizationUrl);
+    const nonce = url.searchParams.get("nonce")!;
+    const state = url.searchParams.get("state")!;
+    const now = Math.floor(Date.now() / 1_000);
+    const { privateKey, publicKey } = await generateKeyPair("RS256");
+    const jwk = await exportJWK(publicKey);
+    jwk.kid = "google-management-callback-test";
+    const idToken = await new SignJWT({ nonce, auth_time: now - 2, email_verified: true })
+      .setProtectedHeader({ alg: "RS256", kid: jwk.kid })
+      .setIssuer("https://accounts.google.com")
+      .setAudience("web-management-test-client")
+      .setSubject("linked-google-subject")
+      .setIssuedAt(now - 1)
+      .setExpirationTime(now + 240)
+      .sign(privateKey);
+    const fetcher = vi.fn(async (input: string | URL | Request) => {
+      const endpoint = new URL(input instanceof Request ? input.url : input);
+      if (endpoint.href === "https://oauth2.googleapis.com/token") {
+        return new Response(JSON.stringify({ id_token: idToken, scope: "openid email", token_type: "Bearer" }),
+          { headers: { "content-type": "application/json" } });
+      }
+      if (endpoint.href === "https://www.googleapis.com/oauth2/v3/certs") {
+        return new Response(JSON.stringify({ keys: [jwk] }), { headers: { "content-type": "application/json" } });
+      }
+      throw new Error("Unexpected external Google test endpoint.");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      const callback = () => app.fetch(request(`/api/auth/callback/google?state=${encodeURIComponent(state)}&code=one-use-code`, {
+        headers: { authorization: `Bearer ${bearerToken}` },
+      }));
+      const response = await callback();
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const proof = await response.json() as { token: string; action: string };
+      expect(proof).toMatchObject({ token: expect.stringMatching(/^[0-9a-f]{64}$/), action: "request_deletion" });
+      expect((await callback()).status).toBe(401);
+      expect(await migrator.db.select().from(schema.session)).toHaveLength(1);
+      expect(await migrator.db.select().from(schema.account)).toHaveLength(2);
+      expect(await migrator.db.select().from(schema.accountLifecycles)).toEqual([]);
+      expect(await migrator.db.select().from(schema.accountManagementGrants)).toHaveLength(1);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("preserves stable text IDs, profile fields, and account record shape", async () => {
     await migrator.db.insert(schema.user).values({
       id: "schema-user-id",

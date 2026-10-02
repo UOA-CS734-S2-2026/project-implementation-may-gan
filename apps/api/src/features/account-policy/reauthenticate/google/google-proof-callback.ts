@@ -38,18 +38,20 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
   const query = new URL(request.url).searchParams;
   const state = query.get("state");
   const code = query.get("code");
-  if (!state || !managementStatePattern.test(state) || !code || code.length > 2048 || query.has("error")) return failure(400);
+  if (!state || !managementStatePattern.test(state) || !code || code.length > 2048 || /\s/.test(code)
+    || query.getAll("state").length !== 1 || query.getAll("code").length !== 1 || query.has("error")) return failure(400);
   let actor: Awaited<ReturnType<typeof deps.resolveSession>>;
   try { actor = await deps.resolveSession(request); } catch { return failure(503); }
   if (!actor?.userId || !actor.sessionId) return failure(401);
   let intent: Awaited<ReturnType<typeof deps.claim>>;
   try { intent = await deps.claim({ state, ...actor }); } catch { return failure(503); }
   if (!intent) return failure(401);
+  let result: Awaited<ReturnType<NonNullable<typeof deps.exchange>>>;
+  try { result = await (deps.exchange ?? exchangeGoogleManagementCode)({ state, code, ...deps.configuration }); }
+  catch { return failure(503); }
+  let proof: Awaited<ReturnType<NonNullable<typeof deps.verify>>>;
   try {
-    const result = await (deps.exchange ?? exchangeGoogleManagementCode)({
-      state, code, ...deps.configuration,
-    });
-    const proof = await (deps.verify ?? verifyGoogleManagementIdToken)({
+    proof = await (deps.verify ?? verifyGoogleManagementIdToken)({
       idToken: result.idToken,
       grantedScope: result.grantedScope,
       clientId: deps.configuration.clientId,
@@ -57,13 +59,13 @@ export async function handleGoogleManagementCallback(request: Request, deps: Goo
       nonceDigest: intent.nonceDigest,
       intentCreatedAt: intent.createdAt,
     });
+  } catch { return failure(401); }
+  try {
     const grant = await deps.complete({ ...actor, action: intent.action, stateDigest: intent.stateDigest, verifiedSubject: proof.subject });
     return grant
       ? Response.json({ action: intent.action, token: grant.token, expiresAt: grant.expiresAt.toISOString() }, { status: 200, headers })
       : failure(409);
-  } catch {
-    return failure(401);
-  }
+  } catch { return failure(503); }
 }
 
 export function isGoogleManagementCallback(request: Request): boolean {

@@ -18,6 +18,29 @@ function assertParameters(input: { state: string; clientId: string; clientSecret
   }
 }
 
+async function readBoundedBody(response: Response): Promise<string> {
+  if (!response.body) throw new Error("Google management exchange failed.");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > 16_384) throw new Error("Google management exchange failed.");
+      chunks.push(value);
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+}
+
 async function verifierForState(secret: string, state: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`dayli-google-management-pkce-v1:${state}`));
@@ -83,8 +106,7 @@ export async function exchangeGoogleManagementCode(input: {
   if (!response.ok || !response.headers.get("content-type")?.startsWith("application/json")) {
     throw new Error("Google management exchange failed.");
   }
-  const text = await response.text();
-  if (text.length > 16_384) throw new Error("Google management exchange failed.");
+  const text = await readBoundedBody(response);
   let decoded: unknown;
   try { decoded = JSON.parse(text); } catch { throw new Error("Google management exchange failed."); }
   if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) throw new Error("Google management exchange failed.");

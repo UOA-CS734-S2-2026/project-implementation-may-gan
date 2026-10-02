@@ -90,6 +90,8 @@ describe("isolated Google management callback", () => {
     expect(isGoogleManagementCallback(callback("ordinary-better-auth-state"))).toBe(false);
     const configured = deps(await signedToken());
     expect((await handleGoogleManagementCallback(callback("bad-state"), configured)).status).toBe(400);
+    const duplicateState = new Request(`${callback().url}&state=${encodeURIComponent(state)}`);
+    expect((await handleGoogleManagementCallback(duplicateState, configured)).status).toBe(400);
     expect(configured.claim).not.toHaveBeenCalled();
   });
 });
