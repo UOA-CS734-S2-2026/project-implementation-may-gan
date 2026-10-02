@@ -1,0 +1,6 @@
+reason: Immediate validation is safe because the intent table is new and empty.
+affected_data_and_clients: No preexisting row is scanned or rewritten.
+rollout_sequence: Validate foreign keys before any future runtime receives access.
+backup_checkpoint: Confirm approved migration recovery posture.
+forward_fix_plan: Use staged validation only for a later populated-table migration.
+reviewer: Database and privacy reviewers required.

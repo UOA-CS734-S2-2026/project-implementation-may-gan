@@ -1,0 +1,6 @@
+reason: Both indexes target the table created earlier in this same transaction, so it is empty and concurrent creation is unavailable and unnecessary.
+affected_data_and_clients: No existing table writer is blocked by the new-table index build.
+rollout_sequence: Create the inactive table and supporting future cleanup indexes together.
+backup_checkpoint: Confirm approved migration recovery posture.
+forward_fix_plan: Add later indexes concurrently when they target populated tables.
+reviewer: Database and privacy reviewers required.
