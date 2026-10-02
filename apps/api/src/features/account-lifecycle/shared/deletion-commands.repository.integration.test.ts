@@ -3,6 +3,7 @@ import { hashPassword } from "better-auth/crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { cancelAccountDeletion, requestAccountDeletion } from "./deletion-commands.repository";
+import { readDeletionStatus } from "./deletion-status.repository";
 
 const enabled = Boolean(process.env.TEST_DATABASE_URL && process.env.TEST_APP_DATABASE_URL);
 const port = process.env.VERIFY_POSTGRES_PORT ?? "5433";
@@ -46,6 +47,10 @@ function localUrl(value: string | undefined) {
 
   it("atomically suppresses the owner, revokes all sessions and leaves the user for later reviewed purge", async () => {
     await migrator.db.insert(schema.user).values({ id: userId, name: "Deletion Owner", email: `${userId}@example.test` });
+    expect(await readDeletionStatus(app.db, userId)).toEqual({
+      state: "active", generation: 0, requestId: null,
+      requestedAt: null, cancelUntil: null, purgeDueAt: null,
+    });
     credentialHash = await hashPassword(password);
     await migrator.db.insert(schema.account).values({
       id: `deletion-credential-${suffix}`, userId, accountId: userId,
@@ -71,6 +76,11 @@ function localUrl(value: string | undefined) {
     expect(requested.revokedSessionIds.sort()).toEqual([sessionId, secondSessionId].sort());
     expect(requested.cancelUntil.getTime() - requested.requestedAt.getTime()).toBe(168 * 60 * 60_000);
     expect(requested.purgeDueAt.getTime() - requested.requestedAt.getTime()).toBe(336 * 60 * 60_000);
+    expect(await readDeletionStatus(app.db, userId)).toMatchObject({
+      state: "pending_deletion", requestId: requested.requestId,
+      requestedAt: requested.requestedAt, cancelUntil: requested.cancelUntil,
+      purgeDueAt: requested.purgeDueAt,
+    });
     expect((await migrator.db.select().from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId)))[0]?.state).toBe("pending_deletion");
     expect(await migrator.db.select().from(schema.user).where(eq(schema.user.id, userId))).toHaveLength(1);
     expect(await migrator.db.select().from(schema.session).where(eq(schema.session.userId, userId))).toEqual([]);
@@ -99,6 +109,7 @@ function localUrl(value: string | undefined) {
     expect((await migrator.db.select().from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId)))[0]?.state).toBe("active");
     const [row] = await migrator.db.select().from(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, userId));
     expect(row).toMatchObject({ state: "active", requestId: null, requestedAt: null, cancelUntil: null, purgeDueAt: null });
+    expect(await readDeletionStatus(app.db, userId)).toMatchObject({ state: "active", generation: 2, requestId: null });
     expect(await migrator.db.select().from(schema.session).where(eq(schema.session.userId, userId))).toHaveLength(1);
     expect(await cancelAccountDeletion(app.db, { userId, sessionId: restrictedSession, grantToken: proofToken }))
       .toEqual({ status: "conflict" });

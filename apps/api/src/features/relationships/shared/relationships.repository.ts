@@ -25,6 +25,7 @@ import {
 } from "./relationship-service";
 import { type RelationshipPostgresContext, type RelationshipQueryable } from "./relationship-postgres";
 import { unblockRelationshipPair } from "./unblock-user.repository";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 type FriendshipSnapshotRow = {
   user_id: string;
@@ -101,7 +102,8 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     };
     const snapshot = async (actorId: string, subjectId: string): Promise<StoredRelationshipSnapshot> => {
       const [target, blocks, friendshipsRows, requests] = await Promise.all([
-        database.select({ id: user.id }).from(user).where(eq(user.id, subjectId)).limit(1),
+        database.select({ id: user.id }).from(user)
+          .where(and(eq(user.id, subjectId), buildDrizzleActiveAccountFilter(database, user.id))).limit(1),
         database
           .select({ blocker_id: relationshipBlocks.blockerId, blocked_id: relationshipBlocks.blockedId })
           .from(relationshipBlocks)
@@ -148,6 +150,11 @@ export class PostgresRelationshipsStore implements RelationshipStore {
     const requireTarget = async (left: string, right: string) => {
       if (!(await targetExists(right)) || !(await targetExists(left))) throw new RelationshipStoreError("TARGET_NOT_FOUND");
     };
+    const requireActiveTarget = async (left: string, right: string) => {
+      const active = await database.select({ id: user.id }).from(user)
+        .where(and(inArray(user.id, [left, right]), buildDrizzleActiveAccountFilter(database, user.id)));
+      if (active.length !== 2) throw new RelationshipStoreError("TARGET_NOT_FOUND");
+    };
     const activeBlock = async (left: string, right: string) => {
       const result = await database
         .select({ blockerId: relationshipBlocks.blockerId })
@@ -178,6 +185,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         .limit(1))[0];
       if (!request || request.status !== "pending" || request[actorColumn] !== actorId) throw new RelationshipStoreError("REQUEST_NOT_FOUND");
       if (await activeBlock(actorId, other)) throw new RelationshipStoreError("FORBIDDEN");
+      if (status === "accepted") await requireActiveTarget(actorId, other);
       await database
         .update(friendRequests)
         .set({ status, resolvedAt: new Date(at) })
@@ -185,7 +193,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         .returning({ id: friendRequests.id });
       return { other, request };
     };
-    const context: RelationshipPostgresContext = { queryable, lockPair, requireTarget, activeBlock, snapshot, finishRequest };
+    const context: RelationshipPostgresContext = { queryable, lockPair, requireTarget, requireActiveTarget, activeBlock, snapshot, finishRequest };
 
     return {
       getSnapshot: snapshot,

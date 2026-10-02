@@ -1,5 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './AccountDeletionCancellationResult';
+export * from './AccountDeletionRequestResult';
+export * from './AccountDeletionStatus';
 export * from './ApiError';
 export * from './ApiErrorCode';
 export * from './ApiErrorError';
@@ -22,6 +25,7 @@ export * from './DailyPostMedia';
 export * from './DailyPostPrompt';
 export * from './DailyPostTomorrowNote';
 export * from './DailyPromptResponse';
+export * from './DeletionGrantRequest';
 export * from './DirectPairLookup';
 export * from './EditMessageRequest';
 export * from './FeedPage';

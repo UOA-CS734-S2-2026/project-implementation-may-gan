@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { RelationshipStoreError, type RelationshipUserCard, type RelationshipUserPage } from "./relationship-service";
 import { type RelationshipQueryable } from "./relationship-postgres";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 type SearchRow = {
   id: string;
@@ -148,6 +149,7 @@ export async function searchUsernameRows(queryable: RelationshipQueryable, actor
     .from(candidate)
     .where(and(
       ne(candidate.id, actorId),
+      buildDrizzleActiveAccountFilter(queryable, candidate.id),
       isNotNull(candidate.username),
       sql`lower(${candidate.username}) like lower(${prefix}) || '%' escape E'\\\\'`,
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,

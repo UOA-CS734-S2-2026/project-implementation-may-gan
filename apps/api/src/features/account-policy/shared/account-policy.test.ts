@@ -37,6 +37,10 @@ describe("account policy", () => {
     await expect(classify("GET", "/api/v1/test")).resolves.toBeUndefined();
     await expect(classify("GET", "/api/v1/test-contracts")).resolves.toBe("ordinary");
     await expect(classify("GET", "/api/v1/account/status")).resolves.toBe("policy_read");
+    await expect(classify("GET", "/api/v1/account/deletion")).resolves.toBe("policy_read");
+    await expect(classify("POST", "/api/v1/account/deletion/request")).resolves.toBe("request_deletion");
+    await expect(classify("POST", "/api/v1/account/deletion/cancel")).resolves.toBe("cancel_deletion_verification");
+    await expect(classify("POST", "/api/v1/account/deletion/request/extra")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
     await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "request_deletion" })).resolves.toBe("request_deletion");
     await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "cancel_deletion" })).resolves.toBe("cancel_deletion_verification");

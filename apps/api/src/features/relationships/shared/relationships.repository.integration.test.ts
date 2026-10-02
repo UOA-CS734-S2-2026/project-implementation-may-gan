@@ -27,7 +27,7 @@ suite("Postgres relationship persistence", () => {
   const directService = createRelationshipsService(directStore);
   const messaging = createMessagingPersistenceServices(database.db);
   const concurrentMessaging = createMessagingPersistenceServices(concurrentDatabase.db);
-  const users = Array.from({ length: 32 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 35 }, (_, index) => `relationship-test-${crypto.randomUUID()}-${index}`);
 
   beforeAll(async () => {
     await database.db.insert(schema.user).values(users.map((id) => ({
@@ -59,6 +59,32 @@ suite("Postgres relationship persistence", () => {
       await concurrentDatabase.close();
       await database.close();
     }
+  });
+
+  it("hides a pending target and refuses new positive relationship mutations", async () => {
+    const hidden = users[32]!;
+    const recipient = users[33]!;
+    const actor = users[34]!;
+    const sent = await service.sendRequest(hidden, recipient);
+    const pendingId = sent.outgoingRequest!.id;
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: hidden, state: "pending_deletion", generation: 1,
+      requestId: `pending-${crypto.randomUUID()}`, idempotencyKeyDigest: "a".repeat(64),
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60_000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60_000),
+    });
+    try {
+      await expect(service.sendRequest(actor, hidden)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.acceptRequest(recipient, pendingId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.getStatus(recipient, hidden)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.block(actor, hidden)).resolves.toMatchObject({ status: "blocked" });
+      await expect(service.unblock(actor, hidden)).resolves.toMatchObject({ status: "none" });
+    } finally {
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, hidden));
+    }
+    await expect(service.acceptRequest(recipient, pendingId)).resolves.toMatchObject({ status: "friends" });
   });
 
   it("serializes reverse sends so exactly one pending request survives", async () => {

@@ -1,7 +1,7 @@
 import {
   inRelationshipTransaction,
   relationshipTimestamp,
-  toRelationshipStatus,
+  toCleanupRelationshipStatus,
   type RelationshipOperationDependencies,
   type RelationshipStatus,
 } from "../shared/relationship-service";
@@ -12,5 +12,5 @@ export async function declineFriendRequest(dependencies: RelationshipOperationDe
     recipientId: actorId,
     declinedAt: relationshipTimestamp(dependencies),
   }));
-  return toRelationshipStatus(snapshot);
+  return toCleanupRelationshipStatus(snapshot);
 }

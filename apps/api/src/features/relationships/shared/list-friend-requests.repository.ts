@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { RelationshipStoreError, type PendingRequestPage, type PendingRequestDirection, type StoredPendingRequest } from "./relationship-service";
 import type { RelationshipQueryable } from "./relationship-postgres";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 type PendingRequestRow = {
   id: string;
@@ -77,6 +78,7 @@ export async function listPendingRequestRows(queryable: RelationshipQueryable, a
       eq(friendRequests.status, "pending"),
       directionCondition,
       after ? sql`(${friendRequests.createdAt}, ${friendRequests.id}) > (${after.createdAt}::timestamptz, ${after.id})` : undefined,
+      buildDrizzleActiveAccountFilter(database, other.id),
       isNotNull(other.username),
       sql`(coalesce(${other.banned}, false) = false or (${other.banExpires} is not null and ${other.banExpires} <= now()))`,
       notExists(

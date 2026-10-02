@@ -8,6 +8,7 @@ export interface RelationshipPostgresContext {
   queryable: RelationshipQueryable;
   lockPair(leftUserId: string, rightUserId: string): Promise<void>;
   requireTarget(leftUserId: string, rightUserId: string): Promise<void>;
+  requireActiveTarget(leftUserId: string, rightUserId: string): Promise<void>;
   activeBlock(leftUserId: string, rightUserId: string): Promise<boolean>;
   snapshot(actorId: string, subjectId: string): Promise<StoredRelationshipSnapshot>;
   finishRequest(

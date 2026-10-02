@@ -204,6 +204,12 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountDeletionCancellationResult':
+          return AccountDeletionCancellationResult.fromJson(value);
+        case 'AccountDeletionRequestResult':
+          return AccountDeletionRequestResult.fromJson(value);
+        case 'AccountDeletionStatus':
+          return AccountDeletionStatus.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':
@@ -250,6 +256,8 @@ class ApiClient {
           return DailyPostTomorrowNote.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
+        case 'DeletionGrantRequest':
+          return DeletionGrantRequest.fromJson(value);
         case 'DirectPairLookup':
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
