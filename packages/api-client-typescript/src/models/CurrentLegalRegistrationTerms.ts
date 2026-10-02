@@ -26,15 +26,15 @@ export interface CurrentLegalRegistrationTerms {
     /**
      *
      */
-    termsVersionId: string;
+    termsVersionId: string | null;
     /**
      *
      */
-    termsContentDigest: string;
+    termsContentDigest: string | null;
     /**
      *
      */
-    ageDeclarationVersion: string;
+    ageDeclarationVersion: string | null;
 }
 
 

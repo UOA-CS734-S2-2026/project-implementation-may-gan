@@ -64,7 +64,7 @@ export interface ProfilePost {
     /**
      *
      */
-    caption: string;
+    caption: string | null;
     /**
      *
      */

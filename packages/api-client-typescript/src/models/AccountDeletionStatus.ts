@@ -30,19 +30,19 @@ export interface AccountDeletionStatus {
     /**
      *
      */
-    requestId: string;
+    requestId: string | null;
     /**
      *
      */
-    requestedAt: Date;
+    requestedAt: Date | null;
     /**
      *
      */
-    cancelUntil: Date;
+    cancelUntil: Date | null;
     /**
      *
      */
-    purgeDueAt: Date;
+    purgeDueAt: Date | null;
 }
 
 
@@ -84,9 +84,9 @@ export function AccountDeletionStatusFromJSONTyped(json: any, ignoreDiscriminato
         'state': json['state'],
         'generation': json['generation'],
         'requestId': json['requestId'],
-        'requestedAt': (json['requestedAt'] == null ? json['requestedAt'] : parseDateTime(json['requestedAt'])),
-        'cancelUntil': (json['cancelUntil'] == null ? json['cancelUntil'] : parseDateTime(json['cancelUntil'])),
-        'purgeDueAt': (json['purgeDueAt'] == null ? json['purgeDueAt'] : parseDateTime(json['purgeDueAt'])),
+        'requestedAt': (json['requestedAt'] == null ? null : parseDateTime(json['requestedAt'])),
+        'cancelUntil': (json['cancelUntil'] == null ? null : parseDateTime(json['cancelUntil'])),
+        'purgeDueAt': (json['purgeDueAt'] == null ? null : parseDateTime(json['purgeDueAt'])),
     };
 }
 

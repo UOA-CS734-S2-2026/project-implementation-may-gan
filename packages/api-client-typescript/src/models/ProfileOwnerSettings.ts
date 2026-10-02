@@ -34,7 +34,7 @@ export interface ProfileOwnerSettings {
     /**
      * When the username can next change, or null when it can change now.
      */
-    usernameChangeAvailableAt: Date;
+    usernameChangeAvailableAt: Date | null;
 }
 
 
@@ -59,7 +59,7 @@ export function ProfileOwnerSettingsFromJSONTyped(json: any, ignoreDiscriminator
     return {
 
         'profileVisibility': ProfileVisibilityFromJSON(json['profileVisibility']),
-        'usernameChangeAvailableAt': (json['usernameChangeAvailableAt'] == null ? json['usernameChangeAvailableAt'] : parseDateTime(json['usernameChangeAvailableAt'])),
+        'usernameChangeAvailableAt': (json['usernameChangeAvailableAt'] == null ? null : parseDateTime(json['usernameChangeAvailableAt'])),
     };
 }
 

@@ -38,7 +38,7 @@ class TrashedPostStatus {
 
   final bool pendingCleanup;
 
-  final String failureCategory;
+  final String? failureCategory;
 
   @override
   bool operator ==(Object other) =>
@@ -63,7 +63,7 @@ class TrashedPostStatus {
       (purgeDueAt.hashCode) +
       (generation.hashCode) +
       (pendingCleanup.hashCode) +
-      (failureCategory.hashCode);
+      (failureCategory == null ? 0 : failureCategory!.hashCode);
 
   @override
   String toString() =>
@@ -78,7 +78,11 @@ class TrashedPostStatus {
     json[r'purgeDueAt'] = this.purgeDueAt.toUtc().toIso8601String();
     json[r'generation'] = this.generation;
     json[r'pendingCleanup'] = this.pendingCleanup;
-    json[r'failureCategory'] = this.failureCategory;
+    if (this.failureCategory != null) {
+      json[r'failureCategory'] = this.failureCategory;
+    } else {
+      json[r'failureCategory'] = null;
+    }
     return json;
   }
 
@@ -93,6 +97,7 @@ class TrashedPostStatus {
     int? generation,
     bool? pendingCleanup,
     String? failureCategory,
+    bool failureCategorySetToNull = false,
   }) =>
       TrashedPostStatus(
         id: id ?? this.id,
@@ -102,7 +107,9 @@ class TrashedPostStatus {
         purgeDueAt: purgeDueAt ?? this.purgeDueAt,
         generation: generation ?? this.generation,
         pendingCleanup: pendingCleanup ?? this.pendingCleanup,
-        failureCategory: failureCategory ?? this.failureCategory,
+        failureCategory: failureCategorySetToNull
+            ? null
+            : failureCategory ?? this.failureCategory,
       );
 
   /// Returns a new [TrashedPostStatus] instance and imports its values from
@@ -146,8 +153,6 @@ class TrashedPostStatus {
             'Required key "TrashedPostStatus[pendingCleanup]" has a null value in JSON.');
         assert(json.containsKey(r'failureCategory'),
             'Required key "TrashedPostStatus[failureCategory]" is missing from JSON.');
-        assert(json[r'failureCategory'] != null,
-            'Required key "TrashedPostStatus[failureCategory]" has a null value in JSON.');
         return true;
       }());
 
@@ -159,7 +164,7 @@ class TrashedPostStatus {
         purgeDueAt: mapDateTime(json, r'purgeDueAt', r'')!,
         generation: mapValueOfType<int>(json, r'generation')!,
         pendingCleanup: mapValueOfType<bool>(json, r'pendingCleanup')!,
-        failureCategory: mapValueOfType<String>(json, r'failureCategory')!,
+        failureCategory: mapValueOfType<String>(json, r'failureCategory'),
       );
     }
     return null;

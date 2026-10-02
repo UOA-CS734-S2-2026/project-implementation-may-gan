@@ -45,11 +45,11 @@ export interface RelationshipStatus {
     /**
      *
      */
-    incomingRequest: PendingRelationshipRequest;
+    incomingRequest: PendingRelationshipRequest | null;
     /**
      *
      */
-    outgoingRequest: PendingRelationshipRequest;
+    outgoingRequest: PendingRelationshipRequest | null;
 }
 
 

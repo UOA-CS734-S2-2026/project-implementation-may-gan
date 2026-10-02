@@ -51,7 +51,7 @@ Retriable commands use `Idempotency-Key`. An identical retry returns the origina
 
 ## OpenAPI
 
-`GET /api/v1/openapi.json` serves OpenAPI 3.1, and `GET /docs` renders it as an interactive Scalar reference. Every route declares a stable `operationId`, tag, summary, parameters, request body, successful responses, expected errors, authentication, and examples where useful. Route-adjacent Zod schemas are the source for runtime validation and client generation.
+`GET /api/v1/openapi.json` serves OpenAPI 3.0.3, and `GET /docs` renders it as an interactive Scalar reference. Every route declares a stable `operationId`, tag, summary, parameters, request body, successful responses, expected errors, authentication, and examples where useful. Route-adjacent Zod schemas are the source for runtime validation and client generation.
 
 Private responses start with `Cache-Control: no-store`. Public-link caching must not be introduced until revocation behavior is tested.
 

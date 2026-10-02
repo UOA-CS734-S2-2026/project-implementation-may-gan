@@ -115,7 +115,7 @@ export interface CreateRealtimeTicketRequest {
     /**
      *
      */
-    requestBody: { [key: string]: any | null; };
+    body: object;
 }
 
 export interface EditMessageOperationRequest {
@@ -357,10 +357,10 @@ export class MessagingApi extends runtime.BaseAPI {
      * Creates request options for createRealtimeTicket without sending the request
      */
     async createRealtimeTicketRequestOpts(requestParameters: CreateRealtimeTicketRequest): Promise<runtime.RequestOpts> {
-        if (requestParameters['requestBody'] == null) {
+        if (requestParameters['body'] == null) {
             throw new runtime.RequiredError(
-                'requestBody',
-                'Required parameter "requestBody" was null or undefined when calling createRealtimeTicket().'
+                'body',
+                'Required parameter "body" was null or undefined when calling createRealtimeTicket().'
             );
         }
 
@@ -386,7 +386,7 @@ export class MessagingApi extends runtime.BaseAPI {
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: requestParameters['requestBody'],
+            body: requestParameters['body'] as any,
         };
     }
 

@@ -21,7 +21,7 @@ class ListConversationChanges200Response {
 
   final List<ListConversationChanges200ResponseItemsInner> items;
 
-  final String nextChangeSequence;
+  final String? nextChangeSequence;
 
   final bool hasMore;
 
@@ -40,7 +40,7 @@ class ListConversationChanges200Response {
   int get hashCode =>
       // ignore: unnecessary_parenthesis
       (items.hashCode) +
-      (nextChangeSequence.hashCode) +
+      (nextChangeSequence == null ? 0 : nextChangeSequence!.hashCode) +
       (hasMore.hashCode) +
       (highWatermark.hashCode);
 
@@ -51,7 +51,11 @@ class ListConversationChanges200Response {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
-    json[r'nextChangeSequence'] = this.nextChangeSequence;
+    if (this.nextChangeSequence != null) {
+      json[r'nextChangeSequence'] = this.nextChangeSequence;
+    } else {
+      json[r'nextChangeSequence'] = null;
+    }
     json[r'hasMore'] = this.hasMore;
     json[r'highWatermark'] = this.highWatermark;
     return json;
@@ -62,12 +66,15 @@ class ListConversationChanges200Response {
   ListConversationChanges200Response copyWith({
     List<ListConversationChanges200ResponseItemsInner>? items,
     String? nextChangeSequence,
+    bool nextChangeSequenceSetToNull = false,
     bool? hasMore,
     String? highWatermark,
   }) =>
       ListConversationChanges200Response(
         items: items ?? this.items,
-        nextChangeSequence: nextChangeSequence ?? this.nextChangeSequence,
+        nextChangeSequence: nextChangeSequenceSetToNull
+            ? null
+            : nextChangeSequence ?? this.nextChangeSequence,
         hasMore: hasMore ?? this.hasMore,
         highWatermark: highWatermark ?? this.highWatermark,
       );
@@ -89,8 +96,6 @@ class ListConversationChanges200Response {
             'Required key "ListConversationChanges200Response[items]" has a null value in JSON.');
         assert(json.containsKey(r'nextChangeSequence'),
             'Required key "ListConversationChanges200Response[nextChangeSequence]" is missing from JSON.');
-        assert(json[r'nextChangeSequence'] != null,
-            'Required key "ListConversationChanges200Response[nextChangeSequence]" has a null value in JSON.');
         assert(json.containsKey(r'hasMore'),
             'Required key "ListConversationChanges200Response[hasMore]" is missing from JSON.');
         assert(json[r'hasMore'] != null,
@@ -105,8 +110,7 @@ class ListConversationChanges200Response {
       return ListConversationChanges200Response(
         items: ListConversationChanges200ResponseItemsInner.listFromJson(
             json[r'items']),
-        nextChangeSequence:
-            mapValueOfType<String>(json, r'nextChangeSequence')!,
+        nextChangeSequence: mapValueOfType<String>(json, r'nextChangeSequence'),
         hasMore: mapValueOfType<bool>(json, r'hasMore')!,
         highWatermark: mapValueOfType<String>(json, r'highWatermark')!,
       );

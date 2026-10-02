@@ -34,7 +34,7 @@ export interface ProfilePostsPage {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

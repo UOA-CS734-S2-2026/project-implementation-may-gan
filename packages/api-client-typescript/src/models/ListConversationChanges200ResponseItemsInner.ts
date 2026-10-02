@@ -30,11 +30,11 @@ export interface ListConversationChanges200ResponseItemsInner {
     /**
      *
      */
-    messageId: string;
+    messageId: string | null;
     /**
      *
      */
-    memberId: string;
+    memberId: string | null;
     /**
      *
      */

@@ -34,7 +34,7 @@ export interface FeedPage {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

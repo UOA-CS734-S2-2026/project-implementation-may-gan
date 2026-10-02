@@ -24,9 +24,9 @@ class ListConversationChanges200ResponseItemsInner {
 
   final String kind;
 
-  final String messageId;
+  final String? messageId;
 
-  final String memberId;
+  final String? memberId;
 
   final DateTime createdAt;
 
@@ -45,8 +45,8 @@ class ListConversationChanges200ResponseItemsInner {
       // ignore: unnecessary_parenthesis
       (changeSequence.hashCode) +
       (kind.hashCode) +
-      (messageId.hashCode) +
-      (memberId.hashCode) +
+      (messageId == null ? 0 : messageId!.hashCode) +
+      (memberId == null ? 0 : memberId!.hashCode) +
       (createdAt.hashCode);
 
   @override
@@ -57,8 +57,16 @@ class ListConversationChanges200ResponseItemsInner {
     final json = <String, dynamic>{};
     json[r'changeSequence'] = this.changeSequence;
     json[r'kind'] = this.kind;
-    json[r'messageId'] = this.messageId;
-    json[r'memberId'] = this.memberId;
+    if (this.messageId != null) {
+      json[r'messageId'] = this.messageId;
+    } else {
+      json[r'messageId'] = null;
+    }
+    if (this.memberId != null) {
+      json[r'memberId'] = this.memberId;
+    } else {
+      json[r'memberId'] = null;
+    }
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
     return json;
   }
@@ -69,14 +77,16 @@ class ListConversationChanges200ResponseItemsInner {
     String? changeSequence,
     String? kind,
     String? messageId,
+    bool messageIdSetToNull = false,
     String? memberId,
+    bool memberIdSetToNull = false,
     DateTime? createdAt,
   }) =>
       ListConversationChanges200ResponseItemsInner(
         changeSequence: changeSequence ?? this.changeSequence,
         kind: kind ?? this.kind,
-        messageId: messageId ?? this.messageId,
-        memberId: memberId ?? this.memberId,
+        messageId: messageIdSetToNull ? null : messageId ?? this.messageId,
+        memberId: memberIdSetToNull ? null : memberId ?? this.memberId,
         createdAt: createdAt ?? this.createdAt,
       );
 
@@ -101,12 +111,8 @@ class ListConversationChanges200ResponseItemsInner {
             'Required key "ListConversationChanges200ResponseItemsInner[kind]" has a null value in JSON.');
         assert(json.containsKey(r'messageId'),
             'Required key "ListConversationChanges200ResponseItemsInner[messageId]" is missing from JSON.');
-        assert(json[r'messageId'] != null,
-            'Required key "ListConversationChanges200ResponseItemsInner[messageId]" has a null value in JSON.');
         assert(json.containsKey(r'memberId'),
             'Required key "ListConversationChanges200ResponseItemsInner[memberId]" is missing from JSON.');
-        assert(json[r'memberId'] != null,
-            'Required key "ListConversationChanges200ResponseItemsInner[memberId]" has a null value in JSON.');
         assert(json.containsKey(r'createdAt'),
             'Required key "ListConversationChanges200ResponseItemsInner[createdAt]" is missing from JSON.');
         assert(json[r'createdAt'] != null,
@@ -117,8 +123,8 @@ class ListConversationChanges200ResponseItemsInner {
       return ListConversationChanges200ResponseItemsInner(
         changeSequence: mapValueOfType<String>(json, r'changeSequence')!,
         kind: mapValueOfType<String>(json, r'kind')!,
-        messageId: mapValueOfType<String>(json, r'messageId')!,
-        memberId: mapValueOfType<String>(json, r'memberId')!,
+        messageId: mapValueOfType<String>(json, r'messageId'),
+        memberId: mapValueOfType<String>(json, r'memberId'),
         createdAt: mapDateTime(json, r'createdAt', r'')!,
       );
     }

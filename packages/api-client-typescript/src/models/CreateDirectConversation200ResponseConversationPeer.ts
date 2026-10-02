@@ -26,7 +26,7 @@ export interface CreateDirectConversation200ResponseConversationPeer {
     /**
      *
      */
-    name: string;
+    name: string | null;
 }
 
 /**

@@ -57,15 +57,15 @@ export interface Message {
     /**
      *
      */
-    text: string;
+    text: string | null;
     /**
      *
      */
-    replyToMessageId: string;
+    replyToMessageId: string | null;
     /**
      *
      */
-    replyPreview: MessageReplyPreview;
+    replyPreview: MessageReplyPreview | null;
     /**
      *
      */
@@ -77,11 +77,11 @@ export interface Message {
     /**
      *
      */
-    editedAt: Date;
+    editedAt: Date | null;
     /**
      *
      */
-    unsentAt: Date;
+    unsentAt: Date | null;
     /**
      *
      */
@@ -128,8 +128,8 @@ export function MessageFromJSONTyped(json: any, ignoreDiscriminator: boolean): M
         'replyPreview': MessageReplyPreviewFromJSON(json['replyPreview']),
         'version': json['version'],
         'createdAt': (json['createdAt'] == null ? json['createdAt'] : parseDateTime(json['createdAt'])),
-        'editedAt': (json['editedAt'] == null ? json['editedAt'] : parseDateTime(json['editedAt'])),
-        'unsentAt': (json['unsentAt'] == null ? json['unsentAt'] : parseDateTime(json['unsentAt'])),
+        'editedAt': (json['editedAt'] == null ? null : parseDateTime(json['editedAt'])),
+        'unsentAt': (json['unsentAt'] == null ? null : parseDateTime(json['unsentAt'])),
         'reactions': ((json['reactions'] as Array<any>).map(MessageReactionsInnerFromJSON)),
     };
 }

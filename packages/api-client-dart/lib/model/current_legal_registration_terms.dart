@@ -21,11 +21,11 @@ class CurrentLegalRegistrationTerms {
 
   final CurrentLegalRegistrationTermsStatusEnum status;
 
-  final String termsVersionId;
+  final String? termsVersionId;
 
-  final String termsContentDigest;
+  final String? termsContentDigest;
 
-  final String ageDeclarationVersion;
+  final String? ageDeclarationVersion;
 
   @override
   bool operator ==(Object other) =>
@@ -40,9 +40,9 @@ class CurrentLegalRegistrationTerms {
   int get hashCode =>
       // ignore: unnecessary_parenthesis
       (status.hashCode) +
-      (termsVersionId.hashCode) +
-      (termsContentDigest.hashCode) +
-      (ageDeclarationVersion.hashCode);
+      (termsVersionId == null ? 0 : termsVersionId!.hashCode) +
+      (termsContentDigest == null ? 0 : termsContentDigest!.hashCode) +
+      (ageDeclarationVersion == null ? 0 : ageDeclarationVersion!.hashCode);
 
   @override
   String toString() =>
@@ -51,9 +51,21 @@ class CurrentLegalRegistrationTerms {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'status'] = this.status;
-    json[r'termsVersionId'] = this.termsVersionId;
-    json[r'termsContentDigest'] = this.termsContentDigest;
-    json[r'ageDeclarationVersion'] = this.ageDeclarationVersion;
+    if (this.termsVersionId != null) {
+      json[r'termsVersionId'] = this.termsVersionId;
+    } else {
+      json[r'termsVersionId'] = null;
+    }
+    if (this.termsContentDigest != null) {
+      json[r'termsContentDigest'] = this.termsContentDigest;
+    } else {
+      json[r'termsContentDigest'] = null;
+    }
+    if (this.ageDeclarationVersion != null) {
+      json[r'ageDeclarationVersion'] = this.ageDeclarationVersion;
+    } else {
+      json[r'ageDeclarationVersion'] = null;
+    }
     return json;
   }
 
@@ -62,15 +74,23 @@ class CurrentLegalRegistrationTerms {
   CurrentLegalRegistrationTerms copyWith({
     CurrentLegalRegistrationTermsStatusEnum? status,
     String? termsVersionId,
+    bool termsVersionIdSetToNull = false,
     String? termsContentDigest,
+    bool termsContentDigestSetToNull = false,
     String? ageDeclarationVersion,
+    bool ageDeclarationVersionSetToNull = false,
   }) =>
       CurrentLegalRegistrationTerms(
         status: status ?? this.status,
-        termsVersionId: termsVersionId ?? this.termsVersionId,
-        termsContentDigest: termsContentDigest ?? this.termsContentDigest,
-        ageDeclarationVersion:
-            ageDeclarationVersion ?? this.ageDeclarationVersion,
+        termsVersionId: termsVersionIdSetToNull
+            ? null
+            : termsVersionId ?? this.termsVersionId,
+        termsContentDigest: termsContentDigestSetToNull
+            ? null
+            : termsContentDigest ?? this.termsContentDigest,
+        ageDeclarationVersion: ageDeclarationVersionSetToNull
+            ? null
+            : ageDeclarationVersion ?? this.ageDeclarationVersion,
       );
 
   /// Returns a new [CurrentLegalRegistrationTerms] instance and imports its values from
@@ -90,27 +110,20 @@ class CurrentLegalRegistrationTerms {
             'Required key "CurrentLegalRegistrationTerms[status]" has a null value in JSON.');
         assert(json.containsKey(r'termsVersionId'),
             'Required key "CurrentLegalRegistrationTerms[termsVersionId]" is missing from JSON.');
-        assert(json[r'termsVersionId'] != null,
-            'Required key "CurrentLegalRegistrationTerms[termsVersionId]" has a null value in JSON.');
         assert(json.containsKey(r'termsContentDigest'),
             'Required key "CurrentLegalRegistrationTerms[termsContentDigest]" is missing from JSON.');
-        assert(json[r'termsContentDigest'] != null,
-            'Required key "CurrentLegalRegistrationTerms[termsContentDigest]" has a null value in JSON.');
         assert(json.containsKey(r'ageDeclarationVersion'),
             'Required key "CurrentLegalRegistrationTerms[ageDeclarationVersion]" is missing from JSON.');
-        assert(json[r'ageDeclarationVersion'] != null,
-            'Required key "CurrentLegalRegistrationTerms[ageDeclarationVersion]" has a null value in JSON.');
         return true;
       }());
 
       return CurrentLegalRegistrationTerms(
         status:
             CurrentLegalRegistrationTermsStatusEnum.fromJson(json[r'status'])!,
-        termsVersionId: mapValueOfType<String>(json, r'termsVersionId')!,
-        termsContentDigest:
-            mapValueOfType<String>(json, r'termsContentDigest')!,
+        termsVersionId: mapValueOfType<String>(json, r'termsVersionId'),
+        termsContentDigest: mapValueOfType<String>(json, r'termsContentDigest'),
         ageDeclarationVersion:
-            mapValueOfType<String>(json, r'ageDeclarationVersion')!,
+            mapValueOfType<String>(json, r'ageDeclarationVersion'),
       );
     }
     return null;

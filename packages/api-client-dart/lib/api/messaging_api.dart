@@ -78,16 +78,16 @@ class MessagingApi {
   /// Performs an HTTP 'POST /api/v1/realtime/tickets' operation and returns the [Response].
   /// Parameters:
   ///
-  /// * [Map<String, Object?>] requestBody (required):
+  /// * [Object] body (required):
   Future<Response> createRealtimeTicketWithHttpInfo(
-    Map<String, Object?> requestBody, {
+    Object body, {
     Future<void>? abortTrigger,
   }) async {
     // ignore: prefer_const_declarations
     final path = r'/api/v1/realtime/tickets';
 
     // ignore: prefer_final_locals
-    Object? postBody = requestBody;
+    Object? postBody = body;
 
     final queryParams = <QueryParam>[];
     final headerParams = <String, String>{};
@@ -109,13 +109,13 @@ class MessagingApi {
 
   /// Parameters:
   ///
-  /// * [Map<String, Object?>] requestBody (required):
+  /// * [Object] body (required):
   Future<CreateRealtimeTicket201Response?> createRealtimeTicket(
-    Map<String, Object?> requestBody, {
+    Object body, {
     Future<void>? abortTrigger,
   }) async {
     final response = await createRealtimeTicketWithHttpInfo(
-      requestBody,
+      body,
       abortTrigger: abortTrigger,
     );
     if (response.statusCode >= HttpStatus.badRequest) {

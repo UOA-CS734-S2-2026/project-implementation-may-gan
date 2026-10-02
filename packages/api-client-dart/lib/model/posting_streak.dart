@@ -28,7 +28,7 @@ class PostingStreak {
   /// Minimum value: 0
   final int longest;
 
-  final String lastPostDate;
+  final String? lastPostDate;
 
   final bool postedToday;
 
@@ -50,7 +50,7 @@ class PostingStreak {
       // ignore: unnecessary_parenthesis
       (current.hashCode) +
       (longest.hashCode) +
-      (lastPostDate.hashCode) +
+      (lastPostDate == null ? 0 : lastPostDate!.hashCode) +
       (postedToday.hashCode) +
       (asOf.hashCode);
 
@@ -62,7 +62,11 @@ class PostingStreak {
     final json = <String, dynamic>{};
     json[r'current'] = this.current;
     json[r'longest'] = this.longest;
-    json[r'lastPostDate'] = this.lastPostDate;
+    if (this.lastPostDate != null) {
+      json[r'lastPostDate'] = this.lastPostDate;
+    } else {
+      json[r'lastPostDate'] = null;
+    }
     json[r'postedToday'] = this.postedToday;
     json[r'asOf'] = this.asOf;
     return json;
@@ -74,13 +78,15 @@ class PostingStreak {
     int? current,
     int? longest,
     String? lastPostDate,
+    bool lastPostDateSetToNull = false,
     bool? postedToday,
     String? asOf,
   }) =>
       PostingStreak(
         current: current ?? this.current,
         longest: longest ?? this.longest,
-        lastPostDate: lastPostDate ?? this.lastPostDate,
+        lastPostDate:
+            lastPostDateSetToNull ? null : lastPostDate ?? this.lastPostDate,
         postedToday: postedToday ?? this.postedToday,
         asOf: asOf ?? this.asOf,
       );
@@ -106,8 +112,6 @@ class PostingStreak {
             'Required key "PostingStreak[longest]" has a null value in JSON.');
         assert(json.containsKey(r'lastPostDate'),
             'Required key "PostingStreak[lastPostDate]" is missing from JSON.');
-        assert(json[r'lastPostDate'] != null,
-            'Required key "PostingStreak[lastPostDate]" has a null value in JSON.');
         assert(json.containsKey(r'postedToday'),
             'Required key "PostingStreak[postedToday]" is missing from JSON.');
         assert(json[r'postedToday'] != null,
@@ -122,7 +126,7 @@ class PostingStreak {
       return PostingStreak(
         current: mapValueOfType<int>(json, r'current')!,
         longest: mapValueOfType<int>(json, r'longest')!,
-        lastPostDate: mapValueOfType<String>(json, r'lastPostDate')!,
+        lastPostDate: mapValueOfType<String>(json, r'lastPostDate'),
         postedToday: mapValueOfType<bool>(json, r'postedToday')!,
         asOf: mapValueOfType<String>(json, r'asOf')!,
       );

@@ -30,7 +30,7 @@ export interface PostingStreak {
     /**
      *
      */
-    lastPostDate: string;
+    lastPostDate: string | null;
     /**
      *
      */

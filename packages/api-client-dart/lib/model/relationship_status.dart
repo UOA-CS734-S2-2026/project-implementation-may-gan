@@ -23,9 +23,9 @@ class RelationshipStatus {
 
   final RelationshipState status;
 
-  final PendingRelationshipRequest incomingRequest;
+  final PendingRelationshipRequest? incomingRequest;
 
-  final PendingRelationshipRequest outgoingRequest;
+  final PendingRelationshipRequest? outgoingRequest;
 
   @override
   bool operator ==(Object other) =>
@@ -41,8 +41,8 @@ class RelationshipStatus {
       // ignore: unnecessary_parenthesis
       (userId.hashCode) +
       (status.hashCode) +
-      (incomingRequest.hashCode) +
-      (outgoingRequest.hashCode);
+      (incomingRequest == null ? 0 : incomingRequest!.hashCode) +
+      (outgoingRequest == null ? 0 : outgoingRequest!.hashCode);
 
   @override
   String toString() =>
@@ -52,8 +52,16 @@ class RelationshipStatus {
     final json = <String, dynamic>{};
     json[r'userId'] = this.userId;
     json[r'status'] = this.status;
-    json[r'incomingRequest'] = this.incomingRequest;
-    json[r'outgoingRequest'] = this.outgoingRequest;
+    if (this.incomingRequest != null) {
+      json[r'incomingRequest'] = this.incomingRequest;
+    } else {
+      json[r'incomingRequest'] = null;
+    }
+    if (this.outgoingRequest != null) {
+      json[r'outgoingRequest'] = this.outgoingRequest;
+    } else {
+      json[r'outgoingRequest'] = null;
+    }
     return json;
   }
 
@@ -63,13 +71,19 @@ class RelationshipStatus {
     String? userId,
     RelationshipState? status,
     PendingRelationshipRequest? incomingRequest,
+    bool incomingRequestSetToNull = false,
     PendingRelationshipRequest? outgoingRequest,
+    bool outgoingRequestSetToNull = false,
   }) =>
       RelationshipStatus(
         userId: userId ?? this.userId,
         status: status ?? this.status,
-        incomingRequest: incomingRequest ?? this.incomingRequest,
-        outgoingRequest: outgoingRequest ?? this.outgoingRequest,
+        incomingRequest: incomingRequestSetToNull
+            ? null
+            : incomingRequest ?? this.incomingRequest,
+        outgoingRequest: outgoingRequestSetToNull
+            ? null
+            : outgoingRequest ?? this.outgoingRequest,
       );
 
   /// Returns a new [RelationshipStatus] instance and imports its values from
@@ -93,12 +107,8 @@ class RelationshipStatus {
             'Required key "RelationshipStatus[status]" has a null value in JSON.');
         assert(json.containsKey(r'incomingRequest'),
             'Required key "RelationshipStatus[incomingRequest]" is missing from JSON.');
-        assert(json[r'incomingRequest'] != null,
-            'Required key "RelationshipStatus[incomingRequest]" has a null value in JSON.');
         assert(json.containsKey(r'outgoingRequest'),
             'Required key "RelationshipStatus[outgoingRequest]" is missing from JSON.');
-        assert(json[r'outgoingRequest'] != null,
-            'Required key "RelationshipStatus[outgoingRequest]" has a null value in JSON.');
         return true;
       }());
 
@@ -106,9 +116,9 @@ class RelationshipStatus {
         userId: mapValueOfType<String>(json, r'userId')!,
         status: RelationshipState.fromJson(json[r'status'])!,
         incomingRequest:
-            PendingRelationshipRequest.fromJson(json[r'incomingRequest'])!,
+            PendingRelationshipRequest.fromJson(json[r'incomingRequest']),
         outgoingRequest:
-            PendingRelationshipRequest.fromJson(json[r'outgoingRequest'])!,
+            PendingRelationshipRequest.fromJson(json[r'outgoingRequest']),
       );
     }
     return null;
