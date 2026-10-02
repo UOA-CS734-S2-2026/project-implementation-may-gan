@@ -1,6 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { UpdatePostChanges } from "./update-post.contract";
 import { createPostgresUpdatePostRepository } from "./update-post.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
@@ -26,6 +27,9 @@ function requireLocalTestUrl(value: string): string {
   const userIds = Object.values(users);
   const now = new Date("2026-09-26T03:00:00.000Z");
   const repo = () => createPostgresUpdatePostRepository(app.db);
+  // The post as first written; each test changes what it needs.
+  const original: UpdatePostChanges = { reflectiveAnswer: "First answer", caption: "Sunset", rating: 6, audience: "friends" };
+  const change = (fields: Partial<UpdatePostChanges>): UpdatePostChanges => ({ ...original, ...fields });
   let postId = "";
   let posts = 0;
 
@@ -84,7 +88,7 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("saves the edit and keeps the previous version as revision 1", async () => {
-    await expect(repo().updatePost(users.author, postId, 0, { reflectiveAnswer: "Second answer", rating: 8 }, now))
+    await expect(repo().updatePost(users.author, postId, 0, change({ reflectiveAnswer: "Second answer", rating: 8 }), now))
       .resolves.toBe("updated");
 
     expect(await current(postId)).toMatchObject({ reflectiveAnswer: "Second answer", rating: 8, caption: "Sunset" });
@@ -101,32 +105,32 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("removes the caption and changes the audience", async () => {
-    await expect(repo().updatePost(users.author, postId, 0, { caption: null, audience: "solo" }, now))
+    await expect(repo().updatePost(users.author, postId, 0, change({ caption: null, audience: "solo" }), now))
       .resolves.toBe("updated");
 
     expect(await current(postId)).toMatchObject({ caption: null, audience: "solo" });
   });
 
   it("treats a retry of a saved edit as unchanged without another revision", async () => {
-    await repo().updatePost(users.author, postId, 0, { reflectiveAnswer: "Second answer" }, now);
+    await repo().updatePost(users.author, postId, 0, change({ reflectiveAnswer: "Second answer" }), now);
 
-    await expect(repo().updatePost(users.author, postId, 0, { reflectiveAnswer: "Second answer" }, now))
+    await expect(repo().updatePost(users.author, postId, 0, change({ reflectiveAnswer: "Second answer" }), now))
       .resolves.toBe("unchanged");
     expect(await revisions(postId)).toHaveLength(1);
   });
 
   it("rejects an edit based on a stale revision count", async () => {
-    await repo().updatePost(users.author, postId, 0, { reflectiveAnswer: "Second answer" }, now);
+    await repo().updatePost(users.author, postId, 0, change({ reflectiveAnswer: "Second answer" }), now);
 
-    await expect(repo().updatePost(users.author, postId, 0, { rating: 2 }, now)).resolves.toBe("conflict");
-    await expect(repo().updatePost(users.author, postId, 1, { rating: 2 }, now)).resolves.toBe("updated");
+    await expect(repo().updatePost(users.author, postId, 0, change({ rating: 2 }), now)).resolves.toBe("conflict");
+    await expect(repo().updatePost(users.author, postId, 1, change({ rating: 2 }), now)).resolves.toBe("updated");
     expect((await revisions(postId)).map((revision) => revision.revisionNumber)).toEqual([1, 2]);
   });
 
   it("lets exactly one of two concurrent edits win", async () => {
     const outcomes = await Promise.all([
-      repo().updatePost(users.author, postId, 0, { rating: 9 }, now),
-      repo().updatePost(users.author, postId, 0, { rating: 3 }, now),
+      repo().updatePost(users.author, postId, 0, change({ rating: 9 }), now),
+      repo().updatePost(users.author, postId, 0, change({ rating: 3 }), now),
     ]);
 
     expect([...outcomes].sort()).toEqual(["conflict", "updated"]);
@@ -134,11 +138,11 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("conceals posts that belong to someone else, are deleted, or don't exist", async () => {
-    await expect(repo().updatePost(users.friend, postId, 0, { rating: 1 }, now)).resolves.toBe("not_found");
-    await expect(repo().updatePost(users.author, id("missing"), 0, { rating: 1 }, now)).resolves.toBe("not_found");
+    await expect(repo().updatePost(users.friend, postId, 0, change({ rating: 1 }), now)).resolves.toBe("not_found");
+    await expect(repo().updatePost(users.author, id("missing"), 0, change({ rating: 1 }), now)).resolves.toBe("not_found");
 
     await migrator.db.update(schema.posts).set({ trashedAt: now, restoreUntil: new Date(now.getTime() + 168 * 3_600_000), trashPurgeDueAt: new Date(now.getTime() + 336 * 3_600_000) }).where(eq(schema.posts.id, postId));
-    await expect(repo().updatePost(users.author, postId, 0, { rating: 1 }, now)).resolves.toBe("not_found");
+    await expect(repo().updatePost(users.author, postId, 0, change({ rating: 1 }), now)).resolves.toBe("not_found");
     expect(await revisions(postId)).toHaveLength(0);
   });
 });

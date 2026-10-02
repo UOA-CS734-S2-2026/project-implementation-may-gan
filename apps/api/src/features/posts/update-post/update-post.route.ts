@@ -28,7 +28,7 @@ const updatePostRoute = createRoute({
   tags: ["Posts"],
   operationId: "posts.update",
   summary: "Edit a post",
-  description: "Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
+  description: "Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
   security,
   request: {
     params: postIdParamsSchema,

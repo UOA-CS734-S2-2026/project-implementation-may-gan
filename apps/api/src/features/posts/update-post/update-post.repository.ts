@@ -38,7 +38,7 @@ export function createPostgresUpdatePostRepository(database: DayliDatabase): Upd
           .for("update");
         if (!post) return "not_found";
 
-        const changed = editableFields.filter((field) => changes[field] !== undefined && changes[field] !== post[field]);
+        const changed = editableFields.filter((field) => changes[field] !== post[field]);
         if (changed.length === 0) return "unchanged";
 
         const [revisions] = await tx
@@ -73,13 +73,7 @@ export function createPostgresUpdatePostRepository(database: DayliDatabase): Upd
         });
         await tx
           .update(posts)
-          .set({
-            ...(changes.reflectiveAnswer !== undefined ? { reflectiveAnswer: changes.reflectiveAnswer } : {}),
-            ...(changes.caption !== undefined ? { caption: changes.caption } : {}),
-            ...(changes.rating !== undefined ? { rating: changes.rating } : {}),
-            ...(changes.audience !== undefined ? { audience: changes.audience } : {}),
-            updatedAt: now,
-          })
+          .set({ ...changes, updatedAt: now })
           .where(eq(posts.id, postId));
         return "updated";
       });

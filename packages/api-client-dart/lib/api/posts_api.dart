@@ -761,7 +761,7 @@ class PostsApi {
 
   /// Edit a post
   ///
-  /// Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  /// Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -802,7 +802,7 @@ class PostsApi {
 
   /// Edit a post
   ///
-  /// Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  /// Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
   ///
   /// Parameters:
   ///

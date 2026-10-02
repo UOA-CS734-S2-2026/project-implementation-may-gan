@@ -37,6 +37,14 @@ function detailRepository(post: PostDetailRecord | null = detail): PostDetailRep
   return { findPost: vi.fn(async () => post) };
 }
 
+const edit = {
+  expectedRevisionCount: 0,
+  reflectiveAnswer: "Walked to the harbour and back.",
+  caption: null,
+  rating: 8,
+  audience: "friends",
+};
+
 function patch(deps: Partial<UpdatePostRouteDependencies>, body: unknown, user: string | null = "user-author") {
   return createApp({ postUpdate: { resolveSession, now: () => fixedNow, ...deps } }).request("/api/v1/posts/post-1", {
     method: "PATCH",
@@ -48,7 +56,7 @@ function patch(deps: Partial<UpdatePostRouteDependencies>, body: unknown, user: 
 describe("PATCH /api/v1/posts/{postId}", () => {
   it("requires a session and never edits the post", async () => {
     const repo = repository("updated");
-    const response = await patch({ repository: repo, detail: detailRepository() }, { expectedRevisionCount: 0, rating: 8 }, null);
+    const response = await patch({ repository: repo, detail: detailRepository() }, edit, null);
 
     expect(response.status).toBe(401);
     expect(repo.updatePost).not.toHaveBeenCalled();
@@ -59,7 +67,7 @@ describe("PATCH /api/v1/posts/{postId}", () => {
     const details = detailRepository();
     const response = await patch(
       { repository: repo, detail: details },
-      { expectedRevisionCount: 0, reflectiveAnswer: "Walked to the harbour and back.", caption: null, rating: 8 },
+      edit,
     );
 
     expect(response.status).toBe(200);
@@ -69,39 +77,40 @@ describe("PATCH /api/v1/posts/{postId}", () => {
       "user-author",
       "post-1",
       0,
-      { reflectiveAnswer: "Walked to the harbour and back.", caption: null, rating: 8 },
+      { reflectiveAnswer: "Walked to the harbour and back.", caption: null, rating: 8, audience: "friends" },
       fixedNow,
     );
     expect(details.findPost).toHaveBeenCalledWith("user-author", "post-1", fixedNow);
   });
 
   it("returns the post when the edit was already saved", async () => {
-    const response = await patch({ repository: repository("unchanged"), detail: detailRepository() }, { expectedRevisionCount: 0, rating: 8 });
+    const response = await patch({ repository: repository("unchanged"), detail: detailRepository() }, edit);
 
     expect(response.status).toBe(200);
   });
 
   it("reports a stale revision count as a conflict", async () => {
-    const response = await patch({ repository: repository("conflict"), detail: detailRepository() }, { expectedRevisionCount: 0, rating: 8 });
+    const response = await patch({ repository: repository("conflict"), detail: detailRepository() }, edit);
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "CONFLICT" } });
   });
 
   it("conceals someone else's or a deleted post as 404", async () => {
-    const response = await patch({ repository: repository("not_found"), detail: detailRepository() }, { expectedRevisionCount: 0, rating: 8 });
+    const response = await patch({ repository: repository("not_found"), detail: detailRepository() }, edit);
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   it.each([
-    ["no change", { expectedRevisionCount: 0 }],
-    ["a missing revision count", { rating: 8 }],
-    ["a blank answer", { expectedRevisionCount: 0, reflectiveAnswer: "  " }],
-    ["a rating out of range", { expectedRevisionCount: 0, rating: 11 }],
-    ["an unknown audience", { expectedRevisionCount: 0, audience: "public" }],
-    ["a field that can't be edited", { expectedRevisionCount: 0, localDate: "2026-09-24" }],
+    ["a missing field", { expectedRevisionCount: 0, rating: 8 }],
+    ["a missing caption", { ...edit, caption: undefined }],
+    ["a missing revision count", { ...edit, expectedRevisionCount: undefined }],
+    ["a blank answer", { ...edit, reflectiveAnswer: "  " }],
+    ["a rating out of range", { ...edit, rating: 11 }],
+    ["an unknown audience", { ...edit, audience: "public" }],
+    ["a field that can't be edited", { ...edit, localDate: "2026-09-24" }],
   ])("rejects %s", async (_, body) => {
     const repo = repository("updated");
     const response = await patch({ repository: repo, detail: detailRepository() }, body);
@@ -113,7 +122,7 @@ describe("PATCH /api/v1/posts/{postId}", () => {
   it("conceals storage failures", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const repo: UpdatePostRepository = { updatePost: async () => { throw new Error("relation \"posts\" does not exist"); } };
-    const response = await patch({ repository: repo, detail: detailRepository() }, { expectedRevisionCount: 0, rating: 8 });
+    const response = await patch({ repository: repo, detail: detailRepository() }, edit);
 
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("posts\"");
@@ -121,7 +130,7 @@ describe("PATCH /api/v1/posts/{postId}", () => {
   });
 
   it("is unavailable when no repository is configured", async () => {
-    const response = await patch({}, { expectedRevisionCount: 0, rating: 8 });
+    const response = await patch({}, edit);
 
     expect(response.status).toBe(503);
   });

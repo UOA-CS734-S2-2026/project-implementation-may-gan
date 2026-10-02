@@ -1419,10 +1419,14 @@
           }
         },
         "required": [
-          "expectedRevisionCount"
+          "expectedRevisionCount",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience"
         ],
         "additionalProperties": false,
-        "description": "Fields left out stay unchanged. The prompt, day, media and tomorrow note cannot be edited."
+        "description": "Every editable field, as the post should read after the edit. Only values that differ are saved, and only then is a revision stored. The prompt, day, media and tomorrow note cannot be edited."
       },
       "PostRevisionsPage": {
         "type": "object",
@@ -3921,7 +3925,7 @@
         ],
         "operationId": "posts.update",
         "summary": "Edit a post",
-        "description": "Lets the author change the reflective answer, caption, rating, or audience of their post, before or after release. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
+        "description": "Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
         "security": [
           {
             "BearerAuth": []
@@ -3999,7 +4003,7 @@
             }
           },
           "422": {
-            "description": "The post ID or a field is invalid, or no field was changed.",
+            "description": "The post ID or a field is invalid, or a field is missing.",
             "content": {
               "application/json": {
                 "schema": {

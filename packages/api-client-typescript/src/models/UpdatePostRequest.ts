@@ -22,7 +22,7 @@ import {
 } from './PostAudience';
 
 /**
- * Fields left out stay unchanged. The prompt, day, media and tomorrow note cannot be edited.
+ * Every editable field, as the post should read after the edit. Only values that differ are saved, and only then is a revision stored. The prompt, day, media and tomorrow note cannot be edited.
  * @export
  * @interface UpdatePostRequest
  */
@@ -34,19 +34,19 @@ export interface UpdatePostRequest {
     /**
      *
      */
-    reflectiveAnswer?: string;
+    reflectiveAnswer: string;
     /**
      * Null removes the caption.
      */
-    caption?: string | null;
+    caption: string | null;
     /**
      *
      */
-    rating?: number;
+    rating: number;
     /**
      *
      */
-    audience?: PostAudience;
+    audience: PostAudience;
 }
 
 
@@ -56,6 +56,10 @@ export interface UpdatePostRequest {
  */
 export function instanceOfUpdatePostRequest(value: object): value is UpdatePostRequest {
     if (!('expectedRevisionCount' in value) || value['expectedRevisionCount'] === undefined) return false;
+    if (!('reflectiveAnswer' in value) || value['reflectiveAnswer'] === undefined) return false;
+    if (!('caption' in value) || value['caption'] === undefined) return false;
+    if (!('rating' in value) || value['rating'] === undefined) return false;
+    if (!('audience' in value) || value['audience'] === undefined) return false;
     return true;
 }
 
@@ -70,10 +74,10 @@ export function UpdatePostRequestFromJSONTyped(json: any, ignoreDiscriminator: b
     return {
 
         'expectedRevisionCount': json['expectedRevisionCount'],
-        'reflectiveAnswer': json['reflectiveAnswer'] == null ? undefined : json['reflectiveAnswer'],
-        'caption': json['caption'] === undefined ? undefined : json['caption'] === null ? null : json['caption'],
-        'rating': json['rating'] == null ? undefined : json['rating'],
-        'audience': json['audience'] == null ? undefined : PostAudienceFromJSON(json['audience']),
+        'reflectiveAnswer': json['reflectiveAnswer'],
+        'caption': json['caption'],
+        'rating': json['rating'],
+        'audience': PostAudienceFromJSON(json['audience']),
     };
 }
 

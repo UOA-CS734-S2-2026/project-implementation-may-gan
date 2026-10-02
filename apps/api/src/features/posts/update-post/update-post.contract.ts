@@ -9,21 +9,17 @@ export const updatePostRequestSchema = z
       description: "The `revisionCount` of the post the author last read. If another edit has been saved since, the request is a 409.",
       example: 0,
     }),
-    reflectiveAnswer: boundedText(DAILY_POST_LIMITS.reflectiveAnswerMaxCodePoints).optional()
+    reflectiveAnswer: boundedText(DAILY_POST_LIMITS.reflectiveAnswerMaxCodePoints)
       .openapi({ example: "Walked to the harbour after class, then home along the beach." }),
-    caption: boundedText(DAILY_POST_LIMITS.captionMaxCodePoints).nullable().optional()
+    caption: boundedText(DAILY_POST_LIMITS.captionMaxCodePoints).nullable()
       .openapi({ description: "Null removes the caption.", example: "Sunset at the wharf" }),
-    rating: z.number().int().min(DAILY_POST_LIMITS.ratingMin).max(DAILY_POST_LIMITS.ratingMax).optional()
+    rating: z.number().int().min(DAILY_POST_LIMITS.ratingMin).max(DAILY_POST_LIMITS.ratingMax)
       .openapi({ example: 8 }),
-    audience: postAudienceSchema.optional(),
+    audience: postAudienceSchema,
   })
   .strict()
-  .refine(
-    (body) => [body.reflectiveAnswer, body.caption, body.rating, body.audience].some((value) => value !== undefined),
-    { message: "Change at least one field." },
-  )
   .openapi("UpdatePostRequest", {
-    description: "Fields left out stay unchanged. The prompt, day, media and tomorrow note cannot be edited.",
+    description: "Every editable field, as the post should read after the edit. Only values that differ are saved, and only then is a revision stored. The prompt, day, media and tomorrow note cannot be edited.",
   });
 
 export type UpdatePostRequest = z.infer<typeof updatePostRequestSchema>;
@@ -43,7 +39,7 @@ export const updatePostErrorResponses = {
     content: { "application/json": { schema: apiErrorSchema } },
   },
   422: {
-    description: "The post ID or a field is invalid, or no field was changed.",
+    description: "The post ID or a field is invalid, or a field is missing.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   429: rateLimitErrorResponse,

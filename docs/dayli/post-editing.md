@@ -4,7 +4,7 @@ Authors can edit and delete their own posts. Every edit keeps the previous versi
 
 ## Editing
 
-`PATCH /api/v1/posts/{postId}` changes the reflective answer, caption, rating, or audience. It works before and after release. The prompt, day, media, and tomorrow note can't be edited. Fields left out stay as they are, and `"caption": null` removes the caption.
+`PATCH /api/v1/posts/{postId}` changes the reflective answer, caption, rating, or audience. It works before and after release. The prompt, day, media, and tomorrow note can't be edited. The request always carries all four fields as the post should read afterwards, and `"caption": null` removes the caption. Only values that differ are saved.
 
 The request carries `expectedRevisionCount`, the `revisionCount` the author last read from post detail. The repository locks the post row, so concurrent edits queue:
 
@@ -14,7 +14,7 @@ The request carries `expectedRevisionCount`, the `revisionCount` the author last
 
 Someone else's post, a deleted post, and an unknown ID all return `404 NOT_FOUND`.
 
-The generated Dart `UpdatePostRequest` writes every left-out field as `null`. That would fail validation for the answer, rating, and audience, and would clear the caption. Clients send all four fields; the server only stores a revision when a value actually changes.
+All four fields are required because the generated Dart client writes every unset field as `null`, so it can't express a partial update: a left-out caption would read as "remove the caption". With every field required, the generated `UpdatePostRequest` sends exactly what the author sees.
 
 ## Revision history
 

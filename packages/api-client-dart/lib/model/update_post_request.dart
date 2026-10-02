@@ -14,10 +14,10 @@ class UpdatePostRequest {
   /// Returns a new [UpdatePostRequest] instance.
   UpdatePostRequest({
     required this.expectedRevisionCount,
-    this.reflectiveAnswer,
-    this.caption,
-    this.rating,
-    this.audience,
+    required this.reflectiveAnswer,
+    required this.caption,
+    required this.rating,
+    required this.audience,
   });
 
   /// The `revisionCount` of the post the author last read. If another edit has been saved since, the request is a 409.
@@ -25,34 +25,16 @@ class UpdatePostRequest {
   /// Minimum value: 0
   final int expectedRevisionCount;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  final String? reflectiveAnswer;
+  final String reflectiveAnswer;
 
   /// Null removes the caption.
   final String? caption;
 
   /// Minimum value: 1
   /// Maximum value: 10
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  final int? rating;
+  final int rating;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
-  final PostAudience? audience;
+  final PostAudience audience;
 
   @override
   bool operator ==(Object other) =>
@@ -68,10 +50,10 @@ class UpdatePostRequest {
   int get hashCode =>
       // ignore: unnecessary_parenthesis
       (expectedRevisionCount.hashCode) +
-      (reflectiveAnswer == null ? 0 : reflectiveAnswer!.hashCode) +
+      (reflectiveAnswer.hashCode) +
       (caption == null ? 0 : caption!.hashCode) +
-      (rating == null ? 0 : rating!.hashCode) +
-      (audience == null ? 0 : audience!.hashCode);
+      (rating.hashCode) +
+      (audience.hashCode);
 
   @override
   String toString() =>
@@ -80,26 +62,14 @@ class UpdatePostRequest {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'expectedRevisionCount'] = this.expectedRevisionCount;
-    if (this.reflectiveAnswer != null) {
-      json[r'reflectiveAnswer'] = this.reflectiveAnswer;
-    } else {
-      json[r'reflectiveAnswer'] = null;
-    }
+    json[r'reflectiveAnswer'] = this.reflectiveAnswer;
     if (this.caption != null) {
       json[r'caption'] = this.caption;
     } else {
       json[r'caption'] = null;
     }
-    if (this.rating != null) {
-      json[r'rating'] = this.rating;
-    } else {
-      json[r'rating'] = null;
-    }
-    if (this.audience != null) {
-      json[r'audience'] = this.audience;
-    } else {
-      json[r'audience'] = null;
-    }
+    json[r'rating'] = this.rating;
+    json[r'audience'] = this.audience;
     return json;
   }
 
@@ -137,16 +107,30 @@ class UpdatePostRequest {
             'Required key "UpdatePostRequest[expectedRevisionCount]" is missing from JSON.');
         assert(json[r'expectedRevisionCount'] != null,
             'Required key "UpdatePostRequest[expectedRevisionCount]" has a null value in JSON.');
+        assert(json.containsKey(r'reflectiveAnswer'),
+            'Required key "UpdatePostRequest[reflectiveAnswer]" is missing from JSON.');
+        assert(json[r'reflectiveAnswer'] != null,
+            'Required key "UpdatePostRequest[reflectiveAnswer]" has a null value in JSON.');
+        assert(json.containsKey(r'caption'),
+            'Required key "UpdatePostRequest[caption]" is missing from JSON.');
+        assert(json.containsKey(r'rating'),
+            'Required key "UpdatePostRequest[rating]" is missing from JSON.');
+        assert(json[r'rating'] != null,
+            'Required key "UpdatePostRequest[rating]" has a null value in JSON.');
+        assert(json.containsKey(r'audience'),
+            'Required key "UpdatePostRequest[audience]" is missing from JSON.');
+        assert(json[r'audience'] != null,
+            'Required key "UpdatePostRequest[audience]" has a null value in JSON.');
         return true;
       }());
 
       return UpdatePostRequest(
         expectedRevisionCount:
             mapValueOfType<int>(json, r'expectedRevisionCount')!,
-        reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer'),
+        reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
         caption: mapValueOfType<String>(json, r'caption'),
-        rating: mapValueOfType<int>(json, r'rating'),
-        audience: PostAudience.fromJson(json[r'audience']),
+        rating: mapValueOfType<int>(json, r'rating')!,
+        audience: PostAudience.fromJson(json[r'audience'])!,
       );
     }
     return null;
@@ -204,5 +188,9 @@ class UpdatePostRequest {
   /// The list of required keys that must be present in a JSON.
   static const requiredKeys = <String>{
     'expectedRevisionCount',
+    'reflectiveAnswer',
+    'caption',
+    'rating',
+    'audience',
   };
 }
