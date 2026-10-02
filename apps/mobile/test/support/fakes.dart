@@ -457,8 +457,9 @@ class TestHarness {
         legalProofRequests++;
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         if (body['acceptedTermsAndDeclaredAge16'] != true ||
-            body['termsVersionId'] != 'test-terms')
+            body['termsVersionId'] != 'test-terms') {
           return http.Response('{}', 409);
+        }
         return http.Response(
           jsonEncode({
             'termsVersionId': 'test-terms',
