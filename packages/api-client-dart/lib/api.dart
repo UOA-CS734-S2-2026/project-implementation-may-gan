@@ -62,6 +62,7 @@ part 'model/daily_post.dart';
 part 'model/daily_post_media.dart';
 part 'model/daily_post_prompt.dart';
 part 'model/daily_post_tomorrow_note.dart';
+part 'model/daily_post_voice_memo.dart';
 part 'model/daily_prompt_response.dart';
 part 'model/deletion_grant_request.dart';
 part 'model/direct_pair_lookup.dart';
@@ -101,6 +102,8 @@ part 'model/post_detail.dart';
 part 'model/post_detail_author.dart';
 part 'model/post_detail_prompt.dart';
 part 'model/post_media.dart';
+part 'model/post_media_content_type.dart';
+part 'model/post_voice_memo.dart';
 part 'model/posting_streak.dart';
 part 'model/posts_list_trash200_response.dart';
 part 'model/posts_restore200_response.dart';
@@ -130,6 +133,7 @@ part 'model/trashed_post_status.dart';
 part 'model/update_profile_request.dart';
 part 'model/username_profile.dart';
 part 'model/username_setup_request.dart';
+part 'model/voice_memo_content_type.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from
 /// the OpenAPI specification file.

@@ -46,6 +46,7 @@ lib/model/daily_post.dart
 lib/model/daily_post_media.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
+lib/model/daily_post_voice_memo.dart
 lib/model/daily_prompt_response.dart
 lib/model/deletion_grant_request.dart
 lib/model/direct_pair_lookup.dart
@@ -85,6 +86,8 @@ lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
+lib/model/post_media_content_type.dart
+lib/model/post_voice_memo.dart
 lib/model/posting_streak.dart
 lib/model/posts_list_trash200_response.dart
 lib/model/posts_restore200_response.dart
@@ -114,4 +117,5 @@ lib/model/trashed_post_status.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart
+lib/model/voice_memo_content_type.dart
 pubspec.yaml

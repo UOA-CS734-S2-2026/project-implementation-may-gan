@@ -254,6 +254,8 @@ class ApiClient {
           return DailyPostPrompt.fromJson(value);
         case 'DailyPostTomorrowNote':
           return DailyPostTomorrowNote.fromJson(value);
+        case 'DailyPostVoiceMemo':
+          return DailyPostVoiceMemo.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
         case 'DeletionGrantRequest':
@@ -332,6 +334,10 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
+        case 'PostMediaContentType':
+          return PostMediaContentTypeTypeTransformer().decode(value);
+        case 'PostVoiceMemo':
+          return PostVoiceMemo.fromJson(value);
         case 'PostingStreak':
           return PostingStreak.fromJson(value);
         case 'PostsListTrash200Response':
@@ -390,6 +396,8 @@ class ApiClient {
           return UsernameProfile.fromJson(value);
         case 'UsernameSetupRequest':
           return UsernameSetupRequest.fromJson(value);
+        case 'VoiceMemoContentType':
+          return VoiceMemoContentTypeTypeTransformer().decode(value);
         default:
           dynamic match;
           if (value is List &&

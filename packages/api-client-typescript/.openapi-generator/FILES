@@ -38,6 +38,7 @@ src/models/DailyPost.ts
 src/models/DailyPostMedia.ts
 src/models/DailyPostPrompt.ts
 src/models/DailyPostTomorrowNote.ts
+src/models/DailyPostVoiceMemo.ts
 src/models/DailyPromptResponse.ts
 src/models/DeletionGrantRequest.ts
 src/models/DirectPairLookup.ts
@@ -77,6 +78,8 @@ src/models/PostDetail.ts
 src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
+src/models/PostMediaContentType.ts
+src/models/PostVoiceMemo.ts
 src/models/PostingStreak.ts
 src/models/PostsListTrash200Response.ts
 src/models/PostsRestore200Response.ts
@@ -106,6 +109,7 @@ src/models/TrashedPostStatus.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts
+src/models/VoiceMemoContentType.ts
 src/models/index.ts
 src/runtime.ts
 tsconfig.esm.json

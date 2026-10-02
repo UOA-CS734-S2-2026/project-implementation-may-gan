@@ -10,63 +10,54 @@
 
 part of openapi.api;
 
-class DailyPostMedia {
-  /// Returns a new [DailyPostMedia] instance.
-  DailyPostMedia({
+class DailyPostVoiceMemo {
+  /// Returns a new [DailyPostVoiceMemo] instance.
+  DailyPostVoiceMemo({
     required this.id,
     required this.contentType,
-    required this.order,
   });
 
   final String id;
 
-  final PostMediaContentType contentType;
-
-  /// Minimum value: 0
-  final int order;
+  final VoiceMemoContentType contentType;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DailyPostMedia &&
+      other is DailyPostVoiceMemo &&
           other.id == id &&
-          other.contentType == contentType &&
-          other.order == order;
+          other.contentType == contentType;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (id.hashCode) + (contentType.hashCode) + (order.hashCode);
+      (id.hashCode) + (contentType.hashCode);
 
   @override
-  String toString() =>
-      'DailyPostMedia[id=$id, contentType=$contentType, order=$order]';
+  String toString() => 'DailyPostVoiceMemo[id=$id, contentType=$contentType]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
     json[r'contentType'] = this.contentType;
-    json[r'order'] = this.order;
     return json;
   }
 
-  /// Clones this instance of [DailyPostMedia] and returns a new one where some of the
+  /// Clones this instance of [DailyPostVoiceMemo] and returns a new one where some of the
   /// properties have changed.
-  DailyPostMedia copyWith({
+  DailyPostVoiceMemo copyWith({
     String? id,
-    PostMediaContentType? contentType,
-    int? order,
+    VoiceMemoContentType? contentType,
   }) =>
-      DailyPostMedia(
+      DailyPostVoiceMemo(
         id: id ?? this.id,
         contentType: contentType ?? this.contentType,
-        order: order ?? this.order,
       );
 
-  /// Returns a new [DailyPostMedia] instance and imports its values from
+  /// Returns a new [DailyPostVoiceMemo] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static DailyPostMedia? fromJson(dynamic value) {
+  static DailyPostVoiceMemo? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -75,37 +66,32 @@ class DailyPostMedia {
       // Note 2: this code is stripped in release mode!
       assert(() {
         assert(json.containsKey(r'id'),
-            'Required key "DailyPostMedia[id]" is missing from JSON.');
+            'Required key "DailyPostVoiceMemo[id]" is missing from JSON.');
         assert(json[r'id'] != null,
-            'Required key "DailyPostMedia[id]" has a null value in JSON.');
+            'Required key "DailyPostVoiceMemo[id]" has a null value in JSON.');
         assert(json.containsKey(r'contentType'),
-            'Required key "DailyPostMedia[contentType]" is missing from JSON.');
+            'Required key "DailyPostVoiceMemo[contentType]" is missing from JSON.');
         assert(json[r'contentType'] != null,
-            'Required key "DailyPostMedia[contentType]" has a null value in JSON.');
-        assert(json.containsKey(r'order'),
-            'Required key "DailyPostMedia[order]" is missing from JSON.');
-        assert(json[r'order'] != null,
-            'Required key "DailyPostMedia[order]" has a null value in JSON.');
+            'Required key "DailyPostVoiceMemo[contentType]" has a null value in JSON.');
         return true;
       }());
 
-      return DailyPostMedia(
+      return DailyPostVoiceMemo(
         id: mapValueOfType<String>(json, r'id')!,
-        contentType: PostMediaContentType.fromJson(json[r'contentType'])!,
-        order: mapValueOfType<int>(json, r'order')!,
+        contentType: VoiceMemoContentType.fromJson(json[r'contentType'])!,
       );
     }
     return null;
   }
 
-  static List<DailyPostMedia> listFromJson(
+  static List<DailyPostVoiceMemo> listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <DailyPostMedia>[];
+    final result = <DailyPostVoiceMemo>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = DailyPostMedia.fromJson(row);
+        final value = DailyPostVoiceMemo.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -114,12 +100,12 @@ class DailyPostMedia {
     return result.toList(growable: growable);
   }
 
-  static Map<String, DailyPostMedia> mapFromJson(dynamic json) {
-    final map = <String, DailyPostMedia>{};
+  static Map<String, DailyPostVoiceMemo> mapFromJson(dynamic json) {
+    final map = <String, DailyPostVoiceMemo>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = DailyPostMedia.fromJson(entry.value);
+        final value = DailyPostVoiceMemo.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -128,17 +114,17 @@ class DailyPostMedia {
     return map;
   }
 
-  // maps a json object with a list of DailyPostMedia-objects as value to a dart map
-  static Map<String, List<DailyPostMedia>> mapListFromJson(
+  // maps a json object with a list of DailyPostVoiceMemo-objects as value to a dart map
+  static Map<String, List<DailyPostVoiceMemo>> mapListFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final map = <String, List<DailyPostMedia>>{};
+    final map = <String, List<DailyPostVoiceMemo>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = DailyPostMedia.listFromJson(
+        map[entry.key] = DailyPostVoiceMemo.listFromJson(
           entry.value,
           growable: growable,
         );
@@ -151,6 +137,5 @@ class DailyPostMedia {
   static const requiredKeys = <String>{
     'id',
     'contentType',
-    'order',
   };
 }

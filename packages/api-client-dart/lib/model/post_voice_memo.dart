@@ -10,36 +10,31 @@
 
 part of openapi.api;
 
-class PostMedia {
-  /// Returns a new [PostMedia] instance.
-  PostMedia({
+class PostVoiceMemo {
+  /// Returns a new [PostVoiceMemo] instance.
+  PostVoiceMemo({
     required this.id,
     required this.contentType,
-    required this.order,
     required this.url,
     required this.expiresAt,
   });
 
   final String id;
 
-  final PostMediaContentType contentType;
+  final VoiceMemoContentType contentType;
 
-  /// Minimum value: 0
-  final int order;
-
-  /// A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead.
+  /// A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead.
   final String url;
 
-  /// When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one.
+  /// When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one.
   final DateTime expiresAt;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PostMedia &&
+      other is PostVoiceMemo &&
           other.id == id &&
           other.contentType == contentType &&
-          other.order == order &&
           other.url == url &&
           other.expiresAt == expiresAt;
 
@@ -48,45 +43,41 @@ class PostMedia {
       // ignore: unnecessary_parenthesis
       (id.hashCode) +
       (contentType.hashCode) +
-      (order.hashCode) +
       (url.hashCode) +
       (expiresAt.hashCode);
 
   @override
   String toString() =>
-      'PostMedia[id=$id, contentType=$contentType, order=$order, url=$url, expiresAt=$expiresAt]';
+      'PostVoiceMemo[id=$id, contentType=$contentType, url=$url, expiresAt=$expiresAt]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
     json[r'contentType'] = this.contentType;
-    json[r'order'] = this.order;
     json[r'url'] = this.url;
     json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
     return json;
   }
 
-  /// Clones this instance of [PostMedia] and returns a new one where some of the
+  /// Clones this instance of [PostVoiceMemo] and returns a new one where some of the
   /// properties have changed.
-  PostMedia copyWith({
+  PostVoiceMemo copyWith({
     String? id,
-    PostMediaContentType? contentType,
-    int? order,
+    VoiceMemoContentType? contentType,
     String? url,
     DateTime? expiresAt,
   }) =>
-      PostMedia(
+      PostVoiceMemo(
         id: id ?? this.id,
         contentType: contentType ?? this.contentType,
-        order: order ?? this.order,
         url: url ?? this.url,
         expiresAt: expiresAt ?? this.expiresAt,
       );
 
-  /// Returns a new [PostMedia] instance and imports its values from
+  /// Returns a new [PostVoiceMemo] instance and imports its values from
   /// [value] if it's a [Map], null otherwise.
   // ignore: prefer_constructors_over_static_methods
-  static PostMedia? fromJson(dynamic value) {
+  static PostVoiceMemo? fromJson(dynamic value) {
     if (value is Map) {
       final json = value.cast<String, dynamic>();
 
@@ -95,32 +86,27 @@ class PostMedia {
       // Note 2: this code is stripped in release mode!
       assert(() {
         assert(json.containsKey(r'id'),
-            'Required key "PostMedia[id]" is missing from JSON.');
+            'Required key "PostVoiceMemo[id]" is missing from JSON.');
         assert(json[r'id'] != null,
-            'Required key "PostMedia[id]" has a null value in JSON.');
+            'Required key "PostVoiceMemo[id]" has a null value in JSON.');
         assert(json.containsKey(r'contentType'),
-            'Required key "PostMedia[contentType]" is missing from JSON.');
+            'Required key "PostVoiceMemo[contentType]" is missing from JSON.');
         assert(json[r'contentType'] != null,
-            'Required key "PostMedia[contentType]" has a null value in JSON.');
-        assert(json.containsKey(r'order'),
-            'Required key "PostMedia[order]" is missing from JSON.');
-        assert(json[r'order'] != null,
-            'Required key "PostMedia[order]" has a null value in JSON.');
+            'Required key "PostVoiceMemo[contentType]" has a null value in JSON.');
         assert(json.containsKey(r'url'),
-            'Required key "PostMedia[url]" is missing from JSON.');
+            'Required key "PostVoiceMemo[url]" is missing from JSON.');
         assert(json[r'url'] != null,
-            'Required key "PostMedia[url]" has a null value in JSON.');
+            'Required key "PostVoiceMemo[url]" has a null value in JSON.');
         assert(json.containsKey(r'expiresAt'),
-            'Required key "PostMedia[expiresAt]" is missing from JSON.');
+            'Required key "PostVoiceMemo[expiresAt]" is missing from JSON.');
         assert(json[r'expiresAt'] != null,
-            'Required key "PostMedia[expiresAt]" has a null value in JSON.');
+            'Required key "PostVoiceMemo[expiresAt]" has a null value in JSON.');
         return true;
       }());
 
-      return PostMedia(
+      return PostVoiceMemo(
         id: mapValueOfType<String>(json, r'id')!,
-        contentType: PostMediaContentType.fromJson(json[r'contentType'])!,
-        order: mapValueOfType<int>(json, r'order')!,
+        contentType: VoiceMemoContentType.fromJson(json[r'contentType'])!,
         url: mapValueOfType<String>(json, r'url')!,
         expiresAt: mapDateTime(json, r'expiresAt', r'')!,
       );
@@ -128,14 +114,14 @@ class PostMedia {
     return null;
   }
 
-  static List<PostMedia> listFromJson(
+  static List<PostVoiceMemo> listFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final result = <PostMedia>[];
+    final result = <PostVoiceMemo>[];
     if (json is List && json.isNotEmpty) {
       for (final row in json) {
-        final value = PostMedia.fromJson(row);
+        final value = PostVoiceMemo.fromJson(row);
         if (value != null) {
           result.add(value);
         }
@@ -144,12 +130,12 @@ class PostMedia {
     return result.toList(growable: growable);
   }
 
-  static Map<String, PostMedia> mapFromJson(dynamic json) {
-    final map = <String, PostMedia>{};
+  static Map<String, PostVoiceMemo> mapFromJson(dynamic json) {
+    final map = <String, PostVoiceMemo>{};
     if (json is Map && json.isNotEmpty) {
       json = json.cast<String, dynamic>(); // ignore: parameter_assignments
       for (final entry in json.entries) {
-        final value = PostMedia.fromJson(entry.value);
+        final value = PostVoiceMemo.fromJson(entry.value);
         if (value != null) {
           map[entry.key] = value;
         }
@@ -158,17 +144,17 @@ class PostMedia {
     return map;
   }
 
-  // maps a json object with a list of PostMedia-objects as value to a dart map
-  static Map<String, List<PostMedia>> mapListFromJson(
+  // maps a json object with a list of PostVoiceMemo-objects as value to a dart map
+  static Map<String, List<PostVoiceMemo>> mapListFromJson(
     dynamic json, {
     bool growable = false,
   }) {
-    final map = <String, List<PostMedia>>{};
+    final map = <String, List<PostVoiceMemo>>{};
     if (json is Map && json.isNotEmpty) {
       // ignore: parameter_assignments
       json = json.cast<String, dynamic>();
       for (final entry in json.entries) {
-        map[entry.key] = PostMedia.listFromJson(
+        map[entry.key] = PostVoiceMemo.listFromJson(
           entry.value,
           growable: growable,
         );
@@ -181,7 +167,6 @@ class PostMedia {
   static const requiredKeys = <String>{
     'id',
     'contentType',
-    'order',
     'url',
     'expiresAt',
   };

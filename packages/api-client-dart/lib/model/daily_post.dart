@@ -25,6 +25,7 @@ class DailyPost {
     required this.releasedAt,
     required this.tomorrowNote,
     this.media = const [],
+    required this.voiceMemo,
   });
 
   final String id;
@@ -52,6 +53,8 @@ class DailyPost {
   /// The attached photos or video in display order. Empty for a text-only post.
   final List<DailyPostMedia> media;
 
+  final DailyPostVoiceMemo voiceMemo;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -67,7 +70,8 @@ class DailyPost {
           other.acceptedAt == acceptedAt &&
           other.releasedAt == releasedAt &&
           other.tomorrowNote == tomorrowNote &&
-          _deepEquality.equals(other.media, media);
+          _deepEquality.equals(other.media, media) &&
+          other.voiceMemo == voiceMemo;
 
   @override
   int get hashCode =>
@@ -83,11 +87,12 @@ class DailyPost {
       (acceptedAt.hashCode) +
       (releasedAt.hashCode) +
       (tomorrowNote.hashCode) +
-      (media.hashCode);
+      (media.hashCode) +
+      (voiceMemo.hashCode);
 
   @override
   String toString() =>
-      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media]';
+      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -103,6 +108,7 @@ class DailyPost {
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'tomorrowNote'] = this.tomorrowNote;
     json[r'media'] = this.media;
+    json[r'voiceMemo'] = this.voiceMemo;
     return json;
   }
 
@@ -121,6 +127,7 @@ class DailyPost {
     DateTime? releasedAt,
     DailyPostTomorrowNote? tomorrowNote,
     List<DailyPostMedia>? media,
+    DailyPostVoiceMemo? voiceMemo,
   }) =>
       DailyPost(
         id: id ?? this.id,
@@ -135,6 +142,7 @@ class DailyPost {
         releasedAt: releasedAt ?? this.releasedAt,
         tomorrowNote: tomorrowNote ?? this.tomorrowNote,
         media: media ?? this.media,
+        voiceMemo: voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [DailyPost] instance and imports its values from
@@ -196,6 +204,10 @@ class DailyPost {
             'Required key "DailyPost[media]" is missing from JSON.');
         assert(json[r'media'] != null,
             'Required key "DailyPost[media]" has a null value in JSON.');
+        assert(json.containsKey(r'voiceMemo'),
+            'Required key "DailyPost[voiceMemo]" is missing from JSON.');
+        assert(json[r'voiceMemo'] != null,
+            'Required key "DailyPost[voiceMemo]" has a null value in JSON.');
         return true;
       }());
 
@@ -212,6 +224,7 @@ class DailyPost {
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         tomorrowNote: DailyPostTomorrowNote.fromJson(json[r'tomorrowNote'])!,
         media: DailyPostMedia.listFromJson(json[r'media']),
+        voiceMemo: DailyPostVoiceMemo.fromJson(json[r'voiceMemo'])!,
       );
     }
     return null;
@@ -280,5 +293,6 @@ class DailyPost {
     'releasedAt',
     'tomorrowNote',
     'media',
+    'voiceMemo',
   };
 }

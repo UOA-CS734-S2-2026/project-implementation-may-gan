@@ -13,13 +13,13 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
-import type { MediaContentType } from './MediaContentType';
+import type { PostMediaContentType } from './PostMediaContentType';
 import {
-    MediaContentTypeFromJSON,
-    MediaContentTypeFromJSONTyped,
-    MediaContentTypeToJSON,
-    MediaContentTypeToJSONTyped,
-} from './MediaContentType';
+    PostMediaContentTypeFromJSON,
+    PostMediaContentTypeFromJSONTyped,
+    PostMediaContentTypeToJSON,
+    PostMediaContentTypeToJSONTyped,
+} from './PostMediaContentType';
 
 /**
  *
@@ -34,7 +34,7 @@ export interface PostMedia {
     /**
      *
      */
-    contentType: MediaContentType;
+    contentType: PostMediaContentType;
     /**
      *
      */
@@ -74,7 +74,7 @@ export function PostMediaFromJSONTyped(json: any, ignoreDiscriminator: boolean):
     return {
 
         'id': json['id'],
-        'contentType': MediaContentTypeFromJSON(json['contentType']),
+        'contentType': PostMediaContentTypeFromJSON(json['contentType']),
         'order': json['order'],
         'url': json['url'],
         'expiresAt': (json['expiresAt'] == null ? json['expiresAt'] : parseDateTime(json['expiresAt'])),
@@ -93,7 +93,7 @@ export function PostMediaToJSONTyped(value?: PostMedia | null, ignoreDiscriminat
     return {
 
         'id': value['id'],
-        'contentType': MediaContentTypeToJSON(value['contentType']),
+        'contentType': PostMediaContentTypeToJSON(value['contentType']),
         'order': value['order'],
         'url': value['url'],
         'expiresAt': value['expiresAt'] == null ? value['expiresAt'] : serializeDateTime(value['expiresAt']),

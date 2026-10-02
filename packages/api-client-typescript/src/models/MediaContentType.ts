@@ -24,6 +24,7 @@ export const MediaContentType = {
     ImageHeic: 'image/heic',
     VideoMp4: 'video/mp4',
     VideoQuicktime: 'video/quicktime',
+    AudioMp4: 'audio/mp4',
 } as const;
 export type MediaContentType = typeof MediaContentType[keyof typeof MediaContentType];
 

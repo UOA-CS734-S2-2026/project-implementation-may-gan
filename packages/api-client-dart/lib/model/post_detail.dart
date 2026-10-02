@@ -26,6 +26,7 @@ class PostDetail {
     required this.edited,
     required this.viewerIsAuthor,
     this.media = const [],
+    required this.voiceMemo,
   });
 
   final String id;
@@ -56,6 +57,8 @@ class PostDetail {
   /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
   final List<PostMedia> media;
 
+  final PostVoiceMemo voiceMemo;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -72,7 +75,8 @@ class PostDetail {
           other.releasedAt == releasedAt &&
           other.edited == edited &&
           other.viewerIsAuthor == viewerIsAuthor &&
-          _deepEquality.equals(other.media, media);
+          _deepEquality.equals(other.media, media) &&
+          other.voiceMemo == voiceMemo;
 
   @override
   int get hashCode =>
@@ -89,11 +93,12 @@ class PostDetail {
       (releasedAt.hashCode) +
       (edited.hashCode) +
       (viewerIsAuthor.hashCode) +
-      (media.hashCode);
+      (media.hashCode) +
+      (voiceMemo.hashCode);
 
   @override
   String toString() =>
-      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, viewerIsAuthor=$viewerIsAuthor, media=$media]';
+      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -110,6 +115,7 @@ class PostDetail {
     json[r'edited'] = this.edited;
     json[r'viewerIsAuthor'] = this.viewerIsAuthor;
     json[r'media'] = this.media;
+    json[r'voiceMemo'] = this.voiceMemo;
     return json;
   }
 
@@ -129,6 +135,7 @@ class PostDetail {
     bool? edited,
     bool? viewerIsAuthor,
     List<PostMedia>? media,
+    PostVoiceMemo? voiceMemo,
   }) =>
       PostDetail(
         id: id ?? this.id,
@@ -144,6 +151,7 @@ class PostDetail {
         edited: edited ?? this.edited,
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
+        voiceMemo: voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [PostDetail] instance and imports its values from
@@ -209,6 +217,10 @@ class PostDetail {
             'Required key "PostDetail[media]" is missing from JSON.');
         assert(json[r'media'] != null,
             'Required key "PostDetail[media]" has a null value in JSON.');
+        assert(json.containsKey(r'voiceMemo'),
+            'Required key "PostDetail[voiceMemo]" is missing from JSON.');
+        assert(json[r'voiceMemo'] != null,
+            'Required key "PostDetail[voiceMemo]" has a null value in JSON.');
         return true;
       }());
 
@@ -226,6 +238,7 @@ class PostDetail {
         edited: mapValueOfType<bool>(json, r'edited')!,
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
+        voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo'])!,
       );
     }
     return null;
@@ -295,6 +308,7 @@ class PostDetail {
     'edited',
     'viewerIsAuthor',
     'media',
+    'voiceMemo',
   };
 }
 

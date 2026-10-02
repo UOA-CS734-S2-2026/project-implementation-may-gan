@@ -54,6 +54,11 @@ import {
     PostsRestore200ResponseToJSON,
 } from '../models/PostsRestore200Response';
 import {
+    type PostVoiceMemo,
+    PostVoiceMemoFromJSON,
+    PostVoiceMemoToJSON,
+} from '../models/PostVoiceMemo';
+import {
     type ProfilePostsPage,
     ProfilePostsPageFromJSON,
     ProfilePostsPageToJSON,
@@ -91,6 +96,13 @@ export interface PostsGetMediaRequest {
      *
      */
     mediaId: string;
+}
+
+export interface PostsGetVoiceMemoRequest {
+    /**
+     *
+     */
+    postId: string;
 }
 
 export interface PostsListFeedRequest {
@@ -321,6 +333,61 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsGetMedia(requestParameters: PostsGetMediaRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostMedia> {
         const response = await this.postsGetMediaRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGetVoiceMemo without sending the request
+     */
+    async postsGetVoiceMemoRequestOpts(requestParameters: PostsGetVoiceMemoRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetVoiceMemo().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/voice-memo`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
+     * Get a fresh download URL for a post\'s voice memo
+     */
+    async postsGetVoiceMemoRaw(requestParameters: PostsGetVoiceMemoRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostVoiceMemo>> {
+        const requestOptions = await this.postsGetVoiceMemoRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostVoiceMemoFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
+     * Get a fresh download URL for a post\'s voice memo
+     */
+    async postsGetVoiceMemo(requestParameters: PostsGetVoiceMemoRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostVoiceMemo> {
+        const response = await this.postsGetVoiceMemoRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
