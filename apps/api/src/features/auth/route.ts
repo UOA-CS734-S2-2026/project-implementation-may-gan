@@ -273,10 +273,12 @@ function isRegistrationAuthRequest(request: Request): boolean {
 
 function registrationAuthSucceeded(request: Request, response: Response): boolean {
   if (request.method !== "GET") return response.ok;
-  const location = response.headers.get("location");
-  if (!location || response.status < 300 || response.status >= 400) return false;
-  const destination = new URL(location, request.url);
-  return !destination.searchParams.has("error") && destination.pathname !== `${authBasePath}/error`;
+  if (response.status < 300 || response.status >= 400) return false;
+  // Better Auth sets the signed session cookie only after an OAuth account
+  // and session exist. A caller-controlled callback URL can contain `error`.
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const cookies = headers.getSetCookie?.() ?? [headers.get("set-cookie") ?? ""];
+  return cookies.some((cookie) => /(?:^|,\s*)(?:__Secure-|__Host-)?better-auth\.session_token=[^;,\s]+/.test(cookie));
 }
 
 /** Register the production authority only after all Worker bindings validate. */

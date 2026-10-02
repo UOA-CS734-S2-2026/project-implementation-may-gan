@@ -405,7 +405,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       });
       const started = await app.fetch(request("/api/auth/sign-in/social", {
         method: "POST", headers: { "content-type": "application/json", "x-dayli-registration-intent": token, "x-dayli-registration-binding": binding },
-        body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome`, disableRedirect: true }),
+        body: JSON.stringify({ provider: "google", callbackURL: `${origin}/welcome?error=previous-value`, disableRedirect: true }),
       }));
       expect(started.status).toBe(200);
       const { url } = await started.json() as { url: string };
@@ -419,7 +419,7 @@ async function signIn(app: ReturnType<typeof createProductionApp>) {
       expect(bound?.stateDigest).toBe(await hash(`google_browser:${state}`));
       const callback = await app.fetch(request(`/api/auth/callback/google?state=${encodeURIComponent(state!)}&code=test-code`, { headers: { cookie: cookie! } }));
       expect(callback.status).toBe(302);
-      expect(callback.headers.get("location")).toContain("/welcome");
+      expect(callback.headers.get("location")).toContain("/welcome?error=previous-value");
       expect(callback.headers.get("location")).not.toContain(token);
       const [user] = await migrator.db.select({ id: schema.user.id, bridge: schema.user.legal_registration_admission }).from(schema.user).where(eq(schema.user.email, email));
       expect(user?.bridge).toBeNull();
