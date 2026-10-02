@@ -1,0 +1,41 @@
+# Privacy implementation handoff
+
+Status: owner decisions for engineering, not evidence of legal compliance or permission to operate on real user data. This document brings together the decisions in [#157](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/157) and the follow-up discussion. The [export architecture](data-export-architecture.md) supplies the more detailed inventory and archive rules. When an older document disagrees with these decisions, reconcile it in a reviewed PR before making a public promise.
+
+## Ownership and release boundaries
+
+The owner is the privacy officer and makes final decisions on legal publication, incidents, and production rollout. The current operator wording is `agroupforcoders`, an informal New Zealand group. Use `agroupforcoders@gmail.com` as the public privacy and support contact. The owner handles those requests personally. Do not promise a faster support response than applicable law requires. The inbox is not a second person. Appointing a trained backup is recommended, but is not a hard launch gate. Before public registration, prove that requests and deadline alerts reach the owner and document how absences are handled. Confirm responsible-party identification in the final public wording.
+
+No independent legal review is planned. Do not call any policy legally approved or claim that this plan establishes worldwide compliance. The owner must review final wording and accept the documented uncertainty before any public publication. New Zealand is the drafting starting point, with mandatory overseas rights preserved. No specific statutory exception to the agreed deletion schedule has been identified; do not invent a general legal hold. Revisit that decision if a specific duty is established.
+
+Engineering may proceed through reviewed, current-main squash-merged PRs. Each privacy PR needs independent exact-head review, four green exact-head checks, and compatibility with current main. A failing security, data-loss, legal-claim, or test finding is not deferred to a polish PR. Non-blocking improvements may be separated. Use the actual immutable migration base for full local verification; never rewrite a published migration.
+
+The owner permits staging-only test legal versions and scoped destructive tests after confirming that the staging accounts and data are synthetic, report-only discovery matches expectations, and the stop procedure works. Do not infer that staging is safe merely from its name or from local fixtures. No permission to delete unknown or real user data, publish final public policies, deploy production, spend money, or turn on production destructive execution is granted here. Those decisions require their own reviewed evidence and explicit owner approval. Keep lifecycle execution disabled by default.
+
+## Registration, age, and existing accounts
+
+Public registration stays closed until its release gates pass. Published Terms require one initially unchecked Terms/Privacy/16+ action before creating a new email or Google account, on web and Flutter. Store separate server-timed Terms-version acceptance and age-declaration facts. Privacy is a notice acknowledgement, not a second Terms consent. Sign-in never implies acceptance. While documents remain drafts, existing registration behavior stays unchanged.
+
+When the first approved Terms and 16+ rule take effect, existing users must explicitly accept and declare 16+ before normal use. Users who have not done so may still read policies, sign out, export their data, request account deletion, and contact support. Do not infer age from prior sign-ins or collect a birth date or identity document by default. Material Terms changes normally get 30 days of notice. An urgent shortened period needs a recorded reason shown to users.
+
+The MVP does not need an in-app under-16 reporting form or automatic age scoring. Reports go to the support email. A raw report does not suspend an account automatically. The owner assesses credible evidence, applies a temporary restriction when warranted, sends a content-free notice, and offers an appeal through the same inbox. There is no automatic underage deletion. Keep a confirmed case restricted and require a separate reviewed owner decision on access, export, and eventual deletion. Minimize case data and give it a review date.
+
+## Account lifecycle and messages
+
+Deletion requires a fresh, action-specific proof. Password accounts confirm their current password; Google-only accounts must repeat a verified Google flow against the already-linked subject. Linked accounts may use either. A verified deletion request immediately hides normal access and revokes ordinary sessions, socket tickets, push registrations, and unsent delivery work. Sign-in never cancels deletion. Cancellation is available until 168 hours after the database-timed request. Active-system cleanup finishes within 336 hours. There is no inactivity deletion.
+
+A surviving recipient retains their conversation history, including the deleted sender's messages and reactions, shown with a `Deleted account` label. This is retention, not anonymization. Remove a conversation when its last participant has been permanently deleted. Tests must rule out cascades that erase the surviving recipient's history. Cleanup evidence contains only minimal digest, category, count, and timestamps while unresolved, then expires 30 days after resolution.
+
+## Trash and export
+
+The first Trash implementation is for deleted posts and their associated notes, revisions, and media. A post disappears from normal views immediately, may be restored for seven days, and is cleaned up within the following seven days. Still-restorable items appear in a labeled `trash/` section of the owner's export. Export never restores an item or extends its deadline. Account deletion takes priority over post Trash and does not extend either deadline.
+
+Keep visibility, restore deadlines, cleanup, export classification, and account-deletion priority as reusable rules. Each future item type needs its own authorization, restore, and cleanup behavior, plus boundary tests. Do not build an unreviewed universal Trash table. Messages stay out of Trash by default because a sender's deletion must not erase the recipient's history. Adding message Trash needs a separate retention decision.
+
+Use one owner-scoped, versioned ZIP export service for the existing export issues and #162. Classify every persisted field and object namespace explicitly before including it. Include approved profile data, owned journals and revisions, private notes, currently readable authored retained messages, owned media once ownership is proven, minimal Terms and age evidence, and restorable Trash. Exclude received message bodies and reply previews, credentials, tokens, logs, other users' private content, and purged data. A pending-deletion or Terms-blocked user may export without cancelling deletion or accepting Terms. Recheck ownership and lifecycle state for authenticated download; ready archives expire after 24 hours and are removed sooner when purge starts. `selectionCutoffAt` is not an atomic snapshot. A self-service archive is not a substitute for review of a formal access request.
+
+## Evidence still required
+
+The merged password-grant foundation does not enable account deletion. Google management proof, deletion and cancellation commands, recipient-safe purge, Trash, the export worker and download journey, operational alerts, and restricted web and Flutter journeys remain separate work. Prove them with PostgreSQL role and race tests, browser and device tests, and staging evidence. The existing staging Google smoke setup can be used only with its dedicated test account and without exposing secrets in logs or this document. Local tests do not prove live Google, R2, push, or physical-device behavior.
+
+Inventory the actual Neon and R2 regions, provider recovery, analytics, and log retention before describing them publicly. Existing backup and recovery-time claims in `docs/dayli/product-decisions.md` and `docs/dayli/security.md` are not verified promises. Do not enable, disable, purchase, or price backup services without a new decision. Public legal publication and registration remain separate reviewed gates even if staging tests succeed.
