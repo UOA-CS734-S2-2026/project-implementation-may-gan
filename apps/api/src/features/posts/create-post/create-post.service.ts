@@ -1,5 +1,5 @@
 import type { AucklandDayService, ClockLike } from "@dayli/domain";
-import { MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "@dayli/contracts";
+import { isAudioContentType, MAX_POST_VOICE_MEMOS, MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "@dayli/contracts";
 
 export type DailyPostAudience = "solo" | "friends";
 
@@ -123,7 +123,7 @@ const messages: Record<CreateDailyPostErrorReason, string> = {
   // One message for missing, someone else's, rejected, expired, and already
   // used uploads, so a response never reveals another user's reservation.
   MEDIA_UNAVAILABLE: "An attachment can't be used. Upload it again.",
-  MEDIA_NOT_ALLOWED: "A post can have up to 3 photos or 1 video, up to 25 MB in total.",
+  MEDIA_NOT_ALLOWED: "A post can have up to 3 photos or 1 video, plus 1 voice memo, up to 25 MB in total.",
 };
 
 export class CreateDailyPostError extends Error {
@@ -198,7 +198,10 @@ function checkAttachments(
   available: AttachableMedia[],
   now: Date,
 ): Array<{ reservationId: string }> {
-  if (reservationIds.length > MAX_POST_PHOTOS || new Set(reservationIds).size !== reservationIds.length) {
+  if (
+    reservationIds.length > MAX_POST_PHOTOS + MAX_POST_VOICE_MEMOS
+    || new Set(reservationIds).size !== reservationIds.length
+  ) {
     throw new CreateDailyPostError("MEDIA_NOT_ALLOWED");
   }
   const byId = new Map(available.map((media) => [media.reservationId, media]));
@@ -219,12 +222,22 @@ function checkAttachments(
   const usable = ordered as AttachableMedia[];
   const videos = usable.filter((media) => media.contentType.startsWith("video/")).length;
   const photos = usable.filter((media) => media.contentType.startsWith("image/")).length;
+  const voiceMemos = usable.filter((media) => isAudioContentType(media.contentType)).length;
   const composition = videos === 0 ? photos <= MAX_POST_PHOTOS : videos === 1 && photos === 0;
   const totalBytes = usable.reduce((sum, media) => sum + media.byteSize, 0);
-  if (videos + photos !== usable.length || !composition || totalBytes > MAX_POST_MEDIA_BYTES) {
+  if (
+    videos + photos + voiceMemos !== usable.length
+    || voiceMemos > MAX_POST_VOICE_MEMOS
+    || !composition
+    || totalBytes > MAX_POST_MEDIA_BYTES
+  ) {
     throw new CreateDailyPostError("MEDIA_NOT_ALLOWED");
   }
-  return usable.map((media) => ({ reservationId: media.reservationId }));
+  // The voice memo is stored last, so photos and video keep contiguous display
+  // orders however the client listed the attachments.
+  const visual = usable.filter((media) => !isAudioContentType(media.contentType));
+  const audio = usable.filter((media) => isAudioContentType(media.contentType));
+  return [...visual, ...audio].map((media) => ({ reservationId: media.reservationId }));
 }
 
 export function createDailyPostService(dependencies: CreateDailyPostServiceDependencies): CreateDailyPostService {

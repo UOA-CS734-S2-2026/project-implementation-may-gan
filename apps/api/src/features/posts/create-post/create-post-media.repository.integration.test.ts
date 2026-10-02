@@ -26,7 +26,7 @@ function requireLocalTestUrl(value: string): string {
 (enabled ? describe : describe.skip)("PostgreSQL post media linking", () => {
   const migrator = createDayliDatabase(requireLocalTestUrl(migratorUrl ?? "postgresql://localhost:5433/dayli_test"));
   const app = createDayliDatabase(requireLocalTestUrl(appUrl ?? "postgresql://localhost:5433/dayli_test"));
-  const users = Array.from({ length: 4 }, (_, index) => `post-media-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 6 }, (_, index) => `post-media-${crypto.randomUUID()}-${index}`);
   const now = new Date("2026-09-25T03:00:00.000Z");
   const clock = () => now;
   const input: CreateDailyPostInput = {
@@ -172,5 +172,26 @@ function requireLocalTestUrl(value: string): string {
     release();
     await writer;
     await expect(submission).resolves.toMatchObject({ post: { media: [{ contentType: "image/jpeg" }] } });
+  });
+  it("links a voice memo after the photos and refuses another user's voice memo", async () => {
+    const memo = await upload(users[4]!, { contentType: "audio/mp4", byteSize: 500_000 });
+    const photo = await upload(users[4]!);
+    const created = await service().createDailyPost(users[4]!, "key-1", { ...input, attachments: [memo, photo] });
+
+    expect(created.post.media.map((media) => [media.contentType, media.order])).toEqual([
+      ["image/jpeg", 0],
+      ["audio/mp4", 1],
+    ]);
+
+    const theirs = await upload(users[4]!, { contentType: "audio/mp4" });
+    await expect(service().createDailyPost(users[5]!, "key-1", { ...input, attachments: [theirs] }))
+      .rejects.toMatchObject({ reason: "MEDIA_UNAVAILABLE" });
+    expect(await countRows(users[5]!)).toEqual({ posts: 0, media: 0 });
+
+    const second = await upload(users[5]!, { contentType: "audio/mp4" });
+    const third = await upload(users[5]!, { contentType: "audio/mp4" });
+    await expect(service().createDailyPost(users[5]!, "key-2", { ...input, attachments: [second, third] }))
+      .rejects.toMatchObject({ reason: "MEDIA_NOT_ALLOWED" });
+    expect(await countRows(users[5]!)).toEqual({ posts: 0, media: 0 });
   });
 });

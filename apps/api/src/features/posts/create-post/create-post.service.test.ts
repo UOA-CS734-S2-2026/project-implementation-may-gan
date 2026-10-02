@@ -218,6 +218,77 @@ describe("attaching uploads", () => {
       .resolves.toMatchObject({ replayed: false });
   });
 
+  it("links one voice memo after the photos, whatever order it was sent in", async () => {
+    const { service, memory } = withUploads([
+      { id: "r-m", contentType: "audio/mp4", byteSize: mb },
+      { id: "r-a" },
+      { id: "r-b", contentType: "image/png" },
+    ]);
+    const result = await service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-m", "r-a", "r-b"] });
+
+    expect(result.post.media).toEqual([
+      { id: expect.any(String), contentType: "image/jpeg", order: 0 },
+      { id: expect.any(String), contentType: "image/png", order: 1 },
+      { id: expect.any(String), contentType: "audio/mp4", order: 2 },
+    ]);
+    expect(memory.posts[0]?.media.map((media) => media.reservationId)).toEqual(["r-a", "r-b", "r-m"]);
+  });
+
+  it("accepts a voice memo alone, with three photos, or with a video", async () => {
+    const cases: Array<{ uploads: Parameters<typeof withUploads>[0]; attachments: string[] }> = [
+      { uploads: [{ id: "r-m", contentType: "audio/mp4" }], attachments: ["r-m"] },
+      {
+        uploads: [{ id: "r-a" }, { id: "r-b" }, { id: "r-c" }, { id: "r-m", contentType: "audio/mp4" }],
+        attachments: ["r-a", "r-b", "r-c", "r-m"],
+      },
+      {
+        uploads: [{ id: "r-v", contentType: "video/mp4", byteSize: 10 * mb }, { id: "r-m", contentType: "audio/mp4" }],
+        attachments: ["r-v", "r-m"],
+      },
+    ];
+    for (const { uploads, attachments } of cases) {
+      const { service } = withUploads(uploads);
+      await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments }))
+        .resolves.toMatchObject({ replayed: false });
+    }
+  });
+
+  it("rejects a second voice memo and counts a voice memo toward the 25 MB total", async () => {
+    const cases: Array<{ uploads: Parameters<typeof withUploads>[0]; attachments: string[] }> = [
+      {
+        uploads: [{ id: "r-m", contentType: "audio/mp4" }, { id: "r-n", contentType: "audio/mp4" }],
+        attachments: ["r-m", "r-n"],
+      },
+      {
+        uploads: [{ id: "r-a", byteSize: 10 * mb }, { id: "r-b", byteSize: 10 * mb }, { id: "r-m", contentType: "audio/mp4", byteSize: 5 * mb + 1 }],
+        attachments: ["r-a", "r-b", "r-m"],
+      },
+    ];
+    for (const { uploads, attachments } of cases) {
+      const { service, memory } = withUploads(uploads);
+      await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments }))
+        .rejects.toMatchObject({ reason: "MEDIA_NOT_ALLOWED" });
+      expect(memory.posts).toHaveLength(0);
+    }
+  });
+
+  it("won't attach another user's voice memo", async () => {
+    const { service, memory } = withUploads([{ id: "r-m", contentType: "audio/mp4", ownerId: "someone-else" }]);
+    await expect(service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-m"] }))
+      .rejects.toMatchObject({ reason: "MEDIA_UNAVAILABLE" });
+    expect(memory.posts).toHaveLength(0);
+  });
+
+  it("waits for a voice memo that is still pending and refuses a failed one", async () => {
+    const pending = withUploads([{ id: "r-m", contentType: "audio/mp4", status: "pending" }]);
+    await expect(pending.service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-m"] }))
+      .rejects.toMatchObject({ reason: "MEDIA_NOT_READY" });
+
+    const failed = withUploads([{ id: "r-m", contentType: "audio/mp4", status: "failed" }]);
+    await expect(failed.service.createDailyPost("author-1", "key-1", { ...input, attachments: ["r-m"] }))
+      .rejects.toMatchObject({ reason: "MEDIA_UNAVAILABLE" });
+  });
+
   it("rejects a mix, too many, duplicates, or more than 25 MB", async () => {
     const cases: Array<{ uploads: Parameters<typeof withUploads>[0]; attachments: string[] }> = [
       { uploads: [{ id: "r-a" }, { id: "r-v", contentType: "video/mp4" }], attachments: ["r-a", "r-v"] },
