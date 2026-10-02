@@ -40,7 +40,7 @@ class MoodDay {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'rating'] = this.rating;
     return json;
   }
@@ -79,7 +79,7 @@ class MoodDay {
       }());
 
       return MoodDay(
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         rating: mapValueOfType<int>(json, r'rating')!,
       );
     }

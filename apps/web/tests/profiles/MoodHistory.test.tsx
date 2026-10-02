@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +26,7 @@ function history(overrides: Partial<MoodHistoryData> = {}): MoodHistoryData {
   return {
     range: "30d",
     trackedFrom: "2026-01-01",
+    hiddenDays: [],
     days: [
       { localDate: "2026-09-27", rating: 6 },
       { localDate: "2026-09-28", rating: 8 },
@@ -44,53 +45,66 @@ beforeEach(() => {
 describe("MoodHistory", () => {
   it("summarises the range with its sample sizes and the comparison", async () => {
     moodHistory.mockResolvedValue({ ok: true, value: history() });
-    render(<MoodHistory />);
+    render(<MoodHistory username="jos" displayName="Jos" isMe />);
 
-    expect(await screen.findByText("7.0/10")).toBeTruthy();
+    expect(await screen.findByText("7.0")).toBeTruthy();
     expect(screen.getByText("From 3 posts")).toBeTruthy();
     expect(screen.getByText("+0.4")).toBeTruthy();
-    expect(screen.getByText("6.6/10 from 18 posts")).toBeTruthy();
+    expect(screen.getByText("6.6 from 18 posts")).toBeTruthy();
     expect(screen.getByText("27")).toBeTruthy();
-    expect(moodHistory).toHaveBeenCalledWith("30d");
+    expect(moodHistory).toHaveBeenCalledWith("jos", "30d");
   });
 
   it("breaks the line across a day without a post", async () => {
     moodHistory.mockResolvedValue({ ok: true, value: history() });
-    const { container } = render(<MoodHistory />);
-    await screen.findByText("7.0/10");
+    const { container } = render(<MoodHistory username="jos" displayName="Jos" isMe />);
+    await screen.findByText("7.0");
 
     // 27th–28th are joined; the 30th stands alone after the missing 29th.
     expect(container.querySelectorAll("polyline")).toHaveLength(1);
     expect(container.querySelectorAll("[data-mood-dot]")).toHaveLength(3);
+    // Every tracked day before today without a post gets an empty baseline marker.
+    expect(container.querySelectorAll("[data-mood-missing]")).toHaveLength(27);
   });
 
-  it("reads each day from the keyboard and as a table", async () => {
+  it("reads each day from the keyboard", async () => {
     const actor = userEvent.setup();
     moodHistory.mockResolvedValue({ ok: true, value: history() });
-    render(<MoodHistory />);
-    await screen.findByText("7.0/10");
+    render(<MoodHistory username="jos" displayName="Jos" isMe />);
+    await screen.findByText("7.0");
 
     screen.getByRole("img").focus();
     await actor.keyboard("{ArrowLeft}");
-    expect(screen.getByRole("status")).toHaveTextContent("7/10");
-    expect(screen.getByRole("status")).toHaveTextContent("30 September 2026");
+    expect(screen.getByRole("status")).toHaveTextContent(/^30 Sept? 2026: Rating of 7$/);
 
-    const table = screen.getByRole("table");
-    expect(within(table).getAllByRole("row")).toHaveLength(4);
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("switches range", async () => {
     const actor = userEvent.setup();
     moodHistory.mockResolvedValue({ ok: true, value: history() });
-    render(<MoodHistory />);
-    await screen.findByText("7.0/10");
+    render(<MoodHistory username="jos" displayName="Jos" isMe />);
+    await screen.findByText("7.0");
 
     moodHistory.mockResolvedValue({ ok: true, value: history({ range: "1y" }) });
     await actor.click(screen.getByRole("radio", { name: "Year" }));
 
-    expect(moodHistory).toHaveBeenLastCalledWith("1y");
+    expect(moodHistory).toHaveBeenLastCalledWith("jos", "1y");
     expect(screen.getByRole("radio", { name: "Year" }).getAttribute("aria-checked")).toBe("true");
-    expect(await screen.findByText("Compared with the year before")).toBeTruthy();
+    expect(await screen.findByText("vs the year before")).toBeTruthy();
+  });
+
+  it("shows a friend's history without marking their hidden posts as missing", async () => {
+    moodHistory.mockResolvedValue({
+      ok: true,
+      value: history({ hiddenDays: ["2026-09-10", "2026-09-29"], current: summary({ postedDays: 3, missingDays: 25, average: 7 }) }),
+    });
+    const { container } = render(<MoodHistory username="ada" displayName="Ada" isMe={false} />);
+
+    expect(await screen.findByText("7.0")).toBeTruthy();
+    expect(screen.getByText(/Only Ada's friends can see this\./)).toBeTruthy();
+    expect(moodHistory).toHaveBeenCalledWith("ada", "30d");
+    expect(container.querySelectorAll("[data-mood-missing]")).toHaveLength(25);
   });
 
   it("does not count days before joining or invent a comparison", async () => {
@@ -103,21 +117,21 @@ describe("MoodHistory", () => {
         previous: summary({ from: "2026-08-02", to: "2026-08-31", trackedDays: 0, missingDays: 0 }),
       }),
     });
-    render(<MoodHistory />);
+    render(<MoodHistory username="jos" displayName="Jos" isMe />);
 
     expect(await screen.findByText("Of 10 days since you joined")).toBeTruthy();
-    expect(screen.getByText("No posts in the 30 days before")).toBeTruthy();
+    expect(screen.getByText("No posts then")).toBeTruthy();
     expect(screen.getByText(/You joined on/)).toBeTruthy();
   });
 
   it("says when nothing has been posted or the read fails", async () => {
     moodHistory.mockResolvedValueOnce({ ok: true, value: history({ days: [], current: summary(), previous: summary() }) });
-    const { unmount } = render(<MoodHistory />);
+    const { unmount } = render(<MoodHistory username="jos" displayName="Jos" isMe />);
     expect(await screen.findByText("Post a dayli and your rating will show up here.")).toBeTruthy();
     unmount();
 
     moodHistory.mockResolvedValueOnce({ ok: false, failure: { kind: "unavailable" } });
-    render(<MoodHistory />);
+    render(<MoodHistory username="jos" displayName="Jos" isMe />);
     expect(await screen.findByText(/couldn't be loaded/)).toBeTruthy();
   });
 });

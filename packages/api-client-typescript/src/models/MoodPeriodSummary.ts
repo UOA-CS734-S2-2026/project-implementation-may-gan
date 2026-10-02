@@ -32,15 +32,15 @@ export interface MoodPeriodSummary {
      */
     trackedDays: number;
     /**
-     *
+     * Days with a rating the caller can see.
      */
     postedDays: number;
     /**
-     * Tracked days that ended without a post. Today is not missing while it is still open.
+     * Tracked days that ended without any post. A post the caller can't see is not missing, and today is not missing while it is still open.
      */
     missingDays: number;
     /**
-     * Mean rating to one decimal place, or null with no posts.
+     * Mean visible rating to one decimal place, or null with none.
      */
     average: number | null;
     /**

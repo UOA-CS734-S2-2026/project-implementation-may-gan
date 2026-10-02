@@ -38,7 +38,7 @@ A profile shows the owner every post they have written, including solo posts and
 
 The bio and streak are visible to any signed-in user when the account is public, and only to active friends when it is private. The owner always sees their own. The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
 
-Mood history is owner-only and sits on the owner's own profile. It covers the last 30 days, 90 days, or year, and compares that range with the same-length range before it. It shows how many days had a post and how many didn't, starts counting from the day the account joined, and makes no diagnostic claims.
+Mood history sits on the profile and reaches the same people as the posts: the owner and their active friends. Friends see ratings from released `friends` posts only; a solo post counts as posted but shows no rating. It covers the last 30 days, 90 days, or year, and compares that range with the same-length range before it. It shows how many days had a post and how many didn't, starts counting from the day the account joined, and makes no diagnostic claims.
 
 ## Shared links
 

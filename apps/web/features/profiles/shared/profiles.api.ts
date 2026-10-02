@@ -1,10 +1,8 @@
-import { FetchError, MediaApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type MoodHistory, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
+import { FetchError, MediaApi, PostsApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type MoodHistory, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
 export type { ChangeUsernameResponse, Mbti, MoodHistory, ProfileDetails, ProfileVisibility };
-
-export const moodRanges = ["30d", "90d", "1y"] as const;
-export type MoodRange = (typeof moodRanges)[number];
+export type MoodRange = "30d" | "90d" | "1y";
 
 export type ProfileFailure =
   | { kind: "unauthenticated" | "notFound" | "network" | "unavailable" | "invalid" }
@@ -44,11 +42,11 @@ async function toFailure(error: unknown): Promise<ProfileFailure> {
   return { kind: "unavailable" };
 }
 
-async function call<T>(operation: (api: ProfileApi) => Promise<T>): Promise<ProfileResult<T>> {
+async function call<T>(operation: (api: ProfileApi, posts: PostsApi) => Promise<T>): Promise<ProfileResult<T>> {
   const configuration = apiConfiguration();
   if (!configuration) return { ok: false, failure: { kind: "unavailable" } };
   try {
-    return { ok: true, value: await operation(new ProfileApi(configuration)) };
+    return { ok: true, value: await operation(new ProfileApi(configuration), new PostsApi(configuration)) };
   } catch (error) {
     return { ok: false, failure: await toFailure(error) };
   }
@@ -61,8 +59,8 @@ export const profilesApi = {
   update: (changes: ProfileUpdate) => call((api) => api.profileUpdate({ updateProfileRequest: changes })),
   changeUsername: (username: string) => call((api) => api.profileChangeUsername({ changeUsernameRequest: { username } })),
   removeAvatar: () => call((api) => api.profileRemoveAvatar()),
-  /** The caller's own ratings; there is no way to read anyone else's. */
-  moodHistory: (range: MoodRange) => call((api) => api.profileGetMoodHistory({ range })),
+  /** Ratings with the same reach as the profile's posts: the owner and active friends. */
+  moodHistory: (username: string, range: MoodRange) => call((_, posts) => posts.postsGetProfileMood({ username, range })),
 
   /**
    * Reserves an upload, sends the bytes straight to storage with the signed

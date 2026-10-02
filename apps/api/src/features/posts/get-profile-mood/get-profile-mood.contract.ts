@@ -3,7 +3,12 @@ import { moodHistoryRanges } from "@dayli/domain";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
-export const moodHistoryQuerySchema = z.object({
+export const profileMoodParamsSchema = z.object({
+  username: z.string().trim().min(2).max(32).regex(/^[a-zA-Z0-9_]+$/)
+    .openapi({ param: { name: "username", in: "path" }, example: "ben" }),
+});
+
+export const profileMoodQuerySchema = z.object({
   range: z.enum(moodHistoryRanges).default("30d").openapi({
     param: { name: "range", in: "query" },
     description: "The last 30 days, 90 days, or 365 days, ending today in Auckland.",
@@ -17,9 +22,9 @@ export const moodPeriodSummarySchema = z.object({
   from: aucklandDateSchema,
   to: aucklandDateSchema,
   trackedDays: z.number().int().nonnegative().openapi({ description: "Days in the period since the account's first day. Earlier days are not missing data." }),
-  postedDays: z.number().int().nonnegative(),
-  missingDays: z.number().int().nonnegative().openapi({ description: "Tracked days that ended without a post. Today is not missing while it is still open." }),
-  average: z.number().nullable().openapi({ description: "Mean rating to one decimal place, or null with no posts." }),
+  postedDays: z.number().int().nonnegative().openapi({ description: "Days with a rating the caller can see." }),
+  missingDays: z.number().int().nonnegative().openapi({ description: "Tracked days that ended without any post. A post the caller can't see is not missing, and today is not missing while it is still open." }),
+  average: z.number().nullable().openapi({ description: "Mean visible rating to one decimal place, or null with none." }),
   lowest: ratingSchema.nullable(),
   highest: ratingSchema.nullable(),
 }).openapi("MoodPeriodSummary");
@@ -30,18 +35,21 @@ export const moodHistorySchema = z.object({
   days: z.array(z.object({
     localDate: aucklandDateSchema,
     rating: ratingSchema,
-  }).openapi("MoodDay")).openapi({ description: "Posted days in the current period, oldest first. Days without a post are left out." }),
+  }).openapi("MoodDay")).openapi({ description: "Rated days the caller can see in the current period, oldest first." }),
+  hiddenDays: z.array(aucklandDateSchema).openapi({ description: "Days in the current period with a post the caller can't see, such as a solo post or today's post before midnight. They are not missing." }),
   current: moodPeriodSummarySchema.openapi({ description: "The requested range, ending today." }),
   previous: moodPeriodSummarySchema.openapi({ description: "The same-length range just before it, for comparison." }),
 }).openapi("MoodHistory", {
-  description: "The caller's own ratings, including solo and unreleased posts. Deleted posts are left out.",
+  description: "A profile's daily ratings. The owner sees every post; an active friend sees released `friends` posts only.",
 });
 
 const error = (description: string) => ({ description, content: { "application/json": { schema: apiErrorSchema } } });
 
-export const getMoodHistoryErrorResponses = {
+export const getProfileMoodErrorResponses = {
   401: error("Authentication is required."),
-  422: error("The range is not one of the supported values."),
+  403: error("Only the owner and their active friends can see this mood history."),
+  404: error("The profile does not exist or is blocked in either direction. The cases are indistinguishable."),
+  422: error("The username or range is invalid."),
   429: rateLimitErrorResponse,
   503: error("Post storage is temporarily unavailable."),
 };

@@ -86,6 +86,21 @@ const tests: Array<[string, () => void]> = [
     equal(history.trackedFrom, "2026-09-30", "tracked from is capped at today");
     equal(history.days.length, 0, "points");
   }],
+
+  ["counts a post the caller can't see as posted but unrated", () => {
+    const history = summarizeMoodHistory("30d", "2026-09-30", "2026-01-01", [{ localDate: "2026-09-28", rating: 8 }], [
+      "2026-09-20",
+      "2026-09-28",
+      "2026-09-30",
+      "2026-08-20",
+    ]);
+
+    equal(history.hiddenDays.join(), "2026-09-20,2026-09-30", "hidden days in range, rated ones excluded");
+    equal(history.current.postedDays, 1, "posted counts only visible ratings");
+    equal(history.current.average, 8, "average");
+    equal(history.current.missingDays, 27, "hidden days and a hidden today are not missing");
+    equal(history.previous.missingDays, 29, "previous range");
+  }],
 ];
 
 for (const [name, run] of tests) {

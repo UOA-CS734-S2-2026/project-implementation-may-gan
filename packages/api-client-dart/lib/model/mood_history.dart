@@ -16,6 +16,7 @@ class MoodHistory {
     required this.range,
     required this.trackedFrom,
     this.days = const [],
+    this.hiddenDays = const [],
     required this.current,
     required this.previous,
   });
@@ -25,8 +26,11 @@ class MoodHistory {
   /// The account's first Auckland day, or its earliest post if that is sooner.
   final String trackedFrom;
 
-  /// Posted days in the current period, oldest first. Days without a post are left out.
+  /// Rated days the caller can see in the current period, oldest first.
   final List<MoodDay> days;
+
+  /// Days in the current period with a post the caller can't see, such as a solo post or today's post before midnight. They are not missing.
+  final List<String> hiddenDays;
 
   final MoodPeriodSummary current;
 
@@ -40,6 +44,7 @@ class MoodHistory {
           other.range == range &&
           other.trackedFrom == trackedFrom &&
           _deepEquality.equals(other.days, days) &&
+          _deepEquality.equals(other.hiddenDays, hiddenDays) &&
           other.current == current &&
           other.previous == previous;
 
@@ -49,18 +54,20 @@ class MoodHistory {
       (range.hashCode) +
       (trackedFrom.hashCode) +
       (days.hashCode) +
+      (hiddenDays.hashCode) +
       (current.hashCode) +
       (previous.hashCode);
 
   @override
   String toString() =>
-      'MoodHistory[range=$range, trackedFrom=$trackedFrom, days=$days, current=$current, previous=$previous]';
+      'MoodHistory[range=$range, trackedFrom=$trackedFrom, days=$days, hiddenDays=$hiddenDays, current=$current, previous=$previous]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'range'] = this.range;
-    json[r'trackedFrom'] = _dateFormatter.format(this.trackedFrom);
+    json[r'trackedFrom'] = this.trackedFrom;
     json[r'days'] = this.days;
+    json[r'hiddenDays'] = this.hiddenDays;
     json[r'current'] = this.current;
     json[r'previous'] = this.previous;
     return json;
@@ -72,6 +79,7 @@ class MoodHistory {
     MoodHistoryRangeEnum? range,
     String? trackedFrom,
     List<MoodDay>? days,
+    List<String>? hiddenDays,
     MoodPeriodSummary? current,
     MoodPeriodSummary? previous,
   }) =>
@@ -79,6 +87,7 @@ class MoodHistory {
         range: range ?? this.range,
         trackedFrom: trackedFrom ?? this.trackedFrom,
         days: days ?? this.days,
+        hiddenDays: hiddenDays ?? this.hiddenDays,
         current: current ?? this.current,
         previous: previous ?? this.previous,
       );
@@ -106,6 +115,10 @@ class MoodHistory {
             'Required key "MoodHistory[days]" is missing from JSON.');
         assert(json[r'days'] != null,
             'Required key "MoodHistory[days]" has a null value in JSON.');
+        assert(json.containsKey(r'hiddenDays'),
+            'Required key "MoodHistory[hiddenDays]" is missing from JSON.');
+        assert(json[r'hiddenDays'] != null,
+            'Required key "MoodHistory[hiddenDays]" has a null value in JSON.');
         assert(json.containsKey(r'current'),
             'Required key "MoodHistory[current]" is missing from JSON.');
         assert(json[r'current'] != null,
@@ -119,8 +132,13 @@ class MoodHistory {
 
       return MoodHistory(
         range: MoodHistoryRangeEnum.fromJson(json[r'range'])!,
-        trackedFrom: mapDateTime(json, r'trackedFrom', r'')!,
+        trackedFrom: mapValueOfType<String>(json, r'trackedFrom')!,
         days: MoodDay.listFromJson(json[r'days']),
+        hiddenDays: json[r'hiddenDays'] is Iterable
+            ? (json[r'hiddenDays'] as Iterable)
+                .cast<String>()
+                .toList(growable: false)
+            : const [],
         current: MoodPeriodSummary.fromJson(json[r'current'])!,
         previous: MoodPeriodSummary.fromJson(json[r'previous'])!,
       );
@@ -182,6 +200,7 @@ class MoodHistory {
     'range',
     'trackedFrom',
     'days',
+    'hiddenDays',
     'current',
     'previous',
   };

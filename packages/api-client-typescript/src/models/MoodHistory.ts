@@ -29,7 +29,7 @@ import {
 } from './MoodPeriodSummary';
 
 /**
- * The caller's own ratings, including solo and unreleased posts. Deleted posts are left out.
+ * A profile's daily ratings. The owner sees every post; an active friend sees released `friends` posts only.
  * @export
  * @interface MoodHistory
  */
@@ -43,9 +43,13 @@ export interface MoodHistory {
      */
     trackedFrom: string;
     /**
-     * Posted days in the current period, oldest first. Days without a post are left out.
+     * Rated days the caller can see in the current period, oldest first.
      */
     days: Array<MoodDay>;
+    /**
+     * Days in the current period with a post the caller can't see, such as a solo post or today's post before midnight. They are not missing.
+     */
+    hiddenDays: Array<string>;
     /**
      *
      */
@@ -75,6 +79,7 @@ export function instanceOfMoodHistory(value: object): value is MoodHistory {
     if (!('range' in value) || value['range'] === undefined) return false;
     if (!('trackedFrom' in value) || value['trackedFrom'] === undefined) return false;
     if (!('days' in value) || value['days'] === undefined) return false;
+    if (!('hiddenDays' in value) || value['hiddenDays'] === undefined) return false;
     if (!('current' in value) || value['current'] === undefined) return false;
     if (!('previous' in value) || value['previous'] === undefined) return false;
     return true;
@@ -93,6 +98,7 @@ export function MoodHistoryFromJSONTyped(json: any, ignoreDiscriminator: boolean
         'range': json['range'],
         'trackedFrom': json['trackedFrom'],
         'days': ((json['days'] as Array<any>).map(MoodDayFromJSON)),
+        'hiddenDays': json['hiddenDays'],
         'current': MoodPeriodSummaryFromJSON(json['current']),
         'previous': MoodPeriodSummaryFromJSON(json['previous']),
     };
@@ -112,6 +118,7 @@ export function MoodHistoryToJSONTyped(value?: MoodHistory | null, ignoreDiscrim
         'range': value['range'],
         'trackedFrom': value['trackedFrom'],
         'days': ((value['days'] as Array<any>).map(MoodDayToJSON)),
+        'hiddenDays': value['hiddenDays'],
         'current': MoodPeriodSummaryToJSON(value['current']),
         'previous': MoodPeriodSummaryToJSON(value['previous']),
     };
