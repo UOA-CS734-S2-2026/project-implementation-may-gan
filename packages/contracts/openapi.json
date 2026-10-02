@@ -2281,6 +2281,127 @@
         "required": [
           "reservationId"
         ]
+      },
+      "MoodHistory": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "type": "string",
+            "enum": [
+              "30d",
+              "90d",
+              "1y"
+            ]
+          },
+          "trackedFrom": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The account's first Auckland day, or its earliest post if that is sooner."
+              }
+            ]
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MoodDay"
+            },
+            "description": "Posted days in the current period, oldest first. Days without a post are left out."
+          },
+          "current": {
+            "$ref": "#/components/schemas/MoodPeriodSummary"
+          },
+          "previous": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MoodPeriodSummary"
+              },
+              {
+                "description": "The same-length range just before it, for comparison."
+              }
+            ]
+          }
+        },
+        "required": [
+          "range",
+          "trackedFrom",
+          "days",
+          "current",
+          "previous"
+        ],
+        "description": "The caller's own ratings, including solo and unreleased posts. Deleted posts are left out."
+      },
+      "MoodDay": {
+        "type": "object",
+        "properties": {
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "localDate",
+          "rating"
+        ]
+      },
+      "MoodPeriodSummary": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "to": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "trackedDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Days in the period since the account's first day. Earlier days are not missing data."
+          },
+          "postedDays": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missingDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Tracked days that ended without a post. Today is not missing while it is still open."
+          },
+          "average": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mean rating to one decimal place, or null with no posts."
+          },
+          "lowest": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
+          },
+          "highest": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "trackedDays",
+          "postedDays",
+          "missingDays",
+          "average",
+          "lowest",
+          "highest"
+        ],
+        "description": "The requested range, ending today."
       }
     },
     "parameters": {}
@@ -9246,6 +9367,104 @@
           },
           "503": {
             "description": "Profile storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profile/mood": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.getMoodHistory",
+        "summary": "Read your mood history",
+        "description": "Returns the caller's own daily ratings over the last 30 days, 90 days or year, with a summary of that range and of the same-length range before it. Only the owner can read their history; there is no way to ask for anyone else's.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "30d",
+                "90d",
+                "1y"
+              ],
+              "default": "30d",
+              "description": "The last 30 days, 90 days, or 365 days, ending today in Auckland.",
+              "example": "30d"
+            },
+            "required": false,
+            "description": "The last 30 days, 90 days, or 365 days, ending today in Auckland.",
+            "name": "range",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's mood history.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoodHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The range is not one of the supported values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

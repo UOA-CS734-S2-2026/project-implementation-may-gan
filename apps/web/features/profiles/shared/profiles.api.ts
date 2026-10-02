@@ -1,7 +1,10 @@
-import { FetchError, MediaApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
+import { FetchError, MediaApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type MoodHistory, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility };
+export type { ChangeUsernameResponse, Mbti, MoodHistory, ProfileDetails, ProfileVisibility };
+
+export const moodRanges = ["30d", "90d", "1y"] as const;
+export type MoodRange = (typeof moodRanges)[number];
 
 export type ProfileFailure =
   | { kind: "unauthenticated" | "notFound" | "network" | "unavailable" | "invalid" }
@@ -58,6 +61,8 @@ export const profilesApi = {
   update: (changes: ProfileUpdate) => call((api) => api.profileUpdate({ updateProfileRequest: changes })),
   changeUsername: (username: string) => call((api) => api.profileChangeUsername({ changeUsernameRequest: { username } })),
   removeAvatar: () => call((api) => api.profileRemoveAvatar()),
+  /** The caller's own ratings; there is no way to read anyone else's. */
+  moodHistory: (range: MoodRange) => call((api) => api.profileGetMoodHistory({ range })),
 
   /**
    * Reserves an upload, sends the bytes straight to storage with the signed

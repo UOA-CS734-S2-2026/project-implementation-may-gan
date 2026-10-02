@@ -162,6 +162,8 @@ import type { UpdateProfileRouteDependencies } from "./features/profiles/update-
 import { createHyperdriveUpdateProfileRepository } from "./features/profiles/update-profile/update-profile.repository";
 import type { ChangeUsernameRouteDependencies } from "./features/profiles/change-username/change-username.route";
 import { createHyperdriveChangeUsernameRepository } from "./features/profiles/change-username/change-username.repository";
+import type { GetMoodHistoryRouteDependencies } from "./features/profiles/get-mood-history/get-mood-history.route";
+import { createHyperdriveMoodHistoryRepository } from "./features/profiles/get-mood-history/get-mood-history.repository";
 import type { SetAvatarRouteDependencies } from "./features/profiles/set-avatar/set-avatar.route";
 import { createHyperdriveSetAvatarRepository } from "./features/profiles/set-avatar/set-avatar.repository";
 import type { RemoveAvatarRouteDependencies } from "./features/profiles/remove-avatar/remove-avatar.route";
@@ -212,6 +214,7 @@ export interface AppDependencies {
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
+  moodHistory?: GetMoodHistoryRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   deletion?: DeletionRouteDependencies;
   passwordReauthentication?: PasswordReauthenticationDependencies;
@@ -248,6 +251,7 @@ export function createApp({
   usernameChange,
   avatarSet,
   avatarRemove,
+  moodHistory,
   accountPolicy,
   deletion,
   passwordReauthentication,
@@ -335,6 +339,7 @@ export function createApp({
     changeUsername: { ...(usernameChange ?? { resolveSession: async () => null }), rateLimiter },
     setAvatar: { ...(avatarSet ?? { resolveSession: async () => null }), rateLimiter },
     removeAvatar: { ...(avatarRemove ?? { resolveSession: async () => null }), rateLimiter },
+    moodHistory: { ...(moodHistory ?? { resolveSession: async () => null }), rateLimiter },
   });
 
   api.doc("/api/v1/openapi.json", {
@@ -477,6 +482,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveChangeUsernameRepository(configuration.hyperdrive),
   } satisfies ChangeUsernameRouteDependencies : undefined;
+  const moodHistory = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveMoodHistoryRepository(configuration.hyperdrive),
+  } satisfies GetMoodHistoryRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -521,6 +530,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameChange,
     avatarSet,
     avatarRemove,
+    moodHistory,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
