@@ -1,4 +1,5 @@
-import { createDayliDatabase } from "@dayli/db";
+import { createDayliDatabase, schema } from "@dayli/db";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { findProfileDetails } from "./profile-details.repository";
 
@@ -117,6 +118,25 @@ function requireLocalTestUrl(value: string): string {
     it("hides the profile across a block, in both directions", async () => {
       await expect(findProfileDetails(app.db, users.blocked, handle("publicOwner"), now)).resolves.toBeNull();
       await expect(findProfileDetails(app.db, users.publicOwner, handle("blocked"), now)).resolves.toBeNull();
+    });
+
+    it("hides a pending owner's profile, then restores it after cancellation", async () => {
+      const requestedAt = new Date();
+      await migrator.db.insert(schema.accountLifecycles).values({
+        userId: users.publicOwner, state: "pending_deletion", generation: 1,
+        requestId: id("deletion-request"), idempotencyKeyDigest: "a".repeat(64),
+        requestedAt,
+        cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60_000),
+        purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60_000),
+      });
+      try {
+        await expect(findProfileDetails(app.db, users.stranger, handle("publicOwner"), now)).resolves.toBeNull();
+        await expect(findProfileDetails(app.db, users.publicOwner, handle("publicOwner"), now)).resolves.toBeNull();
+      } finally {
+        await migrator.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users.publicOwner));
+      }
+      await expect(findProfileDetails(app.db, users.stranger, handle("publicOwner"), now))
+        .resolves.toMatchObject({ id: users.publicOwner });
     });
 
     it("hides unknown handles and treats `_` literally", async () => {

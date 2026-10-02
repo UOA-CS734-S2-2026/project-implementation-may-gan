@@ -22,6 +22,9 @@ lib/auth/authentication.dart
 lib/auth/http_basic_auth.dart
 lib/auth/http_bearer_auth.dart
 lib/auth/oauth.dart
+lib/model/account_deletion_cancellation_result.dart
+lib/model/account_deletion_request_result.dart
+lib/model/account_deletion_status.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
@@ -44,6 +47,7 @@ lib/model/daily_post_media.dart
 lib/model/daily_post_prompt.dart
 lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_prompt_response.dart
+lib/model/deletion_grant_request.dart
 lib/model/direct_pair_lookup.dart
 lib/model/edit_message_request.dart
 lib/model/feed_page.dart

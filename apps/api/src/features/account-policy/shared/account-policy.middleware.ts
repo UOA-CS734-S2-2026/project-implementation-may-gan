@@ -22,6 +22,9 @@ const publicApiRoutes = new Set([
 const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/status", "policy_read"],
   ["GET /api/v1/account/policy", "policy_read"],
+  ["GET /api/v1/account/deletion", "policy_read"],
+  ["POST /api/v1/account/deletion/request", "request_deletion"],
+  ["POST /api/v1/account/deletion/cancel", "cancel_deletion_verification"],
   ["POST /api/v1/legal/acceptance", "legal_acceptance"],
 ]);
 

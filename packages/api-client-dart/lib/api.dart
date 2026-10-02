@@ -38,6 +38,9 @@ part 'api/profile_api.dart';
 part 'api/relationships_api.dart';
 part 'api/system_api.dart';
 
+part 'model/account_deletion_cancellation_result.dart';
+part 'model/account_deletion_request_result.dart';
+part 'model/account_deletion_status.dart';
 part 'model/api_error.dart';
 part 'model/api_error_code.dart';
 part 'model/api_error_error.dart';
@@ -60,6 +63,7 @@ part 'model/daily_post_media.dart';
 part 'model/daily_post_prompt.dart';
 part 'model/daily_post_tomorrow_note.dart';
 part 'model/daily_prompt_response.dart';
+part 'model/deletion_grant_request.dart';
 part 'model/direct_pair_lookup.dart';
 part 'model/edit_message_request.dart';
 part 'model/feed_page.dart';

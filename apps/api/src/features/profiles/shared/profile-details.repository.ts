@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
 import { mbtiTypes, type ProfileDetails } from "./profile-details.contract";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 function isMbti(value: string | null): value is (typeof mbtiTypes)[number] {
   return (mbtiTypes as readonly (string | null)[]).includes(value);
@@ -114,7 +115,11 @@ export async function findProfileDetails(
   signAvatar?: AvatarSigner,
 ): Promise<ProfileDetails | null> {
   const { user, usernameReservations } = schema;
-  const visible = and(notCurrentlyBanned(now), notBlockedEitherWay(database, viewerId, user.id));
+  const visible = and(
+    buildDrizzleActiveAccountFilter(database, user.id),
+    notCurrentlyBanned(now),
+    notBlockedEitherWay(database, viewerId, user.id),
+  );
   const columns = {
     id: user.id,
     username: user.username,

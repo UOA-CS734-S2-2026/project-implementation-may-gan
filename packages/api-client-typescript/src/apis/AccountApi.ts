@@ -14,10 +14,30 @@
 
 import * as runtime from '../runtime';
 import {
+    type AccountDeletionCancellationResult,
+    AccountDeletionCancellationResultFromJSON,
+    AccountDeletionCancellationResultToJSON,
+} from '../models/AccountDeletionCancellationResult';
+import {
+    type AccountDeletionRequestResult,
+    AccountDeletionRequestResultFromJSON,
+    AccountDeletionRequestResultToJSON,
+} from '../models/AccountDeletionRequestResult';
+import {
+    type AccountDeletionStatus,
+    AccountDeletionStatusFromJSON,
+    AccountDeletionStatusToJSON,
+} from '../models/AccountDeletionStatus';
+import {
     type ApiError,
     ApiErrorFromJSON,
     ApiErrorToJSON,
 } from '../models/ApiError';
+import {
+    type DeletionGrantRequest,
+    DeletionGrantRequestFromJSON,
+    DeletionGrantRequestToJSON,
+} from '../models/DeletionGrantRequest';
 import {
     type GoogleReauthenticationIntent,
     GoogleReauthenticationIntentFromJSON,
@@ -46,11 +66,29 @@ export interface AccountBeginGoogleReauthenticationRequest {
     googleReauthenticationRequest: GoogleReauthenticationRequest;
 }
 
+export interface AccountCancelDeletionRequest {
+    /**
+     *
+     */
+    deletionGrantRequest: DeletionGrantRequest;
+}
+
 export interface AccountReauthenticatePasswordRequest {
     /**
      *
      */
     passwordReauthenticationRequest: PasswordReauthenticationRequest;
+}
+
+export interface AccountRequestDeletionRequest {
+    /**
+     *
+     */
+    idempotencyKey: string;
+    /**
+     *
+     */
+    deletionGrantRequest: DeletionGrantRequest;
 }
 
 /**
@@ -116,6 +154,110 @@ export class AccountApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for accountCancelDeletion without sending the request
+     */
+    async accountCancelDeletionRequestOpts(requestParameters: AccountCancelDeletionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['deletionGrantRequest'] == null) {
+            throw new runtime.RequiredError(
+                'deletionGrantRequest',
+                'Required parameter "deletionGrantRequest" was null or undefined when calling accountCancelDeletion().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/deletion/cancel`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: DeletionGrantRequestToJSON(requestParameters['deletionGrantRequest']),
+        };
+    }
+
+    /**
+     * Uses the database cancellation deadline. Revoked sessions and push registrations are not restored.
+     * Cancel a pending deletion after fresh action verification
+     */
+    async accountCancelDeletionRaw(requestParameters: AccountCancelDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountDeletionCancellationResult>> {
+        const requestOptions = await this.accountCancelDeletionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountDeletionCancellationResultFromJSON(jsonValue));
+    }
+
+    /**
+     * Uses the database cancellation deadline. Revoked sessions and push registrations are not restored.
+     * Cancel a pending deletion after fresh action verification
+     */
+    async accountCancelDeletion(requestParameters: AccountCancelDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionCancellationResult> {
+        const response = await this.accountCancelDeletionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountGetDeletionStatus without sending the request
+     */
+    async accountGetDeletionStatusRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/deletion`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Content-free state and database-timed deadlines. An absent lifecycle record is active.
+     * Read the authenticated account\'s deletion status
+     */
+    async accountGetDeletionStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountDeletionStatus>> {
+        const requestOptions = await this.accountGetDeletionStatusRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountDeletionStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Content-free state and database-timed deadlines. An absent lifecycle record is active.
+     * Read the authenticated account\'s deletion status
+     */
+    async accountGetDeletionStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionStatus> {
+        const response = await this.accountGetDeletionStatusRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for accountReauthenticatePassword without sending the request
      */
     async accountReauthenticatePasswordRequestOpts(requestParameters: AccountReauthenticatePasswordRequest): Promise<runtime.RequestOpts> {
@@ -169,6 +311,74 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountReauthenticatePassword(requestParameters: AccountReauthenticatePasswordRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PasswordReauthenticationGrant> {
         const response = await this.accountReauthenticatePasswordRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountRequestDeletion without sending the request
+     */
+    async accountRequestDeletionRequestOpts(requestParameters: AccountRequestDeletionRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['idempotencyKey'] == null) {
+            throw new runtime.RequiredError(
+                'idempotencyKey',
+                'Required parameter "idempotencyKey" was null or undefined when calling accountRequestDeletion().'
+            );
+        }
+
+        if (requestParameters['deletionGrantRequest'] == null) {
+            throw new runtime.RequiredError(
+                'deletionGrantRequest',
+                'Required parameter "deletionGrantRequest" was null or undefined when calling accountRequestDeletion().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (requestParameters['idempotencyKey'] != null) {
+            headerParameters['Idempotency-Key'] = String(requestParameters['idempotencyKey']);
+        }
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/deletion/request`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: DeletionGrantRequestToJSON(requestParameters['deletionGrantRequest']),
+        };
+    }
+
+    /**
+     * Requires a session-bound single-use grant and Idempotency-Key header. Production requests remain disabled until a separate activation decision. This operation does not physically purge content.
+     * Request deletion after fresh action verification
+     */
+    async accountRequestDeletionRaw(requestParameters: AccountRequestDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountDeletionRequestResult>> {
+        const requestOptions = await this.accountRequestDeletionRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountDeletionRequestResultFromJSON(jsonValue));
+    }
+
+    /**
+     * Requires a session-bound single-use grant and Idempotency-Key header. Production requests remain disabled until a separate activation decision. This operation does not physically purge content.
+     * Request deletion after fresh action verification
+     */
+    async accountRequestDeletion(requestParameters: AccountRequestDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionRequestResult> {
+        const response = await this.accountRequestDeletionRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -252,6 +252,18 @@ function toPendingRequest(request: StoredPendingRequest | null): PendingRelation
   return request;
 }
 
+export function toCleanupRelationshipStatus(snapshot: StoredRelationshipSnapshot): RelationshipStatus {
+  // A cleanup may commit while the target is hidden. Do not report a failed
+  // operation or disclose the hidden profile through its result.
+  return snapshot.targetExists
+    ? toRelationshipStatus(snapshot)
+    : {
+        userId: snapshot.subjectId,
+        status: snapshot.blocks.actorBlocksSubject || snapshot.blocks.subjectBlocksActor ? "blocked" : "none",
+        incomingRequest: null, outgoingRequest: null,
+      };
+}
+
 export function toRelationshipStatus(
   snapshot: StoredRelationshipSnapshot,
   options: { concealBlocked?: boolean } = {},

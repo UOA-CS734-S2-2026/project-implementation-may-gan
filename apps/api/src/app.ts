@@ -164,6 +164,9 @@ import { createAccountPolicyMiddleware } from "./features/account-policy/shared/
 import { allowsAccountCapability } from "./features/account-policy/shared/account-policy";
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
+import { registerDeletionRoutes, type DeletionRouteDependencies } from "./features/account-lifecycle/deletion/deletion.route";
+import { readDeletionStatus } from "./features/account-lifecycle/shared/deletion-status.repository";
+import { cancelAccountDeletion } from "./features/account-lifecycle/shared/deletion-commands.repository";
 import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
 import { issuePasswordManagementGrant } from "./features/account-policy/reauthenticate/password/password.repository";
 import { registerGoogleManagementProofRoute, type GoogleManagementProofDependencies } from "./features/account-policy/reauthenticate/google/google-proof.route";
@@ -199,6 +202,7 @@ export interface AppDependencies {
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
+  deletion?: DeletionRouteDependencies;
   passwordReauthentication?: PasswordReauthenticationDependencies;
   googleManagementProof?: GoogleManagementProofDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
@@ -230,6 +234,7 @@ export function createApp({
   avatarSet,
   avatarRemove,
   accountPolicy,
+  deletion,
   passwordReauthentication,
   googleManagementProof,
   legalAcceptance,
@@ -282,6 +287,7 @@ export function createApp({
   }
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
+  registerDeletionRoutes(api, { ...(deletion ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? deletion?.rateLimiter });
   registerPasswordReauthenticationRoute(api, { ...(passwordReauthentication ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? passwordReauthentication?.rateLimiter });
   registerGoogleManagementProofRoute(api, { ...(googleManagementProof ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? googleManagementProof?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
@@ -369,6 +375,15 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     policies: createHyperdriveAccountPolicyResolver(configuration.hyperdrive),
   } satisfies AccountPolicyDependencies : undefined;
+  const deletion = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    status: (userId: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => readDeletionStatus(database, userId)),
+    cancel: (input: Parameters<typeof cancelAccountDeletion>[1]) => withHyperdriveDatabase(
+      configuration.hyperdrive, (database) => cancelAccountDeletion(database, input),
+    ),
+    // Request execution stays unregistered until the synthetic-staging gate is reviewed.
+    requestEnabled: false,
+  } satisfies DeletionRouteDependencies : undefined;
   const passwordReauthentication = configuration ? {
     resolveSession: createSessionResolver(configuration),
     issue: (input: Parameters<typeof issuePasswordManagementGrant>[1]) => withHyperdriveDatabase(
@@ -459,6 +474,7 @@ export function createAppForEnv(env: ApiEnv) {
     pushDevices,
     usernameProfile,
     accountPolicy,
+    deletion,
     passwordReauthentication,
     googleManagementProof,
     legalAcceptance,

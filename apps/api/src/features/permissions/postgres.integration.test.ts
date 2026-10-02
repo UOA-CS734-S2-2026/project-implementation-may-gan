@@ -1,5 +1,6 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { afterAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { findVisiblePost, listVisiblePosts } from "./drizzle";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
@@ -63,6 +64,26 @@ function requireLocalTestUrl(value: string): string {
         expect((await findVisiblePost(transaction, postIds[2], input))).toBeNull();
         expect((await findVisiblePost(transaction, postIds[3], input))).toBeNull();
 
+        const requestedAt = new Date("2026-09-22T12:00:00.000Z");
+        await transaction.insert(schema.accountLifecycles).values({
+          userId: authorId, state: "pending_deletion", generation: 1,
+          requestId: `request-${suffix}`, idempotencyKeyDigest: "a".repeat(64),
+          requestedAt,
+          cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60_000),
+          purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60_000),
+        });
+        expect(await listVisiblePosts(transaction, input, { limit: 10 })).toEqual([]);
+        expect(await findVisiblePost(transaction, postIds[1], input)).toBeNull();
+        expect(await findVisiblePost(transaction, postIds[3], { viewer: { userId: authorId }, now })).toBeNull();
+        expect((await findVisiblePost(transaction, postIds[3], {
+          viewer: { userId: authorId }, now, action: "export",
+        }))?.id).toBe(postIds[3]);
+
+        await transaction.update(schema.accountLifecycles).set({
+          state: "active", generation: 2, requestId: null, idempotencyKeyDigest: null,
+          requestedAt: null, cancelUntil: null, purgeDueAt: null,
+        }).where(eq(schema.accountLifecycles.userId, authorId));
+        expect((await findVisiblePost(transaction, postIds[1], input))?.id).toBe(postIds[1]);
         throw rollback;
       });
     } catch (error) {

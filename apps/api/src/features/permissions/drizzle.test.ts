@@ -26,6 +26,8 @@ describe("concrete PostgreSQL permission filter", () => {
     expect(text.match(/"friendships"/g)?.length).toBeGreaterThanOrEqual(2);
     expect(text).toContain('"state" = $');
     expect(sqlQuery(fragment).params).toContain("active");
+    expect(text).toContain('select "user_id" from "account_lifecycles"');
+    expect(text).toContain('"account_lifecycles"."state" <> $');
     expect(text).toContain('select "blocker_id" from "relationship_blocks"');
     expect(text).toContain('"unblocked_at" is null');
   });
@@ -67,5 +69,6 @@ describe("concrete PostgreSQL permission filter", () => {
     expect(query.sql).toMatch(/"posts"\."author_id" = \$/);
     expect(query.sql).not.toContain('"friendships"');
     expect(query.sql).not.toContain('"posts"."released_at"');
+    expect(query.sql).not.toContain('"account_lifecycles"');
   });
 });

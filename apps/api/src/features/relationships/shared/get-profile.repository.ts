@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema } from "@dayli/db";
 import type { RelationshipUserCard } from "./relationship-service";
 import type { RelationshipQueryable } from "./relationship-postgres";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 /** Minimal, actor-scoped profile projection. Blocks are deliberately indistinguishable from an unknown handle. */
 export async function findProfileByUsername(queryable: RelationshipQueryable, actorId: string, username: string): Promise<RelationshipUserCard | null> {
@@ -65,6 +66,7 @@ export async function findProfileByUsername(queryable: RelationshipQueryable, ac
     .where(and(
       sql`lower(${candidate.username}) = lower(${username})`,
       matchingHandleIsUnique,
+      buildDrizzleActiveAccountFilter(queryable, candidate.id),
       sql`(coalesce(${candidate.banned}, false) = false or (${candidate.banExpires} is not null and ${candidate.banExpires} <= now()))`,
       notExists(
         queryable.select({ blockerId: relationshipBlocks.blockerId }).from(relationshipBlocks).where(and(

@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, isNotNull, isNull, lte, not, notExists, or, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter } from "../../permissions";
+import { buildDrizzleActiveAccountFilter, buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { postEdited } from "../shared/post-edited";
 import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
@@ -32,6 +32,7 @@ async function findProfileOwner(database: DayliDatabase, viewerId: string, usern
     .select({ id: user.id })
     .from(user)
     .where(and(
+      buildDrizzleActiveAccountFilter(database, user.id),
       ilike(user.username, exactHandlePattern(username)),
       or(isNull(user.banned), not(user.banned), and(isNotNull(user.banExpires), lte(user.banExpires, now))),
       notExists(

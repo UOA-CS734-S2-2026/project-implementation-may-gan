@@ -2,7 +2,7 @@ import {
   assertDifferentRelationshipUsers,
   inRelationshipTransaction,
   relationshipTimestamp,
-  toRelationshipStatus,
+  toCleanupRelationshipStatus,
   type RelationshipOperationDependencies,
   type RelationshipStatus,
 } from "../shared/relationship-service";
@@ -14,5 +14,5 @@ export async function unblockUser(dependencies: RelationshipOperationDependencie
     subjectId,
     unblockedAt: relationshipTimestamp(dependencies),
   }));
-  return toRelationshipStatus(snapshot);
+  return toCleanupRelationshipStatus(snapshot);
 }

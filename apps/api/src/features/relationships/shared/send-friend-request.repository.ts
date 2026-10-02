@@ -6,7 +6,7 @@ import type { RelationshipPostgresContext } from "./relationship-postgres";
 export async function insertFriendRequest(context: RelationshipPostgresContext, input: { senderId: string; recipientId: string; createdAt: string }): Promise<StoredRelationshipSnapshot> {
   const { senderId, recipientId, createdAt } = input;
   await context.lockPair(senderId, recipientId);
-  await context.requireTarget(senderId, recipientId);
+  await context.requireActiveTarget(senderId, recipientId);
   if (await context.activeBlock(senderId, recipientId)) throw new RelationshipStoreError("BLOCKED");
   const current = await context.snapshot(senderId, recipientId);
   if (current.friendships.actorToSubject?.state === "active" && current.friendships.subjectToActor?.state === "active") throw new RelationshipStoreError("ALREADY_FRIENDS");
