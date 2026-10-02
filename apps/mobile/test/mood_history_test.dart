@@ -210,10 +210,7 @@ void main() {
     await openProfile(tester, harness, 'ada');
 
     expect(find.byKey(const Key('profile.mood')), findsOneWidget);
-    expect(
-      find.textContaining("Only Ada's friends can see this."),
-      findsOneWidget,
-    );
+    expect(find.textContaining('can see this'), findsNothing);
     expect(profiles.moodRequests, [('ada', MoodRange.days30)]);
   });
 

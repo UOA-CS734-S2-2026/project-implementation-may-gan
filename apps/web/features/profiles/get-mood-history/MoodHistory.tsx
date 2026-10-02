@@ -31,8 +31,10 @@ export function MoodHistory({ username, displayName, isMe }: { username: string;
         <div>
           <h2 id="mood-history-heading" className="text-lg font-semibold tracking-tight">Mood</h2>
           <p className="text-xs text-foreground-secondary">
-            {history ? `${formatMoodDate(history.current.from)} to ${formatMoodDate(history.current.to)} · ` : ""}
-            {isMe ? "You and your friends can see this." : `Only ${displayName}'s friends can see this.`}
+            {[
+              history && `${formatMoodDate(history.current.from)} to ${formatMoodDate(history.current.to)}`,
+              isMe && "You and your friends can see this.",
+            ].filter(Boolean).join(" · ")}
           </p>
         </div>
         <div role="radiogroup" aria-label="Time range" className="flex flex-wrap items-center gap-2">
