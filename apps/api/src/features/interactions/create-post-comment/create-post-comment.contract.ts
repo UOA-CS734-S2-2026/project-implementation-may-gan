@@ -9,8 +9,8 @@ export const createPostCommentRequestSchema = z
       example: "0f8fad5b-d9cb-469f-a165-70867728950e",
     }),
     text: commentTextSchema,
-    parentCommentId: opaqueIdSchema.optional().openapi({
-      description: "Replies to this top-level comment on the same post. Replies to replies are not allowed.",
+    parentCommentId: opaqueIdSchema.nullable().optional().openapi({
+      description: "Replies to this top-level comment on the same post. Leave it out, or send null, for a top-level comment. Replies to replies are not allowed.",
     }),
   })
   .strict()

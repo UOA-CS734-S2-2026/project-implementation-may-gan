@@ -1676,14 +1676,12 @@
             "example": "That sunset!"
           },
           "parentCommentId": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/OpaqueId"
-              },
-              {
-                "description": "Replies to this top-level comment on the same post. Replies to replies are not allowed."
-              }
-            ]
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128,
+            "example": "post_01K4Y6P8K2",
+            "description": "Replies to this top-level comment on the same post. Leave it out, or send null, for a top-level comment. Replies to replies are not allowed."
           }
         },
         "required": [

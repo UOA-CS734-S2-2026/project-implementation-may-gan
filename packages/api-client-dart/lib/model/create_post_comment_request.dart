@@ -23,13 +23,7 @@ class CreatePostCommentRequest {
 
   final String text;
 
-  /// Replies to this top-level comment on the same post. Replies to replies are not allowed.
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
+  /// Replies to this top-level comment on the same post. Leave it out, or send null, for a top-level comment. Replies to replies are not allowed.
   final String? parentCommentId;
 
   @override
@@ -69,11 +63,14 @@ class CreatePostCommentRequest {
     String? clientCommentId,
     String? text,
     String? parentCommentId,
+    bool parentCommentIdSetToNull = false,
   }) =>
       CreatePostCommentRequest(
         clientCommentId: clientCommentId ?? this.clientCommentId,
         text: text ?? this.text,
-        parentCommentId: parentCommentId ?? this.parentCommentId,
+        parentCommentId: parentCommentIdSetToNull
+            ? null
+            : parentCommentId ?? this.parentCommentId,
       );
 
   /// Returns a new [CreatePostCommentRequest] instance and imports its values from

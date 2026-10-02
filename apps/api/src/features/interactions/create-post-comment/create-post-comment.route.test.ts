@@ -56,6 +56,14 @@ describe("POST /api/v1/posts/{postId}/comments", () => {
     expect(repo.createComment).toHaveBeenCalledWith("user-friend", "post-1", { ...valid, parentCommentId: "comment-0" }, fixedNow);
   });
 
+  it("accepts a null parent for a top-level comment", async () => {
+    const repo = repository({ kind: "created", comment });
+    const response = await post(repo, { ...valid, parentCommentId: null });
+
+    expect(response.status).toBe(201);
+    expect(repo.createComment).toHaveBeenCalledWith("user-friend", "post-1", { ...valid, parentCommentId: null }, fixedNow);
+  });
+
   it("returns 200 with the existing comment for a retry", async () => {
     const response = await post(repository({ kind: "replayed", comment }), valid);
 

@@ -28,9 +28,9 @@ export interface CreatePostCommentRequest {
      */
     text: string;
     /**
-     * Replies to this top-level comment on the same post. Replies to replies are not allowed.
+     * Replies to this top-level comment on the same post. Leave it out, or send null, for a top-level comment. Replies to replies are not allowed.
      */
-    parentCommentId?: string;
+    parentCommentId?: string | null;
 }
 
 /**
@@ -54,7 +54,7 @@ export function CreatePostCommentRequestFromJSONTyped(json: any, ignoreDiscrimin
 
         'clientCommentId': json['clientCommentId'],
         'text': json['text'],
-        'parentCommentId': json['parentCommentId'] == null ? undefined : json['parentCommentId'],
+        'parentCommentId': json['parentCommentId'] === undefined ? undefined : json['parentCommentId'] === null ? null : json['parentCommentId'],
     };
 }
 
