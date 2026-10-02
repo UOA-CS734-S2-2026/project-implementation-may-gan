@@ -99,6 +99,18 @@ export interface PostDetail {
     /**
      *
      */
+    likeCount: number;
+    /**
+     *
+     */
+    viewerHasLiked: boolean;
+    /**
+     * Comments and replies the caller can see, leaving out deleted ones and people across a block.
+     */
+    commentCount: number;
+    /**
+     *
+     */
     viewerIsAuthor: boolean;
     /**
      * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
@@ -137,6 +149,9 @@ export function instanceOfPostDetail(value: object): value is PostDetail {
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
     if (!('revisionCount' in value) || value['revisionCount'] === undefined) return false;
+    if (!('likeCount' in value) || value['likeCount'] === undefined) return false;
+    if (!('viewerHasLiked' in value) || value['viewerHasLiked'] === undefined) return false;
+    if (!('commentCount' in value) || value['commentCount'] === undefined) return false;
     if (!('viewerIsAuthor' in value) || value['viewerIsAuthor'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
@@ -165,6 +180,9 @@ export function PostDetailFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'edited': json['edited'],
         'revisionCount': json['revisionCount'],
+        'likeCount': json['likeCount'],
+        'viewerHasLiked': json['viewerHasLiked'],
+        'commentCount': json['commentCount'],
         'viewerIsAuthor': json['viewerIsAuthor'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
         'voiceMemo': PostVoiceMemoFromJSON(json['voiceMemo']),
@@ -194,6 +212,9 @@ export function PostDetailToJSONTyped(value?: PostDetail | null, ignoreDiscrimin
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'edited': value['edited'],
         'revisionCount': value['revisionCount'],
+        'likeCount': value['likeCount'],
+        'viewerHasLiked': value['viewerHasLiked'],
+        'commentCount': value['commentCount'],
         'viewerIsAuthor': value['viewerIsAuthor'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
         'voiceMemo': PostVoiceMemoToJSON(value['voiceMemo']),

@@ -1,4 +1,5 @@
-import { and, desc, eq, exists, isNull, lte, ne, not, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lte, ne, not, notExists, or, sql, type AnyColumn, type SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
@@ -252,6 +253,53 @@ export async function findVisiblePostMedia(
     ))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * True when neither the viewer nor `userColumn`'s person has blocked the other.
+ * Lists of likes and comments hide people across a block in either direction.
+ */
+export function notBlockedWith(database: Queryable, viewerId: string, userColumn: AnyColumn) {
+  const { relationshipBlocks } = schema;
+  return notExists(
+    database
+      .select({ blockerId: relationshipBlocks.blockerId })
+      .from(relationshipBlocks)
+      .where(and(
+        isNull(relationshipBlocks.unblockedAt),
+        or(
+          and(eq(relationshipBlocks.blockerId, viewerId), eq(relationshipBlocks.blockedId, userColumn)),
+          and(eq(relationshipBlocks.blockerId, userColumn), eq(relationshipBlocks.blockedId, viewerId)),
+        ),
+      )),
+  );
+}
+
+/**
+ * Comments the viewer sees on a post they can read: not deleted, not written
+ * by someone across a block, and, for a reply, under a top-level comment that
+ * is itself visible. Callers check the post first.
+ */
+export function buildDrizzleCommentVisibilityFilter(database: Queryable, viewerId: string) {
+  const { postComments } = schema;
+  const parent = alias(postComments, "parent_comment");
+  return and(
+    isNull(postComments.deletedAt),
+    notBlockedWith(database, viewerId, postComments.authorId),
+    or(
+      isNull(postComments.parentCommentId),
+      exists(
+        database
+          .select({ id: parent.id })
+          .from(parent)
+          .where(and(
+            eq(parent.id, postComments.parentCommentId),
+            isNull(parent.deletedAt),
+            notBlockedWith(database, viewerId, parent.authorId),
+          )),
+      ),
+    ),
+  );
 }
 
 /** Tomorrow notes are private and become readable only on the next Auckland day. */

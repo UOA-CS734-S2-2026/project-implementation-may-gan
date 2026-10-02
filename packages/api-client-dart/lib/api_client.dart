@@ -240,6 +240,8 @@ class ApiClient {
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
           return CreateMediaReservationResponse.fromJson(value);
+        case 'CreatePostCommentRequest':
+          return CreatePostCommentRequest.fromJson(value);
         case 'CreateRealtimeTicket201Response':
           return CreateRealtimeTicket201Response.fromJson(value);
         case 'CurrentLegalRegistrationTerms':
@@ -280,6 +282,8 @@ class ApiClient {
           return GoogleReauthenticationRequest.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'InteractionPerson':
+          return InteractionPerson.fromJson(value);
         case 'LegalAcceptanceRequest':
           return LegalAcceptanceRequest.fromJson(value);
         case 'LegalAcceptanceResponse':
@@ -326,12 +330,22 @@ class ApiClient {
           return PendingRequestPage.fromJson(value);
         case 'PostAudience':
           return PostAudienceTypeTransformer().decode(value);
+        case 'PostComment':
+          return PostComment.fromJson(value);
+        case 'PostCommentsPage':
+          return PostCommentsPage.fromJson(value);
         case 'PostDetail':
           return PostDetail.fromJson(value);
         case 'PostDetailAuthor':
           return PostDetailAuthor.fromJson(value);
         case 'PostDetailPrompt':
           return PostDetailPrompt.fromJson(value);
+        case 'PostLike':
+          return PostLike.fromJson(value);
+        case 'PostLikeSummary':
+          return PostLikeSummary.fromJson(value);
+        case 'PostLikesPage':
+          return PostLikesPage.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
         case 'PostMediaContentType':
@@ -394,6 +408,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdatePostCommentRequest':
+          return UpdatePostCommentRequest.fromJson(value);
         case 'UpdatePostRequest':
           return UpdatePostRequest.fromJson(value);
         case 'UpdateProfileRequest':
