@@ -119,6 +119,7 @@ function requireLocalTestUrl(value: string): string {
       edited: true,
       viewerIsAuthor: false,
       media: [],
+      voiceMemo: null,
     });
   });
 

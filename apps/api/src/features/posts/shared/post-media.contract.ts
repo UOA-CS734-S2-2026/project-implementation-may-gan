@@ -1,4 +1,9 @@
-import { mediaContentTypeSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
+import {
+  voiceMemoContentTypeSchema,
+  opaqueIdSchema,
+  postMediaContentTypeSchema,
+  utcTimestampSchema,
+} from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 
 /**
@@ -8,7 +13,7 @@ import { z } from "@hono/zod-openapi";
 export const postMediaSchema = z
   .object({
     id: opaqueIdSchema,
-    contentType: mediaContentTypeSchema,
+    contentType: postMediaContentTypeSchema,
     order: z.number().int().min(0),
     url: z.url().openapi({
       description: "A private download URL that expires at expiresAt. When media storage is unavailable, "
@@ -21,3 +26,23 @@ export const postMediaSchema = z
   .openapi("PostMedia");
 
 export type PostMedia = z.infer<typeof postMediaSchema>;
+
+/**
+ * A post's voice memo as a reader sees it. Like PostMedia,
+ * the URL is a short-lived private download link for this viewer.
+ */
+export const postVoiceMemoSchema = z
+  .object({
+    id: opaqueIdSchema,
+    contentType: voiceMemoContentTypeSchema,
+    url: z.url().openapi({
+      description: "A private download URL that expires at expiresAt. When media storage is unavailable, "
+        + "a response that would include a voice memo is a 503 instead.",
+    }),
+    expiresAt: utcTimestampSchema.openapi({
+      description: "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one.",
+    }),
+  })
+  .openapi("PostVoiceMemo");
+
+export type PostVoiceMemo = z.infer<typeof postVoiceMemoSchema>;

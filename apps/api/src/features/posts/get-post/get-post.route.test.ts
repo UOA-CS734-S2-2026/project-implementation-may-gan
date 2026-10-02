@@ -19,6 +19,7 @@ const detail: PostDetailRecord = {
   edited: false,
   viewerIsAuthor: false,
   media: [],
+  voiceMemo: null,
 };
 
 const resolveSession: GetPostRouteDependencies["resolveSession"] = async (request) => {
@@ -152,6 +153,45 @@ describe("GET /api/v1/posts/{postId}", () => {
       const response = await get({ repository: repository(async () => detail) });
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({ media: [] });
+    });
+
+    describe("voice memo", () => {
+      const withRecording: PostDetailRecord = {
+        ...detail,
+        voiceMemo: {
+          id: "media-9",
+          postId: "post-1",
+          contentType: "audio/mp4",
+          objectKey: "media/user-friend/reservation-9",
+        },
+      };
+      const sign = vi.fn(async (objectKey: string, now: Date) => ({
+        url: `https://storage.example.test/${objectKey}?signature=abc`,
+        expiresAt: new Date(now.getTime() + 300_000),
+      }));
+
+      it("signs the voice memo for this response and never exposes the object key", async () => {
+        const response = await get({ repository: repository(async () => withRecording), signMediaDownload: sign });
+        const body = await response.json<{ media: unknown[]; voiceMemo: unknown }>();
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(body.media).toEqual([]);
+        expect(body.voiceMemo).toEqual({
+          id: "media-9",
+          contentType: "audio/mp4",
+          url: "https://storage.example.test/media/user-friend/reservation-9?signature=abc",
+          expiresAt: "2026-09-26T03:05:00.000Z",
+        });
+        expect(JSON.stringify(body)).not.toContain("objectKey");
+      });
+
+      it("is unavailable for a post with a voice memo when storage isn't configured", async () => {
+        const response = await get({ repository: repository(async () => withRecording) });
+
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toMatchObject({ error: { code: "SERVICE_UNAVAILABLE" } });
+      });
     });
 
     it("signs nothing for a post the viewer can't read", async () => {
