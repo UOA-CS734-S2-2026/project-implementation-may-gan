@@ -17,6 +17,7 @@ void main() {
       'acceptedAt': '2026-10-01T09:00:00.000Z',
       'releasedAt': '2026-10-01T11:00:00.000Z',
       'edited': false,
+      'revisionCount': 0,
       'viewerIsAuthor': false,
       'media': <Object>[],
       'voiceMemo': null,
