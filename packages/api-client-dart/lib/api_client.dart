@@ -264,6 +264,10 @@ class ApiClient {
           return FeedPostPrompt.fromJson(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GoogleReauthenticationIntent':
+          return GoogleReauthenticationIntent.fromJson(value);
+        case 'GoogleReauthenticationRequest':
+          return GoogleReauthenticationRequest.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
         case 'LegalAcceptanceRequest':

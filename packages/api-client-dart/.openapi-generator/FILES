@@ -51,6 +51,8 @@ lib/model/feed_post.dart
 lib/model/feed_post_author.dart
 lib/model/feed_post_prompt.dart
 lib/model/get_messaging_unread200_response.dart
+lib/model/google_reauthentication_intent.dart
+lib/model/google_reauthentication_request.dart
 lib/model/health_response.dart
 lib/model/legal_acceptance_request.dart
 lib/model/legal_acceptance_response.dart

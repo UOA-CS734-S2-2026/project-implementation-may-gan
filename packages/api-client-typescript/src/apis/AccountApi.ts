@@ -19,6 +19,16 @@ import {
     ApiErrorToJSON,
 } from '../models/ApiError';
 import {
+    type GoogleReauthenticationIntent,
+    GoogleReauthenticationIntentFromJSON,
+    GoogleReauthenticationIntentToJSON,
+} from '../models/GoogleReauthenticationIntent';
+import {
+    type GoogleReauthenticationRequest,
+    GoogleReauthenticationRequestFromJSON,
+    GoogleReauthenticationRequestToJSON,
+} from '../models/GoogleReauthenticationRequest';
+import {
     type PasswordReauthenticationGrant,
     PasswordReauthenticationGrantFromJSON,
     PasswordReauthenticationGrantToJSON,
@@ -28,6 +38,13 @@ import {
     PasswordReauthenticationRequestFromJSON,
     PasswordReauthenticationRequestToJSON,
 } from '../models/PasswordReauthenticationRequest';
+
+export interface AccountBeginGoogleReauthenticationRequest {
+    /**
+     *
+     */
+    googleReauthenticationRequest: GoogleReauthenticationRequest;
+}
 
 export interface AccountReauthenticatePasswordRequest {
     /**
@@ -40,6 +57,63 @@ export interface AccountReauthenticatePasswordRequest {
  *
  */
 export class AccountApi extends runtime.BaseAPI {
+
+    /**
+     * Creates request options for accountBeginGoogleReauthentication without sending the request
+     */
+    async accountBeginGoogleReauthenticationRequestOpts(requestParameters: AccountBeginGoogleReauthenticationRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['googleReauthenticationRequest'] == null) {
+            throw new runtime.RequiredError(
+                'googleReauthenticationRequest',
+                'Required parameter "googleReauthenticationRequest" was null or undefined when calling accountBeginGoogleReauthentication().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/reauthenticate/google`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: GoogleReauthenticationRequestToJSON(requestParameters['googleReauthenticationRequest']),
+        };
+    }
+
+    /**
+     * A browser-only authorization-code flow. It does not sign in, link an account, or request deletion. The callback requires the original live session and a fresh signed Google authentication time.
+     * Start browser Google verification for one account action
+     */
+    async accountBeginGoogleReauthenticationRaw(requestParameters: AccountBeginGoogleReauthenticationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GoogleReauthenticationIntent>> {
+        const requestOptions = await this.accountBeginGoogleReauthenticationRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => GoogleReauthenticationIntentFromJSON(jsonValue));
+    }
+
+    /**
+     * A browser-only authorization-code flow. It does not sign in, link an account, or request deletion. The callback requires the original live session and a fresh signed Google authentication time.
+     * Start browser Google verification for one account action
+     */
+    async accountBeginGoogleReauthentication(requestParameters: AccountBeginGoogleReauthenticationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GoogleReauthenticationIntent> {
+        const response = await this.accountBeginGoogleReauthenticationRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
 
     /**
      * Creates request options for accountReauthenticatePassword without sending the request

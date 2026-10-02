@@ -166,6 +166,8 @@ import { createHyperdriveAccountPolicyResolver } from "./features/account-policy
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
 import { issuePasswordManagementGrant } from "./features/account-policy/reauthenticate/password/password.repository";
+import { registerGoogleManagementProofRoute, type GoogleManagementProofDependencies } from "./features/account-policy/reauthenticate/google/google-proof.route";
+import { beginGoogleManagementIntent } from "./features/account-policy/reauthenticate/google/google-proof.repository";
 import { registerLegalAcceptanceRoute, type LegalAcceptanceRouteDependencies } from "./features/legal/record-acceptance/acceptance.route";
 import { recordExplicitLegalAcceptance, type ExplicitLegalAcceptance } from "./features/legal/record-acceptance/acceptance.repository";
 import { registerRegistrationIntentRoutes, type RegistrationIntentRouteDependencies } from "./features/legal/registration-intent/registration-intent.route";
@@ -198,6 +200,7 @@ export interface AppDependencies {
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   passwordReauthentication?: PasswordReauthenticationDependencies;
+  googleManagementProof?: GoogleManagementProofDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
   legalRegistration?: RegistrationIntentRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
@@ -228,6 +231,7 @@ export function createApp({
   avatarRemove,
   accountPolicy,
   passwordReauthentication,
+  googleManagementProof,
   legalAcceptance,
   legalRegistration,
   trustedOrigins = [],
@@ -279,6 +283,7 @@ export function createApp({
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerPasswordReauthenticationRoute(api, { ...(passwordReauthentication ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? passwordReauthentication?.rateLimiter });
+  registerGoogleManagementProofRoute(api, { ...(googleManagementProof ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? googleManagementProof?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
   registerRegistrationIntentRoutes(api, legalRegistration ?? {});
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
@@ -370,6 +375,19 @@ export function createAppForEnv(env: ApiEnv) {
       configuration.hyperdrive, (database) => issuePasswordManagementGrant(database, input),
     ),
   } satisfies PasswordReauthenticationDependencies : undefined;
+  const googleManagementProof = configuration?.google ? {
+    resolveSession: createSessionResolver(configuration),
+    begin: (input: Omit<Parameters<typeof beginGoogleManagementIntent>[1], "configuration">) => withHyperdriveDatabase(
+      configuration.hyperdrive, (database) => beginGoogleManagementIntent(database, {
+        ...input,
+        configuration: {
+          clientId: configuration.google!.clientIds[0],
+          clientSecret: configuration.google!.clientSecret,
+          redirectUri: new URL("/api/auth/callback/google", configuration.baseURL).href,
+        },
+      }),
+    ),
+  } satisfies GoogleManagementProofDependencies : undefined;
   const legalAcceptance = configuration ? {
     resolveSession: createSessionResolver(configuration),
     record: async (userId: string, input: ExplicitLegalAcceptance) => {
@@ -442,6 +460,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameProfile,
     accountPolicy,
     passwordReauthentication,
+    googleManagementProof,
     legalAcceptance,
     legalRegistration,
     profileDetails,

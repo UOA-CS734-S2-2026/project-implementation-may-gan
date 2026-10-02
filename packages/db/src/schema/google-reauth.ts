@@ -15,10 +15,12 @@ export const accountGoogleReauthenticationIntents = pgTable("account_google_reau
   action: accountManagementGrantAction("action").notNull(),
   lifecycleGeneration: bigint("lifecycle_generation", { mode: "number" }).notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("account_google_reauth_intents_user_idx").on(table.userId),
   index("account_google_reauth_intents_session_idx").on(table.sessionId),
+  index("account_google_reauth_intents_expiry_idx").on(table.expiresAt),
   check("account_google_reauth_intents_state_digest_check", sql`${table.stateDigest} ~ '^[0-9a-f]{64}$'`),
   check("account_google_reauth_intents_nonce_digest_check", sql`${table.nonceDigest} ~ '^[0-9a-f]{64}$'`),
   check("account_google_reauth_intents_generation_check", sql`${table.lifecycleGeneration} between 0 and 9007199254740991`),
