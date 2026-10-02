@@ -106,9 +106,11 @@ class _MoodHistoryCardState extends State<MoodHistoryCard> {
     final colors = DayliColors.of(context);
     final history = _history;
     final period = history?.current;
-    final audience = widget.isMe
-        ? 'You and your friends can see this.'
-        : "Only ${widget.displayName}'s friends can see this.";
+    final subtitle = [
+      if (period != null)
+        '${formatMoodDate(period.from)} to ${formatMoodDate(period.to)}',
+      if (widget.isMe) 'You and your friends can see this.',
+    ].join(' · ');
     return Padding(
       padding: const EdgeInsets.only(top: 20),
       child: DayliCard(
@@ -127,16 +129,15 @@ class _MoodHistoryCardState extends State<MoodHistoryCard> {
                 tracking: DayliTracking.tight,
               ),
             ),
-            Text(
-              period == null
-                  ? audience
-                  : '${formatMoodDate(period.from)} to ${formatMoodDate(period.to)} · $audience',
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.xs,
-                color: colors.foregroundSecondary,
+            if (subtitle.isNotEmpty)
+              Text(
+                subtitle,
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.xs,
+                  color: colors.foregroundSecondary,
+                ),
               ),
-            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

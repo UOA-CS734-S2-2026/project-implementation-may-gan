@@ -100,7 +100,7 @@ describe("MoodHistory", () => {
     const { container } = render(<MoodHistory username="ada" displayName="Ada" isMe={false} />);
 
     expect(await screen.findByRole("img")).toBeTruthy();
-    expect(screen.getByText(/Only Ada's friends can see this\./)).toBeTruthy();
+    expect(screen.queryByText(/can see this/)).toBeNull();
     expect(moodHistory).toHaveBeenCalledWith("ada", "30d");
     expect(container.querySelectorAll("[data-mood-missing]")).toHaveLength(25);
   });
