@@ -53,6 +53,8 @@ import { createHyperdriveProfilePostsRepository } from "./features/posts/list-pr
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
 import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
+import type { GetPostVoiceMemoRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo.route";
+import { createHyperdrivePostVoiceMemoRepository } from "./features/posts/get-post-voice-memo/get-post-voice-memo.repository";
 import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
 import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
@@ -191,6 +193,7 @@ export interface AppDependencies {
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
   postMedia?: GetPostMediaRouteDependencies;
+  postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
@@ -224,6 +227,7 @@ export function createApp({
   feed,
   postDetail,
   postMedia,
+  postVoiceMemo,
   profilePosts,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
@@ -302,6 +306,7 @@ export function createApp({
     feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
     media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
+    voiceMemo: { ...(postVoiceMemo ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
   });
@@ -362,6 +367,11 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostMediaRouteDependencies : undefined;
+  const postVoiceMemo = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostVoiceMemoRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies GetPostVoiceMemoRouteDependencies : undefined;
   const profilePosts = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveProfilePostsRepository(configuration.hyperdrive),
@@ -469,6 +479,7 @@ export function createAppForEnv(env: ApiEnv) {
     feed,
     postDetail,
     postMedia,
+    postVoiceMemo,
     profilePosts,
     media,
     relationships,

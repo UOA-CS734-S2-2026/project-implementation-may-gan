@@ -6,7 +6,7 @@ import {
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
-import { postMediaSchema } from "../shared/post-media.contract";
+import { postVoiceMemoSchema, postMediaSchema } from "../shared/post-media.contract";
 
 export const postIdParamsSchema = z.object({
   postId: opaqueIdSchema.openapi({ param: { name: "postId", in: "path" }, example: "post-1" }),
@@ -35,6 +35,10 @@ export const postDetailSchema = z
     viewerIsAuthor: z.boolean(),
     media: z.array(postMediaSchema).openapi({
       description: "Attached photos or video in display order, each with a private download URL that expires after 5 minutes.",
+    }),
+    voiceMemo: postVoiceMemoSchema.nullable().openapi({
+      description: "The post's voice memo with a private download URL that expires after 5 minutes, "
+        + "or null when the post has none. Only post detail carries it; feeds and profile lists do not.",
     }),
   })
   .openapi("PostDetail", {

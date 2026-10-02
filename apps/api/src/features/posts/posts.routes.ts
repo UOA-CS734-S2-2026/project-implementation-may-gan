@@ -2,6 +2,10 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { registerCreateDailyPostRoute, type CreateDailyPostRouteDependencies } from "./create-post/create-post.route";
 import { registerGetPostRoute, type GetPostRouteDependencies } from "./get-post/get-post.route";
+import {
+  registerGetPostVoiceMemoRoute,
+  type GetPostVoiceMemoRouteDependencies,
+} from "./get-post-voice-memo/get-post-voice-memo.route";
 import { registerGetPostMediaRoute, type GetPostMediaRouteDependencies } from "./get-post-media/get-post-media.route";
 import { registerListFeedRoute, type ListFeedRouteDependencies } from "./list-feed/list-feed.route";
 import { registerListProfilePostsRoute, type ListProfilePostsRouteDependencies } from "./list-profile-posts/list-profile-posts.route";
@@ -12,6 +16,7 @@ export interface PostsRouteDependencies {
   feed: ListFeedRouteDependencies;
   detail: GetPostRouteDependencies;
   media: GetPostMediaRouteDependencies;
+  voiceMemo: GetPostVoiceMemoRouteDependencies;
   profilePosts: ListProfilePostsRouteDependencies;
   trash: PostTrashRouteDependencies;
 }
@@ -24,5 +29,6 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   registerPostTrashRoutes(app, dependencies.trash);
   registerGetPostRoute(app, dependencies.detail);
   registerGetPostMediaRoute(app, dependencies.media);
+  registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
   registerListProfilePostsRoute(app, dependencies.profilePosts);
 }

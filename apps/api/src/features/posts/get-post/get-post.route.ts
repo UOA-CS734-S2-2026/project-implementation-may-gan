@@ -3,7 +3,7 @@ import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
+import { signPostVoiceMemo, signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "./get-post.contract";
 import type { PostDetailRepository } from "./get-post.repository";
 
@@ -51,11 +51,14 @@ export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, depe
       const post = await dependencies.repository.findPost(context.get("actor").userId, postId, now);
       if (!post) return apiErrorResponse(context, 404, "NOT_FOUND", "The post was not found.");
       const sign = dependencies.signMediaDownload;
-      if (post.media.length > 0 && !sign) {
+      if ((post.media.length > 0 || post.voiceMemo) && !sign) {
         return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
       }
       const media = sign ? await signPostMedia(post.media, sign, now) : [];
-      return context.json({ ...post, media }, 200);
+      const voiceMemo = sign && post.voiceMemo
+        ? await signPostVoiceMemo(post.voiceMemo, sign, now)
+        : null;
+      return context.json({ ...post, media, voiceMemo }, 200);
     } catch (error) {
       // Never forward SQL or private content to the client.
       console.error("dayli post read failed", error instanceof Error ? error.name : "unknown");

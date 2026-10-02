@@ -1,8 +1,8 @@
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { schema, type DayliDatabase } from "@dayli/db";
-import type { AllowedContentType } from "@dayli/contracts";
+import { audioContentTypes, type AudioContentType, type VisualContentType } from "@dayli/contracts";
 import { createPresignedDownloadUrl, type R2RuntimeConfiguration } from "../../../infrastructure/media/r2";
-import type { PostMedia } from "./post-media.contract";
+import type { PostVoiceMemo, PostMedia } from "./post-media.contract";
 
 /** How long a download URL works. Short, because it is a bearer credential. */
 export const MEDIA_DOWNLOAD_TTL_SECONDS = 5 * 60;
@@ -11,8 +11,16 @@ export const MEDIA_DOWNLOAD_TTL_SECONDS = 5 * 60;
 export interface PostMediaRef {
   id: string;
   postId: string;
-  contentType: AllowedContentType;
+  contentType: VisualContentType;
   order: number;
+  objectKey: string;
+}
+
+/** A post's attached voice memo before signing. The object key never leaves the API. */
+export interface PostVoiceMemoRef {
+  id: string;
+  postId: string;
+  contentType: AudioContentType;
   objectKey: string;
 }
 
@@ -28,9 +36,9 @@ export function createR2MediaDownloadSigner(configuration: R2RuntimeConfiguratio
 }
 
 /**
- * Attached media for posts the caller has already been allowed to read, in
- * display order, in one query. Detached rows and legacy imports without an
- * upload are left out, so they are never signed.
+ * Attached photos and videos for posts the caller has already been allowed to
+ * read, in display order, in one query. Voice memos, detached rows and
+ * legacy imports without an upload are left out, so they are never signed here.
  */
 export async function readAttachedMedia(
   database: DayliDatabase,
@@ -48,11 +56,15 @@ export async function readAttachedMedia(
     })
     .from(schema.postMedia)
     .innerJoin(schema.mediaReservation, eq(schema.mediaReservation.id, schema.postMedia.reservationId))
-    .where(and(inArray(schema.postMedia.postId, [...postIds]), isNull(schema.postMedia.detachedAt)))
+    .where(and(
+      inArray(schema.postMedia.postId, [...postIds]),
+      isNull(schema.postMedia.detachedAt),
+      notInArray(schema.mediaReservation.contentType, [...audioContentTypes]),
+    ))
     .orderBy(asc(schema.postMedia.postId), asc(schema.postMedia.attachmentOrder));
   for (const row of rows) {
     // A reservation only ever stores an allowed type.
-    const ref = { ...row, contentType: row.contentType as AllowedContentType };
+    const ref = { ...row, contentType: row.contentType as VisualContentType };
     byPost.set(row.postId, [...(byPost.get(row.postId) ?? []), ref]);
   }
   return byPost;
@@ -77,4 +89,46 @@ export async function signPostMedia(
       expiresAt: download.expiresAt.toISOString(),
     };
   }));
+}
+
+/**
+ * The voice memo attached to a post the caller has already been allowed
+ * to read, or null. A post has at most one; detached rows are left out.
+ */
+export async function readAttachedVoiceMemo(
+  database: DayliDatabase,
+  postId: string,
+): Promise<PostVoiceMemoRef | null> {
+  const [row] = await database
+    .select({
+      id: schema.postMedia.id,
+      postId: schema.postMedia.postId,
+      contentType: schema.mediaReservation.contentType,
+      objectKey: schema.mediaReservation.objectKey,
+    })
+    .from(schema.postMedia)
+    .innerJoin(schema.mediaReservation, eq(schema.mediaReservation.id, schema.postMedia.reservationId))
+    .where(and(
+      eq(schema.postMedia.postId, postId),
+      isNull(schema.postMedia.detachedAt),
+      inArray(schema.mediaReservation.contentType, [...audioContentTypes]),
+    ))
+    .limit(1);
+  // The filter above leaves only audio types.
+  return row ? { ...row, contentType: row.contentType as AudioContentType } : null;
+}
+
+/** Sign one voice memo for this response; callers return 503 first when storage isn't configured. */
+export async function signPostVoiceMemo(
+  ref: PostVoiceMemoRef,
+  sign: SignMediaDownload,
+  now: Date,
+): Promise<PostVoiceMemo> {
+  const download = await sign(ref.objectKey, now);
+  return {
+    id: ref.id,
+    contentType: ref.contentType,
+    url: download.url,
+    expiresAt: download.expiresAt.toISOString(),
+  };
 }

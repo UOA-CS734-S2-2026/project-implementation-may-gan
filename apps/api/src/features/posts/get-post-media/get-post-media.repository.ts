@@ -1,6 +1,6 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
-import type { AllowedContentType } from "@dayli/contracts";
+import { audioContentTypes, type VisualContentType } from "@dayli/contracts";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter, type ValidatedPublicLinkGrant } from "../../permissions";
 import type { PostMediaRef } from "../shared/post-media";
@@ -49,11 +49,13 @@ export function createPostgresPostMediaRepository(database: DayliDatabase): Post
             mediaId,
             validatedPublicLinkGrant,
           }),
+          // Voice memos are served by their own route.
+          notInArray(mediaReservation.contentType, [...audioContentTypes]),
           isNotNull(user.username),
         ))
         .limit(1);
       // A reservation only ever stores an allowed type.
-      return row ? { ...row, contentType: row.contentType as AllowedContentType } : null;
+      return row ? { ...row, contentType: row.contentType as VisualContentType } : null;
     },
   };
 }
