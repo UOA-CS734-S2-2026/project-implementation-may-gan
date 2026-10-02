@@ -42,16 +42,20 @@ function CommentComposer({
   postId,
   parentCommentId,
   label,
+  hasUnloadedComments = false,
   onPosted,
   onCancel,
 }: {
   postId: string;
   parentCommentId?: string;
   label: string;
+  /** A new comment goes after these, so say where it went. */
+  hasUnloadedComments?: boolean;
   onPosted?: () => void;
   onCancel?: () => void;
 }) {
   const create = useCreateComment(postId);
+  const [postedOutOfView, setPostedOutOfView] = useState(false);
   const [text, setText] = useState("");
   const [clientCommentId, setClientCommentId] = useState(() => crypto.randomUUID());
   const trimmed = text.trim();
@@ -69,6 +73,7 @@ function CommentComposer({
             onSuccess: () => {
               setText("");
               setClientCommentId(crypto.randomUUID());
+              setPostedOutOfView(hasUnloadedComments);
               onPosted?.();
             },
           },
@@ -94,6 +99,11 @@ function CommentComposer({
       </label>
       {tooLong && <p className="text-xs text-red-500">Keep it to {COMMENT_MAX} characters.</p>}
       {create.isError && <p role="alert" className="text-xs text-red-500">{failureMessage(create.error)}</p>}
+      {postedOutOfView && !create.isError && (
+        <p role="status" className="text-xs text-foreground-secondary">
+          Posted. It&apos;s at the end, after the comments that haven&apos;t loaded yet.
+        </p>
+      )}
       <div className="flex gap-2">
         <Button
           type="submit"
@@ -263,7 +273,7 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
         </Button>
       )}
 
-      <CommentComposer postId={postId} label="Add a comment" />
+      <CommentComposer postId={postId} label="Add a comment" hasUnloadedComments={query.hasNextPage} />
     </section>
   );
 }

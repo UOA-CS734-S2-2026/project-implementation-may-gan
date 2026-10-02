@@ -113,14 +113,21 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
-  void _commentsChanged(int delta) {
+  /// Reads the post's counts again after a comment changes, because only the
+  /// server counts comments on pages that aren't loaded.
+  Future<void> _refreshCounts() async {
+    final result = await AppScope.of(context).posts.get(widget.postId);
+    if (!mounted) return;
     final post = _post;
-    if (post == null || delta == 0) return;
-    setState(
-      () => _post = post.copyWith(
-        commentCount: (post.commentCount + delta).clamp(0, 1 << 31),
-      ),
-    );
+    if (result case ApiSuccess(:final value) when post != null) {
+      setState(
+        () => _post = post.copyWith(
+          likeCount: value.likeCount,
+          viewerHasLiked: value.viewerHasLiked,
+          commentCount: value.commentCount,
+        ),
+      );
+    }
   }
 
   Future<void> _edit(PostDetail post) async {
@@ -527,7 +534,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         PostComments(
           key: ValueKey('comments.$_loads'),
           postId: post.id,
-          onCountChanged: _commentsChanged,
+          onChanged: _refreshCounts,
         ),
       ],
     );

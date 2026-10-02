@@ -36,6 +36,8 @@ function useCommentCache(postId: string) {
 
   return {
     loaded: () => client.getQueryData<CommentPages>(commentsKey)?.pages.flatMap((page) => page.items) ?? [],
+    /** True when the last loaded page is the end of the list. */
+    allLoaded: () => client.getQueryData<CommentPages>(commentsKey)?.pages.at(-1)?.hasMore === false,
     edit: (change: (items: PostComment[], isLastPage: boolean) => PostComment[]) =>
       client.setQueryData<CommentPages>(commentsKey, (data) => data && {
         ...data,
@@ -43,6 +45,8 @@ function useCommentCache(postId: string) {
       }),
     adjustCount: (delta: number) =>
       client.setQueryData<PostDetail>(detailKey, (post) => post && { ...post, commentCount: Math.max(0, post.commentCount + delta) }),
+    /** The server's count also covers comments on pages that aren't loaded. */
+    refreshCount: () => client.invalidateQueries({ queryKey: detailKey }),
   };
 }
 
@@ -57,9 +61,11 @@ export function useCreateComment(postId: string) {
       unwrapInteraction(await interactionsApi.createComment(postId, request)),
     onSuccess: (comment) => {
       if (cache.loaded().some((item) => item.id === comment.id)) return;
-      // Pages are in writing order, so a new comment belongs at the end.
-      cache.edit((items, isLastPage) => (isLastPage ? [...items, comment] : items));
+      // Pages are in writing order, so a new comment belongs at the very end.
+      // While older pages are still unloaded, paging reaches it in order.
+      if (cache.allLoaded()) cache.edit((items, isLastPage) => (isLastPage ? [...items, comment] : items));
       cache.adjustCount(1);
+      void cache.refreshCount();
     },
   });
 }
@@ -79,9 +85,9 @@ export function useDeleteComment(postId: string) {
   return useMutation({
     mutationFn: async (commentId: string) => unwrapInteraction(await interactionsApi.deleteComment(postId, commentId)),
     onSuccess: (_result, commentId) => {
-      const removed = cache.loaded().filter((item) => item.id === commentId || item.parentCommentId === commentId).length;
       cache.edit((items) => items.filter((item) => item.id !== commentId && item.parentCommentId !== commentId));
-      cache.adjustCount(-removed);
+      // Replies on unloaded pages disappear too, so only the server knows the new count.
+      void cache.refreshCount();
     },
   });
 }

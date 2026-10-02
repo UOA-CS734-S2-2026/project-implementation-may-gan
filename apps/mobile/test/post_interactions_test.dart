@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/interactions_client.dart';
+import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,12 +20,30 @@ Future<TestHarness> openPost(
   int likeCount = 2,
   int commentCount = 0,
   List<PostComment> comments = const [],
+  String? nextCursor,
   FakeInteractionsClient? interactions,
+
+  /// The comment count the server reports after a comment changes.
+  int? commentCountAfter,
 }) async {
   final client = interactions ?? FakeInteractionsClient();
   client.commentResults
     ..clear()
-    ..add(ApiSuccess(commentPage(comments)));
+    ..add(
+      ApiSuccess(
+        PostPage(
+          items: comments,
+          nextCursor: nextCursor,
+          hasMore: nextCursor != null,
+        ),
+      ),
+    );
+  ApiResult<PostDetail> detail(int count) => ApiSuccess(
+    postDetail(
+      '1',
+      viewerIsAuthor: viewerIsAuthor,
+    ).copyWith(likeCount: likeCount, commentCount: count),
+  );
   final harness = TestHarness(
     feed: FakeFeedClient([
       ApiSuccess(
@@ -32,12 +51,8 @@ Future<TestHarness> openPost(
       ),
     ]),
     posts: FakePostClient([
-      ApiSuccess(
-        postDetail(
-          '1',
-          viewerIsAuthor: viewerIsAuthor,
-        ).copyWith(likeCount: likeCount, commentCount: commentCount),
-      ),
+      detail(commentCount),
+      if (commentCountAfter != null) detail(commentCountAfter),
     ]),
     interactions: client,
   );
@@ -150,7 +165,7 @@ void main() {
           const ApiError(NetworkUnavailable()),
           ApiSuccess(postComment('c-9', author: 'jos', text: 'Lovely.')),
         ]);
-      await openPost(tester, interactions: interactions);
+      await openPost(tester, interactions: interactions, commentCountAfter: 1);
 
       await tester.ensureVisible(find.byKey(const Key('comments.input')));
       await tester.enterText(
@@ -172,6 +187,65 @@ void main() {
       expect(find.byKey(const Key('comment.c-9')), findsOneWidget);
       expect(find.byKey(const Key('comments.sendError')), findsNothing);
       expect(find.text('1 comment'), findsOneWidget);
+    });
+
+    testWidgets('keeps a new comment after older unloaded ones', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..createResults.add(ApiSuccess(postComment('c-9', text: 'Lovely.')));
+      await openPost(
+        tester,
+        commentCount: 30,
+        comments: [postComment('c-1')],
+        nextCursor: 'next',
+        interactions: interactions,
+      );
+
+      await tester.ensureVisible(find.byKey(const Key('comments.input')));
+      await tester.enterText(
+        find.byKey(const Key('comments.input')),
+        'Lovely.',
+      );
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+
+      expect(find.byKey(const Key('comments.postedOutOfView')), findsOneWidget);
+      expect(find.byKey(const Key('comment.c-9')), findsNothing);
+    });
+
+    testWidgets('uses a new ID when the reply target changes after a failure', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..createResults.addAll([
+          const ApiError(NetworkUnavailable()),
+          ApiSuccess(postComment('c-9', text: 'Agreed.')),
+        ]);
+      await openPost(
+        tester,
+        commentCount: 1,
+        comments: [postComment('c-1')],
+        interactions: interactions,
+      );
+
+      await tapVisible(tester, find.byKey(const Key('comment.c-1.reply')));
+      await tester.enterText(
+        find.byKey(const Key('comments.input')),
+        'Agreed.',
+      );
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+      expect(find.byKey(const Key('comments.sendError')), findsOneWidget);
+
+      await tapVisible(tester, find.byKey(const Key('comments.cancelReply')));
+      expect(find.byKey(const Key('comments.sendError')), findsNothing);
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+
+      expect(interactions.created.first.parentCommentId, 'c-1');
+      expect(interactions.created.last.parentCommentId, isNull);
+      expect(
+        interactions.created.last.clientCommentId,
+        isNot(interactions.created.first.clientCommentId),
+      );
     });
 
     testWidgets('replies to a comment', (tester) async {
@@ -243,7 +317,8 @@ void main() {
       await openPost(
         tester,
         viewerIsAuthor: true,
-        commentCount: 2,
+        commentCount: 5,
+        commentCountAfter: 0,
         comments: [
           postComment('c-1', viewerCanDelete: true),
           postComment('c-2', parentCommentId: 'c-1', author: 'cy'),

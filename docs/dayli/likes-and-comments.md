@@ -33,7 +33,9 @@ Web (`apps/web/features/interactions`) and Flutter (`lib/posts/post_comments.dar
 - Comments are grouped into threads as pages arrive, with **Show more comments** for the next page. Replies are offered on top-level comments only.
 - A comment box keeps one `clientCommentId` for its draft until the comment is posted. A failed or offline send keeps the text, and sending again reuses the ID, so nothing is posted twice. Changing the text after a failure starts a new ID.
 - Edit is offered only when `viewerCanEdit` is true, and delete only when `viewerCanDelete` is true. Deleting asks first, and deleting a top-level comment removes its replies from view.
-- Both clients adjust the post's comment count after a change. Web keeps comments in a TanStack Query cache keyed by account. Flutter reloads them with the post on every open and refresh.
+- A new comment is shown at the end only once every page is loaded. While older pages are still unloaded, the client says where it went and paging reaches it in order.
+- After a comment is added or deleted, both clients read the post's count from the server, because deleting a top-level comment also hides replies on pages that aren't loaded. Web keeps comments in a TanStack Query cache keyed by account. Flutter reloads them with the post on every open and refresh.
+- Changing the reply target after a failed send starts a new `clientCommentId`, because the failed send may have reached the server with the old target.
 
 ## Deletion and retention
 

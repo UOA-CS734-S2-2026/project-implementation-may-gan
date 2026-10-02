@@ -12,17 +12,17 @@ const commentMaxLength = 1000;
 
 /// Comments with one level of replies, oldest first, and a box to add one.
 /// A comment that fails to post keeps its text and its client ID, so trying
-/// again never posts it twice. [onCountChanged] reports added and removed
-/// comments so the post's count stays in step.
+/// again never posts it twice. [onChanged] runs after a comment is added or
+/// deleted, so the post can read its count from the server.
 class PostComments extends StatefulWidget {
   const PostComments({
     super.key,
     required this.postId,
-    required this.onCountChanged,
+    required this.onChanged,
   });
 
   final String postId;
-  final ValueChanged<int> onCountChanged;
+  final VoidCallback onChanged;
 
   @override
   State<PostComments> createState() => _PostCommentsState();
@@ -41,6 +41,9 @@ class _PostCommentsState extends State<PostComments> {
   String _clientCommentId = generateIdempotencyKey();
   bool _sending = false;
   ApiFailure? _sendFailure;
+
+  /// The last comment posted went after pages that haven't loaded yet.
+  bool _postedOutOfView = false;
 
   @override
   void didChangeDependencies() {
@@ -96,9 +99,11 @@ class _PostCommentsState extends State<PostComments> {
       _sending = false;
       switch (result) {
         case ApiSuccess(:final value):
-          if (!_comments.any((c) => c.id == value.id)) {
+          // A new comment belongs at the very end. While older pages are
+          // unloaded, paging reaches it in order instead.
+          _postedOutOfView = _nextCursor != null;
+          if (!_postedOutOfView && !_comments.any((c) => c.id == value.id)) {
             _comments.add(value);
-            widget.onCountChanged(1);
           }
           _input.clear();
           _replyingTo = null;
@@ -107,6 +112,7 @@ class _PostCommentsState extends State<PostComments> {
           _sendFailure = failure;
       }
     });
+    if (result is ApiSuccess) widget.onChanged();
   }
 
   /// Changing the text after a failure makes it a new comment with a new ID.
@@ -121,9 +127,18 @@ class _PostCommentsState extends State<PostComments> {
     }
   }
 
-  void _reply(PostComment comment) {
-    setState(() => _replyingTo = comment);
-    _focus.requestFocus();
+  void _reply(PostComment? comment) {
+    setState(() {
+      // A failed send may have reached the server under its old ID with the
+      // old reply target, so a different target is a new comment.
+      if (comment?.id != _replyingTo?.id && _sendFailure != null) {
+        _sendFailure = null;
+        _clientCommentId = generateIdempotencyKey();
+      }
+      _replyingTo = comment;
+      _postedOutOfView = false;
+    });
+    if (comment != null) _focus.requestFocus();
   }
 
   Future<void> _edit(PostComment comment) async {
@@ -183,16 +198,14 @@ class _PostCommentsState extends State<PostComments> {
     switch (result) {
       // Already gone counts as deleted.
       case ApiSuccess() || ApiError(failure: NotFound()):
-        final removed = _comments
-            .where((c) => c.id == comment.id || c.parentCommentId == comment.id)
-            .length;
         setState(() {
           _comments.removeWhere(
             (c) => c.id == comment.id || c.parentCommentId == comment.id,
           );
-          if (_replyingTo?.id == comment.id) _replyingTo = null;
         });
-        widget.onCountChanged(-removed);
+        if (_replyingTo?.id == comment.id) _reply(null);
+        // Replies on unloaded pages go too, so only the server knows the count.
+        widget.onChanged();
       case ApiError(:final failure):
         _notify(_failureText(failure, "That comment couldn't be deleted."));
     }
@@ -303,7 +316,7 @@ class _PostCommentsState extends State<PostComments> {
                 key: const Key('comments.cancelReply'),
                 tooltip: 'Cancel reply',
                 icon: const Icon(Icons.close_rounded, size: 18),
-                onPressed: () => setState(() => _replyingTo = null),
+                onPressed: () => _reply(null),
               ),
             ],
           ),
@@ -344,6 +357,16 @@ class _PostCommentsState extends State<PostComments> {
             ),
           ],
         ),
+        if (_postedOutOfView && _sendFailure == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              "Posted. It's at the end, after the comments that haven't "
+              'loaded yet.',
+              key: const Key('comments.postedOutOfView'),
+              style: muted,
+            ),
+          ),
         if (_sendFailure case final failure?)
           Padding(
             padding: const EdgeInsets.only(top: 6),

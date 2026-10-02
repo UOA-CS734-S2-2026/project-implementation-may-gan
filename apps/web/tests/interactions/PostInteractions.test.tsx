@@ -138,6 +138,7 @@ describe("comments", () => {
 
   it("posts a comment and keeps its ID for a retry after a failure", async () => {
     const actor = userEvent.setup();
+    get.mockResolvedValueOnce({ ok: true, value: detail() }).mockResolvedValue({ ok: true, value: detail({ commentCount: 1 }) });
     api.createComment
       .mockResolvedValueOnce({ ok: false, failure: "network" })
       .mockResolvedValueOnce({ ok: true, value: comment({ id: "comment-9", author: { id: "me", username: "me", displayName: "Me" }, text: "Lovely." }) });
@@ -153,8 +154,21 @@ describe("comments", () => {
     const [first, second] = api.createComment.mock.calls;
     expect(first![1]).toEqual({ clientCommentId: expect.any(String), text: "Lovely." });
     expect(second![1].clientCommentId).toBe(first![1].clientCommentId);
-    expect(screen.getByRole("heading", { name: "1 comment" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "1 comment" })).toBeTruthy();
     expect((screen.getByPlaceholderText("Add a comment") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("doesn't add a new comment ahead of older ones that haven't loaded", async () => {
+    const actor = userEvent.setup();
+    api.comments.mockResolvedValue({ ok: true, value: { items: [comment()], nextCursor: "next", hasMore: true } });
+    api.createComment.mockResolvedValue({ ok: true, value: comment({ id: "comment-9", text: "Lovely." }) });
+    render();
+
+    await actor.type(await screen.findByPlaceholderText("Add a comment"), "Lovely.");
+    await actor.click(screen.getByRole("button", { name: "Post" }));
+
+    expect(await screen.findByText(/at the end, after the comments that haven't loaded yet/)).toBeTruthy();
+    expect(screen.queryByText("Lovely.")).toBeNull();
   });
 
   it("replies to a comment", async () => {
@@ -190,7 +204,8 @@ describe("comments", () => {
 
   it("lets the post's author delete a comment and its replies after confirming", async () => {
     const actor = userEvent.setup();
-    get.mockResolvedValue({ ok: true, value: detail({ viewerIsAuthor: true, commentCount: 2 }) });
+    get.mockResolvedValueOnce({ ok: true, value: detail({ viewerIsAuthor: true, commentCount: 5 }) })
+      .mockResolvedValue({ ok: true, value: detail({ viewerIsAuthor: true, commentCount: 0 }) });
     api.comments.mockResolvedValue(page([
       comment({ viewerCanDelete: true }),
       comment({ id: "comment-2", parentCommentId: "comment-1", author: { id: "friend-2", username: "cy", displayName: "Cy" }, text: "Me too." }),
@@ -206,7 +221,8 @@ describe("comments", () => {
 
     await waitFor(() => expect(screen.queryByText("Beautiful.")).toBeNull());
     expect(screen.queryByText("Me too.")).toBeNull();
-    expect(screen.getByRole("heading", { name: "0 comments" })).toBeTruthy();
+    // The server's count, which also covers replies on pages not loaded yet.
+    expect(await screen.findByRole("heading", { name: "0 comments" })).toBeTruthy();
     expect(api.deleteComment).toHaveBeenCalledWith("post-1", "comment-1");
   });
 
