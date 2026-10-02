@@ -24,7 +24,7 @@ The response uses the standard `{ items, nextCursor, hasMore }` envelope. `limit
 
 ## Projection
 
-Each item has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, prompt, reflective answer, caption, rating, `audience` (always `friends`), `acceptedAt`, `releasedAt`, `edited`, and `media`. `edited` is true when a revision exists. `media` lists the attached photos or video with private URLs that expire after 5 minutes, read for the whole page in one query (see [Downloads](media-reservations.md#downloads-issue-24)). Tomorrow notes are never included.
+Each item has the post ID, author (`id`, `username`, `displayName`), Auckland `localDate`, prompt, reflective answer, caption, rating, `audience` (always `friends`), `acceptedAt`, `releasedAt`, `edited`, and `media`. `edited` is true when a revision exists. `media` lists the attached photos or video with private URLs that expire after 5 minutes, read for the whole page in one query (see [Downloads](media-reservations.md#downloads)). Tomorrow notes are never included.
 
 The whole page is one query with correlated `EXISTS` checks, so there are no per-post author, prompt, or revision lookups. Responses are `Cache-Control: no-store`.
 

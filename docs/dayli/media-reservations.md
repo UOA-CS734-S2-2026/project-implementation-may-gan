@@ -1,6 +1,6 @@
 # Media reservations
 
-`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers issues #21 and #23: reservation, read, and completion. The Flutter composer uses the flow as described in `Flutter client`. Reading attached media is covered in [Downloads](#downloads-issue-24) (#24); cleanup of abandoned reservations is covered in [Cleanup](#cleanup-issue-25) (#25).
+`POST /api/v1/media-reservations` reserves an opaque, owned R2 object path and returns a short-lived presigned PUT URL for a client to upload directly to private R2 ([architecture](architecture.md)'s "Direct R2 transfer" — the Worker never proxies the bytes). `GET /api/v1/media-reservations/{id}` reads the caller's own reservation state. `POST /api/v1/media-reservations/{id}/complete` verifies what the client actually uploaded and records a validated/failed outcome. This covers reservation, read, and completion. Voice memos use the same flow; see [Voice memos](#voice-memos). The Flutter composer uses the flow as described in `Flutter client`. Reading attached media is covered in [Downloads](#downloads); cleanup of abandoned reservations is covered in [Cleanup](#cleanup).
 
 ## How it works
 
@@ -30,7 +30,7 @@ A settled outcome (`validated` or `failed`) is terminal and idempotent: repeat c
 
 A failed validation returns `200` with `{status: "failed", failureReason}` rather than a 4xx — the HTTP request to complete succeeded; the uploaded *content* failing is a normal outcome, not a malformed request. `failureReason` is one of `byte_size_mismatch`, `format_mismatch`, `duration_exceeded`, `malformed_container`, or `object_not_found` (only written for the rare case where an object existed at `HEAD` time but vanished before a following read — a genuine race, not the ordinary not-yet-uploaded case).
 
-## Cleanup (issue #25)
+## Cleanup
 
 A scheduled job deletes uploads nobody attached, so abandoned objects and rows don't pile up. It runs from the Worker's one-minute cron, after the messaging dispatcher, and never from a request. It has no HTTP surface, so there is nothing for a client to call or to authorise against.
 
@@ -59,9 +59,9 @@ Each step is saved in the protected draft (`compressedPath`, `contentType`, `byt
 
 Posting is blocked until every attachment is `validated`. The post then sends their reservation IDs as `attachments`, and the API links them to the post in the same transaction (see [Daily post creation](daily-posts.md)). If the API answers `MEDIA_NOT_READY`, the composer asks the author to post again once uploads finish. If it answers `MEDIA_UNAVAILABLE`, the composer forgets every reservation, keeps the compressed copies, uploads them again, and asks the author to post once that's done. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded. Signing out removes the user's draft and their whole media folder, even if the composer is closed, including copies a crash left behind. An expired session keeps the draft for the next sign-in, so its media stays too.
 
-Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and attached media is shown only to people who can read its post (see [Downloads](#downloads-issue-24)).
+Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and attached media is shown only to people who can read its post (see [Downloads](#downloads)).
 
-## Downloads (issue #24)
+## Downloads
 
 A post's media is shown through short-lived private download URLs. The Worker never proxies the bytes.
 
@@ -69,10 +69,22 @@ A post's media is shown through short-lived private download URLs. The Worker ne
 - **Lifetime.** URLs expire after **5 minutes** (`MEDIA_DOWNLOAD_TTL_SECONDS`). A URL works for anyone who has it until then: never log, store, or cache it. Responses are `Cache-Control: no-store`.
 - **Refreshing.** `GET /api/v1/posts/{postId}/media/{mediaId}` returns one fresh URL through the permission module's `media` action: the same rules as reading the post, plus a live, attached `post_media` row. Missing, detached, and unreadable media all return the same `404`. Without R2 configuration it returns `503`, and so do the post and feed routes for a post or page that has media; text-only posts are unaffected. `url` and `expiresAt` are therefore always set when media is returned.
 - **Never signed.** Detached rows, legacy imports without an upload, and anything on a post the viewer may not read.
-- **Public links.** The media lookup accepts a validated public-link grant, so #41's public route can issue the same URLs to signed-out viewers.
+- **Public links.** The media lookup accepts a validated public-link grant, so the public-link route can issue the same URLs to signed-out viewers.
 - **After access ends.** Unfriending, blocking, deleting the post, or detaching media stops new URLs immediately, but a URL already issued keeps working for up to 5 minutes, and downloaded copies can't be recalled.
 
 Clients load a fresh URL once when media fails to load, then show "Photo unavailable" or "Video unavailable". The web renders photos unoptimized and keeps R2 out of `next.config`'s `remotePatterns`, because the Next image optimizer would fetch and cache private media on the server. Flutter caches images in memory only. In both clients the feed card shows the first photo, or a still tile for a video, and never plays video. The post page shows every photo, and plays a video on its own, muted and looping, with controls to unmute.
+
+## Voice memos
+
+A post can carry one voice memo, recorded in the mobile app. It goes through the same reserve, PUT, complete and link flow as a photo, with these differences. The mobile capture is a separate ticket; this section is what the API accepts. Ambient sound is a separate feature with its own one-second limit and is not covered here: this API has one voice memo slot per post.
+
+- **Format.** `audio/mp4` only: AAC in an MP4 (m4a) file, which both phone platforms record natively and every browser and phone plays. Any other type, including `audio/mpeg`, `audio/wav` and `audio/webm`, is refused at reservation with `422`.
+- **Limits.** At most **60 seconds** (`MAX_VOICE_MEMO_SECONDS`, checked strictly: 60.5 s fails) and **2 MB** (`MAX_VOICE_MEMO_BYTES`, refused at reservation, before any upload, and signed into the PUT as `content-length`). The 10 MB photo and video cap does not apply to audio. A voice memo counts toward the 25 MB post total.
+- **Inspection.** `/complete` checks the real bytes, not the declared type or a file extension, entirely outside any database transaction, with the same bounded ranged reads as video. The leading bytes must be an MP4 `ftyp` (not QuickTime or HEIC). The box tree must then hold an audio (`soun`) track whose own `mdhd` duration agrees with `mvhd`'s, and a non-empty `mdat`. A file that also contains a video track is rejected, so a video can't be passed off as a voice memo. A JPEG, an MP3, random bytes, a truncated file or a header that lies about its length each fail.
+- **Failures.** They reuse the existing reasons and `200` response: `byte_size_mismatch`, `format_mismatch`, `malformed_container`, `duration_exceeded`. A failed validation stores only the reason, never provider details, object keys or bytes. Settled outcomes are terminal and idempotent, so a retry reads the stored result with no R2 calls.
+- **Linking.** The reservation ID goes in `attachments` with the photos or video. The server decides the kind from the recorded content type: at most one voice memo per post, together with up to 3 photos or 1 video. Another user's reservation reads as `MEDIA_UNAVAILABLE`, like any attachment. Because the unique link and `ON DELETE RESTRICT` are on `post_media`, a voice memo can attach to one post only, and [cleanup](#cleanup) never removes a linked one.
+- **Reading.** Post detail (`GET /api/v1/posts/{postId}`) returns `voiceMemo: {id, contentType, url, expiresAt}`, or `null`. It is a separate field from `media` so a client that predates audio never treats it as a photo. Feeds and profile lists do not carry it. `GET /api/v1/posts/{postId}/voice-memo` returns a fresh URL under the same rules. Both go through the permission module's `media` action, so the voice memo follows its post: owner only before release and for solo posts, and gone immediately after a block, an unfriend or an audience change. A missing, detached or unreadable voice memo is one `404`. URLs last 5 minutes and every response is `no-store`.
+- **Cleanup.** An abandoned voice memo is removed like any other unlinked upload, 24 hours after it expires.
 
 ## One-time Cloudflare setup
 
@@ -102,7 +114,7 @@ Checked manually against the deployed staging API and `dayli-media-staging` on 2
 
 `curl` doesn't send a CORS preflight, so this doesn't cover the bucket's CORS rule. A browser upload from the staging web origin is still unverified. Repeat these checks after changing the signing code or the R2 token.
 
-**Downloads (#24), still to run on staging** after migration `0014` and the API that signs download URLs are deployed. Post a dayli with a synthetic photo from Flutter, then:
+**Downloads, still to run on staging** after migration `0014` and the API that signs download URLs are deployed. Post a dayli with a synthetic photo from Flutter, then:
 
 1. `GET /api/v1/posts/{id}` as a friend returns `media[0].url`, and the photo opens from it.
 2. The same URL gets `403` from R2 after 5 minutes.
@@ -110,7 +122,7 @@ Checked manually against the deployed staging API and `dayli-media-staging` on 2
 4. `GET /api/v1/posts/{id}/media/{mediaId}` as a non-friend gets `404`, and as a friend returns a new URL.
 5. Note which caching headers R2 sends on a signed GET. If it allows public caching, consider signing a `response-cache-control=private, no-store` override.
 
-**Cleanup (#25), still to run on staging** after migration `0018` and the API that runs the job are deployed. Use synthetic files only, and don't wait 24 hours: set `expires_at` and `created_at` on a test reservation back by more than a day, as the migrator, in the staging database.
+**Cleanup, still to run on staging** after migration `0018` and the API that runs the job are deployed. Use synthetic files only, and don't wait 24 hours: set `expires_at` and `created_at` on a test reservation back by more than a day, as the migrator, in the staging database.
 1. Reserve and PUT a photo, then back-date its reservation. Within a minute or two its object is gone from R2 (`HEAD` returns `404`) and its row is gone. This also shows the R2 token can delete.
 2. Do the same for a reservation that is attached to a post. Neither the object nor the row changes.
 3. Do the same for a `pending` reservation that never had an object. The row goes and the job doesn't fail.
@@ -123,9 +135,11 @@ No numeric policy exists elsewhere in these docs for reservation TTL or a per-ow
 | Constant | Value | Rationale |
 | --- | --- | --- |
 | `RESERVATION_TTL_SECONDS` | 15 minutes | Matches Better Auth's own reset/verification token TTL precedent in this codebase. |
-| `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Expired rows are deleted by [Cleanup](#cleanup-issue-25). |
+| `MAX_PENDING_RESERVATIONS_PER_OWNER` | 20 | Abuse guard, not a product-stated limit. It counts only reservations with `expiresAt > now`, so expired reservations no longer count without a cron job. Expired rows are deleted by [Cleanup](#cleanup). |
 | `MAX_ATTACHMENT_BYTES` | 10 MB | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). |
 | `MEDIA_CLEANUP_GRACE_MS` | 24 hours | How long after `expires_at` an unlinked upload survives before cleanup. Must stay well above the 15-minute TTL. In `apps/api/src/infrastructure/jobs/dispatch-media-cleanup.ts`. |
 | `MAX_VIDEO_DURATION_SECONDS` | 15 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by the completion check. |
+| `MAX_VOICE_MEMO_SECONDS` | 60 seconds | Pinned by [product decisions](product-decisions.md) and [MVP](mvp.md). Enforced by the completion check, strictly. |
+| `MAX_VOICE_MEMO_BYTES` | 2 MB | A minute of AAC speech is about 1 MB. Enforced at reservation and as the signed `content-length`. |
 
 Revisit these through a reviewed documentation update if the team wants different values, per the change process in [product decisions](product-decisions.md).
