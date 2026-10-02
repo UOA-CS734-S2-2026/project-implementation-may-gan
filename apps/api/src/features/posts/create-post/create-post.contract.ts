@@ -10,6 +10,7 @@ import {
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { nullMember } from "../shared/post-media.contract";
 
 /**
  * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the
@@ -89,6 +90,14 @@ export const idempotencyKeyHeaderSchema = z.object({
     }),
 });
 
+/** Registered non-null; the post references it through a union with null (see nullMember). */
+const dailyPostVoiceMemoSchema = z
+  .object({
+    id: opaqueIdSchema,
+    contentType: voiceMemoContentTypeSchema,
+  })
+  .openapi("DailyPostVoiceMemo", { description: "The post's voice memo." });
+
 export const dailyPostSchema = z
   .object({
     id: opaqueIdSchema,
@@ -116,12 +125,7 @@ export const dailyPostSchema = z
       }).openapi("DailyPostMedia"))
       .openapi({ description: "The attached photos or video in display order. Empty for a text-only post." }),
     voiceMemo: z
-      .object({
-        id: opaqueIdSchema,
-        contentType: voiceMemoContentTypeSchema,
-      })
-      .openapi("DailyPostVoiceMemo", { description: "The post's voice memo." })
-      .nullable()
+      .union([dailyPostVoiceMemoSchema, nullMember])
       .openapi({ description: "The attached voice memo, or null when the post has none." }),
   })
   .openapi("DailyPost");

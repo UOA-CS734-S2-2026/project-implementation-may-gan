@@ -142,17 +142,58 @@ describe("completeMediaReservation — voice memos", () => {
     });
   });
 
-  it("fails a voice memo whose header understates its length only in the movie header", async () => {
-    // mvhd claims 5 s while the audio track says 120 s: the two disagree, so no track is trusted.
+  it("fails a voice memo whose movie header disagrees with its track", async () => {
+    // mvhd claims 5 s while the audio track and its samples say 120 s: no track is trusted.
+    const { result } = await completeAudio(buildMinimalM4a(120, 44_100, { movieSeconds: 5 }));
+    expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+  });
+
+  it("fails matching headers over arbitrary mdat bytes: no AAC description and no samples", async () => {
+    // Every duration header agrees and the handler is `soun`, but nothing describes
+    // or locates an audio sample: the mdat is four filler bytes.
     const file = concatBoxes(
       buildFtypBox("M4A ", ["M4A ", "isom"]),
       buildMoovBox([
         buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
-        buildTrakBox({ timescale: 44_100, duration: 120 * 44_100, handlerType: "soun" }),
+        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
       ]),
-      wrapBox("mdat", new Uint8Array([1, 2, 3])),
+      wrapBox("mdat", new Uint8Array([0, 1, 2, 3])),
     );
     const { result } = await completeAudio(file);
+    expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+  });
+
+  it("fails a track that is not AAC, or whose samples are not where its tables say", async () => {
+    const cases: Array<[string, Uint8Array]> = [
+      ["another codec", buildMinimalM4a(5, 44_100, { sampleEntryType: "alac" })],
+      ["no decoder config", buildMinimalM4a(5, 44_100, { esds: null })],
+      ["samples past the end of mdat", buildMinimalM4a(5, 44_100, { mdatBytes: 100 })],
+      ["chunks outside mdat", buildMinimalM4a(5, 44_100, { chunkOffsetShift: 1_000_000 })],
+    ];
+    for (const [label, file] of cases) {
+      const { result } = await completeAudio(file);
+      expect(result, label).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+    }
+  });
+
+  it("fails a voice memo when a second audio track runs past the limit", async () => {
+    // mvhd and the first track say 30 s; a second audio track says 120 s.
+    const second = buildTrakBox({ timescale: 44_100, duration: 120 * 44_100, handlerType: "soun" });
+    const { result } = await completeAudio(buildMinimalM4a(30, 44_100, { extraTracks: [second] }));
+    expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+  });
+
+  it("fails a video when a second video track runs past the limit", async () => {
+    const repository = createFakeMediaReservationRepository();
+    const second = buildTrakBox({ timescale: 1000, duration: 120_000 });
+    const bytes = buildMinimalMp4(10, 1000, [second]);
+    const record = pendingRecord({ contentType: "video/mp4", byteSize: bytes.byteLength });
+    repository.records.set(record.id, record);
+    const result = await completeMediaReservation(
+      { repository, r2Reader: createFakeR2Reader(new Map([[objectKey, bytes]])) },
+      ownerId,
+      record.id,
+    );
     expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
   });
 
@@ -162,16 +203,8 @@ describe("completeMediaReservation — voice memos", () => {
   });
 
   it("fails an audio file that also carries a video track", async () => {
-    const file = concatBoxes(
-      buildFtypBox("M4A ", ["M4A ", "isom"]),
-      buildMoovBox([
-        buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
-        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
-        buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "vide" }),
-      ]),
-      wrapBox("mdat", new Uint8Array([1, 2, 3])),
-    );
-    const { result } = await completeAudio(file);
+    const video = buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "vide" });
+    const { result } = await completeAudio(buildMinimalM4a(5, 44_100, { extraTracks: [video] }));
     expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
   });
 

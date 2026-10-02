@@ -101,9 +101,9 @@ export interface PostDetail {
      */
     media: Array<PostMedia>;
     /**
-     *
+     * The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
      */
-    voiceMemo: PostVoiceMemo;
+    voiceMemo: PostVoiceMemo | null;
 }
 
 

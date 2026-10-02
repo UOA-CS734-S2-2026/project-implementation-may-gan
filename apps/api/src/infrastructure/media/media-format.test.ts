@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildEsdsBox,
   buildFtypBox,
+  buildHdlrBox,
   buildMinimalM4a,
   buildMinimalMp4,
   buildMoovBox,
@@ -10,6 +12,7 @@ import {
   concatBoxes,
   validJpegBytes,
   wrapBox,
+  type M4aOptions,
 } from "./media-format.fixtures";
 import {
   checkEssentialStructure,
@@ -290,15 +293,8 @@ describe("extractIsoBmffDurationSeconds for voice memos", () => {
     const audio = buildMinimalM4a(5);
     expect(await extractIsoBmffDurationSeconds(boxSourceFor(audio))).toEqual({ outcome: "malformed" });
 
-    const both = concatBoxes(
-      buildFtypBox("M4A ", ["M4A ", "isom"]),
-      buildMoovBox([
-        buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
-        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
-        buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "vide" }),
-      ]),
-      wrapBox("mdat", new Uint8Array([1])),
-    );
+    const video = buildTrakBox({ timescale: 1000, duration: 5000, handlerType: "vide" });
+    const both = buildMinimalM4a(5, 44_100, { extraTracks: [video] });
     expect(await extractIsoBmffDurationSeconds(boxSourceFor(both), undefined, "soun")).toEqual({ outcome: "malformed" });
   });
 
@@ -311,6 +307,146 @@ describe("extractIsoBmffDurationSeconds for voice memos", () => {
       ]),
     );
     expect(await extractIsoBmffDurationSeconds(boxSourceFor(file), undefined, "soun")).toEqual({ outcome: "malformed" });
+  });
+});
+
+describe("AAC verification for voice memos", () => {
+  const audioDuration = (file: Uint8Array) => extractIsoBmffDurationSeconds(boxSourceFor(file), undefined, "soun");
+  const malformed = { outcome: "malformed" };
+
+  it("accepts several chunks, per-sample sizes and 64-bit chunk offsets", async () => {
+    // 5 s at 44.1 kHz is 216 frames.
+    const sizes = Array.from({ length: 216 }, (_, index) => 20 + (index % 7));
+    expect(await audioDuration(buildMinimalM4a(5, 44_100, { sampleSize: sizes, chunks: [100, 100, 16] })))
+      .toEqual({ outcome: "duration", seconds: 5 });
+    expect(await audioDuration(buildMinimalM4a(5, 44_100, { wideOffsets: true, chunks: [108, 108] })))
+      .toEqual({ outcome: "duration", seconds: 5 });
+  });
+
+  it("fits a full-length recording with a per-sample size table inside the read budget", async () => {
+    // 60 s at 48 kHz is 2,813 frames; each size is read from the table.
+    const sizes = Array.from({ length: 2813 }, (_, index) => 90 + (index % 40));
+    const result = await audioDuration(buildMinimalM4a(60, 48_000, { sampleSize: sizes, chunks: Array.from({ length: 60 }, (_, index) => (index < 59 ? 47 : 2813 - 59 * 47)) }));
+    expect(result).toEqual({ outcome: "duration", seconds: 60 });
+  });
+
+  it("accepts HE-AAC signalling and other common sample rates and layouts", async () => {
+    for (const esds of [
+      buildEsdsBox({ audioObjectType: 5 }),
+      buildEsdsBox({ audioObjectType: 29, channelConfiguration: 1 }),
+      buildEsdsBox({ samplingFrequencyIndex: 3, channelConfiguration: 6 }),
+    ]) {
+      expect(await audioDuration(buildMinimalM4a(5, 48_000, { esds }))).toMatchObject({ outcome: "duration" });
+    }
+  });
+
+  it("rejects headers over arbitrary mdat bytes, the shape the checks used to accept", async () => {
+    const file = concatBoxes(
+      buildFtypBox("M4A ", ["M4A ", "isom"]),
+      buildMoovBox([
+        buildMvhdBoxV0({ timescale: 1000, duration: 5000 }),
+        buildTrakBox({ timescale: 44_100, duration: 5 * 44_100, handlerType: "soun" }),
+      ]),
+      wrapBox("mdat", new Uint8Array([0, 1, 2, 3])),
+    );
+    expect(await audioDuration(file)).toEqual(malformed);
+  });
+
+  it.each(["stsd", "stts", "stsc", "stsz", "stco"] as const)("rejects a track with no %s", async (table) => {
+    expect(await audioDuration(buildMinimalM4a(5, 44_100, { omit: [table] }))).toEqual(malformed);
+  });
+
+  it.each<[string, M4aOptions]>([
+    ["a different codec (alac)", { sampleEntryType: "alac" }],
+    ["MP3 in an MP4 (.mp3)", { sampleEntryType: ".mp3" }],
+    ["Opus in an MP4", { sampleEntryType: "Opus" }],
+    ["a sample entry with no esds", { esds: null }],
+    ["a non-AAC object type (MP3)", { esds: buildEsdsBox({ objectTypeIndication: 0x6b }) }],
+    ["a video stream type", { esds: buildEsdsBox({ streamType: 0x11 }) }],
+    ["no audio object type", { esds: buildEsdsBox({ audioObjectType: 0 }) }],
+    ["a non-AAC audio object type", { esds: buildEsdsBox({ audioObjectType: 17 }) }],
+    ["a reserved sampling-frequency index", { esds: buildEsdsBox({ samplingFrequencyIndex: 13 }) }],
+    ["a channel layout from a program config", { esds: buildEsdsBox({ channelConfiguration: 0 }) }],
+    ["no channels", { channelCount: 0 }],
+    ["too many channels", { channelCount: 9 }],
+    ["an 8-bit sample size", { sampleBits: 8 }],
+  ])("rejects %s", async (_label, options) => {
+    expect(await audioDuration(buildMinimalM4a(5, 44_100, options))).toEqual(malformed);
+  });
+
+  it.each<[string, M4aOptions]>([
+    ["zero-length samples", { sampleSize: Array.from({ length: 216 }, () => 0) }],
+    ["an implausibly large sample", { sampleSize: Array.from({ length: 216 }, () => 20_000), mdatBytes: 20_000 * 216 }],
+    ["fewer chunks than samples need", { chunks: [5] }],
+    ["chunk offsets outside the file", { chunkOffsetShift: 1_000_000 }],
+    ["chunk offsets before mdat", { chunkOffsetShift: -40 }],
+    ["samples that run past the end of mdat", { mdatBytes: 100 }],
+    ["a time table with the wrong sample count", { sttsSamples: 215 }],
+    ["a size table with the wrong sample count", { stszCount: 217 }],
+    ["no samples", { stszCount: 0 }],
+    ["an absurd sample count", { stszCount: 100_000 }],
+    ["a time table far longer than the headers claim", { sttsTicks: 5 * 44_100 * 3 }],
+  ])("rejects %s", async (_label, options) => {
+    expect(await audioDuration(buildMinimalM4a(5, 44_100, options))).toEqual(malformed);
+  });
+
+  describe("every audio track is held to the limit", () => {
+    const longTrack = (extra: Parameters<typeof buildTrakBox>[0]) => buildTrakBox({ ...extra, handlerType: "soun" });
+
+    it("rejects a second audio track that runs far past the movie header", async () => {
+      // mvhd and the first track say 30 s; the second says 120 s. It used to be skipped.
+      const file = buildMinimalM4a(30, 44_100, {
+        extraTracks: [longTrack({ timescale: 44_100, duration: 120 * 44_100 })],
+      });
+      expect(await audioDuration(file)).toEqual(malformed);
+    });
+
+    it("rejects a second audio track with no media header, or that is not AAC", async () => {
+      const noHeader = wrapBox("trak", wrapBox("mdia", buildHdlrBox("soun")));
+      expect(await audioDuration(buildMinimalM4a(30, 44_100, { extraTracks: [noHeader] }))).toEqual(malformed);
+
+      // Agrees with mvhd, but has no AAC description or samples.
+      const bare = longTrack({ timescale: 44_100, duration: 30 * 44_100 });
+      expect(await audioDuration(buildMinimalM4a(30, 44_100, { extraTracks: [bare] }))).toEqual(malformed);
+    });
+
+    it("accepts several audio tracks that all agree and verify", async () => {
+      expect(await audioDuration(buildMinimalM4a(30, 44_100, { audioTrackCount: 2 })))
+        .toEqual({ outcome: "duration", seconds: 30 });
+    });
+
+    it("still ignores tracks of other kinds, such as metadata", async () => {
+      const meta = buildTrakBox({ timescale: 1000, duration: 500_000, handlerType: "meta" });
+      expect(await audioDuration(buildMinimalM4a(30, 44_100, { extraTracks: [meta] })))
+        .toEqual({ outcome: "duration", seconds: 30 });
+    });
+  });
+
+  it("reports the longest duration any of the tables claims", async () => {
+    // The time table runs 1% past the headers: inside tolerance, but never understated.
+    const result = await audioDuration(buildMinimalM4a(60, 44_100, { sttsTicks: Math.round(60.6 * 44_100) }));
+    expect(result).toMatchObject({ outcome: "duration" });
+    expect((result as { seconds: number }).seconds).toBeCloseTo(60.6, 3);
+  });
+});
+
+describe("extractIsoBmffDurationSeconds video tracks", () => {
+  const videoDuration = (file: Uint8Array) => extractIsoBmffDurationSeconds(boxSourceFor(file));
+
+  it("rejects a second video track that runs past the movie header", async () => {
+    // mvhd and the first video track say 10 s; the second says 120 s. It used to be skipped.
+    const file = buildMinimalMp4(10, 1000, [buildTrakBox({ timescale: 1000, duration: 120_000 })]);
+    expect(await videoDuration(file)).toEqual({ outcome: "malformed" });
+  });
+
+  it("rejects a second video track with no usable media header", async () => {
+    const noHeader = wrapBox("trak", wrapBox("mdia", buildHdlrBox("vide")));
+    expect(await videoDuration(buildMinimalMp4(10, 1000, [noHeader]))).toEqual({ outcome: "malformed" });
+  });
+
+  it("accepts a second video track that agrees", async () => {
+    const file = buildMinimalMp4(10, 1000, [buildTrakBox({ timescale: 1000, duration: 10_000 })]);
+    expect(await videoDuration(file)).toEqual({ outcome: "duration", seconds: 10 });
   });
 });
 
