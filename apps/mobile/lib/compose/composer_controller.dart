@@ -32,6 +32,18 @@ abstract final class DailyPostLimits {
   /// Matches the API's `MAX_VIDEO_DURATION_SECONDS`, which allows exactly
   /// this length.
   static const videoDurationMax = Duration(seconds: 15);
+
+  /// Matches the API's `MAX_VOICE_MEMO_SECONDS`, which allows exactly this
+  /// length and rejects anything over.
+  static const voiceMemoDurationMax = Duration(seconds: 60);
+
+  /// Matches the API's `MAX_VOICE_MEMO_BYTES`.
+  static const voiceMemoBytesMax = 2 * 1024 * 1024;
+
+  /// Where the recorder stops. A second under the limit, because a file runs
+  /// a little longer than the time the recorder was asked for (a 3 second
+  /// take measured 3.18 s on Android), and the API rejects anything over 60 s.
+  static const voiceMemoRecordingMax = Duration(seconds: 59);
 }
 
 /// Why a picked attachment can't be added to the draft.
@@ -39,7 +51,9 @@ enum MediaLimitViolation {
   empty('That file is empty. Choose another.'),
   attachmentTooLarge('Each photo or video must be 10 MB or smaller.'),
   postTooLarge('Photos in one dayli must add up to 25 MB or less.'),
-  videoTooLong('Videos can be up to 15 seconds long.');
+  videoTooLong('Videos can be up to 15 seconds long.'),
+  voiceMemoTooLong('Voice memos can be up to a minute long.'),
+  voiceMemoTooLarge("That voice memo is too large. Record a shorter one.");
 
   const MediaLimitViolation(this.message);
 
@@ -48,7 +62,9 @@ enum MediaLimitViolation {
 
 /// Checks one compressed attachment against the per-file limits and, with
 /// [otherBytes] (the sizes already in the draft), the per-post total.
-/// [videoDuration] is required for videos and ignored for photos.
+/// [videoDuration] is required for videos and ignored for photos. A voice memo
+/// ([DraftAttachment.voiceMemoMediaType]) is checked against its own size and
+/// its [videoDuration], the length of the recording.
 MediaLimitViolation? checkAttachmentLimits({
   required String mediaType,
   required int byteSize,
@@ -56,7 +72,15 @@ MediaLimitViolation? checkAttachmentLimits({
   Duration? videoDuration,
 }) {
   if (byteSize <= 0) return MediaLimitViolation.empty;
-  if (byteSize > DailyPostLimits.attachmentBytesMax) {
+  if (mediaType == DraftAttachment.voiceMemoMediaType) {
+    if (byteSize > DailyPostLimits.voiceMemoBytesMax) {
+      return MediaLimitViolation.voiceMemoTooLarge;
+    }
+    if (videoDuration == null ||
+        videoDuration > DailyPostLimits.voiceMemoDurationMax) {
+      return MediaLimitViolation.voiceMemoTooLong;
+    }
+  } else if (byteSize > DailyPostLimits.attachmentBytesMax) {
     return MediaLimitViolation.attachmentTooLarge;
   }
   if (mediaType == 'video' &&
@@ -71,11 +95,32 @@ MediaLimitViolation? checkAttachmentLimits({
   return null;
 }
 
-/// True when the draft can take another attachment: fewer than three photos
-/// and no video. Removing every photo lets the first slot take a video again.
-bool canAddAttachment(List<DraftAttachment> attachments) =>
-    attachments.length < DailyPostLimits.photosMax &&
-    !attachments.any((attachment) => attachment.mediaType == 'video');
+/// The photos or video in the draft, in order. The voice memo is not one of
+/// them: it has its own place in the composer and never takes a photo slot.
+List<DraftAttachment> visualAttachments(List<DraftAttachment> attachments) => [
+  for (final attachment in attachments)
+    if (!attachment.isVoiceMemo) attachment,
+];
+
+/// The draft's voice memo, or null. A draft has at most one.
+DraftAttachment? voiceMemoOf(List<DraftAttachment> attachments) =>
+    attachments.where((attachment) => attachment.isVoiceMemo).firstOrNull;
+
+/// True when the draft can take another photo or video: fewer than three
+/// photos and no video. Removing every photo lets the first slot take a video
+/// again. A voice memo doesn't count either way.
+bool canAddAttachment(List<DraftAttachment> attachments) {
+  final visual = visualAttachments(attachments);
+  return visual.length < DailyPostLimits.photosMax &&
+      !visual.any((attachment) => attachment.mediaType == 'video');
+}
+
+/// [visual] with the voice memo of [current] kept last, which is where the API
+/// stores it and where the composer expects it, so photo slots stay contiguous.
+List<DraftAttachment> withVoiceMemoLast(
+  List<DraftAttachment> visual,
+  List<DraftAttachment> current,
+) => [...visual, ?voiceMemoOf(current)];
 
 int codePointLength(String value) => value.runes.length;
 
@@ -161,11 +206,29 @@ ComposerFieldErrors validateDraft(
 }
 
 String? _mediaError(List<DraftAttachment> attachments) {
+  final hasMemo = attachments.any((a) => a.isVoiceMemo);
+  final hasVisual = attachments.any((a) => !a.isVoiceMemo);
+  // Names what is held, so the author knows where to look.
+  final things = switch ((hasVisual, hasMemo)) {
+    (true, true) => 'photos, videos and voice memo',
+    (false, true) => 'voice memo',
+    _ => 'photos and videos',
+  };
   if (attachments.any((a) => a.status == AttachmentUploadStatus.failed)) {
-    return "Remove the photos or videos that couldn't be uploaded.";
+    final failed = attachments.where(
+      (a) => a.status == AttachmentUploadStatus.failed,
+    );
+    final failedMemo = failed.any((a) => a.isVoiceMemo);
+    final failedVisual = failed.any((a) => !a.isVoiceMemo);
+    final named = switch ((failedVisual, failedMemo)) {
+      (true, true) => 'photos, videos or voice memo',
+      (false, true) => 'voice memo',
+      _ => 'photos or videos',
+    };
+    return "Remove the $named that couldn't be uploaded.";
   }
   if (attachments.any((a) => a.status != AttachmentUploadStatus.validated)) {
-    return 'Wait for your photos and videos to finish uploading.';
+    return 'Wait for your $things to finish uploading.';
   }
   return null;
 }
