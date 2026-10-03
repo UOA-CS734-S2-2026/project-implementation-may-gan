@@ -135,6 +135,8 @@ export const accountManagementGrants = pgTable("account_management_grants", {
 export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_tasks", {
   id: text("id").primaryKey(),
   archiveObjectKey: text("archive_object_key").notNull(),
+  uploadId: text("upload_id"),
+  uploadStartedAt: timestamp("upload_started_at", { withTimezone: true }),
   status: dataExportObjectCleanupStatus("status").notNull().default("pending"),
   attemptCount: integer("attempt_count").notNull().default(0),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
@@ -148,6 +150,8 @@ export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_
   index("data_export_object_cleanup_tasks_lease_idx").on(table.status, table.leaseExpiresAt),
   check("data_export_object_cleanup_tasks_id_check", sql`char_length(${table.id}) between 1 and 200`),
   check("data_export_object_cleanup_tasks_archive_key_check", sql`char_length(${table.archiveObjectKey}) between 1 and 1024`),
+  check("data_export_cleanup_upload_pair_check", sql`(${table.uploadId} is null) = (${table.uploadStartedAt} is null)`),
+  check("data_export_cleanup_upload_id_check", sql`${table.uploadId} is null or (char_length(${table.uploadId}) between 1 and 512 and ${table.uploadId} ~ '^[A-Za-z0-9_+/=-]+$')`),
   check("data_export_object_cleanup_tasks_attempt_count_check", sql`${table.attemptCount} >= 0`),
   check("data_export_object_cleanup_tasks_failure_category_check", sql`${table.failureCategory} is null or char_length(${table.failureCategory}) between 1 and 100`),
   check("data_export_object_cleanup_tasks_lease_pair_check", sql`(${table.leaseToken} is null) = (${table.leaseExpiresAt} is null)`),

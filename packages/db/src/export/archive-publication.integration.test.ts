@@ -59,6 +59,17 @@ function local(value: string, role: string): string {
       where archive_object_key = ${reservation!.key}`;
     expect(task).toMatchObject({ archive_object_key: reservation!.key, status: "pending" });
     taskIds.push(task!.id);
+    await expect(app`select public.register_account_export_upload(${request}, ${lease}, ${reservation!.key}, 'upload123')`).rejects.toThrow();
+    expect((await worker`select public.register_account_export_upload(${request}, 'wrong-token', ${reservation!.key}, 'upload123') as ok`)[0]?.ok)
+      .toBe(false);
+    expect((await worker`select public.register_account_export_upload(${request}, ${lease}, ${reservation!.key}, 'upload123') as ok`)[0]?.ok)
+      .toBe(true);
+    expect((await worker`select public.register_account_export_upload(${request}, ${lease}, ${reservation!.key}, 'upload123') as ok`)[0]?.ok)
+      .toBe(true);
+    expect((await worker`select public.register_account_export_upload(${request}, ${lease}, ${reservation!.key}, 'other-upload') as ok`)[0]?.ok)
+      .toBe(false);
+    expect((await migrator`select upload_id from public.data_export_object_cleanup_tasks where id = ${task!.id}`)[0]?.upload_id)
+      .toBe('upload123');
     expect((await worker`select public.publish_account_export_archive(${request}, 'wrong-token', ${reservation!.key}) as ok`)[0]?.ok)
       .toBe(false);
     expect((await worker`select public.publish_account_export_archive(${request}, ${lease}, 'private/unowned.zip') as ok`)[0]?.ok)
