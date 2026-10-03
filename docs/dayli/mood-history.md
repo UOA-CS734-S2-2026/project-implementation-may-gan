@@ -13,7 +13,7 @@ It reaches the same people as the profile's posts.
 | Anyone else | `403`. The clients don't show the section |
 | Blocked in either direction, unknown or banned | `404`, the same as the profile |
 
-Ratings come through `buildDrizzlePostVisibilityFilter` with the `list` action, the same predicate as the [profile archive](profile-archive.md). The profile lookup is shared with that route in `posts/shared/profile-owner.ts`. Deleted posts are left out for everyone.
+Ratings come through `buildDrizzlePostVisibilityFilter` with the `list` action, the same predicate as the [profile archive](profile-archive.md). The profile lookup is shared with that route in `posts/shared/profile-owner.ts`. Posts in Trash are left out for everyone.
 
 ## What it returns
 
@@ -39,4 +39,4 @@ Posting invalidates every `["profiles", userId]` query on web, which includes th
 
 ## Tests
 
-`packages/domain/src/mood-history.test.ts` covers the windows (including a leap day), averages, today staying open, hidden days, the previous range and the tracking start. `get-profile-mood.repository.integration.test.ts` runs through the restricted `app` role and covers the owner's solo, unreleased and deleted posts, a friend's view, strangers (`403`), blocks and unknown handles (`404`), and an imported account. `get-profile-mood.route.test.ts` covers authentication, the range values, both refusals, concealed storage failures and missing storage. Web coverage is `apps/web/tests/profiles/MoodHistory.test.tsx`; Flutter coverage is `apps/mobile/test/mood_history_test.dart`.
+`packages/domain/src/mood-history.test.ts` covers the windows (including a leap day), averages, today staying open, hidden days, the previous range and the tracking start. `get-profile-mood.repository.integration.test.ts` runs through the restricted `app` role and covers the owner's solo, unreleased and trashed posts, a friend's view, strangers (`403`), blocks and unknown handles (`404`), and an imported account. `get-profile-mood.route.test.ts` covers authentication, the range values, both refusals, concealed storage failures and missing storage. Web coverage is `apps/web/tests/profiles/MoodHistory.test.tsx`; Flutter coverage is `apps/mobile/test/mood_history_test.dart`.
