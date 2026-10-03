@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
@@ -38,10 +39,14 @@ class _LockScreenState extends State<LockScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.lock_outline_rounded,
-                size: 64,
-                color: colors.foregroundAccent,
+              SvgPicture.asset(
+                'assets/wdcc/face_id.svg',
+                width: 64,
+                height: 64,
+                colorFilter: ColorFilter.mode(
+                  colors.foregroundAccent,
+                  BlendMode.srcIn,
+                ),
               ),
               const SizedBox(height: 24),
               Text(
