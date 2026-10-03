@@ -67,11 +67,12 @@ export const postsApi = {
     }
   },
 
+  /** Deletes the author's post by moving it to Trash; unavailable while Trash is switched off. */
   async remove(postId: string): Promise<PostResult<void>> {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
-      await new PostsApi(configuration).postsDelete({ postId });
+      await new PostsApi(configuration).postsTrash({ postId });
       return { ok: true, value: undefined };
     } catch (error) {
       return { ok: false, failure: await toFailure(error, true) };

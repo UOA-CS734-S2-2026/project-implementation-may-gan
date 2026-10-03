@@ -252,7 +252,8 @@ abstract interface class PostClient {
   /// means another edit was saved after [PostEdit.expectedRevisionCount].
   Future<ApiResult<PostDetail>> update(String postId, PostEdit edit);
 
-  /// Deletes the author's post. Deleting it again also succeeds.
+  /// Deletes the author's post by moving it to Trash. Trashing it again also
+  /// succeeds. [ServiceUnavailable] while Trash is switched off.
   Future<ApiResult<void>> delete(String postId);
 
   /// Earlier versions of a post, newest first.
@@ -439,13 +440,16 @@ class GeneratedPostClient implements PostClient {
 
   @override
   Future<ApiResult<void>> delete(String postId) async {
-    final sent = await _send((api) => api.postsDeleteWithHttpInfo(postId));
+    final sent = await _send((api) => api.postsTrashWithHttpInfo(postId));
     if (sent case ApiError(:final failure)) return ApiError(failure);
     final response = (sent as ApiSuccess<http.Response>).value;
     return switch (response.statusCode) {
-      HttpStatus.noContent => const ApiSuccess(null),
+      HttpStatus.ok => const ApiSuccess(null),
       HttpStatus.notFound ||
       HttpStatus.unprocessableEntity => const ApiError(NotFound()),
+      HttpStatus.conflict => const ApiError(
+        Conflict("This dayli can't be deleted right now."),
+      ),
       final status => ApiError(failureForStatus(status, null)),
     };
   }

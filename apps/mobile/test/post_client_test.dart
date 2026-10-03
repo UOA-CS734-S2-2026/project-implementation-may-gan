@@ -245,18 +245,27 @@ void main() {
     });
   });
 
-  test('deletes a post and treats a missing one as not found', () async {
+  test('deletes a post by moving it to Trash', () async {
     final deleted = await client(
-      (_) => http.Response('', 204),
+      (_) => http.Response(jsonEncode({'postId': 'post-1'}), 200),
     ).delete('post-1');
-    expect(requests.single.method, 'DELETE');
-    expect(requests.single.url.path, '/api/v1/posts/post-1');
+    expect(requests.single.method, 'POST');
+    expect(requests.single.url.path, '/api/v1/posts/post-1/trash');
     expect(deleted, isA<ApiSuccess<void>>());
 
     final missing = await client(
       (_) => http.Response('{}', 404),
     ).delete('post-1');
     expect((missing as ApiError).failure, isA<NotFound>());
+
+    final refused = await client(
+      (_) => http.Response('{}', 409),
+    ).delete('post-1');
+    expect((refused as ApiError).failure, isA<Conflict>());
+
+    // Trash is switched off until it's enabled for the environment.
+    final off = await client((_) => http.Response('{}', 503)).delete('post-1');
+    expect((off as ApiError).failure, isA<ServiceUnavailable>());
   });
 
   test('reads a page of earlier versions with its cursor', () async {
