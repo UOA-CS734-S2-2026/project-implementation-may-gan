@@ -283,7 +283,7 @@ void main() {
             longest: 5,
             postedToday: true,
           ),
-          stats: const ProfileStats(posts: 4, friends: 13),
+          stats: const ProfileStats(posts: 4, friends: 13, loved: 27),
         ),
       }),
     );
@@ -291,6 +291,7 @@ void main() {
 
     expect(find.bySemanticsLabel('4 Posts'), findsOneWidget);
     expect(find.bySemanticsLabel('13 Friends'), findsOneWidget);
+    expect(find.bySemanticsLabel('27 Loved'), findsOneWidget);
     expect(find.bySemanticsLabel('3 Day streak'), findsOneWidget);
     semantics.dispose();
   });

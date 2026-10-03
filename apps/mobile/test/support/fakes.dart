@@ -264,6 +264,9 @@ FeedPost feedPost(
   String answer = 'Walked to the harbour.',
   String? caption,
   List<PostMedia> media = const [],
+  int likeCount = 0,
+  bool viewerHasLiked = false,
+  int commentCount = 0,
 }) => FeedPost(
   id: id,
   authorId: 'author-$id',
@@ -276,6 +279,9 @@ FeedPost feedPost(
   rating: 7,
   acceptedAt: DateTime.utc(2026, 9, 24, 3),
   edited: false,
+  likeCount: likeCount,
+  viewerHasLiked: viewerHasLiked,
+  commentCount: commentCount,
   media: media,
 );
 
@@ -379,6 +385,8 @@ ProfilePost profilePost(
   String displayName = 'Ada',
   String audience = 'friends',
   bool released = true,
+  int likeCount = 0,
+  bool viewerHasLiked = false,
 }) => ProfilePost(
   id: id,
   authorId: 'author-$username',
@@ -391,6 +399,8 @@ ProfilePost profilePost(
   rating: 7,
   acceptedAt: DateTime.utc(2026, 9, 25, 3),
   edited: false,
+  likeCount: likeCount,
+  viewerHasLiked: viewerHasLiked,
   audience: audience,
   released: released,
 );

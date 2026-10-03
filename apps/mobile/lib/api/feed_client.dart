@@ -9,6 +9,8 @@ import 'post_media.dart';
 import 'post_page.dart';
 import 'posting_day_client.dart' show failureForStatus;
 
+int _count(Object? value) => value is int && value >= 0 ? value : 0;
+
 /// A released post from an active friend.
 class FeedPost {
   const FeedPost({
@@ -23,6 +25,9 @@ class FeedPost {
     required this.rating,
     required this.acceptedAt,
     required this.edited,
+    this.likeCount = 0,
+    this.viewerHasLiked = false,
+    this.commentCount = 0,
     this.media = const [],
   });
 
@@ -39,6 +44,11 @@ class FeedPost {
   final int rating;
   final DateTime acceptedAt;
   final bool edited;
+  final int likeCount;
+  final bool viewerHasLiked;
+
+  /// Comments and replies this user can see.
+  final int commentCount;
 
   /// Attached photos or video in display order.
   final List<PostMedia> media;
@@ -86,6 +96,9 @@ class FeedPost {
       rating: rating,
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
+      likeCount: _count(json['likeCount']),
+      viewerHasLiked: json['viewerHasLiked'] == true,
+      commentCount: _count(json['commentCount']),
       media: PostMedia.parseList(json['media']),
     );
   }

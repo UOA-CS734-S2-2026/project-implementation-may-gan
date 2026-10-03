@@ -429,6 +429,8 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
               posts: posts,
               displayName: person.displayName,
               isMe: isMe,
+              // Reloads the details too, so Loved and the streak stay current.
+              onChanged: _refresh,
             )
           else
             Padding(

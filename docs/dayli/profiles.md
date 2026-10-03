@@ -32,9 +32,9 @@ The details also carry `streak`, shown under the same rule as the bio (null when
 - `postedToday`, `lastPostDate`, and `asOf` (the Auckland day the values were calculated for) come with it.
 - Streaks are calculated on each read rather than stored, so deleting a post (#77) will lower them without a separate recalculation step.
 
-The details also carry `stats`: `posts` (accepted posts, solo ones included, since the streak already shows which days had one) and `friends` (active friendships), under the same rule.
+The details also carry `stats`: `posts` (accepted posts, solo ones included, since the streak already shows which days had one), `friends` (active friendships), and `loved` (likes on posts that aren't in Trash), under the same rule.
 
-Both clients show these in the original web app's stats tile: Posts, Friends, and the current streak as an orange "Day streak". The owner's friend count opens their friends list. "Loved" returns with likes (#79). The longest streak and `postedToday` are in the API but not shown yet. Web refreshes profiles after a post is accepted; Flutter reads the profile again each time it opens. Flutter does not yet cache the last confirmed streak for offline display (#70).
+Both clients show these in the original web app's stats tile: Posts, Friends, Loved, and the current streak as an orange "Day streak". The owner's friend count opens their friends list. The longest streak and `postedToday` are in the API but not shown yet. Web refreshes profiles after a post is accepted; Flutter reads the profile again each time it opens. Flutter does not yet cache the last confirmed streak for offline display (#70).
 
 ## Photos
 

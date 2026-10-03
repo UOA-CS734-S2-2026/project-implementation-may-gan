@@ -122,6 +122,9 @@ function requireLocalTestUrl(value: string): string {
 
   afterAll(async () => {
     try {
+      const authored = migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(inArray(schema.posts.authorId, userIds));
+      await migrator.db.delete(schema.postLikes).where(inArray(schema.postLikes.postId, authored));
+      await migrator.db.delete(schema.postComments).where(inArray(schema.postComments.postId, authored));
       await migrator.db.delete(schema.postRevisions).where(inArray(
         schema.postRevisions.postId,
         migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(inArray(schema.posts.authorId, userIds)),
@@ -159,7 +162,43 @@ function requireLocalTestUrl(value: string): string {
       acceptedAt: "2026-09-25T03:00:00.000Z",
       releasedAt: "2026-09-25T12:00:00.000Z",
       edited: false,
+      likeCount: 0,
+      viewerHasLiked: false,
+      commentCount: 0,
       media: [],
+    });
+  });
+
+  it("counts likes and visible comments for every post on the page", async () => {
+    await migrator.db.insert(schema.postLikes).values([
+      { postId: id("a-25"), userId: users.viewer },
+      { postId: id("a-25"), userId: users.friendB },
+      { postId: id("c-25"), userId: users.friendA },
+    ]);
+    const comment = (key: string, postKey: string, authorId: string, deleted = false) => ({
+      id: id(key),
+      postId: id(postKey),
+      authorId,
+      clientCommentId: id(key),
+      body: key,
+      deletedAt: deleted ? now : null,
+      deletedBy: deleted ? authorId : null,
+    });
+    await migrator.db.insert(schema.postComments).values([
+      comment("comment-1", "c-25", users.friendA),
+      comment("comment-2", "c-25", users.viewer),
+      comment("comment-gone", "c-25", users.friendB, true),
+      // The comment list hides authors without a username, so the count must too.
+      comment("comment-no-username", "c-25", users.noUsername),
+    ]);
+
+    const page = await feed().listFeed(users.viewer, now, 20);
+    const counts = Object.fromEntries(page.items.map((post) => [post.id, [post.likeCount, post.viewerHasLiked, post.commentCount]]));
+
+    expect(counts).toEqual({
+      [id("c-25")]: [1, false, 2],
+      [id("b-25")]: [0, false, 0],
+      [id("a-25")]: [2, true, 0],
     });
   });
 

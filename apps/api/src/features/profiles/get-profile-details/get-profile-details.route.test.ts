@@ -16,7 +16,7 @@ const profile: ProfileDetails = {
   listeningTo: null,
   avatarUrl: null,
   streak: { current: 3, longest: 5, lastPostDate: "2026-09-30", postedToday: true, asOf: "2026-09-30" },
-  stats: { posts: 12, friends: 4 },
+  stats: { posts: 12, friends: 4, loved: 0 },
   owner: null,
 };
 

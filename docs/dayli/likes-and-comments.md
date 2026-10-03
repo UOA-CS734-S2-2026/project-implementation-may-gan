@@ -20,9 +20,9 @@ Likes and comments show a public username, so every interaction route also uses 
 - `PATCH /api/v1/posts/{postId}/comments/{commentId}` lets the commenter change the text. The comment gets an `editedAt` time; saving the same text again changes nothing.
 - `DELETE /api/v1/posts/{postId}/comments/{commentId}` lets the commenter or the post's author delete a comment, which sets `deleted_at` and `deleted_by`. Deleting a top-level comment hides its replies. Deleting again returns `204`.
 
-## Post detail
+## Counts
 
-`GET /api/v1/posts/{postId}` adds `likeCount`, `viewerHasLiked`, and `commentCount`. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. The feed and profile cards don't show counts yet.
+Post detail, the feed, and profile posts carry `likeCount`, `viewerHasLiked`, and `commentCount`. `readInteractionCounts` in `posts/shared` reads them for a whole page in three grouped queries. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. Both clients show the counts on feed and profile cards. Profile stats carry `loved`, the likes on the person's posts that aren't in Trash. On Flutter, liking, unliking, commenting, or deleting a comment on post detail tells the list that opened the post to reload when you go back; a profile reloads its details too, so Loved stays current.
 
 ## Clients
 

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import React, { useMemo } from "react";
+import { BiHeart, BiMessageRounded, BiSolidHeart } from "react-icons/bi";
 import { isVideo, PrivateImage, type PrivateMediaItem } from "@/features/posts/shared/PrivateMedia";
 
 type PostCardProps = {
@@ -17,6 +18,10 @@ type PostCardProps = {
   createdAt: Date | string;
   /** A short note for the author, such as who can see the post. */
   label?: string;
+  /** Omitted counts are not shown. */
+  likeCount?: number;
+  viewerHasLiked?: boolean;
+  commentCount?: number;
 };
 
 const getRotation = (str: string) => {
@@ -43,6 +48,9 @@ export function PostCard({
   media,
   createdAt,
   label,
+  likeCount,
+  viewerHasLiked,
+  commentCount,
 }: PostCardProps) {
   const NZ_TIME_ZONE = "Pacific/Auckland";
   const time = new Intl.DateTimeFormat("en-NZ", {
@@ -140,6 +148,26 @@ export function PostCard({
           {label && (
             <span className="rounded-full bg-background-secondary px-2 py-0.5 text-xs text-foreground-secondary">
               {label}
+            </span>
+          )}
+          {likeCount !== undefined && (
+            <span
+              className="flex items-center gap-1 text-xs text-foreground-secondary"
+              aria-label={`${likeCount} ${likeCount === 1 ? "like" : "likes"}${viewerHasLiked ? ", including yours" : ""}`}
+            >
+              {viewerHasLiked
+                ? <BiSolidHeart aria-hidden className="text-foreground-accent" />
+                : <BiHeart aria-hidden />}
+              {likeCount}
+            </span>
+          )}
+          {commentCount !== undefined && (
+            <span
+              className="flex items-center gap-1 text-xs text-foreground-secondary"
+              aria-label={`${commentCount} ${commentCount === 1 ? "comment" : "comments"}`}
+            >
+              <BiMessageRounded aria-hidden />
+              {commentCount}
             </span>
           )}
           <p className="ml-auto text-xs text-foreground-secondary">
