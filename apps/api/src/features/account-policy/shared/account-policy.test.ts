@@ -171,6 +171,26 @@ describe("account policy", () => {
     expect(resolveSession).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    "/api/v1/profiles/ben",
+    "/api/v1/profiles/ben/posts",
+  ])("lets anonymous profile read %s reach optional authentication", async (path) => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      profileDetails: { resolveSession },
+      profilePosts: { resolveSession },
+    });
+
+    const response = await api.request(`https://api.example.test${path}`);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(resolveSession).not.toHaveBeenCalled();
+  });
+
   it("leaves the actual public test route available to guests and restricted accounts", async () => {
     const guest = createApp({
       accountPolicy: { resolveSession: async () => null, policies: { resolve: async () => resolveAccountPolicy(undefined) } },

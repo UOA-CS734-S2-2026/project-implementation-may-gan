@@ -1,19 +1,23 @@
-import { and, desc, eq, ilike, isNotNull, isNull, lte, not, notExists, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, isNotNull, isNull, lte, not, notExists, or, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzleActiveAccountFilter, buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { postEdited } from "../shared/post-edited";
 import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
-import type { ProfilePost, ProfilePostsPage } from "./list-profile-posts.contract";
+import type { ProfilePost, ProfilePostsPage, RestrictedProfilePosts } from "./list-profile-posts.contract";
 
 /** A profile post with its media not yet signed; the route signs it for the response. */
 export type ProfilePostRecord = Omit<ProfilePost, "media"> & { media: PostMediaRef[] };
-export type ProfilePostsPageRecord = Omit<ProfilePostsPage, "items"> & { items: ProfilePostRecord[] };
+export type ProfilePostsPageRecord = Omit<ProfilePostsPage, "items"> & {
+  accessTier: "authorized" | "public";
+  items: ProfilePostRecord[];
+};
+export type ReadableProfilePostsRecord = ProfilePostsPageRecord | RestrictedProfilePosts;
 
 export interface ProfilePostsRepository {
-  /** Null when the profile is unknown, banned, or blocked in either direction. */
-  listProfilePosts(viewerId: string, username: string, now: Date, limit: number, cursor?: string): Promise<ProfilePostsPageRecord | null>;
+  /** Null when the profile is unknown, inactive, banned, or blocked in either direction. */
+  listProfilePosts(viewerId: string | null, username: string, now: Date, limit: number, cursor?: string): Promise<ReadableProfilePostsRecord | null>;
 }
 
 /** Usernames allow `_`, which is a single-character wildcard in `ILIKE`. */
@@ -26,31 +30,44 @@ function exactHandlePattern(username: string) {
  * case-insensitive handle that matches exactly one account, not currently
  * banned, and not blocked either way.
  */
-async function findProfileOwner(database: DayliDatabase, viewerId: string, username: string, now: Date) {
-  const { user, relationshipBlocks } = schema;
+async function findProfileOwner(database: DayliDatabase, viewerId: string | null, username: string, now: Date) {
+  const { user, relationshipBlocks, friendships } = schema;
+  const friends = viewerId === null ? sql<boolean>`false` : and(
+    exists(database.select({ friendId: friendships.friendId }).from(friendships).where(and(
+      eq(friendships.userId, user.id),
+      eq(friendships.friendId, viewerId),
+      eq(friendships.state, "active"),
+    ))),
+    exists(database.select({ friendId: friendships.friendId }).from(friendships).where(and(
+      eq(friendships.userId, viewerId),
+      eq(friendships.friendId, user.id),
+      eq(friendships.state, "active"),
+    ))),
+  )!.mapWith(Boolean);
+  const notBlocked = viewerId === null ? sql`true` : notExists(
+    database
+      .select({ blockerId: relationshipBlocks.blockerId })
+      .from(relationshipBlocks)
+      .where(and(
+        isNull(relationshipBlocks.unblockedAt),
+        or(
+          and(eq(relationshipBlocks.blockerId, viewerId), eq(relationshipBlocks.blockedId, user.id)),
+          and(eq(relationshipBlocks.blockerId, user.id), eq(relationshipBlocks.blockedId, viewerId)),
+        ),
+      )),
+  );
   const matches = await database
-    .select({ id: user.id })
+    .select({ id: user.id, username: user.username, profileVisibility: user.profileVisibility, friends })
     .from(user)
     .where(and(
       buildDrizzleActiveAccountFilter(database, user.id),
       ilike(user.username, exactHandlePattern(username)),
       or(isNull(user.banned), not(user.banned), and(isNotNull(user.banExpires), lte(user.banExpires, now))),
-      notExists(
-        database
-          .select({ blockerId: relationshipBlocks.blockerId })
-          .from(relationshipBlocks)
-          .where(and(
-            isNull(relationshipBlocks.unblockedAt),
-            or(
-              and(eq(relationshipBlocks.blockerId, viewerId), eq(relationshipBlocks.blockedId, user.id)),
-              and(eq(relationshipBlocks.blockerId, user.id), eq(relationshipBlocks.blockedId, viewerId)),
-            ),
-          )),
-      ),
+      notBlocked,
     ))
     .limit(2);
   // Legacy handles that differ only by case are ambiguous, so neither resolves.
-  return matches.length === 1 ? matches[0]!.id : null;
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 /**
@@ -65,8 +82,12 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
   return {
     async listProfilePosts(viewerId, username, now, limit, rawCursor) {
       const cursor = decodePostCursor(rawCursor);
-      const authorId = await findProfileOwner(database, viewerId, username, now);
-      if (!authorId) return null;
+      const author = await findProfileOwner(database, viewerId, username, now);
+      if (!author?.username) return null;
+      const authorized = viewerId === author.id || author.friends;
+      if (author.profileVisibility === "private" && !authorized) {
+        return { kind: "restricted", username: author.username };
+      }
 
       const rows = await database
         .select({
@@ -89,7 +110,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
         .innerJoin(user, eq(posts.authorId, user.id))
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))
         .where(and(
-          eq(posts.authorId, authorId),
+          eq(posts.authorId, author.id),
           buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "profile" }),
           isNotNull(user.username),
           afterPostCursor(cursor),
@@ -102,6 +123,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
       const last = page.at(-1);
       const media = await readAttachedMedia(database, page.map((row) => row.id));
       return {
+        accessTier: authorized ? "authorized" : "public",
         items: page.map((row): ProfilePostRecord => ({
           id: row.id,
           author: { id: row.authorId, username: row.username!, displayName: row.displayName },

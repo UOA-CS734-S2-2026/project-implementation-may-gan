@@ -29,8 +29,8 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   registerPostTrashRoutes(app, dependencies.trash);
   const publicPostReads = new OpenAPIHono<OptionalAuthenticatedApiEnv>();
   registerGetPostRoute(publicPostReads, dependencies.detail);
+  registerListProfilePostsRoute(publicPostReads, dependencies.profilePosts);
   app.route("/", publicPostReads);
   registerGetPostMediaRoute(app, dependencies.media);
   registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
-  registerListProfilePostsRoute(app, dependencies.profilePosts);
 }

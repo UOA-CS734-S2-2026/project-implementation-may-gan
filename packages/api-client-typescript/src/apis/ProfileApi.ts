@@ -34,6 +34,11 @@ import {
     ProfileDetailsToJSON,
 } from '../models/ProfileDetails';
 import {
+    type ReadableProfile,
+    ReadableProfileFromJSON,
+    ReadableProfileToJSON,
+} from '../models/ReadableProfile';
+import {
     type SetAvatarRequest,
     SetAvatarRequestFromJSON,
     SetAvatarRequestToJSON,
@@ -244,21 +249,21 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
      * Read a profile\'s details
      */
-    async profileGetDetailsRaw(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+    async profileGetDetailsRaw(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReadableProfile>> {
         const requestOptions = await this.profileGetDetailsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReadableProfileFromJSON(jsonValue));
     }
 
     /**
-     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
      * Read a profile\'s details
      */
-    async profileGetDetails(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+    async profileGetDetails(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReadableProfile> {
         const response = await this.profileGetDetailsRaw(requestParameters, initOverrides);
         return await response.value();
     }

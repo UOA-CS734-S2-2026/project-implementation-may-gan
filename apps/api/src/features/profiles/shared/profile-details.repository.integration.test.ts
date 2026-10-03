@@ -1,7 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { findProfileDetails } from "./profile-details.repository";
+import { findProfileDetails, findReadableProfile } from "./profile-details.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -59,6 +59,16 @@ function requireLocalTestUrl(value: string): string {
       insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
       values (${users.publicOwner}, ${users.blocked}, ${changedAt})
     `;
+    await migrator.client`
+      insert into public.media_reservation
+        (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+      values (${id("public-avatar")}, ${users.publicOwner}, ${`media/${users.publicOwner}/avatar`},
+        'image/jpeg', 1024, 'validated', ${now.toISOString()}, ${new Date(now.getTime() + 900_000).toISOString()})
+    `;
+    await migrator.client`
+      insert into public.profile_avatars (user_id, reservation_id, set_at)
+      values (${users.publicOwner}, ${id("public-avatar")}, ${now.toISOString()})
+    `;
     // Two days in a row ending yesterday, after a missed day.
     for (const localDate of ["2026-09-26", "2026-09-28", "2026-09-29"]) {
       await migrator.client`
@@ -72,6 +82,8 @@ function requireLocalTestUrl(value: string): string {
   afterAll(async () => {
     try {
       await migrator.client`delete from public.posts where author_id = any(${userIds}::text[])`;
+      await migrator.client`delete from public.profile_avatars where user_id = any(${userIds}::text[])`;
+      await migrator.client`delete from public.media_reservation where owner_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.username_reservations where user_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.relationship_blocks where blocker_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.friendships where user_id = any(${userIds}::text[])`;
@@ -142,6 +154,76 @@ function requireLocalTestUrl(value: string): string {
     it("hides unknown handles and treats `_` literally", async () => {
       await expect(findProfileDetails(app.db, users.stranger, `r${run}nobody`, now)).resolves.toBeNull();
       await expect(findProfileDetails(app.db, users.stranger, `${handle("friend").slice(0, -1)}_`, now)).resolves.toBeNull();
+    });
+  });
+
+  describe("public read contract", () => {
+    it("returns only public basics to an anonymous reader and does not sign the avatar", async () => {
+      const sign = async () => { throw new Error("anonymous avatar signing is forbidden"); };
+      const profile = await findReadableProfile(app.db, null, handle("publicOwner"), now, sign);
+
+      expect(profile).toEqual({
+        kind: "public",
+        username: handle("publicOwner"),
+        displayName: "Pub",
+        bio: "Bio of publicOwner",
+        avatarUrl: null,
+        streak: { current: 0, longest: 0, lastPostDate: null, postedToday: false, asOf: "2026-09-30" },
+      });
+      expect(profile).not.toHaveProperty("id");
+      expect(profile).not.toHaveProperty("stats");
+    });
+
+    it("keeps public-only signed-in readers from receiving a signed avatar", async () => {
+      const signedKeys: string[] = [];
+      const sign = async (objectKey: string) => {
+        signedKeys.push(objectKey);
+        return `https://r2.example.test/${objectKey}?signed`;
+      };
+
+      const profile = await findReadableProfile(app.db, users.stranger, handle("publicOwner"), now, sign);
+
+      expect(profile).toMatchObject({ kind: "public", avatarUrl: null });
+      expect(signedKeys).toEqual([]);
+    });
+
+    it.each(["publicOwner", "friend"] as const)("signs the avatar for authorized %s access", async (viewer) => {
+      const sign = async (objectKey: string) => `https://r2.example.test/${objectKey}?signed`;
+      const profile = await findReadableProfile(app.db, users[viewer], handle("publicOwner"), now, sign);
+
+      expect(profile).toMatchObject({
+        kind: "authorized",
+        avatarUrl: `https://r2.example.test/media/${users.publicOwner}/avatar?signed`,
+      });
+    });
+
+    it("returns exactly the restricted projection to a private non-friend", async () => {
+      await expect(findReadableProfile(app.db, null, handle("privateOwner"), now))
+        .resolves.toEqual({ kind: "restricted", username: handle("privateOwner") });
+      await expect(findReadableProfile(app.db, users.stranger, handle("privateOwner"), now))
+        .resolves.toEqual({ kind: "restricted", username: handle("privateOwner") });
+    });
+
+    it("stops anonymous detail disclosure immediately when a public account becomes private", async () => {
+      await migrator.client`update public."user" set profile_visibility = 'private' where id = ${users.publicOwner}`;
+      try {
+        const sign = async () => { throw new Error("private avatar signing is forbidden"); };
+        await expect(findReadableProfile(app.db, users.stranger, handle("publicOwner"), now, sign))
+          .resolves.toEqual({ kind: "restricted", username: handle("publicOwner") });
+      } finally {
+        await migrator.client`update public."user" set profile_visibility = 'public' where id = ${users.publicOwner}`;
+      }
+    });
+
+    it("does not sign or reveal a public avatar across a block", async () => {
+      const sign = async () => { throw new Error("blocked avatar signing is forbidden"); };
+      await expect(findReadableProfile(app.db, users.blocked, handle("publicOwner"), now, sign)).resolves.toBeNull();
+    });
+
+    it("returns the normal full projection to an active friend", async () => {
+      const profile = await findReadableProfile(app.db, users.friend, handle("privateOwner"), now);
+
+      expect(profile).toMatchObject({ kind: "authorized", id: users.privateOwner, detailsVisible: true, bio: "Bio of privateOwner" });
     });
   });
 

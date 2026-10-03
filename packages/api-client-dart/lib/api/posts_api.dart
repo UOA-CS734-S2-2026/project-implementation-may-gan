@@ -395,7 +395,7 @@ class PostsApi {
 
   /// List the posts on a profile
   ///
-  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  /// Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -447,7 +447,7 @@ class PostsApi {
 
   /// List the posts on a profile
   ///
-  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  /// Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Parameters:
   ///
@@ -457,7 +457,7 @@ class PostsApi {
   ///   Opaque continuation cursor
   ///
   /// * [int] limit:
-  Future<ProfilePostsPage?> postsListProfilePosts(
+  Future<ReadableProfilePosts?> postsListProfilePosts(
     String username, {
     String? cursor,
     int? limit,
@@ -479,8 +479,8 @@ class PostsApi {
         response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
-        'ProfilePostsPage',
-      ) as ProfilePostsPage;
+        'ReadableProfilePosts',
+      ) as ReadableProfilePosts;
     }
     return null;
   }

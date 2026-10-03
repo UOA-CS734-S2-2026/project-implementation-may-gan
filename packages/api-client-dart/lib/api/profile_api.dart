@@ -154,7 +154,7 @@ class ProfileApi {
 
   /// Read a profile's details
   ///
-  /// Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+  /// Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -192,12 +192,12 @@ class ProfileApi {
 
   /// Read a profile's details
   ///
-  /// Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+  /// Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Parameters:
   ///
   /// * [String] username (required):
-  Future<ProfileDetails?> profileGetDetails(
+  Future<ReadableProfile?> profileGetDetails(
     String username, {
     Future<void>? abortTrigger,
   }) async {
@@ -215,8 +215,8 @@ class ProfileApi {
         response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
-        'ProfileDetails',
-      ) as ProfileDetails;
+        'ReadableProfile',
+      ) as ReadableProfile;
     }
     return null;
   }
