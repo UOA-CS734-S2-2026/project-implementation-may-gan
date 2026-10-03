@@ -22,6 +22,7 @@ dependencies:
   google_sign_in: ^7.2.0
   http: ^1.6.0
   image_picker: ^1.2.3
+  local_auth: ^2.3.0
   path_provider: ^2.1.6
   permission_handler: ^12.0.3
   record: ^7.1.1
