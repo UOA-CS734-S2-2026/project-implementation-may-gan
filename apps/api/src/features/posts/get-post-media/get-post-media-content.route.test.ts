@@ -60,6 +60,32 @@ describe("GET /api/v1/posts/{postId}/media/{mediaId}/content", () => {
     expect(await response.text()).toBe("");
   });
 
+  it.each([412, 416] as const)("discards provider error details for status %s", async (status) => {
+    const deps = dependencies(async () => ref, async () => new Response(
+      `<Error><Key>${ref.objectKey}</Key><RequestId>provider-request</RequestId></Error>`,
+      { status, headers: { "content-type": "application/xml", "content-range": "bytes */2", "x-amz-request-id": "provider-request" } },
+    ));
+    const response = await createApp({ postMediaContent: deps }).request(path, {
+      headers: { range: "bytes=9-10" },
+    });
+
+    expect(response.status).toBe(status);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("content-type")).toBeNull();
+    expect(response.headers.get("content-range")).toBe("bytes */2");
+    expect(response.headers.get("x-amz-request-id")).toBeNull();
+  });
+
+  it("returns an empty 304 after authorization", async () => {
+    const deps = dependencies(async () => ref, async () => new Response(null, { status: 304, headers: { etag: '"current"' } }));
+    const response = await createApp({ postMediaContent: deps }).request(path, {
+      headers: { "if-none-match": '"current"' },
+    });
+    expect(response.status).toBe(304);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("etag")).toBe('"current"');
+  });
+
   it("denies a changed or detached parent without reading storage", async () => {
     const deps = dependencies(async () => null, async () => { throw new Error("must not read"); });
     const response = await createApp({ postMediaContent: deps }).request(path);

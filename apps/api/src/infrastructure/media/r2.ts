@@ -130,6 +130,7 @@ export interface MediaObjectStore {
 
 const forwardedObjectRequestHeaders = [
   "range",
+  "if-range",
   "if-match",
   "if-none-match",
   "if-modified-since",

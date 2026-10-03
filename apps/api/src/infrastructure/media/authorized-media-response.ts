@@ -31,8 +31,12 @@ export async function authorizedMediaResponse(
     "X-Content-Type-Options": "nosniff",
   });
   for (const name of responseHeaders) {
+    // Provider error bodies are discarded, so their representation length and
+    // content type must not describe a body that the API does not return.
+    if ((object.status === 412 || object.status === 416) && (name === "content-type" || name === "content-length")) continue;
     const value = object.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
-  return new Response(method === "HEAD" ? null : object.body, { status: object.status, headers });
+  const streamsRepresentation = method === "GET" && (object.status === 200 || object.status === 206);
+  return new Response(streamsRepresentation ? object.body : null, { status: object.status, headers });
 }
