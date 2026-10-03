@@ -8,9 +8,11 @@ type Queryable = Pick<DayliDatabase, "select">;
  * The post's author when the viewer may read the post now, or null. Every
  * interaction read and write starts here, so likes and comments follow the
  * post's visibility exactly: solo, unreleased, deleted, blocked, and
- * unfriended posts can't be liked, commented on, or listed. It uses the same
- * rules as the post detail read, including an author with a username, so a
- * post that returns 404 there has no likes or comments to reach either.
+ * unfriended posts can't be liked, commented on, or listed. It keeps the
+ * friend scope of the feed rather than the detail read's public-profile
+ * access, so a stranger who can read a public account's post still can't like
+ * or comment on it. It also needs an author with a username, like the detail
+ * read, so a post that returns 404 there has no likes or comments to reach.
  */
 export async function findReadablePost(
   database: Queryable,
@@ -25,7 +27,7 @@ export async function findReadablePost(
     .innerJoin(user, eq(posts.authorId, user.id))
     .where(and(
       eq(posts.id, postId),
-      buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "detail" }),
+      buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "preview" }),
       isNotNull(user.username),
     ))
     .limit(1);

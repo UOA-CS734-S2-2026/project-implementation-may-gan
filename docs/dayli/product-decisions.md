@@ -16,7 +16,7 @@ Authors can delete a post at any time, which moves it to Trash (#250). It disapp
 
 ## Likes and comments
 
-Agreed in October 2026 for #79 and #80. Anyone who can read a post can like it and comment on it, including its author, and loses that ability the moment they lose access to the post. Comments take one level of replies. Commenters can edit and delete their own comments. The post's author can delete, but not edit, any comment on their post. Deleting a top-level comment hides its replies. People across a block don't see each other's likes or comments on a shared friend's post.
+Agreed in October 2026 for #79 and #80. The post's author and their active friends can like it and comment on it, and lose that ability the moment they lose access to the post. A public account lets anyone signed in read its released posts, but not like or comment on them. Comments take one level of replies. Commenters can edit and delete their own comments. The post's author can delete, but not edit, any comment on their post. Deleting a top-level comment hides its replies. People across a block don't see each other's likes or comments on a shared friend's post.
 
 ## Daily prompt versions and tomorrow notes
 
