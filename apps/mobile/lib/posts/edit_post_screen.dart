@@ -5,6 +5,7 @@ import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../compose/composer_controller.dart' show DailyPostLimits;
+import '../auth/session_controller.dart';
 import '../drafts/daily_post_draft.dart' show PostAudience;
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
@@ -43,9 +44,69 @@ class _EditPostScreenState extends State<EditPostScreen> {
   /// itself stays in [_failure] until a newer version loads.
   ApiFailure? _reloadFailure;
   String? _notice;
+  SessionController? _session;
+  ModalRoute<dynamic>? _overlayRoute;
+  (SessionStatus, String?, int)? _openingIdentity;
+  int _operationGeneration = 0;
+  bool _dismissed = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _overlayRoute ??= ModalRoute.of(context);
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+      _openingIdentity ??= _currentIdentity();
+    }
+    _onSessionChanged();
+  }
+
+  (SessionStatus, String?, int) _currentIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentOperation(
+    int operationGeneration,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      !_dismissed &&
+      operationGeneration == _operationGeneration &&
+      identity == _openingIdentity &&
+      identity == _currentIdentity();
+
+  void _onSessionChanged() {
+    if (!mounted || _dismissed || _openingIdentity == _currentIdentity()) {
+      return;
+    }
+    _dismissed = true;
+    _operationGeneration++;
+    _answer.clear();
+    _caption.clear();
+    _failure = null;
+    _reloadFailure = null;
+    _notice = null;
+    _closeOverlay();
+  }
+
+  void _closeOverlay() {
+    final route = _overlayRoute;
+    final navigator = Navigator.of(context);
+    if (route == null) {
+      navigator.pop();
+      return;
+    }
+    navigator.popUntil((candidate) => candidate == route);
+    if (route.isCurrent) navigator.pop();
+  }
 
   @override
   void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    _operationGeneration++;
     _answer.dispose();
     _caption.dispose();
     super.dispose();
@@ -74,6 +135,8 @@ class _EditPostScreenState extends State<EditPostScreen> {
       : null;
 
   Future<void> _save() async {
+    final identity = _currentIdentity();
+    final operationGeneration = ++_operationGeneration;
     setState(() {
       _saving = true;
       _failure = null;
@@ -90,7 +153,9 @@ class _EditPostScreenState extends State<EditPostScreen> {
         audience: _audience.wireValue,
       ),
     );
-    if (!mounted) return;
+    if (!mounted || !_isCurrentOperation(operationGeneration, identity)) {
+      return;
+    }
     switch (result) {
       case ApiSuccess(:final value):
         Navigator.of(context).pop(value);
@@ -106,9 +171,11 @@ class _EditPostScreenState extends State<EditPostScreen> {
 
   /// Reads the post again after a conflict, keeping what the author typed.
   Future<void> _reloadLatest() async {
+    final identity = _currentIdentity();
+    final operationGeneration = ++_operationGeneration;
     setState(() => _reloading = true);
     final result = await AppScope.of(context).posts.get(_base.id);
-    if (!mounted) return;
+    if (!_isCurrentOperation(operationGeneration, identity)) return;
     setState(() {
       _reloading = false;
       switch (result) {

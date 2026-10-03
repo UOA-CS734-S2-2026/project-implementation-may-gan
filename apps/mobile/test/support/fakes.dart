@@ -427,12 +427,16 @@ class FakePostClient implements PostClient {
   ];
   final revisionRequests = <(String, String?)>[];
 
+  /// Completes revision reads when set, so tests can switch session mid-load.
+  Completer<void>? holdRevisions;
+
   @override
   Future<ApiResult<PostPage<PostRevision>>> revisions(
     String postId, {
     String? cursor,
   }) async {
     revisionRequests.add((postId, cursor));
+    await holdRevisions?.future;
     return revisionResults.length > 1
         ? revisionResults.removeAt(0)
         : revisionResults.single;

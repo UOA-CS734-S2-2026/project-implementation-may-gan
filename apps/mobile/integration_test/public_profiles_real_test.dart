@@ -22,14 +22,11 @@ const _publicUsername = String.fromEnvironment('DPP004_PUBLIC_USERNAME');
 const _privateUsername = String.fromEnvironment('DPP004_PRIVATE_USERNAME');
 const _publicPostId = String.fromEnvironment('DPP004_PUBLIC_POST_ID');
 const _privatePostId = String.fromEnvironment('DPP004_PRIVATE_POST_ID');
+const _authorToken = String.fromEnvironment('DPP004_AUTHOR_TOKEN');
 const _viewerEmail = String.fromEnvironment('DPP004_VIEWER_EMAIL');
 const _viewerPassword = String.fromEnvironment('DPP004_VIEWER_PASSWORD');
 const _viewerToken = String.fromEnvironment('DPP004_VIEWER_TOKEN');
 const _expiredToken = String.fromEnvironment('DPP004_EXPIRED_TOKEN');
-const _secondViewerEmail = String.fromEnvironment('DPP004_SECOND_VIEWER_EMAIL');
-const _secondViewerPassword = String.fromEnvironment(
-  'DPP004_SECOND_VIEWER_PASSWORD',
-);
 const _secondViewerToken = String.fromEnvironment('DPP004_SECOND_VIEWER_TOKEN');
 const _caPemBase64 = String.fromEnvironment('DPP004_CA_PEM_B64');
 const _fixtureReady =
@@ -38,12 +35,11 @@ const _fixtureReady =
     _privateUsername != '' &&
     _publicPostId != '' &&
     _privatePostId != '' &&
+    _authorToken != '' &&
     _viewerEmail != '' &&
     _viewerPassword != '' &&
     _viewerToken != '' &&
     _expiredToken != '' &&
-    _secondViewerEmail != '' &&
-    _secondViewerPassword != '' &&
     _secondViewerToken != '' &&
     _caPemBase64 != '';
 
@@ -220,6 +216,45 @@ void main() {
   );
 
   testWidgets(
+    'account replacement closes an author editor before the new actor renders',
+    (tester) async {
+      trustFixtureCertificate();
+      final harness = realReadServices(token: _authorToken);
+      final services = harness.services;
+      await services.session.restore();
+      final authorId = services.session.user!.id;
+      await tester.pumpWidget(
+        DayliApp(
+          services: services,
+          useGoogleFonts: false,
+          initialLocation: '/posts/$_publicPostId',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('post.menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('post.edit')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('editPost.answer')),
+        'Author-only unsaved overlay text.',
+      );
+      expect(find.text('Author-only unsaved overlay text.'), findsOneWidget);
+
+      harness.tokens.value = _secondViewerToken;
+      await services.session.restore();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+      expect(services.session.user!.id, isNot(authorId));
+      expect(find.byKey(const Key('editPost.save')), findsNothing);
+      expect(find.text('Author-only unsaved overlay text.'), findsNothing);
+      expect(find.text('Synthetic released dayli.'), findsOneWidget);
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
     'a server-expired stored bearer retries the public post anonymously',
     (tester) async {
       trustFixtureCertificate();
@@ -258,10 +293,8 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
 
-      await services.session.signIn(
-        email: _secondViewerEmail,
-        password: _secondViewerPassword,
-      );
+      harness.tokens.value = _secondViewerToken;
+      await services.session.restore();
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(services.session.user!.id, isNot(firstViewer));
       expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
