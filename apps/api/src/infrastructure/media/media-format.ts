@@ -468,7 +468,14 @@ const MAX_AUDIO_SAMPLES = 8192;
 const MAX_AUDIO_CHUNKS = 4096;
 const MAX_STTS_ENTRIES = 1024;
 const MAX_STSC_ENTRIES = 256;
-const AUDIO_SAMPLE_DESCRIPTION_PROBE_BYTES = 256;
+/**
+ * The bytes of `stsd` read to check the sample entry. A real `mp4a` entry is ~100
+ * bytes (its fixed fields plus `esds`, sometimes `btrt` or `chan`); one larger than
+ * this is refused rather than partly read.
+ */
+const AUDIO_SAMPLE_DESCRIPTION_PROBE_BYTES = 512;
+/** An audio sample entry's size, type and fixed fields, before any child boxes. */
+const AUDIO_SAMPLE_ENTRY_FIXED_BYTES = 36;
 const MPEG4_AUDIO_OBJECT_TYPE_INDICATION = 0x40;
 const AUDIO_STREAM_TYPE = 0x05;
 /** AAC-LC, and the HE-AAC signalling objects (SBR, PS) some encoders write first. */
@@ -529,25 +536,42 @@ function isAacEsds(body: Uint8Array): boolean {
     && channelConfiguration <= 7;
 }
 
-/** stsd: exactly one `mp4a` sample entry that carries an AAC `esds`. */
-function isAacSampleDescription(body: Uint8Array): boolean {
+/**
+ * stsd: exactly one `mp4a` sample entry that carries one AAC `esds`, and nothing
+ * malformed around it. `body` is the start of the `stsd` body (possibly cut short by
+ * the read window) and `stsdBodyLength` its real length. The entry must fit inside
+ * both, so a declared size can't point past the box that holds it or past what was
+ * read, and every child box must be well-formed up to the entry's declared end:
+ * a player parses all of them, so a child that overruns or a stray partial box
+ * would make the sample entry unreadable even when `esds` looks right.
+ */
+function isAacSampleDescription(body: Uint8Array, stsdBodyLength: number): boolean {
   if (readUint32BE(body, 4) !== 1) return false; // entry_count
   const entrySize = readUint32BE(body, 8);
-  if (entrySize === undefined || entrySize < 44 - 8 + 8 || readAscii(body, 12, 4) !== "mp4a") return false;
+  if (entrySize === undefined || entrySize < AUDIO_SAMPLE_ENTRY_FIXED_BYTES) return false;
+  const entryEnd = 8 + entrySize;
+  if (entryEnd > stsdBodyLength || entryEnd > body.byteLength) return false;
+  if (readAscii(body, 12, 4) !== "mp4a") return false;
   if (readUint16BE(body, 22) !== 1) return false; // data_reference_index
   const channels = readUint16BE(body, 32);
   if (channels === undefined || channels < 1 || channels > 8) return false;
   if (readUint16BE(body, 34) !== 16) return false; // sample size in bits
 
-  const entryEnd = Math.min(8 + entrySize, body.byteLength);
-  let offset = 8 + 36; // the entry's child boxes follow its fixed audio fields
-  while (offset + 8 <= entryEnd) {
+  let configurations = 0;
+  let offset = 8 + AUDIO_SAMPLE_ENTRY_FIXED_BYTES; // the entry's child boxes follow its fixed audio fields
+  while (offset < entryEnd) {
+    // A partial header at the end, a size of 0 or 1 (to-end or 64-bit), or a child
+    // reaching past the entry are all malformed, not something to skip.
+    if (offset + 8 > entryEnd) return false;
     const size = readUint32BE(body, offset);
     if (size === undefined || size < 8 || offset + size > entryEnd) return false;
-    if (readAscii(body, offset + 4, 4) === "esds") return isAacEsds(body.subarray(offset + 8, offset + size));
+    if (readAscii(body, offset + 4, 4) === "esds") {
+      configurations += 1;
+      if (!isAacEsds(body.subarray(offset + 8, offset + size))) return false;
+    }
     offset += size;
   }
-  return false;
+  return configurations === 1;
 }
 
 /** Reads a whole box body of at most `maxBytes`; undefined when it is empty, too large, or unreadable. */
@@ -594,7 +618,7 @@ async function verifyAacSampleTable(
   const probeEnd = Math.min(stsd.bodyStart + AUDIO_SAMPLE_DESCRIPTION_PROBE_BYTES, stsd.boxEnd) - 1;
   if (probeEnd < stsd.bodyStart) return undefined;
   const description = await tracker.read(source, stsd.bodyStart, probeEnd);
-  if (!description || !isAacSampleDescription(description)) return undefined;
+  if (!description || !isAacSampleDescription(description, stsd.boxEnd - stsd.bodyStart)) return undefined;
 
   // stsz: every sample has a real, AAC-sized length.
   const sizeBody = await tracker.read(source, stsz.bodyStart, Math.min(stsz.bodyStart + 11, stsz.boxEnd - 1));
