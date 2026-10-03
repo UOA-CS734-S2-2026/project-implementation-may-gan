@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
@@ -20,13 +23,21 @@ const _privateUsername = String.fromEnvironment('DPP004_PRIVATE_USERNAME');
 const _publicPostId = String.fromEnvironment('DPP004_PUBLIC_POST_ID');
 const _viewerEmail = String.fromEnvironment('DPP004_VIEWER_EMAIL');
 const _viewerPassword = String.fromEnvironment('DPP004_VIEWER_PASSWORD');
+const _caPemBase64 = String.fromEnvironment('DPP004_CA_PEM_B64');
 const _fixtureReady =
     _apiBaseUrl != '' &&
     _publicUsername != '' &&
     _privateUsername != '' &&
     _publicPostId != '' &&
     _viewerEmail != '' &&
-    _viewerPassword != '';
+    _viewerPassword != '' &&
+    _caPemBase64 != '';
+
+void trustFixtureCertificate() {
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(
+    base64Decode(_caPemBase64),
+  );
+}
 
 AppServices realReadServices() {
   final tokens = MemoryTokenStore();
@@ -66,6 +77,7 @@ void main() {
   testWidgets(
     'anonymous native deep links use real isolated public projections',
     (tester) async {
+      trustFixtureCertificate();
       final services = realReadServices();
       await tester.pumpWidget(
         DayliApp(
@@ -77,8 +89,11 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(find.text('@$_publicUsername'), findsWidgets);
       expect(find.byKey(const Key('profile.private')), findsNothing);
+      expect(find.text('Synthetic released dayli.'), findsOneWidget);
 
-      final router = GoRouter.of(tester.element(find.byType(MaterialApp)));
+      final router = GoRouter.of(
+        tester.element(find.byKey(const Key('profile.username'))),
+      );
       router.go('/u/$_privateUsername');
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(find.text('@$_privateUsername'), findsOneWidget);
@@ -88,6 +103,7 @@ void main() {
       router.go('/posts/$_publicPostId');
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(find.byKey(const Key('post.unavailable')), findsNothing);
+      expect(find.text('Synthetic released dayli.'), findsOneWidget);
       expect(find.byKey(const Key('post.like')), findsOneWidget);
     },
     skip: !_fixtureReady,
@@ -96,6 +112,7 @@ void main() {
   testWidgets(
     'password sign-in returns to a refetched finite intent without replay',
     (tester) async {
+      trustFixtureCertificate();
       final services = realReadServices();
       await tester.pumpWidget(
         DayliApp(
