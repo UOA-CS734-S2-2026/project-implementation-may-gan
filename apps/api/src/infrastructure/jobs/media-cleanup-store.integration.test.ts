@@ -145,15 +145,15 @@ const longAgo = new Date(now.getTime() - graceMs - hour);
     }
   });
 
-  it("refuses to delete a row a post links after the claim", async () => {
+  it("rejects an attachment after cleanup claims its reservation", async () => {
     const id = await upload();
     const [job] = await claim();
     expect(job?.id).toBe(id);
-    await attach(id);
-    expect(await store.complete(job!)).toBe(false);
+    await expect(attach(id)).rejects.toMatchObject({ cause: { code: "55000" } });
     expect(await row(id)).toBeDefined();
-    // Even once its lease lapses, a linked upload is never handed out for deletion.
-    expect(await claim({ now: new Date(now.getTime() + hour) })).toEqual([]);
+    // A claimed upload is tombstoned before its object key is returned.
+    expect(await store.complete(job!)).toBe(true);
+    expect(await row(id)).toBeUndefined();
   });
 
   it("gives two concurrent claimers disjoint uploads", async () => {

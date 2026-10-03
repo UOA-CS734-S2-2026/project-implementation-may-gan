@@ -44,6 +44,7 @@ async function checkGeneratedClients() {
     dartCreateDailyPostRequest,
     dartDailyPost,
     dartDailyPostTomorrowNote,
+    dartTrashedPostStatus,
     typescriptApi,
     typescriptRelationshipsApi,
     dartClient,
@@ -58,6 +59,7 @@ async function checkGeneratedClients() {
     readFile("packages/api-client-dart/lib/model/create_daily_post_request.dart", "utf8"),
     readFile("packages/api-client-dart/lib/model/daily_post.dart", "utf8"),
     readFile("packages/api-client-dart/lib/model/daily_post_tomorrow_note.dart", "utf8"),
+    readFile("packages/api-client-dart/lib/model/trashed_post_status.dart", "utf8"),
     readFile("packages/api-client-typescript/src/apis/PostingDaysApi.ts", "utf8"),
     readFile("packages/api-client-typescript/src/apis/RelationshipsApi.ts", "utf8"),
     readFile("packages/api-client-dart/lib/api_client.dart", "utf8"),
@@ -102,6 +104,11 @@ async function checkGeneratedClients() {
       "Dart daily-post localDate stays a string during JSON conversion",
       /json\[r'localDate'\] = this\.localDate;/.test(dartDailyPost) &&
         /localDate: mapValueOfType<String>/.test(dartDailyPost),
+    ],
+    [
+      "Dart Post Trash localDate stays a string during JSON conversion",
+      /json\[r'localDate'\] = this\.localDate;/.test(dartTrashedPostStatus) &&
+        /localDate: mapValueOfType<String>/.test(dartTrashedPostStatus),
     ],
     [
       "Dart daily-post tomorrow-note availableOn stays a string during JSON conversion",

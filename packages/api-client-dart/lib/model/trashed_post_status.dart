@@ -72,7 +72,7 @@ class TrashedPostStatus {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'trashedAt'] = this.trashedAt.toUtc().toIso8601String();
     json[r'restoreUntil'] = this.restoreUntil.toUtc().toIso8601String();
     json[r'purgeDueAt'] = this.purgeDueAt.toUtc().toIso8601String();
@@ -153,7 +153,7 @@ class TrashedPostStatus {
 
       return TrashedPostStatus(
         id: mapValueOfType<String>(json, r'id')!,
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         trashedAt: mapDateTime(json, r'trashedAt', r'')!,
         restoreUntil: mapDateTime(json, r'restoreUntil', r'')!,
         purgeDueAt: mapDateTime(json, r'purgeDueAt', r'')!,

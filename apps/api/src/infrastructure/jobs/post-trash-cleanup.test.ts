@@ -30,6 +30,17 @@ describe("post Trash cleanup dispatcher", () => {
     expect(deleter.delete).not.toHaveBeenCalled();
   });
 
+  it("continues past a terminal media candidate to later due posts", async () => {
+    const cleanup = store();
+    let claims = 0;
+    cleanup.claim = vi.fn(async () => (++claims === 2 ? [job] : []));
+    const deleter = { delete: vi.fn(async () => {}) };
+    const result = await createPostTrashCleanupDispatcher({ mode: "execute", store: cleanup,
+      deleter, batchSize: 3 }).dispatchScheduled();
+    expect(result).toMatchObject({ claimed: 1, deleted: 1 });
+    expect(cleanup.claim).toHaveBeenCalledTimes(3);
+  });
+
   it("deletes every object before completing the fenced database purge", async () => {
     const cleanup = store();
     const order: string[] = [];

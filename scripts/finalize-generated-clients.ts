@@ -171,6 +171,10 @@ async function finalizeGeneratedClients() {
       "packages/api-client-dart/lib/model/test_response.dart",
       "aucklandDate",
     ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/trashed_post_status.dart",
+      "localDate",
+    ),
   ]);
 
   await Promise.all([

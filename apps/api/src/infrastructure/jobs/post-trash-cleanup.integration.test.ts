@@ -31,6 +31,7 @@ function fixtureUrl(value: string) {
   const replacement = id("replacement");
   const accountPost = id("account-pending");
   const sharedPost = id("shared-post");
+  const laterPost = id("later-post");
   const sharedReservation = id("shared-reservation");
   const media = id("media");
   const reservation = id("reservation");
@@ -67,8 +68,8 @@ function fixtureUrl(value: string) {
   afterAll(async () => {
     try {
       await migrator.client`delete from public.profile_avatars where user_id = ${owner}`;
-      await migrator.client`delete from public.post_media where post_id in (${post}, ${replacement}, ${accountPost}, ${sharedPost})`;
-      await migrator.client`delete from public.posts where id in (${post}, ${replacement}, ${accountPost}, ${sharedPost})`;
+      await migrator.client`delete from public.post_media where post_id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost})`;
+      await migrator.client`delete from public.posts where id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost})`;
       await migrator.client`delete from public.media_reservation where id in (${reservation}, ${sharedReservation})`;
       await migrator.client`delete from public."user" where id in (${owner}, ${other})`;
     } finally {
@@ -208,16 +209,32 @@ function fixtureUrl(value: string) {
     await migrator.client`update public.posts set trashed_at = '2025-09-01T00:00:00Z',
       restore_until = '2025-09-08T00:00:00Z', trash_purge_due_at = '2025-09-15T00:00:00Z'
       where id = ${sharedPost}`;
+    // The oldest terminal candidate must not starve a later healthy post.
+    await createPost(laterPost);
+    expect((await postRepo.transition({ userId: owner, sessionId: session,
+      postId: laterPost, action: "trash" })).outcome).toBe("trashed");
+    await migrator.client`update public.posts set trashed_at = '2025-09-01T01:00:00Z',
+      restore_until = '2025-09-08T01:00:00Z', trash_purge_due_at = '2025-09-15T01:00:00Z'
+      where id = ${laterPost}`;
     expect(await cleanup.claim(1, id("shared-lease"), 60)).toEqual([]);
-    const [blocked] = await migrator.client`select trash_failure_category from public.posts where id = ${sharedPost}`;
-    expect(blocked?.trash_failure_category).toBe("shared_media");
+    const [blocked] = await migrator.client`select trash_failure_category, trash_next_attempt_at::text as retry_at
+      from public.posts where id = ${sharedPost}`;
+    expect(blocked).toMatchObject({ trash_failure_category: "shared_media", retry_at: "infinity" });
+    const [laterJob] = await cleanup.claim(1, id("later-lease"), 60);
+    expect(laterJob?.postId).toBe(laterPost);
+    expect(await cleanup.complete(laterJob!)).toBe("deleted");
     await migrator.client`delete from public.profile_avatars where user_id = ${owner}`;
+    // Synthetic migrator cleanup simulates a separately reviewed operator fix.
+    await migrator.client`update public.posts set trash_failure_category = null,
+      trash_next_attempt_at = null where id = ${sharedPost}`;
     await migrator.client`insert into public.post_media (id, post_id, attachment_order)
       values (${id("legacy-media")}, ${sharedPost}, 1)`;
     expect(await cleanup.claim(1, id("legacy-lease"), 60)).toEqual([]);
     const [unsupported] = await migrator.client`select trash_failure_category from public.posts where id = ${sharedPost}`;
     expect(unsupported?.trash_failure_category).toBe("unsupported_media");
     await migrator.client`delete from public.post_media where id = ${id("legacy-media")}`;
+    await migrator.client`update public.posts set trash_failure_category = null,
+      trash_next_attempt_at = null where id = ${sharedPost}`;
     const [recovered] = await cleanup.claim(1, id("recovered-lease"), 60);
     expect(recovered?.postId).toBe(sharedPost);
     expect(await cleanup.complete(recovered!)).toBe("deleted");

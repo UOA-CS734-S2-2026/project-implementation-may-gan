@@ -88,7 +88,9 @@ export function createPostTrashCleanupDispatcher(input: {
         // during the claim call. Leave five seconds for fenced completion.
         const leaseStartedAt = performance.now();
         const [job] = await input.store.claim(1, createLeaseToken(), leaseSeconds);
-        if (!job) break;
+        // A candidate with terminal shared or legacy media returns no job.
+        // Its database retry pause lets the next bounded claim reach later posts.
+        if (!job) continue;
         summary.claimed += 1;
         const stopDeletesAt = Math.min(leaseStartedAt + leaseSeconds * 1000 - 5_000, invocationEndsAt - 1_000);
         try {

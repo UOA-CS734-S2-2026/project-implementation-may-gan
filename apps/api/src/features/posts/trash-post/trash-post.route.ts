@@ -1,6 +1,6 @@
 import { createRoute, type OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { opaqueIdSchema, utcTimestampSchema, apiErrorSchema } from "@dayli/contracts";
+import { opaqueIdSchema, utcTimestampSchema, aucklandDateSchema, apiErrorSchema } from "@dayli/contracts";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { apiErrorResponse } from "../../../http/api-error";
 import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
@@ -19,7 +19,7 @@ const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieA
 const error = (description: string) => ({ description, content: { "application/json": { schema: apiErrorSchema } } });
 const statusSchema = z.object({
   id: opaqueIdSchema,
-  localDate: z.string().date(),
+  localDate: aucklandDateSchema,
   trashedAt: utcTimestampSchema,
   restoreUntil: utcTimestampSchema,
   purgeDueAt: utcTimestampSchema,

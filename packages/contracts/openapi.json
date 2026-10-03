@@ -1021,8 +1021,7 @@
             "$ref": "#/components/schemas/OpaqueId"
           },
           "localDate": {
-            "type": "string",
-            "format": "date"
+            "$ref": "#/components/schemas/AucklandDate"
           },
           "trashedAt": {
             "$ref": "#/components/schemas/UtcTimestamp"
