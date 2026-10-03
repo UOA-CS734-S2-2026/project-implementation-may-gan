@@ -98,6 +98,53 @@ function localUrl(value: string | undefined, role: string): string {
     }
   });
 
+  it("rejects event and device recipient mismatches", async () => {
+    const aliceId = `notification-owner-alice-${crypto.randomUUID()}`;
+    const bobId = `notification-owner-bob-${crypto.randomUUID()}`;
+    const charlieId = `notification-owner-charlie-${crypto.randomUUID()}`;
+    const bobSessionId = `notification-owner-bob-session-${crypto.randomUUID()}`;
+    const charlieSessionId = `notification-owner-charlie-session-${crypto.randomUUID()}`;
+    const bobDeviceId = `notification-owner-bob-device-${crypto.randomUUID()}`;
+    const charlieDeviceId = `notification-owner-charlie-device-${crypto.randomUUID()}`;
+    const eventId = `notification-owner-event-${crypto.randomUUID()}`;
+    const now = new Date();
+    const expires = new Date(now.getTime() + 60_000);
+    await migrator`insert into public."user" (id, name, email) values
+      (${aliceId}, 'Notification Alice', ${`${aliceId}@example.test`}),
+      (${bobId}, 'Notification Bob', ${`${bobId}@example.test`}),
+      (${charlieId}, 'Notification Charlie', ${`${charlieId}@example.test`})`;
+    await migrator`insert into public.session (id, expires_at, token, user_id) values
+      (${bobSessionId}, ${expires}, ${`token-${bobSessionId}`}, ${bobId}),
+      (${charlieSessionId}, ${expires}, ${`token-${charlieSessionId}`}, ${charlieId})`;
+    try {
+      await app`
+        insert into public.push_devices
+          (id, user_id, session_id, installation_id, platform, token, token_hash, opted_in, notification_schema_version, registered_at)
+        values
+          (${bobDeviceId}, ${bobId}, ${bobSessionId}, 'ownership-bob-installation', 'ios', 'ciphertext', ${"b".repeat(64)}, true, 1, ${now}),
+          (${charlieDeviceId}, ${charlieId}, ${charlieSessionId}, 'ownership-charlie-installation', 'ios', 'ciphertext', ${"c".repeat(64)}, true, 1, ${now})
+      `;
+      await app`
+        insert into public.notification_events
+          (id, kind, recipient_id, deduplication_key, source_type, source_id, target_type, target_id, expires_at, created_at)
+        values (${eventId}, 'friend_request', ${aliceId}, 'ownership-source', 'relationship', 'opaque-source', 'profile', 'opaque-target', ${expires}, ${now})
+      `;
+
+      await expect(app`
+        insert into public.notification_deliveries
+          (id, event_id, recipient_id, device_registration_id, status, attempts, available_at)
+        values (${`delivery-event-mismatch-${eventId}`}, ${eventId}, ${bobId}, ${bobDeviceId}, 'pending', 0, ${now})
+      `).rejects.toMatchObject({ code: "23503" });
+      await expect(app`
+        insert into public.notification_deliveries
+          (id, event_id, recipient_id, device_registration_id, status, attempts, available_at)
+        values (${`delivery-device-mismatch-${eventId}`}, ${eventId}, ${aliceId}, ${charlieDeviceId}, 'pending', 0, ${now})
+      `).rejects.toMatchObject({ code: "23503" });
+    } finally {
+      await migrator`delete from public."user" where id in (${aliceId}, ${bobId}, ${charlieId})`;
+    }
+  });
+
   it("exposes only the four approved event kinds", async () => {
     const rows = await migrator`
       select enumlabel from pg_enum

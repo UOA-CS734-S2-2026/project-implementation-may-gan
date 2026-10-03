@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   pgEnum,
   pgTable,
@@ -54,6 +55,7 @@ export const notificationEvents = pgTable("notification_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   unique("notification_events_dedup_unique").on(table.kind, table.recipientId, table.deduplicationKey),
+  unique("notification_events_id_recipient_unique").on(table.id, table.recipientId),
   index("notification_events_recipient_created_idx").on(table.recipientId, table.createdAt),
   check("notification_events_dedup_key_check", sql`char_length(${table.deduplicationKey}) between 1 and 255`),
   check("notification_events_source_type_check", sql`char_length(${table.sourceType}) between 1 and 64`),
@@ -66,9 +68,9 @@ export const notificationEvents = pgTable("notification_events", {
 /** Per-device work is unique, retry-bounded, and protected by paired fenced leases. */
 export const notificationDeliveries = pgTable("notification_deliveries", {
   id: text("id").primaryKey(),
-  eventId: text("event_id").notNull().references(() => notificationEvents.id, { onDelete: "cascade" }),
+  eventId: text("event_id").notNull(),
   recipientId: text("recipient_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  deviceRegistrationId: text("device_registration_id").notNull().references(() => pushDevices.id, { onDelete: "cascade" }),
+  deviceRegistrationId: text("device_registration_id").notNull(),
   status: notificationDeliveryStatus("status").notNull().default("pending"),
   attempts: bigint("attempts", { mode: "number" }).notNull().default(0),
   availableAt: timestamp("available_at", { withTimezone: true }).notNull(),
@@ -79,6 +81,16 @@ export const notificationDeliveries = pgTable("notification_deliveries", {
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 }, (table) => [
   unique("notification_deliveries_event_device_unique").on(table.eventId, table.deviceRegistrationId),
+  foreignKey({
+    columns: [table.eventId, table.recipientId],
+    foreignColumns: [notificationEvents.id, notificationEvents.recipientId],
+    name: "notification_deliveries_event_recipient_fk",
+  }).onDelete("cascade"),
+  foreignKey({
+    columns: [table.deviceRegistrationId, table.recipientId],
+    foreignColumns: [pushDevices.id, pushDevices.userId],
+    name: "notification_deliveries_device_recipient_fk",
+  }).onDelete("cascade"),
   index("notification_deliveries_due_idx").on(table.status, table.availableAt),
   index("notification_deliveries_lease_idx").on(table.status, table.leaseExpiresAt),
   index("notification_deliveries_recipient_idx").on(table.recipientId, table.createdAt),
