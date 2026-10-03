@@ -43,7 +43,7 @@ import {
 } from './PostDetailAuthor';
 
 /**
- * One post the caller may read. Tomorrow notes are not part of this projection.
+ * One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection.
  * @export
  * @interface PostDetail
  */

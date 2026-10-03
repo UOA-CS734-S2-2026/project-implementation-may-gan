@@ -29,6 +29,16 @@ import {
     AccountDeletionStatusToJSON,
 } from '../models/AccountDeletionStatus';
 import {
+    type AccountExportRequestResult,
+    AccountExportRequestResultFromJSON,
+    AccountExportRequestResultToJSON,
+} from '../models/AccountExportRequestResult';
+import {
+    type AccountExportStatus,
+    AccountExportStatusFromJSON,
+    AccountExportStatusToJSON,
+} from '../models/AccountExportStatus';
+import {
     type ApiError,
     ApiErrorFromJSON,
     ApiErrorToJSON,
@@ -71,6 +81,13 @@ export interface AccountCancelDeletionRequest {
      *
      */
     deletionGrantRequest: DeletionGrantRequest;
+}
+
+export interface AccountDownloadExportRequest {
+    /**
+     *
+     */
+    requestId: string;
 }
 
 export interface AccountReauthenticatePasswordRequest {
@@ -211,6 +228,59 @@ export class AccountApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for accountDownloadExport without sending the request
+     */
+    async accountDownloadExportRequestOpts(requestParameters: AccountDownloadExportRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['requestId'] == null) {
+            throw new runtime.RequiredError(
+                'requestId',
+                'Required parameter "requestId" was null or undefined when calling accountDownloadExport().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export/{requestId}/download`;
+        urlPath = urlPath.replace('{requestId}', encodeURIComponent(String(requestParameters['requestId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Download a ready export through a fresh authenticated stream
+     */
+    async accountDownloadExportRaw(requestParameters: AccountDownloadExportRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.accountDownloadExportRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Download a ready export through a fresh authenticated stream
+     */
+    async accountDownloadExport(requestParameters: AccountDownloadExportRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.accountDownloadExportRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for accountGetDeletionStatus without sending the request
      */
     async accountGetDeletionStatusRequestOpts(): Promise<runtime.RequestOpts> {
@@ -254,6 +324,51 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountGetDeletionStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionStatus> {
         const response = await this.accountGetDeletionStatusRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountGetExportStatus without sending the request
+     */
+    async accountGetExportStatusRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Read the owner\'s export request state
+     */
+    async accountGetExportStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountExportStatus>> {
+        const requestOptions = await this.accountGetExportStatusRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountExportStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Read the owner\'s export request state
+     */
+    async accountGetExportStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountExportStatus> {
+        const response = await this.accountGetExportStatusRaw(initOverrides);
         return await response.value();
     }
 
@@ -379,6 +494,51 @@ export class AccountApi extends runtime.BaseAPI {
      */
     async accountRequestDeletion(requestParameters: AccountRequestDeletionRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountDeletionRequestResult> {
         const response = await this.accountRequestDeletionRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for accountRequestExport without sending the request
+     */
+    async accountRequestExportRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/account/export/request`;
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Request one private account export
+     */
+    async accountRequestExportRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<AccountExportRequestResult>> {
+        const requestOptions = await this.accountRequestExportRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => AccountExportRequestResultFromJSON(jsonValue));
+    }
+
+    /**
+     * Request one private account export
+     */
+    async accountRequestExport(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<AccountExportRequestResult> {
+        const response = await this.accountRequestExportRaw(initOverrides);
         return await response.value();
     }
 

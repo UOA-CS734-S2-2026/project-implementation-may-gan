@@ -1,13 +1,15 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
-import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
+import { routePostMedia, signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { InvalidPostCursorError } from "../shared/post-page-cursor";
 import {
   listProfilePostsErrorResponses,
+  readableProfilePostsSchema,
   profilePostsPageSchema,
+  restrictedProfilePostsSchema,
   profilePostsParamsSchema,
   profilePostsQuerySchema,
 } from "./list-profile-posts.contract";
@@ -23,7 +25,7 @@ export interface ListProfilePostsRouteDependencies {
   signMediaDownload?: SignMediaDownload;
 }
 
-const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
+const security: Array<Record<string, string[]>> = [{}, { BearerAuth: [] }, { cookieAuth: [] }];
 
 const listProfilePostsRoute = createRoute({
   method: "get",
@@ -31,20 +33,24 @@ const listProfilePostsRoute = createRoute({
   tags: ["Posts"],
   operationId: "posts.listProfilePosts",
   summary: "List the posts on a profile",
-  description: "Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.",
+  description: "Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.",
   security,
   request: { params: profilePostsParamsSchema, query: profilePostsQuerySchema },
   responses: {
     200: {
       description: "One page of the profile's posts.",
-      content: { "application/json": { schema: profilePostsPageSchema } },
+      content: { "application/json": { schema: readableProfilePostsSchema } },
     },
     ...listProfilePostsErrorResponses,
   },
 });
 
-export function registerListProfilePostsRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: ListProfilePostsRouteDependencies) {
-  app.use("/api/v1/profiles/:username/posts", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+export function registerListProfilePostsRoute(app: OpenAPIHono<OptionalAuthenticatedApiEnv>, dependencies: ListProfilePostsRouteDependencies) {
+  // Keep the page and minimal restricted contracts available to generated
+  // clients even though this operation returns their discriminated wire shape.
+  app.openAPIRegistry.register("ProfilePostsPage", profilePostsPageSchema);
+  app.openAPIRegistry.register("RestrictedProfilePosts", restrictedProfilePostsSchema);
+  app.use("/api/v1/profiles/:username/posts", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(listProfilePostsRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {
@@ -55,17 +61,23 @@ export function registerListProfilePostsRoute(app: OpenAPIHono<AuthenticatedApiE
     const { limit, cursor } = context.req.valid("query");
     const now = dependencies.now?.() ?? new Date();
     try {
-      const page = await dependencies.repository.listProfilePosts(context.get("actor").userId, username, now, limit, cursor);
+      const actor = context.get("actor");
+      const page = await dependencies.repository.listProfilePosts(actor?.userId ?? null, username, now, limit, cursor);
       if (!page) return apiErrorResponse(context, 404, "NOT_FOUND", "The profile was not found.");
+      if ("kind" in page) return context.json(page, 200);
+      const { accessTier, ...archive } = page;
+      const hasMedia = archive.items.some((item) => item.media.length > 0);
       const sign = dependencies.signMediaDownload;
-      if (page.items.some((item) => item.media.length > 0) && !sign) {
+      if (hasMedia && accessTier === "authorized" && !sign) {
         return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
       }
-      const items = await Promise.all(page.items.map(async (item) => ({
+      const items = await Promise.all(archive.items.map(async (item) => ({
         ...item,
-        media: sign ? await signPostMedia(item.media, sign, now) : [],
+        media: accessTier === "public"
+          ? routePostMedia(item.media, context.req.url)
+          : sign ? await signPostMedia(item.media, sign, now) : [],
       })));
-      return context.json({ ...page, items }, 200);
+      return context.json({ kind: "archive" as const, ...archive, items }, 200);
     } catch (error) {
       if (error instanceof InvalidPostCursorError) {
         return apiErrorResponse(context, 422, "VALIDATION_FAILED", "The request contains invalid values.", { field: "cursor" });

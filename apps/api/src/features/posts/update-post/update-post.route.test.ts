@@ -22,6 +22,7 @@ const detail: PostDetailRecord = {
   viewerIsAuthor: true,
   media: [],
   voiceMemo: null,
+  publicMediaDelivery: false,
 };
 
 const resolveSession: UpdatePostRouteDependencies["resolveSession"] = async (request) => {

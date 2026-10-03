@@ -1,4 +1,14 @@
-import { FetchError, MediaApi, ProfileApi, ResponseError, type Mbti, type ChangeUsernameResponse, type ProfileDetails, type ProfileVisibility } from "@dayli/api-client";
+import {
+  FetchError,
+  MediaApi,
+  ProfileApi,
+  ResponseError,
+  instanceOfProfileDetails,
+  type Mbti,
+  type ChangeUsernameResponse,
+  type ProfileDetails,
+  type ProfileVisibility,
+} from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
 export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility };
@@ -53,7 +63,16 @@ async function call<T>(operation: (api: ProfileApi) => Promise<T>): Promise<Prof
 
 /** The generated OpenAPI client owns the transport; this only maps failures for the UI. */
 export const profilesApi = {
-  details: (username: string) => call((api) => api.profileGetDetails({ username })),
+  async details(username: string): Promise<ProfileResult<ProfileDetails>> {
+    const result = await call((api) => api.profileGetDetails({ username }));
+    if (!result.ok) return result;
+    const { kind, ...profile } = result.value;
+    // Public and restricted rendering belongs to DPP-003. Existing signed-in
+    // screens consume only the established owner/friend contract for now.
+    return kind === "authorized" && instanceOfProfileDetails(profile)
+      ? { ok: true, value: profile }
+      : { ok: false, failure: { kind: "notFound" } };
+  },
   /** Blank text clears a field. */
   update: (changes: ProfileUpdate) => call((api) => api.profileUpdate({ updateProfileRequest: changes })),
   changeUsername: (username: string) => call((api) => api.profileChangeUsername({ changeUsernameRequest: { username } })),

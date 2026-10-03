@@ -210,6 +210,10 @@ class ApiClient {
           return AccountDeletionRequestResult.fromJson(value);
         case 'AccountDeletionStatus':
           return AccountDeletionStatus.fromJson(value);
+        case 'AccountExportRequestResult':
+          return AccountExportRequestResult.fromJson(value);
+        case 'AccountExportStatus':
+          return AccountExportStatus.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':
@@ -364,6 +368,12 @@ class ApiClient {
           return ProfileStats.fromJson(value);
         case 'ProfileVisibility':
           return ProfileVisibilityTypeTransformer().decode(value);
+        case 'PublicProfile':
+          return PublicProfile.fromJson(value);
+        case 'ReadableProfile':
+          return ReadableProfile.fromJson(value);
+        case 'ReadableProfilePosts':
+          return ReadableProfilePosts.fromJson(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
         case 'RegistrationIntentRequest':
@@ -382,6 +392,10 @@ class ApiClient {
           return RelationshipUserPage.fromJson(value);
         case 'ResolveMessageRequestRequest':
           return ResolveMessageRequestRequest.fromJson(value);
+        case 'RestrictedProfile':
+          return RestrictedProfile.fromJson(value);
+        case 'RestrictedProfilePosts':
+          return RestrictedProfilePosts.fromJson(value);
         case 'SendMessageRequest':
           return SendMessageRequest.fromJson(value);
         case 'SendRelationshipRequest':

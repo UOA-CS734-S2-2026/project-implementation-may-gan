@@ -122,6 +122,42 @@ export async function createPresignedUploadUrl(
   return { url: signed.url.toString(), method: "PUT", requiredHeaders };
 }
 
+export type MediaObjectRequestMethod = "GET" | "HEAD";
+
+export interface MediaObjectStore {
+  fetch(objectKey: string, request: { method: MediaObjectRequestMethod; headers: Headers }): Promise<Response>;
+}
+
+const forwardedObjectRequestHeaders = [
+  "range",
+  "if-range",
+  "if-match",
+  "if-none-match",
+  "if-modified-since",
+  "if-unmodified-since",
+] as const;
+
+/** Fetches a private object inside the Worker. The signed provider request never leaves the API. */
+export function createR2MediaObjectStore(configuration: R2RuntimeConfiguration): MediaObjectStore {
+  return {
+    async fetch(objectKey, request) {
+      const headers = new Headers();
+      for (const name of forwardedObjectRequestHeaders) {
+        const value = request.headers.get(name);
+        if (value !== null) headers.set(name, value);
+      }
+      try {
+        return await createAwsClient(configuration).fetch(buildObjectUrl(configuration, objectKey), {
+          method: request.method,
+          headers,
+        });
+      } catch (error) {
+        throw wrapAsInfrastructureError(error, "R2 media request failed");
+      }
+    },
+  };
+}
+
 export interface PresignedDownload {
   url: string;
   expiresAt: Date;
