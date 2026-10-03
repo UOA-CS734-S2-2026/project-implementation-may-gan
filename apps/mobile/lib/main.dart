@@ -9,6 +9,7 @@ import 'api/feed_client.dart';
 import 'api/profile_client.dart';
 import 'api/post_client.dart';
 import 'api/friends_client.dart';
+import 'api/interactions_client.dart';
 import 'api/media_upload_client.dart';
 import 'api/posting_day_client.dart';
 import 'app/app.dart';
@@ -137,6 +138,10 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         profiles: GeneratedProfileClient(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
+        interactions: GeneratedInteractionsClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),

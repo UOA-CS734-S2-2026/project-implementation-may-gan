@@ -27,6 +27,9 @@ class PostDetail {
     required this.edited,
     required this.viewerIsAuthor,
     this.revisionCount = 0,
+    this.likeCount = 0,
+    this.viewerHasLiked = false,
+    this.commentCount = 0,
     this.media = const [],
   });
 
@@ -54,8 +57,40 @@ class PostDetail {
   /// editing, so an edit saved elsewhere in between is a conflict.
   final int revisionCount;
 
+  final int likeCount;
+  final bool viewerHasLiked;
+
+  /// Comments and replies this user can see.
+  final int commentCount;
+
   /// Attached photos or video in display order.
   final List<PostMedia> media;
+
+  /// This post with new interaction counts.
+  PostDetail copyWith({
+    int? likeCount,
+    bool? viewerHasLiked,
+    int? commentCount,
+  }) => PostDetail(
+    id: id,
+    authorId: authorId,
+    username: username,
+    displayName: displayName,
+    localDate: localDate,
+    promptText: promptText,
+    reflectiveAnswer: reflectiveAnswer,
+    caption: caption,
+    rating: rating,
+    audience: audience,
+    acceptedAt: acceptedAt,
+    edited: edited,
+    viewerIsAuthor: viewerIsAuthor,
+    revisionCount: revisionCount,
+    likeCount: likeCount ?? this.likeCount,
+    viewerHasLiked: viewerHasLiked ?? this.viewerHasLiked,
+    commentCount: commentCount ?? this.commentCount,
+    media: media,
+  );
 
   static PostDetail? tryParse(Object? json) {
     if (json is! Map<String, Object?>) return null;
@@ -103,14 +138,16 @@ class PostDetail {
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
       viewerIsAuthor: json['viewerIsAuthor'] == true,
-      revisionCount: switch (json['revisionCount']) {
-        final int count when count >= 0 => count,
-        _ => 0,
-      },
+      revisionCount: _count(json['revisionCount']),
+      likeCount: _count(json['likeCount']),
+      viewerHasLiked: json['viewerHasLiked'] == true,
+      commentCount: _count(json['commentCount']),
       media: PostMedia.parseList(json['media']),
     );
   }
 }
+
+int _count(Object? value) => value is int && value >= 0 ? value : 0;
 
 /// The author's change to a post. Every field is sent, so the server only
 /// saves the ones that differ.

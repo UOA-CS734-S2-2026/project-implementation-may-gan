@@ -10,6 +10,8 @@ import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 
 import 'edit_post_screen.dart';
+import 'post_comments.dart';
+import 'post_likers_screen.dart';
 import 'post_revisions_screen.dart';
 import 'private_media.dart';
 
@@ -33,6 +35,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// list that opened the post, so that list can refresh.
   bool _changed = false;
 
+  /// Changes on every load, so the comments reload with the post.
+  int _loads = 0;
+  bool _liking = false;
+
+  /// Changes whenever a like starts, so an older read of the post can't
+  /// overwrite a newer like.
+  int _likeVersion = 0;
+
+  /// Changes whenever the counts are read again, so only the newest read is
+  /// shown and an older answer can't overwrite a newer comment's count.
+  int _countsVersion = 0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -49,6 +63,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
     setState(() {
       _result = result;
+      _loads++;
       switch (result) {
         case ApiSuccess(:final value):
           _post = value;
@@ -59,6 +74,91 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           break;
       }
     });
+  }
+
+  /// Shows the like at once, then keeps the server's count, or puts it back.
+  Future<void> _toggleLike(PostDetail post) async {
+    final liked = !post.viewerHasLiked;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _liking = true;
+      _likeVersion++;
+      _post = post.copyWith(
+        likeCount: (post.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 31),
+        viewerHasLiked: liked,
+      );
+    });
+    final result = await AppScope.of(
+      context,
+    ).interactions.setLike(post.id, liked: liked);
+    if (!mounted) return;
+    setState(() {
+      _liking = false;
+      final current = _post;
+      switch (result) {
+        case ApiSuccess(:final value):
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: value.likeCount,
+              viewerHasLiked: value.viewerHasLiked,
+            );
+          }
+        case ApiError():
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: post.likeCount,
+              viewerHasLiked: post.viewerHasLiked,
+            );
+          }
+      }
+    });
+    if (result is ApiError) {
+      messenger.showSnackBar(
+        const SnackBar(
+          key: Key('post.likeFailed'),
+          content: Text("Your like couldn't be saved. Try again."),
+        ),
+      );
+    }
+  }
+
+  /// Reads the post's counts again after a comment changes, because only the
+  /// server counts comments on pages that aren't loaded. If the post is gone,
+  /// the screen says so instead of showing it from memory.
+  Future<void> _refreshCounts() async {
+    final services = AppScope.of(context);
+    final likeVersion = _likeVersion;
+    final version = ++_countsVersion;
+    final result = await services.posts.get(widget.postId);
+    // A newer read started after this one, so its answer, including a 404,
+    // is the one that counts.
+    if (!mounted || version != _countsVersion) return;
+    switch (result) {
+      case ApiSuccess(:final value):
+        final post = _post;
+        if (post == null) return;
+        // A like saved or started after this read began is newer than it.
+        final likeIsCurrent = !_liking && likeVersion == _likeVersion;
+        setState(
+          () => _post = post.copyWith(
+            likeCount: likeIsCurrent ? value.likeCount : post.likeCount,
+            viewerHasLiked: likeIsCurrent
+                ? value.viewerHasLiked
+                : post.viewerHasLiked,
+            commentCount: value.commentCount,
+          ),
+        );
+      case ApiError(failure: NotFound()):
+        setState(() {
+          _result = result;
+          _post = null;
+        });
+      case ApiError(failure: Unauthenticated()):
+        await services.session.sessionExpired();
+      case ApiError():
+        // The count is refreshed again after the next change.
+        break;
+    }
   }
 
   Future<void> _edit(PostDetail post) async {
@@ -413,8 +513,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  IconButton(
+                    key: const Key('post.like'),
+                    tooltip: post.viewerHasLiked ? 'Unlike' : 'Like',
+                    isSelected: post.viewerHasLiked,
+                    onPressed: _liking || stale
+                        ? null
+                        : () => _toggleLike(post),
+                    icon: Icon(
+                      post.viewerHasLiked
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: colors.foregroundAccent,
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('post.likes'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.foregroundSecondary,
+                    ),
+                    onPressed: post.likeCount == 0
+                        ? null
+                        : () => Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (_) => PostLikersScreen(postId: post.id),
+                            ),
+                          ),
+                    child: Text(
+                      post.likeCount == 1
+                          ? '1 like'
+                          : '${post.likeCount} likes',
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    post.commentCount == 1
+                        ? '1 comment'
+                        : '${post.commentCount} comments',
+                    key: const Key('post.commentCount'),
+                    style: muted,
+                  ),
+                ],
+              ),
             ],
           ),
+        ),
+        const SizedBox(height: 16),
+        PostComments(
+          key: ValueKey('comments.$_loads'),
+          postId: post.id,
+          onChanged: _refreshCounts,
         ),
       ],
     );

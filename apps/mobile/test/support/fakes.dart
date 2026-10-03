@@ -8,6 +8,7 @@ import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_media.dart';
 import 'package:dayli_mobile/api/post_page.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
+import 'package:dayli_mobile/api/interactions_client.dart';
 import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/api/profile_client.dart';
@@ -479,7 +480,9 @@ class TestHarness {
     this.effectiveTerms = false,
     this.accountExports,
     FakeProfileClient? profiles,
+    FakeInteractionsClient? interactions,
   }) : friends = friends ?? FakeFriendsClient(),
+       interactions = interactions ?? FakeInteractionsClient(),
        profiles = profiles ?? FakeProfileClient(),
        feed = feed ?? FakeFeedClient(),
        posts = posts ?? FakePostClient(),
@@ -585,6 +588,7 @@ class TestHarness {
   final FakeFeedClient feed;
   final FakePostClient posts;
   final FakeProfileClient profiles;
+  final FakeInteractionsClient interactions;
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
@@ -607,6 +611,7 @@ class TestHarness {
     posts: posts,
     friends: friends,
     profiles: profiles,
+    interactions: interactions,
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
@@ -774,5 +779,126 @@ class FakeProfileClient implements ProfileClient {
   Future<ApiResult<String>> changeUsername(String username) async {
     usernameChanges.add(username);
     return changeResult ?? ApiSuccess(username);
+  }
+}
+
+PostComment postComment(
+  String id, {
+  String text = 'Beautiful.',
+  String? parentCommentId,
+  String author = 'ben',
+  bool viewerCanEdit = false,
+  bool viewerCanDelete = false,
+  DateTime? editedAt,
+}) => PostComment(
+  id: id,
+  postId: '1',
+  parentCommentId: parentCommentId,
+  author: InteractionPerson(
+    id: 'user-$author',
+    username: author,
+    displayName: author[0].toUpperCase() + author.substring(1),
+  ),
+  text: text,
+  createdAt: DateTime.utc(2026, 9, 29, 20),
+  editedAt: editedAt,
+  viewerCanEdit: viewerCanEdit,
+  viewerCanDelete: viewerCanDelete,
+);
+
+class FakeInteractionsClient implements InteractionsClient {
+  /// Like results in order; the last repeats. Null echoes the request.
+  final likeResults = <ApiResult<LikeSummary>>[];
+  final likeRequests = <bool>[];
+
+  /// Completes each like when set, so a test can see the optimistic state.
+  Completer<void>? holdLike;
+
+  @override
+  Future<ApiResult<LikeSummary>> setLike(
+    String postId, {
+    required bool liked,
+  }) async {
+    likeRequests.add(liked);
+    await holdLike?.future;
+    if (likeResults.isEmpty) {
+      return ApiSuccess(
+        LikeSummary(likeCount: liked ? 1 : 0, viewerHasLiked: liked),
+      );
+    }
+    return likeResults.length > 1
+        ? likeResults.removeAt(0)
+        : likeResults.single;
+  }
+
+  ApiResult<PostPage<PostLike>> likesResult = const ApiSuccess(
+    PostPage(items: [], nextCursor: null, hasMore: false),
+  );
+
+  @override
+  Future<ApiResult<PostPage<PostLike>>> likes(
+    String postId, {
+    String? cursor,
+  }) async => likesResult;
+
+  /// Comment pages in order; the last repeats.
+  final commentResults = <ApiResult<PostPage<PostComment>>>[
+    const ApiSuccess(PostPage(items: [], nextCursor: null, hasMore: false)),
+  ];
+  final commentRequests = <String?>[];
+
+  @override
+  Future<ApiResult<PostPage<PostComment>>> comments(
+    String postId, {
+    String? cursor,
+  }) async {
+    commentRequests.add(cursor);
+    return commentResults.length > 1
+        ? commentResults.removeAt(0)
+        : commentResults.single;
+  }
+
+  /// Create results in order; the last repeats.
+  final createResults = <ApiResult<PostComment>>[];
+  final created =
+      <({String clientCommentId, String text, String? parentCommentId})>[];
+
+  @override
+  Future<ApiResult<PostComment>> createComment(
+    String postId, {
+    required String clientCommentId,
+    required String text,
+    String? parentCommentId,
+  }) async {
+    created.add((
+      clientCommentId: clientCommentId,
+      text: text,
+      parentCommentId: parentCommentId,
+    ));
+    return createResults.length > 1
+        ? createResults.removeAt(0)
+        : createResults.single;
+  }
+
+  ApiResult<PostComment>? updateResult;
+  final updates = <(String, String)>[];
+
+  @override
+  Future<ApiResult<PostComment>> updateComment(
+    String postId,
+    String commentId,
+    String text,
+  ) async {
+    updates.add((commentId, text));
+    return updateResult ?? const ApiError(ServiceUnavailable());
+  }
+
+  ApiResult<void> deleteResult = const ApiSuccess(null);
+  final deletedComments = <String>[];
+
+  @override
+  Future<ApiResult<void>> deleteComment(String postId, String commentId) async {
+    deletedComments.add(commentId);
+    return deleteResult;
   }
 }
