@@ -43,6 +43,9 @@ src/models/DailyPostTomorrowNote.ts
 src/models/DailyPostVoiceMemo.ts
 src/models/DailyPromptResponse.ts
 src/models/DeletionGrantRequest.ts
+src/models/DirectMessageSendQuotaError.ts
+src/models/DirectMessageSendQuotaErrorError.ts
+src/models/DirectMessageSendQuotaErrorErrorDetails.ts
 src/models/DirectPairLookup.ts
 src/models/EditMessageRequest.ts
 src/models/FeedPage.ts

@@ -27,6 +27,8 @@ export interface ApiEnv {
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */
   PUSH_TOKEN_ENCRYPTION_KEY?: string;
+  /** Persistent sender-wide direct-message quota. Zero disables it. */
+  DIRECT_MESSAGE_SEND_LIMIT?: string;
   /** Public environment scope used to keep native rate-limit keys separate. */
   API_RATE_LIMIT_SCOPE?: string;
   /** Native Cloudflare rate-limit bindings. Missing bindings fail API rate limiting closed. */

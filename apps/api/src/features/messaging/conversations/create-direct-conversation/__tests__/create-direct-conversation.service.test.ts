@@ -13,6 +13,7 @@ function transaction(blocked: boolean): DirectConversationTransaction {
     participantsAvailable: async () => true,
     hasActiveFriendship: async () => false,
     findIdempotentMessage: async () => null,
+    claimNewMessageSlot: async () => new Date("2026-09-28T04:50:00.000Z"),
     activateConversation: async (conversation) => ({ ...conversation, requestState: "active" }),
     createConversationWithMessage: async (input) => ({
       conversation: { id: input.conversationId, peerId: input.recipientId, requestState: input.requestState },
@@ -28,5 +29,23 @@ describe("create direct conversation", () => {
     const service = createCreateDirectConversationService({ store, generateId: () => "id" });
     await expect(service.create("alice", { recipientId: "bob", clientMessageId: "client", text: "hello" }))
       .rejects.toMatchObject({ code: "BLOCKED" });
+  });
+
+  it("claims quota only after accepted validation and before creating rows", async () => {
+    const tx = transaction(false);
+    const calls: string[] = [];
+    tx.claimNewMessageSlot = async (_senderId, limit) => {
+      calls.push(`quota:${limit}`);
+      return new Date("2026-09-28T04:50:00.000Z");
+    };
+    const originalCreate = tx.createConversationWithMessage;
+    tx.createConversationWithMessage = async (input) => {
+      calls.push("create");
+      return originalCreate(input);
+    };
+    const store: DirectConversationStore = { withDirectTransaction: async (_actor, _recipient, action) => action(tx) };
+    const service = createCreateDirectConversationService({ store, messageSendLimit: 7, generateId: () => "id" });
+    await service.create("alice", { recipientId: "bob", clientMessageId: "client", text: "hello" });
+    expect(calls).toEqual(["quota:7", "create"]);
   });
 });

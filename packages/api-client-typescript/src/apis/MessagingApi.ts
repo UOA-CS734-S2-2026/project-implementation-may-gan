@@ -39,6 +39,11 @@ import {
     CreateRealtimeTicket201ResponseToJSON,
 } from '../models/CreateRealtimeTicket201Response';
 import {
+    type DirectMessageSendQuotaError,
+    DirectMessageSendQuotaErrorFromJSON,
+    DirectMessageSendQuotaErrorToJSON,
+} from '../models/DirectMessageSendQuotaError';
+import {
     type DirectPairLookup,
     DirectPairLookupFromJSON,
     DirectPairLookupToJSON,

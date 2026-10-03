@@ -4,6 +4,7 @@ import { appendConversationChange } from "../../shared/append-conversation-chang
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { claimNewMessageSlot } from "../../shared/new-message-quota";
 import type {
   DirectConversation,
   DirectConversationStore,
@@ -130,6 +131,10 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       conversation: { id: row.directConversationId, peerId, requestState: row.requestState },
       message: toStoredMessage(row),
     };
+  }
+
+  async claimNewMessageSlot(senderId: string, limit: number): Promise<Date> {
+    return claimNewMessageSlot(this.queryable, senderId, limit);
   }
 
   async activateConversation(conversation: DirectConversation, now: Date): Promise<DirectConversation> {

@@ -17,6 +17,7 @@
   ],
   "vars": {
     "API_RATE_LIMIT_SCOPE": "staging",
+    "DIRECT_MESSAGE_SEND_LIMIT": "30",
     "BETTER_AUTH_BASE_URL": "https://api-staging.example.test",
     "BETTER_AUTH_TRUSTED_ORIGINS": "https://api-staging.example.test,https://web-staging.example.test",
     "R2_ACCOUNT_ID": "REPLACE_WITH_CLOUDFLARE_ACCOUNT_ID",
