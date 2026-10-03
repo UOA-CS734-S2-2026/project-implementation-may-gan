@@ -73,23 +73,30 @@ export async function requestFcmOAuthToken(input: {
   try {
     response = await fetcher("https://oauth2.googleapis.com/token", {
       method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }), signal: input.signal,
+      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+      redirect: "error",
+      signal: input.signal,
     });
   } catch {
     throw new FcmOAuthError("transport_failed");
   }
+  if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
+    throw new FcmOAuthError("response_invalid");
+  }
   if (!response.ok) throw new FcmOAuthError("response_rejected");
 
-  let body: { access_token?: unknown; expires_in?: unknown };
+  let body: unknown;
   try {
-    body = await response.json() as { access_token?: unknown; expires_in?: unknown };
+    body = await response.json();
   } catch {
     throw new FcmOAuthError("response_invalid");
   }
-  if (typeof body.access_token !== "string" || body.access_token.length === 0 || !Number.isFinite(Number(body.expires_in ?? 300))) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new FcmOAuthError("response_invalid");
+  const tokenResponse = body as { access_token?: unknown; expires_in?: unknown };
+  if (typeof tokenResponse.access_token !== "string" || tokenResponse.access_token.length === 0 || typeof tokenResponse.expires_in !== "number" || !Number.isFinite(tokenResponse.expires_in) || tokenResponse.expires_in <= 0) {
     throw new FcmOAuthError("response_invalid");
   }
-  return { token: body.access_token, expiresAt: now().getTime() + Number(body.expires_in ?? 300) * 1_000 };
+  return { token: tokenResponse.access_token, expiresAt: now().getTime() + tokenResponse.expires_in * 1_000 };
 }
 
 /** Worker-compatible FCM HTTP v1 sender. It never includes sender or message text. */
