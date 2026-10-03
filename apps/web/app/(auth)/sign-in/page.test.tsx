@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   email: vi.fn(),
   setError: vi.fn(),
+  getUsernameProfile: vi.fn(),
   user: { id: "actor" } as { id: string } | null,
 }));
 vi.mock("next/navigation", () => ({
@@ -14,6 +15,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/client", () => ({ authClient: { signIn: { email: mocks.email } } }));
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: mocks.user }) }));
+vi.mock("@/lib/profile/username", () => ({ getUsernameProfile: mocks.getUsernameProfile }));
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
     control: {}, setError: mocks.setError, formState: { isSubmitting: false, errors: {} },
@@ -33,6 +35,8 @@ beforeEach(() => {
   mocks.email.mockReset();
   mocks.email.mockResolvedValue({ data: { user: { id: "actor" } }, error: null });
   mocks.setError.mockReset();
+  mocks.getUsernameProfile.mockReset();
+  mocks.getUsernameProfile.mockResolvedValue({ username: "actor", publicName: null, needsUsernameSetup: false });
   mocks.user = { id: "actor" };
 });
 
@@ -66,6 +70,25 @@ describe("email sign-in return destination", () => {
     mocks.user = { id: "new-user" };
     rerender(<SignInPage />);
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/settings"));
+  });
+
+  it("preserves a public return intent through identity propagation and username setup", async () => {
+    mocks.search = "next=%2Fu%2Fada%3Fintent%3Dfriend-request";
+    mocks.user = { id: "old-user" };
+    mocks.email.mockResolvedValue({ data: { user: { id: "new-user" } }, error: null });
+    mocks.getUsernameProfile.mockResolvedValue({ username: null, publicName: null, needsUsernameSetup: true });
+    const { container, rerender } = render(<SignInPage />);
+
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(mocks.email).toHaveBeenCalled());
+    expect(mocks.getUsernameProfile).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.user = { id: "new-user" };
+    rerender(<SignInPage />);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith(
+      "/setup-username?next=%2Fu%2Fada%3Fintent%3Dfriend-request",
+    ));
   });
 
   it("serializes rapid submissions before the first auth request completes", async () => {
