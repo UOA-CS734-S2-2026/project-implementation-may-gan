@@ -32,6 +32,8 @@ Keep R2 private. The reservation route limits the declared type and a 10 MB size
 
 Protect local drafts/credentials and hide app-switcher previews. `local_auth` alone does not prove protected key storage. Test passcode fallback, lockout, enrolment changes, and reinstall. Minimise browser persistence and temporary files.
 
+The camera is used only when the author chooses it. The app asks for access at that tap, never when the composer opens or in the background, and a refusal never blocks posting (see [Camera access](media-reservations.md#flutter-client)). Dayli does not save photos or videos taken in the app to the device photo library, and the compressor strips EXIF and location metadata from them before upload, as for library picks.
+
 Push defaults to generic text. Remove account token associations on logout. Location and microphone access need informed consent and preview. Screenshot reporting is best-effort.
 
 ## Required review

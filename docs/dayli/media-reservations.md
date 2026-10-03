@@ -47,7 +47,7 @@ The R2 token from the setup below needs delete permission on the bucket. **Objec
 
 ## Flutter client 
 
-The composer takes up to three photos, or one video, from the gallery. Camera capture is separate work. Each picked file goes through these steps in the background while the composer is open, one attachment at a time:
+The composer takes up to three photos, or one video, from the camera or the photo library. Tapping an add tile opens a sheet: take a photo, record a video (the first slot only, stopping just under 15 seconds), or choose from the library. A captured photo or video is treated exactly like a library pick from then on. Each picked file goes through these steps in the background while the composer is open, one attachment at a time:
 
 1. **Compress** into app support storage (`dayli-media/user-<id>/`, one folder per user), not temporary storage, so the copy survives a restart. Photos become JPEG with the longest edge at most 2048 px, quality 80, EXIF removed, and orientation applied to the pixels. Videos are checked for length first; a video over 15 seconds is rejected without being encoded. Otherwise they become 720p H.264 and AAC in MP4 at about 2.5 Mbps, with metadata (including location) removed. The client only ever reserves `image/jpeg` or `video/mp4`.
 2. **Check limits** on the compressed copy: 10 MB per file, 15 seconds per video, and 25 MB per post. The server can't check the post total until posts link attachments, so the client is the only check for now. A file over a limit, or one that can't be read, is removed from the draft with a message.
@@ -58,6 +58,14 @@ The composer takes up to three photos, or one video, from the gallery. Camera ca
 Each step is saved in the protected draft (`compressedPath`, `contentType`, `byteSize`, `reservationId`, and `status`: `pending`, `uploading`, `validated`, or `failed`), so an interrupted upload resumes on the next open. After a restart the upload URL is gone, so the client calls `/complete` first: `validated` finishes, and `pending` reserves again and re-uploads. The presigned URL is kept in memory only and never logged or saved. Offline and outage failures keep the file and retry with backoff (2 seconds, doubling to 1 minute); an expired session waits for sign-in.
 
 Posting is blocked until every attachment is `validated`. The post then sends their reservation IDs as `attachments`, and the API links them to the post in the same transaction (see [Daily post creation](daily-posts.md)). If the API answers `MEDIA_NOT_READY`, the composer asks the author to post again once uploads finish. If it answers `MEDIA_UNAVAILABLE`, the composer forgets every reservation, keeps the compressed copies, uploads them again, and asks the author to post once that's done. A compressed copy is deleted when the draft stops referring to it: when the attachment is removed, the dayli is posted, or the draft is discarded. Signing out removes the user's draft and their whole media folder, even if the composer is closed, including copies a crash left behind. An expired session keeps the draft for the next sign-in, so its media stays too.
+
+**Camera access.** The app asks for camera access only when the author chooses "Take a photo" or "Record a video", never when the composer opens, so choosing from the library never prompts. A refusal leaves everything else working:
+
+- **Declined once:** the composer says so and points to the library. Android can ask again on the next tap.
+- **Refused for good** (iOS after one refusal, Android after two): the prompt can't be shown again, so the composer offers **Open Settings**.
+- **Restricted** by a device policy such as parental controls, or **no camera** (a simulator or a device without one): the composer says so and the library stays available. Neither has a Settings action.
+
+Posting never needs the camera, and text-only and library posts are unaffected by any of these. On iOS the video recorder also uses the microphone, which the system asks about itself. Taking a photo does not request photo library access. Android can end the app while the camera is open, so the composer collects the photo or video the system finished taking the next time it opens, unless the draft already has it. The native camera screen provides the preview and retake before the file reaches the composer.
 
 Known gaps: uploads pause while the composer is closed; compressed copies left behind by a crash mid-compression aren't swept until sign-out; video tiles show a placeholder rather than a thumbnail; and attached media is shown only to people who can read its post (see [Downloads](#downloads)).
 
