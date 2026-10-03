@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
@@ -45,6 +45,7 @@ function SignInForm() {
   const router = useRouter();
   const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
   const { user } = useSession();
+  const signInInFlight = useRef(false);
   const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,26 +70,32 @@ function SignInForm() {
   });
 
   const onSubmit = async ({ email, password }: SignInValues) => {
+    if (signInInFlight.current) return;
+    signInInFlight.current = true;
     setExpectedUserId(null);
-    const { data, error } = await authClient.signIn.email({ email, password });
+    try {
+      const { data, error } = await authClient.signIn.email({ email, password });
 
-    if (error) {
-      setError("root", { message: error.message ?? "Invalid credentials." });
-      return;
-    }
-    if (!data?.user?.id) {
-      setError("root", { message: "Your session could not be verified. Please try again." });
-      return;
-    }
+      if (error) {
+        setError("root", { message: error.message ?? "Invalid credentials." });
+        return;
+      }
+      if (!data?.user?.id) {
+        setError("root", { message: "Your session could not be verified. Please try again." });
+        return;
+      }
 
-    setExpectedUserId(data.user.id);
+      setExpectedUserId(data.user.id);
+    } finally {
+      signInInFlight.current = false;
+    }
   };
 
   return (
     <form
       method="post"
       className="flex flex-col gap-8"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={(event) => void handleSubmit(onSubmit)(event)}
     >
       <p className="font-serif text-2xl font-semibold text-foreground tracking-tight">
         Welcome back
