@@ -1,0 +1,6 @@
+reason: The composite push-device owner key is required by a recipient-consistency foreign key. The existing primary key already proves every id unique, so validation does not scan for duplicate ids.
+affected_data_and_clients: The migration briefly locks push_devices while attaching the redundant composite uniqueness guarantee. Existing registration writes can retry after the bounded lock timeout.
+rollout_sequence: Apply during the approved migration window, verify the composite foreign keys, then deploy API composition with publishers disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running.
+forward_fix_plan: If the bounded lock cannot be acquired, stop and retry in a quieter window. Do not weaken the ownership constraint.
+reviewer: Database and availability reviewers required.

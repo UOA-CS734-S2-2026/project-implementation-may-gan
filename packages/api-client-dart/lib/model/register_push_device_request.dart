@@ -65,8 +65,6 @@ class RegisterPushDeviceRequest {
     json[r'optedIn'] = this.optedIn;
     if (this.notificationSchemaVersion != null) {
       json[r'notificationSchemaVersion'] = this.notificationSchemaVersion;
-    } else {
-      json[r'notificationSchemaVersion'] = null;
     }
     return json;
   }
