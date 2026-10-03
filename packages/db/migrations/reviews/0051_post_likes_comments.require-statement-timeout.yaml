@@ -1,0 +1,6 @@
+reason: The protected migration runner sets the statement timeout. Every statement creates or alters a new, empty table.
+affected_data_and_clients: Creates the new empty tables post_likes and post_comments with their keys, indexes, and checks. Existing tables only gain foreign-key references from these new tables, and no existing row or client contract changes.
+rollout_sequence: Apply through the protected migration workflow before deploying the API that reads and writes likes and comments. The tables are unused until then, so the migration is safe to apply ahead of the code.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+forward_fix_plan: Add a new reviewed forward migration for corrections and never edit this migration after release.
+reviewer: Required database CODEOWNER review before migration execution.
