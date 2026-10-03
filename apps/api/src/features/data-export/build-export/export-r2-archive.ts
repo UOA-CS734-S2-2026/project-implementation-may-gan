@@ -1,0 +1,172 @@
+import { AwsClient } from "aws4fetch";
+import { SaxesParser } from "saxes";
+import type { R2RuntimeConfiguration } from "../../../infrastructure/media/r2";
+
+const responseLimit = 64 * 1024;
+const maximumListPages = 20;
+const keyPattern = /^private\/data-exports\/v2\/[0-9a-f]{64}\/[0-9a-f]{64}\.zip$/;
+const uploadIdPattern = /^[A-Za-z0-9_+/=-]{1,512}$/;
+const etagPattern = /^[A-Za-z0-9"_-]{1,200}$/;
+
+export class ExportStorageError extends Error {}
+export interface MultipartPart { partNumber: number; etag: string }
+export interface ExportArchiveStore {
+  begin(key: string): Promise<string>;
+  uploadPart(key: string, uploadId: string, partNumber: number, bytes: Uint8Array): Promise<string>;
+  complete(key: string, uploadId: string, parts: readonly MultipartPart[]): Promise<void>;
+  abort(key: string, uploadId: string): Promise<void>;
+  listUploads(key: string): Promise<string[]>;
+  remove(key: string): Promise<void>;
+}
+function checkKey(key: string) {
+  if (!keyPattern.test(key)) throw new ExportStorageError("Invalid export archive key.");
+}
+function checkUploadId(id: string) {
+  if (!uploadIdPattern.test(id)) throw new ExportStorageError("Invalid export upload ID.");
+}
+function urlFor(config: R2RuntimeConfiguration, key?: string): string {
+  const base = `https://${config.accountId}.r2.cloudflarestorage.com/${encodeURIComponent(config.bucketName)}`;
+  return key ? `${base}/${key.split("/").map(encodeURIComponent).join("/")}` : base;
+}
+async function smallResponse(response: Response): Promise<string> {
+  if (!response.body) throw new ExportStorageError("Missing R2 response body.");
+  const reader = response.body.getReader();
+  let total = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > responseLimit) {
+        await reader.cancel();
+        throw new ExportStorageError("Oversized R2 response.");
+      }
+      chunks.push(part.value);
+    }
+  } finally { reader.releaseLock(); }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const part of chunks) { body.set(part, offset); offset += part.byteLength; }
+  return new TextDecoder("utf-8", { fatal: true }).decode(body);
+}
+interface XmlNode { name: string; text: string; children: XmlNode[] }
+function xmlNode(xml: string, expected: string): XmlNode {
+  const parser = new SaxesParser();
+  const stack: XmlNode[] = [];
+  let root: XmlNode | undefined;
+  let nodes = 0;
+  parser.on("doctype", () => { throw new ExportStorageError("R2 XML DTD is forbidden."); });
+  parser.on("opentag", (tag) => {
+    if (++nodes > 2000 || stack.length > 8) throw new ExportStorageError("R2 XML exceeds its structural limit.");
+    const node: XmlNode = { name: tag.name.split(":").at(-1)!, text: "", children: [] };
+    if (stack.length) stack.at(-1)!.children.push(node);
+    else if (root) throw new ExportStorageError("R2 XML has multiple roots.");
+    else root = node;
+    stack.push(node);
+  });
+  parser.on("text", (value) => { if (stack.length) stack.at(-1)!.text += value; });
+  parser.on("closetag", () => { stack.pop(); });
+  parser.on("error", () => { throw new ExportStorageError("Malformed R2 XML."); });
+  try { parser.write(xml).close(); }
+  catch { throw new ExportStorageError("Malformed R2 XML."); }
+  if (!root || root.name !== expected || stack.length || root.children.some((node) => node.name === "Error")) {
+    throw new ExportStorageError("Unexpected R2 XML response.");
+  }
+  return root;
+}
+function child(node: XmlNode, name: string): string | undefined {
+  const values = node.children.filter((item) => item.name === name);
+  return values.length === 1 && values[0]!.children.length === 0 ? values[0]!.text.trim() : undefined;
+}
+function escapeXml(text: string) {
+  return text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
+}
+
+/** Signed S3 requests only; no direct public URL, object binding, or unbounded response body. */
+export function createExportArchiveStore(config: R2RuntimeConfiguration, transport?: Pick<AwsClient, "fetch">): ExportArchiveStore {
+  const client = transport ?? new AwsClient({
+    accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey, service: "s3", region: "auto",
+  });
+  async function request(url: string | URL, init: RequestInit): Promise<Response> {
+    try { return await client.fetch(url, { ...init, signal: AbortSignal.timeout(15_000) }); }
+    catch { throw new ExportStorageError("R2 export request failed."); }
+  }
+  return {
+    async begin(key) {
+      checkKey(key);
+      const response = await request(`${urlFor(config, key)}?uploads`, { method: "POST" });
+      if (!response.ok) throw new ExportStorageError("R2 multipart initiation failed.");
+      const id = child(xmlNode(await smallResponse(response), "InitiateMultipartUploadResult"), "UploadId");
+      if (!id) throw new ExportStorageError("Missing R2 upload ID.");
+      checkUploadId(id);
+      return id;
+    },
+    async uploadPart(key, id, partNumber, bytes) {
+      checkKey(key); checkUploadId(id);
+      if (!Number.isSafeInteger(partNumber) || partNumber < 1 || partNumber > 100
+        || bytes.byteLength < 1 || bytes.byteLength > 8 * 1024 * 1024) throw new ExportStorageError("Unbounded multipart part.");
+      const url = new URL(urlFor(config, key));
+      url.searchParams.set("partNumber", String(partNumber)); url.searchParams.set("uploadId", id);
+      const response = await request(url, { method: "PUT", body: bytes.slice().buffer });
+      const etag = response.headers.get("etag");
+      if (!response.ok || !etag || !etagPattern.test(etag)) throw new ExportStorageError("R2 multipart part failed.");
+      return etag;
+    },
+    async complete(key, id, parts) {
+      checkKey(key); checkUploadId(id);
+      if (parts.length < 1 || parts.length > 100 || parts.some((part, index) =>
+        part.partNumber !== index + 1 || !etagPattern.test(part.etag))) {
+        throw new ExportStorageError("Invalid multipart completion parts.");
+      }
+      const body = `<CompleteMultipartUpload>${parts.map((part) => `<Part><PartNumber>${part.partNumber}</PartNumber><ETag>${escapeXml(part.etag)}</ETag></Part>`).join("")}</CompleteMultipartUpload>`;
+      const url = new URL(urlFor(config, key)); url.searchParams.set("uploadId", id);
+      const response = await request(url, { method: "POST", headers: { "content-type": "application/xml" }, body });
+      if (!response.ok) throw new ExportStorageError("R2 multipart completion failed.");
+      xmlNode(await smallResponse(response), "CompleteMultipartUploadResult");
+    },
+    async abort(key, id) {
+      checkKey(key); checkUploadId(id);
+      const url = new URL(urlFor(config, key)); url.searchParams.set("uploadId", id);
+      const response = await request(url, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) throw new ExportStorageError("R2 multipart abort failed.");
+    },
+    async listUploads(key) {
+      checkKey(key);
+      const ids = new Set<string>();
+      let previous = "";
+      let keyMarker: string | undefined;
+      let uploadMarker: string | undefined;
+      for (let page = 0; page < maximumListPages; page += 1) {
+        const url = new URL(urlFor(config));
+        url.searchParams.set("uploads", ""); url.searchParams.set("prefix", key);
+        if (keyMarker) url.searchParams.set("key-marker", keyMarker);
+        if (uploadMarker) url.searchParams.set("upload-id-marker", uploadMarker);
+        const response = await request(url, { method: "GET" });
+        if (!response.ok) throw new ExportStorageError("R2 multipart listing failed.");
+        const xml = xmlNode(await smallResponse(response), "ListMultipartUploadsResult");
+        for (const upload of xml.children.filter((node) => node.name === "Upload")) {
+          if (child(upload, "Key") !== key) continue;
+          const id = child(upload, "UploadId");
+          if (!id) throw new ExportStorageError("Missing listed upload ID.");
+          checkUploadId(id);
+          ids.add(id);
+        }
+        const truncated = child(xml, "IsTruncated");
+        if (truncated === "false") return [...ids];
+        if (truncated !== "true") throw new ExportStorageError("Invalid R2 multipart listing cursor.");
+        keyMarker = child(xml, "NextKeyMarker");
+        uploadMarker = child(xml, "NextUploadIdMarker");
+        const marker = `${keyMarker}:${uploadMarker}`;
+        if (!keyMarker || !uploadMarker || marker === previous) throw new ExportStorageError("Invalid R2 multipart listing cursor.");
+        previous = marker;
+      }
+      throw new ExportStorageError("R2 multipart listing exceeds its page limit.");
+    },
+    async remove(key) {
+      checkKey(key);
+      const response = await request(urlFor(config, key), { method: "DELETE" });
+      if (!response.ok && response.status !== 404) throw new ExportStorageError("R2 archive removal failed.");
+    },
+  };
+}
