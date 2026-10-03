@@ -316,6 +316,34 @@
       "when": 1790993400000,
       "tag": "0044_export_lease_renewal",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1790994000000,
+      "tag": "0045_export_authenticated_download",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790994600000,
+      "tag": "0046_export_archive_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790995200000,
+      "tag": "0047_export_trash_file_pages",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790995800000,
+      "tag": "0048_export_cleanup_incident_retention",
+      "breakpoints": true
     }
   ]
 }

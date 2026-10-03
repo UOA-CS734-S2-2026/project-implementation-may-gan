@@ -1,6 +1,7 @@
 import { AwsClient } from "aws4fetch";
 import { SaxesParser } from "saxes";
 import type { R2RuntimeConfiguration } from "../../../infrastructure/media/r2";
+import { MAX_EXPORT_ARCHIVE_BYTES } from "./export-limits";
 
 const responseLimit = 64 * 1024;
 const maximumListPages = 20;
@@ -17,6 +18,9 @@ export interface ExportArchiveStore {
   abort(key: string, uploadId: string): Promise<void>;
   listUploads(key: string): Promise<string[]>;
   remove(key: string): Promise<void>;
+  exists(key: string): Promise<boolean>;
+  head(key: string): Promise<{ size: number; etag: string }>;
+  readRange(key: string, start: number, end: number, size: number, etag: string): Promise<Uint8Array>;
 }
 function checkKey(key: string) {
   if (!keyPattern.test(key)) throw new ExportStorageError("Invalid export archive key.");
@@ -167,6 +171,56 @@ export function createExportArchiveStore(config: R2RuntimeConfiguration, transpo
       checkKey(key);
       const response = await request(urlFor(config, key), { method: "DELETE" });
       if (!response.ok && response.status !== 404) throw new ExportStorageError("R2 archive removal failed.");
+    },
+    async exists(key) {
+      checkKey(key);
+      const response = await request(urlFor(config, key), { method: "HEAD" });
+      if (response.status === 404) return false;
+      if (!response.ok) throw new ExportStorageError("R2 archive existence check failed.");
+      return true;
+    },
+    async head(key) {
+      checkKey(key);
+      const response = await request(urlFor(config, key), { method: "HEAD" });
+      const size = Number(response.headers.get("content-length"));
+      const etag = response.headers.get("etag");
+      if (!response.ok || !response.headers.has("content-length")
+        || !Number.isSafeInteger(size) || size < 1 || size > MAX_EXPORT_ARCHIVE_BYTES
+        || !etag || !etagPattern.test(etag)) throw new ExportStorageError("R2 archive metadata is invalid.");
+      return { size, etag };
+    },
+    async readRange(key, start, end, size, etag) {
+      checkKey(key);
+      const length = end - start + 1;
+      if (!Number.isSafeInteger(start) || start < 0 || !Number.isSafeInteger(end)
+        || !Number.isSafeInteger(size) || size < 1 || size > MAX_EXPORT_ARCHIVE_BYTES
+        || end >= size || length < 1 || length > 512 * 1024 || !etagPattern.test(etag)) {
+        throw new ExportStorageError("Unbounded export archive read.");
+      }
+      const response = await request(urlFor(config, key), { method: "GET",
+        headers: { Range: `bytes=${start}-${end}`, "If-Match": etag } });
+      const range = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+      if (response.status !== 206 || !range || Number(range[1]) !== start || Number(range[2]) !== end
+        || Number(range[3]) !== size || response.headers.get("etag") !== etag || !response.body) {
+        throw new ExportStorageError("R2 archive range is invalid.");
+      }
+      const output = new Uint8Array(length);
+      let received = 0;
+      const reader = response.body.getReader();
+      try {
+        for (;;) {
+          const next = await reader.read();
+          if (next.done) break;
+          if (received + next.value.byteLength > length) {
+            await reader.cancel();
+            throw new ExportStorageError("R2 archive range exceeded its limit.");
+          }
+          output.set(next.value, received);
+          received += next.value.byteLength;
+        }
+      } finally { reader.releaseLock(); }
+      if (received !== length) throw new ExportStorageError("R2 archive range was truncated.");
+      return output;
     },
   };
 }

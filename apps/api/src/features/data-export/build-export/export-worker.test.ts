@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createExportWorker, type ExportBuildStore } from "./export-worker";
-import type { ExportArchiveStore } from "./export-r2-archive";
+import type { ExportArchiveStore } from "../shared/export-r2-archive";
 import type { ExportFileSource, ExportRecordSource } from "./archive-entries";
 
 const selection = { requestId: "request", leaseToken: "lease", selectionCutoffAt: new Date("2026-01-01T00:00:00Z") };
@@ -13,7 +13,9 @@ function fixtures() {
   const objects: ExportArchiveStore = {
     begin: vi.fn(async () => "upload-1"), uploadPart: vi.fn(async () => '"etag"'),
     complete: vi.fn(async () => {}), abort: vi.fn(async () => {}),
-    listUploads: vi.fn(async () => []), remove: vi.fn(async () => {}),
+    listUploads: vi.fn(async () => []), remove: vi.fn(async () => {}), exists: vi.fn(async () => false),
+    head: vi.fn(async () => ({ size: 100, etag: '"etag"' })),
+    readRange: vi.fn(async () => new Uint8Array()),
   };
   const records: ExportRecordSource = { page: vi.fn(async () => []) };
   const files: ExportFileSource = { page: vi.fn(async () => []), read() { throw new Error("Unexpected file read"); } };

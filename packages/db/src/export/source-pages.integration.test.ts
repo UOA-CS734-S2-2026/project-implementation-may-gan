@@ -159,23 +159,25 @@ function fixture(value: string, role: string): string {
   });
 
   it("proves post and avatar references before returning internal R2 keys to the worker", async () => {
-    const files = await worker<{ file_id: string; post_id: string | null; file_kind: string; content_type: string; object_key: string }[]>`
-      select * from public.read_account_export_file_page(${request}, ${lease}, null, 25)`;
+    const files = await worker<{ file_id: string; post_id: string | null; post_trashed: boolean; file_kind: string; content_type: string; object_key: string }[]>`
+      select * from public.read_account_export_file_page_v2(${request}, ${lease}, null, 25)`;
     expect(files.map((file) => file.file_id).sort()).toEqual([`avatar:${owner}`, `post:${liveMedia}`].sort());
     expect(files).toEqual(expect.arrayContaining([
       expect.objectContaining({ file_id: `post:${liveMedia}`, post_id: restorable,
-        content_type: "audio/mp4", object_key: `media/${owner}/${liveReservation}` }),
-      expect.objectContaining({ file_id: `avatar:${owner}`, post_id: null,
+        post_trashed: true, content_type: "audio/mp4", object_key: `media/${owner}/${liveReservation}` }),
+      expect.objectContaining({ file_id: `avatar:${owner}`, post_id: null, post_trashed: false,
         file_kind: "profile_avatar", object_key: `media/${owner}/${avatarReservation}` }),
     ]));
-    expect(await worker`select * from public.read_account_export_file_page(${request}, 'wrong-token', null, 25)`)
+    expect(await worker`select * from public.read_account_export_file_page_v2(${request}, 'wrong-token', null, 25)`)
       .toEqual([]);
-    await expect(app`select * from public.read_account_export_file_page(${request}, ${lease}, null, 25)`)
+    await expect(app`select * from public.read_account_export_file_page_v2(${request}, ${lease}, null, 25)`)
+      .rejects.toThrow();
+    await expect(worker`select * from public.read_account_export_file_page(${request}, ${lease}, null, 25)`)
       .rejects.toThrow();
     const [first] = await worker<{ file_id: string }[]>`
-      select * from public.read_account_export_file_page(${request}, ${lease}, null, 1)`;
+      select * from public.read_account_export_file_page_v2(${request}, ${lease}, null, 1)`;
     expect((await worker<{ file_id: string }[]>`
-      select * from public.read_account_export_file_page(${request}, ${lease}, ${first!.file_id}, 1)`)[0]?.file_id)
+      select * from public.read_account_export_file_page_v2(${request}, ${lease}, ${first!.file_id}, 1)`)[0]?.file_id)
       .not.toBe(first?.file_id);
   });
 

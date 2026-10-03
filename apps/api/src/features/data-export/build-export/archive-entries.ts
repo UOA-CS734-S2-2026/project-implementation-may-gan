@@ -21,6 +21,7 @@ export interface ExportRecordSource {
 export interface ExportFileReference {
   file_id: string;
   post_id: string | null;
+  post_trashed: boolean;
   file_kind: "post_media" | "profile_avatar";
   content_type: string;
   byte_size: number;
@@ -73,33 +74,40 @@ export async function* recordArchiveEntries(
     consistency: "per_source_selection_cutoff_not_atomic_snapshot",
     recordKinds: [...exportSourceKinds],
     fileKinds: files ? ["post_media", "profile_avatar"] : [],
+    trashPaths: ["trash/posts.ndjson", ...(files ? ["trash/media/posts/"] : [])],
   };
   yield { path: "manifest.json", chunks: (async function* () {
     yield encoder.encode(`${JSON.stringify(manifest)}\n`);
   })() };
 
   let count = 0;
-  for (const kind of exportSourceKinds) {
-    yield { path: `records/${kind}.ndjson`, chunks: (async function* () {
-      let after: string | null = null;
-      for (;;) {
-        const page = await source.page(selection, kind, after, EXPORT_PAGE_SIZE);
-        if (page.length > EXPORT_PAGE_SIZE) throw new ExportZipLimitError("Export source returned too many rows.");
-        if (page.length === 0) break;
-        for (const item of page) {
-          if (typeof item.record_key !== "string" || !item.record_key || item.record_key.length > 200
-            || after !== null && item.record_key <= after) {
-            throw new ExportZipLimitError("Export source cursor did not advance.");
-          }
-          after = item.record_key;
-          count += 1;
-          if (count > MAX_EXPORT_RECORDS) throw new ExportZipLimitError("Export record limit exceeded.");
-          yield encodeBoundedRecord(item.payload);
+  async function* records(kind: ExportSourceKind, trashOnly: boolean): AsyncGenerator<Uint8Array> {
+    let after: string | null = null;
+    for (;;) {
+      const page = await source.page(selection, kind, after, EXPORT_PAGE_SIZE);
+      if (page.length > EXPORT_PAGE_SIZE) throw new ExportZipLimitError("Export source returned too many rows.");
+      if (page.length === 0) break;
+      for (const item of page) {
+        if (typeof item.record_key !== "string" || !item.record_key || item.record_key.length > 200
+          || after !== null && item.record_key <= after) {
+          throw new ExportZipLimitError("Export source cursor did not advance.");
         }
-        if (page.length < EXPORT_PAGE_SIZE) break;
+        after = item.record_key;
+        if (kind === "posts") {
+          const trashed = item.payload?.trashed_at !== null && item.payload?.trashed_at !== undefined;
+          if (trashed !== trashOnly) continue;
+        }
+        count += 1;
+        if (count > MAX_EXPORT_RECORDS) throw new ExportZipLimitError("Export record limit exceeded.");
+        yield encodeBoundedRecord(item.payload);
       }
-    })() };
+      if (page.length < EXPORT_PAGE_SIZE) break;
+    }
   }
+  for (const kind of exportSourceKinds) {
+    yield { path: `records/${kind}.ndjson`, chunks: records(kind, false) };
+  }
+  yield { path: "trash/posts.ndjson", chunks: records("posts", true) };
 
   if (!files) return;
   let after: string | null = null;
@@ -118,15 +126,17 @@ export async function* recordArchiveEntries(
       const id = file.file_id.startsWith(prefix) ? file.file_id.slice(prefix.length) : "";
       if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)
         || file.file_kind === "post_media" && (!file.post_id || !/^[a-zA-Z0-9_-]{1,128}$/.test(file.post_id))
-        || file.file_kind === "profile_avatar" && file.post_id !== null) {
+        || file.file_kind === "profile_avatar" && (file.post_id !== null || file.post_trashed)
+        || typeof file.post_trashed !== "boolean") {
         throw new ExportZipLimitError("Export file reference is not a reviewed attachment.");
       }
       after = file.file_id;
       fileCount += 1;
-      if (fileCount > MAX_EXPORT_ENTRIES - exportSourceKinds.length - 2) {
+      if (fileCount > MAX_EXPORT_ENTRIES - exportSourceKinds.length - 3) {
         throw new ExportZipLimitError("Export file count exceeds its limit.");
       }
-      const path = file.file_kind === "post_media" ? `media/posts/${id}.bin` : `media/avatar/${id}.bin`;
+      const path = file.file_kind === "post_media"
+        ? `${file.post_trashed ? "trash/" : ""}media/posts/${id}.bin` : `media/avatar/${id}.bin`;
       descriptions.push(encodeBoundedRecord({ path, kind: file.file_kind, postId: file.post_id,
         contentType: file.content_type, byteSize: file.byte_size }));
       yield { path, chunks: (async function* () {

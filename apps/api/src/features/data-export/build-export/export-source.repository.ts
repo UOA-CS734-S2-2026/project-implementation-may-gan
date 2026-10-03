@@ -40,11 +40,12 @@ export function createRestrictedExportFilePager(database: DayliDatabase): Pick<E
       const rows = await database.select({
         file_id: sql<string>`file_page.file_id`,
         post_id: sql<string | null>`file_page.post_id`,
+        post_trashed: sql<boolean>`file_page.post_trashed`,
         file_kind: sql<ExportFileReference["file_kind"]>`file_page.file_kind`,
         content_type: sql<string>`file_page.content_type`,
         byte_size: sql<string>`file_page.byte_size::text`,
         object_key: sql<string>`file_page.object_key`,
-      }).from(sql`public.read_account_export_file_page(
+      }).from(sql`public.read_account_export_file_page_v2(
         ${selection.requestId}, ${selection.leaseToken}, ${after}, ${limit}) as file_page`);
       return rows.map((row) => ({ ...row, byte_size: Number(row.byte_size) }));
     },

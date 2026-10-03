@@ -137,6 +137,7 @@ export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_
   archiveObjectKey: text("archive_object_key").notNull(),
   uploadId: text("upload_id"),
   uploadStartedAt: timestamp("upload_started_at", { withTimezone: true }),
+  verifiedAbsentAt: timestamp("verified_absent_at", { withTimezone: true }),
   status: dataExportObjectCleanupStatus("status").notNull().default("pending"),
   attemptCount: integer("attempt_count").notNull().default(0),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
@@ -168,6 +169,23 @@ export const dataExportObjectCleanupTasks = pgTable("data_export_object_cleanup_
  * Terminal rows clear their archive and snapshot fields. If an archive needs
  * deletion, archiveCleanupTaskId references the durable private cleanup task.
  */
+export const dataExportCleanupIncidents = pgTable("data_export_cleanup_incidents", {
+  id: text("id").primaryKey(),
+  failureCategory: text("failure_category").notNull(),
+  failureCount: bigint("failure_count", { mode: "number" }).notNull().default(1),
+  firstFailedAt: timestamp("first_failed_at", { withTimezone: true }).notNull(),
+  lastFailedAt: timestamp("last_failed_at", { withTimezone: true }).notNull(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+}, (table) => [
+  index("data_export_cleanup_incidents_expiry_idx").on(table.expiresAt).where(sql`${table.expiresAt} is not null`),
+  check("data_export_cleanup_incident_digest_check", sql`${table.id} ~ '^[0-9a-f]{64}$'`),
+  check("data_export_cleanup_incident_category_check", sql`${table.failureCategory} = 'storage'`),
+  check("data_export_cleanup_incident_count_check", sql`${table.failureCount} between 1 and 9007199254740991`),
+  check("data_export_cleanup_incident_clock_check", sql`${table.lastFailedAt} >= ${table.firstFailedAt} and (${table.resolvedAt} is null or ${table.resolvedAt} >= ${table.lastFailedAt})`),
+  check("data_export_cleanup_incident_retention_check", sql`(${table.resolvedAt} is null and ${table.expiresAt} is null) or (${table.resolvedAt} is not null and ${table.expiresAt} = ${table.resolvedAt} + interval '720 hours')`),
+]);
+
 export const dataExportRequests = pgTable("data_export_requests", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

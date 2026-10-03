@@ -40,6 +40,10 @@ describe("account policy", () => {
     await expect(classify("GET", "/api/v1/account/deletion")).resolves.toBe("policy_read");
     await expect(classify("POST", "/api/v1/account/deletion/request")).resolves.toBe("request_deletion");
     await expect(classify("POST", "/api/v1/account/deletion/cancel")).resolves.toBe("cancel_deletion_verification");
+    await expect(classify("GET", "/api/v1/account/export")).resolves.toBe("export");
+    await expect(classify("POST", "/api/v1/account/export/request")).resolves.toBe("export");
+    await expect(classify("GET", "/api/v1/account/export/request-id/download")).resolves.toBe("export");
+    await expect(classify("GET", "/api/v1/account/export/request-id/download/extra")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/account/deletion/request/extra")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
     await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "request_deletion" })).resolves.toBe("request_deletion");

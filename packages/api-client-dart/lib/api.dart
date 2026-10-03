@@ -41,6 +41,8 @@ part 'api/system_api.dart';
 part 'model/account_deletion_cancellation_result.dart';
 part 'model/account_deletion_request_result.dart';
 part 'model/account_deletion_status.dart';
+part 'model/account_export_request_result.dart';
+part 'model/account_export_status.dart';
 part 'model/api_error.dart';
 part 'model/api_error_code.dart';
 part 'model/api_error_error.dart';

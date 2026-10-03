@@ -17,6 +17,8 @@ src/index.ts
 src/models/AccountDeletionCancellationResult.ts
 src/models/AccountDeletionRequestResult.ts
 src/models/AccountDeletionStatus.ts
+src/models/AccountExportRequestResult.ts
+src/models/AccountExportStatus.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts

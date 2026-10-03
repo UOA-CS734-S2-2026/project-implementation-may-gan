@@ -25,6 +25,8 @@ lib/auth/oauth.dart
 lib/model/account_deletion_cancellation_result.dart
 lib/model/account_deletion_request_result.dart
 lib/model/account_deletion_status.dart
+lib/model/account_export_request_result.dart
+lib/model/account_export_status.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
