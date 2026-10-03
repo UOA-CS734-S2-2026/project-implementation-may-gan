@@ -120,7 +120,7 @@ function requireLocalTestUrl(value: string): string {
       viewerIsAuthor: false,
       media: [],
       voiceMemo: null,
-      publicMediaUnavailable: false,
+      publicMediaDelivery: false,
     });
   });
 
@@ -132,7 +132,7 @@ function requireLocalTestUrl(value: string): string {
       await expect(repo().findPost(null, id("released"), now)).resolves.toMatchObject({
         id: id("released"),
         viewerIsAuthor: false,
-        publicMediaUnavailable: false,
+        publicMediaDelivery: false,
       });
       await expect(repo().findPost(users.stranger, id("released"), now)).resolves.toMatchObject({ id: id("released") });
       await expect(repo().findPost(null, id("solo"), now)).resolves.toBeNull();

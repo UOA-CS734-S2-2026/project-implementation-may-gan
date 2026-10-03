@@ -153,7 +153,7 @@ describe("GET /api/v1/profiles/{username}/posts", () => {
     expect(JSON.stringify(body)).not.toContain("objectKey");
   });
 
-  it.each([null, "user-stranger"])("does not sign media for a public-only archive as %s", async (viewer) => {
+  it.each([null, "user-stranger"])("returns Worker media URLs for a public-only archive as %s", async (viewer) => {
     const withMedia: ProfilePostRecord = {
       ...profilePost,
       media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
@@ -163,10 +163,15 @@ describe("GET /api/v1/profiles/{username}/posts", () => {
       listProfilePosts: async () => archive([withMedia], "public"),
     }, sign), undefined, viewer);
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(sign).not.toHaveBeenCalled();
-    expect(await response.text()).not.toContain("objectKey");
+    const body = await response.json<{ items: Array<{ media: Array<{ url: string; expiresAt: string | null }> }> }>();
+    expect(body.items[0]?.media[0]).toMatchObject({
+      url: "http://localhost/api/v1/posts/post-1/media/m-1/content",
+      expiresAt: null,
+    });
+    expect(JSON.stringify(body)).not.toContain("objectKey");
   });
 
   it("is unavailable for a page with media when storage isn't configured", async () => {

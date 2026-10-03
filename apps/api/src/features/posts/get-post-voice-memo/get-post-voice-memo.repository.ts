@@ -11,6 +11,7 @@ export interface PostVoiceMemoRepository {
     viewerId: string | null,
     postId: string,
     now: Date,
+    access?: "private" | "parent-authorized",
   ): Promise<PostVoiceMemoRef | null>;
 }
 
@@ -21,7 +22,7 @@ export interface PostVoiceMemoRepository {
 export function createPostgresPostVoiceMemoRepository(database: DayliDatabase): PostVoiceMemoRepository {
   const { posts, user, postMedia, mediaReservation } = schema;
   return {
-    async findVoiceMemo(viewerId, postId, now) {
+    async findVoiceMemo(viewerId, postId, now, access = "private") {
       // The id alone reveals nothing: it is returned only if the filter below passes.
       const [attached] = await database
         .select({ id: postMedia.id })
@@ -52,7 +53,7 @@ export function createPostgresPostVoiceMemoRepository(database: DayliDatabase): 
           buildDrizzlePostVisibilityFilter(database, {
             viewer: { userId: viewerId },
             now,
-            action: "media",
+            action: access === "parent-authorized" ? "media" : "private-media",
             mediaId: attached.id,
           }),
           isNotNull(user.username),

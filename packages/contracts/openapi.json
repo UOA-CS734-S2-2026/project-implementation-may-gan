@@ -186,14 +186,15 @@
             "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead."
           },
           "expiresAt": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/UtcTimestamp"
               },
               {
-                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one."
+                "type": "null"
               }
-            ]
+            ],
+            "description": "When a signed private URL stops working. Null for a Worker URL that reauthorizes every request."
           }
         },
         "required": [
@@ -260,7 +261,7 @@
             "type": "string",
             "nullable": true,
             "format": "uri",
-            "description": "Null for anonymous reads until parent-authorized avatar delivery is available."
+            "description": "The parent-authorized Worker avatar route when a current avatar exists, otherwise null."
           },
           "streak": {
             "$ref": "#/components/schemas/PostingStreak"
@@ -1576,14 +1577,15 @@
             "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead."
           },
           "expiresAt": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/UtcTimestamp"
               },
               {
-                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one."
+                "type": "null"
               }
-            ]
+            ],
+            "description": "When a signed private URL stops working. Null for a Worker URL that reauthorizes every request."
           }
         },
         "required": [
@@ -4288,7 +4290,7 @@
             }
           },
           "503": {
-            "description": "Post storage is temporarily unavailable, media storage is unavailable, or public media delivery is pending the parent-authorized media route.",
+            "description": "Post or media storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4416,6 +4418,233 @@
           },
           "503": {
             "description": "Post storage is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/media/{mediaId}/content": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getMediaContent",
+        "summary": "Read currently authorized post media bytes",
+        "description": "Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "media-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "mediaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The media bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested media byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The media is absent, detached, or its current parent is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/voice-memo/content": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getVoiceMemoContent",
+        "summary": "Read currently authorized voice memo bytes",
+        "description": "Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The voice memo bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested voice memo byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The voice memo is absent, detached, or its current parent is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9090,6 +9319,108 @@
           },
           "503": {
             "description": "Profile storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{username}/avatar": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.getAvatar",
+        "summary": "Read a currently authorized profile avatar",
+        "description": "Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The avatar bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested avatar byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The avatar is absent or its current profile is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Avatar media is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

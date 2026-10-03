@@ -86,6 +86,7 @@ function requireLocalTestUrl(value: string): string {
         name: key,
         email: `${userId}@example.test`,
         username: `p${run}${key}`.slice(0, 30),
+        profileVisibility: key === "author" ? "public" : "private",
       });
     }
     for (const other of [users.friend, users.blocked]) {
@@ -147,6 +148,19 @@ function requireLocalTestUrl(value: string): string {
     ];
     for (const [label, viewer, post, item] of denied) {
       await expect(media().findMedia(viewer, id(post), id(item), now), label).resolves.toBeNull();
+    }
+  });
+
+  it("allows public-only readers only through parent-authorized delivery and withdraws on privacy change", async () => {
+    await expect(media().findMedia(null, id("released"), id("first"), now, "parent-authorized")).resolves.not.toBeNull();
+    await expect(media().findMedia(users.stranger, id("released"), id("first"), now, "parent-authorized")).resolves.not.toBeNull();
+    await expect(media().findMedia(users.blocked, id("released"), id("first"), now, "parent-authorized")).resolves.toBeNull();
+
+    await migrator.db.update(schema.user).set({ profileVisibility: "private" }).where(inArray(schema.user.id, [users.author]));
+    try {
+      await expect(media().findMedia(null, id("released"), id("first"), now, "parent-authorized")).resolves.toBeNull();
+    } finally {
+      await migrator.db.update(schema.user).set({ profileVisibility: "public" }).where(inArray(schema.user.id, [users.author]));
     }
   });
 

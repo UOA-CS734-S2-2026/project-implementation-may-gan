@@ -3,7 +3,13 @@ import { apiErrorResponse } from "../../../http/api-error";
 import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { signPostVoiceMemo, signPostMedia, type SignMediaDownload } from "../shared/post-media";
+import {
+  routePostMedia,
+  routePostVoiceMemo,
+  signPostVoiceMemo,
+  signPostMedia,
+  type SignMediaDownload,
+} from "../shared/post-media";
 import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "./get-post.contract";
 import type { PostDetailRepository } from "./get-post.repository";
 
@@ -50,19 +56,18 @@ export function registerGetPostRoute(app: OpenAPIHono<OptionalAuthenticatedApiEn
     try {
       const post = await dependencies.repository.findPost(context.get("actor")?.userId ?? null, postId, now);
       if (!post) return apiErrorResponse(context, 404, "NOT_FOUND", "The post was not found.");
-      const { publicMediaUnavailable, ...detail } = post;
-      // DPP-006 will add parent-authorized media delivery. Until then, never
-      // issue the existing signed download URLs through public-profile access.
-      if (publicMediaUnavailable) {
-        return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Public post media is temporarily unavailable.");
-      }
+      const { publicMediaDelivery, ...detail } = post;
       const sign = dependencies.signMediaDownload;
-      if ((detail.media.length > 0 || detail.voiceMemo) && !sign) {
+      if (!publicMediaDelivery && (detail.media.length > 0 || detail.voiceMemo) && !sign) {
         return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
       }
-      const media = sign ? await signPostMedia(detail.media, sign, now) : [];
-      const voiceMemo = sign && detail.voiceMemo
-        ? await signPostVoiceMemo(detail.voiceMemo, sign, now)
+      const media = publicMediaDelivery
+        ? routePostMedia(detail.media, context.req.url)
+        : sign ? await signPostMedia(detail.media, sign, now) : [];
+      const voiceMemo = detail.voiceMemo
+        ? publicMediaDelivery
+          ? routePostVoiceMemo(detail.voiceMemo, context.req.url)
+          : sign ? await signPostVoiceMemo(detail.voiceMemo, sign, now) : null
         : null;
       return context.json({ ...detail, media, voiceMemo }, 200);
     } catch (error) {

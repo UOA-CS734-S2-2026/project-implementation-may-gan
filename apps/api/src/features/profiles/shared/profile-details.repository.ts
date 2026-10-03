@@ -197,6 +197,7 @@ export async function findReadableProfile(
   username: string,
   now: Date,
   signAvatar?: AvatarSigner,
+  publicAvatarUrl?: (username: string) => string,
 ): Promise<ReadableProfile | null> {
   // Resolve the authorization tier before signing. DPP-006 replaces the
   // staged public null with a parent-authorized Worker URL.
@@ -227,12 +228,15 @@ export async function findReadableProfile(
   if (access.profileVisibility === "private") {
     return { kind: "restricted", username: profile.username };
   }
+  const avatarUrl = publicAvatarUrl
+    ? await findAvatarUrl(database, profile.id, async () => publicAvatarUrl(profile.username))
+    : null;
   return {
     kind: "public",
     username: profile.username,
     displayName: profile.displayName,
     bio: profile.bio,
-    avatarUrl: null,
+    avatarUrl,
     streak: profile.streak,
   };
 }

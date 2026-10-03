@@ -3,7 +3,7 @@ import { apiErrorResponse } from "../../../http/api-error";
 import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { signPostMedia, type SignMediaDownload } from "../shared/post-media";
+import { routePostMedia, signPostMedia, type SignMediaDownload } from "../shared/post-media";
 import { InvalidPostCursorError } from "../shared/post-page-cursor";
 import {
   listProfilePostsErrorResponses,
@@ -67,18 +67,15 @@ export function registerListProfilePostsRoute(app: OpenAPIHono<OptionalAuthentic
       if ("kind" in page) return context.json(page, 200);
       const { accessTier, ...archive } = page;
       const hasMedia = archive.items.some((item) => item.media.length > 0);
-      // DPP-006 adds parent-authorized public media delivery. Until then, fail
-      // public-only pages rather than issuing a signed object URL.
-      if (hasMedia && accessTier === "public") {
-        return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Public post media is temporarily unavailable.");
-      }
       const sign = dependencies.signMediaDownload;
-      if (hasMedia && !sign) {
+      if (hasMedia && accessTier === "authorized" && !sign) {
         return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
       }
       const items = await Promise.all(archive.items.map(async (item) => ({
         ...item,
-        media: sign ? await signPostMedia(item.media, sign, now) : [],
+        media: accessTier === "public"
+          ? routePostMedia(item.media, context.req.url)
+          : sign ? await signPostMedia(item.media, sign, now) : [],
       })));
       return context.json({ kind: "archive" as const, ...archive, items }, 200);
     } catch (error) {

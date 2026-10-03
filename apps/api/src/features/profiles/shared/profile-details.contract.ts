@@ -69,7 +69,7 @@ export const publicProfileSchema = z.object({
   displayName: z.string().min(1),
   bio: z.string().nullable(),
   avatarUrl: z.url().nullable().openapi({
-    description: "Null for anonymous reads until parent-authorized avatar delivery is available.",
+    description: "The parent-authorized Worker avatar route when a current avatar exists, otherwise null.",
   }),
   streak: profileDetailsSchema.shape.streak,
 }).openapi("PublicProfile", {

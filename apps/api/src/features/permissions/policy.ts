@@ -7,7 +7,8 @@ export type PermissionAction =
   | "revision"
   | "preview"
   | "export"
-  | "media";
+  | "media"
+  | "private-media";
 
 export interface Viewer {
   /** Anonymous viewers have no user id. */
@@ -30,14 +31,14 @@ export interface PostPermissionState {
 
 export type PermissionRequest =
   | {
-      action: "media";
+      action: "media" | "private-media";
       viewer: Viewer;
       post: PostPermissionState;
       mediaId: string;
       now?: Date;
     }
   | {
-      action: Exclude<PermissionAction, "media">;
+      action: Exclude<PermissionAction, "media" | "private-media">;
       viewer: Viewer;
       post: PostPermissionState;
       now?: Date;
@@ -82,21 +83,21 @@ export function decidePostPermission(request: PermissionRequest): PermissionDeci
   const isOwner = viewer.userId != null && viewer.userId === post.authorId;
 
   if (post.deleted) return denied("deleted");
-  if (request.action === "media" && post.mediaAttached !== true) return denied("detached_media");
+  if ((request.action === "media" || request.action === "private-media") && post.mediaAttached !== true) return denied("detached_media");
   if (request.action === "export" && !isOwner) return denied("not_owner");
   if (post.blocked && viewer.userId != null) return denied("blocked");
 
   // Export remains owner-only, including before release. All other owner reads
   // are also available before release.
   if (isOwner) return allowed();
-  if (request.action === "media" && post.audience === "solo") return denied("solo_post");
+  if ((request.action === "media" || request.action === "private-media") && post.audience === "solo") return denied("solo_post");
   if (post.releaseAt.getTime() > now.getTime()) return denied("not_released");
   if (post.audience === "solo") return denied("solo_post");
 
-  // Public access is explicit for direct detail and profile archives. Generic
-  // list routes stay friend-scoped so the friends feed does not become global.
-  // Media remains owner/friend-only until its parent-authorized Worker route.
-  if ((request.action === "detail" || request.action === "profile")
+  // Public access is explicit for direct detail, profile archives, and the
+  // parent-authorized byte route. Generic lists and legacy signed downloads
+  // stay friend-scoped.
+  if ((request.action === "detail" || request.action === "profile" || request.action === "media")
     && post.authorProfileVisibility === "public") return allowed();
 
   if (viewer.userId == null) return denied("anonymous");
@@ -158,11 +159,11 @@ interface PostVisibilityFilterInputBase {
 
 export type PostVisibilityFilterInput = PostVisibilityFilterInputBase & (
   | {
-      action: "media";
+      action: "media" | "private-media";
       columns: PostVisibilityColumns & { mediaAttached: SqlFragment };
     }
   | {
-      action?: Exclude<PermissionAction, "media">;
+      action?: Exclude<PermissionAction, "media" | "private-media">;
       columns: PostVisibilityColumns;
     }
 );

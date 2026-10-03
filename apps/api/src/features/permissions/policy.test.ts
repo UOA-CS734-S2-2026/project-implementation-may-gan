@@ -19,7 +19,7 @@ const base: PostPermissionState = {
 };
 
 const decide = (overrides: Partial<PostPermissionState>, viewer: string | null = "bob", action: PermissionAction = "detail") =>
-  decidePostPermission(action === "media"
+  decidePostPermission(action === "media" || action === "private-media"
     ? { action, mediaId: "media-1", post: { ...base, ...overrides }, viewer: { userId: viewer }, now }
     : { action, post: { ...base, ...overrides }, viewer: { userId: viewer }, now });
 
@@ -57,6 +57,16 @@ describe("post permission policy", () => {
   it("denies deleted posts and detached media", () => {
     expect(decide({ deleted: true }, "alice").allowed).toBe(false);
     expect(decide({ mediaAttached: false }, "alice", "media").allowed).toBe(false);
+  });
+
+  it("allows public media through the parent-authorized action only", () => {
+    expect(decide({ mediaAttached: true }, null, "media").allowed).toBe(true);
+    expect(decide({ mediaAttached: true }, "bob", "media").allowed).toBe(true);
+    expect(decide({ mediaAttached: true }, "bob", "private-media").allowed).toBe(false);
+    expect(decide({ mediaAttached: true, authorProfileVisibility: "private" }, null, "media").allowed).toBe(false);
+    expect(decide({ mediaAttached: true, audience: "solo" }, null, "media").allowed).toBe(false);
+    expect(decide({ mediaAttached: true, releaseAt: new Date("2026-09-23") }, null, "media").allowed).toBe(false);
+    expect(decide({ mediaAttached: true, blocked: true }, "bob", "media").allowed).toBe(false);
   });
 
   it("denies media when attachment state is omitted", () => {

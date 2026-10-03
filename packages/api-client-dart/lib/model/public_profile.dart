@@ -29,7 +29,7 @@ class PublicProfile {
 
   final String? bio;
 
-  /// Null for anonymous reads until parent-authorized avatar delivery is available.
+  /// The parent-authorized Worker avatar route when a current avatar exists, otherwise null.
   final String? avatarUrl;
 
   final PostingStreak? streak;

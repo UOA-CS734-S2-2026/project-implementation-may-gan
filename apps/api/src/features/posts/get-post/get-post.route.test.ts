@@ -20,7 +20,7 @@ const detail: PostDetailRecord = {
   viewerIsAuthor: false,
   media: [],
   voiceMemo: null,
-  publicMediaUnavailable: false,
+  publicMediaDelivery: false,
 };
 
 const resolveSession: GetPostRouteDependencies["resolveSession"] = async (request) => {
@@ -79,8 +79,8 @@ describe("GET /api/v1/posts/{postId}", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    const { publicMediaUnavailable, ...expected } = detail;
-    expect(publicMediaUnavailable).toBe(false);
+    const { publicMediaDelivery, ...expected } = detail;
+    expect(publicMediaDelivery).toBe(false);
     await expect(response.json()).resolves.toEqual(expected);
     expect(repo.findPost).toHaveBeenCalledWith("user-viewer", "post-1", fixedNow);
   });
@@ -191,17 +191,25 @@ describe("GET /api/v1/posts/{postId}", () => {
       expect(JSON.stringify(body.media)).not.toContain("postId");
     });
 
-    it("does not issue signed media through public-profile-only access", async () => {
+    it("returns parent-authorized Worker URLs through public-profile-only access", async () => {
       const sign = vi.fn();
       const response = await get({
-        repository: repository(async () => ({ ...withMedia, publicMediaUnavailable: true })),
+        repository: repository(async () => ({ ...withMedia, publicMediaDelivery: true })),
         signMediaDownload: sign,
       }, undefined, null);
+      const body = await response.json<{ media: Array<{ url: string; expiresAt: string | null }> }>();
 
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(body.media[0]).toEqual({
+        id: "media-1",
+        contentType: "image/jpeg",
+        order: 0,
+        url: "http://localhost/api/v1/posts/post-1/media/media-1/content",
+        expiresAt: null,
+      });
       expect(sign).not.toHaveBeenCalled();
-      expect(await response.text()).not.toContain("objectKey");
+      expect(JSON.stringify(body)).not.toContain("objectKey");
     });
 
     it("is unavailable for a post with media when storage isn't configured", async () => {
@@ -248,6 +256,22 @@ describe("GET /api/v1/posts/{postId}", () => {
           expiresAt: "2026-09-26T03:05:00.000Z",
         });
         expect(JSON.stringify(body)).not.toContain("objectKey");
+      });
+
+      it("returns a parent-authorized Worker URL for a public voice memo", async () => {
+        const response = await get({
+          repository: repository(async () => ({ ...withRecording, publicMediaDelivery: true })),
+          signMediaDownload: sign,
+        }, undefined, null);
+        const body = await response.json<{ voiceMemo: { url: string; expiresAt: string | null } }>();
+
+        expect(response.status).toBe(200);
+        expect(body.voiceMemo).toEqual({
+          id: "media-9",
+          contentType: "audio/mp4",
+          url: "http://localhost/api/v1/posts/post-1/voice-memo/content",
+          expiresAt: null,
+        });
       });
 
       it("is unavailable for a post with a voice memo when storage isn't configured", async () => {

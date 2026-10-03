@@ -8,17 +8,25 @@ export interface ProfileDetailsRepository {
   findProfile(viewerId: string | null, username: string, now: Date): Promise<ReadableProfile | null>;
 }
 
-export function createPostgresProfileDetailsRepository(database: DayliDatabase, signAvatar?: AvatarSigner): ProfileDetailsRepository {
+export function createPostgresProfileDetailsRepository(
+  database: DayliDatabase,
+  signAvatar?: AvatarSigner,
+  publicAvatarUrl?: (username: string) => string,
+): ProfileDetailsRepository {
   return {
-    findProfile: (viewerId, username, now) => findReadableProfile(database, viewerId, username, now, signAvatar),
+    findProfile: (viewerId, username, now) => findReadableProfile(database, viewerId, username, now, signAvatar, publicAvatarUrl),
   };
 }
 
 /** Workers close the request-scoped Hyperdrive client after each read. */
-export function createHyperdriveProfileDetailsRepository(hyperdrive: HyperdriveBinding, signAvatar?: AvatarSigner): ProfileDetailsRepository {
+export function createHyperdriveProfileDetailsRepository(
+  hyperdrive: HyperdriveBinding,
+  signAvatar?: AvatarSigner,
+  publicAvatarUrl?: (username: string) => string,
+): ProfileDetailsRepository {
   return {
     findProfile: (viewerId, username, now) => withHyperdriveDatabase(hyperdrive, (database) => (
-      findReadableProfile(database, viewerId, username, now, signAvatar)
+      findReadableProfile(database, viewerId, username, now, signAvatar, publicAvatarUrl)
     )),
   };
 }

@@ -1,7 +1,7 @@
 import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter, findVisiblePostMedia } from "../../permissions";
+import { buildDrizzlePostVisibilityFilter, findPrivatelyVisiblePostMedia } from "../../permissions";
 import {
   readAttachedVoiceMemo,
   readAttachedMedia,
@@ -14,8 +14,8 @@ import type { PostDetail } from "./get-post.contract";
 export type PostDetailRecord = Omit<PostDetail, "media" | "voiceMemo"> & {
   media: PostMediaRef[];
   voiceMemo: PostVoiceMemoRef | null;
-  /** True when post text is public but current media delivery is not. */
-  publicMediaUnavailable: boolean;
+  /** True when media must use the parent-authorized Worker route. */
+  publicMediaDelivery: boolean;
 };
 
 export interface PostDetailRepository {
@@ -69,7 +69,7 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
       const media = (await readAttachedMedia(database, [row.id])).get(row.id) ?? [];
       const voiceMemo = await readAttachedVoiceMemo(database, row.id);
       const attachedMediaId = media[0]?.id ?? voiceMemo?.id;
-      const publicMediaUnavailable = attachedMediaId !== undefined && !(await findVisiblePostMedia(
+      const publicMediaDelivery = attachedMediaId !== undefined && !(await findPrivatelyVisiblePostMedia(
         database,
         row.id,
         attachedMediaId,
@@ -90,7 +90,7 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         viewerIsAuthor: row.authorId === viewerId,
         media,
         voiceMemo,
-        publicMediaUnavailable,
+        publicMediaDelivery,
       };
     },
   };

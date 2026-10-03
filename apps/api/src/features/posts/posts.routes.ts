@@ -7,6 +7,14 @@ import {
   type GetPostVoiceMemoRouteDependencies,
 } from "./get-post-voice-memo/get-post-voice-memo.route";
 import { registerGetPostMediaRoute, type GetPostMediaRouteDependencies } from "./get-post-media/get-post-media.route";
+import {
+  registerGetPostMediaContentRoute,
+  type GetPostMediaContentRouteDependencies,
+} from "./get-post-media/get-post-media-content.route";
+import {
+  registerGetPostVoiceMemoContentRoute,
+  type GetPostVoiceMemoContentRouteDependencies,
+} from "./get-post-voice-memo/get-post-voice-memo-content.route";
 import { registerListFeedRoute, type ListFeedRouteDependencies } from "./list-feed/list-feed.route";
 import { registerListProfilePostsRoute, type ListProfilePostsRouteDependencies } from "./list-profile-posts/list-profile-posts.route";
 import { registerPostTrashRoutes, type PostTrashRouteDependencies } from "./trash-post/trash-post.route";
@@ -16,7 +24,9 @@ export interface PostsRouteDependencies {
   feed: ListFeedRouteDependencies;
   detail: GetPostRouteDependencies;
   media: GetPostMediaRouteDependencies;
+  mediaContent: GetPostMediaContentRouteDependencies;
   voiceMemo: GetPostVoiceMemoRouteDependencies;
+  voiceMemoContent: GetPostVoiceMemoContentRouteDependencies;
   profilePosts: ListProfilePostsRouteDependencies;
   trash: PostTrashRouteDependencies;
 }
@@ -30,6 +40,8 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   const publicPostReads = new OpenAPIHono<OptionalAuthenticatedApiEnv>();
   registerGetPostRoute(publicPostReads, dependencies.detail);
   registerListProfilePostsRoute(publicPostReads, dependencies.profilePosts);
+  registerGetPostMediaContentRoute(publicPostReads, dependencies.mediaContent);
+  registerGetPostVoiceMemoContentRoute(publicPostReads, dependencies.voiceMemoContent);
   app.route("/", publicPostReads);
   registerGetPostMediaRoute(app, dependencies.media);
   registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
