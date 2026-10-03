@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/core/Button";
 import type { PostDetail } from "@/features/posts/shared/posts.api";
 import { isVideo, PrivateImage, PrivateVideo } from "@/features/posts/shared/PrivateMedia";
 import { PostApiError } from "@/features/posts/shared/query-result";
 import { usePostQuery } from "./use-post-query";
+import { useSession } from "@/lib/session/hooks";
+import { isPublicAction, signInForPublicAction } from "@/lib/routing/public-return-intent";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
 
@@ -71,21 +73,31 @@ function Centered({ children }: { children: React.ReactNode }) {
 
 export function PostDetailView({ username, postId }: { username: string; postId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useSession();
   const query = usePostQuery(postId);
   const failure = query.error instanceof PostApiError ? query.error.failure : undefined;
   const post = query.data;
+  const rawIntent = searchParams.get("intent");
+  const intent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
 
   useEffect(() => {
-    if (failure === "unauthenticated") router.replace("/sign-in");
-  }, [failure, router]);
+    if (rawIntent && !intent) router.replace(pathname);
+  }, [intent, pathname, rawIntent, router]);
+  useEffect(() => {
+    if (user && intent && query.isSuccess) void query.refetch();
+    // Refetch once after the initial authenticated response settles. The action itself always needs another click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent, query.isSuccess, user?.id]);
 
   // Keep one address per post: a link with a stale or differently cased
   // username is replaced with the author's current one.
   useEffect(() => {
     if (post && post.author.username.toLowerCase() !== username.toLowerCase()) {
-      router.replace(`/u/${encodeURIComponent(post.author.username)}/${encodeURIComponent(post.id)}`);
+      router.replace(`/u/${encodeURIComponent(post.author.username)}/${encodeURIComponent(post.id)}${intent ? `?intent=${intent}` : ""}`);
     }
-  }, [post, username, router]);
+  }, [intent, post, username, router]);
 
   if (query.isPending) {
     return (
@@ -159,6 +171,28 @@ export function PostDetailView({ username, postId }: { username: string; postId:
           <p className="whitespace-pre-line">{post.caption}</p>
         </section>
       )}
+
+      {user && intent && (
+        <p role="status" className="rounded-xl bg-background-accent px-4 py-3 text-sm text-foreground-accent">
+          You are signed in. {intent === "like" ? "Likes" : "Comments"} are not available in this version yet. Nothing was submitted.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 border-t border-foreground/10 pt-5" aria-label="Post actions">
+        <Button
+          href={user ? undefined : signInForPublicAction(pathname, "like")}
+          onClick={user ? () => router.replace(`${pathname}?intent=like`) : undefined}
+          variant={{ color: "accent", size: "sm", weight: "secondary" }}
+        >
+          like
+        </Button>
+        <Button
+          href={user ? undefined : signInForPublicAction(pathname, "comment")}
+          onClick={user ? () => router.replace(`${pathname}?intent=comment`) : undefined}
+          variant={{ color: "background", size: "sm", weight: "secondary" }}
+        >
+          comment
+        </Button>
+      </div>
     </article>
   );
 }

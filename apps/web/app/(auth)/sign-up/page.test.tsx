@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ push: vi.fn(), email: vi.fn(), current: vi.fn(), issue: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }), useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/lib/auth/client", () => ({ authClient: { signUp: { email: mocks.email } } }));
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
