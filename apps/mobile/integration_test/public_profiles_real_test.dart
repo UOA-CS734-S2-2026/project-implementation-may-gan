@@ -21,16 +21,30 @@ const _apiBaseUrl = String.fromEnvironment('DPP004_API_BASE_URL');
 const _publicUsername = String.fromEnvironment('DPP004_PUBLIC_USERNAME');
 const _privateUsername = String.fromEnvironment('DPP004_PRIVATE_USERNAME');
 const _publicPostId = String.fromEnvironment('DPP004_PUBLIC_POST_ID');
+const _privatePostId = String.fromEnvironment('DPP004_PRIVATE_POST_ID');
 const _viewerEmail = String.fromEnvironment('DPP004_VIEWER_EMAIL');
 const _viewerPassword = String.fromEnvironment('DPP004_VIEWER_PASSWORD');
+const _viewerToken = String.fromEnvironment('DPP004_VIEWER_TOKEN');
+const _expiredToken = String.fromEnvironment('DPP004_EXPIRED_TOKEN');
+const _secondViewerEmail = String.fromEnvironment('DPP004_SECOND_VIEWER_EMAIL');
+const _secondViewerPassword = String.fromEnvironment(
+  'DPP004_SECOND_VIEWER_PASSWORD',
+);
+const _secondViewerToken = String.fromEnvironment('DPP004_SECOND_VIEWER_TOKEN');
 const _caPemBase64 = String.fromEnvironment('DPP004_CA_PEM_B64');
 const _fixtureReady =
     _apiBaseUrl != '' &&
     _publicUsername != '' &&
     _privateUsername != '' &&
     _publicPostId != '' &&
+    _privatePostId != '' &&
     _viewerEmail != '' &&
     _viewerPassword != '' &&
+    _viewerToken != '' &&
+    _expiredToken != '' &&
+    _secondViewerEmail != '' &&
+    _secondViewerPassword != '' &&
+    _secondViewerToken != '' &&
     _caPemBase64 != '';
 
 void trustFixtureCertificate() {
@@ -39,8 +53,10 @@ void trustFixtureCertificate() {
   );
 }
 
-AppServices realReadServices() {
-  final tokens = MemoryTokenStore();
+({AppServices services, MemoryTokenStore tokens}) realReadServices({
+  String? token,
+}) {
+  final tokens = MemoryTokenStore()..value = token;
   final drafts = MemoryDraftStore();
   final session = SessionController(
     session: BetterAuthNativeSession(baseUrl: _apiBaseUrl, tokenStore: tokens),
@@ -48,26 +64,29 @@ AppServices realReadServices() {
     userCache: MemoryUserCache(),
     drafts: drafts,
   );
-  return AppServices(
-    session: session,
-    postingDays: FakePostingDayClient(ApiSuccess(postingDay())),
-    feed: FakeFeedClient(),
-    posts: GeneratedPostClient(
-      baseUrl: _apiBaseUrl,
-      bearerToken: session.bearerToken,
+  return (
+    services: AppServices(
+      session: session,
+      postingDays: FakePostingDayClient(ApiSuccess(postingDay())),
+      feed: FakeFeedClient(),
+      posts: GeneratedPostClient(
+        baseUrl: _apiBaseUrl,
+        bearerToken: session.bearerToken,
+      ),
+      friends: GeneratedFriendsClient(
+        baseUrl: _apiBaseUrl,
+        bearerToken: session.bearerToken,
+      ),
+      profiles: GeneratedProfileClient(
+        baseUrl: _apiBaseUrl,
+        bearerToken: session.bearerToken,
+      ),
+      drafts: drafts,
+      submitter: FakeSubmitter(
+        const SubmissionAccepted(postId: 'unused', replayed: false),
+      ),
     ),
-    friends: GeneratedFriendsClient(
-      baseUrl: _apiBaseUrl,
-      bearerToken: session.bearerToken,
-    ),
-    profiles: GeneratedProfileClient(
-      baseUrl: _apiBaseUrl,
-      bearerToken: session.bearerToken,
-    ),
-    drafts: drafts,
-    submitter: FakeSubmitter(
-      const SubmissionAccepted(postId: 'unused', replayed: false),
-    ),
+    tokens: tokens,
   );
 }
 
@@ -78,7 +97,7 @@ void main() {
     'anonymous native deep links use real isolated public projections',
     (tester) async {
       trustFixtureCertificate();
-      final services = realReadServices();
+      final services = realReadServices().services;
       await tester.pumpWidget(
         DayliApp(
           services: services,
@@ -113,7 +132,7 @@ void main() {
     'password sign-in returns to a refetched finite intent without replay',
     (tester) async {
       trustFixtureCertificate();
-      final services = realReadServices();
+      final services = realReadServices().services;
       await tester.pumpWidget(
         DayliApp(
           services: services,
@@ -137,6 +156,102 @@ void main() {
         find.byKey(const Key('post.interactionUnavailable')),
         findsNothing,
       );
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'failed sign-in keeps a message intent inert until verified authentication',
+    (tester) async {
+      trustFixtureCertificate();
+      final harness = realReadServices();
+      final services = harness.services;
+      await tester.pumpWidget(
+        DayliApp(
+          services: services,
+          useGoogleFonts: false,
+          initialLocation: '/u/$_publicUsername',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      await tester.ensureVisible(find.byKey(const Key('profile.message')));
+      await tester.tap(find.byKey(const Key('profile.message')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(const Key('auth.email')), _viewerEmail);
+      await tester.enterText(
+        find.byKey(const Key('auth.password')),
+        'intentionally-wrong-password',
+      );
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('auth.error')), findsOneWidget);
+      expect(services.session.status, SessionStatus.signedOut);
+
+      harness.tokens.value = _viewerToken;
+      await services.session.restore();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byKey(const Key('profile.intent')), findsOneWidget);
+      expect(
+        find.text('Review and start the message request below.'),
+        findsOneWidget,
+      );
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'a server-expired stored bearer retries the public post anonymously',
+    (tester) async {
+      trustFixtureCertificate();
+      final harness = realReadServices(token: _expiredToken);
+      await tester.pumpWidget(
+        DayliApp(
+          services: harness.services,
+          useGoogleFonts: false,
+          initialLocation: '/posts/$_publicPostId',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+      expect(harness.services.session.status, SessionStatus.signedOut);
+      expect(find.text('Synthetic released dayli.'), findsOneWidget);
+      expect(find.byKey(const Key('post.unavailable')), findsNothing);
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'blocked access, account replacement, and expiry refetch safely',
+    (tester) async {
+      trustFixtureCertificate();
+      final harness = realReadServices(token: _viewerToken);
+      final services = harness.services;
+      await services.session.restore();
+      final firstViewer = services.session.user!.id;
+      await tester.pumpWidget(
+        DayliApp(
+          services: services,
+          useGoogleFonts: false,
+          initialLocation: '/posts/$_privatePostId',
+        ),
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+
+      await services.session.signIn(
+        email: _secondViewerEmail,
+        password: _secondViewerPassword,
+      );
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(services.session.user!.id, isNot(firstViewer));
+      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+
+      await services.session.sessionExpired();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(services.session.status, SessionStatus.signedOut);
+      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
     },
     skip: !_fixtureReady,
   );

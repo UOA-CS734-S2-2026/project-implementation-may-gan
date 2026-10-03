@@ -115,6 +115,10 @@ class SessionController extends ChangeNotifier {
   SessionStatus get status => _status;
   SessionUser? get user => _user;
 
+  /// Changes before credentials are cleared or replaced. Async consumers use
+  /// this with status and user ID to reject responses from an older session.
+  int get generation => _sessionGeneration;
+
   Future<String?> bearerToken() => _session.bearerToken();
 
   /// Restores the stored session. When the network is unreachable the cached
