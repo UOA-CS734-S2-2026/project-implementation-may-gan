@@ -40,7 +40,7 @@ class OnThisDayMemories {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'date'] = _dateFormatter.format(this.date);
+    json[r'date'] = this.date;
     json[r'items'] = this.items;
     return json;
   }
@@ -79,7 +79,7 @@ class OnThisDayMemories {
       }());
 
       return OnThisDayMemories(
-        date: mapDateTime(json, r'date', r'')!,
+        date: mapValueOfType<String>(json, r'date')!,
         items: OnThisDayMemory.listFromJson(json[r'items']),
       );
     }

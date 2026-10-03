@@ -88,7 +88,7 @@ class OnThisDayMemory {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
-    json[r'localDate'] = _dateFormatter.format(this.localDate);
+    json[r'localDate'] = this.localDate;
     json[r'yearsAgo'] = this.yearsAgo;
     json[r'rating'] = this.rating;
     json[r'audience'] = this.audience;
@@ -186,7 +186,7 @@ class OnThisDayMemory {
 
       return OnThisDayMemory(
         id: mapValueOfType<String>(json, r'id')!,
-        localDate: mapDateTime(json, r'localDate', r'')!,
+        localDate: mapValueOfType<String>(json, r'localDate')!,
         yearsAgo: mapValueOfType<int>(json, r'yearsAgo')!,
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: OnThisDayMemoryAudienceEnum.fromJson(json[r'audience'])!,
