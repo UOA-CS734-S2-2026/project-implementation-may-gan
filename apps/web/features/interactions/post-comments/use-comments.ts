@@ -1,4 +1,4 @@
-import { type InfiniteData, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { type InfiniteData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   interactionKeys,
   interactionsApi,
@@ -26,23 +26,45 @@ export function useCommentsQuery(postId: string) {
   });
 }
 
-/** Keeps the loaded comment pages and the post's comment count in step after a change. */
+/**
+ * Comments posted here. A new comment belongs after every older one, so while
+ * older pages are unloaded it can't go into the pages without breaking their
+ * order. It is shown from here until paging reaches it.
+ */
+export function useCreatedComments(postId: string) {
+  const { user } = useSession();
+  const client = useQueryClient();
+  const key = interactionKeys.created(user?.id ?? "anonymous", postId);
+  return useQuery({
+    queryKey: key,
+    queryFn: () => client.getQueryData<PostComment[]>(key) ?? [],
+    initialData: [] as PostComment[],
+    staleTime: Infinity,
+  }).data;
+}
+
+/** Keeps the loaded comment pages, comments posted here, and the post's comment count in step after a change. */
 function useCommentCache(postId: string) {
   const { user } = useSession();
   const client = useQueryClient();
   const userId = user?.id ?? "anonymous";
   const commentsKey = interactionKeys.comments(userId, postId);
+  const createdKey = interactionKeys.created(userId, postId);
   const detailKey = postKeys.detail(userId, postId);
 
   return {
-    loaded: () => client.getQueryData<CommentPages>(commentsKey)?.pages.flatMap((page) => page.items) ?? [],
-    /** True when the last loaded page is the end of the list. */
-    allLoaded: () => client.getQueryData<CommentPages>(commentsKey)?.pages.at(-1)?.hasMore === false,
-    edit: (change: (items: PostComment[], isLastPage: boolean) => PostComment[]) =>
+    has: (commentId: string) => [
+      ...(client.getQueryData<CommentPages>(commentsKey)?.pages.flatMap((page) => page.items) ?? []),
+      ...(client.getQueryData<PostComment[]>(createdKey) ?? []),
+    ].some((item) => item.id === commentId),
+    add: (comment: PostComment) => client.setQueryData<PostComment[]>(createdKey, (items = []) => [...items, comment]),
+    edit: (change: (items: PostComment[]) => PostComment[]) => {
       client.setQueryData<CommentPages>(commentsKey, (data) => data && {
         ...data,
-        pages: data.pages.map((page, index) => ({ ...page, items: change(page.items, index === data.pages.length - 1) })),
-      }),
+        pages: data.pages.map((page) => ({ ...page, items: change(page.items) })),
+      });
+      client.setQueryData<PostComment[]>(createdKey, (items) => items && change(items));
+    },
     adjustCount: (delta: number) =>
       client.setQueryData<PostDetail>(detailKey, (post) => post && { ...post, commentCount: Math.max(0, post.commentCount + delta) }),
     /** The server's count also covers comments on pages that aren't loaded. */
@@ -60,10 +82,9 @@ export function useCreateComment(postId: string) {
     mutationFn: async (request: { clientCommentId: string; text: string; parentCommentId?: string }) =>
       unwrapInteraction(await interactionsApi.createComment(postId, request)),
     onSuccess: (comment) => {
-      if (cache.loaded().some((item) => item.id === comment.id)) return;
-      // Pages are in writing order, so a new comment belongs at the very end.
-      // While older pages are still unloaded, paging reaches it in order.
-      if (cache.allLoaded()) cache.edit((items, isLastPage) => (isLastPage ? [...items, comment] : items));
+      // A retry whose first attempt was saved returns the comment already shown.
+      if (cache.has(comment.id)) return;
+      cache.add(comment);
       cache.adjustCount(1);
       void cache.refreshCount();
     },

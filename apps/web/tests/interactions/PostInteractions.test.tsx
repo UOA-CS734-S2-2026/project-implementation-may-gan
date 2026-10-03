@@ -158,17 +158,51 @@ describe("comments", () => {
     expect((screen.getByPlaceholderText("Add a comment") as HTMLTextAreaElement).value).toBe("");
   });
 
-  it("doesn't add a new comment ahead of older ones that haven't loaded", async () => {
+  it("shows a new comment after older ones that haven't loaded, then once in order", async () => {
     const actor = userEvent.setup();
-    api.comments.mockResolvedValue({ ok: true, value: { items: [comment()], nextCursor: "next", hasMore: true } });
-    api.createComment.mockResolvedValue({ ok: true, value: comment({ id: "comment-9", text: "Lovely." }) });
+    const posted = comment({ id: "comment-9", text: "Lovely." });
+    api.comments
+      .mockResolvedValueOnce({ ok: true, value: { items: [comment()], nextCursor: "next", hasMore: true } })
+      .mockResolvedValueOnce(page([comment({ id: "comment-5", text: "Older." }), posted]));
+    api.createComment.mockResolvedValue({ ok: true, value: posted });
     render();
 
     await actor.type(await screen.findByPlaceholderText("Add a comment"), "Lovely.");
     await actor.click(screen.getByRole("button", { name: "Post" }));
 
     expect(await screen.findByText(/at the end, after the comments that haven't loaded yet/)).toBeTruthy();
-    expect(screen.queryByText("Lovely.")).toBeNull();
+    const more = screen.getByRole("button", { name: "Show more comments" });
+    expect(more.compareDocumentPosition(screen.getByText("Lovely.")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await actor.click(more);
+
+    await screen.findByText("Older.");
+    expect(screen.getAllByText("Lovely.")).toHaveLength(1);
+    expect(screen.getByText("Older.").compareDocumentPosition(screen.getByText("Lovely.")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows a reply under its comment while older pages haven't loaded", async () => {
+    const actor = userEvent.setup();
+    const cy = { id: "friend-2", username: "cy", displayName: "Cy" };
+    const reply = comment({ id: "comment-9", parentCommentId: "comment-1", author: cy, text: "Agreed." });
+    api.comments
+      .mockResolvedValueOnce({ ok: true, value: { items: [comment()], nextCursor: "next", hasMore: true } })
+      .mockResolvedValueOnce(page([comment({ id: "comment-5", parentCommentId: "comment-1", author: cy, text: "Older reply." }), reply]));
+    api.createComment.mockResolvedValue({ ok: true, value: reply });
+    render();
+
+    await actor.click(await screen.findByRole("button", { name: "Reply" }));
+    await actor.type(screen.getByPlaceholderText("Reply to Ben"), "Agreed.");
+    await actor.click(screen.getByRole("button", { name: "Post reply" }));
+
+    const thread = (await screen.findByRole("article", { name: "Comment by Ben" })).closest("li")!;
+    expect(await within(thread).findByText("Agreed.")).toBeTruthy();
+
+    await actor.click(screen.getByRole("button", { name: "Show more comments" }));
+
+    const older = await within(thread).findByText("Older reply.");
+    expect(within(thread).getAllByText("Agreed.")).toHaveLength(1);
+    expect(older.compareDocumentPosition(within(thread).getByText("Agreed.")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("replies to a comment", async () => {
@@ -200,6 +234,39 @@ describe("comments", () => {
     expect(await screen.findByText("Stunning.")).toBeTruthy();
     expect(screen.getByText(/edited/)).toBeTruthy();
     expect(api.updateComment).toHaveBeenCalledWith("post-1", "comment-1", "Stunning.");
+  });
+
+  it("starts a second edit from the saved text", async () => {
+    const actor = userEvent.setup();
+    const mine = { viewerCanEdit: true, viewerCanDelete: true };
+    api.comments.mockResolvedValue(page([comment(mine)]));
+    api.updateComment.mockResolvedValue({ ok: true, value: comment({ ...mine, text: "Stunning.", editedAt: new Date() }) });
+    render();
+
+    await actor.click(await screen.findByRole("button", { name: "Edit" }));
+    await actor.clear(screen.getByLabelText("Edit your comment"));
+    await actor.type(screen.getByLabelText("Edit your comment"), "  Stunning.  ");
+    await actor.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText("Stunning.");
+
+    await actor.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect((screen.getByLabelText("Edit your comment") as HTMLTextAreaElement).value).toBe("Stunning.");
+  });
+
+  it("won't save an edit over the length limit and says why", async () => {
+    const actor = userEvent.setup();
+    api.comments.mockResolvedValue(page([comment({ viewerCanEdit: true })]));
+    render();
+
+    await actor.click(await screen.findByRole("button", { name: "Edit" }));
+    const box = screen.getByLabelText("Edit your comment");
+    await actor.clear(box);
+    await actor.click(box);
+    await actor.paste("a".repeat(1001));
+
+    expect(screen.getByText("Keep it to 1000 characters.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Save" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("lets the post's author delete a comment and its replies after confirming", async () => {

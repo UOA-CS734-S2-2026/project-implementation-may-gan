@@ -33,7 +33,9 @@ Web (`apps/web/features/interactions`) and Flutter (`lib/posts/post_comments.dar
 - Comments are grouped into threads as pages arrive, with **Show more comments** for the next page. Replies are offered on top-level comments only.
 - A comment box keeps one `clientCommentId` for its draft until the comment is posted. A failed or offline send keeps the text, and sending again reuses the ID, so nothing is posted twice. Changing the text after a failure starts a new ID.
 - Edit is offered only when `viewerCanEdit` is true, and delete only when `viewerCanDelete` is true. Deleting asks first, and deleting a top-level comment removes its replies from view.
-- A new comment is shown at the end only once every page is loaded. While older pages are still unloaded, the client says where it went and paging reaches it in order.
+- Comments posted on the screen are kept apart from the loaded pages until paging reaches them, so the pages keep the API's order and nothing appears twice. A new reply shows under its comment, with replies sorted by when they were written. A new top-level comment shows after **Show more comments**, and the client says it went after the comments that haven't loaded.
+- Comment length is counted in Unicode code points, as the API counts it, so emoji joined into one symbol count once per code point. An edit over the limit shows the limit and can't be saved.
+- If the count refresh after a comment change finds the post gone, Flutter shows the post as unavailable. The refresh never replaces a like that is still saving, or one made after it started.
 - After a comment is added or deleted, both clients read the post's count from the server, because deleting a top-level comment also hides replies on pages that aren't loaded. Web keeps comments in a TanStack Query cache keyed by account. Flutter reloads them with the post on every open and refresh.
 - Changing the reply target after a failed send starts a new `clientCommentId`, because the failed send may have reached the server with the old target.
 

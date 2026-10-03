@@ -8,7 +8,16 @@ import '../app/theme.dart';
 import '../compose/composer_controller.dart' show generateIdempotencyKey;
 import '../ui/dayli_button.dart';
 
+/// The API counts Unicode code points, so this counts runes, not graphemes.
 const commentMaxLength = 1000;
+
+bool _tooLong(String text) => text.runes.length > commentMaxLength;
+
+/// The order the API lists comments in.
+int _writtenOrder(PostComment a, PostComment b) {
+  final byTime = a.createdAt.compareTo(b.createdAt);
+  return byTime != 0 ? byTime : a.id.compareTo(b.id);
+}
 
 /// Comments with one level of replies, oldest first, and a box to add one.
 /// A comment that fails to post keeps its text and its client ID, so trying
@@ -32,6 +41,10 @@ class _PostCommentsState extends State<PostComments> {
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _comments = <PostComment>[];
+
+  /// Comments posted here. A new comment belongs after every older one, so
+  /// while older pages are unloaded it is kept here until paging reaches it.
+  final _created = <PostComment>[];
   String? _nextCursor;
   bool _loading = true;
   bool _loadingMore = false;
@@ -83,7 +96,7 @@ class _PostCommentsState extends State<PostComments> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || text.characters.length > commentMaxLength) return;
+    if (text.isEmpty || _tooLong(text)) return;
     setState(() {
       _sending = true;
       _sendFailure = null;
@@ -99,11 +112,12 @@ class _PostCommentsState extends State<PostComments> {
       _sending = false;
       switch (result) {
         case ApiSuccess(:final value):
-          // A new comment belongs at the very end. While older pages are
-          // unloaded, paging reaches it in order instead.
-          _postedOutOfView = _nextCursor != null;
-          if (!_postedOutOfView && !_comments.any((c) => c.id == value.id)) {
-            _comments.add(value);
+          // A reply shows under its comment. A new comment shows at the end,
+          // after any pages that haven't loaded yet.
+          _postedOutOfView = _nextCursor != null && _replyingTo == null;
+          if (!_comments.any((c) => c.id == value.id) &&
+              !_created.any((c) => c.id == value.id)) {
+            _created.add(value);
           }
           _input.clear();
           _replyingTo = null;
@@ -150,7 +164,7 @@ class _PostCommentsState extends State<PostComments> {
         text == null ||
         text.isEmpty ||
         text == comment.text ||
-        text.characters.length > commentMaxLength) {
+        _tooLong(text)) {
       return;
     }
     final result = await _client.updateComment(widget.postId, comment.id, text);
@@ -158,8 +172,10 @@ class _PostCommentsState extends State<PostComments> {
     switch (result) {
       case ApiSuccess(:final value):
         setState(() {
-          final index = _comments.indexWhere((c) => c.id == value.id);
-          if (index >= 0) _comments[index] = value;
+          for (final list in [_comments, _created]) {
+            final index = list.indexWhere((c) => c.id == value.id);
+            if (index >= 0) list[index] = value;
+          }
         });
       case ApiError(:final failure):
         _notify(_failureText(failure, "Your edit couldn't be saved."));
@@ -196,12 +212,15 @@ class _PostCommentsState extends State<PostComments> {
     final result = await _client.deleteComment(widget.postId, comment.id);
     if (!mounted) return;
     switch (result) {
-      // Already gone counts as deleted.
+      // Already gone counts as deleted. A 404 can also mean the post itself
+      // is gone, which the post finds out when it reads its counts again.
       case ApiSuccess() || ApiError(failure: NotFound()):
         setState(() {
-          _comments.removeWhere(
-            (c) => c.id == comment.id || c.parentCommentId == comment.id,
-          );
+          for (final list in [_comments, _created]) {
+            list.removeWhere(
+              (c) => c.id == comment.id || c.parentCommentId == comment.id,
+            );
+          }
         });
         if (_replyingTo?.id == comment.id) _reply(null);
         // Replies on unloaded pages go too, so only the server knows the count.
@@ -235,7 +254,28 @@ class _PostCommentsState extends State<PostComments> {
       size: DayliTextSize.sm,
       color: colors.foregroundSecondary,
     );
-    final topLevel = _comments.where((c) => c.parentCommentId == null);
+    final loadedIds = {for (final c in _comments) c.id};
+    final created = _created.where((c) => !loadedIds.contains(c.id)).toList();
+    final all = [..._comments, ...created];
+    List<Widget> thread(PostComment comment) => [
+      _CommentTile(
+        comment: comment,
+        onReply: () => _reply(comment),
+        onEdit: () => _edit(comment),
+        onDelete: () => _delete(comment),
+      ),
+      for (final reply
+          in all.where((c) => c.parentCommentId == comment.id).toList()
+            ..sort(_writtenOrder))
+        Padding(
+          padding: const EdgeInsets.only(left: 28),
+          child: _CommentTile(
+            comment: reply,
+            onEdit: () => _edit(reply),
+            onDelete: () => _delete(reply),
+          ),
+        ),
+    ];
 
     return Column(
       key: const Key('comments'),
@@ -268,25 +308,10 @@ class _PostCommentsState extends State<PostComments> {
             ),
           ],
         ] else
-          for (final comment in topLevel) ...[
-            _CommentTile(
-              comment: comment,
-              onReply: () => _reply(comment),
-              onEdit: () => _edit(comment),
-              onDelete: () => _delete(comment),
-            ),
-            for (final reply in _comments.where(
-              (c) => c.parentCommentId == comment.id,
-            ))
-              Padding(
-                padding: const EdgeInsets.only(left: 28),
-                child: _CommentTile(
-                  comment: reply,
-                  onEdit: () => _edit(reply),
-                  onDelete: () => _delete(reply),
-                ),
-              ),
-          ],
+          for (final comment in _comments.where(
+            (c) => c.parentCommentId == null,
+          ))
+            ...thread(comment),
         if (_nextCursor case final cursor?)
           Align(
             alignment: Alignment.centerLeft,
@@ -301,6 +326,8 @@ class _PostCommentsState extends State<PostComments> {
               child: Text(_loadingMore ? 'Loading...' : 'Show more comments'),
             ),
           ),
+        for (final comment in created.where((c) => c.parentCommentId == null))
+          ...thread(comment),
         const SizedBox(height: 12),
         if (_replyingTo case final parent?)
           Row(
@@ -336,8 +363,7 @@ class _PostCommentsState extends State<PostComments> {
                   hintText: _replyingTo == null
                       ? 'Add a comment'
                       : 'Add a reply',
-                  errorText:
-                      _input.text.trim().characters.length > commentMaxLength
+                  errorText: _tooLong(_input.text.trim())
                       ? 'Keep it to $commentMaxLength characters.'
                       : null,
                 ),
@@ -346,7 +372,12 @@ class _PostCommentsState extends State<PostComments> {
             IconButton(
               key: const Key('comments.send'),
               tooltip: _sendFailure != null ? 'Send again' : 'Send',
-              onPressed: _sending || _input.text.trim().isEmpty ? null : _send,
+              onPressed:
+                  _sending ||
+                      _input.text.trim().isEmpty ||
+                      _tooLong(_input.text.trim())
+                  ? null
+                  : _send,
               icon: _sending
                   ? const SizedBox(
                       width: 18,
@@ -493,6 +524,8 @@ class _EditCommentDialog extends StatefulWidget {
 class _EditCommentDialogState extends State<_EditCommentDialog> {
   late final _controller = TextEditingController(text: widget.initialText);
 
+  String get _text => _controller.text.trim();
+
   @override
   void dispose() {
     _controller.dispose();
@@ -509,6 +542,12 @@ class _EditCommentDialogState extends State<_EditCommentDialog> {
       autofocus: true,
       minLines: 1,
       maxLines: 5,
+      onChanged: (_) => setState(() {}),
+      decoration: InputDecoration(
+        errorText: _tooLong(_text)
+            ? 'Keep it to $commentMaxLength characters.'
+            : null,
+      ),
     ),
     actions: [
       TextButton(
@@ -517,7 +556,9 @@ class _EditCommentDialogState extends State<_EditCommentDialog> {
       ),
       TextButton(
         key: const Key('comment.edit.save'),
-        onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+        onPressed: _text.isEmpty || _tooLong(_text)
+            ? null
+            : () => Navigator.of(context).pop(_text),
         child: const Text('Save'),
       ),
     ],

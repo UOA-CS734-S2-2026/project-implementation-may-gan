@@ -39,6 +39,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   int _loads = 0;
   bool _liking = false;
 
+  /// Changes whenever a like starts, so an older read of the post can't
+  /// overwrite a newer like.
+  int _likeVersion = 0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -74,6 +78,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() {
       _liking = true;
+      _likeVersion++;
       _post = post.copyWith(
         likeCount: (post.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 31),
         viewerHasLiked: liked,
@@ -114,19 +119,38 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   /// Reads the post's counts again after a comment changes, because only the
-  /// server counts comments on pages that aren't loaded.
+  /// server counts comments on pages that aren't loaded. If the post is gone,
+  /// the screen says so instead of showing it from memory.
   Future<void> _refreshCounts() async {
-    final result = await AppScope.of(context).posts.get(widget.postId);
+    final services = AppScope.of(context);
+    final likeVersion = _likeVersion;
+    final result = await services.posts.get(widget.postId);
     if (!mounted) return;
-    final post = _post;
-    if (result case ApiSuccess(:final value) when post != null) {
-      setState(
-        () => _post = post.copyWith(
-          likeCount: value.likeCount,
-          viewerHasLiked: value.viewerHasLiked,
-          commentCount: value.commentCount,
-        ),
-      );
+    switch (result) {
+      case ApiSuccess(:final value):
+        final post = _post;
+        if (post == null) return;
+        // A like saved or started after this read began is newer than it.
+        final likeIsCurrent = !_liking && likeVersion == _likeVersion;
+        setState(
+          () => _post = post.copyWith(
+            likeCount: likeIsCurrent ? value.likeCount : post.likeCount,
+            viewerHasLiked: likeIsCurrent
+                ? value.viewerHasLiked
+                : post.viewerHasLiked,
+            commentCount: value.commentCount,
+          ),
+        );
+      case ApiError(failure: NotFound()):
+        setState(() {
+          _result = result;
+          _post = null;
+        });
+      case ApiError(failure: Unauthenticated()):
+        await services.session.sessionExpired();
+      case ApiError():
+        // The count is refreshed again after the next change.
+        break;
     }
   }
 

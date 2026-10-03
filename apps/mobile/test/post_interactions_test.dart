@@ -25,6 +25,9 @@ Future<TestHarness> openPost(
 
   /// The comment count the server reports after a comment changes.
   int? commentCountAfter,
+
+  /// What reading the post returns after a comment changes, if not a count.
+  ApiResult<PostDetail>? detailAfter,
 }) async {
   final client = interactions ?? FakeInteractionsClient();
   client.commentResults
@@ -53,6 +56,7 @@ Future<TestHarness> openPost(
     posts: FakePostClient([
       detail(commentCount),
       if (commentCountAfter != null) detail(commentCountAfter),
+      ?detailAfter,
     ]),
     interactions: client,
   );
@@ -189,7 +193,7 @@ void main() {
       expect(find.text('1 comment'), findsOneWidget);
     });
 
-    testWidgets('keeps a new comment after older unloaded ones', (
+    testWidgets('shows a new comment after older unloaded ones, then once', (
       tester,
     ) async {
       final interactions = FakeInteractionsClient()
@@ -201,6 +205,17 @@ void main() {
         nextCursor: 'next',
         interactions: interactions,
       );
+      // The first page was already read; the next read is the older page.
+      interactions.commentResults
+        ..clear()
+        ..add(
+          ApiSuccess(
+            commentPage([
+              postComment('c-5', text: 'Older.'),
+              postComment('c-9'),
+            ]),
+          ),
+        );
 
       await tester.ensureVisible(find.byKey(const Key('comments.input')));
       await tester.enterText(
@@ -210,7 +225,110 @@ void main() {
       await tapVisible(tester, find.byKey(const Key('comments.send')));
 
       expect(find.byKey(const Key('comments.postedOutOfView')), findsOneWidget);
-      expect(find.byKey(const Key('comment.c-9')), findsNothing);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('comment.c-9'))).dy,
+        greaterThan(
+          tester.getTopLeft(find.byKey(const Key('comments.more'))).dy,
+        ),
+      );
+
+      await tapVisible(tester, find.byKey(const Key('comments.more')));
+
+      expect(find.byKey(const Key('comment.c-9')), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('comment.c-9'))).dy,
+        greaterThan(tester.getTopLeft(find.byKey(const Key('comment.c-5'))).dy),
+      );
+    });
+
+    testWidgets(
+      'shows a reply under its comment while older pages are unloaded',
+      (tester) async {
+        final interactions = FakeInteractionsClient()
+          ..createResults.add(
+            ApiSuccess(
+              postComment('c-9', parentCommentId: 'c-1', text: 'Agreed.'),
+            ),
+          );
+        await openPost(
+          tester,
+          commentCount: 30,
+          comments: [postComment('c-1')],
+          nextCursor: 'next',
+          interactions: interactions,
+        );
+
+        await tapVisible(tester, find.byKey(const Key('comment.c-1.reply')));
+        await tester.enterText(
+          find.byKey(const Key('comments.input')),
+          'Agreed.',
+        );
+        await tapVisible(tester, find.byKey(const Key('comments.send')));
+
+        final reply = tester
+            .getTopLeft(find.byKey(const Key('comment.c-9')))
+            .dy;
+        expect(
+          reply,
+          greaterThan(
+            tester.getTopLeft(find.byKey(const Key('comment.c-1'))).dy,
+          ),
+        );
+        expect(
+          reply,
+          lessThan(
+            tester.getTopLeft(find.byKey(const Key('comments.more'))).dy,
+          ),
+        );
+        expect(find.byKey(const Key('comments.postedOutOfView')), findsNothing);
+      },
+    );
+
+    testWidgets('counts characters the way the API does', (tester) async {
+      final interactions = FakeInteractionsClient();
+      await openPost(tester, interactions: interactions);
+
+      // Each family emoji is one grapheme but five code points.
+      await tester.ensureVisible(find.byKey(const Key('comments.input')));
+      await tester.enterText(
+        find.byKey(const Key('comments.input')),
+        '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}' * 201,
+      );
+      await tester.pump();
+
+      expect(find.text('Keep it to 1000 characters.'), findsOneWidget);
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+      expect(interactions.created, isEmpty);
+    });
+
+    testWidgets('keeps an in-flight like when the comment count refreshes', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..holdLike = Completer<void>()
+        ..likeResults.add(
+          const ApiSuccess(LikeSummary(likeCount: 3, viewerHasLiked: true)),
+        )
+        ..createResults.add(ApiSuccess(postComment('c-9', text: 'Lovely.')));
+      // The refreshed post was read before the like was saved.
+      await openPost(tester, interactions: interactions, commentCountAfter: 1);
+
+      await tapVisible(tester, find.byKey(const Key('post.like')));
+      expect(find.text('3 likes'), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('comments.input')));
+      await tester.enterText(
+        find.byKey(const Key('comments.input')),
+        'Lovely.',
+      );
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+
+      expect(find.text('1 comment'), findsOneWidget);
+      expect(find.text('3 likes'), findsOneWidget);
+      expect(find.byIcon(Icons.favorite_rounded), findsOneWidget);
+
+      interactions.holdLike!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('3 likes'), findsOneWidget);
     });
 
     testWidgets('uses a new ID when the reply target changes after a failure', (
@@ -338,6 +456,30 @@ void main() {
       expect(find.byKey(const Key('comment.c-1')), findsNothing);
       expect(find.byKey(const Key('comment.c-2')), findsNothing);
       expect(find.text('0 comments'), findsOneWidget);
+    });
+
+    testWidgets('says the post is unavailable when it went during a delete', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..deleteResult = const ApiError(NotFound());
+      await openPost(
+        tester,
+        viewerIsAuthor: true,
+        commentCount: 1,
+        comments: [postComment('c-1', viewerCanDelete: true)],
+        detailAfter: const ApiError(NotFound()),
+        interactions: interactions,
+      );
+
+      await tapVisible(tester, find.byKey(const Key('comment.c-1.menu')));
+      await tester.tap(find.byKey(const Key('comment.delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('comment.deleteDialog.confirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+      expect(find.byKey(const Key('comments')), findsNothing);
     });
 
     testWidgets('shows no options on someone else\'s comment', (tester) async {

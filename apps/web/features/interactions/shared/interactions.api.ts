@@ -70,4 +70,6 @@ export function unwrapInteraction<T>(result: InteractionResult<T>): T {
 export const interactionKeys = {
   likes: (userId: string, postId: string) => ["posts", userId, "likes", postId] as const,
   comments: (userId: string, postId: string) => ["posts", userId, "comments", postId] as const,
+  /** Comments posted on this screen, kept outside the pages until paging reaches them. */
+  created: (userId: string, postId: string) => ["interactions", userId, "created-comments", postId] as const,
 } as const;

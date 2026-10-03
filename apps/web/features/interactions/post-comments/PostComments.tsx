@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/core/Button";
 import { InteractionApiError, type InteractionFailure, type PostComment } from "@/features/interactions/shared/interactions.api";
-import { useCommentsQuery, useCreateComment, useDeleteComment, useUpdateComment } from "./use-comments";
+import { useCommentsQuery, useCreateComment, useCreatedComments, useDeleteComment, useUpdateComment } from "./use-comments";
 
 const COMMENT_MAX = 1000;
 const NZ_TIME_ZONE = "Pacific/Auckland";
@@ -137,6 +137,7 @@ function CommentItem({
   const [draft, setDraft] = useState(comment.text);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const trimmed = draft.trim();
+  const tooLong = Array.from(trimmed).length > COMMENT_MAX;
 
   return (
     <article aria-label={`Comment by ${comment.author.displayName}`} className="space-y-1">
@@ -153,17 +154,26 @@ function CommentItem({
           className="space-y-2"
           onSubmit={(event) => {
             event.preventDefault();
-            if (!trimmed || Array.from(trimmed).length > COMMENT_MAX) return;
-            update.mutate({ commentId: comment.id, text: trimmed }, { onSuccess: () => setEditing(false) });
+            if (!trimmed || tooLong) return;
+            update.mutate(
+              { commentId: comment.id, text: trimmed },
+              {
+                onSuccess: (saved) => {
+                  setDraft(saved.text);
+                  setEditing(false);
+                },
+              },
+            );
           }}
         >
           <label className="block">
             <span className="sr-only">Edit your comment</span>
             <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2} className={field} />
           </label>
+          {tooLong && <p className="text-xs text-red-500">Keep it to {COMMENT_MAX} characters.</p>}
           {update.isError && <p role="alert" className="text-xs text-red-500">{failureMessage(update.error)}</p>}
           <div className="flex gap-2">
-            <Button type="submit" disabled={update.isPending || !trimmed} variant={{ color: "accent", size: "sm", weight: "secondary" }}>
+            <Button type="submit" disabled={update.isPending || !trimmed || tooLong} variant={{ color: "accent", size: "sm", weight: "secondary" }}>
               {update.isPending ? "Saving..." : "Save"}
             </Button>
             <Button
@@ -185,7 +195,18 @@ function CommentItem({
       {!editing && (
         <div className="flex gap-3 text-xs text-foreground-secondary">
           {onReply && <button type="button" onClick={onReply} className="hover:text-foreground">Reply</button>}
-          {comment.viewerCanEdit && <button type="button" onClick={() => setEditing(true)} className="hover:text-foreground">Edit</button>}
+          {comment.viewerCanEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(comment.text);
+                setEditing(true);
+              }}
+              className="hover:text-foreground"
+            >
+              Edit
+            </button>
+          )}
           {comment.viewerCanDelete && !confirmingDelete && (
             <button type="button" onClick={() => setConfirmingDelete(true)} className="hover:text-foreground">Delete</button>
           )}
@@ -210,13 +231,49 @@ function CommentItem({
   );
 }
 
+const writtenOrder = (a: PostComment, b: PostComment) =>
+  a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
 /** Comments with one level of replies, oldest first. */
 export function PostComments({ postId, commentCount }: { postId: string; commentCount: number }) {
   const query = useCommentsQuery(postId);
+  const createdHere = useCreatedComments(postId);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const comments = query.data?.pages.flatMap((page) => page.items) ?? [];
-  const topLevel = comments.filter((comment) => comment.parentCommentId === null);
-  const replies = (parentId: string) => comments.filter((comment) => comment.parentCommentId === parentId);
+  const loaded = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const loadedIds = new Set(loaded.map((comment) => comment.id));
+  // Comments posted here that paging hasn't reached. A reply shows under its
+  // comment; a new comment shows at the end, after any unloaded pages.
+  const created = createdHere.filter((comment) => !loadedIds.has(comment.id));
+  const all = [...loaded, ...created];
+  const replies = (parentId: string) =>
+    all.filter((comment) => comment.parentCommentId === parentId).sort(writtenOrder);
+  const isTopLevel = (comment: PostComment) => comment.parentCommentId === null;
+
+  const thread = (comment: PostComment) => (
+    <li key={comment.id} className="space-y-3">
+      <CommentItem postId={postId} comment={comment} onReply={() => setReplyingTo(comment.id)} />
+      {(replies(comment.id).length > 0 || replyingTo === comment.id) && (
+        <ol className="ml-6 space-y-3 border-l border-background-secondary pl-4">
+          {replies(comment.id).map((reply) => (
+            <li key={reply.id}>
+              <CommentItem postId={postId} comment={reply} />
+            </li>
+          ))}
+          {replyingTo === comment.id && (
+            <li>
+              <CommentComposer
+                postId={postId}
+                parentCommentId={comment.id}
+                label={`Reply to ${comment.author.displayName}`}
+                onPosted={() => setReplyingTo(null)}
+                onCancel={() => setReplyingTo(null)}
+              />
+            </li>
+          )}
+        </ol>
+      )}
+    </li>
+  );
 
   return (
     <section aria-label="Comments" className="space-y-4 border-t border-background-secondary pt-4">
@@ -226,7 +283,7 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
 
       {query.isPending ? (
         <p role="status" className="text-sm text-foreground-secondary">Loading comments...</p>
-      ) : query.isError && comments.length === 0 ? (
+      ) : query.isError && loaded.length === 0 ? (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-foreground-secondary">Comments couldn&apos;t be loaded right now.</p>
           <Button onClick={() => void query.refetch()} variant={{ color: "accent", size: "sm", weight: "secondary" }}>
@@ -234,33 +291,7 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
           </Button>
         </div>
       ) : (
-        <ol className="space-y-4">
-          {topLevel.map((comment) => (
-            <li key={comment.id} className="space-y-3">
-              <CommentItem postId={postId} comment={comment} onReply={() => setReplyingTo(comment.id)} />
-              {(replies(comment.id).length > 0 || replyingTo === comment.id) && (
-                <ol className="ml-6 space-y-3 border-l border-background-secondary pl-4">
-                  {replies(comment.id).map((reply) => (
-                    <li key={reply.id}>
-                      <CommentItem postId={postId} comment={reply} />
-                    </li>
-                  ))}
-                  {replyingTo === comment.id && (
-                    <li>
-                      <CommentComposer
-                        postId={postId}
-                        parentCommentId={comment.id}
-                        label={`Reply to ${comment.author.displayName}`}
-                        onPosted={() => setReplyingTo(null)}
-                        onCancel={() => setReplyingTo(null)}
-                      />
-                    </li>
-                  )}
-                </ol>
-              )}
-            </li>
-          ))}
-        </ol>
+        <ol className="space-y-4">{loaded.filter(isTopLevel).map(thread)}</ol>
       )}
 
       {query.hasNextPage && (
@@ -271,6 +302,10 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
         >
           {query.isFetchingNextPage ? "Loading..." : "Show more comments"}
         </Button>
+      )}
+
+      {created.some(isTopLevel) && (
+        <ol className="space-y-4">{created.filter(isTopLevel).map(thread)}</ol>
       )}
 
       <CommentComposer postId={postId} label="Add a comment" hasUnloadedComments={query.hasNextPage} />
