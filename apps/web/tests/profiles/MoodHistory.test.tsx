@@ -92,6 +92,26 @@ describe("MoodHistory", () => {
     expect(screen.getByRole("radio", { name: "30 days" }).getAttribute("aria-checked")).toBe("false");
   });
 
+  it("keeps the last range on screen only for the same profile", async () => {
+    const actor = userEvent.setup();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    moodHistory.mockResolvedValue({ ok: true, value: history() });
+    const { rerender } = rtlRender(<MoodHistory username="ada" displayName="Ada" isMe={false} />, { wrapper });
+    await screen.findByRole("img");
+
+    // Another range of the same profile keeps the chart while it loads.
+    moodHistory.mockReturnValue(new Promise(() => {}));
+    await actor.click(screen.getByRole("radio", { name: "Year" }));
+    expect(screen.getByRole("img")).toBeTruthy();
+
+    // Another profile never shows the previous person's history.
+    rerender(<MoodHistory username="bea" displayName="Bea" isMe={false} />);
+    expect(moodHistory).toHaveBeenLastCalledWith("bea", "1y");
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("Loading mood…")).toBeTruthy();
+  });
+
   it("shows a friend's history without marking their hidden posts as missing", async () => {
     moodHistory.mockResolvedValue({
       ok: true,
