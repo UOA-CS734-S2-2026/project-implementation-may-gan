@@ -124,6 +124,24 @@ void main() {
       expect(find.byKey(const Key('post.unavailable')), findsNothing);
       expect(find.text('Synthetic released dayli.'), findsOneWidget);
       expect(find.byKey(const Key('post.like')), findsOneWidget);
+
+      final detailResult = await services.posts.get(_publicPostId);
+      expect(detailResult, isA<ApiSuccess<PostDetail>>());
+      final detail = (detailResult as ApiSuccess<PostDetail>).value;
+      expect(detail.media, hasLength(1));
+      final mediaUrl = detail.media.single.url;
+      expect(mediaUrl, isNotNull);
+      final mediaClient = HttpClient();
+      addTearDown(() => mediaClient.close(force: true));
+      final mediaRequest = await mediaClient.getUrl(mediaUrl!);
+      final mediaResponse = await mediaRequest.close();
+      final mediaBytes = await mediaResponse.fold<List<int>>(
+        <int>[],
+        (bytes, chunk) => bytes..addAll(chunk),
+      );
+      expect(mediaResponse.statusCode, HttpStatus.ok);
+      expect(mediaResponse.headers.contentType?.mimeType, 'image/png');
+      expect(mediaBytes.take(8), [137, 80, 78, 71, 13, 10, 26, 10]);
     },
     skip: !_fixtureReady,
   );
