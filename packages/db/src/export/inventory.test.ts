@@ -72,7 +72,8 @@ describe("explicit export data inventory", () => {
   it("maps every archive source kind to reviewed included tables", () => {
     const sources = {
       profile: ["user"], terms: ["terms_acceptances"], age: ["age_declarations"],
-      posts: ["posts"], revisions: ["post_revisions"], notes: ["tomorrow_notes"], messages: ["messages"],
+      posts: ["posts"], post_media: ["post_media"], profile_avatars: ["profile_avatars"],
+      revisions: ["post_revisions"], notes: ["tomorrow_notes"], messages: ["messages"],
     } as const;
     expect(Object.keys(sources)).toEqual([...exportSourceKinds]);
     for (const tables of Object.values(sources)) {

@@ -199,8 +199,23 @@ function local(value: string, role: string): string {
         now() - interval '1 hour', now() + interval '167 hours', now() + interval '335 hours')`;
     expect(await app`select * from public.authorize_account_export_download(${transitioning}, ${transitionSession}, ${transitionRequest})`)
       .toHaveLength(1);
-    await migrator`update public.account_lifecycles set state = 'purging', generation = 1,
-      purge_started_at = now() where user_id = ${transitioning}`;
+    let signalTransition = () => {};
+    let releaseTransition = () => {};
+    const transitioned = new Promise<void>((resolve) => { signalTransition = resolve; });
+    const release = new Promise<void>((resolve) => { releaseTransition = resolve; });
+    const transition = migrator.begin(async (transaction) => {
+      try {
+        await transaction`update public.account_lifecycles set state = 'purging', generation = 1,
+          purge_started_at = now() where user_id = ${transitioning}`;
+      } finally { signalTransition(); }
+      await release;
+    });
+    await transitioned;
+    const contendingDownload = Promise.resolve(app`
+      select * from public.authorize_account_export_download(${transitioning}, ${transitionSession}, ${transitionRequest})`);
+    releaseTransition();
+    await transition;
+    expect(await contendingDownload).toEqual([]);
     const [fenced] = await migrator<{ status: string; archive_object_key: string | null; archive_cleanup_task_id: string }[]>`
       select status, archive_object_key, archive_cleanup_task_id
       from public.data_export_requests where id = ${transitionRequest}`;

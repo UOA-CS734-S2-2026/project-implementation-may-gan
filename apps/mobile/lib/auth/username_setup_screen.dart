@@ -132,6 +132,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   fullWidth: true,
                   onPressed: _busy ? null : _submit,
                 ),
+                if (AppScope.of(context).accountExports != null)
+                  TextButton(
+                    onPressed: () => context.push('/account/export'),
+                    child: const Text('Your data export'),
+                  ),
                 TextButton(
                   onPressed: _busy
                       ? null

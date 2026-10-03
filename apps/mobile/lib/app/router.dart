@@ -15,6 +15,7 @@ import '../messaging/new_message_screen.dart';
 import '../posts/post_detail_screen.dart';
 import '../profile/edit_profile_screen.dart';
 import '../profile/my_days_screen.dart';
+import '../settings/account_export_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
 import 'splash_screen.dart';
@@ -40,7 +41,9 @@ GoRouter buildRouter(
       case SessionStatus.signedOut:
         return public ? null : '/welcome';
       case SessionStatus.needsUsernameSetup:
-        return location == '/setup-username' ? null : '/setup-username';
+        return location == '/setup-username' || location == '/account/export'
+            ? null
+            : '/setup-username';
       case SessionStatus.signedIn:
         return public || location == '/splash' || location == '/setup-username'
             ? '/'
@@ -73,6 +76,10 @@ GoRouter buildRouter(
     // Full-screen pages above the tabs.
     GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
     GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+    GoRoute(
+      path: '/account/export',
+      builder: (_, _) => const AccountExportScreen(),
+    ),
     GoRoute(
       path: '/profile/edit',
       builder: (_, _) => const EditProfileScreen(),
