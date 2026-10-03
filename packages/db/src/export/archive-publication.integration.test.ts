@@ -49,6 +49,11 @@ function local(value: string, role: string): string {
 
   it("records cleanup ownership before bytes and publishes only the current lease", async () => {
     await expect(app`select public.reserve_account_export_archive(${request}, ${lease})`).rejects.toThrow();
+    await expect(app`select public.renew_account_export_lease(${request}, ${lease}, 120)`).rejects.toThrow();
+    expect((await worker`select public.renew_account_export_lease(${request}, 'wrong-token', 120) as ok`)[0]?.ok)
+      .toBe(false);
+    expect((await worker`select public.renew_account_export_lease(${request}, ${lease}, 120) as ok`)[0]?.ok)
+      .toBe(true);
     const [reservation] = await worker<{ key: string }[]>`
       select public.reserve_account_export_archive(${request}, ${lease}) as key`;
     expect(reservation?.key).toMatch(/^private\/data-exports\/v2\/[0-9a-f]{64}\/[0-9a-f]{64}\.zip$/);
@@ -83,6 +88,8 @@ function local(value: string, role: string): string {
     expect(ready?.request_status).toBe("ready");
     expect(ready!.expires_at.getTime() - ready!.ready_at.getTime()).toBe(24 * 3600_000);
     expect(await worker`select * from public.authorize_account_export_lease(${request}, ${lease})`).toEqual([]);
+    expect((await worker`select public.renew_account_export_lease(${request}, ${lease}, 120) as ok`)[0]?.ok)
+      .toBe(false);
     expect((await migrator`select archive_object_key, snapshot_cutoff_at from public.data_export_requests where id = ${request}`)[0])
       .toMatchObject({ archive_object_key: reservation!.key });
   });
@@ -100,6 +107,8 @@ function local(value: string, role: string): string {
       values (${purging}, 'purging', ${`deletion-${nonce}`}, ${"a".repeat(64)}, 1,
         now() - interval '20 days', now() - interval '13 days', now() - interval '6 days', now())`;
     expect((await worker`select public.publish_account_export_archive(${purgeRequest}, ${lease}, ${reservation!.key}) as ok`)[0]?.ok)
+      .toBe(false);
+    expect((await worker`select public.renew_account_export_lease(${purgeRequest}, ${lease}, 120) as ok`)[0]?.ok)
       .toBe(false);
     expect(await app`select * from public.read_account_export_status(${purging}, ${purgingSession})`).toEqual([]);
     expect((await migrator`select status from public.data_export_object_cleanup_tasks where id = ${task!.id}`)[0]?.status)
