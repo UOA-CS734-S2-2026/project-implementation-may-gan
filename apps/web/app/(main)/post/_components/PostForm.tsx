@@ -14,8 +14,8 @@ import {
   type ApiFailure,
   type PostingDay,
 } from "@/lib/api/daily-posts";
-import AudienceInput from "./AudienceInput";
-import RatingInput from "./RatingInput";
+import AudienceInput from "@/components/ui/AudienceInput";
+import RatingInput from "@/components/ui/RatingInput";
 
 const postSchema = z.object({
   promptResponse: z

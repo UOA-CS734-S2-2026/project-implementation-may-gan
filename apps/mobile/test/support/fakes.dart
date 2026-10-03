@@ -6,6 +6,7 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_media.dart';
+import 'package:dayli_mobile/api/post_page.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
@@ -324,6 +325,50 @@ class FakePostClient implements PostClient {
         ? const ApiError(NotFound())
         : mediaResults.removeAt(0);
   }
+
+  /// Edit results in order; the last repeats.
+  final updateResults = <ApiResult<PostDetail>>[
+    const ApiError(ServiceUnavailable()),
+  ];
+  final edits = <(String, PostEdit)>[];
+
+  /// Completes each edit when set, so a test can look at the saving state.
+  Completer<void>? holdUpdate;
+
+  @override
+  Future<ApiResult<PostDetail>> update(String postId, PostEdit edit) async {
+    edits.add((postId, edit));
+    await holdUpdate?.future;
+    return updateResults.length > 1
+        ? updateResults.removeAt(0)
+        : updateResults.single;
+  }
+
+  ApiResult<void> deleteResult = const ApiSuccess(null);
+  final deleted = <String>[];
+
+  @override
+  Future<ApiResult<void>> delete(String postId) async {
+    deleted.add(postId);
+    return deleteResult;
+  }
+
+  /// Revision pages in order; the last repeats.
+  final revisionResults = <ApiResult<PostPage<PostRevision>>>[
+    const ApiSuccess(PostPage(items: [], nextCursor: null, hasMore: false)),
+  ];
+  final revisionRequests = <(String, String?)>[];
+
+  @override
+  Future<ApiResult<PostPage<PostRevision>>> revisions(
+    String postId, {
+    String? cursor,
+  }) async {
+    revisionRequests.add((postId, cursor));
+    return revisionResults.length > 1
+        ? revisionResults.removeAt(0)
+        : revisionResults.single;
+  }
 }
 
 ProfilePost profilePost(
@@ -356,6 +401,8 @@ PostDetail postDetail(
   String audience = 'friends',
   bool viewerIsAuthor = false,
   bool edited = false,
+  int revisionCount = 0,
+  int rating = 8,
   List<PostMedia> media = const [],
 }) => PostDetail(
   id: id,
@@ -366,11 +413,12 @@ PostDetail postDetail(
   promptText: 'What made you smile today?',
   reflectiveAnswer: answer,
   caption: caption,
-  rating: 8,
+  rating: rating,
   audience: audience,
   acceptedAt: DateTime.utc(2026, 9, 29, 3),
   edited: edited,
   viewerIsAuthor: viewerIsAuthor,
+  revisionCount: revisionCount,
   media: media,
 );
 

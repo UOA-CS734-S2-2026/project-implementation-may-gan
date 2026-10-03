@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/core/Button";
+import { DeletePostDialog } from "@/features/posts/delete-post/DeletePostDialog";
+import { useDeletePostMutation } from "@/features/posts/delete-post/use-delete-post-mutation";
+import { PostRevisions } from "@/features/posts/list-post-revisions/PostRevisions";
 import type { PostDetail } from "@/features/posts/shared/posts.api";
 import { isVideo, PrivateImage, PrivateVideo } from "@/features/posts/shared/PrivateMedia";
 import { PostApiError } from "@/features/posts/shared/query-result";
+import { EditPostForm } from "@/features/posts/update-post/EditPostForm";
 import { usePostQuery } from "./use-post-query";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
@@ -28,6 +32,11 @@ function postedAt(post: PostDetail) {
     hour12: true,
   }).format(new Date(post.acceptedAt));
   return `${date}, ${time}`;
+}
+
+/** Today's Auckland date as `YYYY-MM-DD`. */
+function aucklandToday() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: NZ_TIME_ZONE }).format(new Date());
 }
 
 const photoColumns = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3"] as const;
@@ -74,6 +83,10 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   const query = usePostQuery(postId);
   const failure = query.error instanceof PostApiError ? query.error.failure : undefined;
   const post = query.data;
+  const [editing, setEditing] = useState(false);
+  const [showingHistory, setShowingHistory] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const remove = useDeletePostMutation(postId);
 
   useEffect(() => {
     if (failure === "unauthenticated") router.replace("/sign-in");
@@ -140,25 +153,73 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         </p>
       </header>
 
-      <p className="text-sm text-foreground-secondary">
-        {postedAt(post)}
-        {post.edited && " · Edited"}
-        {post.viewerIsAuthor && (post.audience === "solo" ? " · Only you" : " · Friends")}
-      </p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-foreground-secondary">
+        <p>
+          {postedAt(post)}
+          {post.viewerIsAuthor && (post.audience === "solo" ? " · Only you" : " · Friends")}
+        </p>
+        {post.edited && (
+          <button
+            type="button"
+            aria-expanded={showingHistory}
+            onClick={() => setShowingHistory((open) => !open)}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {showingHistory ? "Hide earlier versions" : "Edited · see earlier versions"}
+          </button>
+        )}
+        {post.viewerIsAuthor && !editing && (
+          <div className="ml-auto flex gap-2">
+            <Button onClick={() => setEditing(true)} variant={{ color: "foreground", size: "sm", weight: "secondary" }}>
+              Edit
+            </Button>
+            <Button
+              onClick={() => setConfirmingDelete(true)}
+              variant={{ color: "foreground", size: "sm", weight: "secondary" }}
+              className="bg-rose-100 text-rose-600 hover:bg-rose-200"
+            >
+              Delete
+            </Button>
+          </div>
+        )}
+      </div>
 
       <PostMedia post={post} />
 
-      <section className="space-y-2">
-        <h1 className="text-sm font-medium text-foreground-tertiary">{post.prompt.text}</h1>
-        <p className="font-serif text-xl tracking-tight whitespace-pre-line">{post.reflectiveAnswer}</p>
-      </section>
+      {editing ? (
+        <EditPostForm
+          post={post}
+          onDone={() => setEditing(false)}
+          onReload={async () => (await query.refetch()).status === "success"}
+        />
+      ) : (
+        <>
+          <section className="space-y-2">
+            <h1 className="text-sm font-medium text-foreground-tertiary">{post.prompt.text}</h1>
+            <p className="font-serif text-xl tracking-tight whitespace-pre-line">{post.reflectiveAnswer}</p>
+          </section>
 
-      {post.caption && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-foreground-tertiary">Word dump</h2>
-          <p className="whitespace-pre-line">{post.caption}</p>
-        </section>
+          {post.caption && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium text-foreground-tertiary">Word dump</h2>
+              <p className="whitespace-pre-line">{post.caption}</p>
+            </section>
+          )}
+        </>
       )}
+
+      {showingHistory && post.edited && <PostRevisions postId={post.id} viewerIsAuthor={post.viewerIsAuthor} />}
+
+      <DeletePostDialog
+        open={confirmingDelete}
+        isPending={remove.isPending}
+        isToday={post.localDate === aucklandToday()}
+        error={remove.isError ? "This dayli couldn't be deleted right now. Try again." : undefined}
+        onClose={() => setConfirmingDelete(false)}
+        onConfirm={() => remove.mutate(undefined, {
+          onSuccess: () => router.replace(`/u/${encodeURIComponent(post.author.username)}`),
+        })}
+      />
     </article>
   );
 }

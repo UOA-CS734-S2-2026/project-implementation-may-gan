@@ -9,6 +9,8 @@ import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 
+import 'edit_post_screen.dart';
+import 'post_revisions_screen.dart';
 import 'private_media.dart';
 
 /// One post, opened from the feed. Every open and refresh asks the server
@@ -26,6 +28,10 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
+
+  /// True once the post was edited or deleted here. It is returned to the
+  /// list that opened the post, so that list can refresh.
+  bool _changed = false;
 
   @override
   void didChangeDependencies() {
@@ -55,42 +61,129 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     });
   }
 
+  Future<void> _edit(PostDetail post) async {
+    final saved = await Navigator.of(context).push<PostDetail>(
+      MaterialPageRoute(builder: (_) => EditPostScreen(post: post)),
+    );
+    if (saved == null || !mounted) return;
+    setState(() {
+      _changed = true;
+      _post = saved;
+      _result = ApiSuccess(saved);
+    });
+  }
+
+  Future<void> _history(PostDetail post) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => PostRevisionsScreen(
+        postId: post.id,
+        viewerIsAuthor: post.viewerIsAuthor,
+      ),
+    ),
+  );
+
+  Future<void> _confirmDelete(PostDetail post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('post.deleteDialog'),
+        title: const Text('Delete this dayli?'),
+        content: const Text(
+          'It disappears for you and your friends straight away. If it was '
+          "today's dayli, you can post a new one before midnight.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('post.deleteDialog.confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: DayliColors.of(context).danger,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final services = AppScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await services.posts.delete(post.id);
+    if (!mounted) return;
+    switch (result) {
+      // Already gone counts as deleted.
+      case ApiSuccess() || ApiError(failure: NotFound()):
+        messenger.showSnackBar(
+          const SnackBar(
+            key: Key('post.deleted'),
+            content: Text('Dayli deleted.'),
+          ),
+        );
+        _changed = true;
+        _leave();
+      case ApiError(failure: Unauthenticated()):
+        await services.session.sessionExpired();
+      case ApiError(:final failure):
+        messenger.showSnackBar(
+          SnackBar(
+            key: const Key('post.deleteFailed'),
+            content: Text(
+              failure is NetworkUnavailable
+                  ? "You're offline, so this dayli wasn't deleted."
+                  : "This dayli couldn't be deleted. Try again.",
+            ),
+          ),
+        );
+    }
+  }
+
+  void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: colors.foregroundAccent,
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () =>
-                        context.canPop() ? context.pop() : context.go('/'),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  Text(
-                    'dayli',
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.xl,
-                      weight: FontWeight.w600,
-                      tracking: DayliTracking.tight,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: colors.foregroundAccent,
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: _leave,
+                      icon: const Icon(Icons.arrow_back_rounded),
                     ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _body(context),
-              ),
-            ],
+                    Text(
+                      'dayli',
+                      style: DayliText.serif(
+                        context,
+                        size: DayliTextSize.xl,
+                        weight: FontWeight.w600,
+                        tracking: DayliTracking.tight,
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _body(context),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -232,19 +325,56 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       ),
                     ),
                   ),
+                  if (post.viewerIsAuthor && !stale)
+                    PopupMenuButton<String>(
+                      key: const Key('post.menu'),
+                      tooltip: 'Post options',
+                      onSelected: (action) =>
+                          action == 'edit' ? _edit(post) : _confirmDelete(post),
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          key: Key('post.edit'),
+                          value: 'edit',
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem(
+                          key: Key('post.delete'),
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 14),
               Text(
                 [
                   longDayLabel(post.localDate),
-                  if (post.edited) 'Edited',
                   if (post.viewerIsAuthor)
                     post.audience == 'solo' ? 'Only you' : 'Friends',
                 ].join(' · '),
                 key: const Key('post.meta'),
                 style: muted,
               ),
+              if (post.edited)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    key: const Key('post.history'),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 44),
+                      foregroundColor: colors.foregroundSecondary,
+                    ),
+                    onPressed: () => _history(post),
+                    child: Text(
+                      'Edited · see earlier versions',
+                      style: muted.copyWith(
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
               if (post.media.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _PostMedia(post: post),

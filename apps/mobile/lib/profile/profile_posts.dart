@@ -123,6 +123,7 @@ class ProfilePostsSection extends StatelessWidget {
             keyPrefix: 'profile.posts',
             label: _labelFor(post),
             linkAuthor: false,
+            onChanged: () => posts.refresh(),
           ),
           const SizedBox(height: 16),
         ],
