@@ -104,86 +104,89 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
     };
 
     // Its own messenger keeps the app's snackbars off the lock screen.
-    return ScaffoldMessenger(
-      child: Scaffold(
-        backgroundColor: colors.background,
-        body: LockBackdrop(
-          child: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _FaceIdBadge(),
-                    const SizedBox(height: 32),
-                    Text(
-                      'App Locked',
-                      style: DayliText.serif(
-                        context,
-                        size: DayliTextSize.xl,
-                        weight: FontWeight.w600,
+    return PopScope(
+      canPop: false,
+      child: ScaffoldMessenger(
+        child: Scaffold(
+          backgroundColor: colors.background,
+          body: LockBackdrop(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _FaceIdBadge(),
+                      const SizedBox(height: 32),
+                      Text(
+                        'App Locked',
+                        style: DayliText.serif(
+                          context,
+                          size: DayliTextSize.xl,
+                          weight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: DayliText.sans(
-                        context,
-                        color: colors.foregroundSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    if (unavailable)
-                      _PrimaryButton(
-                        key: const Key('lock.recover'),
-                        onPressed: busy ? null : _recover,
-                        icon: Icons.login_rounded,
-                        label: 'Sign in again',
-                      )
-                    else
-                      _PrimaryButton(
-                        key: const Key('lock.unlock'),
-                        onPressed: busy ? null : _unlock,
-                        icon: Icons.fingerprint_rounded,
-                        label: 'Unlock',
-                      ),
-                    if (lockedOut) ...[
                       const SizedBox(height: 8),
-                      TextButton(
-                        key: const Key('lock.recoverInstead'),
-                        onPressed: busy ? null : _recover,
-                        child: const Text('Sign in with your account instead'),
-                      ),
-                    ],
-                    if (unavailable || lockedOut) ...[
-                      const SizedBox(height: 16),
                       Text(
-                        "You'll sign in to your Dayli account again and "
-                        'Biometric Unlock will turn off. Your draft stays '
-                        'on this device.',
+                        message,
                         textAlign: TextAlign.center,
                         style: DayliText.sans(
                           context,
-                          size: DayliTextSize.sm,
-                          color: colors.foregroundTertiary,
+                          color: colors.foregroundSecondary,
                         ),
                       ),
-                    ],
-                    if (_recoveryFailed) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        "Couldn't sign out. Try again.",
-                        textAlign: TextAlign.center,
-                        style: DayliText.sans(
-                          context,
-                          size: DayliTextSize.sm,
-                          color: colors.danger,
+                      const SizedBox(height: 48),
+                      if (unavailable)
+                        _PrimaryButton(
+                          key: const Key('lock.recover'),
+                          onPressed: busy ? null : _recover,
+                          icon: Icons.login_rounded,
+                          label: 'Sign in again',
+                        )
+                      else
+                        _PrimaryButton(
+                          key: const Key('lock.unlock'),
+                          onPressed: busy ? null : _unlock,
+                          icon: Icons.fingerprint_rounded,
+                          label: 'Unlock',
                         ),
-                      ),
+                      if (lockedOut) ...[
+                        const SizedBox(height: 8),
+                        TextButton(
+                          key: const Key('lock.recoverInstead'),
+                          onPressed: busy ? null : _recover,
+                          child: const Text('Sign in with your account instead'),
+                        ),
+                      ],
+                      if (unavailable || lockedOut) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          "You'll sign in to your Dayli account again and "
+                          'Biometric Unlock will turn off. Your draft stays '
+                          'on this device.',
+                          textAlign: TextAlign.center,
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: colors.foregroundTertiary,
+                          ),
+                        ),
+                      ],
+                      if (_recoveryFailed) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          "Couldn't sign out. Try again.",
+                          textAlign: TextAlign.center,
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: colors.danger,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

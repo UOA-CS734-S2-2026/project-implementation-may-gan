@@ -386,6 +386,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                             value: enabled,
+                            activeColor: colors.primary,
                             onChanged: _setBiometricUnlock,
                           );
                         },
