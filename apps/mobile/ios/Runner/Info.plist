@@ -4,6 +4,8 @@
 <dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Dayli adds the photos and videos you choose to your daily post.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to quickly unlock Dayli.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

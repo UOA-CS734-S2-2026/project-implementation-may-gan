@@ -19,6 +19,7 @@ import 'app/fresh_install.dart';
 import 'app/session_integrations.dart';
 import 'auth/native_session.dart';
 import 'auth/session_controller.dart';
+import 'auth/biometric_service.dart';
 import 'compose/media_compressor.dart';
 import 'drafts/draft_store.dart';
 import 'messaging/messaging_client.dart';
@@ -51,10 +52,12 @@ Future<void> main() async {
       accessibility: KeychainAccessibility.unlocked_this_device,
     ),
   );
+  final prefs = await SharedPreferences.getInstance();
   await clearProtectedStorageAfterReinstall(
-    preferences: SharedPreferences.getInstance(),
+    preferences: Future.value(prefs),
     secureStorage: secureStorage,
   );
+  final biometric = BiometricService(prefs);
 
   final tokenStore = ProtectedSessionTokenStore(storage: secureStorage);
   final drafts = ProtectedDraftStore(storage: secureStorage);
@@ -154,6 +157,7 @@ Future<void> main() async {
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),
+        biometric: biometric,
       ),
     ),
   );

@@ -15,6 +15,7 @@ import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
 import '../posts/post_submitter.dart';
+import '../auth/biometric_service.dart';
 
 /// Application-wide services, provided once above the router.
 class AppServices {
@@ -26,6 +27,7 @@ class AppServices {
     required this.friends,
     required this.drafts,
     required this.submitter,
+    required this.biometric,
     MessagingController? messaging,
     this.profiles = const UnavailableProfileClient(),
     this.notifications,
@@ -57,6 +59,7 @@ class AppServices {
   final MediaUploadClient? mediaUploads;
   final MediaCompressor mediaCompressor;
   final DateTime Function() clock;
+  final BiometricService biometric;
 }
 
 class AppScope extends InheritedWidget {

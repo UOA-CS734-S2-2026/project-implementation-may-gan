@@ -20,6 +20,7 @@ dependencies:
   google_sign_in: ^7.2.0
   http: ^1.6.0
   image_picker: ^1.2.3
+  local_auth: ^2.3.0
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   v_video_compressor: ^2.2.3
