@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ search: "", push: vi.fn(), email: vi.fn() }));
+const mocks = vi.hoisted(() => ({ search: "", push: vi.fn(), email: vi.fn(), user: { id: "actor" } as { id: string } | null }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mocks.push }),
   useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 vi.mock("@/lib/auth/client", () => ({ authClient: { signIn: { email: mocks.email } } }));
+vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: mocks.user }) }));
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
     control: {}, setError: vi.fn(), formState: { isSubmitting: false, errors: {} },
@@ -24,6 +25,7 @@ beforeEach(() => {
   mocks.search = "";
   mocks.push.mockReset();
   mocks.email.mockResolvedValue({ error: null });
+  mocks.user = { id: "actor" };
 });
 
 describe("email sign-in return destination", () => {
@@ -42,6 +44,19 @@ describe("email sign-in return destination", () => {
     const { container } = render(<SignInPage />);
     fireEvent.submit(container.querySelector("form")!);
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/messages?tab=inbox"));
+  });
+
+  it("waits for the shared session before entering an authenticated route", async () => {
+    mocks.search = "next=%2Fsettings";
+    mocks.user = null;
+    const { container, rerender } = render(<SignInPage />);
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(mocks.email).toHaveBeenCalled());
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.user = { id: "actor" };
+    rerender(<SignInPage />);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/settings"));
   });
 
   it.each(["", "next=https%3A%2F%2Fattacker.example", "next=%2F%252e%252e%2F%2Fattacker.example"])("falls back to /home for unsafe or missing next: %s", async (search) => {
