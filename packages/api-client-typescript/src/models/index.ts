@@ -57,6 +57,7 @@ export * from './MediaReservationStatus';
 export * from './MediaReservationUpload';
 export * from './MediaValidationFailureReason';
 export * from './Message';
+export * from './MessageCreationRateLimitError';
 export * from './MessageReactionsInner';
 export * from './MessageReactionsInnerReactorsInner';
 export * from './MessageReplyPreview';

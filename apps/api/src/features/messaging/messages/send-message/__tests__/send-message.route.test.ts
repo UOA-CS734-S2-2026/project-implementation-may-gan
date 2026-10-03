@@ -32,6 +32,19 @@ describe("POST /conversations/{id}/messages", () => {
     expect(await response.json()).toMatchObject({ error: { code: "RATE_LIMITED", details: { retryAfterSeconds: 17 } } });
   });
 
+  it("documents quota only on creation operations while retaining generic native 429 errors elsewhere", async () => {
+    const document = await (await createApp().request("/api/v1/openapi.json")).json<{
+      paths: Record<string, Record<string, { responses: Record<string, { content: Record<string, { schema: { $ref: string } }> }> }>>;
+    }>();
+    const schema = (path: string, method: string) => document.paths[path]![method]!.responses["429"]!.content["application/json"]!.schema.$ref;
+    expect(schema("/api/v1/conversations/direct", "post")).toBe("#/components/schemas/MessageCreationRateLimitError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages", "post")).toBe("#/components/schemas/MessageCreationRateLimitError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages", "get")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages/{messageId}", "patch")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages/{messageId}/reaction", "put")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/request", "put")).toBe("#/components/schemas/ApiError");
+  });
+
   it("schedules bounded immediate dispatch only after a saved response", async () => {
     const dispatchImmediately = vi.fn(async () => undefined);
     const api = createApp({ messaging: { resolveSession: async () => ({ userId: "alice" }), service, dispatchImmediately } });

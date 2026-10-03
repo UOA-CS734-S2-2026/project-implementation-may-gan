@@ -320,6 +320,8 @@ class ApiClient {
           return MediaValidationFailureReasonTypeTransformer().decode(value);
         case 'Message':
           return Message.fromJson(value);
+        case 'MessageCreationRateLimitError':
+          return MessageCreationRateLimitError.fromJson(value);
         case 'MessageReactionsInner':
           return MessageReactionsInner.fromJson(value);
         case 'MessageReactionsInnerReactorsInner':

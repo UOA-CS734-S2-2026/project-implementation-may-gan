@@ -1,5 +1,6 @@
 import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
+import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 
 const sequenceSchema = z.string().regex(/^\d+$/).openapi({ example: "42" });
 const messageTextSchema = z.string().max(8_000).refine((value) => Array.from(value).length <= 4_000, "Text must contain at most 4,000 Unicode code points.").openapi({ description: "1 through 4,000 Unicode code points. The 8,000 code-unit cap preserves valid astral Unicode text." });
@@ -51,12 +52,22 @@ export const messageQuotaErrorResponse = {
   content: { "application/json": { schema: messageQuotaErrorSchema } },
 } as const;
 
+export const messageCreationRateLimitErrorResponse = {
+  description: "A native request limit or the persistent sender-wide message quota was reached.",
+  headers: messageQuotaErrorResponse.headers,
+  content: {
+    "application/json": {
+      schema: z.union([apiErrorSchema, messageQuotaErrorSchema]).openapi("MessageCreationRateLimitError"),
+    },
+  },
+} as const;
+
 export const messagingErrorResponses = {
   401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } },
   403: { description: "The messaging action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } },
   404: { description: "The conversation or message was not found.", content: { "application/json": { schema: apiErrorSchema } } },
   409: { description: "The messaging action conflicts with current state.", content: { "application/json": { schema: apiErrorSchema } } },
   422: { description: "The request contains invalid values.", content: { "application/json": { schema: apiErrorSchema } } },
-  429: messageQuotaErrorResponse,
+  429: rateLimitErrorResponse,
   503: { description: "Messaging is temporarily unavailable.", content: { "application/json": { schema: apiErrorSchema } } },
 } as const;
