@@ -1,7 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import type { ResolveSession } from "../../../../http/middleware/require-session";
-import { messagingErrorResponses, conversationParamsSchema, messageSchema, sendMessageBodySchema } from "../../shared/message.contract";
+import { messagingErrorResponses, conversationParamsSchema, messageCreationRateLimitErrorResponse, messageSchema, sendMessageBodySchema } from "../../shared/message.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
 import type { SendMessageService } from "./send-message.service";
@@ -12,7 +12,7 @@ const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieA
 const route = createRoute({
   method: "post", path: "/api/v1/conversations/{conversationId}/messages", tags: ["Messaging"], operationId: "sendMessage", security,
   request: { params: conversationParamsSchema, body: { required: true, content: { "application/json": { schema: sendMessageBodySchema } } } },
-  responses: { 201: { description: "Saved message.", content: { "application/json": { schema: messageSchema } } }, 200: { description: "Identical idempotent replay.", content: { "application/json": { schema: messageSchema } } }, ...messagingErrorResponses },
+  responses: { 201: { description: "Saved message.", content: { "application/json": { schema: messageSchema } } }, 200: { description: "Identical idempotent replay.", content: { "application/json": { schema: messageSchema } } }, ...messagingErrorResponses, 429: messageCreationRateLimitErrorResponse },
 });
 
 export function registerSendMessageRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: SendMessageRouteDependencies) {

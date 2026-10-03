@@ -39,11 +39,6 @@ import {
     CreateRealtimeTicket201ResponseToJSON,
 } from '../models/CreateRealtimeTicket201Response';
 import {
-    type DirectMessageSendQuotaError,
-    DirectMessageSendQuotaErrorFromJSON,
-    DirectMessageSendQuotaErrorToJSON,
-} from '../models/DirectMessageSendQuotaError';
-import {
     type DirectPairLookup,
     DirectPairLookupFromJSON,
     DirectPairLookupToJSON,
@@ -88,6 +83,11 @@ import {
     MessageFromJSON,
     MessageToJSON,
 } from '../models/Message';
+import {
+    type MessageCreationRateLimitError,
+    MessageCreationRateLimitErrorFromJSON,
+    MessageCreationRateLimitErrorToJSON,
+} from '../models/MessageCreationRateLimitError';
 import {
     type RegisterPushDeviceRequest,
     RegisterPushDeviceRequestFromJSON,

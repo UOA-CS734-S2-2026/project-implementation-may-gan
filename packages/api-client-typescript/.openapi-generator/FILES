@@ -76,6 +76,7 @@ src/models/MediaReservationStatus.ts
 src/models/MediaReservationUpload.ts
 src/models/MediaValidationFailureReason.ts
 src/models/Message.ts
+src/models/MessageCreationRateLimitError.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts

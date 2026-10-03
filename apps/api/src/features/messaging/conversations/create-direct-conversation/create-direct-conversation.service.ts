@@ -46,12 +46,24 @@ export function createCreateDirectConversationService(dependencies: {
           if (!friendshipActive && existing.requestState === "pending") throw new MessagingError("PENDING");
           if (!friendshipActive && existing.requestState === "declined") throw new MessagingError("DECLINED");
           const conversation = existing.requestState === "active" ? existing : await transaction.activateConversation(existing, now());
+          await transaction.lockNewMessageSender(actorId);
+          const concurrentReplay = await transaction.findIdempotentMessage(actorId, input.clientMessageId);
+          if (concurrentReplay) {
+            if (concurrentReplay.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
+            return { conversation: concurrentReplay.conversation, message: toMessageDto(concurrentReplay.message), replayed: true };
+          }
           const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
           const message = await transaction.appendExistingMessage({ conversation, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt, messageId: generateId() });
           return { conversation, message: toMessageDto(message), replayed: false };
         }
         if (!await transaction.recipientExists(input.recipientId)) throw new MessagingError("NOT_FOUND");
         const requestState = friendshipActive ? "active" as const : "pending" as const;
+        await transaction.lockNewMessageSender(actorId);
+        const concurrentReplay = await transaction.findIdempotentMessage(actorId, input.clientMessageId);
+        if (concurrentReplay) {
+          if (concurrentReplay.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
+          return { conversation: concurrentReplay.conversation, message: toMessageDto(concurrentReplay.message), replayed: true };
+        }
         const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
         const result = await transaction.createConversationWithMessage({ conversationId: generateId(), initiatorId: actorId, recipientId: input.recipientId, requestState, messageId: generateId(), clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt });
         return { conversation: result.conversation, message: toMessageDto(result.message), replayed: false };

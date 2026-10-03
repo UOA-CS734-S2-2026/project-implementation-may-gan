@@ -1,9 +1,13 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, type SQL } from "drizzle-orm";
 import { MessagingError } from "./messaging-error";
 
 export const DEFAULT_DIRECT_MESSAGE_SEND_LIMIT = 30;
-const WINDOW_MILLISECONDS = 60_000;
+export type DatabaseTimestamp = Date | string;
+
+export function databaseTimestampValue(value: DatabaseTimestamp): Date | SQL {
+  return value instanceof Date ? value : sql`${value}::timestamptz`;
+}
 
 type QuotaTransaction = Pick<DayliDatabase, "select">;
 
@@ -14,40 +18,56 @@ export function parseDirectMessageSendLimit(value: string | undefined): number {
   return Number.isSafeInteger(parsed) ? parsed : DEFAULT_DIRECT_MESSAGE_SEND_LIMIT;
 }
 
-function senderLockKey(senderId: string): string {
+export function newMessageSenderLockKey(senderId: string): string {
   return `direct-message-send:${senderId.length}:${senderId}`;
 }
 
+/** Serialize sender-wide idempotency and quota decisions after existing locks. */
+export async function lockNewMessageSender(transaction: QuotaTransaction, senderId: string): Promise<void> {
+  await transaction
+    .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${newMessageSenderLockKey(senderId)}, 734))` })
+    .from(sql`(values (1)) as lock_source`);
+}
+
 /**
- * Claim one sender-wide message slot inside the caller-owned transaction.
- * Existing pair and conversation locks must be acquired before this function.
+ * Check quota after the sender lock and return the exact sampled PostgreSQL
+ * timestamp as text. Repositories cast that text back to timestamptz on writes,
+ * preserving PostgreSQL microseconds instead of passing through JavaScript Date.
  */
 export async function claimNewMessageSlot(
   transaction: QuotaTransaction,
   senderId: string,
   limit: number,
-): Promise<Date> {
-  if (limit > 0) {
-    await transaction
-      .select({ lock: sql`pg_advisory_xact_lock(hashtextextended(${senderLockKey(senderId)}, 734))` })
-      .from(sql`(values (1)) as lock_source`);
-  }
-
+  sampledAtForBoundaryTest?: string,
+): Promise<DatabaseTimestamp> {
+  const databaseClock = sampledAtForBoundaryTest === undefined
+    ? sql<Date>`clock_timestamp()`
+    : sql<Date>`${sampledAtForBoundaryTest}::timestamptz`;
   const sampledClock = transaction
-    .select({ sampledAt: sql<Date>`clock_timestamp()`.as("sampled_at") })
+    .select({ sampledAt: databaseClock.as("sampled_at") })
     .from(sql`(values (1)) as clock_source`)
     .as("sampled_clock");
   if (limit === 0) {
-    const [clock] = await transaction.select().from(sampledClock);
+    const [clock] = await transaction
+      .select({ sampledAt: sql<string>`to_char(${sampledClock.sampledAt}, 'YYYY-MM-DD"T"HH24:MI:SS.USOF')` })
+      .from(sampledClock);
     if (!clock) throw new Error("Database clock did not return a timestamp.");
-    return new Date(clock.sampledAt);
+    return clock.sampledAt;
   }
 
   const [usage] = await transaction
     .select({
-      sampledAt: sampledClock.sampledAt,
+      sampledAt: sql<string>`to_char(${sampledClock.sampledAt}, 'YYYY-MM-DD"T"HH24:MI:SS.USOF')`,
       count: sql<number>`count(${schema.messages.id})::integer`,
-      oldestCreatedAt: sql<Date | null>`min(${schema.messages.createdAt})`,
+      retryAfterSeconds: sql<number | null>`case
+        when count(${schema.messages.id}) >= ${limit} then greatest(
+          1,
+          floor(extract(epoch from (
+            min(${schema.messages.createdAt}) + interval '60 seconds' - ${sampledClock.sampledAt}
+          )))::integer + 1
+        )
+        else null
+      end`,
     })
     .from(sampledClock)
     .leftJoin(schema.messages, and(
@@ -56,12 +76,12 @@ export async function claimNewMessageSlot(
     ))
     .groupBy(sampledClock.sampledAt);
   if (!usage) throw new Error("Database clock did not return quota usage.");
-  const sampledAt = new Date(usage.sampledAt);
-
-  if (Number(usage.count) >= limit && usage.oldestCreatedAt) {
-    const oldestExpiry = new Date(usage.oldestCreatedAt).getTime() + WINDOW_MILLISECONDS;
-    const retryAfterSeconds = Math.max(1, Math.floor((oldestExpiry - sampledAt.getTime()) / 1_000) + 1);
+  if (Number(usage.count) >= limit) {
+    const retryAfterSeconds = Number(usage.retryAfterSeconds);
+    if (!Number.isInteger(retryAfterSeconds) || retryAfterSeconds < 1) {
+      throw new Error("Database quota retry calculation was invalid.");
+    }
     throw new MessagingError("RATE_LIMITED", retryAfterSeconds);
   }
-  return sampledAt;
+  return usage.sampledAt;
 }
