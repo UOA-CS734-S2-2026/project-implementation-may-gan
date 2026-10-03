@@ -32,7 +32,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
   SessionController? _session;
-  String? _accountId;
+  (SessionStatus, String?, int)? _sessionIdentity;
+  String? _loadedPostId;
+  int _requestGeneration = 0;
   String? _intentNotice;
 
   /// True once the post was edited or deleted here. It is returned to the
@@ -55,15 +57,42 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _syncActor();
   }
 
-  void _syncActor() {
-    final accountId = _session?.user?.id;
-    if (_result == null || accountId != _accountId) {
-      _accountId = accountId;
+  void _syncActor({bool force = false}) {
+    final identity = _currentSessionIdentity();
+    if (force ||
+        identity != _sessionIdentity ||
+        _loadedPostId != widget.postId) {
+      _sessionIdentity = identity;
+      _loadedPostId = widget.postId;
       _post = null;
       _result = null;
       _intentNotice = null;
       _load();
       if (mounted) setState(() {});
+    }
+  }
+
+  (SessionStatus, String?, int) _currentSessionIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentLoad(
+    int requestGeneration,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      requestGeneration == _requestGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
+  @override
+  void didUpdateWidget(covariant PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.intent != widget.intent) {
+      _syncActor(force: true);
     }
   }
 
@@ -75,14 +104,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   Future<void> _load() async {
     final services = AppScope.of(context);
-    final result = await services.posts.get(widget.postId);
-    if (!mounted) return;
+    final requestGeneration = ++_requestGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     if (result case ApiError(failure: Unauthenticated())) {
-      if (services.session.status == SessionStatus.signedIn) {
+      if (identity.$1 == SessionStatus.signedIn) {
         await services.session.sessionExpired();
       }
       return;
     }
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     setState(() {
       _result = result;
       switch (result) {

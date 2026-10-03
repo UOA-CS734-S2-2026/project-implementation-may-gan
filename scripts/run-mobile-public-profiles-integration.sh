@@ -24,12 +24,16 @@ suffix="$(openssl rand -hex 6)"
 public_username="dpp_public_${suffix}"
 private_username="dpp_private_${suffix}"
 viewer_username="dpp_viewer_${suffix}"
+second_viewer_username="dpp_viewer_two_${suffix}"
 public_email="${public_username}@example.test"
 private_email="${private_username}@example.test"
 viewer_email="${viewer_username}@example.test"
+second_viewer_email="${second_viewer_username}@example.test"
 viewer_password="$(openssl rand -hex 18)"
+second_viewer_password="$(openssl rand -hex 18)"
 fixture_password="$(openssl rand -hex 18)"
 public_post_id="dpp-post-${suffix}"
+private_post_id="dpp-private-post-${suffix}"
 certificate="$temporary_dir/fixture.pem"
 key="$temporary_dir/fixture-key.pem"
 defines="$temporary_dir/flutter-defines.json"
@@ -91,6 +95,7 @@ sign_up() {
   local username="$1"
   local email="$2"
   local password="$3"
+  local fixture_ip="$4"
   local headers="$temporary_dir/${username}.headers"
   local body="$temporary_dir/${username}.json"
   local status
@@ -98,6 +103,7 @@ sign_up() {
     --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
     --request POST "${host_api_origin}/api/auth/sign-up/email" \
     --header 'content-type: application/json' \
+    --header "cf-connecting-ip: ${fixture_ip}" \
     --data "{\"name\":\"Synthetic ${username}\",\"username\":\"${username}\",\"displayUsername\":\"Synthetic ${username}\",\"email\":\"${email}\",\"password\":\"${password}\"}")"
   if [[ "$status" != "200" ]]; then
     echo "Synthetic account setup failed with HTTP ${status}." >&2
@@ -162,10 +168,11 @@ api_pid=$!
 wait_for_url
 
 echo 'Creating disposable synthetic accounts'
-public_token="$(sign_up "$public_username" "$public_email" "$fixture_password")"
-private_token="$(sign_up "$private_username" "$private_email" "$fixture_password")"
-sign_up "$viewer_username" "$viewer_email" "$viewer_password" >/dev/null
-if [[ -z "$public_token" || -z "$private_token" ]]; then
+public_token="$(sign_up "$public_username" "$public_email" "$fixture_password" '198.51.100.11')"
+private_token="$(sign_up "$private_username" "$private_email" "$fixture_password" '198.51.100.12')"
+viewer_token="$(sign_up "$viewer_username" "$viewer_email" "$viewer_password" '198.51.100.13')"
+second_viewer_token="$(sign_up "$second_viewer_username" "$second_viewer_email" "$second_viewer_password" '198.51.100.14')"
+if [[ -z "$public_token" || -z "$private_token" || -z "$viewer_token" || -z "$second_viewer_token" ]]; then
   echo 'Synthetic account setup returned no native session token.' >&2
   exit 1
 fi
@@ -182,27 +189,44 @@ fi
 
 public_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
   psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${public_email}'")"
-if [[ -z "$public_user_id" ]]; then
-  echo 'Synthetic public account was not persisted.' >&2
+private_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+  psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${private_email}'")"
+viewer_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+  psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${viewer_email}'")"
+if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" ]]; then
+  echo 'Synthetic accounts were not persisted.' >&2
   exit 1
 fi
 
 docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
   psql -v ON_ERROR_STOP=1 -U postgres -d dayli_test \
-    -v author_id="$public_user_id" -v post_id="$public_post_id" >/dev/null <<'SQL'
+    -v author_id="$public_user_id" -v post_id="$public_post_id" \
+    -v private_author_id="$private_user_id" -v private_post_id="$private_post_id" \
+    -v blocked_id="$viewer_user_id" >/dev/null <<'SQL'
 INSERT INTO public.posts
   (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
 VALUES
   (:'post_id', :'author_id', '2026-09-29', 'prompt-09-29', 'Synthetic released dayli.', 8,
-   'friends', '2026-09-29T03:00:00Z', '2026-09-29T11:00:00Z');
+   'friends', '2026-09-29T03:00:00Z', '2026-09-29T11:00:00Z'),
+  (:'private_post_id', :'private_author_id', '2026-09-28', 'prompt-09-28', 'Blocked private dayli.', 6,
+   'friends', '2026-09-28T03:00:00Z', '2026-09-28T11:00:00Z');
+INSERT INTO public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+VALUES (:'private_author_id', :'blocked_id', now());
+DELETE FROM public.session WHERE user_id = :'author_id';
 SQL
 
 export DPP004_API_BASE_URL="$device_api_origin"
 export DPP004_PUBLIC_USERNAME="$public_username"
 export DPP004_PRIVATE_USERNAME="$private_username"
 export DPP004_PUBLIC_POST_ID="$public_post_id"
+export DPP004_PRIVATE_POST_ID="$private_post_id"
 export DPP004_VIEWER_EMAIL="$viewer_email"
 export DPP004_VIEWER_PASSWORD="$viewer_password"
+export DPP004_VIEWER_TOKEN="$viewer_token"
+export DPP004_EXPIRED_TOKEN="$public_token"
+export DPP004_SECOND_VIEWER_EMAIL="$second_viewer_email"
+export DPP004_SECOND_VIEWER_PASSWORD="$second_viewer_password"
+export DPP004_SECOND_VIEWER_TOKEN="$second_viewer_token"
 export DPP004_CA_PEM_B64="$(base64 < "$certificate" | tr -d '\n')"
 node >"$defines" <<'NODE'
 const fs = require('node:fs');
@@ -211,8 +235,14 @@ const keys = [
   'DPP004_PUBLIC_USERNAME',
   'DPP004_PRIVATE_USERNAME',
   'DPP004_PUBLIC_POST_ID',
+  'DPP004_PRIVATE_POST_ID',
   'DPP004_VIEWER_EMAIL',
   'DPP004_VIEWER_PASSWORD',
+  'DPP004_VIEWER_TOKEN',
+  'DPP004_EXPIRED_TOKEN',
+  'DPP004_SECOND_VIEWER_EMAIL',
+  'DPP004_SECOND_VIEWER_PASSWORD',
+  'DPP004_SECOND_VIEWER_TOKEN',
   'DPP004_CA_PEM_B64',
 ];
 fs.writeFileSync(1, JSON.stringify(Object.fromEntries(keys.map(key => [key, process.env[key]]))));

@@ -35,40 +35,70 @@ typedef _LoadedProfile = ({ProfileDetails info, FriendCard? person});
 class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Future<ApiResult<_LoadedProfile>>? _profile;
   SessionController? _session;
-  String? _accountId;
+  (SessionStatus, String?, int)? _sessionIdentity;
   String? _loadedUsername;
+  int _requestGeneration = 0;
   bool _busy = false;
   String? _notice;
   String? _authorizedProfileId;
   ProfilePostsController? _posts;
-  (String?, String)? _postsFor;
+  ((SessionStatus, String?, int), String)? _postsFor;
 
-  Future<ApiResult<_LoadedProfile>> _load() async {
+  (SessionStatus, String?, int) _currentSessionIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentLoad(
+    int requestGeneration,
+    String username,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      requestGeneration == _requestGeneration &&
+      username == widget.username &&
+      identity == _currentSessionIdentity();
+
+  Future<ApiResult<_LoadedProfile>> _startLoad() {
+    final requestGeneration = ++_requestGeneration;
+    return _load(requestGeneration, widget.username, _currentSessionIdentity());
+  }
+
+  Future<ApiResult<_LoadedProfile>> _load(
+    int requestGeneration,
+    String username,
+    (SessionStatus, String?, int) identity,
+  ) async {
     final services = AppScope.of(context);
-    final details = await services.profiles.details(widget.username);
+    final details = await services.profiles.details(username);
+    if (!_isCurrentLoad(requestGeneration, username, identity)) {
+      return const ApiError(ServiceUnavailable());
+    }
     if (details case ApiError(:final failure)) {
-      if (failure is Unauthenticated &&
-          services.session.status == SessionStatus.signedIn) {
+      if (failure is Unauthenticated && identity.$1 == SessionStatus.signedIn) {
         await services.session.sessionExpired();
       }
       return ApiError(failure);
     }
     final info = (details as ApiSuccess<ProfileDetails>).value;
-    if (_session?.status != SessionStatus.signedIn) {
+    if (identity.$1 != SessionStatus.signedIn) {
       return ApiSuccess((info: info, person: null));
     }
 
     // The public and restricted DTOs contain no account ID. Resolve the
     // session-authorized relationship after sign-in before enabling a write.
     final card = await services.friends.profile(info.username);
+    if (!_isCurrentLoad(requestGeneration, username, identity)) {
+      return const ApiError(ServiceUnavailable());
+    }
+    if (card case ApiError(failure: Unauthenticated())) {
+      await services.session.sessionExpired();
+      return const ApiError(Unauthenticated());
+    }
     return switch (card) {
       ApiSuccess(value: final person) => ApiSuccess((
         info: info,
         person: person,
-      )),
-      ApiError(failure: Unauthenticated()) => ApiSuccess((
-        info: info,
-        person: null,
       )),
       ApiError() when info.isPublic => ApiSuccess((info: info, person: null)),
       ApiError(:final failure) => ApiError(failure),
@@ -102,17 +132,17 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   }
 
   void _syncActor({bool force = false}) {
-    final accountId = _session?.user?.id;
+    final identity = _currentSessionIdentity();
     if (force ||
         _profile == null ||
-        _accountId != accountId ||
+        _sessionIdentity != identity ||
         _loadedUsername != widget.username) {
-      _accountId = accountId;
+      _sessionIdentity = identity;
       _loadedUsername = widget.username;
       _notice = null;
       _authorizedProfileId = null;
       _clearPosts();
-      _profile = _load();
+      _profile = _startLoad();
     }
   }
 
@@ -140,7 +170,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
         !info.isRestricted &&
         info.detailsVisible &&
         (info.isPublic || info.isOwner || person?.relationship == 'friends');
-    final owner = (_accountId, info.username);
+    final owner = (_sessionIdentity!, info.username);
     if (!canSee) {
       _clearPosts();
       return null;
@@ -158,7 +188,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
 
   Future<void> _refresh() async {
     setState(() {
-      _profile = _load();
+      _profile = _startLoad();
     });
     await Future.wait([?_profile, ?_posts?.refresh()]);
   }
@@ -182,7 +212,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   }
 
   Future<void> _friend(FriendCard person) async {
-    final accountAtStart = _accountId;
+    final accountAtStart = _session?.user?.id;
     if (_busy ||
         accountAtStart == person.id ||
         accountAtStart != _session?.user?.id ||
@@ -204,7 +234,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
       _notice = result is ApiError<void>
           ? 'That action is unavailable. Please try again.'
           : null;
-      _profile = _load();
+      _profile = _startLoad();
     });
   }
 
@@ -242,7 +272,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Widget build(BuildContext context) {
     _syncActor();
     return FutureBuilder<ApiResult<_LoadedProfile>>(
-      key: ValueKey((_accountId, widget.username)),
+      key: ValueKey((_sessionIdentity, widget.username)),
       future: _profile,
       builder: (context, snapshot) {
         if (!snapshot.hasData) {

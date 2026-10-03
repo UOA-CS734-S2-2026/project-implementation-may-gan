@@ -547,6 +547,7 @@ class TestHarness {
     this.effectiveTerms = false,
     this.accountExports,
     FakeProfileClient? profiles,
+    this.google,
   }) : friends = friends ?? FakeFriendsClient(),
        profiles = profiles ?? FakeProfileClient(),
        feed = feed ?? FakeFeedClient(),
@@ -604,6 +605,13 @@ class TestHarness {
           _ => http.Response('{}', 200, headers: {'set-auth-token': 'token-1'}),
         };
       }
+      if (path.endsWith('/sign-in/social')) {
+        return http.Response(
+          '{}',
+          200,
+          headers: {'set-auth-token': 'google-token'},
+        );
+      }
       if (path.endsWith('/sign-in/email')) {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         if (body['email'] == 'busy@example.test') {
@@ -614,6 +622,20 @@ class TestHarness {
             : http.Response('{}', 401);
       }
       if (path.endsWith('/get-session')) {
+        if (request.headers['authorization'] == 'Bearer google-token') {
+          return http.Response(
+            jsonEncode({
+              'user': {
+                'id': 'google-user',
+                'name': 'Provider Name',
+                'email': 'google@example.test',
+                'username': null,
+              },
+              'session': {'id': 'google-session'},
+            }),
+            200,
+          );
+        }
         return request.headers['authorization'] == 'Bearer token-1'
             ? http.Response(
                 jsonEncode({
@@ -628,6 +650,9 @@ class TestHarness {
                 200,
               )
             : http.Response('null', 200);
+      }
+      if (path.endsWith('/api/v1/profile/username')) {
+        return http.Response('{}', 200);
       }
       if (path.endsWith('/sign-out')) return http.Response('{}', 200);
       return http.Response('{}', 404);
@@ -672,6 +697,7 @@ class TestHarness {
   final bool uploadMedia;
   final bool effectiveTerms;
   final AccountExportClient? accountExports;
+  final GoogleIdTokenProvider? google;
   int legalProofRequests = 0;
   List<String?>? signupProofHeaders;
   late final SessionController session;
@@ -690,6 +716,7 @@ class TestHarness {
     pendingCaptures: pendingCaptures,
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
+    google: google,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }
