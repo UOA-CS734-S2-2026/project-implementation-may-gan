@@ -1,5 +1,7 @@
+import { MAX_EXPORT_ARCHIVE_BYTES } from "../shared/export-limits";
+
+export { MAX_EXPORT_ARCHIVE_BYTES } from "../shared/export-limits";
 const text = new TextEncoder();
-export const MAX_EXPORT_ARCHIVE_BYTES = 250 * 1024 * 1024;
 export const MAX_EXPORT_ENTRY_BYTES = 200 * 1024 * 1024;
 export const MAX_EXPORT_CHUNK_BYTES = 1024 * 1024;
 export const MAX_EXPORT_ENTRIES = 5_000;

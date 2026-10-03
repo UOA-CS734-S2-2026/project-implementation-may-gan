@@ -58,6 +58,26 @@ describe("private R2 export multipart store", () => {
     await expect(store.listUploads(key)).rejects.toThrow(/listing cursor/);
   });
 
+  it("distinguishes a missing archive from an uncertain provider error", async () => {
+    const { store } = setup(new Response(null, { status: 404 }), new Response(null, { status: 503 }));
+    expect(await store.exists(key)).toBe(false);
+    await expect(store.exists(key)).rejects.toThrow(/existence check failed/);
+  });
+
+  it("bounds authenticated archive reads and verifies object identity on every range", async () => {
+    const { store, fetch } = setup(
+      new Response(null, { status: 200, headers: { "content-length": "5", etag: '"same"' } }),
+      new Response("hello", { status: 206, headers: { "content-range": "bytes 0-4/5", etag: '"same"' } }),
+    );
+    const meta = await store.head(key);
+    expect(new TextDecoder().decode(await store.readRange(key, 0, 4, meta.size, meta.etag))).toBe("hello");
+    expect(fetch.mock.calls[1]?.[1]?.headers).toMatchObject({ Range: "bytes=0-4", "If-Match": '"same"' });
+    const unsafe = setup(new Response("hello", { status: 200 }));
+    await expect(unsafe.store.readRange(key, 0, 4, 5, '"same"')).rejects.toThrow(/range is invalid/);
+    const changed = setup(new Response("hello", { status: 206, headers: { "content-range": "bytes 0-4/5", etag: '"changed"' } }));
+    await expect(changed.store.readRange(key, 0, 4, 5, '"same"')).rejects.toThrow(/range is invalid/);
+  });
+
   it("cancels an oversized provider response without buffering it", async () => {
     let cancelled = false;
     const stream = new ReadableStream<Uint8Array>({

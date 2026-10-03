@@ -210,6 +210,10 @@ class ApiClient {
           return AccountDeletionRequestResult.fromJson(value);
         case 'AccountDeletionStatus':
           return AccountDeletionStatus.fromJson(value);
+        case 'AccountExportRequestResult':
+          return AccountExportRequestResult.fromJson(value);
+        case 'AccountExportStatus':
+          return AccountExportStatus.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':

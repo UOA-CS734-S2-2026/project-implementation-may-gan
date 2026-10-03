@@ -29,13 +29,13 @@ describe("versioned record archive declaration", () => {
         : [];
     } };
     const files = await readEntries(source);
-    expect(Object.keys(files)).toEqual(["manifest.json", ...exportSourceKinds.map((kind) => `records/${kind}.ndjson`)]);
+    expect(Object.keys(files)).toEqual(["manifest.json", ...exportSourceKinds.map((kind) => `records/${kind}.ndjson`), "trash/posts.ndjson"]);
     expect(JSON.parse(files["manifest.json"]!)).toMatchObject({
       archiveVersion: 2, selectionCutoffAt: selection.selectionCutoffAt.toISOString(),
       consistency: "per_source_selection_cutoff_not_atomic_snapshot", recordKinds: [...exportSourceKinds],
     });
     expect(files["records/posts.ndjson"]).toContain("User text with https://example.test");
-    expect(observed.map((item) => item.kind)).toEqual([...exportSourceKinds]);
+    expect(observed.map((item) => item.kind)).toEqual([...exportSourceKinds, "posts"]);
     expect(observed.every((item) => item.cutoff === selection.selectionCutoffAt)).toBe(true);
   });
 
@@ -43,7 +43,7 @@ describe("versioned record archive declaration", () => {
     const empty: ExportRecordSource = { async page() { return []; } };
     const files: ExportFileSource = {
       async page(_selection, after) { return after === null ? [{
-        file_id: "post:media_1", post_id: "post_1", file_kind: "post_media" as const,
+        file_id: "post:media_1", post_id: "post_1", post_trashed: false, file_kind: "post_media" as const,
         content_type: "audio/mp4", byte_size: 3, object_key: "media/owner/reservation_private",
       }] : []; },
       async *read() { yield encoder.encode("abc"); },
@@ -57,11 +57,32 @@ describe("versioned record archive declaration", () => {
     expect(JSON.parse(archive["manifest.json"]!).fileKinds).toEqual(["post_media", "profile_avatar"]);
   });
 
+  it("places restorable posts and their proved media inside trash/", async () => {
+    const source: ExportRecordSource = { async page(_job, kind) {
+      return kind === "posts" ? [
+        { record_key: "active", payload: { id: "active", trashed_at: null } },
+        { record_key: "restorable", payload: { id: "restorable", trashed_at: "2026-10-02T00:00:00Z" } },
+      ] : [];
+    } };
+    const files: ExportFileSource = {
+      async page() { return [{ file_id: "post:trash_media", post_id: "restorable", post_trashed: true,
+        file_kind: "post_media", content_type: "audio/mp4", byte_size: 3, object_key: "media/owner/private" }]; },
+      async *read() { yield encoder.encode("abc"); },
+    };
+    const archive = await readEntries(source, files);
+    expect(archive["records/posts.ndjson"]).toContain('"id":"active"');
+    expect(archive["records/posts.ndjson"]).not.toContain("restorable");
+    expect(archive["trash/posts.ndjson"]).toContain('"id":"restorable"');
+    expect(archive["trash/media/posts/trash_media.bin"]).toBe("abc");
+    expect(archive["files.ndjson"]).toContain("trash/media/posts/trash_media.bin");
+    expect(JSON.stringify(archive)).not.toContain("media/owner/private");
+  });
+
   it("rejects file-length mismatches instead of publishing incomplete bytes", async () => {
     const empty: ExportRecordSource = { async page() { return []; } };
     const files: ExportFileSource = {
       async page(_selection, after) { return after === null ? [{
-        file_id: "post:media_1", post_id: "post_1", file_kind: "post_media" as const,
+        file_id: "post:media_1", post_id: "post_1", post_trashed: false, file_kind: "post_media" as const,
         content_type: "audio/mp4", byte_size: 4, object_key: "media/owner/reservation_private",
       }] : []; },
       async *read() { yield encoder.encode("abc"); },

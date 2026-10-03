@@ -168,6 +168,11 @@ import { allowsAccountCapability } from "./features/account-policy/shared/accoun
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerDeletionRoutes, type DeletionRouteDependencies } from "./features/account-lifecycle/deletion/deletion.route";
+import { registerExportRoutes, type ExportRouteDependencies } from "./features/data-export/data-export.routes";
+import { createExportOwnerRepository } from "./features/data-export/shared/export-owner.repository";
+import { authorizeExportDownload } from "./features/data-export/shared/export-download.repository";
+import { prepareExportDownload } from "./features/data-export/shared/export-download";
+import { createExportArchiveStore } from "./features/data-export/shared/export-r2-archive";
 import { readDeletionStatus } from "./features/account-lifecycle/shared/deletion-status.repository";
 import { cancelAccountDeletion } from "./features/account-lifecycle/shared/deletion-commands.repository";
 import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
@@ -208,6 +213,7 @@ export interface AppDependencies {
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   deletion?: DeletionRouteDependencies;
+  exportService?: ExportRouteDependencies;
   passwordReauthentication?: PasswordReauthenticationDependencies;
   googleManagementProof?: GoogleManagementProofDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
@@ -242,6 +248,7 @@ export function createApp({
   avatarRemove,
   accountPolicy,
   deletion,
+  exportService,
   passwordReauthentication,
   googleManagementProof,
   legalAcceptance,
@@ -295,6 +302,7 @@ export function createApp({
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerDeletionRoutes(api, { ...(deletion ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? deletion?.rateLimiter });
+  registerExportRoutes(api, { ...(exportService ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? exportService?.rateLimiter });
   registerPasswordReauthenticationRoute(api, { ...(passwordReauthentication ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? passwordReauthentication?.rateLimiter });
   registerGoogleManagementProofRoute(api, { ...(googleManagementProof ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? googleManagementProof?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
@@ -398,6 +406,20 @@ export function createAppForEnv(env: ApiEnv) {
     // Request execution stays unregistered until the synthetic-staging gate is reviewed.
     requestEnabled: false,
   } satisfies DeletionRouteDependencies : undefined;
+  const exportService = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    status: (userId: string, sessionId: string) => withHyperdriveDatabase(configuration.hyperdrive,
+      (database) => createExportOwnerRepository(database).status(userId, sessionId)),
+    request: (userId: string, sessionId: string, requestId: string) => withHyperdriveDatabase(configuration.hyperdrive,
+      (database) => createExportOwnerRepository(database).request(userId, sessionId, requestId)),
+    download: r2Runtime ? (userId: string, sessionId: string, requestId: string) => prepareExportDownload({
+      authorize: () => withHyperdriveDatabase(configuration.hyperdrive,
+        (database) => authorizeExportDownload(database, { userId, sessionId, requestId })),
+      objects: createExportArchiveStore(r2Runtime),
+    }) : undefined,
+    // Runtime activation requires separate provider and cleanup verification.
+    enabled: false,
+  } satisfies ExportRouteDependencies : undefined;
   const passwordReauthentication = configuration ? {
     resolveSession: createSessionResolver(configuration),
     issue: (input: Parameters<typeof issuePasswordManagementGrant>[1]) => withHyperdriveDatabase(
@@ -490,6 +512,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameProfile,
     accountPolicy,
     deletion,
+    exportService,
     passwordReauthentication,
     googleManagementProof,
     legalAcceptance,

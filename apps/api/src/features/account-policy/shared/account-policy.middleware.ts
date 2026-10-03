@@ -25,6 +25,8 @@ const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/deletion", "policy_read"],
   ["POST /api/v1/account/deletion/request", "request_deletion"],
   ["POST /api/v1/account/deletion/cancel", "cancel_deletion_verification"],
+  ["GET /api/v1/account/export", "export"],
+  ["POST /api/v1/account/export/request", "export"],
   ["POST /api/v1/legal/acceptance", "legal_acceptance"],
 ]);
 
@@ -76,6 +78,8 @@ export async function accountCapabilityForRequest(request: Request): Promise<Acc
     return body && typeof body === "object" && !Array.isArray(body) && (body as { action?: unknown }).action === "cancel_deletion"
       ? "cancel_deletion_verification" : "request_deletion";
   }
+  if (request.method.toUpperCase() === "GET"
+    && matches(pathSegments(url.pathname), ["api", "v1", "account", "export", "*", "download"])) return "export";
   return managementApiRoutes.get(key) ?? await cleanupCapability(request, url.pathname) ?? "ordinary";
 }
 

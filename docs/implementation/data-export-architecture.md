@@ -1,6 +1,6 @@
 # Data export architecture and data inventory
 
-Status: approved engineering direction, not an implemented or enabled export service. This document records the owner decisions discussed for issues #157 and #162 and the remaining work in PR #191. It does not approve production activation, legal publication, provider purchases, or destructive lifecycle execution.
+Status: approved engineering direction, not an enabled export service. The inventory prerequisite is merged as PR #251. Draft PR #252 implements restricted sources and archive processing, but its routes and scheduled jobs remain disabled. This document records the owner decisions for #157 and #162. It does not approve production activation, legal publication, provider purchases, or destructive lifecycle execution.
 
 ## Decisions
 
@@ -12,9 +12,9 @@ Status: approved engineering direction, not an implemented or enabled export ser
 
 ## What exists and what does not
 
-Main currently has the lifecycle schema foundation. PR #191 is an unfinished, unmerged export implementation. In that branch, `packages/db/src/export-worker.ts` loops over `profile`, `journals`, `revisions`, `notes`, and `messages`; `packages/db/migrations/0034_export_source_budgets.sql` explicitly accepts those kinds and defines their bounded SQL projections; `apps/api/src/features/data-export/build-export/export-worker.ts` has a separate archive manifest list. These are the present allowlists, not a single extensible registry. The migration number is branch-local and must be reconciled with published main before any integration.
+Main has the lifecycle schema foundation and checked-in inventory. PR #191 is an unfinished historical branch and is not a source to merge wholesale. In that branch, `packages/db/src/export-worker.ts` loops over `profile`, `journals`, `revisions`, `notes`, and `messages`; `packages/db/migrations/0034_export_source_budgets.sql` explicitly accepts those kinds and defines their bounded SQL projections; `apps/api/src/features/data-export/build-export/export-worker.ts` has a separate archive manifest list. These are the present allowlists, not a single extensible registry. The migration number is branch-local and must be reconciled with published main before any integration.
 
-The partial branch does not export owned upload bytes, Terms acceptance, age declarations, or restorable Trash. Its authored-message projection selects by the sender's participant identity but does not independently check current conversation authorization. Its `post_media` relationships do not prove which R2 key belongs in an archive. It does not yet implement the required checked-in data inventory. The later local reconciliation prototype is also unpublished and unapproved. Known review gaps include lease-fenced inventory authorization, resolution of recorded cleanup incidents after later success, broad real-role and runtime tests, complete source canaries, and authenticated client journeys. Do not merge #191 or the frozen export code in #196 as if these gaps were closed.
+Those historical projections do not prove owned upload bytes, Terms acceptance, age declarations, restorable Trash, or current message readability. Draft PR #252 replaces them with explicit reviewed sources, lease-fenced file proofs, a versioned ZIP, and restricted publication and download checks. It remains disabled. Known review gaps include late-provider cleanup evidence and resolution, complete exclusion canaries, authenticated web and native client journeys, and live R2 behavior. Do not merge #191 or the frozen export code in #196 as if those gaps were closed.
 
 ## Target design
 

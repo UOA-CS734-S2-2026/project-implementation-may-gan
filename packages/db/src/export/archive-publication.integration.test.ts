@@ -92,6 +92,59 @@ function local(value: string, role: string): string {
       .toBe(false);
     expect((await migrator`select archive_object_key, snapshot_cutoff_at from public.data_export_requests where id = ${request}`)[0])
       .toMatchObject({ archive_object_key: reservation!.key });
+    expect((await app`select * from public.authorize_account_export_download(${owner}, ${session}, ${request})`)[0])
+      .toMatchObject({ archive_object_key: reservation!.key });
+    expect(await app`select * from public.authorize_account_export_download(${owner}, ${purgingSession}, ${request})`).toEqual([]);
+    expect(await app`select * from public.authorize_account_export_download(${purging}, ${purgingSession}, ${request})`).toEqual([]);
+    await expect(worker`select * from public.authorize_account_export_download(${owner}, ${session}, ${request})`)
+      .rejects.toThrow();
+    await migrator`update public.data_export_requests set ready_at = now() - interval '24 hours 1 second',
+      expires_at = now() - interval '1 second' where id = ${request}`;
+    expect(await app`select * from public.authorize_account_export_download(${owner}, ${session}, ${request})`).toEqual([]);
+    await expect(app`select * from public.claim_account_export_cleanup(1, 'wrong-role', 60)`).rejects.toThrow();
+    expect((await worker`select public.expire_due_account_exports(1) as count`)[0]?.count).toBe(1);
+    expect((await migrator`select status, archive_object_key, archive_cleanup_task_id
+      from public.data_export_requests where id = ${request}`)[0]).toMatchObject({
+      status: "expired", archive_object_key: null, archive_cleanup_task_id: task!.id,
+    });
+    const [first] = await worker<{ task_id: string; object_key: string; upload_id: string }[]>`
+      select * from public.claim_account_export_cleanup(1, 'cleanup-lease-1', 60)`;
+    expect(first).toMatchObject({ task_id: task!.id, object_key: reservation!.key, upload_id: "upload123" });
+    expect((await worker`select public.finish_account_export_cleanup(${task!.id}, 'wrong-token') as ok`)[0]?.ok)
+      .toBe(false);
+    expect((await worker`select public.retry_account_export_cleanup(${task!.id}, 'cleanup-lease-1', 30) as ok`)[0]?.ok)
+      .toBe(true);
+    const [incident] = await migrator<{ id: string; failure_category: string; resolved_at: Date | null }[]>`
+      select id, failure_category, resolved_at from public.data_export_cleanup_incidents`;
+    expect(incident).toMatchObject({ id: expect.stringMatching(/^[0-9a-f]{64}$/), failure_category: "storage", resolved_at: null });
+    expect(JSON.stringify(incident)).not.toContain(reservation!.key);
+    await expect(app`select id from public.data_export_cleanup_incidents`).rejects.toThrow();
+    await migrator`update public.data_export_object_cleanup_tasks set next_attempt_at = now() - interval '1 second'
+      where id = ${task!.id}`;
+    expect((await worker`select * from public.claim_account_export_cleanup(1, 'cleanup-lease-2', 60)`)[0]?.task_id)
+      .toBe(task!.id);
+    expect((await worker`select public.finish_account_export_cleanup(${task!.id}, 'cleanup-lease-2') as ok`)[0]?.ok)
+      .toBe(true);
+    expect(await migrator`select id from public.data_export_object_cleanup_tasks where id = ${task!.id}`).toHaveLength(1);
+    await migrator`update public.data_export_object_cleanup_tasks
+      set verified_absent_at = now() - interval '24 hours 1 second',
+        next_attempt_at = now() - interval '1 second' where id = ${task!.id}`;
+    expect((await worker`select * from public.claim_account_export_cleanup(1, 'cleanup-lease-3', 60)`)[0]?.task_id)
+      .toBe(task!.id);
+    expect((await worker`select public.finish_account_export_cleanup(${task!.id}, 'cleanup-lease-3') as ok`)[0]?.ok)
+      .toBe(true);
+    expect(await migrator`select id from public.data_export_requests where id = ${request}`).toHaveLength(0);
+    expect(await migrator`select id from public.data_export_object_cleanup_tasks where id = ${task!.id}`).toHaveLength(0);
+    const [resolved] = await migrator<{ resolved_at: Date; expires_at: Date }[]>`
+      select resolved_at, expires_at from public.data_export_cleanup_incidents where id = ${incident!.id}`;
+    expect(resolved!.expires_at.getTime() - resolved!.resolved_at.getTime()).toBe(30 * 24 * 3600_000);
+    await expect(app`select public.delete_expired_account_export_incidents(100)`).rejects.toThrow();
+    await migrator`update public.data_export_cleanup_incidents
+      set first_failed_at = now() - interval '721 hours', last_failed_at = now() - interval '721 hours',
+        resolved_at = now() - interval '720 hours 1 second', expires_at = now() - interval '1 second'
+      where id = ${incident!.id}`;
+    expect((await worker`select public.delete_expired_account_export_incidents(100) as count`)[0]?.count).toBe(1);
+    expect(await migrator`select id from public.data_export_cleanup_incidents where id = ${incident!.id}`).toHaveLength(0);
   });
 
   it("refuses to publish an archive after irreversible purge begins", async () => {

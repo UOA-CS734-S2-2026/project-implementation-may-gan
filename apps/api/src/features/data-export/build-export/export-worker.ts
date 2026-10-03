@@ -1,6 +1,6 @@
 import type { ExportFileSource, ExportRecordSource, ExportSelection } from "./archive-entries";
 import { recordArchiveEntries } from "./archive-entries";
-import type { ExportArchiveStore, MultipartPart } from "./export-r2-archive";
+import type { ExportArchiveStore, MultipartPart } from "../shared/export-r2-archive";
 import { ExportZipLimitError, streamExportZip } from "./zip-stream";
 
 const partBytes = 5 * 1024 * 1024;
