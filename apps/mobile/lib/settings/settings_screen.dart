@@ -223,6 +223,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  const _GroupLabel('security'),
+                  _Group(
+                    children: [
+                      ListenableBuilder(
+                        listenable: AppScope.of(context).biometric,
+                        builder: (context, _) => SwitchListTile.adaptive(
+                          title: Text(
+                            'Biometric Unlock',
+                            style: DayliText.sans(
+                              context,
+                              weight: FontWeight.w500,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Require Face ID or fingerprint to open Dayli.',
+                            style: DayliText.sans(
+                              context,
+                              size: DayliTextSize.sm,
+                              color: colors.foregroundTertiary,
+                            ),
+                          ),
+                          value: AppScope.of(context).biometric.isEnabled,
+                          activeColor: colors.primary,
+                          onChanged: (value) async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final biometric = AppScope.of(context).biometric;
+                            final success = await biometric.setEnabled(value);
+                            if (!success && mounted && value) {
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Could not enable biometric unlock.'),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   const _GroupLabel('legal'),
                   const _Group(
                     children: [
