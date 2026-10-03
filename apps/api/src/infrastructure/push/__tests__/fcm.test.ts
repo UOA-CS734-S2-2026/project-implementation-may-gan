@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { buildFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../fcm";
-import { createPushOutboxHandler } from "../push-dispatcher";:apps/api/src/infrastructure/push/fcm.test.ts
+import { createPushOutboxHandler } from "../push-dispatcher";
 
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
 
