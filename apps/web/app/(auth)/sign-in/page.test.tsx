@@ -68,6 +68,29 @@ describe("email sign-in return destination", () => {
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/settings"));
   });
 
+  it("serializes rapid submissions before the first auth request completes", async () => {
+    let resolveFirst!: (result: { data: null; error: { message: string } }) => void;
+    const firstResult = new Promise<{ data: null; error: { message: string } }>((resolve) => { resolveFirst = resolve; });
+    mocks.user = null;
+    mocks.email.mockReset();
+    mocks.email.mockReturnValueOnce(firstResult);
+    const { container, rerender } = render(<SignInPage />);
+
+    fireEvent.submit(container.querySelector("form")!);
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(mocks.email).toHaveBeenCalledTimes(1));
+
+    await act(async () => resolveFirst({ data: null, error: { message: "Try again." } }));
+    mocks.email.mockResolvedValueOnce({ data: { user: { id: "retry-user" } }, error: null });
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(mocks.email).toHaveBeenCalledTimes(2));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.user = { id: "retry-user" };
+    rerender(<SignInPage />);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/home"));
+  });
+
   it("does not let an earlier session update release a newer sign-in attempt", async () => {
     let resolveSecond!: (result: { data: { user: { id: string } }; error: null }) => void;
     const secondResult = new Promise<{ data: { user: { id: string } }; error: null }>((resolve) => { resolveSecond = resolve; });
