@@ -1,6 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
+import { buildDrizzleCommentVisibilityFilter } from "../../permissions";
 import { findReadablePost } from "../shared/readable-post";
 
 export interface DeletePostCommentRepository {
@@ -23,7 +24,11 @@ export function createPostgresDeletePostCommentRepository(database: DayliDatabas
         const [comment] = await tx
           .select({ authorId: postComments.authorId, deletedAt: postComments.deletedAt })
           .from(postComments)
-          .where(and(eq(postComments.id, commentId), eq(postComments.postId, postId)))
+          .where(and(
+            eq(postComments.id, commentId),
+            eq(postComments.postId, postId),
+            or(isNotNull(postComments.deletedAt), buildDrizzleCommentVisibilityFilter(tx, viewerId)),
+          ))
           .for("update");
         if (!comment || (comment.authorId !== viewerId && post.authorId !== viewerId)) return false;
         if (!comment.deletedAt) {

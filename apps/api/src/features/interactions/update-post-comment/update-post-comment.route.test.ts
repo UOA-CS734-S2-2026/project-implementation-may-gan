@@ -51,6 +51,15 @@ describe("PATCH /api/v1/posts/{postId}/comments/{commentId}", () => {
     expect((await patch({ updateComment: async () => null }, { text: "Edited" })).status).toBe(404);
   });
 
+  it("conceals a reply under a deleted or blocked parent as 404 without a comment in the response", async () => {
+    // The repository can't tell the route why it returned null, so neither can the response.
+    const repo = { updateComment: vi.fn(async () => null) };
+    const response = await patch(repo, { text: "Edited" });
+
+    expect(response.status).toBe(404);
+    expect(await response.text()).not.toContain("Edited");
+  });
+
   it("rejects blank text", async () => {
     const repo = { updateComment: vi.fn(async () => comment) };
     expect((await patch(repo, { text: "" })).status).toBe(422);

@@ -27,6 +27,12 @@ import { createPostgresDeletePostCommentRepository } from "./delete-post-comment
       comment("own", users.friend),
       comment("moderated", users.friend),
       comment("protected", users.otherFriend),
+      { ...comment("gone-parent", users.otherFriend), deletedAt: fixtureNow, deletedBy: users.otherFriend },
+      comment("blocked-parent", users.otherFriend),
+    ]);
+    await fixture.migrator.db.insert(schema.postComments).values([
+      { ...comment("orphan", users.friend), parentCommentId: id("gone-parent") },
+      { ...comment("shielded", users.blocker), parentCommentId: id("blocked-parent") },
     ]);
   });
   afterAll(() => fixture.tearDown());
@@ -50,5 +56,14 @@ import { createPostgresDeletePostCommentRepository } from "./delete-post-comment
     await expect(repo().deleteComment(users.author, posts.shared, id("missing"), fixtureNow)).resolves.toBe(false);
 
     expect(await row("protected")).toMatchObject({ deletedAt: null });
+  });
+
+  it("refuses to delete a reply whose parent is deleted or its author is blocked", async () => {
+    await expect(repo().deleteComment(users.friend, posts.shared, id("orphan"), fixtureNow)).resolves.toBe(false);
+    await expect(repo().deleteComment(users.author, posts.shared, id("orphan"), fixtureNow)).resolves.toBe(false);
+    await expect(repo().deleteComment(users.blocker, posts.shared, id("shielded"), fixtureNow)).resolves.toBe(false);
+
+    expect(await row("orphan")).toMatchObject({ deletedAt: null });
+    expect(await row("shielded")).toMatchObject({ deletedAt: null });
   });
 });

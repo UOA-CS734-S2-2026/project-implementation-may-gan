@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { classifyPostgresConstraintError, schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { notBlockedWith } from "../../permissions";
+import { buildDrizzleCommentVisibilityFilter } from "../../permissions";
 import type { PostComment } from "../shared/interactions.contract";
 import { readComment, toPostComment } from "../shared/post-comment.projection";
 import { findReadablePost } from "../shared/readable-post";
@@ -70,8 +70,7 @@ export function createPostgresCreatePostCommentRepository(database: DayliDatabas
             eq(postComments.id, request.parentCommentId),
             eq(postComments.postId, postId),
             isNull(postComments.parentCommentId),
-            isNull(postComments.deletedAt),
-            notBlockedWith(tx, viewerId, postComments.authorId),
+            buildDrizzleCommentVisibilityFilter(tx, viewerId),
           ))
           .for("share")
           .limit(1);

@@ -24,6 +24,24 @@ import { createPostgresUpdatePostCommentRepository } from "./update-post-comment
         deletedAt: fixtureNow,
         deletedBy: users.friend,
       },
+      {
+        id: id("gone-parent"),
+        postId: posts.shared,
+        authorId: users.otherFriend,
+        clientCommentId: id("gone-parent"),
+        body: "Parent",
+        createdAt: fixtureNow,
+        deletedAt: fixtureNow,
+        deletedBy: users.otherFriend,
+      },
+      { id: id("blocked-parent"), postId: posts.shared, authorId: users.otherFriend, clientCommentId: id("blocked-parent"), body: "Parent", createdAt: fixtureNow },
+      { id: id("visible-parent"), postId: posts.shared, authorId: users.otherFriend, clientCommentId: id("visible-parent"), body: "Parent", createdAt: fixtureNow },
+    ]);
+    await fixture.migrator.db.insert(schema.postComments).values([
+      { id: id("orphan"), postId: posts.shared, authorId: users.friend, clientCommentId: id("orphan"), parentCommentId: id("gone-parent"), body: "Reply", createdAt: fixtureNow },
+      // The blocker blocked the parent's author, so the parent is hidden from them.
+      { id: id("shielded"), postId: posts.shared, authorId: users.blocker, clientCommentId: id("shielded"), parentCommentId: id("blocked-parent"), body: "Reply", createdAt: fixtureNow },
+      { id: id("reply"), postId: posts.shared, authorId: users.friend, clientCommentId: id("reply"), parentCommentId: id("visible-parent"), body: "Reply", createdAt: fixtureNow },
     ]);
   });
   afterAll(() => fixture.tearDown());
@@ -48,5 +66,26 @@ import { createPostgresUpdatePostCommentRepository } from "./update-post-comment
     await expect(repo().updateComment(users.author, posts.shared, id("mine"), "Changed", later)).resolves.toBeNull();
     await expect(repo().updateComment(users.friend, posts.shared, id("deleted"), "Back", later)).resolves.toBeNull();
     await expect(repo().updateComment(users.friend, posts.solo, id("mine"), "Wrong post", later)).resolves.toBeNull();
+  });
+
+  it("lets the author of a reply edit it while its parent is visible", async () => {
+    await expect(repo().updateComment(users.friend, posts.shared, id("reply"), "Reply!", later)).resolves.toMatchObject({
+      text: "Reply!",
+      parentCommentId: id("visible-parent"),
+    });
+  });
+
+  it("refuses to edit a reply whose parent was deleted, and writes nothing", async () => {
+    await expect(repo().updateComment(users.friend, posts.shared, id("orphan"), "Edited", later)).resolves.toBeNull();
+
+    const [row] = await fixture.migrator.db.select().from(schema.postComments).where(eq(schema.postComments.id, id("orphan")));
+    expect(row).toMatchObject({ body: "Reply", editedAt: null });
+  });
+
+  it("refuses to edit a reply whose parent's author is blocked, and writes nothing", async () => {
+    await expect(repo().updateComment(users.blocker, posts.shared, id("shielded"), "Edited", later)).resolves.toBeNull();
+
+    const [row] = await fixture.migrator.db.select().from(schema.postComments).where(eq(schema.postComments.id, id("shielded")));
+    expect(row).toMatchObject({ body: "Reply", editedAt: null });
   });
 });
