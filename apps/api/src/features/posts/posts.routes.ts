@@ -20,8 +20,9 @@ export interface PostsRouteDependencies {
 export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: PostsRouteDependencies) {
   registerCreateDailyPostRoute(app, dependencies.create);
   registerListFeedRoute(app, dependencies.feed);
+  // Register this static path before the dynamic /posts/:postId detail path.
+  registerPostTrashRoutes(app, dependencies.trash);
   registerGetPostRoute(app, dependencies.detail);
   registerGetPostMediaRoute(app, dependencies.media);
   registerListProfilePostsRoute(app, dependencies.profilePosts);
-  registerPostTrashRoutes(app, dependencies.trash);
 }

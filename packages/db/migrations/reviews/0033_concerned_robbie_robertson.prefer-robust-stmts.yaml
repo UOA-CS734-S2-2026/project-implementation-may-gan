@@ -1,0 +1,6 @@
+reason: The new deadline-presence constraint closes a PostgreSQL three-valued-logic gap in the prior Trash deadline constraint. The migration runner wraps the size check and validation in one transaction, so any failure rolls back without leaving the schema half changed.
+affected_data_and_clients: Existing active rows pass because they have no Trash timestamp. Previously written Trash rows must have both deadlines; invalid rows block the migration. Trash routes remain disabled.
+rollout_sequence: Measure posts, confirm the staging backup, migrate the synthetic database, and inspect validated constraints before considering any route activation.
+backup_checkpoint: Confirm the staging recovery checkpoint before the migration. Production needs separate approval.
+forward_fix_plan: Stop on invalid rows or an oversized table and investigate without rewriting applied migrations. Use a reviewed corrective forward migration.
+reviewer: Database and privacy reviewers required.

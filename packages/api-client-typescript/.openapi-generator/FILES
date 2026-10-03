@@ -78,6 +78,8 @@ src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
 src/models/PostingStreak.ts
+src/models/PostsListTrash200Response.ts
+src/models/PostsRestore200Response.ts
 src/models/ProfileDetails.ts
 src/models/ProfileOwnerSettings.ts
 src/models/ProfilePost.ts
@@ -100,6 +102,7 @@ src/models/SendRelationshipRequest.ts
 src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
+src/models/TrashedPostStatus.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts

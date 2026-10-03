@@ -1014,6 +1014,48 @@
           "expiresAt"
         ]
       },
+      "TrashedPostStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "localDate": {
+            "type": "string",
+            "format": "date"
+          },
+          "trashedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "restoreUntil": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "purgeDueAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingCleanup": {
+            "type": "boolean"
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "localDate",
+          "trashedAt",
+          "restoreUntil",
+          "purgeDueAt",
+          "generation",
+          "pendingCleanup",
+          "failureCategory"
+        ]
+      },
       "PostDetail": {
         "type": "object",
         "properties": {
@@ -3167,6 +3209,16 @@
               }
             }
           },
+          "403": {
+            "description": "Posting is unavailable while account deletion is pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "409": {
             "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
             "content": {
@@ -3322,6 +3374,235 @@
           },
           "503": {
             "description": "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/trash": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listTrash",
+        "summary": "List the authenticated owner's trashed posts",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only Trash status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "posts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrashedPostStatus"
+                      }
+                    }
+                  },
+                  "required": [
+                    "posts"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/trash": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.trash",
+        "summary": "Move an owned post to Trash",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post Trash state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedPostStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Post cannot be moved to Trash.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/restore": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.restore",
+        "summary": "Restore an owned post from Trash",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post restored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "restored"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Post cannot be restored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
             "content": {
               "application/json": {
                 "schema": {

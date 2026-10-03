@@ -180,6 +180,7 @@ export const posts = pgTable("posts", {
     (${table.trashedAt} is not null and ${table.restoreUntil} = ${table.trashedAt} + interval '168 hours' and
       ${table.trashPurgeDueAt} = ${table.trashedAt} + interval '336 hours')
   `),
+  check("posts_trash_deadline_presence_check", sql`${table.trashedAt} is null or (${table.restoreUntil} is not null and ${table.trashPurgeDueAt} is not null)`),
   check("posts_trash_lease_pair_check", sql`(${table.trashLeaseToken} is null) = (${table.trashLeaseExpiresAt} is null)`),
   check("posts_trash_failure_category_check", sql`${table.trashFailureCategory} is null or char_length(${table.trashFailureCategory}) between 1 and 100`),
 ]);

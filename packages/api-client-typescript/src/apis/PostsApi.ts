@@ -44,10 +44,25 @@ import {
     PostMediaToJSON,
 } from '../models/PostMedia';
 import {
+    type PostsListTrash200Response,
+    PostsListTrash200ResponseFromJSON,
+    PostsListTrash200ResponseToJSON,
+} from '../models/PostsListTrash200Response';
+import {
+    type PostsRestore200Response,
+    PostsRestore200ResponseFromJSON,
+    PostsRestore200ResponseToJSON,
+} from '../models/PostsRestore200Response';
+import {
     type ProfilePostsPage,
     ProfilePostsPageFromJSON,
     ProfilePostsPageToJSON,
 } from '../models/ProfilePostsPage';
+import {
+    type TrashedPostStatus,
+    TrashedPostStatusFromJSON,
+    TrashedPostStatusToJSON,
+} from '../models/TrashedPostStatus';
 
 export interface PostsCreateRequest {
     /**
@@ -102,6 +117,20 @@ export interface PostsListProfilePostsRequest {
      *
      */
     limit?: number;
+}
+
+export interface PostsRestoreRequest {
+    /**
+     *
+     */
+    postId: string;
+}
+
+export interface PostsTrashRequest {
+    /**
+     *
+     */
+    postId: string;
 }
 
 /**
@@ -410,6 +439,157 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfilePostsPage> {
         const response = await this.postsListProfilePostsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListTrash without sending the request
+     */
+    async postsListTrashRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/trash`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * List the authenticated owner\'s trashed posts
+     */
+    async postsListTrashRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostsListTrash200Response>> {
+        const requestOptions = await this.postsListTrashRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostsListTrash200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * List the authenticated owner\'s trashed posts
+     */
+    async postsListTrash(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostsListTrash200Response> {
+        const response = await this.postsListTrashRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsRestore without sending the request
+     */
+    async postsRestoreRequestOpts(requestParameters: PostsRestoreRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsRestore().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/restore`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Restore an owned post from Trash
+     */
+    async postsRestoreRaw(requestParameters: PostsRestoreRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostsRestore200Response>> {
+        const requestOptions = await this.postsRestoreRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostsRestore200ResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Restore an owned post from Trash
+     */
+    async postsRestore(requestParameters: PostsRestoreRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostsRestore200Response> {
+        const response = await this.postsRestoreRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsTrash without sending the request
+     */
+    async postsTrashRequestOpts(requestParameters: PostsTrashRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsTrash().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/trash`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Move an owned post to Trash
+     */
+    async postsTrashRaw(requestParameters: PostsTrashRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<TrashedPostStatus>> {
+        const requestOptions = await this.postsTrashRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => TrashedPostStatusFromJSON(jsonValue));
+    }
+
+    /**
+     * Move an owned post to Trash
+     */
+    async postsTrash(requestParameters: PostsTrashRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TrashedPostStatus> {
+        const response = await this.postsTrashRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
