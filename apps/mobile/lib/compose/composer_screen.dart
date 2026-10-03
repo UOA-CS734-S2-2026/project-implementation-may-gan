@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +12,7 @@ import '../ui/post_inputs.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
+import 'media_picker.dart';
 import 'media_upload_controller.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
@@ -32,6 +35,10 @@ class _ComposerScreenState extends State<ComposerScreen> {
   final _caption = TextEditingController();
   final _tomorrowNote = TextEditingController();
   String? _boundDraftKey;
+
+  /// Why the camera couldn't be used, and whether only Settings can fix it.
+  String? _captureNotice;
+  bool _settingsCanFix = false;
 
   @override
   void didChangeDependencies() {
@@ -58,7 +65,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    _controller!.load();
+    unawaited(_controller!.load().then((_) => _recoverLostCapture()));
   }
 
   /// Copies a newly loaded draft into the text fields once, without fighting
@@ -86,12 +93,97 @@ class _ComposerScreenState extends State<ComposerScreen> {
     super.dispose();
   }
 
-  Future<void> _pick(ComposerController controller, int slot) async {
+  /// Asks where the next attachment comes from. The camera is offered first, and
+  /// only the first slot can take a video.
+  Future<void> _choose(ComposerController controller, int slot) async {
     _uploads?.clearNotice();
+    final source = await showModalBottomSheet<_MediaSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _SourceSheet(videoAllowed: slot == 0),
+    );
+    if (source == null || !mounted) return;
+    setState(() {
+      _captureNotice = null;
+      _settingsCanFix = false;
+    });
+    switch (source) {
+      case _MediaSource.photo:
+        await _capture(controller, slot, (picker) => picker.capturePhoto());
+      case _MediaSource.video:
+        await _capture(controller, slot, (picker) => picker.captureVideo());
+      case _MediaSource.library:
+        await _pick(controller, slot);
+    }
+  }
+
+  Future<void> _pick(ComposerController controller, int slot) async {
     final picker = AppScope.of(context).mediaPicker;
     final picked = slot == 0
         ? await picker.pickPhotoOrVideo()
         : await picker.pickPhoto();
+    _attach(controller, slot, picked);
+  }
+
+  /// Takes a photo or video. Whatever happens, the rest of the composer, the
+  /// library and posting without media all keep working.
+  Future<void> _capture(
+    ComposerController controller,
+    int slot,
+    Future<CaptureOutcome> Function(MediaPicker picker) take,
+  ) async {
+    final outcome = await take(AppScope.of(context).mediaPicker);
+    if (!mounted) return;
+    switch (outcome) {
+      case Captured(:final attachment):
+        _attach(controller, slot, attachment);
+      case CaptureCancelled():
+        break;
+      case CaptureFailed(:final reason):
+        setState(() {
+          _captureNotice = switch (reason) {
+            CaptureFailure.denied =>
+              'Camera access was declined. You can still choose from your '
+                  'library.',
+            CaptureFailure.permanentlyDenied =>
+              'Camera access is off for Dayli. Turn it on in Settings, or '
+                  'choose from your library.',
+            CaptureFailure.restricted =>
+              'The camera is restricted on this device. You can still choose '
+                  'from your library.',
+            CaptureFailure.unavailable =>
+              'No camera is available. You can still choose from your '
+                  'library.',
+          };
+          _settingsCanFix = reason == CaptureFailure.permanentlyDenied;
+        });
+    }
+  }
+
+  /// Android can end the app while the camera is open. The photo or video taken
+  /// is waiting for it the next time the composer opens.
+  Future<void> _recoverLostCapture() async {
+    if (!mounted) return;
+    final controller = _controller;
+    final recovered = await AppScope.of(
+      context,
+    ).mediaPicker.recoverLostCapture();
+    final draft = controller?.draft;
+    if (!mounted || controller == null || draft == null || recovered == null) {
+      return;
+    }
+    final known = draft.attachments.any(
+      (attachment) => attachment.localPath == recovered.localPath,
+    );
+    if (known || !canAddAttachment(draft.attachments)) return;
+    _attach(controller, draft.attachments.length, recovered);
+  }
+
+  void _attach(
+    ComposerController controller,
+    int slot,
+    DraftAttachment? picked,
+  ) {
     final draft = controller.draft;
     if (picked == null || draft == null) return;
     final attachments = [...draft.attachments];
@@ -102,6 +194,9 @@ class _ComposerScreenState extends State<ComposerScreen> {
     }
     controller.update(attachments: attachments);
   }
+
+  Future<void> _openSettings() =>
+      AppScope.of(context).mediaPicker.openSettings();
 
   void _remove(ComposerController controller, int slot) {
     final draft = controller.draft;
@@ -118,16 +213,18 @@ class _ComposerScreenState extends State<ComposerScreen> {
     if (uploads == null) {
       return MediaInput(
         attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       );
     }
     return ListenableBuilder(
       listenable: uploads,
       builder: (context, _) => MediaInput(
         attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
         uploads: true,
@@ -138,6 +235,8 @@ class _ComposerScreenState extends State<ComposerScreen> {
         notice: uploads.notice,
         problem: uploads.problem,
         onRetry: uploads.retryNow,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       ),
     );
   }
@@ -705,6 +804,48 @@ class _UnpostedDraft extends StatelessWidget {
         fullWidth: true,
         height: 52,
         onPressed: onDiscard,
+      ),
+    );
+  }
+}
+
+enum _MediaSource { photo, video, library }
+
+/// Where the next photo or video comes from.
+class _SourceSheet extends StatelessWidget {
+  const _SourceSheet({required this.videoAllowed});
+
+  final bool videoAllowed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            key: const Key('composer.media.source.photo'),
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.of(context).pop(_MediaSource.photo),
+          ),
+          if (videoAllowed)
+            ListTile(
+              key: const Key('composer.media.source.video'),
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Record a video'),
+              subtitle: const Text('Up to 15 seconds'),
+              onTap: () => Navigator.of(context).pop(_MediaSource.video),
+            ),
+          ListTile(
+            key: const Key('composer.media.source.library'),
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(
+              videoAllowed ? 'Choose a photo or video' : 'Choose a photo',
+            ),
+            onTap: () => Navigator.of(context).pop(_MediaSource.library),
+          ),
+        ],
       ),
     );
   }
