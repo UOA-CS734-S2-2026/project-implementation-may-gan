@@ -17,15 +17,20 @@ import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/compose/media_compressor.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/compose/pending_capture.dart';
+import 'package:dayli_mobile/compose/voice_recorder.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:dayli_mobile/settings/account_export_client.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+
+import 'voice_fakes.dart';
 
 class FakeFriendsClient implements FriendsClient {
   static const emptyFriends = FriendPage(
@@ -687,6 +692,13 @@ class TestHarness {
   final mediaPicker = FakeMediaPicker();
   final pendingStore = MemoryPendingCaptureStore();
 
+  /// The voice memo recorder, its microphone permission, and its files.
+  final voiceRecorder = FakeVoiceRecorder();
+  final microphone = FakeMicrophonePermission(
+    current: PermissionStatus.granted,
+  );
+  final voiceFiles = FakeVoiceMemoFiles();
+
   /// Files the app removed because no one could claim them.
   final deletedFiles = <String>[];
   late final pendingCaptures = PendingCaptures(
@@ -718,6 +730,13 @@ class TestHarness {
     submitter: submitter,
     mediaPicker: mediaPicker,
     pendingCaptures: pendingCaptures,
+    voiceMemos: VoiceMemoServices(
+      createRecorder: () => voiceRecorder,
+      permission: microphone,
+      files: voiceFiles,
+      // Widget tests move fake time, not the wall clock.
+      clock: () => TestWidgetsFlutterBinding.ensureInitialized().clock.now(),
+    ),
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
     google: google,
@@ -731,6 +750,13 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
   final sources = <String?>[];
   final calls = <String>[];
   var failures = 0;
+
+  /// How long every new player reports its media to be.
+  var mediaDuration = const Duration(seconds: 10);
+
+  /// What [getPosition] answers, which the player polls while playing.
+  var position = Duration.zero;
+  final seeks = <Duration>[];
   var _nextId = 0;
   final _events = <int, StreamController<VideoEvent>>{};
 
@@ -751,7 +777,7 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
       events.add(
         VideoEvent(
           eventType: VideoEventType.initialized,
-          duration: const Duration(seconds: 10),
+          duration: mediaDuration,
           size: const Size(1080, 1920),
         ),
       );
@@ -780,10 +806,17 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
   Future<void> setPlaybackSpeed(int playerId, double speed) async {}
 
   @override
-  Future<void> seekTo(int playerId, Duration position) async {}
+  Future<void> seekTo(int playerId, Duration position) async {
+    seeks.add(position);
+    this.position = position;
+  }
 
   @override
-  Future<Duration> getPosition(int playerId) async => Duration.zero;
+  Future<Duration> getPosition(int playerId) async => position;
+
+  /// Tells the player the media played to its end.
+  void finish(int playerId) =>
+      _events[playerId]?.add(VideoEvent(eventType: VideoEventType.completed));
 
   @override
   Future<void> setMixWithOthers(bool mixWithOthers) async {}
