@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import type { ResolveSession } from "../../../http/middleware/require-session";
+import { hasSessionCredential, type ResolveSession } from "../../../http/middleware/require-session";
 import { actionableAccountCapabilities, allowsAccountCapability, type AccountCapability, type AccountPolicy } from "./account-policy";
 
 export interface AccountPolicyResolver {
@@ -34,6 +34,11 @@ function pathSegments(pathname: string): string[] {
 
 function matches(segments: readonly string[], expected: readonly string[]): boolean {
   return segments.length === expected.length && expected.every((segment, index) => segment === "*" || segments[index] === segment);
+}
+
+function isOptionalSessionRoute(request: Request): boolean {
+  return request.method.toUpperCase() === "GET"
+    && matches(pathSegments(new URL(request.url).pathname), ["api", "v1", "posts", "*"]);
 }
 
 async function cleanupCapability(request: Request, pathname: string): Promise<AccountCapability | undefined> {
@@ -94,8 +99,12 @@ export function createAccountPolicyMiddleware(
   policies: AccountPolicyResolver,
 ): MiddlewareHandler<AuthenticatedApiEnv> {
   return async (context, next) => {
-    const capability = await accountCapabilityForRequest(context.req.raw);
+    const request = context.req.raw;
+    const capability = await accountCapabilityForRequest(request);
     if (!capability) return next();
+    // Public post detail is anonymous only when no credential was presented.
+    // Signed-in callers still pass through account lifecycle policy.
+    if (isOptionalSessionRoute(request) && !hasSessionCredential(request)) return next();
     context.header("Cache-Control", "no-store");
 
     let actor: AuthenticatedActor | null | undefined;

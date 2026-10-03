@@ -13,12 +13,6 @@ export interface Viewer {
   userId?: string | null;
 }
 
-export interface ValidatedPublicLinkGrant {
-  /** #41 owns token hashing, lookup, and revocation. */
-  postId: string;
-  active: boolean;
-}
-
 export interface PostPermissionState {
   postId: string;
   authorId: string;
@@ -31,7 +25,6 @@ export interface PostPermissionState {
   blocked: boolean;
   /** False for media referenced only by an old revision. */
   mediaAttached?: boolean;
-  publicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type PermissionRequest =
@@ -56,7 +49,6 @@ export type DenialReason =
   | "not_released"
   | "not_owner"
   | "not_friend"
-  | "not_public_link"
   | "solo_post"
   | "detached_media";
 
@@ -100,13 +92,11 @@ export function decidePostPermission(request: PermissionRequest): PermissionDeci
   if (post.releaseAt.getTime() > now.getTime()) return denied("not_released");
   if (post.audience === "solo") return denied("solo_post");
 
-  if (post.publicLinkGrant?.postId === post.postId && post.publicLinkGrant.active) {
-    // A public link is valid only for released friends posts on public profiles.
-    // A known signed-in block was handled above; anonymous bearer links cannot
-    // be matched to an individual block.
-    if (post.authorProfileVisibility === "public") return allowed();
-    if (viewer.userId == null) return denied("not_public_link");
-  }
+  // DPP-001 opens post detail only. List routes keep their existing scope so a
+  // public account does not turn the friends feed into a global feed. Media
+  // remains on its current owner/friend policy until the parent-authorized
+  // Worker route is implemented separately.
+  if (request.action === "detail" && post.authorProfileVisibility === "public") return allowed();
 
   if (viewer.userId == null) return denied("anonymous");
   if (!post.friendshipActive) return denied("not_friend");
@@ -157,16 +147,12 @@ export interface PostVisibilityColumns {
   authorProfileVisibility?: SqlFragment;
   friendshipActive?: SqlFragment;
   blocked?: SqlFragment;
-  publicLinkActive?: SqlFragment;
-  publicLinkPostId?: SqlFragment;
   mediaAttached?: SqlFragment;
 }
 
 interface PostVisibilityFilterInputBase {
   viewer: Viewer;
   now: Date;
-  /** Supplied only by #41 after validating an active grant for this post. */
-  validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type PostVisibilityFilterInput = PostVisibilityFilterInputBase & (

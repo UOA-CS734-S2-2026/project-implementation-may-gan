@@ -37,7 +37,7 @@ function requireLocalTestUrl(value: string): string {
         const now = new Date("2026-09-22T12:00:00.000Z");
 
         await transaction.insert(schema.user).values([
-          { id: authorId, name: "Permission Author", email: `${authorId}@example.test` },
+          { id: authorId, name: "Permission Author", email: `${authorId}@example.test`, profileVisibility: "public" },
           { id: viewerId, name: "Permission Viewer", email: `${viewerId}@example.test` },
         ]);
         await transaction.insert(schema.friendships).values([
@@ -63,6 +63,27 @@ function requireLocalTestUrl(value: string): string {
         }
         expect((await findVisiblePost(transaction, postIds[2], input))).toBeNull();
         expect((await findVisiblePost(transaction, postIds[3], input))).toBeNull();
+
+        const anonymous = { viewer: { userId: null }, now, action: "detail" as const };
+        expect((await findVisiblePost(transaction, postIds[1], anonymous))?.id).toBe(postIds[1]);
+        expect(await findVisiblePost(transaction, postIds[2], anonymous)).toBeNull();
+        expect(await findVisiblePost(transaction, postIds[3], anonymous)).toBeNull();
+        // Public detail access never widens a generic list query.
+        expect(await listVisiblePosts(transaction, { viewer: { userId: null }, now }, { limit: 10 })).toEqual([]);
+
+        await transaction.insert(schema.relationshipBlocks).values({
+          blockerId: authorId,
+          blockedId: viewerId,
+          blockedAt: now,
+        });
+        expect(await findVisiblePost(transaction, postIds[1], input)).toBeNull();
+        await transaction.delete(schema.relationshipBlocks).where(eq(schema.relationshipBlocks.blockerId, authorId));
+
+        await transaction.update(schema.user).set({ profileVisibility: "private" }).where(eq(schema.user.id, authorId));
+        expect(await findVisiblePost(transaction, postIds[1], anonymous)).toBeNull();
+        // Existing active-friend access is unchanged for private authors.
+        expect((await findVisiblePost(transaction, postIds[1], input))?.id).toBe(postIds[1]);
+        await transaction.update(schema.user).set({ profileVisibility: "public" }).where(eq(schema.user.id, authorId));
 
         const requestedAt = new Date("2026-09-22T12:00:00.000Z");
         await transaction.insert(schema.accountLifecycles).values({

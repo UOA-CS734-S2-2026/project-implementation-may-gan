@@ -5,7 +5,7 @@
 | Level | Tool and coverage |
 | --- | --- |
 | Units | Vitest/Dart: dates, permissions, retries, recaps. |
-| Database | Isolated PostgreSQL: transactions, constraints, races, share-token revocation, outbox. |
+| Database | Isolated PostgreSQL: transactions, constraints, races, public-profile withdrawal, outbox. |
 | Runtime | Workers Vitest/Wrangler: Hono, bindings, schedules, hibernation, alarms. |
 | Contracts | Generate/compile Dart and TypeScript clients; test old-client compatibility. |
 | Web/mobile | Playwright, Flutter widgets, physical iOS/Android workflows. |
@@ -44,7 +44,7 @@ Use the [implementation reference](../implementation/implementation-reference.md
 - Ticket replay, expiry, logout, and revocation remain safe after hibernation.
 - Failed uploads preserve drafts; cleanup never deletes attached media.
 - Provider outages use bounded retries and honest pending/failed states.
-- Recovery meets the tested 24-hour RPO and 8-hour RTO; revoked public links cannot be reused.
+- Recovery meets the tested 24-hour RPO and 8-hour RTO; private, `solo`, unreleased, deleted, or trashed posts cannot be recovered through public reads.
 - No private content or credentials leak through logs, telemetry, URLs, or push.
 
 Performance workloads and targets live in [Scalability](scalability.md).
@@ -54,7 +54,7 @@ Performance workloads and targets live in [Scalability](scalability.md).
 1. Record the August 2026 frontend reuse approval and source attribution. Import useful WDCC frontend code without secrets or build output.
 2. Establish the monorepo and prove auth/database/native compatibility on Workers.
 3. Move reusable services and auth authority into Hono. Temporary tRPC proxies may call Hono, but must not become a competing backend.
-4. Add release/audience fields, private uploads, public share tokens, idempotency, socket tickets, and jobs. Replace process-local SSE with Durable Objects.
+4. Add release and audience fields, private uploads, public-profile reads, idempotency, socket tickets, and jobs. Replace process-local SSE with Durable Objects.
 5. Complete [MVP phases](mvp.md), remove obsolete routes, run failure/load tests, and rehearse restore/deploy.
 
 Automatic CI is the required pull request gate, and `pnpm verify:local` remains the matching developer verification evidence. It checks formatting, types, contracts, relevant backend/runtime and frontend tests. Its PostgreSQL fixture also checks Drizzle metadata, schema drift, Squawk safety, local PostgreSQL 18 application, rollback, locking, and restricted-role behavior. Shared changes test all affected apps. Deploy API and web independently; run PostgreSQL migrations separately through the [database migration runbook](database-migrations.md) and declare Durable Object migrations. Keep secrets/signing credentials away from untrusted PRs.

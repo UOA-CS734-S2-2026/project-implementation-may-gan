@@ -20,6 +20,7 @@ const detail: PostDetailRecord = {
   viewerIsAuthor: false,
   media: [],
   voiceMemo: null,
+  publicMediaUnavailable: false,
 };
 
 const resolveSession: GetPostRouteDependencies["resolveSession"] = async (request) => {
@@ -38,12 +39,37 @@ function repository(findPost: PostDetailRepository["findPost"]): PostDetailRepos
 }
 
 describe("GET /api/v1/posts/{postId}", () => {
-  it("requires a session and never reads the post", async () => {
+  it("reads a public post anonymously without resolving a session", async () => {
     const repo = repository(async () => detail);
-    const response = await get({ repository: repo }, undefined, null);
+    const resolver = vi.fn(async () => { throw new Error("must not resolve"); });
+    const response = await get({ repository: repo, resolveSession: resolver }, undefined, null);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(repo.findPost).toHaveBeenCalledWith(null, "post-1", fixedNow);
+    expect(resolver).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual(expect.objectContaining({ id: "post-1" }));
+  });
+
+  it("rejects invalid credentials instead of treating them as anonymous", async () => {
+    const repo = repository(async () => detail);
+    const response = await createApp({ postDetail: { resolveSession, repository: repo } }).request("/api/v1/posts/post-1", {
+      headers: { authorization: "Bearer invalid" },
+    });
 
     expect(response.status).toBe(401);
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(repo.findPost).not.toHaveBeenCalled();
+  });
+
+  it("returns a sanitized 503 when credential resolution fails", async () => {
+    const repo = repository(async () => detail);
+    const response = await createApp({
+      postDetail: { resolveSession: async () => { throw new Error("auth database unavailable"); }, repository: repo },
+    }).request("/api/v1/posts/post-1", { headers: { authorization: "Bearer valid" } });
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).not.toContain("database unavailable");
     expect(repo.findPost).not.toHaveBeenCalled();
   });
 
@@ -53,7 +79,9 @@ describe("GET /api/v1/posts/{postId}", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toEqual(detail);
+    const { publicMediaUnavailable, ...expected } = detail;
+    expect(publicMediaUnavailable).toBe(false);
+    await expect(response.json()).resolves.toEqual(expected);
     expect(repo.findPost).toHaveBeenCalledWith("user-viewer", "post-1", fixedNow);
   });
 
@@ -161,6 +189,19 @@ describe("GET /api/v1/posts/{postId}", () => {
       expect(sign).toHaveBeenCalledWith("media/user-friend/reservation-1", fixedNow);
       expect(JSON.stringify(body.media)).not.toContain("objectKey");
       expect(JSON.stringify(body.media)).not.toContain("postId");
+    });
+
+    it("does not issue signed media through public-profile-only access", async () => {
+      const sign = vi.fn();
+      const response = await get({
+        repository: repository(async () => ({ ...withMedia, publicMediaUnavailable: true })),
+        signMediaDownload: sign,
+      }, undefined, null);
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(sign).not.toHaveBeenCalled();
+      expect(await response.text()).not.toContain("objectKey");
     });
 
     it("is unavailable for a post with media when storage isn't configured", async () => {
