@@ -158,7 +158,9 @@ export function buildDrizzlePostVisibilityFilter(
   const activeAccount = input.action === "export"
     ? sql`true`
     : buildDrizzleActiveAccountFilter(database, posts.authorId);
-  return and(activeAccount, media, notBlocked, access);
+  // Export uses a separate owner-scoped Trash projection for restorable items.
+  // Normal post, media, revision, and active-export reads never include Trash.
+  return and(isNull(posts.trashedAt), activeAccount, media, notBlocked, access);
 }
 
 /** List filtering is applied before limit/offset, preventing page holes/leaks. */
@@ -272,12 +274,14 @@ export async function findVisibleTomorrowNote(
   currentAucklandDate: string,
 ) {
   const [row] = await database
-    .select()
+    .select({ note: schema.tomorrowNotes })
     .from(schema.tomorrowNotes)
+    .innerJoin(schema.posts, eq(schema.tomorrowNotes.postId, schema.posts.id))
     .where(and(
       eq(schema.tomorrowNotes.id, noteId),
+      isNull(schema.posts.trashedAt),
       buildTomorrowNoteVisibilityFilter(viewer, currentAucklandDate),
     ))
     .limit(1);
-  return row ?? null;
+  return row?.note ?? null;
 }

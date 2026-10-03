@@ -43,9 +43,10 @@ const jobFields = {
   leaseExpiresAt: schema.mediaReservation.cleanupLeaseExpiresAt,
 };
 
-/** A reservation no post has ever linked, attached or detached. */
-const neverLinked = notExists(
-  sql`(select 1 from ${schema.postMedia} where ${schema.postMedia.reservationId} = ${schema.mediaReservation.id})`,
+/** A reservation no post or profile avatar still references. */
+const neverLinked = and(
+  notExists(sql`(select 1 from ${schema.postMedia} where ${schema.postMedia.reservationId} = ${schema.mediaReservation.id})`),
+  notExists(sql`(select 1 from ${schema.profileAvatars} where ${schema.profileAvatars.reservationId} = ${schema.mediaReservation.id})`),
 );
 
 export function createPostgresMediaCleanupStore(database: DayliDatabase): MediaCleanupStore {

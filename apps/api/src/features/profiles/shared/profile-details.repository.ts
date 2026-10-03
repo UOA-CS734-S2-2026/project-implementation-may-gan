@@ -85,7 +85,7 @@ async function findPostingStreak(database: DayliDatabase, authorId: string, now:
   const rows = await database
     .select({ localDate: posts.localDate })
     .from(posts)
-    .where(eq(posts.authorId, authorId));
+    .where(and(eq(posts.authorId, authorId), isNull(posts.trashedAt)));
   const localDates = rows.map((row) => row.localDate);
   return { streak: { ...calculatePostingStreak(localDates, today), asOf: today }, posts: localDates.length };
 }

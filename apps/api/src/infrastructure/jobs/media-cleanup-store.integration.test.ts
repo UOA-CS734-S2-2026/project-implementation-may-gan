@@ -81,9 +81,11 @@ const longAgo = new Date(now.getTime() - graceMs - hour);
   // Each test starts from a table where only linked uploads remain.
   beforeEach(async () => {
     const linked = migrator.db.select({ id: schema.postMedia.reservationId }).from(schema.postMedia).where(isNotNull(schema.postMedia.reservationId));
+    const avatars = migrator.db.select({ id: schema.profileAvatars.reservationId }).from(schema.profileAvatars);
     await migrator.db.delete(schema.mediaReservation).where(and(
       eq(schema.mediaReservation.ownerId, owner),
       notInArray(schema.mediaReservation.id, linked),
+      notInArray(schema.mediaReservation.id, avatars),
     ));
   });
 
@@ -92,6 +94,7 @@ const longAgo = new Date(now.getTime() - graceMs - hour);
       const posts = migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(eq(schema.posts.authorId, owner));
       await migrator.db.delete(schema.postMedia).where(inArray(schema.postMedia.postId, posts));
       await migrator.db.delete(schema.posts).where(eq(schema.posts.authorId, owner));
+      await migrator.db.delete(schema.profileAvatars).where(eq(schema.profileAvatars.userId, owner));
       await migrator.db.delete(schema.mediaReservation).where(eq(schema.mediaReservation.ownerId, owner));
       await migrator.db.delete(schema.user).where(eq(schema.user.id, owner));
     } finally {
@@ -131,15 +134,26 @@ const longAgo = new Date(now.getTime() - graceMs - hour);
     expect(await row(detached)).toBeDefined();
   });
 
-  it("refuses to delete a row a post links after the claim", async () => {
+  it("never claims or deletes an upload still used as a profile avatar", async () => {
+    const avatar = await upload();
+    await migrator.db.insert(schema.profileAvatars).values({ userId: owner, reservationId: avatar, setAt: now });
+    try {
+      expect(await claim()).toEqual([]);
+      expect(await row(avatar)).toBeDefined();
+    } finally {
+      await migrator.db.delete(schema.profileAvatars).where(eq(schema.profileAvatars.userId, owner));
+    }
+  });
+
+  it("rejects an attachment after cleanup claims its reservation", async () => {
     const id = await upload();
     const [job] = await claim();
     expect(job?.id).toBe(id);
-    await attach(id);
-    expect(await store.complete(job!)).toBe(false);
+    await expect(attach(id)).rejects.toMatchObject({ cause: { code: "55000" } });
     expect(await row(id)).toBeDefined();
-    // Even once its lease lapses, a linked upload is never handed out for deletion.
-    expect(await claim({ now: new Date(now.getTime() + hour) })).toEqual([]);
+    // A claimed upload is tombstoned before its object key is returned.
+    expect(await store.complete(job!)).toBe(true);
+    expect(await row(id)).toBeUndefined();
   });
 
   it("gives two concurrent claimers disjoint uploads", async () => {

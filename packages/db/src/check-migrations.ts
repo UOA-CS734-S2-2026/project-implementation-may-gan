@@ -142,7 +142,7 @@ async function ensureDriftFree(): Promise<void> {
     const tempConfig = path.join(tempDir, "drizzle.config.ts");
     await writeFile(
       tempConfig,
-      `import { defineConfig } from "drizzle-kit";\nexport default defineConfig({ schema: "${migrationsRepositoryPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true });\n`,
+      `export default { schema: "${migrationsRepositoryPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true };\n`,
     );
     await run("pnpm", ["exec", "drizzle-kit", "generate", "--config", tempConfig]);
     const after = await fileHashes(tempDir);

@@ -1,0 +1,6 @@
+reason: The trigger and backfill must install atomically so terminal shared or unsupported media failures stop consuming all subsequent claim limits. The migration runner wraps the file in a transaction, and Trash cleanup is not scheduled in production.
+affected_data_and_clients: Existing failed Trash posts get an indefinite retry pause. Their content remains hidden, and a later eligible post can be claimed. No media object is deleted by this migration.
+rollout_sequence: Apply on isolated synthetic staging, verify one terminal failure followed by a healthy due post, and keep owner routes and physical cleanup disabled pending separate approval.
+backup_checkpoint: Confirm the staging recovery checkpoint and a measured posts table before running.
+forward_fix_plan: Stop on migration failure. Investigate terminal media references before any explicit operator retry; add a reviewed forward migration rather than editing applied SQL.
+reviewer: Database, media, and privacy reviewers required.

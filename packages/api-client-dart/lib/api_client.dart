@@ -334,6 +334,10 @@ class ApiClient {
           return PostMedia.fromJson(value);
         case 'PostingStreak':
           return PostingStreak.fromJson(value);
+        case 'PostsListTrash200Response':
+          return PostsListTrash200Response.fromJson(value);
+        case 'PostsRestore200Response':
+          return PostsRestore200Response.fromJson(value);
         case 'ProfileDetails':
           return ProfileDetails.fromJson(value);
         case 'ProfileOwnerSettings':
@@ -378,6 +382,8 @@ class ApiClient {
           return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
+        case 'TrashedPostStatus':
+          return TrashedPostStatus.fromJson(value);
         case 'UpdateProfileRequest':
           return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':

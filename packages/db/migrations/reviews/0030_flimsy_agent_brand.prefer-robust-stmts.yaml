@@ -1,0 +1,6 @@
+reason: Post Trash columns, the active-day unique index, the legacy constraint removal, and the restricted transition procedures must install atomically. The migration runner wraps each migration in one transaction and verifies the immutable migration prefix before applying it. A failed attempt rolls back in full.
+affected_data_and_clients: Existing posts remain active with null Trash fields and keep their original day uniqueness until the partial active index is present. The API Trash routes and physical cleanup remain disabled by default.
+rollout_sequence: Verify the posts table is no larger than the migration's 16 MiB cap, run the reviewed migration with a backup checkpoint, inspect the new index and app role permissions, and exercise synthetic post transitions before any route activation.
+backup_checkpoint: Record the staging backup and its recovery procedure before migration. Production needs a separate explicit rollout approval.
+forward_fix_plan: Stop on any failed size check or lock timeout. Use a separately reviewed large-table or corrective forward migration rather than modifying applied SQL.
+reviewer: Database, privacy, and availability reviewers required.

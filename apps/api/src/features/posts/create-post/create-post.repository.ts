@@ -87,7 +87,7 @@ async function readPost(queryable: Queryable, postId: string): Promise<StoredDai
     .from(schema.posts)
     .innerJoin(schema.dailyPrompts, eq(schema.dailyPrompts.id, schema.posts.promptId))
     .leftJoin(schema.tomorrowNotes, eq(schema.tomorrowNotes.postId, schema.posts.id))
-    .where(eq(schema.posts.id, postId))
+    .where(and(eq(schema.posts.id, postId), isNull(schema.posts.trashedAt)))
     .limit(1);
   return row ? toStoredPost(await readPostMedia(queryable, postId), row) : null;
 }
@@ -108,16 +108,21 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .limit(1);
       if (!record) return null;
       const post = await readPost(queryable, record.postId);
-      // The idempotency row cascades with its post, so a missing post means
-      // cleanup is mid-flight; treat the key as unused rather than replaying.
-      return post ? { requestFingerprint: record.requestFingerprint, post } : null;
+      // A retained key for a trashed post cannot replay hidden content or be
+      // reused for a replacement. Purge removes the key with its post.
+      if (!post) throw new CreateDailyPostError("IDEMPOTENCY_KEY_REUSED");
+      return { requestFingerprint: record.requestFingerprint, post };
     },
 
     async hasPostForDay(authorId, localDate) {
       const rows = await queryable
         .select({ id: schema.posts.id })
         .from(schema.posts)
-        .where(and(eq(schema.posts.authorId, authorId), eq(schema.posts.localDate, localDate)))
+        .where(and(
+          eq(schema.posts.authorId, authorId),
+          eq(schema.posts.localDate, localDate),
+          isNull(schema.posts.trashedAt),
+        ))
         .limit(1);
       return rows.length > 0;
     },
@@ -149,7 +154,11 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .select({ reservationId: schema.postMedia.reservationId })
         .from(schema.postMedia)
         .where(inArray(schema.postMedia.reservationId, reservations.map((row) => row.reservationId)));
-      const linkedIds = new Set(linked.map((row) => row.reservationId));
+      const avatarLinks = await queryable
+        .select({ reservationId: schema.profileAvatars.reservationId })
+        .from(schema.profileAvatars)
+        .where(inArray(schema.profileAvatars.reservationId, reservations.map((row) => row.reservationId)));
+      const linkedIds = new Set([...linked, ...avatarLinks].map((row) => row.reservationId));
       return reservations.map(({ cleanupClaimedAt, ...row }) => ({
         ...row,
         // Cleanup tombstones the upload under this same row lock, so a claimed
@@ -221,6 +230,18 @@ export function createPostgresDailyPostStore(database: DayliDatabase): DailyPost
         await tx
           .select({ locked: sql`pg_advisory_xact_lock(hashtextextended(${authorLockKey(authorId)}, 734))` })
           .from(sql`(values (1)) as lock_source`);
+        // This matches the Trash command lock order. A pending deletion that
+        // commits while the submission waits must not admit another post.
+        const [author] = await tx.select({ id: schema.user.id })
+          .from(schema.user).where(eq(schema.user.id, authorId)).for("update");
+        const [lifecycle] = author
+          ? await tx.select({ state: schema.accountLifecycles.state })
+            .from(schema.accountLifecycles)
+            .where(eq(schema.accountLifecycles.userId, authorId)).for("share")
+          : [];
+        if (!author || (lifecycle && lifecycle.state !== "active")) {
+          throw new CreateDailyPostError("ACCOUNT_RESTRICTED");
+        }
         return operation(createTransaction(tx));
       });
     },

@@ -95,6 +95,9 @@ export function registerCreateDailyPostRoute(app: OpenAPIHono<AuthenticatedApiEn
     } catch (error) {
       if (error instanceof CreateDailyPostError) {
         if (error.reason === "PROMPT_UNAVAILABLE") return unavailable(context);
+        if (error.reason === "ACCOUNT_RESTRICTED") {
+          return apiErrorResponse(context, 403, "FORBIDDEN", error.message);
+        }
         if (error.reason === "MEDIA_NOT_ALLOWED") {
           return apiErrorResponse(context, 422, "VALIDATION_FAILED", error.message, {
             field: "attachments",

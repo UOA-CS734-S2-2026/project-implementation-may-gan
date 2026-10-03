@@ -24,6 +24,9 @@ BEGIN
   IF to_regclass('public."user"') IS NOT NULL THEN
     REVOKE DELETE ON TABLE public."user" FROM app;
   END IF;
+  IF to_regclass('public.posts') IS NOT NULL THEN
+    REVOKE DELETE ON TABLE public.posts FROM app;
+  END IF;
 
   FOREACH restricted_table IN ARRAY ARRAY[
     'account_google_reauthentication_intents',

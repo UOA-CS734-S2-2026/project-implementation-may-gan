@@ -130,6 +130,10 @@ export const createDailyPostErrorResponses = {
     description: "Authentication is required.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
+  403: {
+    description: "Posting is unavailable while account deletion is pending.",
+    content: { "application/json": { schema: apiErrorSchema } },
+  },
   409: {
     description: "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
     content: { "application/json": { schema: apiErrorSchema } },
