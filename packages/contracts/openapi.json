@@ -2416,7 +2416,7 @@
           "loved": {
             "type": "integer",
             "minimum": 0,
-            "description": "Likes on the person's posts that haven't been deleted."
+            "description": "Likes on the person's posts that aren't in Trash."
           }
         },
         "required": [

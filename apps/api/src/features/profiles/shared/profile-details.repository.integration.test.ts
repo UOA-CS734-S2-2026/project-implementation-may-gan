@@ -124,7 +124,7 @@ function requireLocalTestUrl(value: string): string {
         .resolves.toMatchObject({ detailsVisible: false, bio: null, mbti: null, whatIDo: null, streak: null, stats: null, owner: null });
     });
 
-    it("counts likes on posts that haven't been deleted as loved", async () => {
+    it("counts likes on posts that aren't in Trash as loved", async () => {
       await migrator.client`
         insert into public.post_likes (post_id, user_id)
         values (${id("post-2026-09-29")}, ${users.friend}), (${id("post-2026-09-28")}, ${users.privateOwner}),

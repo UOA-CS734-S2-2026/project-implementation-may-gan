@@ -90,14 +90,14 @@ async function findPostingStreak(database: DayliDatabase, authorId: string, now:
   return { streak: { ...calculatePostingStreak(localDates, today), asOf: today }, posts: localDates.length };
 }
 
-/** Likes on the author's posts that haven't been deleted. */
+/** Likes on the author's posts that aren't in Trash. */
 async function countLoved(database: DayliDatabase, authorId: string) {
   const { posts, postLikes } = schema;
   const [row] = await database
     .select({ loved: count() })
     .from(postLikes)
     .innerJoin(posts, eq(postLikes.postId, posts.id))
-    .where(and(eq(posts.authorId, authorId), isNull(posts.deletedAt)));
+    .where(and(eq(posts.authorId, authorId), isNull(posts.trashedAt)));
   return row?.loved ?? 0;
 }
 

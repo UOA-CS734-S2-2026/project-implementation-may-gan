@@ -26,7 +26,7 @@ class ProfileStats {
   /// Minimum value: 0
   final int friends;
 
-  /// Likes on the person's posts that haven't been deleted.
+  /// Likes on the person's posts that aren't in Trash.
   ///
   /// Minimum value: 0
   final int loved;

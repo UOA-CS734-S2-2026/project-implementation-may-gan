@@ -28,7 +28,7 @@ export interface ProfileStats {
      */
     friends: number;
     /**
-     * Likes on the person's posts that haven't been deleted.
+     * Likes on the person's posts that aren't in Trash.
      */
     loved: number;
 }
