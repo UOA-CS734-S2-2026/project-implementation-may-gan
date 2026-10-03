@@ -12,7 +12,8 @@ import { ProfileAbout } from "@/features/profiles/get-profile-details/ProfileAbo
 import { Button } from "@/components/ui/core/Button";
 import { ProfileAvatar } from "@/features/profiles/update-profile/AvatarForm";
 import { useSession } from "@/lib/session/hooks";
-import { isPublicAction, signInForPublicAction } from "@/lib/routing/public-return-intent";
+import { isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
+import { profileKeys } from "@/features/profiles/shared/profiles.keys";
 import { ProfileActions } from "./_components/ProfileActions";
 
 function requireFriendAction<T>(result: FriendsResult<T>): T {
@@ -25,7 +26,7 @@ export default function ProfilePage({ params }: { params: Promise<{ username: st
 }
 
 export function Profile({ username: requested }: { username: string }) {
-  const { user } = useSession();
+  const { user, isPending: sessionPending } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,19 +36,16 @@ export function Profile({ username: requested }: { username: string }) {
   const handle = info?.username;
   const moved = Boolean(handle && handle.toLowerCase() !== requested.toLowerCase());
   const rawIntent = searchParams.get("intent");
-  const intent = isPublicAction(rawIntent) && (rawIntent === "friend-request" || rawIntent === "message-request") ? rawIntent : null;
-
+  const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "friend-request" || rawIntent === "message-request") ? rawIntent : null;
+  const intent = !sessionPending && candidateIntent && user && resumePublicIntent(`${pathname}?intent=${candidateIntent}`, user.id)
+    ? candidateIntent
+    : null;
   useEffect(() => {
-    if (rawIntent && !intent) router.replace(pathname);
-  }, [intent, pathname, rawIntent, router]);
+    if (rawIntent && !sessionPending && !intent) router.replace(pathname);
+  }, [intent, pathname, rawIntent, router, sessionPending]);
   useEffect(() => {
     if (moved && handle) router.replace(`/u/${encodeURIComponent(handle)}${intent ? `?intent=${intent}` : ""}`);
   }, [handle, intent, moved, router]);
-  useEffect(() => {
-    if (info?.kind === "restricted") {
-      client.removeQueries({ queryKey: postKeys.profile(user?.id ?? "anonymous", info.username) });
-    }
-  }, [client, info, user?.id]);
   useEffect(() => {
     if (user && intent && details.isSuccess) void details.refetch();
     // Refetch once after the initial authenticated response settles.
@@ -64,6 +62,19 @@ export function Profile({ username: requested }: { username: string }) {
       return result.value;
     },
   });
+  useEffect(() => {
+    const actor = user?.id ?? "anonymous";
+    if (info?.kind === "restricted") {
+      client.removeQueries({ queryKey: postKeys.profile(actor, info.username) });
+    }
+    if (details.isError || social.isError) {
+      void client.cancelQueries({ queryKey: profileKeys.details(actor, requested) });
+      client.removeQueries({ queryKey: profileKeys.details(actor, requested) });
+      client.removeQueries({ queryKey: postKeys.profile(actor, requested) });
+      if (handle) client.removeQueries({ queryKey: postKeys.profile(actor, handle) });
+    }
+  }, [client, details.isError, handle, info, requested, social.isError, user?.id]);
+
   const friendAction = useMutation({
     mutationFn: async () => {
       const person = social.data!;
@@ -146,10 +157,11 @@ export function Profile({ username: requested }: { username: string }) {
 }
 
 function AnonymousProfileActions({ pathname }: { pathname: string }) {
+  const remember = (action: PublicAction) => rememberPublicIntent(withPublicAction(pathname, action));
   return (
     <div className="flex w-full flex-col gap-2">
-      <Button href={signInForPublicAction(pathname, "friend-request")} variant={{ weight: "secondary", color: "accent", size: "sm", width: "full" }}>add friend</Button>
-      <Button href={signInForPublicAction(pathname, "message-request")} variant={{ weight: "secondary", color: "background", size: "sm", width: "full" }}>message</Button>
+      <Button href={signInForPublicAction(pathname, "friend-request")} onClick={() => remember("friend-request")} variant={{ weight: "secondary", color: "accent", size: "sm", width: "full" }}>add friend</Button>
+      <Button href={signInForPublicAction(pathname, "message-request")} onClick={() => remember("message-request")} variant={{ weight: "secondary", color: "background", size: "sm", width: "full" }}>message</Button>
     </div>
   );
 }

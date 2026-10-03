@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
 import { DeletePostDialog } from "@/features/posts/delete-post/DeletePostDialog";
 import { useDeletePostMutation } from "@/features/posts/delete-post/use-delete-post-mutation";
@@ -13,7 +14,8 @@ import { PostApiError } from "@/features/posts/shared/query-result";
 import { EditPostForm } from "@/features/posts/update-post/EditPostForm";
 import { usePostQuery } from "./use-post-query";
 import { useSession } from "@/lib/session/hooks";
-import { isPublicAction, signInForPublicAction } from "@/lib/routing/public-return-intent";
+import { isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
+import { postKeys } from "@/features/posts/shared/posts.keys";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
 
@@ -42,6 +44,10 @@ function aucklandToday() {
 }
 
 const photoColumns = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3"] as const;
+
+function rememberPostIntent(pathname: string, action: PublicAction) {
+  return rememberPublicIntent(withPublicAction(pathname, action));
+}
 
 /** One video, or up to three photos, each loaded from a private, expiring URL. */
 function PostMedia({ post }: { post: PostDetail }) {
@@ -84,20 +90,34 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useSession();
+  const { user, isPending: sessionPending } = useSession();
+  const client = useQueryClient();
   const query = usePostQuery(postId);
   const failure = query.error instanceof PostApiError ? query.error.failure : undefined;
-  const post = query.data;
+  const accessRevoked = failure === "notFound" || failure === "unauthenticated";
+  const post = accessRevoked ? undefined : query.data;
   const [editing, setEditing] = useState(false);
   const [showingHistory, setShowingHistory] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const remove = useDeletePostMutation(postId);
   const rawIntent = searchParams.get("intent");
-  const intent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
+  const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
+  const intent = !sessionPending && candidateIntent && user && resumePublicIntent(`${pathname}?intent=${candidateIntent}`, user.id)
+    ? candidateIntent
+    : null;
 
   useEffect(() => {
-    if (rawIntent && !intent) router.replace(pathname);
-  }, [intent, pathname, rawIntent, router]);
+    if (rawIntent && !sessionPending && !intent) router.replace(pathname);
+  }, [intent, pathname, rawIntent, router, sessionPending]);
+  useEffect(() => {
+    if (failure === "unauthenticated") router.replace("/sign-in");
+  }, [failure, router]);
+  useEffect(() => {
+    if (!accessRevoked) return;
+    const actor = user?.id ?? "anonymous";
+    void client.cancelQueries({ queryKey: postKeys.detail(actor, postId) });
+    client.removeQueries({ queryKey: postKeys.detail(actor, postId) });
+  }, [accessRevoked, client, postId, user?.id]);
   useEffect(() => {
     if (user && intent && query.isSuccess) void query.refetch();
     // Refetch once after the initial authenticated response settles. The action itself always needs another click.
@@ -121,7 +141,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   }
 
   if (!post) {
-    if (failure === "notFound") {
+    if (accessRevoked) {
       return (
         <Centered>
           <p className="mb-4">This dayli isn&apos;t available. It may have been deleted, or you may no longer have access.</p>
@@ -241,14 +261,14 @@ export function PostDetailView({ username, postId }: { username: string; postId:
       <div className="flex flex-wrap gap-2 border-t border-foreground/10 pt-5" aria-label="Post actions">
         <Button
           href={user ? undefined : signInForPublicAction(pathname, "like")}
-          onClick={user ? () => router.replace(`${pathname}?intent=like`) : undefined}
+          onClick={user ? () => { rememberPostIntent(pathname, "like"); router.replace(`${pathname}?intent=like`); } : () => rememberPostIntent(pathname, "like")}
           variant={{ color: "accent", size: "sm", weight: "secondary" }}
         >
           like
         </Button>
         <Button
           href={user ? undefined : signInForPublicAction(pathname, "comment")}
-          onClick={user ? () => router.replace(`${pathname}?intent=comment`) : undefined}
+          onClick={user ? () => { rememberPostIntent(pathname, "comment"); router.replace(`${pathname}?intent=comment`); } : () => rememberPostIntent(pathname, "comment")}
           variant={{ color: "background", size: "sm", weight: "secondary" }}
         >
           comment
