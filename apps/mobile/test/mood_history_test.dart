@@ -34,14 +34,17 @@ Map<String, Object?> period({
 Map<String, Object?> historyJson({
   String trackedFrom = '2026-01-01',
   Map<String, Object?>? previous,
+  List<Map<String, Object?>>? days,
 }) => {
   'range': '30d',
   'trackedFrom': trackedFrom,
-  'days': [
-    {'localDate': '2026-09-27', 'rating': 6},
-    {'localDate': '2026-09-28', 'rating': 8},
-    {'localDate': '2026-09-30', 'rating': 7},
-  ],
+  'days':
+      days ??
+      [
+        {'localDate': '2026-09-27', 'rating': 6},
+        {'localDate': '2026-09-28', 'rating': 8},
+        {'localDate': '2026-09-30', 'rating': 7},
+      ],
   'current': period(),
   'previous':
       previous ??
@@ -157,6 +160,52 @@ void main() {
     await tester.tapAt(Offset(box.right - 9, box.center.dy));
     await tester.pumpAndSettle();
     expect(find.text('30 Sept 2026: Rating of 7'), findsOneWidget);
+  });
+
+  testProfile('drops a selection the next range no longer has', (tester) async {
+    final profiles = FakeProfileClient({
+      'jos': details('jos', displayName: 'Jos', owner: true),
+    })..moodResult = ApiSuccess(history());
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'jos': me}),
+      profiles: profiles,
+    );
+    await openMyDays(tester, harness);
+
+    // A year with more posted days than the 30-day view.
+    profiles.moodResult = ApiSuccess(
+      MoodHistory.tryParse(
+        historyJson(
+          days: [
+            for (final date in [
+              '2026-05-01',
+              '2026-06-01',
+              '2026-07-01',
+              '2026-08-01',
+              '2026-09-29',
+              '2026-09-30',
+            ])
+              {'localDate': date, 'rating': 5},
+          ],
+        ),
+      )!,
+    );
+    await tester.tap(find.byKey(const Key('profile.mood.1y')));
+    await tester.pumpAndSettle();
+    final chart = find.byKey(const Key('profile.mood.chart'));
+    await tester.ensureVisible(chart);
+    await tester.pumpAndSettle();
+    final box = tester.getRect(chart);
+    await tester.tapAt(Offset(box.right - 9, box.center.dy));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('profile.mood.tooltip')), findsOneWidget);
+
+    profiles.moodResult = ApiSuccess(history());
+    await tester.tap(find.byKey(const Key('profile.mood.30d')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const Key('profile.mood.tooltip')), findsNothing);
   });
 
   testProfile('does not count days before joining', (tester) async {

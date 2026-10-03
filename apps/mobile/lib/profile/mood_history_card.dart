@@ -272,6 +272,13 @@ class _MoodChartState extends State<MoodChart> {
   static const _tooltipHeight = 30.0;
   int? _active;
 
+  @override
+  void didUpdateWidget(covariant MoodChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A new range brings new days, so an old selection no longer names one.
+    if (oldWidget.days != widget.days) _active = null;
+  }
+
   int get _start => _dayNumber(widget.from);
   int get _span => math.max(1, _dayNumber(widget.to) - _start);
 
@@ -293,7 +300,10 @@ class _MoodChartState extends State<MoodChart> {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final active = _active == null ? null : widget.days[_active!];
+    final index = _active;
+    final active = index == null || index >= widget.days.length
+        ? null
+        : widget.days[index];
     final ratings = widget.days.map((day) => day.rating).toList();
     final average = ratings.isEmpty
         ? null
@@ -373,7 +383,7 @@ class _MoodChartState extends State<MoodChart> {
                     hiddenDays: {
                       for (final day in widget.hiddenDays) _dayNumber(day),
                     },
-                    active: _active,
+                    active: active == null ? null : index,
                     colors: colors,
                     labelStyle: DayliText.sans(
                       context,
@@ -467,7 +477,8 @@ class _MoodPainter extends CustomPainter {
       for (final day in days)
         (day: _dayNumber(day.localDate), rating: day.rating),
     ];
-    final posted = {for (final point in points) point.day};
+    // Days with any post, including ones the viewer can't see.
+    final posted = {for (final point in points) point.day, ...hiddenDays};
     final dense = span > 90;
 
     // As on web, a tracked day without any post gets an empty circle on the
@@ -479,7 +490,7 @@ class _MoodPainter extends CustomPainter {
         ..color = colors.foreground.withValues(alpha: 0.3);
       final fill = Paint()..color = colors.background;
       for (var day = math.max(start, trackedFrom); day < to; day++) {
-        if (posted.contains(day) || hiddenDays.contains(day)) continue;
+        if (posted.contains(day)) continue;
         canvas.drawCircle(Offset(x(day), y(1)), 4, fill);
         canvas.drawCircle(Offset(x(day), y(1)), 4, ring);
       }
@@ -529,6 +540,7 @@ class _MoodPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MoodPainter old) =>
       old.days != days ||
+      old.hiddenDays != hiddenDays ||
       old.active != active ||
       old.colors != colors ||
       old.span != span ||

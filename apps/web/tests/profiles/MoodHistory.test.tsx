@@ -105,6 +105,27 @@ describe("MoodHistory", () => {
     expect(container.querySelectorAll("[data-mood-missing]")).toHaveLength(25);
   });
 
+  it("treats a hidden post as a neighbour when thinning a long range", async () => {
+    const year = (days: MoodHistoryData["days"], hiddenDays: string[]) => history({
+      range: "1y",
+      days,
+      hiddenDays,
+      current: summary({ from: "2025-10-01", to: "2026-09-30", trackedDays: 365, postedDays: days.length, missingDays: 0, average: 5 }),
+    });
+    moodHistory.mockResolvedValueOnce({ ok: true, value: year([{ localDate: "2026-09-10", rating: 5 }], []) });
+    const { container, unmount } = render(<MoodHistory username="ada" displayName="Ada" isMe={false} />);
+    await screen.findByRole("img");
+    // On its own, a day keeps its dot.
+    expect(container.querySelectorAll("[data-mood-dot]")).toHaveLength(1);
+    unmount();
+
+    moodHistory.mockResolvedValueOnce({ ok: true, value: year([{ localDate: "2026-09-10", rating: 5 }], ["2026-09-11"]) });
+    const next = render(<MoodHistory username="ada" displayName="Ada" isMe={false} />);
+    await screen.findByRole("img");
+    // Beside a hidden post it is part of a run, so it doesn't.
+    expect(next.container.querySelectorAll("[data-mood-dot]")).toHaveLength(0);
+  });
+
   it("does not count days before joining", async () => {
     moodHistory.mockResolvedValue({
       ok: true,

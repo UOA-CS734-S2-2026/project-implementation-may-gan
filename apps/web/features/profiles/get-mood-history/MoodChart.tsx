@@ -39,6 +39,12 @@ export function MoodChart({ from, to, trackedFrom, days, hiddenDays = [] }: {
   hiddenDays?: readonly string[];
 }) {
   const [active, setActive] = useState<number | null>(null);
+  // A new range brings new days, so an old selection no longer names one.
+  const [shownDays, setShownDays] = useState(days);
+  if (shownDays !== days) {
+    setShownDays(days);
+    setActive(null);
+  }
   const start = dayNumber(from);
   const span = Math.max(1, dayNumber(to) - start);
   const points = days.map((day) => {
@@ -53,12 +59,14 @@ export function MoodChart({ from, to, trackedFrom, days, hiddenDays = [] }: {
     if (run && point.day === run.at(-1)!.day + 1) run.push(point);
     else runs.push([point]);
   }
+  // Days with any post, including ones the viewer can't see.
+  const posted = new Set([...points.map((point) => point.day), ...hiddenDays.map(dayNumber)]);
   // Over long ranges dots would merge into a band, so only lone days keep one.
+  // A hidden post next to a rating still counts as a neighbour.
   const dense = span > 90;
-  const lone = new Set(runs.filter((run) => run.length === 1).map((run) => run[0]!.localDate));
+  const lone = new Set(points.filter((point) => !posted.has(point.day - 1) && !posted.has(point.day + 1)).map((point) => point.localDate));
   // As in the original graph, a tracked day without any post gets an empty
   // circle on the baseline. Today is still open, so it never gets one.
-  const posted = new Set([...points.map((point) => point.day), ...hiddenDays.map(dayNumber)]);
   const missing: number[] = [];
   if (!dense) {
     for (let day = Math.max(start, dayNumber(trackedFrom)); day < dayNumber(to); day += 1) {
@@ -87,7 +95,7 @@ export function MoodChart({ from, to, trackedFrom, days, hiddenDays = [] }: {
     }
   }
 
-  const focused = active === null ? null : points[active];
+  const focused = active === null ? null : (points[active] ?? null);
   return (
     <div className="pl-7 pr-2">
       <div
