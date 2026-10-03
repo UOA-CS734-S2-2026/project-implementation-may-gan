@@ -27,7 +27,7 @@ async function main() {
       if (index) {
         index.content = index.content.replace(
           '\n\n<Cards>',
-          "\n\nDayli's web and mobile apps both use this API. These pages are generated from the OpenAPI document used to create the client libraries, so changes to a route, request, or response start in the API contract.\n\n<Cards>",
+          "\n\nThis is the reference for Dayli's backend endpoints. The web and mobile apps use the same API, and these pages are generated from the OpenAPI document we use to create the client libraries.\n\nHave a poke around. Pick an endpoint below to check its parameters, request body, and responses, or open the interactive explorer to try a request yourself.\n\n<Cards>",
         );
         index.content += '\n\n[Open the interactive API explorer](/docs/api-reference/playground)\n';
       }
