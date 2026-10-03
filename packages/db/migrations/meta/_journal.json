@@ -253,6 +253,20 @@
       "when": 1790988000000,
       "tag": "0035_export_owner_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790988600000,
+      "tag": "0036_export_generation_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1790989200000,
+      "tag": "0037_export_worker_claims",
+      "breakpoints": true
     }
   ]
 }
