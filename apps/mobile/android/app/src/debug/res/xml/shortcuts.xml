@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug copy of src/main/res/xml/shortcuts.xml. Only the target package
+     differs: debug builds use the .staging application ID. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="compose_today"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/compose_shortcut_short_label"
+        android:shortcutLongLabel="@string/compose_shortcut_long_label">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="dayli://app/post"
+            android:targetPackage="nz.ac.auckland.dayli.dayli_mobile.staging"
+            android:targetClass="nz.ac.auckland.dayli.dayli_mobile.MainActivity" />
+    </shortcut>
+</shortcuts>

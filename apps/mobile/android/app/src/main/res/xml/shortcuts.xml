@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher shortcut (long-press the app icon). It opens today's
+     composer through the same dayli:// link the router handles, and never
+     posts. See docs/dayli/native-composer-entry-points.md.
+     Debug builds have their own copy in src/debug because their application
+     ID ends in .staging. Keep the two in step. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="compose_today"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/compose_shortcut_short_label"
+        android:shortcutLongLabel="@string/compose_shortcut_long_label">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="dayli://app/post"
+            android:targetPackage="nz.ac.auckland.dayli.dayli_mobile"
+            android:targetClass="nz.ac.auckland.dayli.dayli_mobile.MainActivity" />
+    </shortcut>
+</shortcuts>
