@@ -295,6 +295,20 @@
       "when": 1790991600000,
       "tag": "0041_export_archive_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790992200000,
+      "tag": "0042_export_upload_registration",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790992800000,
+      "tag": "0043_validate_export_upload_registration",
+      "breakpoints": true
     }
   ]
 }
