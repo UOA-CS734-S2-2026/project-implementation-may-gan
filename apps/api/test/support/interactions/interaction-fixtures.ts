@@ -1,5 +1,5 @@
 import { createDayliDatabase, schema } from "@dayli/db";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -21,8 +21,10 @@ export const fixtureNow = new Date("2026-09-26T03:00:00.000Z");
 /**
  * An author with a released friends post, a solo post, and a deleted post;
  * two active friends, a friend who blocked the author's other friend, a
- * stranger, and a friend who is blocked by the author. Fixtures are unique per
- * run; the app connection uses the restricted runtime role.
+ * stranger, and a friend who is blocked by the author. A friend of `friend`
+ * who hasn't chosen a username yet has a released friends post of their own.
+ * Fixtures are unique per run; the app connection uses the restricted
+ * runtime role.
  */
 export function createInteractionFixture(prefix: string) {
   const migrator = createDayliDatabase(requireLocalTestUrl(migratorUrl ?? "postgresql://localhost:5433/dayli_test"));
@@ -38,8 +40,12 @@ export function createInteractionFixture(prefix: string) {
     stranger: id("stranger"),
     /** A friend who hasn't chosen a username yet. */
     noUsername: id("nousername"),
+    /** Another author without a username yet, friends with `friend`. */
+    pendingAuthor: id("pendingauthor"),
   };
-  const posts = { shared: id("shared"), solo: id("solo"), deleted: id("deleted") };
+  const posts = { shared: id("shared"), solo: id("solo"), deleted: id("deleted"), byPendingAuthor: id("bypending") };
+  const unnamed = new Set<string>(["noUsername", "pendingAuthor"]);
+  const usernameFor = (key: string) => `${prefix.slice(0, 3)}${run}${key}`.toLowerCase().slice(0, 30);
   const userIds = Object.values(users);
 
   async function setUp() {
@@ -48,7 +54,7 @@ export function createInteractionFixture(prefix: string) {
         id: userId,
         name: key,
         email: `${userId}@example.test`,
-        username: key === "noUsername" ? null : `${prefix.slice(0, 3)}${run}${key}`.toLowerCase().slice(0, 30),
+        username: unnamed.has(key) ? null : usernameFor(key),
         displayUsername: key === "friend" ? "Friendly" : null,
       });
     }
@@ -58,14 +64,18 @@ export function createInteractionFixture(prefix: string) {
         { userId: friend, friendId: users.author, state: "active", stateChangedAt: fixtureNow },
       ]);
     }
+    await migrator.db.insert(schema.friendships).values([
+      { userId: users.pendingAuthor, friendId: users.friend, state: "active", stateChangedAt: fixtureNow },
+      { userId: users.friend, friendId: users.pendingAuthor, state: "active", stateChangedAt: fixtureNow },
+    ]);
     await migrator.db.insert(schema.relationshipBlocks).values([
       // Two of the author's friends who don't want to see each other.
       { blockerId: users.blocker, blockedId: users.otherFriend, blockedAt: fixtureNow },
       { blockerId: users.author, blockedId: users.blockedByAuthor, blockedAt: fixtureNow },
     ]);
-    const post = (key: keyof typeof posts, localDate: string, audience: "solo" | "friends") => ({
+    const post = (key: keyof typeof posts, localDate: string, audience: "solo" | "friends", authorId = users.author) => ({
       id: posts[key],
-      authorId: users.author,
+      authorId,
       localDate,
       promptId: `prompt-${localDate.slice(5)}`,
       reflectiveAnswer: `Answer ${key}`,
@@ -86,7 +96,16 @@ export function createInteractionFixture(prefix: string) {
       post("shared", "2026-09-24", "friends"),
       post("solo", "2026-09-23", "solo"),
       post("deleted", "2026-09-22", "friends"),
+      post("byPendingAuthor", "2026-09-24", "friends", users.pendingAuthor),
     ]);
+  }
+
+  /** Gives the pending author a username, or takes it away again. */
+  async function setPendingAuthorNamed(named: boolean) {
+    await migrator.db
+      .update(schema.user)
+      .set({ username: named ? usernameFor("pendingAuthor") : null })
+      .where(eq(schema.user.id, users.pendingAuthor));
   }
 
   async function tearDown() {
@@ -105,5 +124,5 @@ export function createInteractionFixture(prefix: string) {
     }
   }
 
-  return { migrator, app, id, users, posts, setUp, tearDown };
+  return { migrator, app, id, users, posts, setUp, setPendingAuthorNamed, tearDown };
 }

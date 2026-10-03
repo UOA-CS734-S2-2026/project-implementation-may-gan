@@ -54,4 +54,17 @@ import { createPostgresPostLikesRepository } from "./list-post-likes.repository"
     await expect(repo().listLikes(users.stranger, posts.shared, fixtureNow, 20)).resolves.toBeNull();
     await expect(repo().listLikes(users.author, posts.deleted, fixtureNow, 20)).resolves.toBeNull();
   });
+
+  it("conceals likes on a friend's post until its author has a username, as the post detail does", async () => {
+    await fixture.migrator.db.insert(schema.postLikes).values({ postId: posts.byPendingAuthor, userId: users.friend, createdAt: fixtureNow });
+
+    await expect(repo().listLikes(users.friend, posts.byPendingAuthor, fixtureNow, 20)).resolves.toBeNull();
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      const page = await repo().listLikes(users.friend, posts.byPendingAuthor, fixtureNow, 20);
+      expect(page?.items.map((like) => like.person.id)).toEqual([users.friend]);
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
 });

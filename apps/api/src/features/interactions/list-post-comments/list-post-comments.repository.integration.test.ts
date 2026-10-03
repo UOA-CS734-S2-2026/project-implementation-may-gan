@@ -76,4 +76,24 @@ import { createPostgresPostCommentsRepository } from "./list-post-comments.repos
     await expect(repo().listComments(users.blockedByAuthor, posts.shared, fixtureNow, 20)).resolves.toBeNull();
     await expect(repo().listComments(users.author, posts.deleted, fixtureNow, 20)).resolves.toBeNull();
   });
+
+  it("conceals comments on a friend's post until its author has a username, as the post detail does", async () => {
+    await fixture.migrator.db.insert(schema.postComments).values({
+      id: id("on-pending"),
+      postId: posts.byPendingAuthor,
+      authorId: users.friend,
+      clientCommentId: id("on-pending"),
+      body: "on-pending",
+      createdAt: fixtureNow,
+    });
+
+    await expect(repo().listComments(users.friend, posts.byPendingAuthor, fixtureNow, 20)).resolves.toBeNull();
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      const page = await repo().listComments(users.friend, posts.byPendingAuthor, fixtureNow, 20);
+      expect(page?.items.map((comment) => comment.text)).toEqual(["on-pending"]);
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
 });

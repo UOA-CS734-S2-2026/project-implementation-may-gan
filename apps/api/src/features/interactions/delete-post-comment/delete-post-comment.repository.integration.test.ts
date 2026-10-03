@@ -58,6 +58,21 @@ import { createPostgresDeletePostCommentRepository } from "./delete-post-comment
     expect(await row("protected")).toMatchObject({ deletedAt: null });
   });
 
+  it("refuses to delete a comment on a post whose author has no username yet, as the post detail does", async () => {
+    await fixture.migrator.db.insert(schema.postComments).values({ ...comment("on-pending", users.friend), postId: posts.byPendingAuthor });
+
+    await expect(repo().deleteComment(users.friend, posts.byPendingAuthor, id("on-pending"), fixtureNow)).resolves.toBe(false);
+    expect(await row("on-pending")).toMatchObject({ deletedAt: null });
+
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      await expect(repo().deleteComment(users.friend, posts.byPendingAuthor, id("on-pending"), fixtureNow)).resolves.toBe(true);
+      expect(await row("on-pending")).toMatchObject({ deletedAt: fixtureNow, deletedBy: users.friend });
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
+
   it("refuses to delete a reply whose parent is deleted or its author is blocked", async () => {
     await expect(repo().deleteComment(users.friend, posts.shared, id("orphan"), fixtureNow)).resolves.toBe(false);
     await expect(repo().deleteComment(users.author, posts.shared, id("orphan"), fixtureNow)).resolves.toBe(false);

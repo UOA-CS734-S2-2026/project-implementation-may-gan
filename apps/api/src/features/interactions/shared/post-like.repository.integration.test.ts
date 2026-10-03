@@ -62,6 +62,20 @@ import { createPostgresPostLikeRepository } from "./post-like.repository";
     expect(await fixture.migrator.db.select().from(schema.postComments).where(eq(schema.postComments.postId, purged))).toEqual([]);
   });
 
+  it("refuses a friend on a post whose author has no username yet, as the post detail does", async () => {
+    await expect(repo().setLike(users.friend, posts.byPendingAuthor, true, fixtureNow)).resolves.toBeNull();
+    await expect(repo().setLike(users.friend, posts.byPendingAuthor, false, fixtureNow)).resolves.toBeNull();
+    expect(await fixture.migrator.db.select().from(schema.postLikes).where(eq(schema.postLikes.postId, posts.byPendingAuthor))).toEqual([]);
+
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      await expect(repo().setLike(users.friend, posts.byPendingAuthor, true, fixtureNow)).resolves.toEqual({ likeCount: 1, viewerHasLiked: true });
+      await expect(repo().setLike(users.friend, posts.byPendingAuthor, false, fixtureNow)).resolves.toEqual({ likeCount: 0, viewerHasLiked: false });
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
+
   it("refuses a friend before the post is released", async () => {
     await expect(repo().setLike(users.friend, posts.shared, true, new Date("2026-09-24T11:00:00.000Z"))).resolves.toBeNull();
   });

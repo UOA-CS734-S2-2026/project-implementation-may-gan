@@ -82,6 +82,31 @@ import { createPostgresUpdatePostCommentRepository } from "./update-post-comment
     expect(row).toMatchObject({ body: "Reply", editedAt: null });
   });
 
+  it("refuses to edit a comment on a post whose author has no username yet, as the post detail does", async () => {
+    await fixture.migrator.db.insert(schema.postComments).values({
+      id: id("on-pending"),
+      postId: posts.byPendingAuthor,
+      authorId: users.friend,
+      clientCommentId: id("on-pending"),
+      body: "Hi",
+      createdAt: fixtureNow,
+    });
+
+    await expect(repo().updateComment(users.friend, posts.byPendingAuthor, id("on-pending"), "Edited", later)).resolves.toBeNull();
+    const [row] = await fixture.migrator.db.select().from(schema.postComments).where(eq(schema.postComments.id, id("on-pending")));
+    expect(row).toMatchObject({ body: "Hi", editedAt: null });
+
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      await expect(repo().updateComment(users.friend, posts.byPendingAuthor, id("on-pending"), "Edited", later)).resolves.toMatchObject({
+        text: "Edited",
+        editedAt: later.toISOString(),
+      });
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
+
   it("refuses to edit a reply whose parent's author is blocked, and writes nothing", async () => {
     await expect(repo().updateComment(users.blocker, posts.shared, id("shielded"), "Edited", later)).resolves.toBeNull();
 

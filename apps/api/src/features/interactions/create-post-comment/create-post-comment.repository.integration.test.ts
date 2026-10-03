@@ -81,4 +81,21 @@ import { createPostgresCreatePostCommentRepository } from "./create-post-comment
   ] as const)("refuses %s", async (_, viewer, post) => {
     await expect(create(users[viewer], `c-refused-${viewer}-${post}`, "Hi", undefined, posts[post])).resolves.toEqual({ kind: "not_found" });
   });
+
+  it("refuses a friend on a post whose author has no username yet, as the post detail does", async () => {
+    const clientCommentId = fixture.id("c-pending");
+
+    await expect(create(users.friend, clientCommentId, "Hi", undefined, posts.byPendingAuthor)).resolves.toEqual({ kind: "not_found" });
+    expect(await fixture.migrator.db.select().from(schema.postComments).where(eq(schema.postComments.clientCommentId, clientCommentId))).toEqual([]);
+
+    await fixture.setPendingAuthorNamed(true);
+    try {
+      await expect(create(users.friend, clientCommentId, "Hi", undefined, posts.byPendingAuthor)).resolves.toMatchObject({
+        kind: "created",
+        comment: { postId: posts.byPendingAuthor, text: "Hi" },
+      });
+    } finally {
+      await fixture.setPendingAuthorNamed(false);
+    }
+  });
 });
