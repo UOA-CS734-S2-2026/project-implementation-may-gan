@@ -82,7 +82,7 @@ describe("explicit export data inventory", () => {
 
   it("keeps recipient and relationship data out of the inventory", () => {
     for (const table of ["conversation_changes", "conversation_members", "conversations", "messaging_participants",
-      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks"] as const) {
+      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
     }
@@ -140,6 +140,15 @@ describe("explicit export data inventory", () => {
     expect(exportDataInventory.messages!.included).toContain("body");
     expect(exportDataInventory.messages!.excluded).toContain("reply_to_message_id");
     expect(exportDataInventory.messages!.retainedForOthers).toBe("retain_for_surviving_recipients");
+  });
+
+  it("records authored comments without reply pointers or moderators", () => {
+    expect(exportDataInventory.post_comments!.owner).toBe("author_id_and_current_readable_post");
+    expect(exportDataInventory.post_comments!.included).toContain("body");
+    for (const column of ["parent_comment_id", "client_comment_id", "deleted_by"]) {
+      expect(exportDataInventory.post_comments!.excluded).toContain(column);
+    }
+    expect(exportDataInventory.post_comments!.deletion).toBe("purge_with_post");
   });
 
   it("records media metadata while withholding raw object keys", () => {
