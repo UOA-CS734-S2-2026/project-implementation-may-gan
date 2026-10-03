@@ -26,8 +26,8 @@ class PostVoiceMemo {
   /// A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead.
   final String url;
 
-  /// When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one.
-  final DateTime expiresAt;
+  /// When a signed private URL stops working. Null for a Worker URL that reauthorizes every request.
+  final DateTime? expiresAt;
 
   @override
   bool operator ==(Object other) =>
@@ -44,7 +44,7 @@ class PostVoiceMemo {
       (id.hashCode) +
       (contentType.hashCode) +
       (url.hashCode) +
-      (expiresAt.hashCode);
+      (expiresAt == null ? 0 : expiresAt!.hashCode);
 
   @override
   String toString() =>
@@ -55,7 +55,11 @@ class PostVoiceMemo {
     json[r'id'] = this.id;
     json[r'contentType'] = this.contentType;
     json[r'url'] = this.url;
-    json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
+    if (this.expiresAt != null) {
+      json[r'expiresAt'] = this.expiresAt!.toUtc().toIso8601String();
+    } else {
+      json[r'expiresAt'] = null;
+    }
     return json;
   }
 
@@ -66,12 +70,13 @@ class PostVoiceMemo {
     VoiceMemoContentType? contentType,
     String? url,
     DateTime? expiresAt,
+    bool expiresAtSetToNull = false,
   }) =>
       PostVoiceMemo(
         id: id ?? this.id,
         contentType: contentType ?? this.contentType,
         url: url ?? this.url,
-        expiresAt: expiresAt ?? this.expiresAt,
+        expiresAt: expiresAtSetToNull ? null : expiresAt ?? this.expiresAt,
       );
 
   /// Returns a new [PostVoiceMemo] instance and imports its values from
@@ -99,8 +104,6 @@ class PostVoiceMemo {
             'Required key "PostVoiceMemo[url]" has a null value in JSON.');
         assert(json.containsKey(r'expiresAt'),
             'Required key "PostVoiceMemo[expiresAt]" is missing from JSON.');
-        assert(json[r'expiresAt'] != null,
-            'Required key "PostVoiceMemo[expiresAt]" has a null value in JSON.');
         return true;
       }());
 
@@ -108,7 +111,7 @@ class PostVoiceMemo {
         id: mapValueOfType<String>(json, r'id')!,
         contentType: VoiceMemoContentType.fromJson(json[r'contentType'])!,
         url: mapValueOfType<String>(json, r'url')!,
-        expiresAt: mapDateTime(json, r'expiresAt', r'')!,
+        expiresAt: mapDateTime(json, r'expiresAt', r''),
       );
     }
     return null;

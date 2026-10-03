@@ -34,6 +34,11 @@ import {
     ProfileDetailsToJSON,
 } from '../models/ProfileDetails';
 import {
+    type ReadableProfile,
+    ReadableProfileFromJSON,
+    ReadableProfileToJSON,
+} from '../models/ReadableProfile';
+import {
     type SetAvatarRequest,
     SetAvatarRequestFromJSON,
     SetAvatarRequestToJSON,
@@ -66,6 +71,13 @@ export interface ProfileClaimInitialUsernameRequest {
      *
      */
     usernameSetupRequest: UsernameSetupRequest;
+}
+
+export interface ProfileGetAvatarRequest {
+    /**
+     *
+     */
+    username: string;
 }
 
 export interface ProfileGetDetailsRequest {
@@ -209,6 +221,61 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for profileGetAvatar without sending the request
+     */
+    async profileGetAvatarRequestOpts(requestParameters: ProfileGetAvatarRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling profileGetAvatar().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profiles/{username}/avatar`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+     * Read a currently authorized profile avatar
+     */
+    async profileGetAvatarRaw(requestParameters: ProfileGetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.profileGetAvatarRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+     * Read a currently authorized profile avatar
+     */
+    async profileGetAvatar(requestParameters: ProfileGetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.profileGetAvatarRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for profileGetDetails without sending the request
      */
     async profileGetDetailsRequestOpts(requestParameters: ProfileGetDetailsRequest): Promise<runtime.RequestOpts> {
@@ -244,21 +311,21 @@ export class ProfileApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
      * Read a profile\'s details
      */
-    async profileGetDetailsRaw(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfileDetails>> {
+    async profileGetDetailsRaw(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReadableProfile>> {
         const requestOptions = await this.profileGetDetailsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ProfileDetailsFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReadableProfileFromJSON(jsonValue));
     }
 
     /**
-     * Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+     * Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
      * Read a profile\'s details
      */
-    async profileGetDetails(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfileDetails> {
+    async profileGetDetails(requestParameters: ProfileGetDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReadableProfile> {
         const response = await this.profileGetDetailsRaw(requestParameters, initOverrides);
         return await response.value();
     }

@@ -57,9 +57,26 @@ export const profilePostSchema = z
 
 export const profilePostsPageSchema = paginatedResponseSchema(profilePostSchema).openapi("ProfilePostsPage");
 
+export const restrictedProfilePostsSchema = z.object({
+  kind: z.literal("restricted"),
+  username: z.string().min(1),
+}).openapi("RestrictedProfilePosts", {
+  description: "The complete archive response for a private account when the caller is neither its owner nor an active friend.",
+});
+
+export const readableProfilePostsSchema = z.object({
+  kind: z.enum(["archive", "restricted"]),
+  username: z.string().min(1).optional(),
+  items: profilePostsPageSchema.shape.items.optional(),
+  nextCursor: profilePostsPageSchema.shape.nextCursor.optional(),
+  hasMore: profilePostsPageSchema.shape.hasMore.optional(),
+}).openapi("ReadableProfilePosts", {
+  description: "A restricted response has only kind and username. An archive response has kind and every ProfilePostsPage field.",
+});
+
 export const listProfilePostsErrorResponses = {
   401: {
-    description: "Authentication is required.",
+    description: "Presented credentials are invalid.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   404: {
@@ -79,3 +96,5 @@ export const listProfilePostsErrorResponses = {
 
 export type ProfilePost = z.infer<typeof profilePostSchema>;
 export type ProfilePostsPage = z.infer<typeof profilePostsPageSchema>;
+export type RestrictedProfilePosts = z.infer<typeof restrictedProfilePostsSchema>;
+export type ReadableProfilePosts = z.infer<typeof readableProfilePostsSchema>;

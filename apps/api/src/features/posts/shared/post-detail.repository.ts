@@ -1,7 +1,7 @@
 import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter } from "../../permissions";
+import { buildDrizzlePostVisibilityFilter, findPrivatelyVisiblePostMedia } from "../../permissions";
 import { readInteractionCounts } from "./post-interaction-counts";
 import {
   readAttachedVoiceMemo,
@@ -16,17 +16,20 @@ import type { PostDetail } from "./post-detail.contract";
 export type PostDetailRecord = Omit<PostDetail, "media" | "voiceMemo"> & {
   media: PostMediaRef[];
   voiceMemo: PostVoiceMemoRef | null;
+  /** True when media must use the parent-authorized Worker route. */
+  publicMediaDelivery: boolean;
 };
 
 export interface PostDetailRepository {
   /** Null when the post is absent or the viewer may not read it. */
-  findPost(viewerId: string, postId: string, now: Date): Promise<PostDetailRecord | null>;
+  findPost(viewerId: string | null, postId: string, now: Date): Promise<PostDetailRecord | null>;
 }
 
 /**
  * Reads one post through the shared detail predicate, the same one the feed
- * uses for lists. The owner may read solo and unreleased posts; anyone else
- * needs a released friends post, an active friendship, and no block.
+ * uses for authorization. The owner may read solo and unreleased posts. A
+ * released friends post is also readable by active friends and, for detail,
+ * anyone when its author has a public profile.
  */
 export function createPostgresPostDetailRepository(database: DayliDatabase): PostDetailRepository {
   const { posts, user, dailyPrompts, postRevisions } = schema;
@@ -68,6 +71,13 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
       const interactions = (await readInteractionCounts(database, viewerId, [row.id]))(row.id);
       const media = (await readAttachedMedia(database, [row.id])).get(row.id) ?? [];
       const voiceMemo = await readAttachedVoiceMemo(database, row.id);
+      const attachedMediaId = media[0]?.id ?? voiceMemo?.id;
+      const publicMediaDelivery = attachedMediaId !== undefined && !(await findPrivatelyVisiblePostMedia(
+        database,
+        row.id,
+        attachedMediaId,
+        { viewer: { userId: viewerId }, now },
+      ));
       return {
         id: row.id,
         author: { id: row.authorId, username: row.username!, displayName: row.displayName },
@@ -85,6 +95,7 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         viewerIsAuthor,
         media,
         voiceMemo,
+        publicMediaDelivery,
       };
     },
   };

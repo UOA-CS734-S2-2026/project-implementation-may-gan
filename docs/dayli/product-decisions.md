@@ -38,17 +38,15 @@ The [messaging handoff](../implementation/messaging-implementation-handoff.md) d
 
 ## Profiles
 
-A profile shows the owner every post they have written, including solo posts and today's post before release, labelled so the owner can tell who sees each one. An active friend sees released `friends` posts only. Anyone else sees the name, username, bio, and streak but no posts, whether the account is public or private. Blocking in either direction hides the whole profile.
+A profile shows the owner every post they have written, including solo posts and today's post before release, labelled so the owner can tell who sees each one. A public account exposes its public name, username, bio, avatar, streak summary, and released `friends` posts to anyone, including visitors without a session. A private account remains discoverable by username, but non-friends receive only that username and a generic private-profile state. An active friend sees the normal private profile and its released `friends` posts. Blocking in either direction hides the whole profile from a known signed-in viewer.
 
-The bio and streak are visible to any signed-in user when the account is public, and only to active friends when it is private. The owner always sees their own. The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
+The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
 
-## Shared links
+## Public post access
 
-Shared links do not create account grants.
+Account visibility is the only anonymous journal-read grant. A released `friends` post from a public account is readable through its profile and direct URL without signing in. Changing the account to private, changing the post to `solo`, making it unreleased, deleting it, or moving it to Trash removes that access immediately. Private-account posts still require the owner or an active friend. `solo` and unreleased posts remain owner-only. There are no opaque share links or per-post public tokens.
 
-A public account can create an opaque, unlisted link for a released non-solo post. Anyone with the link can view that post without signing in. The post does not become discoverable through profile or search views. Links do not expire automatically, but the author can revoke them. Deleting the post or making the account private also invalidates its links. Forwarded links work until invalidated, and downloaded copies cannot be recalled.
-
-For a private account, a link grants no access. A viewer must sign in and be an active friend. Solo posts cannot have public links.
+Public avatars and media attached to publicly readable posts use an authorized Worker route that checks the current parent profile or post on every request. Anonymous reads do not use permanent public object URLs or signed URL windows. Downloaded copies cannot be recalled.
 
 ## Media and supported devices
 

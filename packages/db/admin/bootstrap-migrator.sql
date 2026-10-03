@@ -36,6 +36,7 @@ BEGIN
     'age_declarations',
     'data_export_requests',
     'data_export_object_cleanup_tasks',
+    'data_export_cleanup_incidents',
     'legal_document_versions',
     'messaging_participants',
     'operator_cases',
@@ -55,7 +56,6 @@ BEGIN
 
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
-    GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
     GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;
     GRANT SELECT, INSERT ON TABLE public.terms_acceptances TO app;

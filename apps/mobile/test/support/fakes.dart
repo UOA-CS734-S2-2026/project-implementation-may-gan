@@ -20,6 +20,7 @@ import 'package:dayli_mobile/compose/media_picker.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:dayli_mobile/settings/account_export_client.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
@@ -487,6 +488,7 @@ class TestHarness {
     FakePostClient? posts,
     this.uploadMedia = true,
     this.effectiveTerms = false,
+    this.accountExports,
     FakeProfileClient? profiles,
     FakeInteractionsClient? interactions,
   }) : friends = friends ?? FakeFriendsClient(),
@@ -606,12 +608,14 @@ class TestHarness {
   /// False gives the app no upload client, so picked media stays on the device.
   final bool uploadMedia;
   final bool effectiveTerms;
+  final AccountExportClient? accountExports;
   int legalProofRequests = 0;
   List<String?>? signupProofHeaders;
   late final SessionController session;
 
   AppServices get services => AppServices(
     session: session,
+    accountExports: accountExports,
     postingDays: postingDays,
     feed: feed,
     posts: posts,

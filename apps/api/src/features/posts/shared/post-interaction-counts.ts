@@ -18,7 +18,7 @@ const none: PostInteractionCounts = { likeCount: 0, viewerHasLiked: false, comme
  */
 export async function readInteractionCounts(
   database: Pick<DayliDatabase, "select">,
-  viewerId: string,
+  viewerId: string | null,
   postIds: string[],
 ): Promise<(postId: string) => PostInteractionCounts> {
   if (postIds.length === 0) return () => none;
@@ -29,10 +29,13 @@ export async function readInteractionCounts(
       .from(postLikes)
       .where(inArray(postLikes.postId, postIds))
       .groupBy(postLikes.postId),
-    database
-      .select({ postId: postLikes.postId })
-      .from(postLikes)
-      .where(and(inArray(postLikes.postId, postIds), eq(postLikes.userId, viewerId))),
+    // A signed-out reader of a public post has no likes of their own.
+    viewerId === null
+      ? Promise.resolve([])
+      : database
+        .select({ postId: postLikes.postId })
+        .from(postLikes)
+        .where(and(inArray(postLikes.postId, postIds), eq(postLikes.userId, viewerId))),
     database
       .select({ postId: postComments.postId, count: count() })
       .from(postComments)

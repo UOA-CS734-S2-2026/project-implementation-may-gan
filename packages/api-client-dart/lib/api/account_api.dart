@@ -152,6 +152,71 @@ class AccountApi {
     return null;
   }
 
+  /// Download a ready export through a fresh authenticated stream
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] requestId (required):
+  Future<Response> accountDownloadExportWithHttpInfo(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/export/{requestId}/download'
+        .replaceAll('{requestId}', requestId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Download a ready export through a fresh authenticated stream
+  ///
+  /// Parameters:
+  ///
+  /// * [String] requestId (required):
+  Future<MultipartFile?> accountDownloadExport(
+    String requestId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountDownloadExportWithHttpInfo(
+      requestId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
   /// Read the authenticated account's deletion status
   ///
   /// Content-free state and database-timed deadlines. An absent lifecycle record is active.
@@ -205,6 +270,59 @@ class AccountApi {
         await _decodeBodyBytes(response),
         'AccountDeletionStatus',
       ) as AccountDeletionStatus;
+    }
+    return null;
+  }
+
+  /// Read the owner's export request state
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> accountGetExportStatusWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/export';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read the owner's export request state
+  Future<AccountExportStatus?> accountGetExportStatus({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountGetExportStatusWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'AccountExportStatus',
+      ) as AccountExportStatus;
     }
     return null;
   }
@@ -350,6 +468,59 @@ class AccountApi {
         await _decodeBodyBytes(response),
         'AccountDeletionRequestResult',
       ) as AccountDeletionRequestResult;
+    }
+    return null;
+  }
+
+  /// Request one private account export
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> accountRequestExportWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/account/export/request';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Request one private account export
+  Future<AccountExportRequestResult?> accountRequestExport({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await accountRequestExportWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'AccountExportRequestResult',
+      ) as AccountExportRequestResult;
     }
     return null;
   }
