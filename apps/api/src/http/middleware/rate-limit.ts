@@ -43,6 +43,7 @@ export function rateLimitActionFor(request: Request): ActionRateLimitPolicy | un
   if (method === "POST" && pathname === "/api/v1/account/reauthenticate/google") return { action: "reauthenticate_google", binding: "directPush" };
   if (method === "POST" && pathname === "/api/v1/account/deletion/request") return { action: "request_deletion", binding: "directPush" };
   if (method === "POST" && pathname === "/api/v1/account/deletion/cancel") return { action: "cancel_deletion", binding: "directPush" };
+  if (method === "POST" && pathname === "/api/v1/account/export/request") return { action: "request_export", binding: "directPush" };
   if (method === "POST" && /^\/api\/v1\/conversations\/[^/]+\/messages$/.test(pathname)) return { action: "send_message", binding: "message" };
   if (method === "POST" && pathname === "/api/v1/conversations/direct") return { action: "create_direct_conversation", binding: "directPush" };
   if (method === "POST" && pathname === "/api/v1/realtime/tickets") return { action: "create_realtime_ticket", binding: "realtime" };

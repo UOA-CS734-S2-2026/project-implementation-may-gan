@@ -7,9 +7,16 @@ export interface AuthenticatedActor {
   sessionId?: string;
 }
 
-/** Hono environment for routes that read the verified authenticated actor. */
+/** Hono environment for routes that require a verified authenticated actor. */
 export interface AuthenticatedApiEnv extends Env {
   Variables: {
     actor: AuthenticatedActor;
+  };
+}
+
+/** Hono environment for public reads whose verified actor may be absent. */
+export interface OptionalAuthenticatedApiEnv extends Env {
+  Variables: {
+    actor: AuthenticatedActor | null;
   };
 }
