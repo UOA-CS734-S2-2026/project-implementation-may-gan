@@ -19,10 +19,16 @@ import 'private_media.dart';
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({super.key, required this.postId, this.intent});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    this.intent,
+    this.intentActorId,
+  });
 
   final String postId;
   final PublicActionIntent? intent;
+  final String? intentActorId;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -91,7 +97,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   void didUpdateWidget(covariant PostDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.postId != widget.postId ||
-        oldWidget.intent != widget.intent) {
+        oldWidget.intent != widget.intent ||
+        oldWidget.intentActorId != widget.intentActorId) {
       _syncActor(force: true);
     }
   }
@@ -484,7 +491,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               ],
               const SizedBox(height: 20),
               if (widget.intent != null &&
-                  _session?.status == SessionStatus.signedIn)
+                  _session?.status == SessionStatus.signedIn &&
+                  widget.intentActorId == _session?.user?.id)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
@@ -534,12 +542,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   void _interaction(PublicActionIntent action) {
     if (_session?.status != SessionStatus.signedIn) {
-      context.go(
-        PublicReturnIntent(
-          target: '/posts/${widget.postId}',
-          action: action,
-        ).authLocation,
+      final intent = _session?.issuePublicReturnIntent(
+        '/posts/${widget.postId}',
+        action,
       );
+      context.go(intent?.authLocation() ?? '/sign-in');
       return;
     }
     setState(() {

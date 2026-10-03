@@ -6,7 +6,6 @@ import '../app/theme.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import 'native_session.dart';
-import 'public_return_intent.dart';
 
 class UsernameSetupScreen extends StatefulWidget {
   const UsernameSetupScreen({super.key});
@@ -41,9 +40,9 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       _error = null;
     });
     try {
-      final returnIntent = PublicReturnIntent.fromAuthUri(
-        GoRouterState.of(context).uri,
-      );
+      final returnIntent = AppScope.of(
+        context,
+      ).session.resolvePublicReturnIntent(GoRouterState.of(context).uri);
       await AppScope.of(context).session.completeUsernameSetup(
         username: username,
         publicName: _publicName.text,

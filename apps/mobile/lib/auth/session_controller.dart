@@ -8,6 +8,7 @@ import 'package:http/http.dart' show ClientException;
 
 import '../drafts/draft_store.dart';
 import 'native_session.dart';
+import 'public_return_intent.dart';
 
 enum SessionStatus { unknown, signedOut, needsUsernameSetup, signedIn }
 
@@ -111,6 +112,8 @@ class SessionController extends ChangeNotifier {
   SessionUser? _user;
   String? _startedSessionUserId;
   int _sessionGeneration = 0;
+  final PublicReturnIntentRegistry _publicReturnIntents =
+      PublicReturnIntentRegistry();
 
   SessionStatus get status => _status;
   SessionUser? get user => _user;
@@ -120,6 +123,31 @@ class SessionController extends ChangeNotifier {
   int get generation => _sessionGeneration;
 
   Future<String?> bearerToken() => _session.bearerToken();
+
+  PublicReturnIntent? issuePublicReturnIntent(
+    String target,
+    PublicActionIntent action,
+  ) {
+    if (_status != SessionStatus.signedOut) {
+      _publicReturnIntents.clear();
+      return null;
+    }
+    return _publicReturnIntents.issue(target, action);
+  }
+
+  PublicReturnIntent? resolvePublicReturnIntent(Uri uri) =>
+      _publicReturnIntents.resolveAuth(uri, actorId: _user?.id);
+
+  PublicReturnIntent? consumePublicReturnIntent(Uri uri) {
+    final actorId = _status == SessionStatus.signedIn ? _user?.id : null;
+    if (actorId == null) {
+      _publicReturnIntents.clear();
+      return null;
+    }
+    return _publicReturnIntents.consumePublic(uri, actorId: actorId);
+  }
+
+  void clearPublicReturnIntent() => _publicReturnIntents.clear();
 
   /// Restores the stored session. When the network is unreachable the cached
   /// identity is used so the author can keep drafting offline.
@@ -252,6 +280,7 @@ class SessionController extends ChangeNotifier {
   /// Signs out and removes this user's protected draft, and the media saved
   /// for it, from the device.
   Future<void> signOut() async {
+    _publicReturnIntents.clear();
     final userId = _user?.id;
     // Fence a late authenticated startup before its cleanup awaits.
     _invalidateSessionStartup();
@@ -281,7 +310,10 @@ class SessionController extends ChangeNotifier {
   }
 
   /// Called when the API rejects the stored session.
-  Future<void> sessionExpired() => _signedOutLocally();
+  Future<void> sessionExpired() {
+    _publicReturnIntents.clear();
+    return _signedOutLocally();
+  }
 
   Future<void> _beforeCredentialReplacement() async {
     // Fence existing startup before old-bearer cleanup. The hook can await
