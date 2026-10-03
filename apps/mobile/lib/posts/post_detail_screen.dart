@@ -10,6 +10,7 @@ import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
+import '../ui/voice_player.dart';
 
 import 'edit_post_screen.dart';
 import 'post_revisions_screen.dart';
@@ -226,6 +227,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
+  /// A new URL for the post's voice memo, or null when it can't be read now.
+  Future<Uri?> _freshVoiceMemoUrl(String postId) async {
+    final result = await AppScope.of(context).posts.voiceMemo(postId);
+    return switch (result) {
+      ApiSuccess(value: final memo) => memo.url,
+      ApiError() => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -462,6 +472,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               if (post.media.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _PostMedia(post: post),
+              ],
+              if (post.voiceMemo?.url case final url?) ...[
+                const SizedBox(height: 16),
+                // Starts only when played. A URL that has expired is replaced
+                // once, by asking the server again.
+                VoicePlayerPill.network(
+                  key: ValueKey('post.voiceMemo.${post.id}'),
+                  url: url,
+                  label: post.viewerIsAuthor
+                      ? 'Your voice memo'
+                      : "${post.displayName}'s voice memo",
+                  onRefreshUrl: () => _freshVoiceMemoUrl(post.id),
+                ),
               ],
               const SizedBox(height: 18),
               Text(

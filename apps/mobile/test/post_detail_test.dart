@@ -760,6 +760,145 @@ void main() {
     expect(first.semanticLabel, "Friend 1's photo 1 of 2");
   });
 
+  group('a voice memo', () {
+    late FakeVideoPlatform videos;
+
+    setUp(() {
+      videos = FakeVideoPlatform()..mediaDuration = const Duration(seconds: 34);
+      VideoPlayerPlatform.instance = videos;
+    });
+
+    String time(WidgetTester tester) =>
+        tester.widget<Text>(find.byKey(const Key('voicePlayer.time'))).data!;
+
+    testWidgets('shows a play control with its length, and stays silent', (
+      tester,
+    ) async {
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('voicePlayer')), findsOneWidget);
+      expect(time(tester), '0:00 / 0:34');
+      expect(videos.sources.single, 'https://storage.example.test/vm-1?sig=1');
+      // Never starts by itself.
+      expect(videos.calls, isNot(contains('play')));
+    });
+
+    testWidgets('plays when the play control is tapped', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('voicePlayer.toggle')));
+      await tester.pump();
+
+      expect(videos.calls, contains('play'));
+    });
+
+    testWidgets('names whose memo it is', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final friends = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      await openPost(tester, friends);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel("Friend 1's voice memo"), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('lets the author hear their own', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(
+            postDetail('1', viewerIsAuthor: true, voiceMemo: voiceMemoOfPost()),
+          ),
+        ]),
+      );
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Your voice memo'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('is absent from a post without one', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1'))]),
+      );
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('voicePlayer')), findsNothing);
+      expect(videos.sources, isEmpty);
+    });
+
+    testWidgets('asks once for a fresh URL after the first one expired', (
+      tester,
+    ) async {
+      videos.failures = 1;
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      harness.posts.voiceMemoResults.add(
+        ApiSuccess(
+          voiceMemoOfPost(url: 'https://storage.example.test/vm-1?sig=2'),
+        ),
+      );
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(harness.posts.refreshedVoiceMemos, ['1']);
+      expect(videos.sources, [
+        'https://storage.example.test/vm-1?sig=1',
+        'https://storage.example.test/vm-1?sig=2',
+      ]);
+      expect(time(tester), '0:00 / 0:34');
+    });
+
+    testWidgets('says it is unavailable when access has gone', (tester) async {
+      videos.failures = 1;
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      // The refresh is refused: the post was deleted or access was removed.
+      await openPost(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(harness.posts.refreshedVoiceMemos, ['1']);
+      expect(find.text('Voice memo unavailable'), findsOneWidget);
+    });
+
+    testWidgets('never plays from a feed card', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', voiceMemo: voiceMemoOfPost())),
+        ]),
+      );
+      await signIn(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('home.feed.post.1')), findsOneWidget);
+      expect(find.byKey(const Key('voicePlayer')), findsNothing);
+      expect(videos.sources, isEmpty);
+      expect(videos.calls, isNot(contains('play')));
+    });
+  });
+
   testWidgets('plays a video on the post, muted and looping', (tester) async {
     final videos = FakeVideoPlatform();
     VideoPlayerPlatform.instance = videos;

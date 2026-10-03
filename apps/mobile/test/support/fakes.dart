@@ -399,6 +399,18 @@ class FakePostClient implements PostClient {
         : mediaResults.removeAt(0);
   }
 
+  /// Voice memo refresh results in order; refused once they run out.
+  final voiceMemoResults = <ApiResult<PostVoiceMemo>>[];
+  final refreshedVoiceMemos = <String>[];
+
+  @override
+  Future<ApiResult<PostVoiceMemo>> voiceMemo(String postId) async {
+    refreshedVoiceMemos.add(postId);
+    return voiceMemoResults.isEmpty
+        ? const ApiError(NotFound())
+        : voiceMemoResults.removeAt(0);
+  }
+
   /// Edit results in order; the last repeats.
   final updateResults = <ApiResult<PostDetail>>[
     const ApiError(ServiceUnavailable()),
@@ -481,6 +493,7 @@ PostDetail postDetail(
   int revisionCount = 0,
   int rating = 8,
   List<PostMedia> media = const [],
+  PostVoiceMemo? voiceMemo,
 }) => PostDetail(
   id: id,
   authorId: 'author-$id',
@@ -497,6 +510,18 @@ PostDetail postDetail(
   viewerIsAuthor: viewerIsAuthor,
   revisionCount: revisionCount,
   media: media,
+  voiceMemo: voiceMemo,
+);
+
+/// A signed voice memo for widget tests.
+PostVoiceMemo voiceMemoOfPost({
+  String id = 'vm-1',
+  String url = 'https://storage.example.test/vm-1?sig=1',
+}) => PostVoiceMemo(
+  id: id,
+  contentType: 'audio/mp4',
+  url: Uri.parse(url),
+  expiresAt: DateTime.utc(2026, 9, 30, 3, 5),
 );
 
 class FakePostingDayClient implements PostingDayClient {
