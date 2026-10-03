@@ -5,9 +5,11 @@ description: Exercise Dayli Durable Objects and browser proxy bindings in local 
 
 # Worker runtime tests
 
-Some backend behavior only exists because Cloudflare Workers supplies it. A mocked Durable Object namespace cannot prove that a WebSocket upgrade reaches the right object. Calling the browser proxy as an ordinary function cannot prove that its named service binding stays separate from the public API handler.
+Runtime tests check application code in the environment it depends on. For Cloudflare Workers, that means using a local version of the Worker runtime, not treating everything as an ordinary function running in Node.js.
 
-Worker runtime tests keep that boundary real. Dayli runs the code in the Cloudflare Vitest runtime or workerd, with local bindings described by Wrangler configuration. They sit between focused API tests and a deployed staging check. They are still local, but they exercise runtime APIs that Node or jsdom does not provide.
+These tests matter when the hosting platform supplies part of the behaviour. Replacing those features with mocks can help test our logic, but it cannot prove that the real runtime connects services or handles WebSockets as expected.
+
+Dayli uses local Worker runtime tests for realtime messaging and the browser proxy. For example, the proxy tests send requests through actual local service bindings to check that the private proxy entry point stays separate from the public API. These tests exercise Cloudflare-specific behaviour locally; they do not prove the deployed configuration is correct.
 
 Run commands on this page from the repository root.
 

@@ -5,13 +5,13 @@ description: Write focused tests for Dayli domain logic, API behavior, React com
 
 # Unit and component tests
 
-A small change can break something you weren't even working on. Maybe you adjust username search and the results still appear, but clicking one now opens the wrong profile. The app starts fine, so you might not notice until someone tries it.
+A **unit test** checks a small piece of logic on its own. A **component test** checks a piece of the interface by interacting with its controls and checking the result. Flutter calls its interface checks **widget tests**.
 
-Unit and component tests help catch those small failures while we're working. They're quick enough to run after a change, without starting the whole app and clicking through every screen. Less "surely that still works", more checking that it actually does.
+These tests matter because a small change can break something without stopping the app from running. They give us quick, repeatable checks while we're working, without starting every service and clicking through every screen. Less "surely that still works", more checking that it actually does.
 
-A **unit test** checks a small piece of logic on its own, such as deciding whether someone has already posted today. A **component test** checks a piece of the interface, such as entering a username and seeing a clickable search result. Flutter calls these interface checks **widget tests**.
+Dayli uses unit tests for rules such as calculating the Auckland posting day and rejecting a second daily post. We use component and widget tests for features such as username search on web and displaying the feed on mobile.
 
-For example, a username-search test can supply a sample result for Ada, type into the search box, and check that Ada's name appears with the right profile link. That catches a broken label or destination without needing a real account or API server. It doesn't prove that the deployed search API works, which is why we also need the other [test layers](./).
+For example, search can display the right person but link to the wrong profile. Our web component test supplies a sample result, types into the search box, and checks the result's name and destination. That catches a broken link without needing a real account or API server. It doesn't prove that the deployed search API works, which is why we also need the other [test layers](./).
 
 Keep the code you're checking real. Replace dependencies outside that check, such as the clock, database access, network client, or router, with controlled test versions. These replacements are called fakes or mocks. They let us choose the situation we're testing, including failures that would be awkward to reproduce by hand.
 

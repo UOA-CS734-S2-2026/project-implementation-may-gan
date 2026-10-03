@@ -5,11 +5,13 @@ description: Understand Dayli's implemented staging authentication monitor, its 
 
 # Synthetic testing
 
-A health endpoint can return `200` while sign-in is broken. The landing page may load even though the protected-page redirect loses its return path, the session cookie has the wrong attributes, or sign-out leaves another tab authenticated.
+Synthetic tests repeatedly imitate a user's actions against a deployed application. They use a controlled account and a known journey, often on a schedule, to check whether a feature is still working after deployment.
 
-A synthetic test checks a small deployed user journey on a schedule. It behaves like a controlled user, using a dedicated account and known steps, so it can catch failures in the running web app and its deployed configuration. Dayli has an implemented synthetic authentication journey for staging.
+These tests matter because an app can break between releases too. A service might become unavailable or its configuration might change. Checking that a page loads isn't enough if people can no longer sign in. A scheduled user journey can catch that kind of failure without waiting for someone to report it.
 
-"Synthetic" describes the journey and its controlled account. It is not the same as synthetic test data inside a local unit test. It is also not a mocked check. This browser opens the deployed staging site and uses the real staging authentication path.
+Dayli has an implemented synthetic authentication journey for staging. It opens the deployed site, signs in with a dedicated test account, checks protected access, and signs out. It can run hourly when its automation flag is enabled. The workflow's existence does not tell us whether that flag is currently enabled or recent runs are passing.
+
+This uses the real staging authentication path, not a mocked API. Synthetic test data in a local unit test is a different thing: here, "synthetic" describes the controlled user journey.
 
 ## Where Dayli uses these tests
 

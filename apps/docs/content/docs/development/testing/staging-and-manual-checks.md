@@ -5,11 +5,13 @@ description: Use Dayli's reviewed GitHub workflows when a check needs deployed C
 
 # Staging and manual checks
 
-Local tests can all pass while staging is misconfigured. A Worker binding can point at the wrong resource, a migration can be missing, or the web and API deployments can come from different revisions. These failures depend on deployed resources, so adding another mock will not answer the question.
+Staging checks test the application in its deployed test environment. Manual checks are performed by a person, who follows a feature's steps and records the result rather than relying only on an automated script.
 
-Staging checks run only after the local layers have passed and only through the repository's dedicated GitHub workflows. Those workflows keep Cloudflare, Neon, and application credentials in the `staging` environment. Do not copy their commands into a terminal with live secrets just to get faster feedback.
+These checks matter because working on our computers doesn't guarantee that the deployed app works too. Hosting settings, credentials, and external services can differ. A person can also notice confusing interactions or device-specific problems that our automated checks don't cover.
 
-A manual check is useful when a person needs to inspect a new interaction or diagnose a failed automated check. Record what was checked, the deployed revision if it can be established, and any limitation. "The page opened" is not enough evidence for a data or authentication change.
+Dayli uses protected GitHub workflows to check the deployed API's connection to its staging database. We also use recorded manual checks for features such as mobile uploads and native sign-in when a local test cannot establish the deployed or device behaviour. A successful check is evidence for that specific feature and revision, not the entire app.
+
+Credentialed automated staging checks belong in the repository's dedicated workflows, which keep secrets in the GitHub `staging` environment. Do not copy their commands into a terminal with live secrets. For a manual feature check, record the steps, result, deployed revision if known, and any limitations.
 
 ## Where Dayli uses these tests
 

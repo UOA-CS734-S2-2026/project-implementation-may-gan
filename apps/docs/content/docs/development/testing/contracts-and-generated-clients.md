@@ -5,9 +5,11 @@ description: Keep Dayli's OpenAPI document, TypeScript client, and Dart client i
 
 # Contracts and generated clients
 
-A backend route can be correct while an app still cannot call it. Rename a response field in the API and the old TypeScript or Dart client may keep compiling until that particular path is used. This is a compatibility problem between packages, not a user journey through the running app.
+Contract checks test the agreement between an API and the applications using it. That agreement describes the requests an app can send and the responses it should receive. Generated clients turn those definitions into code the frontend can use to call the API.
 
-Dayli generates an OpenAPI document from the Hono application, then generates TypeScript and Dart clients from that document. The contract check repeats that process and fails if the tracked generated files no longer match. It also checks a few Dayli-specific details that a generic generator does not know about, such as preserving date-only values as strings and exposing every relationship operation.
+These checks matter because the backend and frontend can get out of sync. If an API field changes but a client still expects the old format, a feature can fail even though both projects build successfully. Checking the generated files helps catch that mismatch before someone uses the app.
+
+Dayli generates its OpenAPI description from the backend and uses it to generate TypeScript and Dart clients for web and mobile. Our checks regenerate those files and detect changes that haven't been committed. For example, they also check that an Auckland calendar date remains a date-only string instead of being converted into a timestamp. This checks the contract, not whether every API request works at runtime.
 
 Run commands on this page from the repository root.
 
