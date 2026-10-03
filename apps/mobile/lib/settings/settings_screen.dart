@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
@@ -242,6 +243,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               context,
                               size: DayliTextSize.sm,
                               color: colors.foregroundTertiary,
+                            ),
+                          ),
+                          secondary: SvgPicture.asset(
+                            AppScope.of(context).biometric.isEnabled
+                                ? 'assets/wdcc/face_id.svg'
+                                : 'assets/wdcc/face_id_off.svg',
+                            width: 24,
+                            height: 24,
+                            colorFilter: ColorFilter.mode(
+                              AppScope.of(context).biometric.isEnabled
+                                  ? colors.primary
+                                  : colors.foregroundSecondary,
+                              BlendMode.srcIn,
                             ),
                           ),
                           value: AppScope.of(context).biometric.isEnabled,
