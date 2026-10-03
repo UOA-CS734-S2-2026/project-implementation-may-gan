@@ -51,12 +51,19 @@ export function validateBrowserProxyMode(mode) {
   return mode;
 }
 
+export function validatePushReadiness(value) {
+  if (value !== "true" && value !== "false") {
+    fail("PUSH_READINESS must be true or false.");
+  }
+  return value;
+}
+
 function git(args, { cwd, stdio = "pipe" } = {}) {
   const result = execFileSync("git", args, { cwd, encoding: "utf8", stdio });
   return typeof result === "string" ? result.trim() : "";
 }
 
-export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, cwd = process.cwd() }) {
+export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, pushReadiness, cwd = process.cwd() }) {
   const mainSha = git(["rev-parse", "origin/main"], { cwd });
   const hasCommit = (sha) => {
     try {
@@ -82,11 +89,12 @@ export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, br
     migrationMode: selectMigrationMode({ eventSha, inputSha }),
     toolingSha,
     browserProxyEnabled: validateBrowserProxyMode(browserProxyEnabled),
+    pushReadiness: validatePushReadiness(pushReadiness),
   };
 }
 
-function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled }, outputPath) {
-  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\n`;
+function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled, pushReadiness }, outputPath) {
+  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\npush_readiness=${pushReadiness}\n`;
   if (outputPath) {
     appendFileSync(outputPath, output);
   } else {
@@ -101,6 +109,7 @@ function main() {
     dispatchSha: process.env.DISPATCH_SHA,
     toolingSha: process.env.TOOLING_SHA,
     browserProxyEnabled: process.env.STAGING_BROWSER_PROXY_ENABLED,
+    pushReadiness: process.env.PUSH_READINESS,
   });
   writeOutputs(release, process.env.GITHUB_OUTPUT);
 }

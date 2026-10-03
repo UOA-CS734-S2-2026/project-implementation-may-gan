@@ -1,11 +1,17 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { buildFcmPayload, createFcmHttpV1Sender } from "./fcm";
+import { buildFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount } from "./fcm";
 import { createPushOutboxHandler } from "./push-dispatcher";
 
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
 
 describe("FCM HTTP v1 adapter", () => {
+  it("normalizes standard Firebase service accounts and preserves the prior Worker shape", () => {
+    expect(normalizeFcmServiceAccount({ client_email: "worker@example.test", private_key: "key", project_id: "project" })).toEqual({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" });
+    expect(normalizeFcmServiceAccount({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" })).toEqual({ clientEmail: "worker@example.test", privateKey: "key", projectId: "project" });
+    expect(normalizeFcmServiceAccount({ client_email: "worker@example.test" })).toBeUndefined();
+  });
+
   it("constructs a generic, body-free notification payload", () => {
     const payload = JSON.stringify(buildFcmPayload({ token: "secret-device-token", eventId: "event", conversationId: "conversation" }));
     expect(payload).toContain("New message on Dayli");
