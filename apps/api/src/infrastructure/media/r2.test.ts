@@ -36,6 +36,16 @@ describe("readR2RuntimeConfiguration", () => {
 });
 
 describe("createPresignedUploadUrl", () => {
+  it("rejects an unreviewed prefix through aliases and direct signing arguments", async () => {
+    const key = "private/unreviewed/archive";
+    const base = { contentType: "image/jpeg", byteSize: 1024, expiresInSeconds: 900 };
+    await expect(createPresignedUploadUrl(configuration, { ...base, objectKey: key })).rejects.toThrow(/owned-media namespace/);
+    await expect(createPresignedUploadUrl(configuration, { ...base, objectKey: "private/unreviewed/direct" }))
+      .rejects.toThrow(/owned-media namespace/);
+    await expect(createPresignedUploadUrl(configuration, { ...base, objectKey: "media/owner/../../secret" }))
+      .rejects.toThrow(/owned-media namespace/);
+  });
+
   it("builds a scoped, expiring presigned PUT URL without exposing credentials", async () => {
     const now = new Date("2026-09-09T12:00:00.000Z");
     const upload = await createPresignedUploadUrl(configuration, {
