@@ -6,14 +6,14 @@ import { useSession } from "@/lib/session/hooks";
 
 /** Pages of one profile's posts, keyed by account so a switch never shows another user's view. */
 export function useProfilePostsQuery(username: string) {
-  const { user } = useSession();
+  const { user, isPending } = useSession();
   const userId = user?.id ?? "anonymous";
   return useInfiniteQuery({
     queryKey: postKeys.profile(userId, username),
-    enabled: Boolean(user?.id && username),
+    enabled: !isPending && Boolean(username),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => unwrapPostResult(await postsApi.profilePage(username, pageParam)),
-    getNextPageParam: (page) => (page.hasMore ? page.nextCursor ?? undefined : undefined),
+    getNextPageParam: (page) => page.kind !== "restricted" && page.hasMore ? page.nextCursor ?? undefined : undefined,
     retry: false,
   });
 }
