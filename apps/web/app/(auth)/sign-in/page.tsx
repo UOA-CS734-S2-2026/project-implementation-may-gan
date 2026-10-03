@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
@@ -14,6 +14,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
 import { getUsernameProfile } from "@/lib/profile/username";
+import { useSession } from "@/lib/session/hooks";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -43,6 +44,19 @@ function GoogleSignInError() {
 function SignInForm() {
   const router = useRouter();
   const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
+  const { user } = useSession();
+  const [signInComplete, setSignInComplete] = useState(false);
+
+  useEffect(() => {
+    if (!signInComplete || !user) return;
+    let current = true;
+    void getUsernameProfile().then((profile) => {
+      if (current) router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
+    }).catch(() => {
+      if (current) router.push(returnTo);
+    });
+    return () => { current = false; };
+  }, [returnTo, router, signInComplete, user]);
 
   const {
     control,
@@ -62,12 +76,7 @@ function SignInForm() {
       return;
     }
 
-    try {
-      const profile = await getUsernameProfile();
-      router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
-    } catch {
-      router.push(returnTo);
-    }
+    setSignInComplete(true);
   };
 
   return (
