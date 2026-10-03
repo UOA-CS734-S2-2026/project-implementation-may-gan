@@ -723,4 +723,17 @@ class FakeProfileClient implements ProfileClient {
     usernameChanges.add(username);
     return changeResult ?? ApiSuccess(username);
   }
+
+  /// What [moodHistory] returns; unavailable unless a test sets it.
+  ApiResult<MoodHistory> moodResult = const ApiError(ServiceUnavailable());
+  final moodRequests = <(String, MoodRange)>[];
+
+  @override
+  Future<ApiResult<MoodHistory>> moodHistory(
+    String username,
+    MoodRange range,
+  ) async {
+    moodRequests.add((username, range));
+    return moodResult;
+  }
 }

@@ -8,6 +8,7 @@ import '../app/app_scope.dart';
 import '../auth/session_controller.dart';
 import '../app/theme.dart';
 import '../profile/profile_posts.dart';
+import '../profile/mood_history_card.dart';
 import '../profile/profile_about.dart';
 import '../profile/profile_stats.dart';
 import '../ui/dayli_button.dart';
@@ -44,6 +45,9 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   /// Posts for the profile on screen, for the account that loaded them.
   ProfilePostsController? _posts;
   (String?, String)? _postsFor;
+
+  /// Bumped on pull to refresh so the owner's mood history reloads too.
+  int _moodRefresh = 0;
 
   /// Details first: they resolve a handle the owner has since changed, and the
   /// relationship card is then read for the current one.
@@ -151,6 +155,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   Future<void> _refresh() async {
     setState(() {
       _profile = _load();
+      _moodRefresh++;
     });
     await Future.wait([?_profile, ?_posts?.refresh()]);
   }
@@ -423,6 +428,17 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
               ],
             ),
           ),
+          // The same people who can see the posts: the owner and friends.
+          if (posts != null)
+            MoodHistoryCard(
+              // A new account never sees the previous one's view.
+              key: ValueKey(('mood', _accountId, person.username)),
+              profiles: AppScope.of(context).profiles,
+              username: person.username,
+              displayName: person.displayName,
+              isMe: isMe,
+              refreshCount: _moodRefresh,
+            ),
           const SizedBox(height: 20),
           if (posts != null)
             ProfilePostsSection(

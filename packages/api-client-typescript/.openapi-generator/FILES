@@ -69,6 +69,9 @@ src/models/Message.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/MoodDay.ts
+src/models/MoodHistory.ts
+src/models/MoodPeriodSummary.ts
 src/models/PasswordReauthenticationGrant.ts
 src/models/PasswordReauthenticationRequest.ts
 src/models/PendingRelationshipRequest.ts
