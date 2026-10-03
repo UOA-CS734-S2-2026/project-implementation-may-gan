@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
@@ -44,9 +43,8 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
         username: username,
         publicName: _publicName.text,
       );
-      if (mounted) {
-        context.go('/');
-      }
+      // The router's session redirect leaves this page once setup completes,
+      // opening a composer link that was waiting for it, or home.
     } on AuthenticationFailure catch (error) {
       if (mounted) {
         setState(

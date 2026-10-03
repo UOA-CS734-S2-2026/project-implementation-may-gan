@@ -15,8 +15,14 @@ import 'media_upload_controller.dart';
 /// rating, the words, a note to tomorrow, and who can see it, with the Post
 /// button pinned above the keyboard.
 /// Every edit is saved to protected storage as the author types.
+///
+/// [initialRating] comes from a composer link and has already been checked
+/// against the rating range. It only fills the slider: nothing is posted until
+/// the author chooses who can see the dayli and taps Post.
 class ComposerScreen extends StatefulWidget {
-  const ComposerScreen({super.key});
+  const ComposerScreen({super.key, this.initialRating});
+
+  final int? initialRating;
 
   @override
   State<ComposerScreen> createState() => _ComposerScreenState();
@@ -57,7 +63,23 @@ class _ComposerScreenState extends State<ComposerScreen> {
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    _controller!.load();
+    _controller!.load().then((_) => _prefillRating());
+  }
+
+  @override
+  void didUpdateWidget(ComposerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A second link can reach a composer that is already open.
+    if (widget.initialRating != oldWidget.initialRating) _prefillRating();
+  }
+
+  /// Sets the linked rating, like moving the slider, once today's draft is
+  /// editable. It replaces a rating already in the draft. A posted or missed
+  /// day is left as it is.
+  void _prefillRating() {
+    final rating = widget.initialRating;
+    if (!mounted || rating == null) return;
+    _controller?.update(rating: () => rating);
   }
 
   /// Copies a newly loaded draft into the text fields once, without fighting
