@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPresignedDownloadUrl,
   createPresignedUploadUrl,
+  createR2MediaObjectStore,
   deleteR2Object,
   headR2Object,
   R2ReadInfrastructureError,
@@ -87,6 +88,38 @@ describe("createPresignedUploadUrl", () => {
     const smallSignature = new URL(small.url).searchParams.get("X-Amz-Signature");
     const largeSignature = new URL(large.url).searchParams.get("X-Amz-Signature");
     expect(smallSignature).not.toEqual(largeSignature);
+  });
+});
+
+describe("createR2MediaObjectStore", () => {
+  it("signs an internal request and forwards only supported read preconditions", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new Uint8Array([1]), {
+      status: 206,
+      headers: { "content-range": "bytes 0-0/1" },
+    }));
+    const requestHeaders = new Headers({
+      range: "bytes=0-0",
+      "if-range": '"previous-avatar"',
+      "if-none-match": '"etag"',
+      authorization: "Bearer user-session",
+      cookie: "private=cookie",
+    });
+
+    const response = await createR2MediaObjectStore(configuration).fetch("media/user/object", {
+      method: "GET",
+      headers: requestHeaders,
+    });
+
+    expect(response.status).toBe(206);
+    const [input, init] = fetch.mock.calls[0]!;
+    const sent = input instanceof Request ? input.headers : new Headers(init?.headers);
+    expect(sent.get("range")).toBe("bytes=0-0");
+    expect(sent.get("if-range")).toBe('"previous-avatar"');
+    expect(sent.get("if-none-match")).toBe('"etag"');
+    expect(sent.get("authorization")).toMatch(/^AWS4-HMAC-SHA256 /);
+    expect(sent.get("authorization")).not.toContain("user-session");
+    expect(sent.has("cookie")).toBe(false);
+    expect(sent.get("x-amz-security-token")).toBeNull();
   });
 });
 

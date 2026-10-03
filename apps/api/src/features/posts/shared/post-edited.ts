@@ -5,9 +5,10 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 /**
  * True when the viewer can see that the post was edited. The author sees every
  * edit. Anyone else sees only versions that were already shared with friends,
- * so an edit made while the post was solo never reaches them.
+ * so an edit made while the post was solo never reaches them. A signed-out
+ * viewer is never the author.
  */
-export function postEdited(viewerId: string) {
+export function postEdited(viewerId: string | null) {
   const { posts, postRevisions } = schema;
   return exists(
     new QueryBuilder()
@@ -15,7 +16,9 @@ export function postEdited(viewerId: string) {
       .from(postRevisions)
       .where(and(
         eq(postRevisions.postId, posts.id),
-        or(eq(posts.authorId, viewerId), eq(postRevisions.previousAudience, "friends")),
+        viewerId === null
+          ? eq(postRevisions.previousAudience, "friends")
+          : or(eq(posts.authorId, viewerId), eq(postRevisions.previousAudience, "friends")),
       )),
   ).mapWith(Boolean);
 }

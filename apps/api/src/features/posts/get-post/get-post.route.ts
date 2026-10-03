@@ -1,9 +1,15 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
-import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
-import { signPostVoiceMemo, signPostMedia, type SignMediaDownload } from "../shared/post-media";
+import {
+  routePostMedia,
+  routePostVoiceMemo,
+  signPostVoiceMemo,
+  signPostMedia,
+  type SignMediaDownload,
+} from "../shared/post-media";
 import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "../shared/post-detail.contract";
 import type { PostDetailRepository } from "../shared/post-detail.repository";
 
@@ -17,7 +23,7 @@ export interface GetPostRouteDependencies {
   rateLimiter?: ActorRateLimiter;
 }
 
-const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
+const security: Array<Record<string, string[]>> = [{}, { BearerAuth: [] }, { cookieAuth: [] }];
 
 const getPostRoute = createRoute({
   method: "get",
@@ -25,7 +31,7 @@ const getPostRoute = createRoute({
   tags: ["Posts"],
   operationId: "posts.get",
   summary: "Read one post",
-  description: "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.",
+  description: "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.",
   security,
   request: { params: postIdParamsSchema },
   responses: {
@@ -37,8 +43,8 @@ const getPostRoute = createRoute({
   },
 });
 
-export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
-  app.on("GET", "/api/v1/posts/:postId", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+export function registerGetPostRoute(app: OpenAPIHono<OptionalAuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
+  app.on("GET", "/api/v1/posts/:postId", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {
@@ -48,17 +54,22 @@ export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, depe
     const { postId } = context.req.valid("param");
     const now = dependencies.now?.() ?? new Date();
     try {
-      const post = await dependencies.repository.findPost(context.get("actor").userId, postId, now);
+      const post = await dependencies.repository.findPost(context.get("actor")?.userId ?? null, postId, now);
       if (!post) return apiErrorResponse(context, 404, "NOT_FOUND", "The post was not found.");
+      const { publicMediaDelivery, ...detail } = post;
       const sign = dependencies.signMediaDownload;
-      if ((post.media.length > 0 || post.voiceMemo) && !sign) {
+      if (!publicMediaDelivery && (detail.media.length > 0 || detail.voiceMemo) && !sign) {
         return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Media is temporarily unavailable.");
       }
-      const media = sign ? await signPostMedia(post.media, sign, now) : [];
-      const voiceMemo = sign && post.voiceMemo
-        ? await signPostVoiceMemo(post.voiceMemo, sign, now)
+      const media = publicMediaDelivery
+        ? routePostMedia(detail.media, context.req.url)
+        : sign ? await signPostMedia(detail.media, sign, now) : [];
+      const voiceMemo = detail.voiceMemo
+        ? publicMediaDelivery
+          ? routePostVoiceMemo(detail.voiceMemo, context.req.url)
+          : sign ? await signPostVoiceMemo(detail.voiceMemo, sign, now) : null
         : null;
-      return context.json({ ...post, media, voiceMemo }, 200);
+      return context.json({ ...detail, media, voiceMemo }, 200);
     } catch (error) {
       // Never forward SQL or private content to the client.
       console.error("dayli post read failed", error instanceof Error ? error.name : "unknown");

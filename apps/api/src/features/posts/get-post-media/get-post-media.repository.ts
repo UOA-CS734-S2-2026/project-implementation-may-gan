@@ -2,20 +2,17 @@ import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { audioContentTypes, type VisualContentType } from "@dayli/contracts";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter, type ValidatedPublicLinkGrant } from "../../permissions";
+import { buildDrizzlePostVisibilityFilter } from "../../permissions";
 import type { PostMediaRef } from "../shared/post-media";
 
 export interface PostMediaRepository {
-  /**
-   * Null unless the media is attached to a post the viewer may read now.
-   * A grant is accepted only after #41 has validated a public link token.
-   */
+  /** Null unless the media is attached to a post the viewer may read now. */
   findMedia(
     viewerId: string | null,
     postId: string,
     mediaId: string,
     now: Date,
-    validatedPublicLinkGrant?: ValidatedPublicLinkGrant,
+    access?: "private" | "parent-authorized",
   ): Promise<PostMediaRef | null>;
 }
 
@@ -26,7 +23,7 @@ export interface PostMediaRepository {
 export function createPostgresPostMediaRepository(database: DayliDatabase): PostMediaRepository {
   const { posts, user, postMedia, mediaReservation } = schema;
   return {
-    async findMedia(viewerId, postId, mediaId, now, validatedPublicLinkGrant) {
+    async findMedia(viewerId, postId, mediaId, now, access = "private") {
       const [row] = await database
         .select({
           id: postMedia.id,
@@ -45,9 +42,8 @@ export function createPostgresPostMediaRepository(database: DayliDatabase): Post
           buildDrizzlePostVisibilityFilter(database, {
             viewer: { userId: viewerId },
             now,
-            action: "media",
+            action: access === "parent-authorized" ? "media" : "private-media",
             mediaId,
-            validatedPublicLinkGrant,
           }),
           // Voice memos are served by their own route.
           notInArray(mediaReservation.contentType, [...audioContentTypes]),

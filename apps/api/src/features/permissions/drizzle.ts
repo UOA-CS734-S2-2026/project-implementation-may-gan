@@ -2,23 +2,21 @@ import { and, desc, eq, exists, isNotNull, isNull, lte, ne, not, notExists, or, 
 import { alias } from "drizzle-orm/pg-core";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
-import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
+import type { PermissionAction, Viewer } from "./policy";
 
 interface DrizzlePostVisibilityInputBase {
   viewer: Viewer;
   now: Date;
-  /** This value is accepted only after #41 has validated the bearer token. */
-  validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type DrizzlePostVisibilityInput = DrizzlePostVisibilityInputBase & (
   | {
-      action: "media";
+      action: "media" | "private-media";
       /** Required for a media-byte check; an old revision reference is not enough. */
       mediaId: string;
     }
   | {
-      action?: Exclude<PermissionAction, "media">;
+      action?: Exclude<PermissionAction, "media" | "private-media">;
       mediaId?: never;
     }
 );
@@ -136,22 +134,20 @@ export function buildDrizzlePostVisibilityFilter(
       not(activeBlock(database, posts.authorId, viewerId)),
     );
 
-  const grant = input.validatedPublicLinkGrant;
-  const publicLink = grant?.active === true && grant.postId.length > 0
-    ? and(
-      eq(posts.id, grant.postId),
-      eq(posts.audience, "friends"),
-      eq(user.profileVisibility, "public"),
-    )
+  // Public access is explicit for direct detail, profile archives, and the
+  // parent-authorized byte route. Generic lists and legacy signed downloads
+  // retain their friend scope.
+  const publicProfile = input.action === "detail" || input.action === "profile" || input.action === "media"
+    ? and(eq(posts.audience, "friends"), eq(user.profileVisibility, "public"))
     : sql`false`;
 
   const access = input.action === "export"
     ? owner
-    : or(owner, and(released, or(friends, publicLink)));
+    : or(owner, and(released, or(friends, publicProfile)));
   const notBlocked = viewerId === null
     ? sql`true`
     : not(activeBlock(database, posts.authorId, viewerId));
-  const media = input.action === "media"
+  const media = input.action === "media" || input.action === "private-media"
     ? attachedMedia(database, posts.id, input.mediaId)
     : sql`true`;
 
@@ -234,12 +230,12 @@ export function findVisiblePostExport(
   return findVisiblePost(database, postId, { ...input, action: "export" });
 }
 
-/** Media authorization is tied to a live post_media row, never revision metadata. */
-export async function findVisiblePostMedia(
+async function findPostMediaForAction(
   database: DayliDatabase,
   postId: string,
   mediaId: string,
   input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+  action: "media" | "private-media",
 ) {
   const [row] = await database
     .select({ media: schema.postMedia, post: schema.posts })
@@ -249,18 +245,39 @@ export async function findVisiblePostMedia(
     .where(and(
       eq(schema.postMedia.postId, postId),
       eq(schema.postMedia.id, mediaId),
-      buildDrizzlePostVisibilityFilter(database, { ...input, action: "media", mediaId }),
+      buildDrizzlePostVisibilityFilter(database, { ...input, action, mediaId }),
     ))
     .limit(1);
   return row ?? null;
+}
+
+/** Media authorization is tied to a live post_media row, never revision metadata. */
+export function findVisiblePostMedia(
+  database: DayliDatabase,
+  postId: string,
+  mediaId: string,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+) {
+  return findPostMediaForAction(database, postId, mediaId, input, "media");
+}
+
+/** Existing signed downloads remain limited to owners and active friends. */
+export function findPrivatelyVisiblePostMedia(
+  database: DayliDatabase,
+  postId: string,
+  mediaId: string,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+) {
+  return findPostMediaForAction(database, postId, mediaId, input, "private-media");
 }
 
 /**
  * True when neither the viewer nor `userColumn`'s person has blocked the other.
  * Lists of likes and comments hide people across a block in either direction.
  */
-export function notBlockedWith(database: Queryable, viewerId: string, userColumn: AnyColumn) {
+export function notBlockedWith(database: Queryable, viewerId: string | null, userColumn: AnyColumn) {
   const { relationshipBlocks } = schema;
+  if (viewerId === null) return sql`true`;
   return notExists(
     database
       .select({ blockerId: relationshipBlocks.blockerId })
@@ -281,7 +298,7 @@ export function notBlockedWith(database: Queryable, viewerId: string, userColumn
  * top-level comment that is itself visible. Lists and counts share this rule.
  * Callers check the post first.
  */
-export function buildDrizzleCommentVisibilityFilter(database: Queryable, viewerId: string) {
+export function buildDrizzleCommentVisibilityFilter(database: Queryable, viewerId: string | null) {
   const { postComments } = schema;
   const parent = alias(postComments, "parent_comment");
   return and(
