@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildBoxWithDeclaredSize,
   buildEsdsBox,
   buildFtypBox,
   buildHdlrBox,
@@ -372,6 +373,40 @@ describe("AAC verification for voice memos", () => {
     ["an 8-bit sample size", { sampleBits: 8 }],
   ])("rejects %s", async (_label, options) => {
     expect(await audioDuration(buildMinimalM4a(5, 44_100, options))).toEqual(malformed);
+  });
+
+  describe("a malformed mp4a sample entry", () => {
+    const boxHeader = (type: string, size: number) => buildBoxWithDeclaredSize(type, size);
+
+    it("accepts well-formed sibling boxes after esds", async () => {
+      // btrt (bitrate) is the usual extra child; its body is three 32-bit fields.
+      const btrt = wrapBox("btrt", new Uint8Array(12));
+      expect(await audioDuration(buildMinimalM4a(5, 44_100, { entryChildren: [btrt, wrapBox("free", new Uint8Array(3))] })))
+        .toEqual({ outcome: "duration", seconds: 5 });
+    });
+
+    it.each<[string, M4aOptions]>([
+      ["an entry size that runs past the stsd box", { entrySizeDelta: 100 }],
+      ["an entry size one byte past the stsd box", { entrySizeDelta: 1 }],
+      ["an entry size shorter than its own esds", { entrySizeDelta: -10 }],
+      ["an entry size that cuts off the fixed fields", { entrySizeDelta: -60 }],
+      ["a later child that overruns the entry", { entryChildren: [boxHeader("btrt", 0x1000)] }],
+      ["a later child that is one byte too long", { entryChildren: [buildBoxWithDeclaredSize("btrt", 21, 12)] }],
+      ["a later child with a size under 8", { entryChildren: [boxHeader("btrt", 4)] }],
+      ["a later child sized 'to the end' (0)", { entryChildren: [boxHeader("btrt", 0)] }],
+      ["a later child with a 64-bit size (1)", { entryChildren: [boxHeader("btrt", 1)] }],
+      ["stray bytes too short to be a box after esds", { entryTrailingBytes: 4 }],
+      ["a second esds", { entryChildren: [buildEsdsBox()] }],
+      ["a malformed esds after a good one", { entryChildren: [wrapBox("esds", new Uint8Array(6))] }],
+    ])("rejects %s", async (_label, options) => {
+      expect(await audioDuration(buildMinimalM4a(5, 44_100, options))).toEqual(malformed);
+    });
+
+    it("rejects an entry too large to be read in full", async () => {
+      // Well-formed, but bigger than the read window: refused, not partly checked.
+      const padding = Array.from({ length: 40 }, () => wrapBox("free", new Uint8Array(24)));
+      expect(await audioDuration(buildMinimalM4a(5, 44_100, { entryChildren: padding }))).toEqual(malformed);
+    });
   });
 
   it.each<[string, M4aOptions]>([

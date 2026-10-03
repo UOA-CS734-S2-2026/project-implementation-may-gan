@@ -175,6 +175,14 @@ export function buildAudioSampleEntry(
   return wrapBox(type, concatBoxes(fields, ...children));
 }
 
+/** A box whose declared size differs from the bytes written: `declaredSize` in its header, `bodyBytes` after it. */
+export function buildBoxWithDeclaredSize(type: string, declaredSize: number, bodyBytes = 0): Uint8Array {
+  const box = new Uint8Array(8 + bodyBytes);
+  writeUint32BE(box, 0, declaredSize);
+  writeAscii(box, 4, type);
+  return box;
+}
+
 export function buildStsdBox(entry: Uint8Array): Uint8Array {
   return wrapBox("stsd", concatBoxes(new Uint8Array([0, 0, 0, 0, ...uint32BE(1)]), entry));
 }
@@ -235,6 +243,12 @@ export interface M4aOptions {
   sampleEntryType?: string;
   /** The esds box; `null` leaves the sample entry without one. */
   esds?: Uint8Array | null;
+  /** Further child boxes written inside the sample entry, after `esds`. */
+  entryChildren?: Uint8Array[];
+  /** Filler bytes at the end of the sample entry, inside its declared size. */
+  entryTrailingBytes?: number;
+  /** Added to the sample entry's declared size, so it no longer matches its contents. */
+  entrySizeDelta?: number;
   channelCount?: number;
   sampleBits?: number;
   /** Bytes per sample (default 16), or one size per sample. */
@@ -284,8 +298,16 @@ export function buildMinimalM4a(durationSeconds: number, trackTimescale = 44_100
     const entry = buildAudioSampleEntry(
       options.sampleEntryType ?? "mp4a",
       { channelCount: options.channelCount, sampleBits: options.sampleBits },
-      options.esds === null ? [] : [options.esds ?? buildEsdsBox()],
+      [
+        ...(options.esds === null ? [] : [options.esds ?? buildEsdsBox()]),
+        ...(options.entryChildren ?? []),
+        ...(options.entryTrailingBytes ? [new Uint8Array(options.entryTrailingBytes)] : []),
+      ],
     );
+    if (options.entrySizeDelta) {
+      const declared = new DataView(entry.buffer, entry.byteOffset, 4);
+      declared.setUint32(0, declared.getUint32(0) + options.entrySizeDelta);
+    }
     let sample = 0;
     let offset = firstChunkOffset;
     const chunkOffsets = chunks.map((samples) => {

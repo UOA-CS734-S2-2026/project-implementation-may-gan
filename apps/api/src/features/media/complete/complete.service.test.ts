@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createFakeR2Reader, createUnusedR2Reader } from "../../../infrastructure/media/r2.fake";
 import {
+  buildBoxWithDeclaredSize,
   buildFtypBox,
   buildMinimalM4a,
   buildMinimalMp4,
@@ -195,6 +196,17 @@ describe("completeMediaReservation — voice memos", () => {
       record.id,
     );
     expect(result).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+  });
+
+  it("fails a voice memo whose sample entry is malformed even though its tables are fine", async () => {
+    const cases: Array<[string, Uint8Array]> = [
+      ["entry past its stsd box", buildMinimalM4a(5, 44_100, { entrySizeDelta: 100 })],
+      ["child overrunning the entry", buildMinimalM4a(5, 44_100, { entryChildren: [buildBoxWithDeclaredSize("btrt", 0x1000)] })],
+    ];
+    for (const [label, file] of cases) {
+      const { result } = await completeAudio(file);
+      expect(result, label).toMatchObject({ reservation: { status: "failed", failureReason: "malformed_container" } });
+    }
   });
 
   it("fails a video declared as audio", async () => {
