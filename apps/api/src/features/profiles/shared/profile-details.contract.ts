@@ -60,7 +60,50 @@ export const profileDetailsSchema = z
       }),
     }).nullable().openapi("ProfileOwnerSettings", { description: "Present only on the caller's own profile." }),
   })
-  .openapi("ProfileDetails");
+  .openapi("ProfileDetails", {
+    description: "The full profile projection returned only to the owner or an active friend.",
+  });
+
+export const publicProfileSchema = z.object({
+  kind: z.literal("public"),
+  username: z.string().min(1),
+  displayName: z.string().min(1),
+  bio: z.string().nullable(),
+  avatarUrl: z.url().nullable().openapi({
+    description: "The parent-authorized Worker avatar route when a current avatar exists, otherwise null.",
+  }),
+  streak: profileDetailsSchema.shape.streak,
+}).openapi("PublicProfile", {
+  description: "The anonymous-safe basics for a public account.",
+});
+
+export const restrictedProfileSchema = z.object({
+  kind: z.literal("restricted"),
+  username: z.string().min(1),
+}).openapi("RestrictedProfile", {
+  description: "The complete response for a private account when the caller is neither its owner nor an active friend.",
+});
+
+export const readableProfileSchema = z.object({
+  kind: z.enum(["authorized", "public", "restricted"]),
+  username: z.string().min(1),
+  id: profileDetailsSchema.shape.id.optional(),
+  displayName: profileDetailsSchema.shape.displayName.optional(),
+  detailsVisible: profileDetailsSchema.shape.detailsVisible.optional(),
+  bio: profileDetailsSchema.shape.bio.optional(),
+  mbti: profileDetailsSchema.shape.mbti.optional(),
+  whatIDo: profileDetailsSchema.shape.whatIDo.optional(),
+  listeningTo: profileDetailsSchema.shape.listeningTo.optional(),
+  avatarUrl: profileDetailsSchema.shape.avatarUrl.optional(),
+  streak: profileDetailsSchema.shape.streak.optional(),
+  stats: profileDetailsSchema.shape.stats.optional(),
+  owner: profileDetailsSchema.shape.owner.optional(),
+}).openapi("ReadableProfile", {
+  description: "A restricted response has only kind and username. A public response adds displayName, bio, avatarUrl, and streak. An authorized response has every ProfileDetails field.",
+});
 
 export type ProfileDetails = z.infer<typeof profileDetailsSchema>;
+export type PublicProfile = z.infer<typeof publicProfileSchema>;
+export type RestrictedProfile = z.infer<typeof restrictedProfileSchema>;
+export type ReadableProfile = z.infer<typeof readableProfileSchema>;
 export type ProfileVisibility = z.infer<typeof profileVisibilitySchema>;

@@ -17,6 +17,7 @@ import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
 import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
+import '../settings/account_export_client.dart';
 import '../profile/streak_cache.dart';
 
 /// Application-wide services, provided once above the router.
@@ -33,6 +34,7 @@ class AppServices {
     this.profiles = const UnavailableProfileClient(),
     this.interactions = const UnavailableInteractionsClient(),
     this.notifications,
+    this.accountExports,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
     this.mediaUploads,
@@ -66,6 +68,9 @@ class AppServices {
   final ProfileClient profiles;
   final InteractionsClient interactions;
   final FirebasePushLifecycle? notifications;
+
+  /// Null until export provider proof and an explicit release decision.
+  final AccountExportClient? accountExports;
 
   /// Null when this build has no Google client ID configured.
   final GoogleIdTokenProvider? google;

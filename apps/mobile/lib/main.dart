@@ -28,6 +28,10 @@ import 'notifications/firebase_push_source.dart';
 import 'notifications/push_registration_client.dart';
 import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
+import 'settings/account_export_client.dart';
+
+// A separate release change must enable this after provider and privacy review.
+const nativeExportEnabled = false;
 import 'profile/streak_cache.dart';
 
 Future<void> main() async {
@@ -152,6 +156,12 @@ Future<void> main() async {
         drafts: drafts,
         messaging: messaging,
         notifications: notifications,
+        accountExports: nativeExportEnabled
+            ? HttpAccountExportClient(
+                baseUrl: config.apiBaseUrl,
+                bearerToken: nativeSession.bearerToken,
+              )
+            : null,
         google: config.googleSignInConfigured
             ? FlutterGoogleIdTokenProvider(
                 webClientId: config.googleWebClientId,

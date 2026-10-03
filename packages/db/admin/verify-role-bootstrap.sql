@@ -38,6 +38,20 @@ SELECT
   NOT has_schema_privilege('lifecycle_worker', 'drizzle', 'USAGE') AS lifecycle_worker_cannot_use_drizzle,
   NOT has_schema_privilege('lifecycle_worker', 'drizzle', 'CREATE') AS lifecycle_worker_cannot_create_in_drizzle;
 
+-- Optional tables may not exist during initial bootstrap. Once migrations add
+-- them, the ordinary app and the worker must never have direct table access.
+SELECT NOT EXISTS (
+  SELECT 1
+  FROM (VALUES ('data_export_requests'), ('data_export_object_cleanup_tasks'),
+    ('data_export_cleanup_incidents')) AS tables(table_name)
+  CROSS JOIN (VALUES ('app'), ('lifecycle_worker')) AS roles(role_name)
+  WHERE to_regclass(format('public.%I', table_name)) IS NOT NULL
+    AND (COALESCE(has_table_privilege(role_name, to_regclass(format('public.%I', table_name)), 'SELECT'), false)
+      OR COALESCE(has_table_privilege(role_name, to_regclass(format('public.%I', table_name)), 'INSERT'), false)
+      OR COALESCE(has_table_privilege(role_name, to_regclass(format('public.%I', table_name)), 'UPDATE'), false)
+      OR COALESCE(has_table_privilege(role_name, to_regclass(format('public.%I', table_name)), 'DELETE'), false))
+) AS export_operations_private;
+
 SELECT
   count(DISTINCT privilege_type) FILTER (
     WHERE defaclobjtype = 'r'

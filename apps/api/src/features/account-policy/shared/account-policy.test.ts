@@ -40,6 +40,12 @@ describe("account policy", () => {
     await expect(classify("GET", "/api/v1/account/deletion")).resolves.toBe("policy_read");
     await expect(classify("POST", "/api/v1/account/deletion/request")).resolves.toBe("request_deletion");
     await expect(classify("POST", "/api/v1/account/deletion/cancel")).resolves.toBe("cancel_deletion_verification");
+    await expect(classify("GET", "/api/v1/account/export")).resolves.toBe("export");
+    await expect(classify("POST", "/api/v1/account/export/request")).resolves.toBe("export");
+    await expect(classify("GET", "/api/v1/account/export/request-id/download")).resolves.toBe("export");
+    await expect(classify("GET", "/api/v1/account/export/request-id/download/extra")).resolves.toBe("ordinary");
+    await expect(classify("HEAD", "/api/v1/account/export/request-id/download")).resolves.toBe("ordinary");
+    await expect(classify("POST", "/api/v1/posts/post-1/media/media-1/content")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/account/deletion/request/extra")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
     await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "request_deletion" })).resolves.toBe("request_deletion");
@@ -142,6 +148,91 @@ describe("account policy", () => {
     const failure = await unavailable.request("https://api.example.test/api/v1/feed");
     expect(failure.status).toBe(503);
     expect(failure.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("lets anonymous post detail reach optional authentication but still rejects invalid credentials", async () => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      postDetail: { resolveSession },
+    });
+
+    const anonymous = await api.request("https://api.example.test/api/v1/posts/post-1");
+    expect(anonymous.status).toBe(503);
+    // Account policy and optional authentication both skip session resolution
+    // when no credential exists. The route reaches its unavailable repository.
+    expect(resolveSession).not.toHaveBeenCalled();
+
+    const invalid = await api.request("https://api.example.test/api/v1/posts/post-1", {
+      headers: { authorization: "Bearer invalid" },
+    });
+    expect(invalid.status).toBe(401);
+    expect(resolveSession).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "/api/v1/profiles/ben",
+    "/api/v1/profiles/ben/posts",
+  ])("lets anonymous profile read %s reach optional authentication", async (path) => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      profileDetails: { resolveSession },
+      profilePosts: { resolveSession },
+    });
+
+    const response = await api.request(`https://api.example.test${path}`);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(resolveSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["GET", "/api/v1/posts/post-1/media/media-1/content"],
+    ["HEAD", "/api/v1/posts/post-1/media/media-1/content"],
+    ["GET", "/api/v1/posts/post-1/voice-memo/content"],
+    ["HEAD", "/api/v1/posts/post-1/voice-memo/content"],
+    ["GET", "/api/v1/profiles/ben/avatar"],
+    ["HEAD", "/api/v1/profiles/ben/avatar"],
+  ])("lets anonymous media request %s %s reach its optional-session route", async (method, path) => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      postMediaContent: { resolveSession },
+      postVoiceMemoContent: { resolveSession },
+      profileAvatar: { resolveSession },
+    });
+
+    const response = await api.request(`https://api.example.test${path}`, { method });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(resolveSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["POST", "/api/v1/posts/post-1/media/media-1/content"],
+    ["DELETE", "/api/v1/posts/post-1/voice-memo/content"],
+    ["PUT", "/api/v1/profiles/ben/avatar"],
+    ["GET", "/api/v1/posts/post-1/media/media-1/content/extra"],
+    ["HEAD", "/api/v1/profiles/ben/avatar/extra"],
+    ["GET", "/api/v1/account/export/request-id/download"],
+  ])("keeps non-reviewed anonymous request %s %s fail closed", async (method, path) => {
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => null,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+    });
+    expect((await api.request(`https://api.example.test${path}`, { method })).status).toBe(401);
   });
 
   it("leaves the actual public test route available to guests and restricted accounts", async () => {

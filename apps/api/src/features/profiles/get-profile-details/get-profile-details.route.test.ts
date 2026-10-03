@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
-import type { ProfileDetails } from "../shared/profile-details.contract";
+import type { ProfileDetails, ReadableProfile } from "../shared/profile-details.contract";
 import type { ProfileDetailsRepository } from "./get-profile-details.repository";
 import type { GetProfileDetailsRouteDependencies } from "./get-profile-details.route";
 
@@ -36,26 +36,56 @@ function get(deps: GetProfileDetailsRouteDependencies, path = "/api/v1/profiles/
 }
 
 describe("GET /api/v1/profiles/{username}", () => {
-  it("requires a session", async () => {
-    const findProfile = vi.fn();
+  it("allows an anonymous read and passes no actor identity", async () => {
+    const findProfile = vi.fn(async (): Promise<ReadableProfile> => ({
+      kind: "public",
+      username: "ben",
+      displayName: "Ben",
+      bio: "Bakes bread.",
+      avatarUrl: null,
+      streak: profile.streak,
+    }));
     const response = await get(dependencies(findProfile), undefined, null);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({ kind: "public", username: "ben" });
+    expect(findProfile).toHaveBeenCalledWith(null, "ben", fixedNow);
+  });
+
+  it("rejects invalid presented credentials instead of treating them as anonymous", async () => {
+    const findProfile = vi.fn();
+    const response = await createApp({ profileDetails: dependencies(findProfile) }).request(
+      "/api/v1/profiles/ben",
+      { headers: { authorization: "Bearer invalid" } },
+    );
 
     expect(response.status).toBe(401);
     expect(findProfile).not.toHaveBeenCalled();
   });
 
   it("reads the profile for the verified actor", async () => {
-    const findProfile = vi.fn(async () => profile);
+    const readable = { kind: "authorized" as const, ...profile };
+    const findProfile = vi.fn(async () => readable);
     const response = await get(dependencies(findProfile));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toEqual(profile);
+    await expect(response.json()).resolves.toEqual(readable);
     expect(findProfile).toHaveBeenCalledWith("user-viewer", "ben", fixedNow);
   });
 
+  it("returns the exact minimal restricted contract without profile metadata", async () => {
+    const findProfile = vi.fn(async (): Promise<ReadableProfile> => ({ kind: "restricted", username: "ben" }));
+    const response = await get(dependencies(findProfile), undefined, null);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ kind: "restricted", username: "ben" });
+  });
+
   it("does not claim the posts path", async () => {
-    const findProfile = vi.fn(async () => profile);
+    const findProfile = vi.fn(async () => ({ kind: "authorized" as const, ...profile }));
     await get(dependencies(findProfile), "/api/v1/profiles/ben/posts");
 
     expect(findProfile).not.toHaveBeenCalled();

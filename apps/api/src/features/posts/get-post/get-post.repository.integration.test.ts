@@ -128,6 +128,7 @@ function requireLocalTestUrl(value: string): string {
       viewerIsAuthor: false,
       media: [],
       voiceMemo: null,
+      publicMediaDelivery: false,
     });
   });
 
@@ -145,6 +146,27 @@ function requireLocalTestUrl(value: string): string {
 
     await expect(repo().findPost(users.friend, id("released"), now)).resolves.toMatchObject({ edited: true, revisionCount: 1 });
     await expect(repo().findPost(users.author, id("released"), now)).resolves.toMatchObject({ edited: true, revisionCount: 2 });
+  });
+
+  it("lets anyone read a released friends post after the author becomes public", async () => {
+    await migrator.db.update(schema.user)
+      .set({ profileVisibility: "public" })
+      .where(inArray(schema.user.id, [users.author]));
+    try {
+      await expect(repo().findPost(null, id("released"), now)).resolves.toMatchObject({
+        id: id("released"),
+        viewerIsAuthor: false,
+        publicMediaDelivery: false,
+      });
+      await expect(repo().findPost(users.stranger, id("released"), now)).resolves.toMatchObject({ id: id("released") });
+      await expect(repo().findPost(null, id("solo"), now)).resolves.toBeNull();
+      await expect(repo().findPost(null, id("unreleased"), now)).resolves.toBeNull();
+      await expect(repo().findPost(users.blocked, id("released"), now)).resolves.toBeNull();
+    } finally {
+      await migrator.db.update(schema.user)
+        .set({ profileVisibility: "private" })
+        .where(inArray(schema.user.id, [users.author]));
+    }
   });
 
   it("lets the author read their solo and unreleased posts", async () => {

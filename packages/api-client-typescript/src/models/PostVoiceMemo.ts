@@ -40,9 +40,9 @@ export interface PostVoiceMemo {
      */
     url: string;
     /**
-     * When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one.
+     * When a signed private URL stops working. Null for a Worker URL that reauthorizes every request.
      */
-    expiresAt: Date;
+    expiresAt: Date | null;
 }
 
 
@@ -71,7 +71,7 @@ export function PostVoiceMemoFromJSONTyped(json: any, ignoreDiscriminator: boole
         'id': json['id'],
         'contentType': VoiceMemoContentTypeFromJSON(json['contentType']),
         'url': json['url'],
-        'expiresAt': (json['expiresAt'] == null ? json['expiresAt'] : parseDateTime(json['expiresAt'])),
+        'expiresAt': (json['expiresAt'] == null ? null : parseDateTime(json['expiresAt'])),
     };
 }
 

@@ -1,7 +1,16 @@
 import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { InvalidPostCursorError } from "../shared/post-page-cursor";
-import { createPostgresProfilePostsRepository } from "./list-profile-posts.repository";
+import {
+  createPostgresProfilePostsRepository,
+  type ProfilePostsPageRecord,
+  type ReadableProfilePostsRecord,
+} from "./list-profile-posts.repository";
+
+function fullPage(page: ReadableProfilePostsRecord | null): ProfilePostsPageRecord {
+  if (!page || "kind" in page) throw new Error("Expected a readable profile archive page.");
+  return page;
+}
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -27,6 +36,7 @@ function requireLocalTestUrl(value: string): string {
   const id = (name: string) => `profile-${run}-${name}`;
   const users = {
     owner: id("owner"),
+    publicOwner: id("public-owner"),
     friend: id("friend"),
     stranger: id("stranger"),
     ended: id("ended"),
@@ -60,9 +70,9 @@ function requireLocalTestUrl(value: string): string {
   beforeAll(async () => {
     for (const [key, userId] of Object.entries(users)) {
       await migrator.client`
-        insert into public."user" (id, name, email, username, display_username, banned)
+        insert into public."user" (id, name, email, username, display_username, banned, profile_visibility)
         values (${userId}, ${key}, ${`${userId}@example.test`}, ${handle(key as keyof typeof users)},
-          ${key === "owner" ? "The Owner" : null}, ${key === "banned"})
+          ${key === "owner" ? "The Owner" : null}, ${key === "banned"}, ${key === "publicOwner" ? "public" : "private"})
       `;
     }
 
@@ -82,6 +92,11 @@ function requireLocalTestUrl(value: string): string {
     await insertPost("26-unreleased", users.owner, "2026-09-26", { released: false });
     await insertPost("friend-25", users.friend, "2026-09-25");
     await insertPost("banned-25", users.banned, "2026-09-25");
+    await insertPost("public-20", users.publicOwner, "2026-09-20");
+    await insertPost("public-21-solo", users.publicOwner, "2026-09-21", { audience: "solo" });
+    await insertPost("public-22", users.publicOwner, "2026-09-22");
+    await insertPost("public-24", users.publicOwner, "2026-09-24");
+    await insertPost("public-26-unreleased", users.publicOwner, "2026-09-26", { released: false });
 
     await migrator.client`
       insert into public.post_revisions (id, post_id, revision_number, previous_reflective_answer, previous_rating,
@@ -103,24 +118,26 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("shows the owner every post, including solo and unreleased ones", async () => {
-    const page = await profiles().listProfilePosts(users.owner, handle("owner"), now, 20);
+    const page = fullPage(await profiles().listProfilePosts(users.owner, handle("owner"), now, 20));
 
-    expect(page?.items.map((post) => post.id)).toEqual([id("26-unreleased"), id("24"), id("22"), id("21-solo"), id("20")]);
+    expect(page.accessTier).toBe("authorized");
+    expect(page.items.map((post) => post.id)).toEqual([id("26-unreleased"), id("24"), id("22"), id("21-solo"), id("20")]);
     expect(page?.items.map((post) => [post.audience, post.released])).toEqual([
       ["friends", false], ["friends", true], ["friends", true], ["solo", true], ["friends", true],
     ]);
   });
 
   it("shows a friend only released friends posts", async () => {
-    const page = await profiles().listProfilePosts(users.friend, handle("owner"), now, 20);
+    const page = fullPage(await profiles().listProfilePosts(users.friend, handle("owner"), now, 20));
 
-    expect(page?.items.map((post) => post.id)).toEqual([id("24"), id("22"), id("20")]);
+    expect(page.accessTier).toBe("authorized");
+    expect(page.items.map((post) => post.id)).toEqual([id("24"), id("22"), id("20")]);
   });
 
   it("projects the author, prompt, and edited marker", async () => {
-    const page = await profiles().listProfilePosts(users.friend, handle("owner"), now, 20);
+    const page = fullPage(await profiles().listProfilePosts(users.friend, handle("owner"), now, 20));
 
-    expect(page?.items[0]).toEqual({
+    expect(page.items[0]).toEqual({
       id: id("24"),
       author: { id: users.owner, username: handle("owner"), displayName: "The Owner" },
       localDate: "2026-09-24",
@@ -141,16 +158,40 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("resolves the handle case-insensitively", async () => {
-    const page = await profiles().listProfilePosts(users.friend, handle("owner").toUpperCase(), now, 1);
+    const page = fullPage(await profiles().listProfilePosts(users.friend, handle("owner").toUpperCase(), now, 1));
 
     expect(page?.items.map((post) => post.id)).toEqual([id("24")]);
   });
 
-  it("gives a stranger and an ended friendship an empty page, not a 404", async () => {
+  it("gives a private non-friend only the username and restricted state", async () => {
+    await expect(profiles().listProfilePosts(null, handle("owner"), now, 20))
+      .resolves.toEqual({ kind: "restricted", username: handle("owner") });
     await expect(profiles().listProfilePosts(users.stranger, handle("owner"), now, 20))
-      .resolves.toEqual({ items: [], hasMore: false, nextCursor: null });
+      .resolves.toEqual({ kind: "restricted", username: handle("owner") });
     await expect(profiles().listProfilePosts(users.ended, handle("owner"), now, 20))
-      .resolves.toEqual({ items: [], hasMore: false, nextCursor: null });
+      .resolves.toEqual({ kind: "restricted", username: handle("owner") });
+  });
+
+  it("filters a public profile archive before pagination for a non-friend", async () => {
+    const first = fullPage(await profiles().listProfilePosts(null, handle("publicOwner"), now, 1));
+    const second = fullPage(await profiles().listProfilePosts(null, handle("publicOwner"), now, 1, first.nextCursor!));
+    const stranger = fullPage(await profiles().listProfilePosts(users.stranger, handle("publicOwner"), now, 1));
+
+    expect(first.accessTier).toBe("public");
+    expect(stranger.accessTier).toBe("public");
+    expect(first.items.map((post) => post.id)).toEqual([id("public-24")]);
+    expect(first).toMatchObject({ hasMore: true });
+    expect(second.items.map((post) => post.id)).toEqual([id("public-22")]);
+  });
+
+  it("stops an anonymous archive immediately when the account becomes private", async () => {
+    await migrator.client`update public."user" set profile_visibility = 'private' where id = ${users.publicOwner}`;
+    try {
+      await expect(profiles().listProfilePosts(null, handle("publicOwner"), now, 20))
+        .resolves.toEqual({ kind: "restricted", username: handle("publicOwner").toLowerCase() });
+    } finally {
+      await migrator.client`update public."user" set profile_visibility = 'public' where id = ${users.publicOwner}`;
+    }
   });
 
   it("hides the profile entirely across a block, in both directions", async () => {
@@ -170,17 +211,17 @@ function requireLocalTestUrl(value: string): string {
   });
 
   it("pages deterministically without repeating or skipping posts", async () => {
-    const first = await profiles().listProfilePosts(users.owner, handle("owner"), now, 3);
+    const first = fullPage(await profiles().listProfilePosts(users.owner, handle("owner"), now, 3));
     expect(first?.items.map((post) => post.id)).toEqual([id("26-unreleased"), id("24"), id("22")]);
     expect(first?.hasMore).toBe(true);
 
-    const second = await profiles().listProfilePosts(users.owner, handle("owner"), now, 3, first!.nextCursor!);
+    const second = fullPage(await profiles().listProfilePosts(users.owner, handle("owner"), now, 3, first.nextCursor!));
     expect(second?.items.map((post) => post.id)).toEqual([id("21-solo"), id("20")]);
     expect(second).toMatchObject({ hasMore: false, nextCursor: null });
   });
 
   it("shows friends today's post once it is released", async () => {
-    const afterMidnight = await profiles().listProfilePosts(users.friend, handle("owner"), new Date("2026-09-26T12:00:00.000Z"), 1);
+    const afterMidnight = fullPage(await profiles().listProfilePosts(users.friend, handle("owner"), new Date("2026-09-26T12:00:00.000Z"), 1));
 
     expect(afterMidnight?.items.map((post) => post.id)).toEqual([id("26-unreleased")]);
   });

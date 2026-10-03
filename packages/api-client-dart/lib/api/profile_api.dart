@@ -152,9 +152,78 @@ class ProfileApi {
     return null;
   }
 
+  /// Read a currently authorized profile avatar
+  ///
+  /// Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] username (required):
+  Future<Response> profileGetAvatarWithHttpInfo(
+    String username, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/profiles/{username}/avatar'
+        .replaceAll('{username}', username);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read a currently authorized profile avatar
+  ///
+  /// Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] username (required):
+  Future<MultipartFile?> profileGetAvatar(
+    String username, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await profileGetAvatarWithHttpInfo(
+      username,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
   /// Read a profile's details
   ///
-  /// Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+  /// Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -192,12 +261,12 @@ class ProfileApi {
 
   /// Read a profile's details
   ///
-  /// Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.
+  /// Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Parameters:
   ///
   /// * [String] username (required):
-  Future<ProfileDetails?> profileGetDetails(
+  Future<ReadableProfile?> profileGetDetails(
     String username, {
     Future<void>? abortTrigger,
   }) async {
@@ -215,8 +284,8 @@ class ProfileApi {
         response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
-        'ProfileDetails',
-      ) as ProfileDetails;
+        'ReadableProfile',
+      ) as ReadableProfile;
     }
     return null;
   }

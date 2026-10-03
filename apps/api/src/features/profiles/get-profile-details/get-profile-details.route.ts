@@ -1,11 +1,11 @@
 import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorSchema } from "@dayli/contracts";
 import { apiErrorResponse } from "../../../http/api-error";
-import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import { createRequireSession, type ResolveSession } from "../../../http/middleware/require-session";
+import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
-import { profileDetailsSchema } from "../shared/profile-details.contract";
+import { publicProfileSchema, readableProfileSchema, restrictedProfileSchema } from "../shared/profile-details.contract";
 import type { ProfileDetailsRepository } from "./get-profile-details.repository";
 
 export interface GetProfileDetailsRouteDependencies {
@@ -16,7 +16,7 @@ export interface GetProfileDetailsRouteDependencies {
   rateLimiter?: ActorRateLimiter;
 }
 
-const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
+const security: Array<Record<string, string[]>> = [{}, { BearerAuth: [] }, { cookieAuth: [] }];
 
 const paramsSchema = z.object({
   username: z.string().trim().min(2).max(32).regex(/^[a-zA-Z0-9_]+$/)
@@ -31,12 +31,12 @@ const getProfileDetailsRoute = createRoute({
   tags: ["Profile"],
   operationId: "profile.getDetails",
   summary: "Read a profile's details",
-  description: "Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.",
+  description: "Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.",
   security,
   request: { params: paramsSchema },
   responses: {
-    200: { description: "The profile.", content: { "application/json": { schema: profileDetailsSchema } } },
-    401: error("Authentication is required."),
+    200: { description: "The readable or restricted profile projection.", content: { "application/json": { schema: readableProfileSchema } } },
+    401: error("Presented credentials are invalid."),
     404: error("The profile does not exist or is blocked in either direction. The cases are indistinguishable."),
     422: error("The username is invalid."),
     429: rateLimitErrorResponse,
@@ -44,8 +44,10 @@ const getProfileDetailsRoute = createRoute({
   },
 });
 
-export function registerGetProfileDetailsRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: GetProfileDetailsRouteDependencies) {
-  app.use("/api/v1/profiles/:username", createRequireSession(dependencies.resolveSession, dependencies.rateLimiter));
+export function registerGetProfileDetailsRoute(app: OpenAPIHono<OptionalAuthenticatedApiEnv>, dependencies: GetProfileDetailsRouteDependencies) {
+  app.openAPIRegistry.register("PublicProfile", publicProfileSchema);
+  app.openAPIRegistry.register("RestrictedProfile", restrictedProfileSchema);
+  app.use("/api/v1/profiles/:username", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getProfileDetailsRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {
@@ -53,7 +55,7 @@ export function registerGetProfileDetailsRoute(app: OpenAPIHono<AuthenticatedApi
     }
     const now = dependencies.now?.() ?? new Date();
     try {
-      const profile = await dependencies.repository.findProfile(context.get("actor").userId, context.req.valid("param").username, now);
+      const profile = await dependencies.repository.findProfile(context.get("actor")?.userId ?? null, context.req.valid("param").username, now);
       if (!profile) return apiErrorResponse(context, 404, "NOT_FOUND", "The profile was not found.");
       return context.json(profile, 200);
     } catch (error) {
