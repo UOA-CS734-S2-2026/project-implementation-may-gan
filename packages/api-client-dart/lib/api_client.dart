@@ -236,6 +236,8 @@ class ApiClient {
               value);
         case 'CreateDirectConversationRequest':
           return CreateDirectConversationRequest.fromJson(value);
+        case 'CreateFutureSelfNoteRequest':
+          return CreateFutureSelfNoteRequest.fromJson(value);
         case 'CreateMediaReservationRequest':
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
@@ -272,6 +274,14 @@ class ApiClient {
           return FeedPostAuthor.fromJson(value);
         case 'FeedPostPrompt':
           return FeedPostPrompt.fromJson(value);
+        case 'FutureSelfNote':
+          return FutureSelfNote.fromJson(value);
+        case 'FutureSelfNoteDetail':
+          return FutureSelfNoteDetail.fromJson(value);
+        case 'FutureSelfNotePage':
+          return FutureSelfNotePage.fromJson(value);
+        case 'FutureSelfNoteStatus':
+          return FutureSelfNoteStatusTypeTransformer().decode(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
         case 'GoogleReauthenticationIntent':
@@ -390,6 +400,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdateFutureSelfNoteRequest':
+          return UpdateFutureSelfNoteRequest.fromJson(value);
         case 'UpdateProfileRequest':
           return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':

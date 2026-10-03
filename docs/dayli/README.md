@@ -33,6 +33,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Post detail](post-detail.md): `GET /api/v1/posts/{postId}`, who can read one post, and 404 concealment.
 - [Profiles](profiles.md): profile details, who sees the bio, editing, and username changes.
 - [Profile archive](profile-archive.md): `GET /api/v1/profiles/{username}/posts`, who sees which posts on a profile.
+- [Future-self notes](future-self-notes.md): owner-only notes scheduled for an Auckland date, early-access rules, and the delivery job.
 
 ## Fixed rules
 

@@ -1383,6 +1383,146 @@
           "text"
         ]
       },
+      "FutureSelfNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "deliverOn": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FutureSelfNoteStatus"
+          },
+          "deliveredAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "updatedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "id",
+          "deliverOn",
+          "status",
+          "deliveredAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "description": "A note to your future self, without its text."
+      },
+      "FutureSelfNoteStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "delivered"
+        ],
+        "description": "`scheduled` until the delivery job records the note as delivered. A scheduled note becomes readable on its Auckland date even before the job has run."
+      },
+      "CreateFutureSelfNoteRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The note text, trimmed, 1 to 1,000 characters. It is never readable before its delivery date.",
+            "example": "I hope the thesis is submitted and you slept well."
+          },
+          "deliverOn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "example": "2027-01-01",
+                "description": "The Auckland calendar date the note is delivered on. When creating or rescheduling it must be from tomorrow (Auckland, decided by the server) up to 10 years after today."
+              }
+            ]
+          }
+        },
+        "required": [
+          "body",
+          "deliverOn"
+        ],
+        "additionalProperties": false
+      },
+      "FutureSelfNotePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FutureSelfNote"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "FutureSelfNoteDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FutureSelfNote"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "string",
+                "description": "The note text. Present only on or after deliverOn."
+              }
+            },
+            "required": [
+              "body"
+            ]
+          }
+        ],
+        "description": "A note to your future self whose date has arrived, with its text."
+      },
+      "UpdateFutureSelfNoteRequest": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The note text, trimmed, 1 to 1,000 characters. It is never readable before its delivery date.",
+            "example": "I hope the thesis is submitted and you slept well."
+          },
+          "deliverOn": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "example": "2027-01-01",
+                "description": "The Auckland calendar date the note is delivered on. When creating or rescheduling it must be from tomorrow (Auckland, decided by the server) up to 10 years after today."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "PendingRequestPage": {
         "type": "object",
         "properties": {
@@ -4159,6 +4299,570 @@
           },
           "503": {
             "description": "Post storage is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/future-self-notes": {
+      "post": {
+        "tags": [
+          "Future-self notes"
+        ],
+        "operationId": "futureSelfNotes.create",
+        "summary": "Write a note to your future self",
+        "description": "Schedules an owner-only note for an Auckland date from tomorrow up to 10 years ahead. The note is not attached to a post. Its text is never readable, even by you, before that date. Retry a lost response with the same `Idempotency-Key`: an identical retry returns the original note with `Idempotent-Replayed: true`, while a changed request conflicts. Requires a chosen username.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "A client-generated key reused for every retry of this note, such as a UUID stored with the draft.",
+              "example": "0f8fad5b-d9cb-469f-a165-70867728950e"
+            },
+            "required": true,
+            "description": "A client-generated key reused for every retry of this note, such as a UUID stored with the draft.",
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFutureSelfNoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The scheduled note without its text, or the original note for an identical retry.",
+            "headers": {
+              "Idempotent-Replayed": {
+                "description": "Present and `true` when this response replays an earlier accepted request.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FutureSelfNote"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account has not chosen a username (`details.reason` is absent), or is restricted. A note read before its date is `NOTE_NOT_YET_AVAILABLE`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The idempotency key was already used for a different request (`details.reason` is `IDEMPOTENCY_KEY_REUSED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values. `details.reason` is `DELIVER_ON_OUT_OF_RANGE` when the date is not from tomorrow (Auckland) up to 10 years ahead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Future-self note storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Future-self notes"
+        ],
+        "operationId": "futureSelfNotes.list",
+        "summary": "List your future-self notes",
+        "description": "Returns the caller's own notes, soonest delivery date first. Each item shows that the note exists, its date and its status, but never its text: read one note to get its text once its date has arrived.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the caller's notes, without text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FutureSelfNotePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account has not chosen a username (`details.reason` is absent), or is restricted. A note read before its date is `NOTE_NOT_YET_AVAILABLE`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values. `details.reason` is `DELIVER_ON_OUT_OF_RANGE` when the date is not from tomorrow (Auckland) up to 10 years ahead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Future-self note storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/future-self-notes/{noteId}": {
+      "get": {
+        "tags": [
+          "Future-self notes"
+        ],
+        "operationId": "futureSelfNotes.get",
+        "summary": "Read a future-self note",
+        "description": "Returns the note's text to its owner from its Auckland delivery date onward, whether or not the delivery job has run. Before that date the response is `403` with `details.reason` `NOTE_NOT_YET_AVAILABLE` and no text. Anyone else, and an unknown ID, gets `404`.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "noteId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The note with its text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FutureSelfNoteDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account has not chosen a username (`details.reason` is absent), or is restricted. A note read before its date is `NOTE_NOT_YET_AVAILABLE`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The note does not exist or is not yours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Future-self note storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Future-self notes"
+        ],
+        "operationId": "futureSelfNotes.update",
+        "summary": "Edit a future-self note",
+        "description": "Changes the text, the delivery date, or both, until the note is delivered. A new date follows the create rules and replaces any delivery already queued for the old one. A delivered note returns `409` with `details.reason` `NOTE_ALREADY_DELIVERED`. The response never includes the text.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "noteId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFutureSelfNoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated note without its text.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FutureSelfNote"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account has not chosen a username (`details.reason` is absent), or is restricted. A note read before its date is `NOTE_NOT_YET_AVAILABLE`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The note does not exist or is not yours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The note is already delivered (`details.reason` is `NOTE_ALREADY_DELIVERED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values. `details.reason` is `DELIVER_ON_OUT_OF_RANGE` when the date is not from tomorrow (Auckland) up to 10 years ahead.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Future-self note storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Future-self notes"
+        ],
+        "operationId": "futureSelfNotes.delete",
+        "summary": "Delete a future-self note",
+        "description": "Deletes the caller's own note, scheduled or delivered, together with any queued delivery. An unknown ID or someone else's note returns `404`.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "noteId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The note is deleted."
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account has not chosen a username (`details.reason` is absent), or is restricted. A note read before its date is `NOTE_NOT_YET_AVAILABLE`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The note does not exist or is not yours.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Future-self note storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

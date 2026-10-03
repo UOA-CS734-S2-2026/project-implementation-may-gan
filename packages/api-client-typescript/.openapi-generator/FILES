@@ -4,6 +4,7 @@
 README.md
 package.json
 src/apis/AccountApi.ts
+src/apis/FutureSelfNotesApi.ts
 src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
@@ -29,6 +30,7 @@ src/models/CreateDirectConversation200Response.ts
 src/models/CreateDirectConversation200ResponseConversation.ts
 src/models/CreateDirectConversation200ResponseConversationPeer.ts
 src/models/CreateDirectConversationRequest.ts
+src/models/CreateFutureSelfNoteRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
 src/models/CreateRealtimeTicket201Response.ts
@@ -47,6 +49,10 @@ src/models/FeedPage.ts
 src/models/FeedPost.ts
 src/models/FeedPostAuthor.ts
 src/models/FeedPostPrompt.ts
+src/models/FutureSelfNote.ts
+src/models/FutureSelfNoteDetail.ts
+src/models/FutureSelfNotePage.ts
+src/models/FutureSelfNoteStatus.ts
 src/models/GetMessagingUnread200Response.ts
 src/models/GoogleReauthenticationIntent.ts
 src/models/GoogleReauthenticationRequest.ts
@@ -106,6 +112,7 @@ src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/TrashedPostStatus.ts
+src/models/UpdateFutureSelfNoteRequest.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts
