@@ -59,10 +59,10 @@ import {
     PostsRestore200ResponseToJSON,
 } from '../models/PostsRestore200Response';
 import {
-    type ProfilePostsPage,
-    ProfilePostsPageFromJSON,
-    ProfilePostsPageToJSON,
-} from '../models/ProfilePostsPage';
+    type ReadableProfilePosts,
+    ReadableProfilePostsFromJSON,
+    ReadableProfilePostsToJSON,
+} from '../models/ReadableProfilePosts';
 import {
     type TrashedPostStatus,
     TrashedPostStatusFromJSON,
@@ -490,21 +490,21 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * Returns one person\'s posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
      * List the posts on a profile
      */
-    async postsListProfilePostsRaw(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfilePostsPage>> {
+    async postsListProfilePostsRaw(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReadableProfilePosts>> {
         const requestOptions = await this.postsListProfilePostsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ProfilePostsPageFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReadableProfilePostsFromJSON(jsonValue));
     }
 
     /**
-     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * Returns one person\'s posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
      * List the posts on a profile
      */
-    async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfilePostsPage> {
+    async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReadableProfilePosts> {
         const response = await this.postsListProfilePostsRaw(requestParameters, initOverrides);
         return await response.value();
     }

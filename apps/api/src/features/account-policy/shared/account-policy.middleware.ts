@@ -39,8 +39,11 @@ function matches(segments: readonly string[], expected: readonly string[]): bool
 }
 
 function isOptionalSessionRoute(request: Request): boolean {
-  return request.method.toUpperCase() === "GET"
-    && matches(pathSegments(new URL(request.url).pathname), ["api", "v1", "posts", "*"]);
+  if (request.method.toUpperCase() !== "GET") return false;
+  const segments = pathSegments(new URL(request.url).pathname);
+  return matches(segments, ["api", "v1", "posts", "*"])
+    || matches(segments, ["api", "v1", "profiles", "*"])
+    || matches(segments, ["api", "v1", "profiles", "*", "posts"]);
 }
 
 async function cleanupCapability(request: Request, pathname: string): Promise<AccountCapability | undefined> {

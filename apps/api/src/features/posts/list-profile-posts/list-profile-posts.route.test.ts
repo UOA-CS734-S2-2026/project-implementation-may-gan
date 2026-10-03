@@ -22,6 +22,13 @@ const profilePost: ProfilePostRecord = {
   media: [],
 };
 
+const archive = (
+  items: ProfilePostRecord[] = [profilePost],
+  accessTier: "authorized" | "public" = "authorized",
+  nextCursor: string | null = null,
+  hasMore = false,
+) => ({ accessTier, items, nextCursor, hasMore });
+
 function dependencies(repository?: Partial<ProfilePostsRepository>, signMediaDownload?: ListProfilePostsRouteDependencies["signMediaDownload"]): ListProfilePostsRouteDependencies {
   return {
     resolveSession: async (request) => {
@@ -29,7 +36,7 @@ function dependencies(repository?: Partial<ProfilePostsRepository>, signMediaDow
       return header?.startsWith("Bearer user-") ? { userId: header.slice("Bearer ".length) } : null;
     },
     repository: repository
-      ? { listProfilePosts: vi.fn(async () => ({ items: [profilePost], nextCursor: null, hasMore: false })), ...repository }
+      ? { listProfilePosts: vi.fn(async () => archive()), ...repository }
       : undefined,
     now: () => fixedNow,
     signMediaDownload,
@@ -43,31 +50,50 @@ function get(deps: ListProfilePostsRouteDependencies, path = "/api/v1/profiles/f
 }
 
 describe("GET /api/v1/profiles/{username}/posts", () => {
-  it("requires a session and never invokes the repository", async () => {
-    const listProfilePosts = vi.fn();
+  it("allows an anonymous read and passes no actor identity", async () => {
+    const listProfilePosts = vi.fn(async () => archive([profilePost], "public"));
     const response = await get(dependencies({ listProfilePosts }), undefined, null);
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHENTICATED" } });
+    expect(listProfilePosts).toHaveBeenCalledWith(null, "friend", fixedNow, 20, undefined);
+  });
+
+  it("rejects invalid presented credentials instead of treating them as anonymous", async () => {
+    const listProfilePosts = vi.fn();
+    const response = await createApp({ profilePosts: dependencies({ listProfilePosts }) }).request(
+      "/api/v1/profiles/friend/posts",
+      { headers: { authorization: "Bearer invalid" } },
+    );
+
+    expect(response.status).toBe(401);
     expect(listProfilePosts).not.toHaveBeenCalled();
   });
 
   it("reads the page for the verified actor with the default page size and server time", async () => {
-    const listProfilePosts = vi.fn(async () => ({ items: [profilePost], nextCursor: "next", hasMore: true }));
+    const listProfilePosts = vi.fn(async () => archive([profilePost], "authorized", "next", true));
     const response = await get(dependencies({ listProfilePosts }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toEqual({ items: [profilePost], nextCursor: "next", hasMore: true });
+    await expect(response.json()).resolves.toEqual({ kind: "archive", items: [profilePost], nextCursor: "next", hasMore: true });
     expect(listProfilePosts).toHaveBeenCalledWith("user-viewer", "friend", fixedNow, 20, undefined);
   });
 
   it("forwards the cursor and limit", async () => {
-    const listProfilePosts = vi.fn(async () => ({ items: [], nextCursor: null, hasMore: false }));
+    const listProfilePosts = vi.fn(async () => archive([]));
     await get(dependencies({ listProfilePosts }), "/api/v1/profiles/friend/posts?limit=5&cursor=abc");
 
     expect(listProfilePosts).toHaveBeenCalledWith("user-viewer", "friend", fixedNow, 5, "abc");
+  });
+
+  it("returns a private non-friend only the username and restricted state", async () => {
+    const response = await get(dependencies({
+      listProfilePosts: async () => ({ kind: "restricted", username: "friend" }),
+    }), undefined, null);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ kind: "restricted", username: "friend" });
   });
 
   it("is not found when the repository cannot resolve the profile", async () => {
@@ -110,7 +136,7 @@ describe("GET /api/v1/profiles/{username}/posts", () => {
     error.mockRestore();
   });
 
-  it("signs each post's media and never exposes the object key", async () => {
+  it.each(["user-owner", "user-friend"])("signs media for authorized viewer %s", async (viewer) => {
     const withMedia: ProfilePostRecord = {
       ...profilePost,
       media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
@@ -119,7 +145,7 @@ describe("GET /api/v1/profiles/{username}/posts", () => {
       url: `https://storage.example.test/${objectKey}?signature=abc`,
       expiresAt: new Date(now.getTime() + 300_000),
     }));
-    const response = await get(dependencies({ listProfilePosts: async () => ({ items: [withMedia], nextCursor: null, hasMore: false }) }, sign));
+    const response = await get(dependencies({ listProfilePosts: async () => archive([withMedia]) }, sign), undefined, viewer);
     const body = await response.json<{ items: Array<{ media: Array<{ url: string }> }> }>();
 
     expect(response.status).toBe(200);
@@ -127,12 +153,28 @@ describe("GET /api/v1/profiles/{username}/posts", () => {
     expect(JSON.stringify(body)).not.toContain("objectKey");
   });
 
+  it.each([null, "user-stranger"])("does not sign media for a public-only archive as %s", async (viewer) => {
+    const withMedia: ProfilePostRecord = {
+      ...profilePost,
+      media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
+    };
+    const sign = vi.fn(async () => ({ url: "https://storage.example.test/signed", expiresAt: fixedNow }));
+    const response = await get(dependencies({
+      listProfilePosts: async () => archive([withMedia], "public"),
+    }, sign), undefined, viewer);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(sign).not.toHaveBeenCalled();
+    expect(await response.text()).not.toContain("objectKey");
+  });
+
   it("is unavailable for a page with media when storage isn't configured", async () => {
     const withMedia: ProfilePostRecord = {
       ...profilePost,
       media: [{ id: "m-1", postId: "post-1", contentType: "image/jpeg", order: 0, objectKey: "media/user-friend/r-1" }],
     };
-    const response = await get(dependencies({ listProfilePosts: async () => ({ items: [withMedia], nextCursor: null, hasMore: false }) }));
+    const response = await get(dependencies({ listProfilePosts: async () => archive([withMedia]) }));
 
     expect(response.status).toBe(503);
   });

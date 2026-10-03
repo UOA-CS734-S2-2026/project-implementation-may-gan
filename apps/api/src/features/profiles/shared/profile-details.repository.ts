@@ -1,8 +1,8 @@
-import { and, count, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExists, or, type SQLWrapper } from "drizzle-orm";
+import { and, count, eq, exists, gt, ilike, isNotNull, isNull, lte, not, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
-import { mbtiTypes, type ProfileDetails } from "./profile-details.contract";
+import { mbtiTypes, type ProfileDetails, type ReadableProfile } from "./profile-details.contract";
 import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 function isMbti(value: string | null): value is (typeof mbtiTypes)[number] {
@@ -25,7 +25,8 @@ function notCurrentlyBanned(now: Date) {
   return or(isNull(user.banned), not(user.banned), and(isNotNull(user.banExpires), lte(user.banExpires, now)));
 }
 
-function notBlockedEitherWay(database: DayliDatabase, viewerId: string, otherId: SQLWrapper) {
+function notBlockedEitherWay(database: DayliDatabase, viewerId: string | null, otherId: SQLWrapper) {
+  if (viewerId === null) return sql`true`;
   const { relationshipBlocks } = schema;
   return notExists(
     database
@@ -42,7 +43,8 @@ function notBlockedEitherWay(database: DayliDatabase, viewerId: string, otherId:
 }
 
 /** Both directional rows must be active, as the post visibility filter requires. */
-function activeFriends(database: DayliDatabase, viewerId: string, otherId: SQLWrapper) {
+function activeFriends(database: DayliDatabase, viewerId: string | null, otherId: SQLWrapper) {
+  if (viewerId === null) return sql<boolean>`false`;
   const { friendships } = schema;
   const reciprocal = alias(friendships, "reciprocal");
   return exists(
@@ -109,7 +111,7 @@ async function countFriends(database: DayliDatabase, userId: string) {
  */
 export async function findProfileDetails(
   database: DayliDatabase,
-  viewerId: string,
+  viewerId: string | null,
   username: string,
   now: Date,
   signAvatar?: AvatarSigner,
@@ -153,7 +155,7 @@ export async function findProfileDetails(
     .limit(1);
   if (!row?.username) return null;
 
-  const isOwner = row.id === viewerId;
+  const isOwner = viewerId !== null && row.id === viewerId;
   const detailsVisible = isOwner || row.profileVisibility === "public" || row.friends;
   const [activity, friends, avatarUrl] = detailsVisible
     ? await Promise.all([findPostingStreak(database, row.id, now), countFriends(database, row.id), findAvatarUrl(database, row.id, signAvatar)])
@@ -180,5 +182,57 @@ export async function findProfileDetails(
         usernameChangeAvailableAt: changeAvailableAt && changeAvailableAt > now ? changeAvailableAt.toISOString() : null,
       }
       : null,
+  };
+}
+
+/**
+ * Builds the profile read contract without reusing the full DTO for callers
+ * who are not an owner or active friend. The access lookup repeats lifecycle,
+ * ban, and block checks so a change between the two reads can only conceal
+ * more data.
+ */
+export async function findReadableProfile(
+  database: DayliDatabase,
+  viewerId: string | null,
+  username: string,
+  now: Date,
+  signAvatar?: AvatarSigner,
+): Promise<ReadableProfile | null> {
+  // Resolve the authorization tier before signing. DPP-006 replaces the
+  // staged public null with a parent-authorized Worker URL.
+  const profile = await findProfileDetails(database, viewerId, username, now);
+  if (!profile) return null;
+
+  const { user } = schema;
+  const [access] = await database
+    .select({
+      profileVisibility: user.profileVisibility,
+      friends: activeFriends(database, viewerId, user.id),
+    })
+    .from(user)
+    .where(and(
+      eq(user.id, profile.id),
+      buildDrizzleActiveAccountFilter(database, user.id),
+      notCurrentlyBanned(now),
+      notBlockedEitherWay(database, viewerId, user.id),
+    ))
+    .limit(1);
+  if (!access) return null;
+
+  const owner = profile.owner !== null;
+  if (owner || access.friends) {
+    const avatarUrl = await findAvatarUrl(database, profile.id, signAvatar);
+    return { kind: "authorized", ...profile, avatarUrl };
+  }
+  if (access.profileVisibility === "private") {
+    return { kind: "restricted", username: profile.username };
+  }
+  return {
+    kind: "public",
+    username: profile.username,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    avatarUrl: null,
+    streak: profile.streak,
   };
 }

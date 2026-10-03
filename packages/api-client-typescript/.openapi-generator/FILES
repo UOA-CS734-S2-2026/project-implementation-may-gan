@@ -93,6 +93,9 @@ src/models/ProfilePostPrompt.ts
 src/models/ProfilePostsPage.ts
 src/models/ProfileStats.ts
 src/models/ProfileVisibility.ts
+src/models/PublicProfile.ts
+src/models/ReadableProfile.ts
+src/models/ReadableProfilePosts.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RegistrationIntentRequest.ts
 src/models/RegistrationIntentResponse.ts
@@ -102,6 +105,8 @@ src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts
 src/models/RelationshipUserPage.ts
 src/models/ResolveMessageRequestRequest.ts
+src/models/RestrictedProfile.ts
+src/models/RestrictedProfilePosts.ts
 src/models/SendMessageRequest.ts
 src/models/SendRelationshipRequest.ts
 src/models/SetAvatarRequest.ts

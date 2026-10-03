@@ -1,16 +1,16 @@
 import type { DayliDatabase, HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import type { ProfileDetails } from "../shared/profile-details.contract";
-import { findProfileDetails, type AvatarSigner } from "../shared/profile-details.repository";
+import type { ReadableProfile } from "../shared/profile-details.contract";
+import { findReadableProfile, type AvatarSigner } from "../shared/profile-details.repository";
 
 export interface ProfileDetailsRepository {
   /** Null when the profile is unknown, banned, or blocked in either direction. */
-  findProfile(viewerId: string, username: string, now: Date): Promise<ProfileDetails | null>;
+  findProfile(viewerId: string | null, username: string, now: Date): Promise<ReadableProfile | null>;
 }
 
 export function createPostgresProfileDetailsRepository(database: DayliDatabase, signAvatar?: AvatarSigner): ProfileDetailsRepository {
   return {
-    findProfile: (viewerId, username, now) => findProfileDetails(database, viewerId, username, now, signAvatar),
+    findProfile: (viewerId, username, now) => findReadableProfile(database, viewerId, username, now, signAvatar),
   };
 }
 
@@ -18,7 +18,7 @@ export function createPostgresProfileDetailsRepository(database: DayliDatabase, 
 export function createHyperdriveProfileDetailsRepository(hyperdrive: HyperdriveBinding, signAvatar?: AvatarSigner): ProfileDetailsRepository {
   return {
     findProfile: (viewerId, username, now) => withHyperdriveDatabase(hyperdrive, (database) => (
-      findProfileDetails(database, viewerId, username, now, signAvatar)
+      findReadableProfile(database, viewerId, username, now, signAvatar)
     )),
   };
 }
