@@ -380,7 +380,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 24,
                               colorFilter: ColorFilter.mode(
                                 enabled
-                                    ? colors.foregroundAccent
+                                    ? colors.primary
                                     : colors.foregroundSecondary,
                                 BlendMode.srcIn,
                               ),
