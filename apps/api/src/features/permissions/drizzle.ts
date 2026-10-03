@@ -133,10 +133,10 @@ export function buildDrizzlePostVisibilityFilter(
       not(activeBlock(database, posts.authorId, viewerId)),
     );
 
-  // Public-profile access is currently limited to direct post detail. Existing
-  // list routes retain their own scope, and media stays owner/friend-only until
+  // Public access is explicit for direct detail and profile archives. Generic
+  // lists retain their friend scope, and media stays owner/friend-only until
   // the parent-authorized Worker route lands.
-  const publicProfile = input.action === "detail"
+  const publicProfile = input.action === "detail" || input.action === "profile"
     ? and(eq(posts.audience, "friends"), eq(user.profileVisibility, "public"))
     : sql`false`;
 

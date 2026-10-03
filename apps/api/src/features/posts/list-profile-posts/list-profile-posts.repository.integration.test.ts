@@ -27,6 +27,7 @@ function requireLocalTestUrl(value: string): string {
   const id = (name: string) => `profile-${run}-${name}`;
   const users = {
     owner: id("owner"),
+    publicOwner: id("public-owner"),
     friend: id("friend"),
     stranger: id("stranger"),
     ended: id("ended"),
@@ -60,9 +61,9 @@ function requireLocalTestUrl(value: string): string {
   beforeAll(async () => {
     for (const [key, userId] of Object.entries(users)) {
       await migrator.client`
-        insert into public."user" (id, name, email, username, display_username, banned)
+        insert into public."user" (id, name, email, username, display_username, banned, profile_visibility)
         values (${userId}, ${key}, ${`${userId}@example.test`}, ${handle(key as keyof typeof users)},
-          ${key === "owner" ? "The Owner" : null}, ${key === "banned"})
+          ${key === "owner" ? "The Owner" : null}, ${key === "banned"}, ${key === "publicOwner" ? "public" : "private"})
       `;
     }
 
@@ -82,6 +83,11 @@ function requireLocalTestUrl(value: string): string {
     await insertPost("26-unreleased", users.owner, "2026-09-26", { released: false });
     await insertPost("friend-25", users.friend, "2026-09-25");
     await insertPost("banned-25", users.banned, "2026-09-25");
+    await insertPost("public-20", users.publicOwner, "2026-09-20");
+    await insertPost("public-21-solo", users.publicOwner, "2026-09-21", { audience: "solo" });
+    await insertPost("public-22", users.publicOwner, "2026-09-22");
+    await insertPost("public-24", users.publicOwner, "2026-09-24");
+    await insertPost("public-26-unreleased", users.publicOwner, "2026-09-26", { released: false });
 
     await migrator.client`
       insert into public.post_revisions (id, post_id, revision_number, previous_reflective_answer, previous_rating,
@@ -148,6 +154,15 @@ function requireLocalTestUrl(value: string): string {
       .resolves.toEqual({ items: [], hasMore: false, nextCursor: null });
     await expect(profiles().listProfilePosts(users.ended, handle("owner"), now, 20))
       .resolves.toEqual({ items: [], hasMore: false, nextCursor: null });
+  });
+
+  it("filters a public profile archive before pagination for a non-friend", async () => {
+    const first = await profiles().listProfilePosts(users.stranger, handle("publicOwner"), now, 1);
+    const second = await profiles().listProfilePosts(users.stranger, handle("publicOwner"), now, 1, first!.nextCursor!);
+
+    expect(first?.items.map((post) => post.id)).toEqual([id("public-24")]);
+    expect(first).toMatchObject({ hasMore: true });
+    expect(second?.items.map((post) => post.id)).toEqual([id("public-22")]);
   });
 
   it("hides the profile entirely across a block, in both directions", async () => {

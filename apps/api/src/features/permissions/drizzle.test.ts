@@ -38,6 +38,11 @@ describe("concrete PostgreSQL permission filter", () => {
       now: new Date("2026-09-22T00:00:00Z"),
       action: "detail",
     }));
+    const profile = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
+      viewer: { userId: null },
+      now: new Date("2026-09-22T00:00:00Z"),
+      action: "profile",
+    }));
     const list = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: null },
       now: new Date("2026-09-22T00:00:00Z"),
@@ -48,6 +53,7 @@ describe("concrete PostgreSQL permission filter", () => {
     expect(detail.sql).toContain('"user"."profile_visibility" = $');
     expect(detail.params).toContain("friends");
     expect(detail.params).toContain("public");
+    expect(profile.params).toContain("public");
     expect(list.params).not.toContain("public");
   });
 

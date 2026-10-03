@@ -2,6 +2,7 @@ export type PostAudience = "solo" | "friends";
 export type ProfileVisibility = "public" | "private";
 export type PermissionAction =
   | "list"
+  | "profile"
   | "detail"
   | "revision"
   | "preview"
@@ -92,11 +93,11 @@ export function decidePostPermission(request: PermissionRequest): PermissionDeci
   if (post.releaseAt.getTime() > now.getTime()) return denied("not_released");
   if (post.audience === "solo") return denied("solo_post");
 
-  // DPP-001 opens post detail only. List routes keep their existing scope so a
-  // public account does not turn the friends feed into a global feed. Media
-  // remains on its current owner/friend policy until the parent-authorized
-  // Worker route is implemented separately.
-  if (request.action === "detail" && post.authorProfileVisibility === "public") return allowed();
+  // Public access is explicit for direct detail and profile archives. Generic
+  // list routes stay friend-scoped so the friends feed does not become global.
+  // Media remains owner/friend-only until its parent-authorized Worker route.
+  if ((request.action === "detail" || request.action === "profile")
+    && post.authorProfileVisibility === "public") return allowed();
 
   if (viewer.userId == null) return denied("anonymous");
   if (!post.friendshipActive) return denied("not_friend");

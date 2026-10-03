@@ -1,5 +1,5 @@
-import type { OpenAPIHono } from "@hono/zod-openapi";
-import type { AuthenticatedApiEnv } from "../../http/authenticated-actor";
+import { OpenAPIHono } from "@hono/zod-openapi";
+import type { AuthenticatedApiEnv, OptionalAuthenticatedApiEnv } from "../../http/authenticated-actor";
 import { registerCreateDailyPostRoute, type CreateDailyPostRouteDependencies } from "./create-post/create-post.route";
 import { registerGetPostRoute, type GetPostRouteDependencies } from "./get-post/get-post.route";
 import {
@@ -27,7 +27,9 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   registerListFeedRoute(app, dependencies.feed);
   // Register this static path before the dynamic /posts/:postId detail path.
   registerPostTrashRoutes(app, dependencies.trash);
-  registerGetPostRoute(app, dependencies.detail);
+  const publicPostReads = new OpenAPIHono<OptionalAuthenticatedApiEnv>();
+  registerGetPostRoute(publicPostReads, dependencies.detail);
+  app.route("/", publicPostReads);
   registerGetPostMediaRoute(app, dependencies.media);
   registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
   registerListProfilePostsRoute(app, dependencies.profilePosts);

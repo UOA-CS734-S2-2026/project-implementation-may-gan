@@ -1,6 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import { apiErrorResponse } from "../../../http/api-error";
-import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import type { OptionalAuthenticatedApiEnv } from "../../../http/authenticated-actor";
 import { createOptionalSession, type ResolveSession } from "../../../http/middleware/require-session";
 import type { ActorRateLimiter } from "../../../http/middleware/rate-limit";
 import { signPostVoiceMemo, signPostMedia, type SignMediaDownload } from "../shared/post-media";
@@ -37,7 +37,7 @@ const getPostRoute = createRoute({
   },
 });
 
-export function registerGetPostRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
+export function registerGetPostRoute(app: OpenAPIHono<OptionalAuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
   app.use("/api/v1/posts/:postId", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
