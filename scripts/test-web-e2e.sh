@@ -139,4 +139,4 @@ wait_for_url "$web_origin" "$web_pid" 'Web application'
 echo 'Running Playwright browser journeys'
 # `pnpm run <script> -- <args>` passes the separator through to shell scripts.
 if [[ "${1:-}" == "--" ]]; then shift; fi
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"
+E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" pnpm --filter @dayli/web exec playwright test "$@"

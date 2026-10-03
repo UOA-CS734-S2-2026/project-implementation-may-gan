@@ -1,7 +1,7 @@
 "use client";
 
 import { authClient } from "@/lib/auth/client";
-import { safeReturnPath } from "@/lib/routing/safe-return-path";
+import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
 import { registrationHeaders, type RegistrationProof } from "@/lib/legal/registration";
 
 export function GoogleSignInButton({
@@ -15,7 +15,7 @@ export function GoogleSignInButton({
   async function handleGoogleSignIn() {
     try {
       const proof = await prepareRegistration?.() ?? null;
-      const destination = safeReturnPath(returnTo, "/home");
+      const destination = safeAuthenticationReturnPath(returnTo, "/home");
       // OAuth requires an absolute callback, but its origin stays fixed to this web app.
       const callbackURL = new URL(destination, window.location.origin).toString();
       const errorCallbackURL = new URL(`/sign-in?next=${encodeURIComponent(destination)}`, window.location.origin).toString();

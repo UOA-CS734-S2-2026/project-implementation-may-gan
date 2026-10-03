@@ -3,10 +3,12 @@ import { apiConfiguration } from "@/lib/api/config";
 
 export type { PostDetail, PostMedia, ProfilePost };
 export type ProfilePostsPage = {
+  kind: "archive";
   items: ProfilePost[];
   nextCursor: string | null;
   hasMore: boolean;
 };
+export type ReadableProfilePosts = ProfilePostsPage | { kind: "restricted"; username: string };
 
 export type PostFailure = "unauthenticated" | "notFound" | "network" | "unavailable";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
@@ -47,19 +49,23 @@ export const postsApi = {
   },
 
   /** 404 is an unknown or blocked profile; a profile you may not read posts on is an empty page. */
-  async profilePage(username: string, cursor?: string): Promise<PostResult<ProfilePostsPage>> {
+  async profilePage(username: string, cursor?: string): Promise<PostResult<ReadableProfilePosts>> {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
-      const page = await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username });
-      // Public and restricted archive rendering belongs to DPP-003. Existing
-      // signed-in screens consume only complete archive pages for now.
+      const page = await new PostsApi(configuration).postsListProfilePosts(
+        cursor ? { username, cursor } : { username },
+        { cache: "no-store" },
+      );
+      if (page.kind === "restricted" && typeof page.username === "string") {
+        return { ok: true, value: { kind: "restricted", username: page.username } };
+      }
       if (page.kind !== "archive" || !page.items || page.nextCursor === undefined || page.hasMore === undefined) {
-        return { ok: false, failure: "notFound" };
+        return { ok: false, failure: "unavailable" };
       }
       return {
         ok: true,
-        value: { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore },
+        value: { kind: "archive", items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore },
       };
     } catch (error) {
       return { ok: false, failure: await toFailure(error) };
