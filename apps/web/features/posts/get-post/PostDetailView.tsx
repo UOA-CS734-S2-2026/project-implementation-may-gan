@@ -116,7 +116,9 @@ export function PostDetailView({ username, postId }: { username: string; postId:
     if (!accessRevoked) return;
     const actor = user?.id ?? "anonymous";
     void client.cancelQueries({ queryKey: postKeys.detail(actor, postId) });
+    void client.cancelQueries({ queryKey: postKeys.revisions(actor, postId) });
     client.removeQueries({ queryKey: postKeys.detail(actor, postId) });
+    client.removeQueries({ queryKey: postKeys.revisions(actor, postId) });
   }, [accessRevoked, client, postId, user?.id]);
   useEffect(() => {
     if (user && intent && query.isSuccess) void query.refetch();
@@ -190,7 +192,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
           {postedAt(post)}
           {post.viewerIsAuthor && (post.audience === "solo" ? " · Only you" : " · Friends")}
         </p>
-        {post.edited && (
+        {post.edited && (user ? (
           <button
             type="button"
             aria-expanded={showingHistory}
@@ -199,7 +201,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
           >
             {showingHistory ? "Hide earlier versions" : "Edited · see earlier versions"}
           </button>
-        )}
+        ) : <span>Edited</span>)}
         {post.viewerIsAuthor && !editing && (
           <div className="ml-auto flex gap-2">
             <Button onClick={() => setEditing(true)} variant={{ color: "foreground", size: "sm", weight: "secondary" }}>
@@ -240,7 +242,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         </>
       )}
 
-      {showingHistory && post.edited && <PostRevisions postId={post.id} viewerIsAuthor={post.viewerIsAuthor} />}
+      {showingHistory && post.edited && <PostRevisions key={post.id} postId={post.id} viewerIsAuthor={post.viewerIsAuthor} />}
 
       <DeletePostDialog
         open={confirmingDelete}

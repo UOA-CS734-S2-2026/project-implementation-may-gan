@@ -232,7 +232,7 @@ describe("PostDetailView", () => {
         },
       })
       .mockResolvedValue({ ok: false, failure: "notFound" });
-    render(<PostDetailView username="ana_walks" postId="post-1" />);
+    const { client } = render(<PostDetailView username="ana_walks" postId="post-1" />);
 
     await actor.click(await screen.findByRole("button", { name: "Edited · see earlier versions" }));
     expect(await screen.findByText("Walked the track.")).toBeTruthy();
@@ -241,6 +241,32 @@ describe("PostDetailView", () => {
 
     expect(await screen.findByText("Earlier versions aren't available.")).toBeTruthy();
     expect(screen.queryByText("Walked the track.")).toBeNull();
+    await waitFor(() => expect(client.getQueryData(["posts", "me", "revisions", "post-1"])).toBeUndefined());
+  });
+
+  it("clears visible earlier versions when revision authentication expires", async () => {
+    const actor = userEvent.setup();
+    get.mockResolvedValue({ ok: true, value: detail({ edited: true, revisionCount: 1 }) });
+    revisions
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          items: [{ revisionNumber: 1, reflectiveAnswer: "Private earlier answer.", caption: null, rating: 6, audience: "friends", replacedAt: new Date("2026-09-29T08:00:00.000Z") }],
+          nextCursor: null,
+          hasMore: false,
+        },
+      })
+      .mockResolvedValue({ ok: false, failure: "unauthenticated" });
+    const { client } = render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    await actor.click(await screen.findByRole("button", { name: "Edited · see earlier versions" }));
+    expect(await screen.findByText("Private earlier answer.")).toBeTruthy();
+    await actor.click(screen.getByRole("button", { name: "Hide earlier versions" }));
+    await actor.click(screen.getByRole("button", { name: "Edited · see earlier versions" }));
+
+    expect(await screen.findByText("Earlier versions aren't available.")).toBeTruthy();
+    expect(screen.queryByText("Private earlier answer.")).toBeNull();
+    await waitFor(() => expect(client.getQueryData(["posts", "me", "revisions", "post-1"])).toBeUndefined());
   });
 
   it("opens earlier versions from the edited marker", async () => {
@@ -298,10 +324,14 @@ describe("PostDetailView", () => {
 
   it("renders a public post and offers safe sign-in actions without a session", async () => {
     userId = null;
-    get.mockResolvedValue({ ok: true, value: detail() });
+    get.mockResolvedValue({ ok: true, value: detail({ edited: true, revisionCount: 1 }) });
     render(<PostDetailView username="ana_walks" postId="post-1" />);
 
     expect(await screen.findByText("Walked the coastal track.")).toBeTruthy();
+    expect(screen.getByText("Edited")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /earlier versions/i })).toBeNull();
+    expect(screen.queryByText("Loading earlier versions...")).toBeNull();
+    expect(revisions).not.toHaveBeenCalled();
     expect(screen.getByRole("link", { name: "like" }).getAttribute("href")).toBe("/sign-in?next=%2Fu%2Fana_walks%2Fpost-1%3Fintent%3Dlike");
     expect(screen.getByRole("link", { name: "comment" })).toBeTruthy();
   });
@@ -322,23 +352,27 @@ describe("PostDetailView", () => {
     const { client } = render(<PostDetailView username="ana_walks" postId="post-1" />);
     expect(await screen.findByText("Walked the coastal track.")).toBeTruthy();
     expect(screen.getByAltText("Ana's photo 1 of 1")).toBeTruthy();
+    client.setQueryData(["posts", "me", "revisions", "post-1"], { pages: [{ items: [{ reflectiveAnswer: "Protected history" }] }], pageParams: [undefined] });
 
     await client.refetchQueries({ queryKey: ["posts", "me", "detail", "post-1"] });
     expect(await screen.findByText(/isn't available/)).toBeTruthy();
     expect(screen.queryByText("Walked the coastal track.")).toBeNull();
     expect(screen.queryByAltText("Ana's photo 1 of 1")).toBeNull();
     await waitFor(() => expect(client.getQueryData(["posts", "me", "detail", "post-1"])).toBeUndefined());
+    expect(client.getQueryData(["posts", "me", "revisions", "post-1"])).toBeUndefined();
   });
 
   it("conceals and evicts stale content after an authentication failure", async () => {
     get.mockResolvedValueOnce({ ok: true, value: detail() }).mockResolvedValue({ ok: false, failure: "unauthenticated" });
     const { client } = render(<PostDetailView username="ana_walks" postId="post-1" />);
     expect(await screen.findByText("Walked the coastal track.")).toBeTruthy();
+    client.setQueryData(["posts", "me", "revisions", "post-1"], { pages: [{ items: [{ reflectiveAnswer: "Protected history" }] }], pageParams: [undefined] });
 
     await client.refetchQueries({ queryKey: ["posts", "me", "detail", "post-1"] });
     expect(await screen.findByText(/isn't available/)).toBeTruthy();
     expect(screen.queryByText("Walked the coastal track.")).toBeNull();
     await waitFor(() => expect(client.getQueryData(["posts", "me", "detail", "post-1"])).toBeUndefined());
+    expect(client.getQueryData(["posts", "me", "revisions", "post-1"])).toBeUndefined();
     expect(replace).toHaveBeenCalledWith("/sign-in");
   });
 
