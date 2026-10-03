@@ -1,4 +1,4 @@
-import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import { act, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,11 +28,14 @@ const api = interactionsApi as unknown as Record<keyof typeof interactionsApi, R
 
 function render() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return rtlRender(
-    <QueryClientProvider client={client}>
-      <PostDetailView username="ana_walks" postId="post-1" />
-    </QueryClientProvider>,
-  );
+  return {
+    client,
+    ...rtlRender(
+      <QueryClientProvider client={client}>
+        <PostDetailView username="ana_walks" postId="post-1" />
+      </QueryClientProvider>,
+    ),
+  };
 }
 
 function detail(overrides: Record<string, unknown> = {}) {
@@ -118,6 +121,21 @@ describe("likes", () => {
 
     const likers = await screen.findByRole("region", { name: "Liked by" });
     expect(within(likers).getByRole("link", { name: "Ben" }).getAttribute("href")).toBe("/u/ben");
+  });
+
+  it("drops the likers already loaded when a refetch says access is gone", async () => {
+    const actor = userEvent.setup();
+    api.likes.mockResolvedValue(page([{ person: { id: "friend-1", username: "ben", displayName: "Ben" }, likedAt: new Date() }]));
+    const { client } = render();
+    await actor.click(await screen.findByRole("button", { name: "2 likes" }));
+    await screen.findByRole("link", { name: "Ben" });
+
+    api.likes.mockResolvedValue({ ok: false, failure: "notFound" });
+    await act(() => client.refetchQueries({ queryKey: ["posts", "me", "likes", "post-1"] }));
+
+    expect(await screen.findByText("Likes aren't available.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Ben" })).toBeNull();
+    expect(JSON.stringify(client.getQueryData(["posts", "me", "likes", "post-1"]))).not.toContain("Ben");
   });
 });
 
@@ -300,5 +318,25 @@ describe("comments", () => {
     const thread = await screen.findByRole("article", { name: "Comment by Ben" });
     expect(within(thread).queryByRole("button", { name: "Edit" })).toBeNull();
     expect(within(thread).queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+
+  it("drops loaded and just-posted comments and the composer when a refetch says access is gone", async () => {
+    const actor = userEvent.setup();
+    api.comments.mockResolvedValue(page([comment()]));
+    api.createComment.mockResolvedValue({ ok: true, value: comment({ id: "comment-2", text: "Mine." , viewerCanEdit: true, viewerCanDelete: true }) });
+    const { client } = render();
+    await screen.findByRole("article", { name: "Comment by Ben" });
+    await actor.type(screen.getByRole("textbox", { name: "Add a comment" }), "Mine.");
+    await actor.click(screen.getByRole("button", { name: "Post" }));
+    await screen.findByText("Mine.");
+
+    api.comments.mockResolvedValue({ ok: false, failure: "notFound" });
+    await act(() => client.refetchQueries({ queryKey: ["posts", "me", "comments", "post-1"] }));
+
+    expect(await screen.findByText("Comments aren't available.")).toBeTruthy();
+    expect(screen.queryByText("Beautiful.")).toBeNull();
+    expect(screen.queryByText("Mine.")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Add a comment" })).toBeNull();
+    expect(client.getQueryData(["interactions", "me", "created-comments", "post-1"])).toEqual([]);
   });
 });

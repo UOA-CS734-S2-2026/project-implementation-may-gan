@@ -239,11 +239,13 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
   const query = useCommentsQuery(postId);
   const createdHere = useCreatedComments(postId);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
-  const loaded = query.data?.pages.flatMap((page) => page.items) ?? [];
+  // Access was revoked: show nothing from the pages or comments cached earlier.
+  const gone = query.data?.pages.some((page) => page.unavailable) ?? false;
+  const loaded = gone ? [] : query.data?.pages.flatMap((page) => page.items) ?? [];
   const loadedIds = new Set(loaded.map((comment) => comment.id));
   // Comments posted here that paging hasn't reached. A reply shows under its
   // comment; a new comment shows at the end, after any unloaded pages.
-  const created = createdHere.filter((comment) => !loadedIds.has(comment.id));
+  const created = gone ? [] : createdHere.filter((comment) => !loadedIds.has(comment.id));
   const all = [...loaded, ...created];
   const replies = (parentId: string) =>
     all.filter((comment) => comment.parentCommentId === parentId).sort(writtenOrder);
@@ -283,6 +285,8 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
 
       {query.isPending ? (
         <p role="status" className="text-sm text-foreground-secondary">Loading comments...</p>
+      ) : gone ? (
+        <p role="alert" className="text-sm text-foreground-secondary">Comments aren&apos;t available.</p>
       ) : query.isError && loaded.length === 0 ? (
         <div className="space-y-2">
           <p role="alert" className="text-sm text-foreground-secondary">Comments couldn&apos;t be loaded right now.</p>
@@ -308,7 +312,7 @@ export function PostComments({ postId, commentCount }: { postId: string; comment
         <ol className="space-y-4">{created.filter(isTopLevel).map(thread)}</ol>
       )}
 
-      <CommentComposer postId={postId} label="Add a comment" hasUnloadedComments={query.hasNextPage} />
+      {!gone && <CommentComposer postId={postId} label="Add a comment" hasUnloadedComments={query.hasNextPage} />}
     </section>
   );
 }

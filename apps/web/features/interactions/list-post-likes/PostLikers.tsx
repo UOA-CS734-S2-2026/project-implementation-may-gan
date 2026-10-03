@@ -2,22 +2,19 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/core/Button";
-import { InteractionApiError } from "@/features/interactions/shared/interactions.api";
 import { useLikesQuery } from "./use-likes-query";
 
 /** The people who liked a post, newest first. */
 export function PostLikers({ postId }: { postId: string }) {
   const query = useLikesQuery(postId, true);
-  const likes = query.data?.pages.flatMap((page) => page.items) ?? [];
+  // Access was revoked: show nothing from the pages loaded earlier.
+  const gone = query.data?.pages.some((page) => page.unavailable) ?? false;
+  const likes = gone ? [] : query.data?.pages.flatMap((page) => page.items) ?? [];
 
   if (query.isPending) return <p role="status" className="text-sm text-foreground-secondary">Loading likes...</p>;
+  if (gone) return <p role="alert" className="text-sm text-foreground-secondary">Likes aren&apos;t available.</p>;
   if (query.isError && likes.length === 0) {
-    const gone = query.error instanceof InteractionApiError && query.error.failure === "notFound";
-    return (
-      <p role="alert" className="text-sm text-foreground-secondary">
-        {gone ? "Likes aren't available." : "Likes couldn't be loaded right now."}
-      </p>
-    );
+    return <p role="alert" className="text-sm text-foreground-secondary">Likes couldn&apos;t be loaded right now.</p>;
   }
   if (likes.length === 0) return <p className="text-sm text-foreground-secondary">No likes yet.</p>;
 
