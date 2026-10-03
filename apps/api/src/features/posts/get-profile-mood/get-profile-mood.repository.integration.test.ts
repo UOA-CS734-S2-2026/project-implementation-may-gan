@@ -32,10 +32,13 @@ function requireLocalTestUrl(value: string): string {
 
   async function post(authorId: string, localDate: string, rating: number, options: { audience?: "solo" | "friends"; deleted?: boolean } = {}) {
     await migrator.client`
-      insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at, deleted_at)
+      insert into public.posts (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at,
+        trashed_at, restore_until, trash_purge_due_at)
       values (${id(`${authorId}-${localDate}-${rating}`)}, ${authorId}, ${localDate}, ${`prompt-${localDate.slice(5)}`}, 'An answer', ${rating},
         ${options.audience ?? "friends"}, ${`${localDate}T03:00:00.000Z`}, ${`${localDate}T12:00:00.000Z`},
-        ${options.deleted ? `${localDate}T04:00:00.000Z` : null})
+        ${options.deleted ? `${localDate}T04:00:00.000Z` : null},
+        ${options.deleted ? new Date(Date.parse(`${localDate}T04:00:00.000Z`) + 168 * 3_600_000).toISOString() : null},
+        ${options.deleted ? new Date(Date.parse(`${localDate}T04:00:00.000Z`) + 336 * 3_600_000).toISOString() : null})
     `;
   }
 

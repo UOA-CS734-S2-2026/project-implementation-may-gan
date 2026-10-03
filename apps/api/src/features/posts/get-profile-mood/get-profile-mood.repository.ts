@@ -53,7 +53,7 @@ export async function findProfileMood(
   const { posts, user } = schema;
   const today = getAucklandDay(() => now).localDate;
   const window = moodHistoryWindow(range, today);
-  const live = and(eq(posts.authorId, ownerId), isNull(posts.deletedAt));
+  const live = and(eq(posts.authorId, ownerId), isNull(posts.trashedAt));
   const inWindow = and(gte(posts.localDate, window.previousFrom), lte(posts.localDate, today));
   const [[account], [first], ratings, postedDays] = await Promise.all([
     database.select({ createdAt: user.createdAt }).from(user).where(eq(user.id, ownerId)).limit(1),
