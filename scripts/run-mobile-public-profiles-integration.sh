@@ -9,7 +9,9 @@ compose_file="$repo_root/packages/db/docker-compose.yml"
 compose_project="dayli-mobile-dpp004-${$}-${RANDOM}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-mobile-dpp004.XXXXXX")"
 api_log="$temporary_dir/api.log"
+media_log="$temporary_dir/media.log"
 api_pid=""
+media_pid=""
 
 find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
@@ -17,6 +19,7 @@ find_free_port() {
 
 postgres_port="$(find_free_port)"
 api_port="$(find_free_port)"
+media_port="$(find_free_port)"
 host_api_origin="https://localhost:${api_port}"
 device_api_origin="https://10.0.2.2:${api_port}"
 device_id="${DPP004_DEVICE_ID:-}"
@@ -33,6 +36,7 @@ viewer_password="$(openssl rand -hex 18)"
 second_viewer_password="$(openssl rand -hex 18)"
 fixture_password="$(openssl rand -hex 18)"
 public_post_id="dpp-post-${suffix}"
+public_media_id="dpp-media-${suffix}"
 private_post_id="dpp-private-post-${suffix}"
 certificate="$temporary_dir/fixture.pem"
 key="$temporary_dir/fixture-key.pem"
@@ -58,6 +62,7 @@ cleanup() {
   local status=$?
   trap - EXIT INT TERM
   stop_process "$api_pid"
+  stop_process "$media_pid"
   docker compose -p "$compose_project" -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
   if [[ "$status" -ne 0 ]]; then
     echo 'Disposable API log:' >&2
@@ -140,6 +145,19 @@ openssl req -x509 -newkey rsa:2048 -sha256 -nodes -days 1 \
   -keyout "$key" -out "$certificate" -subj '/CN=dayli-dpp004-fixture' \
   -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2' >/dev/null 2>&1
 
+mkdir -p "$temporary_dir/media"
+node "$repo_root/scripts/fixtures/local-s3-media-server.mjs" \
+  "$temporary_dir/media" "$media_port" >"$media_log" 2>&1 &
+media_pid=$!
+for _ in $(seq 1 40); do
+  if curl --fail --silent "http://127.0.0.1:${media_port}/health" >/dev/null; then break; fi
+  sleep 0.1
+done
+if ! curl --fail --silent "http://127.0.0.1:${media_port}/health" >/dev/null; then
+  echo 'Disposable media fixture did not become ready.' >&2
+  exit 1
+fi
+
 cd "$repo_root"
 echo 'Starting disposable DPP-004 PostgreSQL fixture'
 docker compose -p "$compose_project" -f "$compose_file" up -d --wait
@@ -162,7 +180,12 @@ echo 'Starting disposable local Worker'
       --persist-to "$temporary_dir/wrangler" --log-level warn \
       --var 'BETTER_AUTH_SECRET:dpp004-disposable-secret-at-least-32-characters' \
       --var "BETTER_AUTH_BASE_URL:${device_api_origin}" \
-      --var "BETTER_AUTH_TRUSTED_ORIGINS:${device_api_origin},${host_api_origin}"
+      --var "BETTER_AUTH_TRUSTED_ORIGINS:${device_api_origin},${host_api_origin}" \
+      --var 'R2_ACCOUNT_ID:local-e2e' \
+      --var 'R2_BUCKET_NAME:dayli-media-local' \
+      --var 'R2_ACCESS_KEY_ID:local-access-key' \
+      --var 'R2_SECRET_ACCESS_KEY:local-secret-key' \
+      --var "R2_LOCAL_ENDPOINT:http://127.0.0.1:${media_port}"
 ) >"$api_log" 2>&1 &
 api_pid=$!
 wait_for_url
@@ -198,9 +221,19 @@ if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" ]]; 
   exit 1
 fi
 
+public_media_key="media/${public_user_id}/${public_media_id}.png"
+public_media_path="$temporary_dir/media/dayli-media-local/$public_media_key"
+mkdir -p "$(dirname "$public_media_path")"
+node -e 'require("node:fs").writeFileSync(process.argv[1], Buffer.from(process.argv[2], "base64"))' \
+  "$public_media_path" \
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+public_media_size="$(wc -c < "$public_media_path" | tr -d ' ')"
+
 docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
   psql -v ON_ERROR_STOP=1 -U postgres -d dayli_test \
     -v author_id="$public_user_id" -v post_id="$public_post_id" \
+    -v media_id="$public_media_id" -v media_key="$public_media_key" \
+    -v media_size="$public_media_size" \
     -v private_author_id="$private_user_id" -v private_post_id="$private_post_id" \
     -v blocked_id="$viewer_user_id" >/dev/null <<'SQL'
 INSERT INTO public.posts
@@ -210,6 +243,12 @@ VALUES
    'friends', '2026-09-29T03:00:00Z', '2026-09-29T11:00:00Z'),
   (:'private_post_id', :'private_author_id', '2026-09-28', 'prompt-09-28', 'Blocked private dayli.', 6,
    'friends', '2026-09-28T03:00:00Z', '2026-09-28T11:00:00Z');
+INSERT INTO public.media_reservation
+  (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+VALUES
+  (:'media_id', :'author_id', :'media_key', 'image/png', :'media_size', 'validated', now(), now() + interval '1 day');
+INSERT INTO public.post_media (id, post_id, attachment_order, reservation_id)
+VALUES (:'media_id', :'post_id', 0, :'media_id');
 INSERT INTO public.relationship_blocks (blocker_id, blocked_id, blocked_at)
 VALUES (:'private_author_id', :'blocked_id', now());
 DELETE FROM public.session WHERE user_id = :'author_id';
