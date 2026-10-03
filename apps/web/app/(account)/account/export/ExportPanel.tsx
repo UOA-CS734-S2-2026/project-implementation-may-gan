@@ -7,16 +7,17 @@ import { accountExportDownloadUrl, getAccountExportStatus, requestAccountExport,
 
 export function ExportPanel({ enabled }: { enabled: boolean }) {
   const { user, isPending } = useSession();
+  const userId = user?.id;
   const [status, setStatus] = useState<AccountExportStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
-    if (!enabled || !user) return;
+    if (!enabled || !userId) return;
     let active = true;
     void getAccountExportStatus().then((next) => { if (active) setStatus(next); })
       .catch(() => { if (active) setError("Export status is unavailable. Try again later."); });
     return () => { active = false; };
-  }, [enabled, user]);
+  }, [enabled, userId]);
   if (!enabled) return <p>Account exports are not available yet.</p>;
   if (isPending) return <p>Checking your session…</p>;
   if (!user) return <p>Sign in to request an export.</p>;

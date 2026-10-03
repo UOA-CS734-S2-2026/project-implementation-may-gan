@@ -108,6 +108,7 @@ function fixture(value: string, role: string): string {
   afterAll(async () => {
     try {
       await migrator`delete from public.conversations where id = ${conversation}`;
+      await migrator`delete from public.relationship_blocks where blocker_id = ${peer} and blocked_id = ${owner}`;
       await migrator`delete from public.tomorrow_notes where id = ${note}`;
       await migrator`delete from public.post_revisions where id = ${revision}`;
       await migrator`delete from public.profile_avatars where user_id = ${owner}`;
@@ -158,6 +159,27 @@ function fixture(value: string, role: string): string {
     expect((await page("notes"))[0]?.payload).toMatchObject({ note: "Private tomorrow note", author_id: owner });
   });
 
+  it("exports reviewed media reference fields without exposing reservations or detached bytes", async () => {
+    const refs = await page("post_media");
+    expect(refs.map((row) => row.record_key).sort()).toEqual([attachment, liveMedia, foreignKeyMedia].sort());
+    expect(refs.find((row) => row.record_key === attachment)?.payload).toMatchObject({
+      id: attachment, post_id: post, attachment_order: 0, post_trashed: false,
+    });
+    expect(refs.find((row) => row.record_key === liveMedia)?.payload).toMatchObject({
+      post_id: restorable, post_trashed: true, detached_at: null,
+    });
+    expect(JSON.stringify(refs)).not.toContain("reservation_id");
+    expect(JSON.stringify(refs)).not.toContain("object_key");
+    const avatars = await page("profile_avatars");
+    expect(avatars).toHaveLength(1);
+    expect(avatars[0]?.payload).toMatchObject({ user_id: owner });
+    expect(avatars[0]?.payload.set_at).toBeTruthy();
+    expect(JSON.stringify(avatars)).not.toContain("reservation_id");
+    expect(await page("post_media", null, "wrong-token")).toEqual([]);
+    await expect(app`select * from public.read_account_export_page(${request}, ${lease}, 'post_media', null, 50)`)
+      .rejects.toThrow();
+  });
+
   it("proves post and avatar references before returning internal R2 keys to the worker", async () => {
     const files = await worker<{ file_id: string; post_id: string | null; post_trashed: boolean; file_kind: string; content_type: string; object_key: string }[]>`
       select * from public.read_account_export_file_page_v2(${request}, ${lease}, null, 25)`;
@@ -188,6 +210,16 @@ function fixture(value: string, role: string): string {
     expect(messages[0]?.payload.body).toBe("Own authored body");
     expect(JSON.stringify(messages)).not.toContain("Received private body");
     expect(messages[0]?.payload).not.toHaveProperty("reply_to_message_id");
+    expect(await page("messages", null, "wrong-token")).toEqual([]);
+  });
+
+  it("keeps readable authored history after a block but stops when membership is removed", async () => {
+    await migrator`insert into public.relationship_blocks (blocker_id, blocked_id, blocked_at)
+      values (${peer}, ${owner}, now())`;
+    expect((await page("messages")).map((row) => row.record_key)).toEqual([authored]);
+    await migrator`delete from public.conversation_members
+      where conversation_id = ${conversation} and user_id = ${owner}`;
+    expect(await page("messages")).toEqual([]);
     expect(await page("messages", null, "wrong-token")).toEqual([]);
   });
 

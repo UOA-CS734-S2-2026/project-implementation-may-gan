@@ -74,7 +74,7 @@ export async function* recordArchiveEntries(
     consistency: "per_source_selection_cutoff_not_atomic_snapshot",
     recordKinds: [...exportSourceKinds],
     fileKinds: files ? ["post_media", "profile_avatar"] : [],
-    trashPaths: ["trash/posts.ndjson", ...(files ? ["trash/media/posts/"] : [])],
+    trashPaths: ["trash/posts.ndjson", "trash/post_media.ndjson", ...(files ? ["trash/media/posts/"] : [])],
   };
   yield { path: "manifest.json", chunks: (async function* () {
     yield encoder.encode(`${JSON.stringify(manifest)}\n`);
@@ -93,8 +93,13 @@ export async function* recordArchiveEntries(
           throw new ExportZipLimitError("Export source cursor did not advance.");
         }
         after = item.record_key;
-        if (kind === "posts") {
-          const trashed = item.payload?.trashed_at !== null && item.payload?.trashed_at !== undefined;
+        if (kind === "posts" || kind === "post_media") {
+          if (kind === "post_media" && typeof item.payload?.post_trashed !== "boolean") {
+            throw new ExportZipLimitError("Export media record has no reviewed Trash state.");
+          }
+          const trashed = kind === "posts"
+            ? item.payload?.trashed_at !== null && item.payload?.trashed_at !== undefined
+            : item.payload?.post_trashed === true;
           if (trashed !== trashOnly) continue;
         }
         count += 1;
@@ -108,6 +113,7 @@ export async function* recordArchiveEntries(
     yield { path: `records/${kind}.ndjson`, chunks: records(kind, false) };
   }
   yield { path: "trash/posts.ndjson", chunks: records("posts", true) };
+  yield { path: "trash/post_media.ndjson", chunks: records("post_media", true) };
 
   if (!files) return;
   let after: string | null = null;
@@ -132,7 +138,7 @@ export async function* recordArchiveEntries(
       }
       after = file.file_id;
       fileCount += 1;
-      if (fileCount > MAX_EXPORT_ENTRIES - exportSourceKinds.length - 3) {
+      if (fileCount > MAX_EXPORT_ENTRIES - exportSourceKinds.length - 4) {
         throw new ExportZipLimitError("Export file count exceeds its limit.");
       }
       const path = file.file_kind === "post_media"

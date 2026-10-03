@@ -29,13 +29,14 @@ describe("versioned record archive declaration", () => {
         : [];
     } };
     const files = await readEntries(source);
-    expect(Object.keys(files)).toEqual(["manifest.json", ...exportSourceKinds.map((kind) => `records/${kind}.ndjson`), "trash/posts.ndjson"]);
+    expect(Object.keys(files)).toEqual(["manifest.json", ...exportSourceKinds.map((kind) => `records/${kind}.ndjson`),
+      "trash/posts.ndjson", "trash/post_media.ndjson"]);
     expect(JSON.parse(files["manifest.json"]!)).toMatchObject({
       archiveVersion: 2, selectionCutoffAt: selection.selectionCutoffAt.toISOString(),
       consistency: "per_source_selection_cutoff_not_atomic_snapshot", recordKinds: [...exportSourceKinds],
     });
     expect(files["records/posts.ndjson"]).toContain("User text with https://example.test");
-    expect(observed.map((item) => item.kind)).toEqual([...exportSourceKinds, "posts"]);
+    expect(observed.map((item) => item.kind)).toEqual([...exportSourceKinds, "posts", "post_media"]);
     expect(observed.every((item) => item.cutoff === selection.selectionCutoffAt)).toBe(true);
   });
 
@@ -59,10 +60,15 @@ describe("versioned record archive declaration", () => {
 
   it("places restorable posts and their proved media inside trash/", async () => {
     const source: ExportRecordSource = { async page(_job, kind) {
-      return kind === "posts" ? [
+      if (kind === "posts") return [
         { record_key: "active", payload: { id: "active", trashed_at: null } },
         { record_key: "restorable", payload: { id: "restorable", trashed_at: "2026-10-02T00:00:00Z" } },
-      ] : [];
+      ];
+      if (kind === "post_media") return [
+        { record_key: "active_media", payload: { id: "active_media", post_trashed: false } },
+        { record_key: "trash_media", payload: { id: "trash_media", post_trashed: true } },
+      ];
+      return [];
     } };
     const files: ExportFileSource = {
       async page() { return [{ file_id: "post:trash_media", post_id: "restorable", post_trashed: true,
@@ -73,6 +79,9 @@ describe("versioned record archive declaration", () => {
     expect(archive["records/posts.ndjson"]).toContain('"id":"active"');
     expect(archive["records/posts.ndjson"]).not.toContain("restorable");
     expect(archive["trash/posts.ndjson"]).toContain('"id":"restorable"');
+    expect(archive["records/post_media.ndjson"]).toContain('"id":"active_media"');
+    expect(archive["records/post_media.ndjson"]).not.toContain("trash_media");
+    expect(archive["trash/post_media.ndjson"]).toContain('"id":"trash_media"');
     expect(archive["trash/media/posts/trash_media.bin"]).toBe("abc");
     expect(archive["files.ndjson"]).toContain("trash/media/posts/trash_media.bin");
     expect(JSON.stringify(archive)).not.toContain("media/owner/private");
@@ -105,6 +114,10 @@ describe("versioned record archive declaration", () => {
     const oversized: ExportRecordSource = { async page(_job, kind) {
       return kind === "profile" ? [{ record_key: "user", payload: { bio: "a".repeat(33_000) } }] : [];
     } };
+    const missingTrashState: ExportRecordSource = { async page(_job, kind) {
+      return kind === "post_media" ? [{ record_key: "media_1", payload: { id: "media_1" } }] : [];
+    } };
+    await expect(drain(missingTrashState)).rejects.toBeInstanceOf(ExportZipLimitError);
     await expect(drain(oversized)).rejects.toBeInstanceOf(ExportZipLimitError);
   });
 });

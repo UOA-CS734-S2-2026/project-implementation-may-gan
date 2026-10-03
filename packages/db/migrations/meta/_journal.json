@@ -351,6 +351,13 @@
       "when": 1790996400000,
       "tag": "0049_export_purge_cleanup_fence",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791000000000,
+      "tag": "0050_export_media_reference_records",
+      "breakpoints": true
     }
   ]
 }
