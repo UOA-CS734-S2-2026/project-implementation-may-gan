@@ -1,6 +1,6 @@
 # Data export architecture and data inventory
 
-Status: approved engineering direction, not an enabled export service. The inventory prerequisite is merged as PR #251. Draft PR #252 implements restricted sources and archive processing, but its routes and scheduled jobs remain disabled. This document records the owner decisions for #157 and #162. It does not approve production activation, legal publication, provider purchases, or destructive lifecycle execution.
+Status: approved engineering direction, not an enabled export service. The inventory prerequisite is merged as PR #251. Merged PR #252 implements restricted sources and archive processing. Its routes and scheduled jobs remain disabled. This document records the owner decisions for #157 and #162. It does not approve production activation, legal publication, provider purchases, or destructive lifecycle execution.
 
 ## Decisions
 
