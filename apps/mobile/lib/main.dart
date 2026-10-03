@@ -28,6 +28,7 @@ import 'notifications/firebase_push_source.dart';
 import 'notifications/push_registration_client.dart';
 import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
+import 'profile/streak_cache.dart';
 import 'settings/account_export_client.dart';
 
 // A separate release change must enable this after provider and privacy review.
@@ -63,6 +64,7 @@ Future<void> main() async {
 
   final tokenStore = ProtectedSessionTokenStore(storage: secureStorage);
   final drafts = ProtectedDraftStore(storage: secureStorage);
+  final streakCache = ProtectedStreakCache(secureStorage);
   // Shared so sign-out deletes the compressed media the composer saved.
   final mediaCompressor = DeviceMediaCompressor();
   final nativeSession = BetterAuthNativeSession(
@@ -113,8 +115,14 @@ Future<void> main() async {
     onSignedIn: integrations.start,
     // Must run before Better Auth stores a replacement token. [clear] always
     // stops and clears messaging, then rethrows any unsafe push cleanup error.
-    onBeforeSessionReplacement: integrations.clear,
-    onPrivateDataClear: integrations.clear,
+    onBeforeSessionReplacement: () async {
+      await streakCache.clear();
+      await integrations.clear();
+    },
+    onPrivateDataClear: () async {
+      await streakCache.clear();
+      await integrations.clear();
+    },
   );
 
   runApp(
@@ -165,6 +173,7 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         mediaCompressor: mediaCompressor,
+        streakCache: streakCache,
         mediaUploads: GeneratedMediaUploadClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
