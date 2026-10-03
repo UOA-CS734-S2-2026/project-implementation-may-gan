@@ -20,8 +20,11 @@ function local(value: string, role: string): string {
   const nonce = crypto.randomUUID();
   const owner = `archive-owner-${nonce}`;
   const purging = `archive-purging-${nonce}`;
+  const transitioning = `archive-transition-${nonce}`;
   const session = `archive-session-${nonce}`;
   const purgingSession = `archive-purge-session-${nonce}`;
+  const transitionSession = `archive-transition-session-${nonce}`;
+  const transitionRequest = `archive-transition-request-${nonce}`;
   const request = `archive-request-${nonce}`;
   const purgeRequest = `archive-purge-request-${nonce}`;
   const lease = `archive-lease-${nonce}`;
@@ -30,10 +33,12 @@ function local(value: string, role: string): string {
   beforeAll(async () => {
     await migrator`insert into public."user" (id, name, email) values
       (${owner}, 'Archive owner', ${`${owner}@example.test`}),
-      (${purging}, 'Archive purge owner', ${`${purging}@example.test`})`;
+      (${purging}, 'Archive purge owner', ${`${purging}@example.test`}),
+      (${transitioning}, 'Archive transition owner', ${`${transitioning}@example.test`})`;
     await migrator`insert into public.session (id, token, user_id, expires_at) values
       (${session}, ${`archive-token-${nonce}`}, ${owner}, '2090-01-01T00:00:00Z'),
-      (${purgingSession}, ${`archive-purge-token-${nonce}`}, ${purging}, '2090-01-01T00:00:00Z')`;
+      (${purgingSession}, ${`archive-purge-token-${nonce}`}, ${purging}, '2090-01-01T00:00:00Z'),
+      (${transitionSession}, ${`archive-transition-token-${nonce}`}, ${transitioning}, '2090-01-01T00:00:00Z')`;
     await app`select * from public.request_account_export(${owner}, ${session}, ${request})`;
     await app`select * from public.request_account_export(${purging}, ${purgingSession}, ${purgeRequest})`;
     expect((await worker`select * from public.claim_account_exports(10, ${lease}, 120)`).map((row) => row.request_id))
@@ -42,7 +47,7 @@ function local(value: string, role: string): string {
 
   afterAll(async () => {
     try {
-      await migrator`delete from public."user" where id in (${owner}, ${purging})`;
+      await migrator`delete from public."user" where id in (${owner}, ${purging}, ${transitioning})`;
       if (taskIds.length > 0) await migrator`delete from public.data_export_object_cleanup_tasks where id = any(${taskIds})`;
     } finally { await Promise.all([migrator.end(), app.end(), worker.end()]); }
   });
@@ -173,5 +178,38 @@ function local(value: string, role: string): string {
     const [cleanup] = await migrator<{ due: boolean; status: string }[]>`
       select next_attempt_at <= now() as due, status from public.data_export_object_cleanup_tasks where id = ${task!.id}`;
     expect(cleanup).toMatchObject({ due: true, status: "pending" });
+  });
+
+  it("clears a ready archive and advances cleanup in the purge transaction", async () => {
+    await app`select * from public.request_account_export(${transitioning}, ${transitionSession}, ${transitionRequest})`;
+    const token = `transition-lease-${nonce}`;
+    expect((await worker`select * from public.claim_account_exports(1, ${token}, 120)`)[0]?.request_id)
+      .toBe(transitionRequest);
+    const [reservation] = await worker<{ key: string }[]>`
+      select public.reserve_account_export_archive(${transitionRequest}, ${token}) as key`;
+    expect(reservation?.key).toMatch(/^private\/data-exports\/v2\//);
+    expect((await worker`select public.publish_account_export_archive(${transitionRequest}, ${token}, ${reservation!.key}) as ok`)[0]?.ok)
+      .toBe(true);
+    const [task] = await migrator<{ id: string }[]>`
+      select id from public.data_export_object_cleanup_tasks where archive_object_key = ${reservation!.key}`;
+    taskIds.push(task!.id);
+    await migrator`insert into public.account_lifecycles
+      (user_id, state, request_id, idempotency_key_digest, generation, requested_at, cancel_until, purge_due_at)
+      values (${transitioning}, 'pending_deletion', ${`transition-delete-${nonce}`}, ${"b".repeat(64)}, 0,
+        now() - interval '1 hour', now() + interval '167 hours', now() + interval '335 hours')`;
+    expect(await app`select * from public.authorize_account_export_download(${transitioning}, ${transitionSession}, ${transitionRequest})`)
+      .toHaveLength(1);
+    await migrator`update public.account_lifecycles set state = 'purging', generation = 1,
+      purge_started_at = now() where user_id = ${transitioning}`;
+    const [fenced] = await migrator<{ status: string; archive_object_key: string | null; archive_cleanup_task_id: string }[]>`
+      select status, archive_object_key, archive_cleanup_task_id
+      from public.data_export_requests where id = ${transitionRequest}`;
+    expect(fenced).toMatchObject({ status: "cancelled", archive_object_key: null,
+      archive_cleanup_task_id: task!.id });
+    expect(await app`select * from public.authorize_account_export_download(${transitioning}, ${transitionSession}, ${transitionRequest})`)
+      .toEqual([]);
+    const [due] = await migrator<{ due: boolean }[]>`
+      select next_attempt_at <= now() as due from public.data_export_object_cleanup_tasks where id = ${task!.id}`;
+    expect(due?.due).toBe(true);
   });
 });
