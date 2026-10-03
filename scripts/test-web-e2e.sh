@@ -5,6 +5,21 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Better Auth deliberately limits sign-up and sign-in bursts by source IP. Give
+# each independent spec its own complete local fixture so one scenario cannot
+# spend another scenario's production-equivalent auth budget.
+if [[ -z "${DAYLI_WEB_E2E_SINGLE_FIXTURE:-}" && "$#" -eq 0 ]]; then
+  while IFS= read -r spec; do
+    relative_spec="e2e/$(basename "$spec")"
+    echo "Running $relative_spec in an isolated local fixture"
+    if [[ "${DAYLI_WEB_E2E_PLAN_ONLY:-}" != "1" ]]; then
+      DAYLI_WEB_E2E_SINGLE_FIXTURE=1 bash "$repo_root/scripts/test-web-e2e.sh" "$relative_spec"
+    fi
+  done < <(find "$repo_root/apps/web/e2e" -maxdepth 1 -type f -name '*.spec.ts' | LC_ALL=C sort)
+  exit 0
+fi
+
 compose_file="$repo_root/packages/db/docker-compose.yml"
 compose_project="dayli-web-e2e-${$}-${RANDOM}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e.XXXXXX")"
