@@ -44,6 +44,11 @@ import {
     PostMediaToJSON,
 } from '../models/PostMedia';
 import {
+    type PostVoiceMemo,
+    PostVoiceMemoFromJSON,
+    PostVoiceMemoToJSON,
+} from '../models/PostVoiceMemo';
+import {
     type PostsListTrash200Response,
     PostsListTrash200ResponseFromJSON,
     PostsListTrash200ResponseToJSON,
@@ -53,11 +58,6 @@ import {
     PostsRestore200ResponseFromJSON,
     PostsRestore200ResponseToJSON,
 } from '../models/PostsRestore200Response';
-import {
-    type PostVoiceMemo,
-    PostVoiceMemoFromJSON,
-    PostVoiceMemoToJSON,
-} from '../models/PostVoiceMemo';
 import {
     type ProfilePostsPage,
     ProfilePostsPageFromJSON,
