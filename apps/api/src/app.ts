@@ -60,6 +60,9 @@ import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media"
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
+import { registerFutureSelfNotesRoutes, type FutureSelfNotesRouteDependencies } from "./features/future-self-notes/future-self-notes.routes";
+import { createFutureSelfNoteService } from "./features/future-self-notes/shared/future-self-note.service";
+import { createHyperdriveFutureSelfNoteStore } from "./features/future-self-notes/shared/future-self-note.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
 import { createPresignedDownloadUrl, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
@@ -195,6 +198,7 @@ export interface AppDependencies {
   postMedia?: GetPostMediaRouteDependencies;
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
+  futureSelfNotes?: FutureSelfNotesRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -229,6 +233,7 @@ export function createApp({
   postMedia,
   postVoiceMemo,
   profilePosts,
+  futureSelfNotes,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -310,6 +315,7 @@ export function createApp({
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
   });
+  registerFutureSelfNotesRoutes(api, { ...(futureSelfNotes ?? { resolveSession: async () => null }), rateLimiter });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
     ...messaging,
@@ -378,6 +384,15 @@ export function createAppForEnv(env: ApiEnv) {
     signMediaDownload,
   } satisfies ListProfilePostsRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
+  const futureSelfNotes = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    service: createFutureSelfNoteService({
+      store: createHyperdriveFutureSelfNoteStore(configuration.hyperdrive),
+      clock: { now: () => new Date() },
+      dayService: createAucklandDayService({ now: () => new Date() }),
+    }),
+  } satisfies FutureSelfNotesRouteDependencies : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
@@ -481,6 +496,7 @@ export function createAppForEnv(env: ApiEnv) {
     postMedia,
     postVoiceMemo,
     profilePosts,
+    futureSelfNotes,
     media,
     relationships,
     messaging,

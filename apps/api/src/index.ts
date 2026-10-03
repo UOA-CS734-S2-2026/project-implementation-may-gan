@@ -2,6 +2,7 @@ import { createAppForEnv, app } from "./app";
 import type { ApiEnv } from "./env";
 import { createMediaCleanupDispatcherForEnv } from "./infrastructure/jobs/media-cleanup-runtime";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
+import { createFutureSelfNoteDeliveryDispatcherForEnv } from "./infrastructure/jobs/future-self-note-delivery-runtime";
 import { readBetterAuthRuntimeConfiguration } from "./features/auth/better-auth";
 import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
 import { pruneExpiredGoogleManagementIntents } from "./features/account-policy/reauthenticate/google/google-proof.repository";
@@ -26,6 +27,7 @@ export default {
     if (env.USER_REALTIME) context.waitUntil(createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: env.USER_REALTIME }).dispatchScheduled());
     context.waitUntil(runMediaCleanup(env));
     context.waitUntil(runGoogleIntentExpiry(env));
+    context.waitUntil(runFutureSelfNoteDelivery(env));
   },
 };
 
@@ -38,6 +40,16 @@ async function runGoogleIntentExpiry(env: ApiEnv): Promise<void> {
     );
   } catch {
     console.error("google management intent expiry failed");
+  }
+}
+
+/** Counts only. Records delivered state; it never sends push, and it never logs a note or its owner. */
+async function runFutureSelfNoteDelivery(env: ApiEnv): Promise<void> {
+  try {
+    const summary = await createFutureSelfNoteDeliveryDispatcherForEnv(env).dispatchScheduled();
+    if (summary.claimed > 0) console.info("future-self note delivery", summary);
+  } catch {
+    console.error("future-self note delivery failed");
   }
 }
 

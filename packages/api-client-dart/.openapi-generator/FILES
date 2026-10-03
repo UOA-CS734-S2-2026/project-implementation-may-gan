@@ -6,6 +6,7 @@ analysis_options.yaml
 git_push.sh
 lib/api.dart
 lib/api/account_api.dart
+lib/api/future_self_notes_api.dart
 lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
@@ -37,6 +38,7 @@ lib/model/create_direct_conversation200_response.dart
 lib/model/create_direct_conversation200_response_conversation.dart
 lib/model/create_direct_conversation200_response_conversation_peer.dart
 lib/model/create_direct_conversation_request.dart
+lib/model/create_future_self_note_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
 lib/model/create_realtime_ticket201_response.dart
@@ -55,6 +57,10 @@ lib/model/feed_page.dart
 lib/model/feed_post.dart
 lib/model/feed_post_author.dart
 lib/model/feed_post_prompt.dart
+lib/model/future_self_note.dart
+lib/model/future_self_note_detail.dart
+lib/model/future_self_note_page.dart
+lib/model/future_self_note_status.dart
 lib/model/get_messaging_unread200_response.dart
 lib/model/google_reauthentication_intent.dart
 lib/model/google_reauthentication_request.dart
@@ -114,6 +120,7 @@ lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
+lib/model/update_future_self_note_request.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart

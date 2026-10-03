@@ -95,6 +95,7 @@ describe("explicit export data inventory", () => {
   it("keeps lifecycle and operational fields out of the inventory", () => {
     for (const table of ["account_lifecycles", "account_purge_receipts", "data_export_requests",
       "data_export_object_cleanup_tasks", "operator_cases", "post_idempotency_keys", "rateLimit",
+      "future_self_note_deliveries", "future_self_note_idempotency_keys",
       "relationship_search_quota"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
@@ -133,6 +134,10 @@ describe("explicit export data inventory", () => {
     expect(exportDataInventory.post_revisions!.transformed?.previous_attachment_refs)
       .toEqual(["media_id", "attachment_order", "status"]);
     expect(exportDataInventory.tomorrow_notes!.included).toContain("note");
+    // A future-self note body is withheld from every projection until delivery rules decide otherwise.
+    expect(exportDataInventory.future_self_notes!.included).not.toContain("body");
+    expect(exportDataInventory.future_self_notes!.excluded).toContain("body");
+    expect(exportDataInventory.future_self_notes!.deletion).toBe("purge_with_account");
   });
 
   it("records authored readable messages without reply previews", () => {

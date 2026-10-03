@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './AccountApi';
+export * from './FutureSelfNotesApi';
 export * from './LegalApi';
 export * from './MediaApi';
 export * from './MessagingApi';
