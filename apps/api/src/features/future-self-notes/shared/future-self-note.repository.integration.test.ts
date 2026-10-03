@@ -250,7 +250,7 @@ async function reason(promise: Promise<unknown>): Promise<FutureSelfNoteErrorRea
   it("enforces the body and delivery-state constraints in the database", async () => {
     const insert = (id: string, body: string, status = "scheduled", deliveredAt: Date | null = null) => migrator.client`
       insert into public.future_self_notes (id, owner_id, body, deliver_on, status, delivered_at)
-      values (${`${prefix}-${id}`}, ${owner}, ${body}, '2030-01-01', ${status}::public.future_self_note_status, ${deliveredAt})`;
+      values (${`${prefix}-${id}`}, ${owner}, ${body}, '2030-01-01', ${status}::public.future_self_note_status, ${deliveredAt?.toISOString() ?? null}::timestamptz)`;
 
     await expect(insert("blank", "")).rejects.toMatchObject({ code: "23514" });
     await expect(insert("spaces", " padded ")).rejects.toMatchObject({ code: "23514" });
