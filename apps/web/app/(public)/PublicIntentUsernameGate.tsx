@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getUsernameProfile } from "@/lib/profile/username";
 import { useSession } from "@/lib/session/hooks";
-import { publicActionTarget } from "@/lib/routing/public-return-intent";
+import { publicActionTarget, resumePublicIntent } from "@/lib/routing/public-return-intent";
 
 /** New Google accounts finish username setup before an authenticated action can be resumed. */
 export function PublicIntentUsernameGate() {
@@ -15,7 +15,7 @@ export function PublicIntentUsernameGate() {
   const target = publicActionTarget(`${pathname}${searchParams.size ? `?${searchParams}` : ""}`);
 
   useEffect(() => {
-    if (isPending || !user || !target) return;
+    if (isPending || !user || !target || !resumePublicIntent(target, user.id)) return;
     let current = true;
     void getUsernameProfile().then((profile) => {
       if (current && profile.needsUsernameSetup) router.replace(`/setup-username?next=${encodeURIComponent(target)}`);
