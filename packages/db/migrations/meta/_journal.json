@@ -246,6 +246,13 @@
       "when": 1790987437312,
       "tag": "0034_post_trash_terminal_failure_pause",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790988000000,
+      "tag": "0035_export_owner_commands",
+      "breakpoints": true
     }
   ]
 }

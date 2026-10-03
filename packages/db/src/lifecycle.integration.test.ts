@@ -110,7 +110,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       insert into public.account_lifecycles (user_id, generation)
       values (${lifecycleUserId}, ${maximumSafeInteger}::bigint)
     `;
-    await app`
+    await migrator`
       insert into public.data_export_requests (id, user_id, lifecycle_generation)
       values (${exportId}, ${exportUserId}, ${maximumSafeInteger}::bigint)
     `;
@@ -127,7 +127,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await expect(app.begin((tx) => tx`
       update public.account_lifecycles set generation = 9007199254740992 where user_id = ${lifecycleUserId}
     `)).rejects.toMatchObject({ code: "23514" });
-    await expect(app.begin((tx) => tx`
+    await expect(migrator.begin((tx) => tx`
       update public.data_export_requests set lifecycle_generation = -1 where id = ${exportId}
     `)).rejects.toMatchObject({ code: "23514" });
   });
@@ -144,22 +144,22 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await migrator`set time zone 'America/New_York'`;
     await app`set time zone 'America/New_York'`;
     try {
-      await app`
+      await migrator`
         insert into public.data_export_requests (id, user_id, lifecycle_generation, requested_at)
         values (${firstId}, ${userId}, 3, ${requestedAt})
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         insert into public.data_export_requests (id, user_id, lifecycle_generation, requested_at)
         values (${secondId}, ${userId}, 3, ${requestedAt})
       `)).rejects.toMatchObject({ code: "23505" });
 
-      await app`
+      await migrator`
         update public.data_export_requests
         set status = 'ready', snapshot_cutoff_at = ${requestedAt}, archive_object_key = 'exports/opaque/archive',
             ready_at = ${readyAt}, expires_at = '2026-03-08T22:00:00.000Z'
         where id = ${firstId}
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         update public.data_export_requests
         set expires_at = ready_at + interval '1 day'
         where id = ${firstId}
@@ -169,13 +169,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         insert into public.data_export_object_cleanup_tasks (id, archive_object_key, next_attempt_at)
         values (${cleanupTaskId}, 'exports/opaque/archive', ${readyAt})
       `;
-      await app`
+      await migrator`
         update public.data_export_requests
         set status = 'expired', snapshot_cutoff_at = null, archive_object_key = null,
             ready_at = null, expires_at = null, archive_cleanup_task_id = ${cleanupTaskId}
         where id = ${firstId}
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         update public.data_export_requests
         set snapshot_cutoff_at = ${requestedAt}
         where id = ${firstId}
