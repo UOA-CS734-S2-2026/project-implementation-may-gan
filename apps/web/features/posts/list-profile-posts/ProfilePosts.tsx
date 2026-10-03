@@ -41,6 +41,7 @@ export function ProfilePosts({ username, displayName, isMe }: { username: string
   const posts = useMemo(() => {
     const seen = new Map<string, ProfilePost>();
     for (const page of query.data?.pages ?? []) {
+      if (page.kind === "restricted") continue;
       for (const post of page.items) if (!seen.has(post.id)) seen.set(post.id, post);
     }
     return [...seen.values()];
@@ -53,6 +54,9 @@ export function ProfilePosts({ username, displayName, isMe }: { username: string
       </Message>
     );
   }
+
+  const restricted = query.data?.pages.some((page) => page.kind === "restricted") ?? false;
+  if (restricted) return null;
 
   if (query.isError && posts.length === 0) {
     return (

@@ -5,10 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PostDetailView } from "@/features/posts/get-post/PostDetailView";
 import { postsApi } from "@/features/posts/shared/posts.api";
 
-let userId = "me";
+let userId: string | null = "me";
+let search = "";
 const replace = vi.fn();
-vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: userId }, session: { id: userId }, isPending: false }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
+vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: userId ? { id: userId } : null, session: userId ? { id: userId } : null, isPending: false }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace, push: vi.fn() }),
+  usePathname: () => "/u/ana_walks/post-1",
+  useSearchParams: () => new URLSearchParams(search),
+}));
 vi.mock("@/features/posts/shared/posts.api", () => ({ postsApi: { get: vi.fn(), media: vi.fn() } }));
 
 const get = postsApi.get as unknown as ReturnType<typeof vi.fn>;
@@ -41,6 +46,7 @@ function detail(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   userId = "me";
+  search = "";
 });
 
 describe("PostDetailView", () => {
@@ -91,11 +97,23 @@ describe("PostDetailView", () => {
     expect(await screen.findByText("Walked the coastal track.")).toBeTruthy();
   });
 
-  it("sends a signed-out user to sign in", async () => {
-    get.mockResolvedValue({ ok: false, failure: "unauthenticated" });
+  it("renders a public post and offers safe sign-in actions without a session", async () => {
+    userId = null;
+    get.mockResolvedValue({ ok: true, value: detail() });
     render(<PostDetailView username="ana_walks" postId="post-1" />);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/sign-in"));
+    expect(await screen.findByText("Walked the coastal track.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "like" }).getAttribute("href")).toBe("/sign-in?next=%2Fu%2Fana_walks%2Fpost-1%3Fintent%3Dlike");
+    expect(screen.getByRole("link", { name: "comment" })).toBeTruthy();
+  });
+
+  it("refetches a returned intent without replaying a mutation", async () => {
+    search = "intent=like";
+    get.mockResolvedValue({ ok: true, value: detail() });
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    expect(await screen.findByText(/Nothing was submitted/)).toBeTruthy();
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThanOrEqual(2));
   });
 
   describe("media", () => {

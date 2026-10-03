@@ -4,14 +4,22 @@ import {
   ProfileApi,
   ResponseError,
   instanceOfProfileDetails,
+  instanceOfPublicProfile,
+  instanceOfRestrictedProfile,
   type Mbti,
   type ChangeUsernameResponse,
   type ProfileDetails,
+  type PublicProfile,
+  type RestrictedProfile,
   type ProfileVisibility,
 } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility };
+export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility, PublicProfile, RestrictedProfile };
+export type ReadableProfile =
+  | ({ kind: "authorized" } & ProfileDetails)
+  | PublicProfile
+  | RestrictedProfile;
 
 export type ProfileFailure =
   | { kind: "unauthenticated" | "notFound" | "network" | "unavailable" | "invalid" }
@@ -63,15 +71,17 @@ async function call<T>(operation: (api: ProfileApi) => Promise<T>): Promise<Prof
 
 /** The generated OpenAPI client owns the transport; this only maps failures for the UI. */
 export const profilesApi = {
-  async details(username: string): Promise<ProfileResult<ProfileDetails>> {
-    const result = await call((api) => api.profileGetDetails({ username }));
+  async details(username: string): Promise<ProfileResult<ReadableProfile>> {
+    const result = await call((api) => api.profileGetDetails({ username }, { cache: "no-store" }));
     if (!result.ok) return result;
-    const { kind, ...profile } = result.value;
-    // Public and restricted rendering belongs to DPP-003. Existing signed-in
-    // screens consume only the established owner/friend contract for now.
-    return kind === "authorized" && instanceOfProfileDetails(profile)
-      ? { ok: true, value: profile }
-      : { ok: false, failure: { kind: "notFound" } };
+    const response = result.value;
+    if (response.kind === "restricted" && instanceOfRestrictedProfile(response)) return { ok: true, value: response };
+    if (response.kind === "public" && instanceOfPublicProfile(response)) return { ok: true, value: response };
+    if (response.kind === "authorized") {
+      const { kind, ...profile } = response;
+      if (instanceOfProfileDetails(profile)) return { ok: true, value: { kind, ...profile } };
+    }
+    return { ok: false, failure: { kind: "unavailable" } };
   },
   /** Blank text clears a field. */
   update: (changes: ProfileUpdate) => call((api) => api.profileUpdate({ updateProfileRequest: changes })),
