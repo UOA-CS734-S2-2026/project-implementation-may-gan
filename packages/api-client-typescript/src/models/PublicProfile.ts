@@ -44,7 +44,7 @@ export interface PublicProfile {
      */
     bio: string | null;
     /**
-     * Null for anonymous reads until parent-authorized avatar delivery is available.
+     * The parent-authorized Worker avatar route when a current avatar exists, otherwise null.
      */
     avatarUrl: string | null;
     /**

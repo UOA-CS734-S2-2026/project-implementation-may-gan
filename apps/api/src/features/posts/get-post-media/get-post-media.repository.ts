@@ -12,6 +12,7 @@ export interface PostMediaRepository {
     postId: string,
     mediaId: string,
     now: Date,
+    access?: "private" | "parent-authorized",
   ): Promise<PostMediaRef | null>;
 }
 
@@ -22,7 +23,7 @@ export interface PostMediaRepository {
 export function createPostgresPostMediaRepository(database: DayliDatabase): PostMediaRepository {
   const { posts, user, postMedia, mediaReservation } = schema;
   return {
-    async findMedia(viewerId, postId, mediaId, now) {
+    async findMedia(viewerId, postId, mediaId, now, access = "private") {
       const [row] = await database
         .select({
           id: postMedia.id,
@@ -41,7 +42,7 @@ export function createPostgresPostMediaRepository(database: DayliDatabase): Post
           buildDrizzlePostVisibilityFilter(database, {
             viewer: { userId: viewerId },
             now,
-            action: "media",
+            action: access === "parent-authorized" ? "media" : "private-media",
             mediaId,
           }),
           // Voice memos are served by their own route.

@@ -91,6 +91,17 @@ export async function signPostMedia(
   }));
 }
 
+/** Public read projection. No object key or time-bounded bearer credential leaves the API. */
+export function routePostMedia(refs: readonly PostMediaRef[], requestUrl: string): PostMedia[] {
+  return refs.map((ref) => ({
+    id: ref.id,
+    contentType: ref.contentType,
+    order: ref.order,
+    url: new URL(`/api/v1/posts/${encodeURIComponent(ref.postId)}/media/${encodeURIComponent(ref.id)}/content`, requestUrl).href,
+    expiresAt: null,
+  }));
+}
+
 /**
  * The voice memo attached to a post the caller has already been allowed
  * to read, or null. A post has at most one; detached rows are left out.
@@ -130,5 +141,15 @@ export async function signPostVoiceMemo(
     contentType: ref.contentType,
     url: download.url,
     expiresAt: download.expiresAt.toISOString(),
+  };
+}
+
+/** Voice memo projection for the same parent-authorized Worker delivery path. */
+export function routePostVoiceMemo(ref: PostVoiceMemoRef, requestUrl: string): PostVoiceMemo {
+  return {
+    id: ref.id,
+    contentType: ref.contentType,
+    url: new URL(`/api/v1/posts/${encodeURIComponent(ref.postId)}/voice-memo/content`, requestUrl).href,
+    expiresAt: null,
   };
 }

@@ -52,8 +52,10 @@ import type { ListProfilePostsRouteDependencies } from "./features/posts/list-pr
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
+import type { GetPostMediaContentRouteDependencies } from "./features/posts/get-post-media/get-post-media-content.route";
 import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
 import type { GetPostVoiceMemoRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo.route";
+import type { GetPostVoiceMemoContentRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo-content.route";
 import { createHyperdrivePostVoiceMemoRepository } from "./features/posts/get-post-voice-memo/get-post-voice-memo.repository";
 import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
 import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
@@ -61,7 +63,7 @@ import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { createPresignedDownloadUrl, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createPresignedDownloadUrl, createR2MediaObjectStore, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import {
   createActorRateLimiter,
@@ -153,6 +155,8 @@ import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/
 import type { UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { registerProfilesRoutes } from "./features/profiles/profiles.routes";
 import type { GetProfileDetailsRouteDependencies } from "./features/profiles/get-profile-details/get-profile-details.route";
+import type { GetAvatarRouteDependencies } from "./features/profiles/get-avatar/get-avatar.route";
+import { createHyperdriveAvatarContentRepository } from "./features/profiles/shared/avatar-content.repository";
 import { createHyperdriveProfileDetailsRepository } from "./features/profiles/get-profile-details/get-profile-details.repository";
 import type { UpdateProfileRouteDependencies } from "./features/profiles/update-profile/update-profile.route";
 import { createHyperdriveUpdateProfileRepository } from "./features/profiles/update-profile/update-profile.repository";
@@ -199,7 +203,9 @@ export interface AppDependencies {
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
   postMedia?: GetPostMediaRouteDependencies;
+  postMediaContent?: GetPostMediaContentRouteDependencies;
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
+  postVoiceMemoContent?: GetPostVoiceMemoContentRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
@@ -208,6 +214,7 @@ export interface AppDependencies {
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
   profileDetails?: GetProfileDetailsRouteDependencies;
+  profileAvatar?: GetAvatarRouteDependencies;
   profileUpdate?: UpdateProfileRouteDependencies;
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
@@ -234,7 +241,9 @@ export function createApp({
   feed,
   postDetail,
   postMedia,
+  postMediaContent,
   postVoiceMemo,
+  postVoiceMemoContent,
   profilePosts,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
@@ -243,6 +252,7 @@ export function createApp({
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
   profileDetails,
+  profileAvatar,
   profileUpdate,
   usernameChange,
   avatarSet,
@@ -315,7 +325,9 @@ export function createApp({
     feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
     media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
+    mediaContent: { ...(postMediaContent ?? { resolveSession: async () => null }), rateLimiter },
     voiceMemo: { ...(postVoiceMemo ?? { resolveSession: async () => null }), rateLimiter },
+    voiceMemoContent: { ...(postVoiceMemoContent ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
   });
@@ -330,6 +342,7 @@ export function createApp({
   registerProfilesRoutes(api, {
     username: { ...usernameProfile, rateLimiter },
     details: { ...(profileDetails ?? { resolveSession: async () => null }), rateLimiter },
+    avatar: { ...(profileAvatar ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(profileUpdate ?? { resolveSession: async () => null }), rateLimiter },
     changeUsername: { ...(usernameChange ?? { resolveSession: async () => null }), rateLimiter },
     setAvatar: { ...(avatarSet ?? { resolveSession: async () => null }), rateLimiter },
@@ -361,6 +374,7 @@ export function createAppForEnv(env: ApiEnv) {
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
   const signMediaDownload = r2Runtime ? createR2MediaDownloadSigner(r2Runtime) : undefined;
+  const mediaObjects = r2Runtime ? createR2MediaObjectStore(r2Runtime) : undefined;
   const feed = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveFeedRepository(configuration.hyperdrive),
@@ -376,11 +390,21 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostMediaRouteDependencies : undefined;
+  const postMediaContent = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetPostMediaContentRouteDependencies : undefined;
   const postVoiceMemo = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdrivePostVoiceMemoRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostVoiceMemoRouteDependencies : undefined;
+  const postVoiceMemoContent = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostVoiceMemoRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetPostVoiceMemoContentRouteDependencies : undefined;
   const profilePosts = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveProfilePostsRepository(configuration.hyperdrive),
@@ -459,10 +483,18 @@ export function createAppForEnv(env: ApiEnv) {
   const signAvatar = r2Runtime
     ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
     : undefined;
+  const publicAvatarUrl = configuration
+    ? (username: string) => new URL(`/api/v1/profiles/${encodeURIComponent(username)}/avatar`, configuration.baseURL).href
+    : undefined;
   const profileDetails = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive, signAvatar),
+    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive, signAvatar, publicAvatarUrl),
   } satisfies GetProfileDetailsRouteDependencies : undefined;
+  const profileAvatar = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveAvatarContentRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetAvatarRouteDependencies : undefined;
   const profileUpdate = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveUpdateProfileRepository(configuration.hyperdrive, signAvatar),
@@ -502,7 +534,9 @@ export function createAppForEnv(env: ApiEnv) {
     feed,
     postDetail,
     postMedia,
+    postMediaContent,
     postVoiceMemo,
+    postVoiceMemoContent,
     profilePosts,
     media,
     relationships,
@@ -519,6 +553,7 @@ export function createAppForEnv(env: ApiEnv) {
     legalAcceptance,
     legalRegistration,
     profileDetails,
+    profileAvatar,
     profileUpdate,
     usernameChange,
     avatarSet,

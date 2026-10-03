@@ -1,6 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPostgresAvatarContentRepository } from "./avatar-content.repository";
 import { findProfileDetails, findReadableProfile } from "./profile-details.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
@@ -158,32 +159,43 @@ function requireLocalTestUrl(value: string): string {
   });
 
   describe("public read contract", () => {
-    it("returns only public basics to an anonymous reader and does not sign the avatar", async () => {
+    it("returns public basics with a parent-authorized avatar route to an anonymous reader", async () => {
       const sign = async () => { throw new Error("anonymous avatar signing is forbidden"); };
-      const profile = await findReadableProfile(app.db, null, handle("publicOwner"), now, sign);
+      const publicAvatarUrl = (username: string) => `https://api.example.test/api/v1/profiles/${username}/avatar`;
+      const profile = await findReadableProfile(app.db, null, handle("publicOwner"), now, sign, publicAvatarUrl);
 
       expect(profile).toEqual({
         kind: "public",
         username: handle("publicOwner"),
         displayName: "Pub",
         bio: "Bio of publicOwner",
-        avatarUrl: null,
+        avatarUrl: `https://api.example.test/api/v1/profiles/${handle("publicOwner")}/avatar`,
         streak: { current: 0, longest: 0, lastPostDate: null, postedToday: false, asOf: "2026-09-30" },
       });
       expect(profile).not.toHaveProperty("id");
       expect(profile).not.toHaveProperty("stats");
     });
 
-    it("keeps public-only signed-in readers from receiving a signed avatar", async () => {
+    it("keeps public-only signed-in readers on the parent-authorized avatar route", async () => {
       const signedKeys: string[] = [];
       const sign = async (objectKey: string) => {
         signedKeys.push(objectKey);
         return `https://r2.example.test/${objectKey}?signed`;
       };
 
-      const profile = await findReadableProfile(app.db, users.stranger, handle("publicOwner"), now, sign);
+      const profile = await findReadableProfile(
+        app.db,
+        users.stranger,
+        handle("publicOwner"),
+        now,
+        sign,
+        (username) => `https://api.example.test/api/v1/profiles/${username}/avatar`,
+      );
 
-      expect(profile).toMatchObject({ kind: "public", avatarUrl: null });
+      expect(profile).toMatchObject({
+        kind: "public",
+        avatarUrl: `https://api.example.test/api/v1/profiles/${handle("publicOwner")}/avatar`,
+      });
       expect(signedKeys).toEqual([]);
     });
 
@@ -195,6 +207,22 @@ function requireLocalTestUrl(value: string): string {
         kind: "authorized",
         avatarUrl: `https://r2.example.test/media/${users.publicOwner}/avatar?signed`,
       });
+    });
+
+    it("authorizes avatar objects from the current profile state on every read", async () => {
+      const avatars = createPostgresAvatarContentRepository(app.db);
+      await expect(avatars.findAvatar(null, handle("publicOwner"), now)).resolves.toMatchObject({
+        objectKey: `media/${users.publicOwner}/avatar`,
+        contentType: "image/jpeg",
+      });
+      await expect(avatars.findAvatar(users.blocked, handle("publicOwner"), now)).resolves.toBeNull();
+
+      await migrator.db.update(schema.user).set({ profileVisibility: "private" }).where(eq(schema.user.id, users.publicOwner));
+      try {
+        await expect(avatars.findAvatar(null, handle("publicOwner"), now)).resolves.toBeNull();
+      } finally {
+        await migrator.db.update(schema.user).set({ profileVisibility: "public" }).where(eq(schema.user.id, users.publicOwner));
+      }
     });
 
     it("returns exactly the restricted projection to a private non-friend", async () => {

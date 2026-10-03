@@ -73,6 +73,13 @@ export interface ProfileClaimInitialUsernameRequest {
     usernameSetupRequest: UsernameSetupRequest;
 }
 
+export interface ProfileGetAvatarRequest {
+    /**
+     *
+     */
+    username: string;
+}
+
 export interface ProfileGetDetailsRequest {
     /**
      *
@@ -210,6 +217,61 @@ export class ProfileApi extends runtime.BaseAPI {
      */
     async profileClaimInitialUsername(requestParameters: ProfileClaimInitialUsernameRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<UsernameProfile> {
         const response = await this.profileClaimInitialUsernameRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for profileGetAvatar without sending the request
+     */
+    async profileGetAvatarRequestOpts(requestParameters: ProfileGetAvatarRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['username'] == null) {
+            throw new runtime.RequiredError(
+                'username',
+                'Required parameter "username" was null or undefined when calling profileGetAvatar().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/profiles/{username}/avatar`;
+        urlPath = urlPath.replace('{username}', encodeURIComponent(String(requestParameters['username'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+     * Read a currently authorized profile avatar
+     */
+    async profileGetAvatarRaw(requestParameters: ProfileGetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.profileGetAvatarRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.
+     * Read a currently authorized profile avatar
+     */
+    async profileGetAvatar(requestParameters: ProfileGetAvatarRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.profileGetAvatarRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -10,12 +10,12 @@ interface DrizzlePostVisibilityInputBase {
 
 export type DrizzlePostVisibilityInput = DrizzlePostVisibilityInputBase & (
   | {
-      action: "media";
+      action: "media" | "private-media";
       /** Required for a media-byte check; an old revision reference is not enough. */
       mediaId: string;
     }
   | {
-      action?: Exclude<PermissionAction, "media">;
+      action?: Exclude<PermissionAction, "media" | "private-media">;
       mediaId?: never;
     }
 );
@@ -133,10 +133,10 @@ export function buildDrizzlePostVisibilityFilter(
       not(activeBlock(database, posts.authorId, viewerId)),
     );
 
-  // Public access is explicit for direct detail and profile archives. Generic
-  // lists retain their friend scope, and media stays owner/friend-only until
-  // the parent-authorized Worker route lands.
-  const publicProfile = input.action === "detail" || input.action === "profile"
+  // Public access is explicit for direct detail, profile archives, and the
+  // parent-authorized byte route. Generic lists and legacy signed downloads
+  // retain their friend scope.
+  const publicProfile = input.action === "detail" || input.action === "profile" || input.action === "media"
     ? and(eq(posts.audience, "friends"), eq(user.profileVisibility, "public"))
     : sql`false`;
 
@@ -146,7 +146,7 @@ export function buildDrizzlePostVisibilityFilter(
   const notBlocked = viewerId === null
     ? sql`true`
     : not(activeBlock(database, posts.authorId, viewerId));
-  const media = input.action === "media"
+  const media = input.action === "media" || input.action === "private-media"
     ? attachedMedia(database, posts.id, input.mediaId)
     : sql`true`;
 
@@ -229,12 +229,12 @@ export function findVisiblePostExport(
   return findVisiblePost(database, postId, { ...input, action: "export" });
 }
 
-/** Media authorization is tied to a live post_media row, never revision metadata. */
-export async function findVisiblePostMedia(
+async function findPostMediaForAction(
   database: DayliDatabase,
   postId: string,
   mediaId: string,
   input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+  action: "media" | "private-media",
 ) {
   const [row] = await database
     .select({ media: schema.postMedia, post: schema.posts })
@@ -244,10 +244,30 @@ export async function findVisiblePostMedia(
     .where(and(
       eq(schema.postMedia.postId, postId),
       eq(schema.postMedia.id, mediaId),
-      buildDrizzlePostVisibilityFilter(database, { ...input, action: "media", mediaId }),
+      buildDrizzlePostVisibilityFilter(database, { ...input, action, mediaId }),
     ))
     .limit(1);
   return row ?? null;
+}
+
+/** Media authorization is tied to a live post_media row, never revision metadata. */
+export function findVisiblePostMedia(
+  database: DayliDatabase,
+  postId: string,
+  mediaId: string,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+) {
+  return findPostMediaForAction(database, postId, mediaId, input, "media");
+}
+
+/** Existing signed downloads remain limited to owners and active friends. */
+export function findPrivatelyVisiblePostMedia(
+  database: DayliDatabase,
+  postId: string,
+  mediaId: string,
+  input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
+) {
+  return findPostMediaForAction(database, postId, mediaId, input, "private-media");
 }
 
 /** Tomorrow notes are private and become readable only on the next Auckland day. */

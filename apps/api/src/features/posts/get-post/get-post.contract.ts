@@ -60,7 +60,7 @@ export const getPostErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "Post storage is temporarily unavailable, media storage is unavailable, or public media delivery is pending the parent-authorized media route.",
+    description: "Post or media storage is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };

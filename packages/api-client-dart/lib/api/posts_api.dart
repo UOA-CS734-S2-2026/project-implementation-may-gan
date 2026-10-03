@@ -240,6 +240,83 @@ class PostsApi {
     return null;
   }
 
+  /// Read currently authorized post media bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] mediaId (required):
+  Future<Response> postsGetMediaContentWithHttpInfo(
+    String postId,
+    String mediaId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/media/{mediaId}/content'
+        .replaceAll('{postId}', postId.toString())
+        .replaceAll('{mediaId}', mediaId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read currently authorized post media bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] mediaId (required):
+  Future<MultipartFile?> postsGetMediaContent(
+    String postId,
+    String mediaId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetMediaContentWithHttpInfo(
+      postId,
+      mediaId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
   /// Get a fresh download URL for a post's voice memo
   ///
   /// Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
@@ -305,6 +382,75 @@ class PostsApi {
         await _decodeBodyBytes(response),
         'PostVoiceMemo',
       ) as PostVoiceMemo;
+    }
+    return null;
+  }
+
+  /// Read currently authorized voice memo bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsGetVoiceMemoContentWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/voice-memo/content'
+        .replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read currently authorized voice memo bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<MultipartFile?> postsGetVoiceMemoContent(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetVoiceMemoContentWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
     }
     return null;
   }

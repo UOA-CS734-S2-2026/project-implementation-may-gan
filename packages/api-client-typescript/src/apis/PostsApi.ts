@@ -98,7 +98,25 @@ export interface PostsGetMediaRequest {
     mediaId: string;
 }
 
+export interface PostsGetMediaContentRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     *
+     */
+    mediaId: string;
+}
+
 export interface PostsGetVoiceMemoRequest {
+    /**
+     *
+     */
+    postId: string;
+}
+
+export interface PostsGetVoiceMemoContentRequest {
     /**
      *
      */
@@ -337,6 +355,69 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for postsGetMediaContent without sending the request
+     */
+    async postsGetMediaContentRequestOpts(requestParameters: PostsGetMediaContentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetMediaContent().'
+            );
+        }
+
+        if (requestParameters['mediaId'] == null) {
+            throw new runtime.RequiredError(
+                'mediaId',
+                'Required parameter "mediaId" was null or undefined when calling postsGetMediaContent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/media/{mediaId}/content`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+        urlPath = urlPath.replace('{mediaId}', encodeURIComponent(String(requestParameters['mediaId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized post media bytes
+     */
+    async postsGetMediaContentRaw(requestParameters: PostsGetMediaContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.postsGetMediaContentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized post media bytes
+     */
+    async postsGetMediaContent(requestParameters: PostsGetMediaContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.postsGetMediaContentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for postsGetVoiceMemo without sending the request
      */
     async postsGetVoiceMemoRequestOpts(requestParameters: PostsGetVoiceMemoRequest): Promise<runtime.RequestOpts> {
@@ -388,6 +469,61 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsGetVoiceMemo(requestParameters: PostsGetVoiceMemoRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostVoiceMemo> {
         const response = await this.postsGetVoiceMemoRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGetVoiceMemoContent without sending the request
+     */
+    async postsGetVoiceMemoContentRequestOpts(requestParameters: PostsGetVoiceMemoContentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetVoiceMemoContent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/voice-memo/content`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized voice memo bytes
+     */
+    async postsGetVoiceMemoContentRaw(requestParameters: PostsGetVoiceMemoContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.postsGetVoiceMemoContentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized voice memo bytes
+     */
+    async postsGetVoiceMemoContent(requestParameters: PostsGetVoiceMemoContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.postsGetVoiceMemoContentRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
