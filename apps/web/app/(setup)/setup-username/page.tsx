@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/session/hooks";
 import { claimInitialUsername, getUsernameProfile } from "@/lib/profile/username";
 import { authClient } from "@/lib/auth/client";
+import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
 
 const usernamePattern = /^[a-z0-9][a-z0-9_]{2,29}$/;
 
-export default function SetupUsernamePage() {
+function SetupUsernameForm() {
   const { user, isPending } = useSession();
   const router = useRouter();
+  const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
   const [username, setUsername] = useState("");
   const [publicName, setPublicName] = useState("");
   const [error, setError] = useState<string>();
@@ -20,9 +22,9 @@ export default function SetupUsernamePage() {
     if (isPending) return;
     if (!user) { router.replace("/sign-in"); return; }
     void getUsernameProfile().then((profile) => {
-      if (!profile.needsUsernameSetup) router.replace("/home");
+      if (!profile.needsUsernameSetup) router.replace(returnTo);
     }).catch(() => router.replace("/sign-in"));
-  }, [isPending, router, user]);
+  }, [isPending, returnTo, router, user]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -35,7 +37,7 @@ export default function SetupUsernamePage() {
     setError(undefined);
     try {
       await claimInitialUsername(handle, publicName);
-      router.replace("/home");
+      router.replace(returnTo);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your username.");
     } finally {
@@ -59,4 +61,8 @@ export default function SetupUsernamePage() {
       <button type="button" onClick={() => void authClient.signOut()} className="ml-4 text-sm underline">Sign out</button>
     </form>
   </main>;
+}
+
+export default function SetupUsernamePage() {
+  return <Suspense fallback={null}><SetupUsernameForm /></Suspense>;
 }
