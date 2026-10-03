@@ -62,6 +62,88 @@ function boxSourceFor(buffer: Uint8Array): BoxSource {
   };
 }
 
+/**
+ * The header of a real clip recorded on an Android emulator's camera and compressed by
+ * the app: ftyp and moov, then a `free` box and a 64-bit `mdat`. Its audio track runs
+ * 5.76 s, its video track 4.20 s, and the movie header 5.56 s, so the video track is
+ * 1.36 s shorter than the header. Only box headers are read, so the media itself is
+ * stood in for by a file size and the two box headers that follow the moov.
+ */
+const androidCameraClip = {
+  fileSize: 702_753,
+  leading: Uint8Array.from(
+    atob(
+  "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"
+    ),
+    (char) => char.charCodeAt(0),
+  ),
+  // Box headers at 3,013 (free, 397,023 bytes) and 400,036 (mdat, 64-bit size).
+  headers: new Map([
+    [3_013, "00060edf66726565"],
+    [400_036, "000000016d6461740000000000049e7d"],
+  ]),
+};
+
+function androidCameraClipSource(): BoxSource {
+  const { fileSize, leading, headers } = androidCameraClip;
+  const segments: Array<[number, Uint8Array]> = [
+    [0, leading],
+    ...[...headers].map(([start, hex]): [number, Uint8Array] => [
+      start,
+      Uint8Array.from(hex.match(/../g)!, (pair) => Number.parseInt(pair, 16)),
+    ]),
+  ];
+  return {
+    fileSize,
+    // Serves a range lying wholly inside one known segment, and nothing else.
+    async readRange(start, end) {
+      const segment = segments.find(([from, bytes]) => start >= from && end < from + bytes.byteLength);
+      return segment ? segment[1].slice(start - segment[0], end - segment[0] + 1) : undefined;
+    },
+  };
+}
+
 function rangeReaderFor(buffer: Uint8Array): RangeReader {
   return async (start, end) => {
     if (start < 0 || end < start || end >= buffer.byteLength) return undefined;
@@ -462,6 +544,36 @@ describe("AAC verification for voice memos", () => {
     const result = await audioDuration(buildMinimalM4a(60, 44_100, { sttsTicks: Math.round(60.6 * 44_100) }));
     expect(result).toMatchObject({ outcome: "duration" });
     expect((result as { seconds: number }).seconds).toBeCloseTo(60.6, 3);
+  });
+});
+
+describe("a real camera recording", () => {
+  it("accepts a video track that is shorter than the movie header", async () => {
+    const result = await extractIsoBmffDurationSeconds(androidCameraClipSource());
+
+    // The movie header covers the longest track (the 5.76 s audio), so it's what's reported.
+    expect(result).toMatchObject({ outcome: "duration" });
+    expect((result as { seconds: number }).seconds).toBeCloseTo(5.56, 2);
+  });
+
+  it("still refuses a video track longer than the movie header", async () => {
+    // Same shape, but the header understates the video: a 4.2 s movie with a 9 s video track.
+    const video = buildTrakBox({ timescale: 1000, duration: 9_000 });
+    const file = buildMinimalMp4(4.2, 1000, [video]);
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(file))).toEqual({ outcome: "malformed" });
+  });
+
+  it("applies the limit to the movie header when the video is shorter", async () => {
+    // A 4 s video track in a 30 s movie (sound runs on): the longest claim is reported.
+    const file = concatBoxes(
+      buildFtypBox("isom", ["isom"]),
+      buildMoovBox([
+        buildMvhdBoxV0({ timescale: 1000, duration: 30_000 }),
+        buildTrakBox({ timescale: 1000, duration: 4_000 }),
+      ]),
+      wrapBox("mdat", new Uint8Array([0, 1, 2, 3])),
+    );
+    expect(await extractIsoBmffDurationSeconds(boxSourceFor(file))).toEqual({ outcome: "duration", seconds: 30 });
   });
 });
 
