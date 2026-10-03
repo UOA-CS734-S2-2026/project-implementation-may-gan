@@ -8,6 +8,7 @@ import { migrationsRepositoryPath, migrationsRepositoryRoot } from "./migrations
 import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
 import { migrationsFolder, readLocalMigrations } from "./migrations/state";
+import { currentExportSchemaColumns, validateExportInventory } from "./export/inventory";
 
 const execFileAsync = promisify(execFile);
 
@@ -182,6 +183,8 @@ async function main(): Promise<void> {
   await ensureJournalMatchesFiles();
   await ensureHistoryIsAdditive();
   await ensureDriftFree();
+  const unclassified = validateExportInventory(currentExportSchemaColumns());
+  if (unclassified.length > 0) fail(`Export inventory is stale: ${unclassified.join("; ")}`);
   await ensureSquawkReviews();
 
   const hashes = await readLocalMigrations();
