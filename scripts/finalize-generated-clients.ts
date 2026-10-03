@@ -84,14 +84,15 @@ async function normalizeDartDateOnlyModel(path: string, ...fields: string[]): Pr
   // One read and write per model, so several fields in one file never race.
   let source = await readFile(path, "utf8");
   for (const field of fields) {
+    // Nullable fields are generated without the trailing `!`.
     const normalized = source
       .replace(
-        `json[r'${field}'] = _dateFormatter.format(this.${field});`,
+        new RegExp(`json\\[r'${field}'\\] = _dateFormatter\\.format\\(this\\.${field}(!?)\\);`),
         `json[r'${field}'] = this.${field};`,
       )
       .replace(
-        `${field}: mapDateTime(json, r'${field}', r'')!,`,
-        `${field}: mapValueOfType<String>(json, r'${field}')!,`,
+        new RegExp(`${field}: mapDateTime\\(json, r'${field}', r''\\)(!?),`),
+        `${field}: mapValueOfType<String>(json, r'${field}')$1,`,
       );
 
     if (normalized === source) {
@@ -170,6 +171,10 @@ async function finalizeGeneratedClients() {
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/test_response.dart",
       "aucklandDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/trashed_post_status.dart",
+      "localDate",
     ),
   ]);
 

@@ -34,7 +34,7 @@ export interface PendingRequestPage {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

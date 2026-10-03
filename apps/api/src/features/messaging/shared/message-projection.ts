@@ -11,7 +11,7 @@ export type MessageProjectionRow = {
   id: string;
   conversationId: string;
   sequence: number;
-  senderId: string;
+  senderId: string | null;
   senderParticipantId: string | null;
   clientMessageId: string;
   requestFingerprint: string;
@@ -42,9 +42,11 @@ export const messageProjectionSelection = {
 
 /** Validates and converts a native Drizzle message row to the internal model. */
 export function toStoredMessage(row: MessageProjectionRow): StoredMessage {
+  const senderId = row.senderParticipantId ?? row.senderId;
+  if (!senderId) throw new Error("Message sender identity is missing.");
   return {
     ...row,
-    senderId: row.senderParticipantId ?? row.senderId,
+    senderId,
     sequence: requireSafeSequenceBigInt(row.sequence),
     version: requireSafeMessageVersion(row.version),
     reactions: [],

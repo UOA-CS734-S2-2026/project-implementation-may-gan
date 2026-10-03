@@ -51,6 +51,9 @@ function createBetterAuth(options: BetterAuthOptions) {
         // The public name is deliberately separate from Better Auth's name.
         // OAuth providers can populate name, but never this explicit field.
         displayUsername: { type: "string", required: false },
+        // The server hook supplies this only for the INSERT transaction. The
+        // database replaces the bearer before storing the new user row.
+        legal_registration_admission: { type: "string", required: false, input: false, returned: false },
       },
     },
     databaseHooks: {
@@ -71,7 +74,19 @@ function createBetterAuth(options: BetterAuthOptions) {
             if (displayUsername !== undefined && displayUsername.length > 80) {
               throw new APIError("BAD_REQUEST", { message: "Public name is too long." });
             }
-            return { data: { ...user, username, displayUsername: displayUsername || null } };
+            const current = hookContext as { getHeader?: (name: string) => string | null; request?: Request } | null;
+            const header = (name: string) => current?.getHeader?.(name) ?? current?.request?.headers.get(name) ?? null;
+            const token = header("x-dayli-registration-intent");
+            const binding = header("x-dayli-registration-binding");
+            const state = header("x-dayli-registration-browser-state");
+            const proof = token && binding && /^[0-9a-f]{64}$/.test(token) && /^[0-9a-f]{64}$/.test(binding)
+              ? path === "/sign-up/email" ? `email|${token}|${binding}`
+                : path === "/sign-in/social" && header("x-dayli-native-google-admission") === "1"
+                  ? `google_native|${token}|${binding}` : undefined
+              : undefined;
+            const legal_registration_admission = path === "/callback/:id" && state && state.length >= 8 && state.length <= 256 && !state.includes("|")
+              ? `google_browser||${state}` : proof;
+            return { data: { ...user, username, displayUsername: displayUsername || null, legal_registration_admission } };
           },
         },
         update: {

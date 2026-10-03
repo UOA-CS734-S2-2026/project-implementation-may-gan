@@ -50,7 +50,12 @@ function requireLocalTestUrl(value: string): string {
     });
   }
 
-  async function attach(key: string, post: string, order: number, options: { detached?: boolean; legacy?: boolean } = {}) {
+  async function attach(
+    key: string,
+    post: string,
+    order: number,
+    options: { detached?: boolean; legacy?: boolean; contentType?: string } = {},
+  ) {
     let reservationId: string | null = null;
     if (!options.legacy) {
       reservationId = id(`reservation-${key}`);
@@ -58,7 +63,7 @@ function requireLocalTestUrl(value: string): string {
         id: reservationId,
         ownerId: users.author,
         objectKey: `media/${users.author}/${reservationId}`,
-        contentType: "image/jpeg",
+        contentType: options.contentType ?? "image/jpeg",
         byteSize: 1000,
         status: "validated",
         validatedAt: now,
@@ -103,6 +108,7 @@ function requireLocalTestUrl(value: string): string {
     await attach("first", "released", 0);
     await attach("removed", "released", 5, { detached: true });
     await attach("legacy", "released", 2, { legacy: true });
+    await attach("memo", "released", 3, { contentType: "audio/mp4" });
     await attach("solo-photo", "solo", 0);
     await attach("unreleased-photo", "unreleased", 0);
   });
@@ -149,6 +155,12 @@ function requireLocalTestUrl(value: string): string {
     await expect(media().findMedia(users.friend, id("released"), id("legacy"), now)).resolves.toBeNull();
     // A readable post can't be used to reach another post's media.
     await expect(media().findMedia(users.friend, id("released"), id("solo-photo"), now)).resolves.toBeNull();
+  });
+
+  it("never serves a voice memo through the photo and video route", async () => {
+    // Recordings are read through their own route.
+    await expect(media().findMedia(users.friend, id("released"), id("memo"), now)).resolves.toBeNull();
+    await expect(media().findMedia(users.author, id("released"), id("memo"), now)).resolves.toBeNull();
   });
 
   it("lets the author reach their own solo and unreleased media", async () => {

@@ -204,6 +204,12 @@ class ApiClient {
           return valueString == 'true' || valueString == '1';
         case 'DateTime':
           return value is DateTime ? value : DateTime.tryParse(value);
+        case 'AccountDeletionCancellationResult':
+          return AccountDeletionCancellationResult.fromJson(value);
+        case 'AccountDeletionRequestResult':
+          return AccountDeletionRequestResult.fromJson(value);
+        case 'AccountDeletionStatus':
+          return AccountDeletionStatus.fromJson(value);
         case 'ApiError':
           return ApiError.fromJson(value);
         case 'ApiErrorCode':
@@ -236,6 +242,8 @@ class ApiClient {
           return CreateMediaReservationResponse.fromJson(value);
         case 'CreateRealtimeTicket201Response':
           return CreateRealtimeTicket201Response.fromJson(value);
+        case 'CurrentLegalRegistrationTerms':
+          return CurrentLegalRegistrationTerms.fromJson(value);
         case 'CurrentPostingDayResponse':
           return CurrentPostingDayResponse.fromJson(value);
         case 'DailyPost':
@@ -246,8 +254,12 @@ class ApiClient {
           return DailyPostPrompt.fromJson(value);
         case 'DailyPostTomorrowNote':
           return DailyPostTomorrowNote.fromJson(value);
+        case 'DailyPostVoiceMemo':
+          return DailyPostVoiceMemo.fromJson(value);
         case 'DailyPromptResponse':
           return DailyPromptResponse.fromJson(value);
+        case 'DeletionGrantRequest':
+          return DeletionGrantRequest.fromJson(value);
         case 'DirectPairLookup':
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
@@ -262,8 +274,16 @@ class ApiClient {
           return FeedPostPrompt.fromJson(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GoogleReauthenticationIntent':
+          return GoogleReauthenticationIntent.fromJson(value);
+        case 'GoogleReauthenticationRequest':
+          return GoogleReauthenticationRequest.fromJson(value);
         case 'HealthResponse':
           return HealthResponse.fromJson(value);
+        case 'LegalAcceptanceRequest':
+          return LegalAcceptanceRequest.fromJson(value);
+        case 'LegalAcceptanceResponse':
+          return LegalAcceptanceResponse.fromJson(value);
         case 'ListConversationChanges200Response':
           return ListConversationChanges200Response.fromJson(value);
         case 'ListConversationChanges200ResponseItemsInner':
@@ -296,6 +316,10 @@ class ApiClient {
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'PasswordReauthenticationGrant':
+          return PasswordReauthenticationGrant.fromJson(value);
+        case 'PasswordReauthenticationRequest':
+          return PasswordReauthenticationRequest.fromJson(value);
         case 'PendingRelationshipRequest':
           return PendingRelationshipRequest.fromJson(value);
         case 'PendingRequestPage':
@@ -310,8 +334,16 @@ class ApiClient {
           return PostDetailPrompt.fromJson(value);
         case 'PostMedia':
           return PostMedia.fromJson(value);
+        case 'PostMediaContentType':
+          return PostMediaContentTypeTypeTransformer().decode(value);
+        case 'PostVoiceMemo':
+          return PostVoiceMemo.fromJson(value);
         case 'PostingStreak':
           return PostingStreak.fromJson(value);
+        case 'PostsListTrash200Response':
+          return PostsListTrash200Response.fromJson(value);
+        case 'PostsRestore200Response':
+          return PostsRestore200Response.fromJson(value);
         case 'ProfileDetails':
           return ProfileDetails.fromJson(value);
         case 'ProfileOwnerSettings':
@@ -330,6 +362,10 @@ class ApiClient {
           return ProfileVisibilityTypeTransformer().decode(value);
         case 'RegisterPushDeviceRequest':
           return RegisterPushDeviceRequest.fromJson(value);
+        case 'RegistrationIntentRequest':
+          return RegistrationIntentRequest.fromJson(value);
+        case 'RegistrationIntentResponse':
+          return RegistrationIntentResponse.fromJson(value);
         case 'RelationshipProfile':
           return RelationshipProfile.fromJson(value);
         case 'RelationshipState':
@@ -352,12 +388,16 @@ class ApiClient {
           return SetMessageReactionRequest.fromJson(value);
         case 'TestResponse':
           return TestResponse.fromJson(value);
+        case 'TrashedPostStatus':
+          return TrashedPostStatus.fromJson(value);
         case 'UpdateProfileRequest':
           return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':
           return UsernameProfile.fromJson(value);
         case 'UsernameSetupRequest':
           return UsernameSetupRequest.fromJson(value);
+        case 'VoiceMemoContentType':
+          return VoiceMemoContentTypeTypeTransformer().decode(value);
         default:
           dynamic match;
           if (value is List &&

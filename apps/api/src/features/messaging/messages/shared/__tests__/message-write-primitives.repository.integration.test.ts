@@ -61,8 +61,8 @@ suite("message write primitive builders", () => {
       updatedAt: now,
     });
     await database.db.insert(conversationMembers).values([
-      { conversationId, userId: users[0]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
-      { conversationId, userId: users[1]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+      { conversationId, userId: users[0]!, participantId: users[0]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
+      { conversationId, userId: users[1]!, participantId: users[1]!, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
     ]);
     await database.db.insert(messages).values({
       id: messageId,
@@ -76,8 +76,8 @@ suite("message write primitive builders", () => {
       createdAt: now,
     });
     await database.db.insert(messageReactions).values([
-      { messageId, userId: users[0]!, reaction: "like", createdAt: now },
-      { messageId, userId: users[1]!, reaction: "like", createdAt: now },
+      { messageId, userId: users[0]!, participantId: users[0]!, reaction: "like", createdAt: now },
+      { messageId, userId: users[1]!, participantId: users[1]!, reaction: "like", createdAt: now },
     ]);
     return { conversationId, messageId };
   }

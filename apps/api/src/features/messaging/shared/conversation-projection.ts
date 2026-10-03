@@ -18,8 +18,9 @@ export async function projectConversationDto(
   row: ConversationProjectionRow,
   actorId: string,
 ) {
-  const latest = row.latestMessage ? await projectMessageDto(database, row.latestMessage, actorId) : null;
+  const latest = row.latestMessage?.id ? await projectMessageDto(database, row.latestMessage, actorId) : null;
   const blocked = row.blocked === true;
+  const participantsAvailable = row.participants_available === true;
   const actorParticipantId = String(row.member_participant_id ?? actorId);
   return {
     id: String(row.id),
@@ -35,8 +36,8 @@ export async function projectConversationDto(
     lastReadSequence: sequenceText(row.last_read_sequence),
     receiptSequence: sequenceText(row.receipt_sequence),
     capabilities: {
-      canSend: row.request_state === "active" && !blocked,
-      canResolveRequest: row.request_state === "pending" && String(row.initiator_participant_id ?? row.initiator_id) !== actorParticipantId && !blocked,
+      canSend: row.request_state === "active" && participantsAvailable && !blocked,
+      canResolveRequest: row.request_state === "pending" && participantsAvailable && String(row.initiator_participant_id ?? row.initiator_id) !== actorParticipantId && !blocked,
     },
     updatedAt: date(row.updated_at).toISOString(),
   };

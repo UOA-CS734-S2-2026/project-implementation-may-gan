@@ -8,6 +8,7 @@ import { migrationsRepositoryPath, migrationsRepositoryRoot } from "./migrations
 import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
 import { migrationsFolder, readLocalMigrations } from "./migrations/state";
+import { currentExportJsonColumns, currentExportSchemaColumns, inventoryTestRegistry, validateExportInventory, validateExportJsonFamilies } from "./export/inventory";
 
 const execFileAsync = promisify(execFile);
 
@@ -142,7 +143,7 @@ async function ensureDriftFree(): Promise<void> {
     const tempConfig = path.join(tempDir, "drizzle.config.ts");
     await writeFile(
       tempConfig,
-      `import { defineConfig } from "drizzle-kit";\nexport default defineConfig({ schema: "${migrationsRepositoryPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true });\n`,
+      `export default { schema: "${migrationsRepositoryPath("packages/db/src/schema/index.ts")}", out: "${tempDir}", dialect: "postgresql", strict: true };\n`,
     );
     await run("pnpm", ["exec", "drizzle-kit", "generate", "--config", tempConfig]);
     const after = await fileHashes(tempDir);
@@ -182,6 +183,14 @@ async function main(): Promise<void> {
   await ensureJournalMatchesFiles();
   await ensureHistoryIsAdditive();
   await ensureDriftFree();
+  const unclassified = validateExportInventory(currentExportSchemaColumns());
+  if (unclassified.length > 0) fail(`Export inventory is stale: ${unclassified.join("; ")}`);
+  const unclassifiedJson = validateExportJsonFamilies(currentExportJsonColumns());
+  if (unclassifiedJson.length > 0) fail(`Export JSON inventory is stale: ${unclassifiedJson.join("; ")}`);
+  for (const [id, test] of Object.entries(inventoryTestRegistry)) {
+    const source = await readFile(migrationsRepositoryPath(test.file), "utf8").catch(() => "");
+    if (!source.includes(`it("${test.name}"`)) fail(`Export inventory test is missing: ${id}`);
+  }
   await ensureSquawkReviews();
 
   const hashes = await readLocalMigrations();

@@ -240,6 +240,75 @@ class PostsApi {
     return null;
   }
 
+  /// Get a fresh download URL for a post's voice memo
+  ///
+  /// Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsGetVoiceMemoWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/voice-memo'
+        .replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Get a fresh download URL for a post's voice memo
+  ///
+  /// Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<PostVoiceMemo?> postsGetVoiceMemo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetVoiceMemoWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostVoiceMemo',
+      ) as PostVoiceMemo;
+    }
+    return null;
+  }
+
   /// List yesterday's posts from friends
   ///
   /// Returns yesterday's `friends` posts by the authenticated user's active friends: the Auckland day released at the most recent midnight. Earlier days are on each friend's profile. Solo posts, the caller's own posts, and posts by blocked or blocking users are never included. Access is re-checked on every page.
@@ -412,6 +481,188 @@ class PostsApi {
         await _decodeBodyBytes(response),
         'ProfilePostsPage',
       ) as ProfilePostsPage;
+    }
+    return null;
+  }
+
+  /// List the authenticated owner's trashed posts
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> postsListTrashWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/trash';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List the authenticated owner's trashed posts
+  Future<PostsListTrash200Response?> postsListTrash({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListTrashWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostsListTrash200Response',
+      ) as PostsListTrash200Response;
+    }
+    return null;
+  }
+
+  /// Restore an owned post from Trash
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsRestoreWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/posts/{postId}/restore'.replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Restore an owned post from Trash
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<PostsRestore200Response?> postsRestore(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsRestoreWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostsRestore200Response',
+      ) as PostsRestore200Response;
+    }
+    return null;
+  }
+
+  /// Move an owned post to Trash
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsTrashWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/trash'.replaceAll('{postId}', postId);
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'POST',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Move an owned post to Trash
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<TrashedPostStatus?> postsTrash(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsTrashWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'TrashedPostStatus',
+      ) as TrashedPostStatus;
     }
     return null;
   }

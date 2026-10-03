@@ -1,6 +1,9 @@
 import { createHyperdriveDatabase, schema, sql, type HyperdriveBinding } from "@dayli/db";
 import { and, eq, exists, gt, isNull, or } from "drizzle-orm";
 import type { OutboxJob } from "../jobs/outbox-store";
+import { conversationPairBlocked, conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
+import { allowsAccountCapability } from "../../features/account-policy/shared/account-policy";
+import { readAccountPolicy } from "../../features/account-policy/shared/account-policy.repository";
 import { bodyFreeRealtimeEvent } from "../jobs/dispatch-outbox";
 
 interface UserRealtimeStub {
@@ -61,37 +64,15 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
         )),
     );
-    const blocked = exists(
-      database.db
-        .select({ blockerId: schema.relationshipBlocks.blockerId })
-        .from(schema.relationshipBlocks)
-        .where(and(
-          isNull(schema.relationshipBlocks.unblockedAt),
-          or(
-            and(
-              eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-              eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
-            ),
-            and(
-              eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-              eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
-            ),
-          ),
-        )),
+    const blocked = conversationPairBlocked(
+      database.db,
+      schema.conversations.participantLowId,
+      schema.conversations.participantHighId,
     );
-    const availableParticipant = (
-      participantId: typeof schema.conversations.participantLowId | typeof schema.conversations.participantHighId,
-    ) => exists(database.db
-      .select({ id: schema.messagingParticipants.id })
-      .from(schema.messagingParticipants)
-      .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
-      .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
-      .where(and(
-        eq(schema.messagingParticipants.id, participantId),
-        eq(schema.messagingParticipants.state, "active"),
-        or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
-      )));
-    const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.participantLowId)} and ${availableParticipant(schema.conversations.participantHighId)}`;
+    const participantsAvailable = conversationParticipantsAvailable(
+      schema.conversations.participantLowId,
+      schema.conversations.participantHighId,
+    );
     const reactionStillPresent = exists(database.db
       .select({ messageId: schema.messageReactions.messageId })
       .from(schema.messageReactions)
@@ -144,6 +125,11 @@ export async function canPublishCurrentChange(hyperdrive: HyperdriveBinding, job
       ))
       .limit(1);
     if (!row || !row.recipientMember) return false;
+    try {
+      if (!allowsAccountCapability(await readAccountPolicy(database.db, job.recipientId), "ordinary")) return false;
+    } catch {
+      return false;
+    }
     // New writers persist the actual actor. Old message-created jobs can derive
     // it from the immutable message sender. Other ambiguous old queued changes
     // may be delivered only when neither availability nor blocks changed.

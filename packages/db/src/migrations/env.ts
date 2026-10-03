@@ -88,7 +88,7 @@ export function validateMigrationConnectionString(connectionString: string, targ
 }
 
 export function messagingReadinessSizeCap(target: MigrationTarget, environment = process.env): number {
-  const configured = environment.MESSAGING_0023_SIZE_CAP_BYTES;
+  const configured = environment.MESSAGING_0024_SIZE_CAP_BYTES;
   if (target === "staging") {
     if (configured && configured !== String(messagingReadinessStagingCapBytes)) {
       throw new Error("Staging must use the fixed 16 MiB messaging readiness size cap.");
@@ -97,17 +97,17 @@ export function messagingReadinessSizeCap(target: MigrationTarget, environment =
   }
 
   if (target !== "production") {
-    if (configured) throw new Error("MESSAGING_0023_SIZE_CAP_BYTES is only allowed for a production migration.");
+    if (configured) throw new Error("MESSAGING_0024_SIZE_CAP_BYTES is only allowed for a production migration.");
     return messagingReadinessStagingCapBytes;
   }
 
   if (!configured) return messagingReadinessStagingCapBytes;
   if (!/^[0-9]+$/.test(configured)) {
-    throw new Error("MESSAGING_0023_SIZE_CAP_BYTES must be a whole number of bytes.");
+    throw new Error("MESSAGING_0024_SIZE_CAP_BYTES must be a whole number of bytes.");
   }
   const cap = Number(configured);
   if (!Number.isSafeInteger(cap) || cap < messagingReadinessStagingCapBytes) {
-    throw new Error("MESSAGING_0023_SIZE_CAP_BYTES must be at least 16 MiB.");
+    throw new Error("MESSAGING_0024_SIZE_CAP_BYTES must be at least 16 MiB.");
   }
   return cap;
 }

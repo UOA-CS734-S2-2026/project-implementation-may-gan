@@ -22,7 +22,7 @@ class PostMedia {
 
   final String id;
 
-  final MediaContentType contentType;
+  final PostMediaContentType contentType;
 
   /// Minimum value: 0
   final int order;
@@ -70,7 +70,7 @@ class PostMedia {
   /// properties have changed.
   PostMedia copyWith({
     String? id,
-    MediaContentType? contentType,
+    PostMediaContentType? contentType,
     int? order,
     String? url,
     DateTime? expiresAt,
@@ -119,7 +119,7 @@ class PostMedia {
 
       return PostMedia(
         id: mapValueOfType<String>(json, r'id')!,
-        contentType: MediaContentType.fromJson(json[r'contentType'])!,
+        contentType: PostMediaContentType.fromJson(json[r'contentType'])!,
         order: mapValueOfType<int>(json, r'order')!,
         url: mapValueOfType<String>(json, r'url')!,
         expiresAt: mapDateTime(json, r'expiresAt', r'')!,

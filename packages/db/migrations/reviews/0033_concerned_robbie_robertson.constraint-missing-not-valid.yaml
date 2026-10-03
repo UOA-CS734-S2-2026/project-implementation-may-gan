@@ -1,0 +1,6 @@
+reason: This transaction is capped at 16 MiB of posts and follows the same measured small-table rollout as migration 0030. Validation must be complete before Trash writers can be enabled. Five-second lock acquisition and five-minute statement limits abort rather than silently weakening the check.
+affected_data_and_clients: Brief post write delays are possible only during the bounded constraint validation. Existing invalid Trash deadlines fail closed.
+rollout_sequence: Measure posts and confirm a backup, apply on synthetic staging, inspect convalidated, and keep Trash routes disabled pending independent review.
+backup_checkpoint: Confirm the staging recovery checkpoint before running.
+forward_fix_plan: Stop if a larger table or write pause is unacceptable. Use a separately reviewed nonblocking constraint validation migration, not a modification of applied SQL.
+reviewer: Database and availability reviewers required.

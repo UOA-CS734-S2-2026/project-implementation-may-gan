@@ -17,6 +17,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 | Weather | Permission-based coarse location/provider snapshot; omit or select place manually. |
 | Music | Supported OS/provider title and artist; manual selection when unavailable. No universal cross-app access. |
 | Ambient sound | Explicit one-second recording with preview/removal. Never silent capture. |
+| Voice memo | One optional explicit in-app recording of up to 60 seconds with preview/removal, recorded on mobile only; every device can play it. Never silent capture. Separate from ambient sound (#63). |
 
 ## 3. Memories and privacy
 

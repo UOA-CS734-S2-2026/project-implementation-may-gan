@@ -23,6 +23,8 @@ The command performs four steps:
 
 OpenAPI Generator CLI is pinned in `package.json`. Its Java generator version is pinned in `openapitools.json`. Review generator upgrades like dependency upgrades because they can change every generated file.
 
+The API serves the document with `api.doc()`, which writes OpenAPI 3.0 schemas (`nullable: true`), so it declares `openapi: "3.0.3"`. Declaring 3.1 with that writer made both generators ignore `nullable` and type nullable fields as required. `apps/web/lib/api/generated-nullability.test.ts` and `apps/mobile/test/generated_client_nullability_test.dart` decode real nulls to catch a regression. Keep request schemas to one enum per field: the Dart generator cannot build a union of a referenced enum, a literal, and null.
+
 ## Changing an API contract
 
 Update the route contract and its tests, then run:

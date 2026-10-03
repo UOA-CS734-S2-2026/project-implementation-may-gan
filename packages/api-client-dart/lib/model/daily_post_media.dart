@@ -20,7 +20,7 @@ class DailyPostMedia {
 
   final String id;
 
-  final MediaContentType contentType;
+  final PostMediaContentType contentType;
 
   /// Minimum value: 0
   final int order;
@@ -54,7 +54,7 @@ class DailyPostMedia {
   /// properties have changed.
   DailyPostMedia copyWith({
     String? id,
-    MediaContentType? contentType,
+    PostMediaContentType? contentType,
     int? order,
   }) =>
       DailyPostMedia(
@@ -91,7 +91,7 @@ class DailyPostMedia {
 
       return DailyPostMedia(
         id: mapValueOfType<String>(json, r'id')!,
-        contentType: MediaContentType.fromJson(json[r'contentType'])!,
+        contentType: PostMediaContentType.fromJson(json[r'contentType'])!,
         order: mapValueOfType<int>(json, r'order')!,
       );
     }

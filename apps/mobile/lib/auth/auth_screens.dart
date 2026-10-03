@@ -32,8 +32,53 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _fieldErrors = const {};
   String? _error;
   bool _googleNeedsLink = false;
+  bool _termsLoaded = false;
+  bool _termsUnavailable = false;
+  bool _accepted = false;
+  RegistrationTerms? _terms;
+  bool _startedTermsLoad = false;
 
   bool get _signUp => widget.mode == AuthMode.signUp;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_startedTermsLoad) {
+      _startedTermsLoad = true;
+      _loadTerms();
+    }
+  }
+
+  Future<void> _loadTerms() async {
+    try {
+      final terms = await AppScope.of(
+        context,
+      ).session.currentRegistrationTerms();
+      if (mounted) {
+        setState(() {
+          _terms = terms;
+          _termsLoaded = true;
+          _termsUnavailable = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _termsLoaded = true;
+          _termsUnavailable = true;
+        });
+      }
+    }
+  }
+
+  Future<RegistrationProof?> _proof(String flow) async {
+    if (!_termsLoaded || _termsUnavailable || (_terms != null && !_accepted)) {
+      throw const AuthenticationFailure('registration-terms', 409);
+    }
+    return AppScope.of(
+      context,
+    ).session.issueRegistrationProof(flow: flow, terms: _terms);
+  }
 
   @override
   void dispose() {
@@ -70,6 +115,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _submit() async {
+    if (_signUp && (!_termsLoaded || _termsUnavailable)) return;
+    if (_signUp && _terms != null && !_accepted) {
+      setState(
+        () => _error = 'Confirm the Terms and that you are 16 or older.',
+      );
+      return;
+    }
     final errors = _validate();
     setState(() {
       _fieldErrors = errors;
@@ -82,8 +134,9 @@ class _AuthScreenState extends State<AuthScreen> {
     FocusScope.of(context).unfocus();
     final session = AppScope.of(context).session;
     await _run(
-      () => _signUp
+      () async => _signUp
           ? session.signUp(
+              registrationProof: await _proof('email'),
               name: _name.text.trim().isEmpty
                   ? _username.text.trim().toLowerCase()
                   : _name.text.trim(),
@@ -103,6 +156,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
+    if (_signUp && (!_termsLoaded || _termsUnavailable)) return;
+    if (_signUp && _terms != null && !_accepted) {
+      setState(
+        () => _error = 'Confirm the Terms and that you are 16 or older.',
+      );
+      return;
+    }
     final services = AppScope.of(context);
     final google = services.google;
     if (google == null) {
@@ -113,7 +173,10 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
     await _run(
-      () => services.session.signInWithGoogle(google),
+      () async => services.session.signInWithGoogle(
+        google,
+        registrationProof: _signUp ? await _proof('google_native') : null,
+      ),
       rejected: "Google sign-in didn't complete. Try again.",
     );
   }
@@ -131,6 +194,19 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await action();
     } on AuthenticationFailure catch (failure) {
+      if (failure.operation == 'registration-proof' ||
+          failure.operation == 'registration-terms') {
+        if (mounted) {
+          setState(() {
+            _accepted = false;
+            _termsLoaded = false;
+            _error =
+                'Registration terms changed. Check the documents and try again.';
+          });
+        }
+        await _loadTerms();
+        return;
+      }
       // Better Auth answers 422 when a sign-up email is taken and 429 when
       // its attempt limit is hit; neither is an outage.
       final message = failure.needsGoogleLink
@@ -177,14 +253,18 @@ class _AuthScreenState extends State<AuthScreen> {
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
         const SizedBox(height: 8),
-        const LegalLinks(
+        LegalLinks(
           center: true,
           compact: true,
-          draftMarker: true,
+          draftMarker: _terms == null,
           notice: false,
         ),
         const SizedBox(height: 20),
-        GoogleSignInButton(onPressed: _busy ? null : _signInWithGoogle),
+        GoogleSignInButton(
+          onPressed: _busy || (_signUp && (!_termsLoaded || _termsUnavailable))
+              ? null
+              : _signInWithGoogle,
+        ),
         const SizedBox(height: 20),
         DayliDivider(
           label: 'or',
@@ -251,6 +331,28 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ),
+        if (_signUp && _terms != null) ...[
+          const SizedBox(height: 16),
+          Material(
+            type: MaterialType.transparency,
+            child: CheckboxListTile(
+              key: const Key('auth.legalAction'),
+              value: _accepted,
+              onChanged: _busy
+                  ? null
+                  : (value) => setState(() => _accepted = value ?? false),
+              title: const Text(
+                'I agree to the Terms of Service, acknowledge the Privacy Policy, and confirm I am 16 or older.',
+              ),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+        if (_signUp && _termsUnavailable) ...[
+          const SizedBox(height: 12),
+          const Text('Registration terms cannot be verified right now.'),
+        ],
         if (_error != null) ...[
           const SizedBox(height: 16),
           Container(
@@ -302,7 +404,9 @@ class _AuthScreenState extends State<AuthScreen> {
           fullWidth: true,
           height: 52,
           arrow: !_busy,
-          onPressed: _busy ? null : _submit,
+          onPressed: _busy || (_signUp && (!_termsLoaded || _termsUnavailable))
+              ? null
+              : _submit,
         ),
         const SizedBox(height: 12),
         // Wraps under large text sizes instead of overflowing.

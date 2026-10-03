@@ -14,11 +14,14 @@ import {
   type SocialLinkConfirmationStore,
 } from "./social-link-confirmation";
 import { withHyperdriveDatabase } from "../../infrastructure/database/hyperdrive";
-import { schema } from "@dayli/db";
+import { schema, type DayliDatabase } from "@dayli/db";
+import { bindBrowserRegistrationIntent } from "../legal/shared/registration-intent.repository";
 import { eq } from "drizzle-orm";
+import { handleGoogleManagementCallback, isGoogleManagementCallback, type GoogleManagementCallbackDependencies } from "../account-policy/reauthenticate/google/google-proof-callback";
+import { claimGoogleManagementIntent, completeGoogleManagementIntent } from "../account-policy/reauthenticate/google/google-proof.repository";
 
 const corsMethods = ["GET", "POST"];
-const corsHeaders = ["authorization", "content-type"];
+const corsHeaders = ["authorization", "content-type", "x-dayli-registration-intent", "x-dayli-registration-binding"];
 
 function appendVary(headers: Headers, value: string) {
   const values = new Set(headers.get("vary")?.split(",").map((item) => item.trim()).filter(Boolean) ?? []);
@@ -191,11 +194,50 @@ function registerStrictAuthRoutes<E extends Env>(
   });
 }
 
+async function prepareRegistrationRequest(request: Request): Promise<Request> {
+  const path = new URL(request.url).pathname;
+  const headers = new Headers(request.headers);
+  // Internal proof markers cannot be supplied by a browser or native caller.
+  headers.delete("x-dayli-native-google-admission");
+  headers.delete("x-dayli-registration-browser-state");
+  if (request.method === "GET" && path === `${authBasePath}/callback/google` && !isGoogleManagementCallback(request)) {
+    const state = new URL(request.url).searchParams.get("state");
+    if (state && state.length >= 8 && state.length <= 256 && !state.includes("|")) headers.set("x-dayli-registration-browser-state", state);
+  }
+  if (request.method === "POST" && path === `${authBasePath}/sign-in/social`) {
+    const body: unknown = await request.clone().json().catch(() => undefined);
+    if (body && typeof body === "object" && !Array.isArray(body) && (body as { provider?: unknown }).provider === "google") {
+      const idToken = (body as { idToken?: unknown }).idToken;
+      if (idToken && typeof idToken === "object" && typeof (idToken as { token?: unknown }).token === "string") {
+        headers.set("x-dayli-native-google-admission", "1");
+      }
+    }
+  }
+  return new Request(request, { headers });
+}
+
+async function bindBrowserSignupResponse(request: Request, response: Response, database: DayliDatabase): Promise<Response> {
+  if (request.method !== "POST" || new URL(request.url).pathname !== `${authBasePath}/sign-in/social` || !response.ok) return response;
+  if (request.headers.get("x-dayli-native-google-admission") === "1") return response;
+  const token = request.headers.get("x-dayli-registration-intent");
+  const binding = request.headers.get("x-dayli-registration-binding");
+  if (!token && !binding) return response;
+  const state = await redirectState(response);
+  return token && binding && state && await bindBrowserRegistrationIntent(database, token, binding, state)
+    ? response : linkFailure(403);
+}
+
 async function handleAuthRequest(
   request: Request,
   handler: AuthHandler,
   confirmations: SocialLinkConfirmationStore,
+  googleManagement?: GoogleManagementCallbackDependencies,
 ): Promise<Response> {
+  if (isGoogleManagementCallback(request)) {
+    return googleManagement
+      ? handleGoogleManagementCallback(request, googleManagement)
+      : new Response(null, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
   const pathname = new URL(request.url).pathname;
   if (request.method === "POST" && pathname === `${authBasePath}/link-social`) {
     return handleProtectedSocialLink(request, handler, confirmations);
@@ -224,6 +266,29 @@ function isSessionRevocationRequest(request: Request): boolean {
   return request.method === "POST" && (path === `${authBasePath}/sign-out` || path === `${authBasePath}/revoke-sessions`);
 }
 
+class RollbackRegistrationResponse extends Error {
+  constructor(readonly response: Response) {
+    super("Registration did not complete.");
+  }
+}
+
+function isRegistrationAuthRequest(request: Request): boolean {
+  const path = new URL(request.url).pathname;
+  return (request.method === "POST" && path === `${authBasePath}/sign-up/email`)
+    || (request.method === "POST" && path === `${authBasePath}/sign-in/social` && request.headers.get("x-dayli-native-google-admission") === "1")
+    || (request.method === "GET" && path === `${authBasePath}/callback/google`);
+}
+
+function registrationAuthSucceeded(request: Request, response: Response): boolean {
+  if (request.method !== "GET") return response.ok;
+  if (response.status < 300 || response.status >= 400) return false;
+  // Better Auth sets the signed session cookie only after an OAuth account
+  // and session exist. A caller-controlled callback URL can contain `error`.
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+  const cookies = headers.getSetCookie?.() ?? [headers.get("set-cookie") ?? ""];
+  return cookies.some((cookie) => /(?:^|,\s*)(?:__Secure-|__Host-)?better-auth\.session_token=[^;,\s]+/.test(cookie));
+}
+
 /** Register the production authority only after all Worker bindings validate. */
 export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono<E>, env: ApiEnv, revocations?: SessionRevocationHook) {
   const configuration = readBetterAuthRuntimeConfiguration(env);
@@ -232,28 +297,54 @@ export function registerPostgresBetterAuthRoutes<E extends Env>(app: OpenAPIHono
   registerStrictAuthRoutes(app, configuration.trustedOrigins, (request) => withHyperdriveDatabase(
     configuration.hyperdrive,
     async (database) => {
-      const auth = createPostgresBetterAuth({
-        baseURL: configuration.baseURL,
-        secret: configuration.secret,
-        trustedOrigins: configuration.trustedOrigins,
-        database,
-        google: configuration.google,
-        resend: configuration.resend,
-      });
-      const revoke = isSessionRevocationRequest(request) && revocations
-        ? await readAuthoritativeSession(request, auth.handler)
-        : undefined;
-      let sessionIds: string[] = [];
-      if (revoke) {
-        const stored = await database
-          .select({ id: schema.session.id })
-          .from(schema.session)
-          .where(eq(schema.session.userId, revoke.userId));
-        sessionIds = stored.map((row) => row.id);
+      const prepared = await prepareRegistrationRequest(request);
+      const dispatch = async (authDatabase: DayliDatabase) => {
+        const auth = createPostgresBetterAuth({
+          baseURL: configuration.baseURL,
+          secret: configuration.secret,
+          trustedOrigins: configuration.trustedOrigins,
+          database: authDatabase,
+          google: configuration.google,
+          resend: configuration.resend,
+        });
+        const revoke = isSessionRevocationRequest(request) && revocations
+          ? await readAuthoritativeSession(request, auth.handler)
+          : undefined;
+        let sessionIds: string[] = [];
+        if (revoke) {
+          const stored = await authDatabase
+            .select({ id: schema.session.id })
+            .from(schema.session)
+            .where(eq(schema.session.userId, revoke.userId));
+          sessionIds = stored.map((row) => row.id);
+        }
+        const googleManagement: GoogleManagementCallbackDependencies | undefined = configuration.google ? {
+          configuration: {
+            clientId: configuration.google.clientIds[0],
+            clientSecret: configuration.google.clientSecret,
+            redirectUri: new URL(`${authBasePath}/callback/google`, configuration.baseURL).href,
+          },
+          resolveSession: async (inner) => (await readAuthoritativeSession(inner, auth.handler)) ?? null,
+          claim: (input) => claimGoogleManagementIntent(authDatabase, input),
+          complete: (input) => completeGoogleManagementIntent(authDatabase, input),
+        } : undefined;
+        const response = await handleAuthRequest(prepared, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(authDatabase), googleManagement);
+        if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
+        return bindBrowserSignupResponse(prepared, response, authDatabase);
+      };
+      if (!isRegistrationAuthRequest(prepared) || isGoogleManagementCallback(prepared)) return dispatch(database);
+      // Better Auth inserts the user, account, and session in separate calls.
+      // Keep all three, plus trigger-owned legal evidence, in one transaction.
+      try {
+        return await database.transaction(async (tx) => {
+          const response = await dispatch(tx as DayliDatabase);
+          if (!registrationAuthSucceeded(prepared, response)) throw new RollbackRegistrationResponse(response);
+          return response;
+        });
+      } catch (error) {
+        if (error instanceof RollbackRegistrationResponse) return error.response;
+        throw error;
       }
-      const response = await handleAuthRequest(request, (inner) => auth.handler(inner), createPostgresSocialLinkConfirmationStore(database));
-      if (response.ok && revoke && sessionIds.length > 0) await revocations?.revokeSessions(revoke.userId, sessionIds);
-      return response;
     },
   ));
   return true;

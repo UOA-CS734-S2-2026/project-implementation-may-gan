@@ -26,6 +26,7 @@ class PostDetail {
     required this.edited,
     required this.viewerIsAuthor,
     this.media = const [],
+    required this.voiceMemo,
   });
 
   final String id;
@@ -38,7 +39,7 @@ class PostDetail {
 
   final String reflectiveAnswer;
 
-  final String caption;
+  final String? caption;
 
   final int rating;
 
@@ -56,6 +57,9 @@ class PostDetail {
   /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
   final List<PostMedia> media;
 
+  /// The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
+  final PostVoiceMemo? voiceMemo;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -72,7 +76,8 @@ class PostDetail {
           other.releasedAt == releasedAt &&
           other.edited == edited &&
           other.viewerIsAuthor == viewerIsAuthor &&
-          _deepEquality.equals(other.media, media);
+          _deepEquality.equals(other.media, media) &&
+          other.voiceMemo == voiceMemo;
 
   @override
   int get hashCode =>
@@ -82,18 +87,19 @@ class PostDetail {
       (localDate.hashCode) +
       (prompt.hashCode) +
       (reflectiveAnswer.hashCode) +
-      (caption.hashCode) +
+      (caption == null ? 0 : caption!.hashCode) +
       (rating.hashCode) +
       (audience.hashCode) +
       (acceptedAt.hashCode) +
       (releasedAt.hashCode) +
       (edited.hashCode) +
       (viewerIsAuthor.hashCode) +
-      (media.hashCode);
+      (media.hashCode) +
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
-      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, viewerIsAuthor=$viewerIsAuthor, media=$media]';
+      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -102,7 +108,11 @@ class PostDetail {
     json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
-    json[r'caption'] = this.caption;
+    if (this.caption != null) {
+      json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     json[r'rating'] = this.rating;
     json[r'audience'] = this.audience;
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
@@ -110,6 +120,11 @@ class PostDetail {
     json[r'edited'] = this.edited;
     json[r'viewerIsAuthor'] = this.viewerIsAuthor;
     json[r'media'] = this.media;
+    if (this.voiceMemo != null) {
+      json[r'voiceMemo'] = this.voiceMemo;
+    } else {
+      json[r'voiceMemo'] = null;
+    }
     return json;
   }
 
@@ -122,6 +137,7 @@ class PostDetail {
     PostDetailPrompt? prompt,
     String? reflectiveAnswer,
     String? caption,
+    bool captionSetToNull = false,
     int? rating,
     PostDetailAudienceEnum? audience,
     DateTime? acceptedAt,
@@ -129,6 +145,8 @@ class PostDetail {
     bool? edited,
     bool? viewerIsAuthor,
     List<PostMedia>? media,
+    PostVoiceMemo? voiceMemo,
+    bool voiceMemoSetToNull = false,
   }) =>
       PostDetail(
         id: id ?? this.id,
@@ -136,7 +154,7 @@ class PostDetail {
         localDate: localDate ?? this.localDate,
         prompt: prompt ?? this.prompt,
         reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
-        caption: caption ?? this.caption,
+        caption: captionSetToNull ? null : caption ?? this.caption,
         rating: rating ?? this.rating,
         audience: audience ?? this.audience,
         acceptedAt: acceptedAt ?? this.acceptedAt,
@@ -144,6 +162,7 @@ class PostDetail {
         edited: edited ?? this.edited,
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
+        voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [PostDetail] instance and imports its values from
@@ -179,8 +198,6 @@ class PostDetail {
             'Required key "PostDetail[reflectiveAnswer]" has a null value in JSON.');
         assert(json.containsKey(r'caption'),
             'Required key "PostDetail[caption]" is missing from JSON.');
-        assert(json[r'caption'] != null,
-            'Required key "PostDetail[caption]" has a null value in JSON.');
         assert(json.containsKey(r'rating'),
             'Required key "PostDetail[rating]" is missing from JSON.');
         assert(json[r'rating'] != null,
@@ -209,6 +226,8 @@ class PostDetail {
             'Required key "PostDetail[media]" is missing from JSON.');
         assert(json[r'media'] != null,
             'Required key "PostDetail[media]" has a null value in JSON.');
+        assert(json.containsKey(r'voiceMemo'),
+            'Required key "PostDetail[voiceMemo]" is missing from JSON.');
         return true;
       }());
 
@@ -218,7 +237,7 @@ class PostDetail {
         localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: PostDetailPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
-        caption: mapValueOfType<String>(json, r'caption')!,
+        caption: mapValueOfType<String>(json, r'caption'),
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: PostDetailAudienceEnum.fromJson(json[r'audience'])!,
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,
@@ -226,6 +245,7 @@ class PostDetail {
         edited: mapValueOfType<bool>(json, r'edited')!,
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
+        voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo']),
       );
     }
     return null;
@@ -295,6 +315,7 @@ class PostDetail {
     'edited',
     'viewerIsAuthor',
     'media',
+    'voiceMemo',
   };
 }
 

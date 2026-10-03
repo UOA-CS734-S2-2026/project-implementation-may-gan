@@ -80,6 +80,7 @@ describe("POST /api/v1/posts", () => {
       releasedAt: "2026-09-25T12:00:00.000Z",
       tomorrowNote: { availableOn: "2026-09-26" },
       media: [],
+      voiceMemo: null,
     });
     expect(JSON.stringify(created)).not.toContain("Bring the camera.");
   });
@@ -223,7 +224,7 @@ describe("POST /api/v1/posts", () => {
 
     it("rejects a malformed list before reaching the service", async () => {
       const app = withUploads([]);
-      for (const attachments of [["r-a", "r-a"], ["r-a", "r-b", "r-c", "r-d"], [""], ["x".repeat(129)], "r-a"]) {
+      for (const attachments of [["r-a", "r-a"], ["r-a", "r-b", "r-c", "r-d", "r-e"], [""], ["x".repeat(129)], "r-a"]) {
         const response = await post(app, { user: "user-1", json: { ...body, attachments } });
         expect(response.status, JSON.stringify(attachments)).toBe(422);
         await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_FAILED" } });

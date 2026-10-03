@@ -17,6 +17,7 @@ enum MediaContentType {
   imageSlashHeic._(r'image/heic'),
   videoSlashMp4._(r'video/mp4'),
   videoSlashQuicktime._(r'video/quicktime'),
+  audioSlashMp4._(r'audio/mp4'),
   ;
 
   /// Instantiate a new enum with the provided value.
@@ -93,6 +94,8 @@ class MediaContentTypeTypeTransformer {
           return MediaContentType.videoSlashMp4;
         case r'video/quicktime':
           return MediaContentType.videoSlashQuicktime;
+        case r'audio/mp4':
+          return MediaContentType.audioSlashMp4;
         default:
           if (!allowNull) {
             throw ArgumentError('Unknown enum value to decode: $data');

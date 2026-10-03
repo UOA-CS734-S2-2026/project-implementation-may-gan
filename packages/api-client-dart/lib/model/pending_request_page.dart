@@ -20,7 +20,7 @@ class PendingRequestPage {
 
   final List<PendingRelationshipRequest> items;
 
-  final String nextCursor;
+  final String? nextCursor;
 
   final bool hasMore;
 
@@ -35,7 +35,9 @@ class PendingRequestPage {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (items.hashCode) + (nextCursor.hashCode) + (hasMore.hashCode);
+      (items.hashCode) +
+      (nextCursor == null ? 0 : nextCursor!.hashCode) +
+      (hasMore.hashCode);
 
   @override
   String toString() =>
@@ -44,7 +46,11 @@ class PendingRequestPage {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
-    json[r'nextCursor'] = this.nextCursor;
+    if (this.nextCursor != null) {
+      json[r'nextCursor'] = this.nextCursor;
+    } else {
+      json[r'nextCursor'] = null;
+    }
     json[r'hasMore'] = this.hasMore;
     return json;
   }
@@ -54,11 +60,12 @@ class PendingRequestPage {
   PendingRequestPage copyWith({
     List<PendingRelationshipRequest>? items,
     String? nextCursor,
+    bool nextCursorSetToNull = false,
     bool? hasMore,
   }) =>
       PendingRequestPage(
         items: items ?? this.items,
-        nextCursor: nextCursor ?? this.nextCursor,
+        nextCursor: nextCursorSetToNull ? null : nextCursor ?? this.nextCursor,
         hasMore: hasMore ?? this.hasMore,
       );
 
@@ -79,8 +86,6 @@ class PendingRequestPage {
             'Required key "PendingRequestPage[items]" has a null value in JSON.');
         assert(json.containsKey(r'nextCursor'),
             'Required key "PendingRequestPage[nextCursor]" is missing from JSON.');
-        assert(json[r'nextCursor'] != null,
-            'Required key "PendingRequestPage[nextCursor]" has a null value in JSON.');
         assert(json.containsKey(r'hasMore'),
             'Required key "PendingRequestPage[hasMore]" is missing from JSON.');
         assert(json[r'hasMore'] != null,
@@ -90,7 +95,7 @@ class PendingRequestPage {
 
       return PendingRequestPage(
         items: PendingRelationshipRequest.listFromJson(json[r'items']),
-        nextCursor: mapValueOfType<String>(json, r'nextCursor')!,
+        nextCursor: mapValueOfType<String>(json, r'nextCursor'),
         hasMore: mapValueOfType<bool>(json, r'hasMore')!,
       );
     }

@@ -26,7 +26,7 @@ export interface ChangeUsernameResponse {
     /**
      * When the username can next change, or null when it can change now.
      */
-    usernameChangeAvailableAt: Date;
+    usernameChangeAvailableAt: Date | null;
 }
 
 /**
@@ -49,7 +49,7 @@ export function ChangeUsernameResponseFromJSONTyped(json: any, ignoreDiscriminat
     return {
 
         'username': json['username'],
-        'usernameChangeAvailableAt': (json['usernameChangeAvailableAt'] == null ? json['usernameChangeAvailableAt'] : parseDateTime(json['usernameChangeAvailableAt'])),
+        'usernameChangeAvailableAt': (json['usernameChangeAvailableAt'] == null ? null : parseDateTime(json['usernameChangeAvailableAt'])),
     };
 }
 

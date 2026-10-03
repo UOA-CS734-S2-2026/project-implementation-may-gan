@@ -1,13 +1,16 @@
 import {
   apiErrorSchema,
   aucklandDateSchema,
+  MAX_POST_VOICE_MEMOS,
   MAX_POST_PHOTOS,
-  mediaContentTypeSchema,
   opaqueIdSchema,
+  voiceMemoContentTypeSchema,
+  postMediaContentTypeSchema,
   utcTimestampSchema,
 } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
+import { nullMember } from "../shared/post-media.contract";
 
 /**
  * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the
@@ -61,12 +64,13 @@ export const createDailyPostRequestSchema = z
     // sends this field, defaulting to [].
     attachments: z
       .array(opaqueIdSchema)
-      .max(MAX_POST_PHOTOS)
+      .max(MAX_POST_PHOTOS + MAX_POST_VOICE_MEMOS)
       .refine((ids) => new Set(ids).size === ids.length, { message: "Must not repeat an attachment." })
       .optional()
       .openapi({
         description: "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. "
-          + "Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
+          + "Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. "
+          + "Omit it or send an empty list for a text-only post.",
         example: ["0f8fad5b-d9cb-469f-a165-70867728950e"],
       }),
   })
@@ -85,6 +89,14 @@ export const idempotencyKeyHeaderSchema = z.object({
       example: "0f8fad5b-d9cb-469f-a165-70867728950e",
     }),
 });
+
+/** Registered non-null; the post references it through a union with null (see nullMember). */
+const dailyPostVoiceMemoSchema = z
+  .object({
+    id: opaqueIdSchema,
+    contentType: voiceMemoContentTypeSchema,
+  })
+  .openapi("DailyPostVoiceMemo", { description: "The post's voice memo." });
 
 export const dailyPostSchema = z
   .object({
@@ -108,10 +120,13 @@ export const dailyPostSchema = z
     media: z
       .array(z.object({
         id: opaqueIdSchema,
-        contentType: mediaContentTypeSchema,
+        contentType: postMediaContentTypeSchema,
         order: z.number().int().min(0),
       }).openapi("DailyPostMedia"))
       .openapi({ description: "The attached photos or video in display order. Empty for a text-only post." }),
+    voiceMemo: z
+      .union([dailyPostVoiceMemoSchema, nullMember])
+      .openapi({ description: "The attached voice memo, or null when the post has none." }),
   })
   .openapi("DailyPost");
 
@@ -128,6 +143,10 @@ export const createDailyPostConflictReasons = [
 export const createDailyPostErrorResponses = {
   401: {
     description: "Authentication is required.",
+    content: { "application/json": { schema: apiErrorSchema } },
+  },
+  403: {
+    description: "Posting is unavailable while account deletion is pending.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   409: {

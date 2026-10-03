@@ -3,6 +3,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { schema, type DayliDatabase } from "@dayli/db";
 import { calculatePostingStreak, getAucklandDay } from "@dayli/domain";
 import { mbtiTypes, type ProfileDetails } from "./profile-details.contract";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 function isMbti(value: string | null): value is (typeof mbtiTypes)[number] {
   return (mbtiTypes as readonly (string | null)[]).includes(value);
@@ -84,7 +85,7 @@ async function findPostingStreak(database: DayliDatabase, authorId: string, now:
   const rows = await database
     .select({ localDate: posts.localDate })
     .from(posts)
-    .where(eq(posts.authorId, authorId));
+    .where(and(eq(posts.authorId, authorId), isNull(posts.trashedAt)));
   const localDates = rows.map((row) => row.localDate);
   return { streak: { ...calculatePostingStreak(localDates, today), asOf: today }, posts: localDates.length };
 }
@@ -114,7 +115,11 @@ export async function findProfileDetails(
   signAvatar?: AvatarSigner,
 ): Promise<ProfileDetails | null> {
   const { user, usernameReservations } = schema;
-  const visible = and(notCurrentlyBanned(now), notBlockedEitherWay(database, viewerId, user.id));
+  const visible = and(
+    buildDrizzleActiveAccountFilter(database, user.id),
+    notCurrentlyBanned(now),
+    notBlockedEitherWay(database, viewerId, user.id),
+  );
   const columns = {
     id: user.id,
     username: user.username,

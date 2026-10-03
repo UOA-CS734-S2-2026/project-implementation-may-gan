@@ -20,7 +20,7 @@ class ProfileOwnerSettings {
   final ProfileVisibility profileVisibility;
 
   /// When the username can next change, or null when it can change now.
-  final DateTime usernameChangeAvailableAt;
+  final DateTime? usernameChangeAvailableAt;
 
   @override
   bool operator ==(Object other) =>
@@ -32,7 +32,10 @@ class ProfileOwnerSettings {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (profileVisibility.hashCode) + (usernameChangeAvailableAt.hashCode);
+      (profileVisibility.hashCode) +
+      (usernameChangeAvailableAt == null
+          ? 0
+          : usernameChangeAvailableAt!.hashCode);
 
   @override
   String toString() =>
@@ -41,8 +44,12 @@ class ProfileOwnerSettings {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'profileVisibility'] = this.profileVisibility;
-    json[r'usernameChangeAvailableAt'] =
-        this.usernameChangeAvailableAt.toUtc().toIso8601String();
+    if (this.usernameChangeAvailableAt != null) {
+      json[r'usernameChangeAvailableAt'] =
+          this.usernameChangeAvailableAt!.toUtc().toIso8601String();
+    } else {
+      json[r'usernameChangeAvailableAt'] = null;
+    }
     return json;
   }
 
@@ -51,11 +58,13 @@ class ProfileOwnerSettings {
   ProfileOwnerSettings copyWith({
     ProfileVisibility? profileVisibility,
     DateTime? usernameChangeAvailableAt,
+    bool usernameChangeAvailableAtSetToNull = false,
   }) =>
       ProfileOwnerSettings(
         profileVisibility: profileVisibility ?? this.profileVisibility,
-        usernameChangeAvailableAt:
-            usernameChangeAvailableAt ?? this.usernameChangeAvailableAt,
+        usernameChangeAvailableAt: usernameChangeAvailableAtSetToNull
+            ? null
+            : usernameChangeAvailableAt ?? this.usernameChangeAvailableAt,
       );
 
   /// Returns a new [ProfileOwnerSettings] instance and imports its values from
@@ -75,8 +84,6 @@ class ProfileOwnerSettings {
             'Required key "ProfileOwnerSettings[profileVisibility]" has a null value in JSON.');
         assert(json.containsKey(r'usernameChangeAvailableAt'),
             'Required key "ProfileOwnerSettings[usernameChangeAvailableAt]" is missing from JSON.');
-        assert(json[r'usernameChangeAvailableAt'] != null,
-            'Required key "ProfileOwnerSettings[usernameChangeAvailableAt]" has a null value in JSON.');
         return true;
       }());
 
@@ -84,7 +91,7 @@ class ProfileOwnerSettings {
         profileVisibility:
             ProfileVisibility.fromJson(json[r'profileVisibility'])!,
         usernameChangeAvailableAt:
-            mapDateTime(json, r'usernameChangeAvailableAt', r'')!,
+            mapDateTime(json, r'usernameChangeAvailableAt', r''),
       );
     }
     return null;

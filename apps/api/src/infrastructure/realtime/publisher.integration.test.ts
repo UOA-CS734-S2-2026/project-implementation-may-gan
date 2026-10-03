@@ -1,8 +1,9 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import type { OutboxJob } from "../jobs/outbox-store";
-import { canPublishCurrentChange } from "./publisher";
+import { createOutboxDispatcher } from "../jobs/dispatch-outbox";
+import { createPostgresOutboxStore, type OutboxJob } from "../jobs/outbox-store";
+import { canPublishCurrentChange, createDurableObjectRealtimePublisher } from "./publisher";
 
 const connectionString = process.env.MESSAGING_DELIVERY_TEST_DATABASE_URL ?? process.env.MESSAGING_TEST_DATABASE_URL;
 const target = connectionString ? new URL(connectionString) : undefined;
@@ -21,6 +22,7 @@ suite("Postgres realtime publisher authorization", () => {
     conversation: `realtime-publisher-c-${crypto.randomUUID()}`,
   };
   const createdAt = new Date();
+  let effectiveTermsId: string | undefined;
 
   function job(row: { id: string; recipientId: string; changeSequence: number; leaseToken: string }): OutboxJob {
     return {
@@ -51,6 +53,21 @@ suite("Postgres realtime publisher authorization", () => {
     });
   }
 
+  async function insertPendingJob(recipientId: string, changeSequence: number) {
+    await database.db.insert(schema.messagingOutbox).values({
+      id: `realtime-publisher-pending-${crypto.randomUUID()}`,
+      eventId: crypto.randomUUID(),
+      recipientId,
+      conversationId: ids.conversation,
+      changeSequence,
+      channel: "realtime",
+      status: "pending",
+      attempts: 0,
+      availableAt: new Date(Date.now() - 1_000),
+      createdAt,
+    });
+  }
+
   async function insertLeasedJob(input: { recipientId: string; changeSequence: number; leaseToken?: string; leaseExpiresAt?: Date }): Promise<OutboxJob> {
     const id = `realtime-publisher-job-${crypto.randomUUID()}`;
     const leaseToken = input.leaseToken ?? `lease-${crypto.randomUUID()}`;
@@ -77,8 +94,8 @@ suite("Postgres realtime publisher authorization", () => {
       requestState: "active", lastMessageSequence: 0, lastChangeSequence: 0, lastActivityAt: createdAt, createdAt, updatedAt: createdAt,
     });
     await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
     ]);
   });
 
@@ -88,14 +105,19 @@ suite("Postgres realtime publisher authorization", () => {
   );
 
   afterEach(async () => {
+    if (effectiveTermsId) {
+      await database.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, effectiveTermsId));
+      effectiveTermsId = undefined;
+    }
+    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(inArray(schema.user.id, [ids.alice, ids.bob]));
     await database.db.delete(schema.relationshipBlocks).where(isTestUserBlock);
     await database.db.delete(schema.accountLifecycles).where(inArray(schema.accountLifecycles.userId, [ids.alice, ids.bob]));
     await database.db.delete(schema.messagingOutbox).where(eq(schema.messagingOutbox.conversationId, ids.conversation));
     await database.db.delete(schema.conversationChanges).where(eq(schema.conversationChanges.conversationId, ids.conversation));
     await database.db.delete(schema.messages).where(eq(schema.messages.conversationId, ids.conversation));
     await database.db.insert(schema.conversationMembers).values([
-      { conversationId: ids.conversation, userId: ids.alice, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
-      { conversationId: ids.conversation, userId: ids.bob, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
+      { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt, updatedAt: createdAt },
     ]).onConflictDoNothing({ target: [schema.conversationMembers.conversationId, schema.conversationMembers.userId] });
   });
 
@@ -106,6 +128,40 @@ suite("Postgres realtime publisher authorization", () => {
     } finally {
       await database.close();
     }
+  });
+
+  it("dispatches one leased body-free frame to an allowed endpoint and none to a banned endpoint", async () => {
+    const frames = new Map<string, unknown[]>([[ids.alice, []], [ids.bob, []]]);
+    const namespace = {
+      idFromName: (userId: string) => userId,
+      get: (userId: string) => ({
+        fetch: async (request: Request) => {
+          frames.get(userId)?.push(await request.json());
+          return new Response(null, { status: 204 });
+        },
+        revokeSession: async () => undefined,
+      }),
+    } as unknown as DurableObjectNamespace;
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    await insertPendingJob(ids.alice, 1);
+    await insertPendingJob(ids.bob, 1);
+    await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
+
+    const publisher = createDurableObjectRealtimePublisher(namespace, { connectionString: connectionString! });
+    const dispatcher = createOutboxDispatcher({
+      store: createPostgresOutboxStore(database.db),
+      handlers: { realtime: publisher.deliver, push: async () => ({ ok: true as const }) },
+      scheduledBatchSize: 2,
+    });
+    await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({ claimed: 2, delivered: 2 });
+    expect(frames.get(ids.alice)).toEqual([{
+      version: 1,
+      eventId: expect.any(String),
+      type: "conversation.changed",
+      conversationId: ids.conversation,
+      changeSequence: "1",
+    }]);
+    expect(frames.get(ids.bob)).toEqual([]);
   });
 
   it("rejects a stale lease even when the token still matches", async () => {
@@ -213,6 +269,25 @@ suite("Postgres realtime publisher authorization", () => {
     });
 
     await expect(canPublishCurrentChange({ connectionString: connectionString! }, job)).resolves.toBe(false);
+  });
+
+  it("fails closed for an active ban and an effective Terms gate before body-free delivery", async () => {
+    await insertChange({ sequence: 1, senderId: ids.alice, kind: "message.created" });
+    const recipient = await insertLeasedJob({ recipientId: ids.bob, changeSequence: 1 });
+    await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
+
+    await database.db.update(schema.user).set({ banned: false, banExpires: null }).where(eq(schema.user.id, ids.bob));
+    effectiveTermsId = `realtime-policy-terms-${crypto.randomUUID()}`;
+    await database.db.insert(schema.legalDocumentVersions).values({
+      id: effectiveTermsId,
+      kind: "terms",
+      version: 1_000_000_001,
+      contentDigest: "e".repeat(64),
+      status: "effective",
+      effectiveAt: new Date("2020-01-01T00:00:00.000Z"),
+    });
+    await expect(canPublishCurrentChange({ connectionString: connectionString! }, recipient)).resolves.toBe(false);
   });
 
   it("rejects a recipient whose membership was removed", async () => {

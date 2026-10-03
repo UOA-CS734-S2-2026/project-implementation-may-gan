@@ -1,3 +1,4 @@
+import { assertOwnedMediaObjectKey } from "@dayli/contracts";
 import { AwsClient, AwsV4Signer } from "aws4fetch";
 
 /** Runtime bindings required before presigned R2 uploads can be issued. */
@@ -87,6 +88,8 @@ export async function createPresignedUploadUrl(
   configuration: R2RuntimeConfiguration,
   input: CreatePresignedUploadUrlInput,
 ): Promise<PresignedUpload> {
+  // Enforce at the signing sink, including callers that alias or inline a key.
+  assertOwnedMediaObjectKey(input.objectKey);
   const requiredHeaders: Record<string, string> = {
     "content-type": input.contentType,
     "content-length": String(input.byteSize),
@@ -269,10 +272,10 @@ export function createR2Reader(configuration: R2RuntimeConfiguration): MediaR2Re
  * Any other outcome, including a raw network error, is an infrastructure error the
  * caller retries.
  */
-export async function deleteR2Object(configuration: R2RuntimeConfiguration, objectKey: string): Promise<void> {
+export async function deleteR2Object(configuration: R2RuntimeConfiguration, objectKey: string, signal?: AbortSignal): Promise<void> {
   try {
     const client = createAwsClient(configuration);
-    const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "DELETE" });
+    const response = await client.fetch(buildObjectUrl(configuration, objectKey), { method: "DELETE", signal });
     if (response.ok || response.status === 404) return;
     throw new R2ReadInfrastructureError(`R2 DELETE failed with status ${response.status}`);
   } catch (error) {
@@ -281,9 +284,9 @@ export async function deleteR2Object(configuration: R2RuntimeConfiguration, obje
 }
 
 export interface MediaR2Deleter {
-  delete(objectKey: string): Promise<void>;
+  delete(objectKey: string, signal?: AbortSignal): Promise<void>;
 }
 
 export function createR2Deleter(configuration: R2RuntimeConfiguration): MediaR2Deleter {
-  return { delete: (objectKey) => deleteR2Object(configuration, objectKey) };
+  return { delete: (objectKey, signal) => deleteR2Object(configuration, objectKey, signal) };
 }

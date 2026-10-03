@@ -1,0 +1,6 @@
+reason: The existing Trash worker procedures must be wrapped, their old worker grants removed, and attachment guards installed in one migration transaction. Partial installation could expose R2 keys without first tombstoning reservations.
+affected_data_and_clients: The existing owner procedure retains its signature and grants. Worker procedures retain their signatures but now tombstone reservation rows before returning object keys and lock references before completion. Previously applied migrations remain unchanged.
+rollout_sequence: Apply to an isolated synthetic database, verify worker-only procedure grants, attempt a competing avatar insert after claim, and check the post-lock deadline with two connections before considering route activation.
+backup_checkpoint: Confirm the synthetic staging backup and stop procedure before applying. Production execution remains disabled.
+forward_fix_plan: On failure, leave Trash routes and cleanup disabled. Use a new reviewed forward migration rather than editing an applied file.
+reviewer: Database, media, and privacy reviewers required.

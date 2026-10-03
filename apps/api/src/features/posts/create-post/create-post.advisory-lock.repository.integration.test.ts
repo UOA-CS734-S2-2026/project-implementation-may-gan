@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createPostgresDailyPostStore } from "./create-post.repository";
 
 const configuredUrl = process.env.ADVISORY_LOCK_TEST_DATABASE_URL;
+const migratorUrl = process.env.ADVISORY_LOCK_TEST_MIGRATOR_DATABASE_URL;
 
 function disposableDatabaseUrl(): string | undefined {
   if (!configuredUrl) return undefined;
@@ -42,9 +43,21 @@ async function within<T>(promise: Promise<T>, message: string): Promise<T> {
 }
 
 const databaseUrl = disposableDatabaseUrl();
+if (databaseUrl && (!migratorUrl || new URL(migratorUrl).host !== new URL(databaseUrl).host
+  || new URL(migratorUrl).pathname !== new URL(databaseUrl).pathname)) {
+  throw new Error("The advisory-lock fixture needs a migrator on the same disposable database.");
+}
 
 (databaseUrl ? describe : describe.skip)("daily post advisory lock", () => {
   const databases: Array<ReturnType<typeof createDayliDatabase>> = [];
+  const fixtureUsers: string[] = [];
+  const migrator = createDayliDatabase(migratorUrl!);
+
+  async function authorFixture(authorId: string) {
+    await migrator.client`insert into public."user" (id, name, email)
+      values (${authorId}, 'Advisory lock fixture', ${`${authorId}@example.test`})`;
+    fixtureUsers.push(authorId);
+  }
 
   function database() {
     const value = createDayliDatabase(databaseUrl!);
@@ -53,7 +66,11 @@ const databaseUrl = disposableDatabaseUrl();
   }
 
   afterAll(async () => {
-    await Promise.all(databases.map((value) => value.close()));
+    try {
+      if (fixtureUsers.length) await migrator.client`delete from public."user" where id = any(${fixtureUsers}::text[])`;
+    } finally {
+      await Promise.all([migrator.close(), ...databases.map((value) => value.close())]);
+    }
   });
 
   it("blocks a new builder transaction behind the old raw lock and releases it on commit", async () => {
@@ -63,6 +80,7 @@ const databaseUrl = disposableDatabaseUrl();
     const releaseFirst = createDeferred();
     const secondEntered = createDeferred();
     const authorId = `advisory-post-${crypto.randomUUID()}`;
+    await authorFixture(authorId);
 
     const firstAttempt = first.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('posts:author:' || ${authorId}, 734))`);
@@ -90,6 +108,7 @@ const databaseUrl = disposableDatabaseUrl();
     const secondEntered = createDeferred();
     const authorId = `advisory-post-rollback-${crypto.randomUUID()}`;
     const rollback = new Error("rollback the first transaction");
+    await authorFixture(authorId);
 
     const firstAttempt = first.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('posts:author:' || ${authorId}, 734))`);

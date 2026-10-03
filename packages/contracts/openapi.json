@@ -1,5 +1,5 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
     "title": "Dayli API",
     "version": "1.0.0",
@@ -126,6 +126,334 @@
           "SERVICE_UNAVAILABLE"
         ]
       },
+      "AccountDeletionStatus": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "pending_deletion",
+              "purging",
+              "purge_failed"
+            ]
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "requestedAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "cancelUntil": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "purgeDueAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          }
+        },
+        "required": [
+          "state",
+          "generation",
+          "requestId",
+          "requestedAt",
+          "cancelUntil",
+          "purgeDueAt"
+        ]
+      },
+      "AccountDeletionRequestResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "already_requested"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "requestedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "cancelUntil": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "purgeDueAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "status",
+          "requestId",
+          "requestedAt",
+          "cancelUntil",
+          "purgeDueAt"
+        ]
+      },
+      "DeletionGrantRequest": {
+        "type": "object",
+        "properties": {
+          "grantToken": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "grantToken"
+        ],
+        "additionalProperties": false
+      },
+      "AccountDeletionCancellationResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "cancelled"
+            ]
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "generation"
+        ]
+      },
+      "PasswordReauthenticationGrant": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_deletion",
+              "cancel_deletion"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "expiresAt",
+          "action"
+        ]
+      },
+      "PasswordReauthenticationRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_deletion",
+              "cancel_deletion"
+            ]
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "action",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "GoogleReauthenticationIntent": {
+        "type": "object",
+        "properties": {
+          "authorizationUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "authorizationUrl",
+          "expiresAt"
+        ]
+      },
+      "GoogleReauthenticationRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "request_deletion",
+              "cancel_deletion"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "LegalAcceptanceResponse": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string"
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "declaredAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "acceptedAt",
+          "declaredAt"
+        ]
+      },
+      "LegalAcceptanceRequest": {
+        "type": "object",
+        "properties": {
+          "termsVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "acceptedTermsAndDeclaredAge16": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "termsVersionId",
+          "termsContentDigest",
+          "acceptedTermsAndDeclaredAge16"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentLegalRegistrationTerms": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unavailable",
+              "effective"
+            ]
+          },
+          "termsVersionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "nullable": true
+          },
+          "ageDeclarationVersion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "termsVersionId",
+          "termsContentDigest",
+          "ageDeclarationVersion"
+        ]
+      },
+      "RegistrationIntentResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "binding": {
+            "type": "string"
+          },
+          "termsVersionId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "token",
+          "binding",
+          "termsVersionId",
+          "expiresAt"
+        ]
+      },
+      "RegistrationIntentRequest": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "enum": [
+              "email",
+              "google_native",
+              "google_browser"
+            ]
+          },
+          "termsVersionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "termsContentDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "acceptedTermsAndDeclaredAge16": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "flow",
+          "termsVersionId",
+          "termsContentDigest",
+          "acceptedTermsAndDeclaredAge16"
+        ],
+        "additionalProperties": false
+      },
       "CreateMediaReservationResponse": {
         "type": "object",
         "properties": {
@@ -177,7 +505,8 @@
           "image/webp",
           "image/heic",
           "video/mp4",
-          "video/quicktime"
+          "video/quicktime",
+          "audio/mp4"
         ]
       },
       "MediaReservationStatus": {
@@ -386,6 +715,17 @@
               "$ref": "#/components/schemas/DailyPostMedia"
             },
             "description": "The attached photos or video in display order. Empty for a text-only post."
+          },
+          "voiceMemo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DailyPostVoiceMemo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The attached voice memo, or null when the post has none."
           }
         },
         "required": [
@@ -400,7 +740,8 @@
           "acceptedAt",
           "releasedAt",
           "tomorrowNote",
-          "media"
+          "media",
+          "voiceMemo"
         ]
       },
       "DailyPostPrompt": {
@@ -433,7 +774,7 @@
             "$ref": "#/components/schemas/OpaqueId"
           },
           "contentType": {
-            "$ref": "#/components/schemas/MediaContentType"
+            "$ref": "#/components/schemas/PostMediaContentType"
           },
           "order": {
             "type": "integer",
@@ -444,6 +785,39 @@
           "id",
           "contentType",
           "order"
+        ]
+      },
+      "PostMediaContentType": {
+        "type": "string",
+        "enum": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "video/mp4",
+          "video/quicktime"
+        ]
+      },
+      "DailyPostVoiceMemo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/VoiceMemoContentType"
+          }
+        },
+        "required": [
+          "id",
+          "contentType"
+        ],
+        "description": "The post's voice memo."
+      },
+      "VoiceMemoContentType": {
+        "type": "string",
+        "enum": [
+          "audio/mp4"
         ]
       },
       "CreateDailyPostRequest": {
@@ -497,8 +871,8 @@
             "items": {
               "$ref": "#/components/schemas/OpaqueId"
             },
-            "maxItems": 3,
-            "description": "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
+            "maxItems": 4,
+            "description": "Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. Omit it or send an empty list for a text-only post.",
             "example": [
               "0f8fad5b-d9cb-469f-a165-70867728950e"
             ]
@@ -656,7 +1030,7 @@
             "$ref": "#/components/schemas/OpaqueId"
           },
           "contentType": {
-            "$ref": "#/components/schemas/MediaContentType"
+            "$ref": "#/components/schemas/PostMediaContentType"
           },
           "order": {
             "type": "integer",
@@ -684,6 +1058,47 @@
           "order",
           "url",
           "expiresAt"
+        ]
+      },
+      "TrashedPostStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "trashedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "restoreUntil": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "purgeDueAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "generation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingCleanup": {
+            "type": "boolean"
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "localDate",
+          "trashedAt",
+          "restoreUntil",
+          "purgeDueAt",
+          "generation",
+          "pendingCleanup",
+          "failureCategory"
         ]
       },
       "PostDetail": {
@@ -737,6 +1152,17 @@
               "$ref": "#/components/schemas/PostMedia"
             },
             "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          },
+          "voiceMemo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostVoiceMemo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not."
           }
         },
         "required": [
@@ -752,7 +1178,8 @@
           "releasedAt",
           "edited",
           "viewerIsAuthor",
-          "media"
+          "media",
+          "voiceMemo"
         ],
         "description": "One post the caller may read. Tomorrow notes are not part of this projection."
       },
@@ -792,6 +1219,38 @@
           "text"
         ],
         "description": "The prompt stored with the post, not the current day's prompt."
+      },
+      "PostVoiceMemo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/VoiceMemoContentType"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead."
+          },
+          "expiresAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one."
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "url",
+          "expiresAt"
+        ]
       },
       "ProfilePostsPage": {
         "type": "object",
@@ -1664,19 +2123,27 @@
             "$ref": "#/components/schemas/ProfileVisibility"
           },
           "mbti": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Mbti"
-              },
-              {
-                "type": "string",
-                "enum": [
-                  ""
-                ]
-              },
-              {
-                "nullable": true
-              }
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "INTJ",
+              "INTP",
+              "ENTJ",
+              "ENTP",
+              "INFJ",
+              "INFP",
+              "ENFJ",
+              "ENFP",
+              "ISTJ",
+              "ISFJ",
+              "ESTJ",
+              "ESFJ",
+              "ISTP",
+              "ISFP",
+              "ESTP",
+              "ESFP",
+              "",
+              null
             ],
             "description": "One of the 16 types. Null or blank clears it."
           },
@@ -1782,6 +2249,680 @@
           },
           "422": {
             "description": "The query parameters are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/deletion": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.getDeletionStatus",
+        "summary": "Read the authenticated account's deletion status",
+        "description": "Content-free state and database-timed deadlines. An absent lifecycle record is active.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current account lifecycle state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies the read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Status is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/deletion/request": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.requestDeletion",
+        "summary": "Request deletion after fresh action verification",
+        "description": "Requires a session-bound single-use grant and Idempotency-Key header. Production requests remain disabled until a separate activation decision. This operation does not physically purge content.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._~-]{16,128}$"
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionGrantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The same pending request already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionRequestResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Request recorded and ordinary sessions revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionRequestResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy or the action proof denies this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The lifecycle already has a different request or is irreversible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed action grant or idempotency key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Requests are disabled or temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/deletion/cancel": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.cancelDeletion",
+        "summary": "Cancel a pending deletion after fresh action verification",
+        "description": "Uses the database cancellation deadline. Revoked sessions and push registrations are not restored.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletionGrantRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deletion cancelled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionCancellationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy or the action proof denies cancellation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No pending request exists or the cancellation deadline has passed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed action grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Cancellation is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/password": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.reauthenticatePassword",
+        "summary": "Verify a password for one account management action",
+        "description": "Issues a session-bound, single-use five-minute grant. This does not request or cancel deletion. Google-only accounts require a separate verified Google action.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordReauthenticationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Short-lived action grant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordReauthenticationGrant"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication or password verification failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies the action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The account has no password or its lifecycle changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed action or password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The actor's reauthentication rate limit was reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Verification or rate limiting is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/reauthenticate/google": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.beginGoogleReauthentication",
+        "summary": "Start browser Google verification for one account action",
+        "description": "A browser-only authorization-code flow. It does not sign in, link an account, or request deletion. The callback requires the original live session and a fresh signed Google authentication time.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoogleReauthenticationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Google authorization URL for the current session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleReauthenticationIntent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A live session is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies this action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No linked Google account or the account state changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Malformed action.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Reauthentication is rate limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Google proof or rate limiting is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/acceptance": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.recordAcceptance",
+        "summary": "Record an explicit current Terms and 16+ action",
+        "description": "Available only for an effective Terms version. The Privacy Policy is a notice, not consent. No draft document can be accepted.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LegalAcceptanceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server-recorded Terms and age declaration timestamps.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LegalAcceptanceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account cannot accept Terms in its current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The requested Terms are stale or no Terms are effective.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit confirmation and an exact current Terms digest are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Legal acceptance is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/current": {
+      "get": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.currentRegistrationTerms",
+        "summary": "Read current published signup Terms metadata",
+        "responses": {
+          "200": {
+            "description": "Draft documents are not available for acceptance. The response has no private data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentLegalRegistrationTerms"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The legal version cannot be verified.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/legal/registration-intent": {
+      "post": {
+        "tags": [
+          "Legal"
+        ],
+        "operationId": "legal.issueRegistrationIntent",
+        "summary": "Start one explicit email or Google registration action",
+        "description": "Requires current approved documents and one affirmative Terms, Privacy notice, and 16+ action before account creation.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationIntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Opaque, short-lived, one-use registration proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationIntentResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No current approved Terms or the selected version changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit acceptance and a valid flow are required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many registration attempts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The legal version cannot be verified.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2165,6 +3306,16 @@
               }
             }
           },
+          "403": {
+            "description": "Posting is unavailable while account deletion is pending.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "409": {
             "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
             "content": {
@@ -2320,6 +3471,235 @@
           },
           "503": {
             "description": "The feed is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/trash": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listTrash",
+        "summary": "List the authenticated owner's trashed posts",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only Trash status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "posts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrashedPostStatus"
+                      }
+                    }
+                  },
+                  "required": [
+                    "posts"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/trash": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.trash",
+        "summary": "Move an owned post to Trash",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post Trash state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashedPostStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Post cannot be moved to Trash.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/restore": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.restore",
+        "summary": "Restore an owned post from Trash",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/OpaqueId"
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post restored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "restored"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Post cannot be restored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post Trash is disabled or unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2508,6 +3888,112 @@
           },
           "404": {
             "description": "The media is missing, detached, or on a post the caller may not read. These cases are not distinguished.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/voice-memo": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getVoiceMemo",
+        "summary": "Get a fresh download URL for a post's voice memo",
+        "description": "Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The voice memo with a fresh download URL.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostVoiceMemo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post has no voice memo, or the caller may not read the post. These cases are not distinguished.",
             "content": {
               "application/json": {
                 "schema": {

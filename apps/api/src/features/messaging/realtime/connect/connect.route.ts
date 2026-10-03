@@ -7,7 +7,7 @@ export type RealtimeConnectRouteDependencies = Partial<RealtimeConnectDependenci
 /** This protocol upgrade intentionally stays outside OpenAPI's JSON operations. */
 export function registerConnectRealtimeRoute(app: OpenAPIHono<AuthenticatedApiEnv>, dependencies: RealtimeConnectRouteDependencies) {
   app.get("/api/v1/realtime/connect", (context) => {
-    if (!dependencies.tickets || !dependencies.resolveActiveSession || !dependencies.userRealtime || !dependencies.trustedOrigins) {
+    if (!dependencies.tickets || !dependencies.resolveActiveSession || !dependencies.userRealtime || !dependencies.trustedOrigins || !dependencies.policyAllowsOrdinary) {
       return new Response("Realtime is temporarily unavailable.", { status: 503, headers: { "Cache-Control": "no-store" } });
     }
     return connectRealtime(context.req.raw, {
@@ -16,6 +16,7 @@ export function registerConnectRealtimeRoute(app: OpenAPIHono<AuthenticatedApiEn
       userRealtime: dependencies.userRealtime,
       trustedOrigins: dependencies.trustedOrigins,
       hasUsername: dependencies.hasUsername,
+      policyAllowsOrdinary: dependencies.policyAllowsOrdinary,
       rateLimiter: dependencies.rateLimiter,
     });
   });

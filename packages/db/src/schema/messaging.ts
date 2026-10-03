@@ -40,9 +40,10 @@ export const messagingParticipants = pgTable("messaging_participants", {
 export const conversations = pgTable("conversations", {
   id: text("id").primaryKey(),
   kind: conversationKind("kind").notNull().default("direct"),
-  userLowId: text("user_low_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  userHighId: text("user_high_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  initiatorId: text("initiator_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Legacy compatibility identities are detached when the user is removed. */
+  userLowId: text("user_low_id").references(() => user.id, { onDelete: "set null" }),
+  userHighId: text("user_high_id").references(() => user.id, { onDelete: "set null" }),
+  initiatorId: text("initiator_id").references(() => user.id, { onDelete: "set null" }),
   /** Database triggers derive this durable identity while deployed writers use user IDs. */
   participantLowId: text("participant_low_id").references(() => messagingParticipants.id),
   participantHighId: text("participant_high_id").references(() => messagingParticipants.id),
@@ -66,16 +67,17 @@ export const conversations = pgTable("conversations", {
 
 export const conversationMembers = pgTable("conversation_members", {
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Legacy compatibility identity, retained for rolling old workers. */
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   /** Database triggers derive this durable identity while deployed writers use user IDs. */
-  participantId: text("participant_id").references(() => messagingParticipants.id),
+  participantId: text("participant_id").notNull().references(() => messagingParticipants.id),
   lastReadSequence: bigint("last_read_sequence", { mode: "number" }).notNull(),
   receiptSequence: bigint("receipt_sequence", { mode: "number" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  primaryKey({ name: "conversation_members_pk", columns: [table.conversationId, table.userId] }),
-  unique("conversation_members_participant_unique").on(table.conversationId, table.participantId),
+  primaryKey({ name: "conversation_members_pk", columns: [table.conversationId, table.participantId] }),
+  unique("conversation_members_legacy_user_unique").on(table.conversationId, table.userId),
   index("conversation_members_user_conversation_idx").on(table.userId, table.conversationId),
   check("conversation_members_participant_presence_check", sql`${table.participantId} is not null`),
   check("conversation_members_receipt_read_check", sql`${table.receiptSequence} <= ${table.lastReadSequence}`),
@@ -85,7 +87,8 @@ export const messages = pgTable("messages", {
   id: text("id").primaryKey(),
   conversationId: text("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
   sequence: bigint("sequence", { mode: "number" }).notNull(),
-  senderId: text("sender_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Legacy compatibility identity, retained for rolling old workers. */
+  senderId: text("sender_id").references(() => user.id, { onDelete: "set null" }),
   /** Database triggers derive this durable identity while deployed writers use user IDs. */
   senderParticipantId: text("sender_participant_id").references(() => messagingParticipants.id),
   clientMessageId: text("client_message_id").notNull(),
@@ -109,14 +112,15 @@ export const messages = pgTable("messages", {
 
 export const messageReactions = pgTable("message_reactions", {
   messageId: text("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  /** Legacy compatibility identity, retained for rolling old workers. */
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
   /** Database triggers derive this durable identity while deployed writers use user IDs. */
-  participantId: text("participant_id").references(() => messagingParticipants.id),
+  participantId: text("participant_id").notNull().references(() => messagingParticipants.id),
   reaction: text("reaction").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
 }, (table) => [
-  primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.userId] }),
-  unique("message_reactions_participant_unique").on(table.messageId, table.participantId),
+  primaryKey({ name: "message_reactions_pk", columns: [table.messageId, table.participantId] }),
+  unique("message_reactions_legacy_user_unique").on(table.messageId, table.userId),
   check("message_reactions_participant_presence_check", sql`${table.participantId} is not null`),
   check("message_reactions_key_check", sql`${table.reaction} in ('like', 'love', 'laugh', 'surprised', 'sad', 'angry', 'thanks')`),
 ]);
@@ -126,7 +130,7 @@ export const conversationChanges = pgTable("conversation_changes", {
   changeSequence: bigint("change_sequence", { mode: "number" }).notNull(),
   kind: text("kind").notNull(),
   messageId: text("message_id").references(() => messages.id, { onDelete: "cascade" }),
-  memberId: text("member_id").references(() => user.id, { onDelete: "cascade" }),
+  memberId: text("member_id").references(() => user.id, { onDelete: "set null" }),
   /** Populated by database triggers while deployed writers still use user IDs. */
   memberParticipantId: text("member_participant_id").references(() => messagingParticipants.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),

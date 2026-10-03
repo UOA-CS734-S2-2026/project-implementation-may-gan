@@ -1,0 +1,6 @@
+reason: The grant generation and credential digest columns and narrowly executable issue and consume procedures must install together. A partial migration would leave action grants without lifecycle or credential fencing.
+affected_data_and_clients: Existing grants are inaccessible to runtime roles and are expected to be empty. Historic grants without a credential digest cannot be consumed. No deletion endpoint or purge job is enabled. Existing sign-in and registration remain unchanged.
+rollout_sequence: Apply only after green main CI and reviewed staging migration evidence. Test app-role execution, stale session, changed credential, action binding, generation changes, and replay locally before enabling lifecycle actions.
+backup_checkpoint: Confirm the staging migration recovery checkpoint and current app and lifecycle_worker role grants before installation.
+forward_fix_plan: Add a reviewed forward migration if already applied. Do not grant direct app writes to account_management_grants or bypass generation checks.
+reviewer: Database and authentication reviewers required.

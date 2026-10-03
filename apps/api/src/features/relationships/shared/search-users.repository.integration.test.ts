@@ -1,4 +1,4 @@
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createDayliDatabase, schema } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { consumeUsernameSearchQuota, searchUsernameRows } from "./search-users.repository";
@@ -85,6 +85,25 @@ suite("username search Postgres repository", () => {
       relationship: "none",
     }]);
     expect(Object.keys(page.items[0]!)).toEqual(["id", "username", "displayName", "relationship"]);
+  });
+
+  it("removes a pending account from discovery and restores it after cancellation", async () => {
+    const requestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users.privateUser, state: "pending_deletion", generation: 1,
+      requestId: id("request"), idempotencyKeyDigest: "a".repeat(64),
+      requestedAt,
+      cancelUntil: new Date(requestedAt.getTime() + 168 * 60 * 60_000),
+      purgeDueAt: new Date(requestedAt.getTime() + 336 * 60 * 60_000),
+    });
+    try {
+      const hidden = await searchUsernameRows(database.db, users.actor, handles.privacy, 20);
+      expect(hidden.items).toEqual([]);
+    } finally {
+      await database.db.delete(schema.accountLifecycles).where(eq(schema.accountLifecycles.userId, users.privateUser));
+    }
+    const restored = await searchUsernameRows(database.db, users.actor, handles.privacy, 20);
+    expect(restored.items.map((item) => item.id)).toEqual([users.privateUser]);
   });
 
   it("serializes quota attempts and releases the lock after commit", async () => {

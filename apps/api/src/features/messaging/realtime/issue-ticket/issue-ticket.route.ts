@@ -12,6 +12,8 @@ export interface RealtimeTicketRouteDependencies {
   tickets?: { issue(session: VerifiedRealtimeSession): Promise<{ ticket: string; expiresAt: Date }> };
   webSocketUrl: string;
   hasUsername?: HasUsername;
+  /** Fresh account-policy check before a ticket can become a WebSocket upgrade. */
+  policyAllowsOrdinary(userId: string): Promise<boolean>;
 }
 
 const route = createRoute({
@@ -45,6 +47,13 @@ export function registerIssueRealtimeTicketRoute(
     if (!dependencies.tickets) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Realtime is temporarily unavailable.") as never;
     const session = await dependencies.resolveRealtimeSession(context.req.raw);
     if (!session || session.userId !== context.get("actor").userId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "Authentication is required.") as never;
+    try {
+      if (!await dependencies.policyAllowsOrdinary(session.userId)) {
+        return apiErrorResponse(context, 403, "FORBIDDEN", "This account is currently restricted.") as never;
+      }
+    } catch {
+      return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Account policy is temporarily unavailable.") as never;
+    }
     const ticket = await dependencies.tickets.issue(session);
     return context.json({ ticket: ticket.ticket, expiresAt: ticket.expiresAt.toISOString(), webSocketUrl: dependencies.webSocketUrl }, 201);
   });

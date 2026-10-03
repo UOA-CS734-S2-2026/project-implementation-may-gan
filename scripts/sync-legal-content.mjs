@@ -59,6 +59,9 @@ function validateDocument(document, source) {
   if (document.status === "approved" && !/^\d{4}-\d{2}-\d{2}$/.test(document.effectiveDate ?? "")) {
     throw new Error(`${source} needs an approved effective date.`);
   }
+  if (document.status === "draft" && document.effectiveDate !== null) {
+    throw new Error(`${source} must not give a draft an effective date.`);
+  }
   if (!Array.isArray(document.sections) || document.sections.length === 0) {
     throw new Error(`${source} has no sections.`);
   }

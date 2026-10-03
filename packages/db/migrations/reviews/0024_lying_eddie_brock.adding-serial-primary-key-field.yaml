@@ -1,0 +1,6 @@
+reason: Squawk classifies replacement participant-pair primary keys under this rule. These keys use existing durable text participant identities, not serial values.
+affected_data_and_clients: conversation_members and message_reactions retain legacy pair unique constraints for rolling ON CONFLICT workers while their primary keys move to participant pairs.
+rollout_sequence: Acquire the documented final locks and pass the locked combined size recheck before replacing either primary key.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Repair any discovered duplicate with a new reviewed forward migration. Do not reuse a detached participant identity or remove the legacy conflict target during rolling deployment.
+reviewer: Database, messaging, and privacy reviewers must approve the detachment contract.

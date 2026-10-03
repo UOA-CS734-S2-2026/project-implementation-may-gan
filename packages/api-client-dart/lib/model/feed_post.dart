@@ -37,7 +37,7 @@ class FeedPost {
 
   final String reflectiveAnswer;
 
-  final String caption;
+  final String? caption;
 
   final int rating;
 
@@ -79,7 +79,7 @@ class FeedPost {
       (localDate.hashCode) +
       (prompt.hashCode) +
       (reflectiveAnswer.hashCode) +
-      (caption.hashCode) +
+      (caption == null ? 0 : caption!.hashCode) +
       (rating.hashCode) +
       (audience.hashCode) +
       (acceptedAt.hashCode) +
@@ -98,7 +98,11 @@ class FeedPost {
     json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
-    json[r'caption'] = this.caption;
+    if (this.caption != null) {
+      json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     json[r'rating'] = this.rating;
     json[r'audience'] = this.audience;
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
@@ -117,6 +121,7 @@ class FeedPost {
     FeedPostPrompt? prompt,
     String? reflectiveAnswer,
     String? caption,
+    bool captionSetToNull = false,
     int? rating,
     FeedPostAudienceEnum? audience,
     DateTime? acceptedAt,
@@ -130,7 +135,7 @@ class FeedPost {
         localDate: localDate ?? this.localDate,
         prompt: prompt ?? this.prompt,
         reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
-        caption: caption ?? this.caption,
+        caption: captionSetToNull ? null : caption ?? this.caption,
         rating: rating ?? this.rating,
         audience: audience ?? this.audience,
         acceptedAt: acceptedAt ?? this.acceptedAt,
@@ -172,8 +177,6 @@ class FeedPost {
             'Required key "FeedPost[reflectiveAnswer]" has a null value in JSON.');
         assert(json.containsKey(r'caption'),
             'Required key "FeedPost[caption]" is missing from JSON.');
-        assert(json[r'caption'] != null,
-            'Required key "FeedPost[caption]" has a null value in JSON.');
         assert(json.containsKey(r'rating'),
             'Required key "FeedPost[rating]" is missing from JSON.');
         assert(json[r'rating'] != null,
@@ -207,7 +210,7 @@ class FeedPost {
         localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: FeedPostPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
-        caption: mapValueOfType<String>(json, r'caption')!,
+        caption: mapValueOfType<String>(json, r'caption'),
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: FeedPostAudienceEnum.fromJson(json[r'audience'])!,
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,

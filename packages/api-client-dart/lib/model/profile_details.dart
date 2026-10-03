@@ -37,24 +37,24 @@ class ProfileDetails {
   /// False when the account is private and the caller is not an active friend. The bio is then null.
   final bool detailsVisible;
 
-  final String bio;
+  final String? bio;
 
-  final Mbti mbti;
-
-  /// Null when unset or when the bio is hidden.
-  final String whatIDo;
+  final Mbti? mbti;
 
   /// Null when unset or when the bio is hidden.
-  final String listeningTo;
+  final String? whatIDo;
+
+  /// Null when unset or when the bio is hidden.
+  final String? listeningTo;
 
   /// A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.
-  final String avatarUrl;
+  final String? avatarUrl;
 
-  final PostingStreak streak;
+  final PostingStreak? streak;
 
-  final ProfileStats stats;
+  final ProfileStats? stats;
 
-  final ProfileOwnerSettings owner;
+  final ProfileOwnerSettings? owner;
 
   @override
   bool operator ==(Object other) =>
@@ -80,14 +80,14 @@ class ProfileDetails {
       (username.hashCode) +
       (displayName.hashCode) +
       (detailsVisible.hashCode) +
-      (bio.hashCode) +
-      (mbti.hashCode) +
-      (whatIDo.hashCode) +
-      (listeningTo.hashCode) +
-      (avatarUrl.hashCode) +
-      (streak.hashCode) +
-      (stats.hashCode) +
-      (owner.hashCode);
+      (bio == null ? 0 : bio!.hashCode) +
+      (mbti == null ? 0 : mbti!.hashCode) +
+      (whatIDo == null ? 0 : whatIDo!.hashCode) +
+      (listeningTo == null ? 0 : listeningTo!.hashCode) +
+      (avatarUrl == null ? 0 : avatarUrl!.hashCode) +
+      (streak == null ? 0 : streak!.hashCode) +
+      (stats == null ? 0 : stats!.hashCode) +
+      (owner == null ? 0 : owner!.hashCode);
 
   @override
   String toString() =>
@@ -99,14 +99,46 @@ class ProfileDetails {
     json[r'username'] = this.username;
     json[r'displayName'] = this.displayName;
     json[r'detailsVisible'] = this.detailsVisible;
-    json[r'bio'] = this.bio;
-    json[r'mbti'] = this.mbti;
-    json[r'whatIDo'] = this.whatIDo;
-    json[r'listeningTo'] = this.listeningTo;
-    json[r'avatarUrl'] = this.avatarUrl;
-    json[r'streak'] = this.streak;
-    json[r'stats'] = this.stats;
-    json[r'owner'] = this.owner;
+    if (this.bio != null) {
+      json[r'bio'] = this.bio;
+    } else {
+      json[r'bio'] = null;
+    }
+    if (this.mbti != null) {
+      json[r'mbti'] = this.mbti;
+    } else {
+      json[r'mbti'] = null;
+    }
+    if (this.whatIDo != null) {
+      json[r'whatIDo'] = this.whatIDo;
+    } else {
+      json[r'whatIDo'] = null;
+    }
+    if (this.listeningTo != null) {
+      json[r'listeningTo'] = this.listeningTo;
+    } else {
+      json[r'listeningTo'] = null;
+    }
+    if (this.avatarUrl != null) {
+      json[r'avatarUrl'] = this.avatarUrl;
+    } else {
+      json[r'avatarUrl'] = null;
+    }
+    if (this.streak != null) {
+      json[r'streak'] = this.streak;
+    } else {
+      json[r'streak'] = null;
+    }
+    if (this.stats != null) {
+      json[r'stats'] = this.stats;
+    } else {
+      json[r'stats'] = null;
+    }
+    if (this.owner != null) {
+      json[r'owner'] = this.owner;
+    } else {
+      json[r'owner'] = null;
+    }
     return json;
   }
 
@@ -118,27 +150,36 @@ class ProfileDetails {
     String? displayName,
     bool? detailsVisible,
     String? bio,
+    bool bioSetToNull = false,
     Mbti? mbti,
+    bool mbtiSetToNull = false,
     String? whatIDo,
+    bool whatIDoSetToNull = false,
     String? listeningTo,
+    bool listeningToSetToNull = false,
     String? avatarUrl,
+    bool avatarUrlSetToNull = false,
     PostingStreak? streak,
+    bool streakSetToNull = false,
     ProfileStats? stats,
+    bool statsSetToNull = false,
     ProfileOwnerSettings? owner,
+    bool ownerSetToNull = false,
   }) =>
       ProfileDetails(
         id: id ?? this.id,
         username: username ?? this.username,
         displayName: displayName ?? this.displayName,
         detailsVisible: detailsVisible ?? this.detailsVisible,
-        bio: bio ?? this.bio,
-        mbti: mbti ?? this.mbti,
-        whatIDo: whatIDo ?? this.whatIDo,
-        listeningTo: listeningTo ?? this.listeningTo,
-        avatarUrl: avatarUrl ?? this.avatarUrl,
-        streak: streak ?? this.streak,
-        stats: stats ?? this.stats,
-        owner: owner ?? this.owner,
+        bio: bioSetToNull ? null : bio ?? this.bio,
+        mbti: mbtiSetToNull ? null : mbti ?? this.mbti,
+        whatIDo: whatIDoSetToNull ? null : whatIDo ?? this.whatIDo,
+        listeningTo:
+            listeningToSetToNull ? null : listeningTo ?? this.listeningTo,
+        avatarUrl: avatarUrlSetToNull ? null : avatarUrl ?? this.avatarUrl,
+        streak: streakSetToNull ? null : streak ?? this.streak,
+        stats: statsSetToNull ? null : stats ?? this.stats,
+        owner: ownerSetToNull ? null : owner ?? this.owner,
       );
 
   /// Returns a new [ProfileDetails] instance and imports its values from
@@ -170,36 +211,20 @@ class ProfileDetails {
             'Required key "ProfileDetails[detailsVisible]" has a null value in JSON.');
         assert(json.containsKey(r'bio'),
             'Required key "ProfileDetails[bio]" is missing from JSON.');
-        assert(json[r'bio'] != null,
-            'Required key "ProfileDetails[bio]" has a null value in JSON.');
         assert(json.containsKey(r'mbti'),
             'Required key "ProfileDetails[mbti]" is missing from JSON.');
-        assert(json[r'mbti'] != null,
-            'Required key "ProfileDetails[mbti]" has a null value in JSON.');
         assert(json.containsKey(r'whatIDo'),
             'Required key "ProfileDetails[whatIDo]" is missing from JSON.');
-        assert(json[r'whatIDo'] != null,
-            'Required key "ProfileDetails[whatIDo]" has a null value in JSON.');
         assert(json.containsKey(r'listeningTo'),
             'Required key "ProfileDetails[listeningTo]" is missing from JSON.');
-        assert(json[r'listeningTo'] != null,
-            'Required key "ProfileDetails[listeningTo]" has a null value in JSON.');
         assert(json.containsKey(r'avatarUrl'),
             'Required key "ProfileDetails[avatarUrl]" is missing from JSON.');
-        assert(json[r'avatarUrl'] != null,
-            'Required key "ProfileDetails[avatarUrl]" has a null value in JSON.');
         assert(json.containsKey(r'streak'),
             'Required key "ProfileDetails[streak]" is missing from JSON.');
-        assert(json[r'streak'] != null,
-            'Required key "ProfileDetails[streak]" has a null value in JSON.');
         assert(json.containsKey(r'stats'),
             'Required key "ProfileDetails[stats]" is missing from JSON.');
-        assert(json[r'stats'] != null,
-            'Required key "ProfileDetails[stats]" has a null value in JSON.');
         assert(json.containsKey(r'owner'),
             'Required key "ProfileDetails[owner]" is missing from JSON.');
-        assert(json[r'owner'] != null,
-            'Required key "ProfileDetails[owner]" has a null value in JSON.');
         return true;
       }());
 
@@ -208,14 +233,14 @@ class ProfileDetails {
         username: mapValueOfType<String>(json, r'username')!,
         displayName: mapValueOfType<String>(json, r'displayName')!,
         detailsVisible: mapValueOfType<bool>(json, r'detailsVisible')!,
-        bio: mapValueOfType<String>(json, r'bio')!,
-        mbti: Mbti.fromJson(json[r'mbti'])!,
-        whatIDo: mapValueOfType<String>(json, r'whatIDo')!,
-        listeningTo: mapValueOfType<String>(json, r'listeningTo')!,
-        avatarUrl: mapValueOfType<String>(json, r'avatarUrl')!,
-        streak: PostingStreak.fromJson(json[r'streak'])!,
-        stats: ProfileStats.fromJson(json[r'stats'])!,
-        owner: ProfileOwnerSettings.fromJson(json[r'owner'])!,
+        bio: mapValueOfType<String>(json, r'bio'),
+        mbti: Mbti.fromJson(json[r'mbti']),
+        whatIDo: mapValueOfType<String>(json, r'whatIDo'),
+        listeningTo: mapValueOfType<String>(json, r'listeningTo'),
+        avatarUrl: mapValueOfType<String>(json, r'avatarUrl'),
+        streak: PostingStreak.fromJson(json[r'streak']),
+        stats: ProfileStats.fromJson(json[r'stats']),
+        owner: ProfileOwnerSettings.fromJson(json[r'owner']),
       );
     }
     return null;

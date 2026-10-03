@@ -1,5 +1,5 @@
 import { createDayliDatabase, schema } from "@dayli/db";
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
@@ -16,7 +16,7 @@ const suite = enabled ? describe : describe.skip;
 suite("list messages Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const users = Array.from({ length: 4 }, (_, index) => `list-messages-${crypto.randomUUID()}-${index}`);
-  const { direct, send, unsend } = createMessagingPersistenceServices(database.db);
+  const { direct, send, unsend, set: setReaction, remove: removeReaction, resolveMessageRequest, listConversations, getConversation, getMessage } = createMessagingPersistenceServices(database.db);
   const repository = createPostgresListMessagesRepository(database.db);
   const builderQueries: string[] = [];
   const observedRepository = createPostgresListMessagesRepository(drizzle(database.client, {
@@ -70,15 +70,16 @@ suite("list messages Postgres repository", () => {
     await database.db.insert(schema.conversationMembers).values({
       conversationId: initial.conversation.id,
       userId: users[2]!,
+      participantId: users[2]!,
       lastReadSequence: 0,
       receiptSequence: 0,
       createdAt: now,
       updatedAt: now,
     });
     await database.db.insert(schema.messageReactions).values([
-      { messageId: reply.message.id, userId: users[0]!, reaction: "love", createdAt: now },
-      { messageId: reply.message.id, userId: users[1]!, reaction: "love", createdAt: now },
-      { messageId: reply.message.id, userId: users[2]!, reaction: "laugh", createdAt: now },
+      { messageId: reply.message.id, userId: users[0]!, participantId: users[0]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[1]!, participantId: users[1]!, reaction: "love", createdAt: now },
+      { messageId: reply.message.id, userId: users[2]!, participantId: users[2]!, reaction: "laugh", createdAt: now },
     ]);
     await database.db.update(schema.messages)
       .set({ sequence: Number.MAX_SAFE_INTEGER })
@@ -199,6 +200,118 @@ suite("list messages Postgres repository", () => {
 
     await expect(repository.list(users[0]!, created.conversation.id, undefined, undefined, 10))
       .rejects.toThrow("Database message version must be a positive safe integer.");
+    await database.db.update(schema.messages).set({ version: 1 })
+      .where(eq(schema.messages.id, created.message.id));
+  });
+
+  it("retains one peer's history and masks its profile after a privileged raw deletion", async () => {
+    const deletedPeer = `raw-deleted-peer-${crypto.randomUUID()}`;
+    const deletedRequester = `raw-deleted-requester-${crypto.randomUUID()}`;
+    const now = new Date();
+    const assertSurvivorRealtimeOutbox = async (conversationId: string, kind: string, afterSequence?: number) => {
+      const [change] = await database.db.select({ sequence: schema.conversationChanges.changeSequence })
+        .from(schema.conversationChanges)
+        .where(and(
+          eq(schema.conversationChanges.conversationId, conversationId),
+          eq(schema.conversationChanges.kind, kind),
+          afterSequence === undefined ? undefined : gt(schema.conversationChanges.changeSequence, afterSequence),
+        ))
+        .orderBy(desc(schema.conversationChanges.changeSequence))
+        .limit(1);
+      expect(change).toBeDefined();
+
+      const jobs = await database.db.select({
+        recipientId: schema.messagingOutbox.recipientId,
+        channel: schema.messagingOutbox.channel,
+      }).from(schema.messagingOutbox).where(and(
+        eq(schema.messagingOutbox.conversationId, conversationId),
+        eq(schema.messagingOutbox.changeSequence, change!.sequence),
+      ));
+      expect(jobs).toEqual(expect.arrayContaining([
+        { recipientId: users[0]!, channel: "realtime" },
+      ]));
+      expect(jobs).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ recipientId: deletedPeer }),
+      ]));
+      expect(jobs).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ recipientId: deletedRequester }),
+      ]));
+    };
+    await database.db.insert(schema.user).values({ id: deletedPeer, name: "private deleted peer", email: `${deletedPeer}@example.test` });
+    await database.db.insert(schema.friendships).values([
+      { userId: users[0]!, friendId: deletedPeer, state: "active", stateChangedAt: now },
+      { userId: deletedPeer, friendId: users[0]!, state: "active", stateChangedAt: now },
+    ]);
+    const created = await direct.create(users[0]!, {
+      recipientId: deletedPeer,
+      clientMessageId: crypto.randomUUID(),
+      text: "survivor can still unsend this",
+    });
+    const peerMessage = await send.send(deletedPeer, created.conversation.id, {
+      clientMessageId: crypto.randomUUID(),
+      text: "deleted peer history",
+    });
+    await setReaction.set(deletedPeer, created.conversation.id, created.message.id, "angry");
+    await setReaction.set(users[0]!, created.conversation.id, peerMessage.message.id, "love");
+    await database.db.insert(schema.user).values({ id: deletedRequester, name: "private deleted requester", email: `${deletedRequester}@example.test` });
+    const pendingRequest = await direct.create(deletedRequester, {
+      recipientId: users[0]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "deleted peer request",
+    });
+    await database.db.update(schema.user).set({
+      name: "private deleted peer",
+      username: "private_deleted_peer",
+      displayUsername: "private deleted peer",
+      image: "https://example.test/private-deleted-peer-avatar.png",
+    }).where(eq(schema.user.id, deletedPeer));
+    await database.db.delete(schema.friendships).where(or(
+      eq(schema.friendships.userId, deletedPeer),
+      eq(schema.friendships.friendId, deletedPeer),
+    ));
+    await database.db.delete(schema.user).where(eq(schema.user.id, deletedPeer));
+    await database.db.delete(schema.user).where(eq(schema.user.id, deletedRequester));
+
+    const listedConversation = await listConversations.list(users[0]!, "inbox", undefined, 10);
+    const inboxConversation = listedConversation.items.find((item): item is { id: string; peer: unknown } =>
+      typeof item === "object" && item !== null && "id" in item && item.id === created.conversation.id,
+    );
+    expect(inboxConversation?.peer).toEqual({ id: deletedPeer, name: "Deleted account" });
+    const conversation = await getConversation.get(users[0]!, created.conversation.id) as { peer: unknown };
+    expect(conversation.peer).toEqual({ id: deletedPeer, name: "Deleted account" });
+    await expect(getMessage.get(users[0]!, created.conversation.id, peerMessage.message.id)).resolves.toMatchObject({
+      id: peerMessage.message.id,
+      senderId: deletedPeer,
+    });
+    const history = await repository.list(users[0]!, created.conversation.id, undefined, undefined, 10);
+    expect(history.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: peerMessage.message.id, senderId: deletedPeer }),
+      expect.objectContaining({
+        id: created.message.id,
+        reactions: expect.arrayContaining([
+          expect.objectContaining({
+            reaction: "angry",
+            count: 1,
+            reactedByActor: false,
+            reactors: [{ id: deletedPeer, name: "Deleted account" }],
+          }),
+        ]),
+      }),
+    ]));
+
+    const [reactionBaseline] = await database.db.select({ sequence: schema.conversations.lastChangeSequence })
+      .from(schema.conversations)
+      .where(eq(schema.conversations.id, created.conversation.id));
+    expect(reactionBaseline).toBeDefined();
+    await expect(removeReaction.remove(users[0]!, created.conversation.id, peerMessage.message.id)).resolves.toMatchObject({ changed: true });
+    await assertSurvivorRealtimeOutbox(created.conversation.id, "reaction.changed", reactionBaseline!.sequence);
+    await expect(unsend.unsend(users[0]!, created.conversation.id, created.message.id)).resolves.toMatchObject({
+      message: { id: created.message.id, text: null },
+    });
+    await assertSurvivorRealtimeOutbox(created.conversation.id, "message.unsent");
+    await expect(resolveMessageRequest.resolve(users[0]!, pendingRequest.conversation.id, "decline"))
+      .resolves.toMatchObject({ requestState: "declined" });
+    await assertSurvivorRealtimeOutbox(pendingRequest.conversation.id, "request.declined");
   });
 
   it("counts a pending-deletion participant's angry reaction without leaking profile data", async () => {
@@ -212,6 +325,7 @@ suite("list messages Postgres repository", () => {
     await database.db.insert(schema.messageReactions).values({
       messageId: created.message.id,
       userId: users[1]!,
+      participantId: users[1]!,
       reaction: "angry",
       createdAt: new Date(),
     });

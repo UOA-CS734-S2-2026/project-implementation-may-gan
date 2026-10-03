@@ -19,7 +19,7 @@ class CreateDirectConversation200ResponseConversationPeer {
 
   final String id;
 
-  final String name;
+  final String? name;
 
   @override
   bool operator ==(Object other) =>
@@ -31,7 +31,7 @@ class CreateDirectConversation200ResponseConversationPeer {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (id.hashCode) + (name.hashCode);
+      (id.hashCode) + (name == null ? 0 : name!.hashCode);
 
   @override
   String toString() =>
@@ -40,7 +40,11 @@ class CreateDirectConversation200ResponseConversationPeer {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
-    json[r'name'] = this.name;
+    if (this.name != null) {
+      json[r'name'] = this.name;
+    } else {
+      json[r'name'] = null;
+    }
     return json;
   }
 
@@ -49,10 +53,11 @@ class CreateDirectConversation200ResponseConversationPeer {
   CreateDirectConversation200ResponseConversationPeer copyWith({
     String? id,
     String? name,
+    bool nameSetToNull = false,
   }) =>
       CreateDirectConversation200ResponseConversationPeer(
         id: id ?? this.id,
-        name: name ?? this.name,
+        name: nameSetToNull ? null : name ?? this.name,
       );
 
   /// Returns a new [CreateDirectConversation200ResponseConversationPeer] instance and imports its values from
@@ -73,14 +78,12 @@ class CreateDirectConversation200ResponseConversationPeer {
             'Required key "CreateDirectConversation200ResponseConversationPeer[id]" has a null value in JSON.');
         assert(json.containsKey(r'name'),
             'Required key "CreateDirectConversation200ResponseConversationPeer[name]" is missing from JSON.');
-        assert(json[r'name'] != null,
-            'Required key "CreateDirectConversation200ResponseConversationPeer[name]" has a null value in JSON.');
         return true;
       }());
 
       return CreateDirectConversation200ResponseConversationPeer(
         id: mapValueOfType<String>(json, r'id')!,
-        name: mapValueOfType<String>(json, r'name')!,
+        name: mapValueOfType<String>(json, r'name'),
       );
     }
     return null;

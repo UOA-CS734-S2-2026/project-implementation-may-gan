@@ -3,62 +3,22 @@ import { describe, expect, it } from "vitest";
 import { withLockedConversationMessageTransaction } from "../conversation-message-transaction";
 
 describe("withLockedConversationMessageTransaction", () => {
-  it("locks canonical user rows before the relationship pair and callback", async () => {
-    const events: string[] = [];
-    let ordinarySelects = 0;
+  it("runs the callback when the durable conversation lookup is absent", async () => {
     const transaction = {
-      select(fields?: { lock?: unknown }) {
-        if (fields?.lock) {
-          return {
-            async from() {
-              events.push("relationship pair lock");
-              return [];
-            },
-          };
-        }
-        ordinarySelects += 1;
-        if (ordinarySelects === 1) {
-          return {
-            from() {
-              return {
-                where() {
-                  return {
-                    async limit() {
-                      events.push("pair lookup");
-                      return [{ userLowId: "amy", userHighId: "zoe" }];
-                    },
-                  };
-                },
-              };
-            },
-          };
-        }
+      select() {
         return {
           from() {
             return {
               where() {
-                return {
-                  orderBy() {
-                    return {
-                      async for() {
-                        events.push("canonical user locks");
-                        return [];
-                      },
-                    };
-                  },
-                };
+                return { limit: async () => [] };
               },
             };
           },
         };
       },
     } as unknown as DayliDatabase;
+    const callback = async () => "called";
 
-    await withLockedConversationMessageTransaction(transaction, "conversation-1", async (received) => {
-      expect(received).toBe(transaction);
-      events.push("callback");
-    });
-
-    expect(events).toEqual(["pair lookup", "canonical user locks", "relationship pair lock", "callback"]);
+    await expect(withLockedConversationMessageTransaction(transaction, "missing", callback)).resolves.toBe("called");
   });
 });

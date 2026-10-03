@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { createBetterAuthCompatibilitySlice } from "../../auth/better-auth";
-import { MAX_ATTACHMENT_BYTES, MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
+import {
+  MAX_ATTACHMENT_BYTES,
+  MAX_VOICE_MEMO_BYTES,
+  MAX_PENDING_RESERVATIONS_PER_OWNER,
+  RESERVATION_TTL_SECONDS,
+} from "../shared/media-reservation-policy";
 import { createUnusedR2Reader } from "../../../infrastructure/media/r2.fake";
 import { createFakeMediaReservationRepository } from "../shared/media-reservation.repository.fake";
 import type { MediaReservationRepository } from "../shared/media-reservation.repository";
@@ -149,6 +154,28 @@ describe("POST /api/v1/media-reservations", () => {
 
     const disallowed = await createReservation(app, token, { contentType: "application/pdf" });
     expect(disallowed.status).toBe(422);
+  });
+
+  it("reserves a voice memo up to 2 MB and rejects a larger one", async () => {
+    const { app } = createTestApp();
+    const token = await signUpAndGetToken(app);
+
+    const accepted = await createReservation(app, token, { contentType: "audio/mp4", byteSize: MAX_VOICE_MEMO_BYTES });
+    expect(accepted.status).toBe(201);
+    expect(await jsonBody(accepted)).toMatchObject({
+      contentType: "audio/mp4",
+      upload: { requiredHeaders: { "content-type": "audio/mp4", "content-length": String(MAX_VOICE_MEMO_BYTES) } },
+    });
+
+    // Under the 10 MB photo and video cap, but over the audio cap.
+    const oversized = await createReservation(app, token, { contentType: "audio/mp4", byteSize: MAX_VOICE_MEMO_BYTES + 1 });
+    expect(oversized.status).toBe(422);
+
+    // Documented formats only: other audio types are refused.
+    for (const contentType of ["audio/mpeg", "audio/wav", "audio/webm", "audio/x-m4a"]) {
+      const refused = await createReservation(app, token, { contentType, byteSize: 1024 });
+      expect(refused.status, contentType).toBe(422);
+    }
   });
 
   it("enforces a per-owner quota on concurrent pending reservations", async () => {

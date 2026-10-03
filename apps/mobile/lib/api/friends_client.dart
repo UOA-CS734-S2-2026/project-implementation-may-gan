@@ -208,7 +208,7 @@ FriendCard _card(generated.RelationshipUserCard card) => FriendCard(
 );
 FriendPage _friendPage(generated.RelationshipUserPage? page) => FriendPage(
   items: (page?.items ?? []).map(_card).toList(growable: false),
-  nextCursor: page?.nextCursor.isEmpty ?? true ? null : page!.nextCursor,
+  nextCursor: page?.nextCursor,
   hasMore: page?.hasMore ?? false,
 );
 FriendRequestPage _requestPage(generated.PendingRequestPage? page) =>
@@ -223,6 +223,6 @@ FriendRequestPage _requestPage(generated.PendingRequestPage? page) =>
             ),
           )
           .toList(growable: false),
-      nextCursor: page?.nextCursor.isEmpty ?? true ? null : page!.nextCursor,
+      nextCursor: page?.nextCursor,
       hasMore: page?.hasMore ?? false,
     );

@@ -1,4 +1,4 @@
-import { and, desc, eq, lte } from "drizzle-orm";
+import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { DailyPromptRepository } from "../../features/posting-days/shared/posting-day-types";
@@ -31,7 +31,11 @@ export async function hasPostedOnDay(database: DayliDatabase, userId: string, lo
   const rows = await database
     .select({ id: schema.posts.id })
     .from(schema.posts)
-    .where(and(eq(schema.posts.authorId, userId), eq(schema.posts.localDate, localDate)))
+    .where(and(
+      eq(schema.posts.authorId, userId),
+      eq(schema.posts.localDate, localDate),
+      isNull(schema.posts.trashedAt),
+    ))
     .limit(1);
   return rows.length > 0;
 }

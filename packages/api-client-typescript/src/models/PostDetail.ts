@@ -13,6 +13,13 @@
  */
 
 import { mapValues, parseDate, parseDateTime, serializeDate, serializeDateTime } from '../runtime';
+import type { PostVoiceMemo } from './PostVoiceMemo';
+import {
+    PostVoiceMemoFromJSON,
+    PostVoiceMemoFromJSONTyped,
+    PostVoiceMemoToJSON,
+    PostVoiceMemoToJSONTyped,
+} from './PostVoiceMemo';
 import type { PostMedia } from './PostMedia';
 import {
     PostMediaFromJSON,
@@ -64,7 +71,7 @@ export interface PostDetail {
     /**
      *
      */
-    caption: string;
+    caption: string | null;
     /**
      *
      */
@@ -93,6 +100,10 @@ export interface PostDetail {
      * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
      */
     media: Array<PostMedia>;
+    /**
+     * The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
+     */
+    voiceMemo: PostVoiceMemo | null;
 }
 
 
@@ -123,6 +134,7 @@ export function instanceOfPostDetail(value: object): value is PostDetail {
     if (!('edited' in value) || value['edited'] === undefined) return false;
     if (!('viewerIsAuthor' in value) || value['viewerIsAuthor'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
+    if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
     return true;
 }
 
@@ -149,6 +161,7 @@ export function PostDetailFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'edited': json['edited'],
         'viewerIsAuthor': json['viewerIsAuthor'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
+        'voiceMemo': PostVoiceMemoFromJSON(json['voiceMemo']),
     };
 }
 
@@ -176,5 +189,6 @@ export function PostDetailToJSONTyped(value?: PostDetail | null, ignoreDiscrimin
         'edited': value['edited'],
         'viewerIsAuthor': value['viewerIsAuthor'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
+        'voiceMemo': PostVoiceMemoToJSON(value['voiceMemo']),
     };
 }

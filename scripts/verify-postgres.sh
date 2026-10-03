@@ -121,6 +121,7 @@ export MIGRATION_TARGET=local
 export DATABASE_URL="$(migrator_url "$main_database")"
 export TEST_DATABASE_URL="$DATABASE_URL"
 export TEST_APP_DATABASE_URL="$(app_url "$main_database")"
+export TEST_POST_TRASH_WORKER_DATABASE_URL="$(lifecycle_worker_url "$main_database")"
 export TEST_LIFECYCLE_DATABASE_URL="$(migrator_url "$lifecycle_database")"
 export TEST_LIFECYCLE_APP_DATABASE_URL="$(app_url "$lifecycle_database")"
 export TEST_LIFECYCLE_WORKER_DATABASE_URL="$(lifecycle_worker_url "$lifecycle_database")"

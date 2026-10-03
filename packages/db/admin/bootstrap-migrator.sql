@@ -24,8 +24,12 @@ BEGIN
   IF to_regclass('public."user"') IS NOT NULL THEN
     REVOKE DELETE ON TABLE public."user" FROM app;
   END IF;
+  IF to_regclass('public.posts') IS NOT NULL THEN
+    REVOKE DELETE ON TABLE public.posts FROM app;
+  END IF;
 
   FOREACH restricted_table IN ARRAY ARRAY[
+    'account_google_reauthentication_intents',
     'account_lifecycles',
     'account_management_grants',
     'account_purge_receipts',
@@ -51,7 +55,6 @@ BEGIN
 
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
-    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_management_grants TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
     GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;
@@ -60,6 +63,7 @@ BEGIN
   END IF;
 END
 $$;
+
 
 CREATE SCHEMA IF NOT EXISTS drizzle AUTHORIZATION migrator;
 ALTER SCHEMA drizzle OWNER TO migrator;

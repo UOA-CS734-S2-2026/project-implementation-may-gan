@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNull, lte, not, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lte, ne, not, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
@@ -28,6 +28,16 @@ export interface VisiblePostPage {
 }
 
 type Queryable = Pick<DayliDatabase, "select">;
+
+/** Missing lifecycle rows are active. A pending or terminal owner is hidden before pagination. */
+export function buildDrizzleActiveAccountFilter(database: Queryable, subjectId: string | SQLWrapper) {
+  return notExists(database.select({ userId: schema.accountLifecycles.userId })
+    .from(schema.accountLifecycles)
+    .where(and(
+      eq(schema.accountLifecycles.userId, subjectId),
+      ne(schema.accountLifecycles.state, "active"),
+    )));
+}
 
 function activeFriendship(
   database: Queryable,
@@ -144,7 +154,13 @@ export function buildDrizzlePostVisibilityFilter(
     ? attachedMedia(database, posts.id, input.mediaId)
     : sql`true`;
 
-  return and(media, notBlocked, access);
+  // Pending owners may still request their own export. Normal reads stay hidden.
+  const activeAccount = input.action === "export"
+    ? sql`true`
+    : buildDrizzleActiveAccountFilter(database, posts.authorId);
+  // Export uses a separate owner-scoped Trash projection for restorable items.
+  // Normal post, media, revision, and active-export reads never include Trash.
+  return and(isNull(posts.trashedAt), activeAccount, media, notBlocked, access);
 }
 
 /** List filtering is applied before limit/offset, preventing page holes/leaks. */
@@ -258,12 +274,14 @@ export async function findVisibleTomorrowNote(
   currentAucklandDate: string,
 ) {
   const [row] = await database
-    .select()
+    .select({ note: schema.tomorrowNotes })
     .from(schema.tomorrowNotes)
+    .innerJoin(schema.posts, eq(schema.tomorrowNotes.postId, schema.posts.id))
     .where(and(
       eq(schema.tomorrowNotes.id, noteId),
+      isNull(schema.posts.trashedAt),
       buildTomorrowNoteVisibilityFilter(viewer, currentAucklandDate),
     ))
     .limit(1);
-  return row ?? null;
+  return row?.note ?? null;
 }

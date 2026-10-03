@@ -10,6 +10,7 @@ export interface SessionRuntimeConfiguration {
 
 export interface AuthenticatedUser {
   userId: string;
+  sessionId: string;
 }
 
 /**
@@ -24,5 +25,7 @@ export async function resolveSession(
 ): Promise<AuthenticatedUser | undefined> {
   const auth = createPostgresBetterAuth({ ...configuration, database });
   const result = await auth.api.getSession({ headers: request.headers });
-  return result?.user?.id ? { userId: result.user.id } : undefined;
+  return result?.user?.id && result.session?.id
+    ? { userId: result.user.id, sessionId: result.session.id }
+    : undefined;
 }

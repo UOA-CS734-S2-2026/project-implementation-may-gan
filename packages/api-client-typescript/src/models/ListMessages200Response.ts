@@ -34,7 +34,7 @@ export interface ListMessages200Response {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

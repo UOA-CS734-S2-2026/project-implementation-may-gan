@@ -1,0 +1,6 @@
+reason: The existing unique day constraint prevents duplicates while the new partial active-day index is built. The transaction-scoped migration runner cannot create an index concurrently. A preflight aborts when the posts table exceeds 16 MiB, and lock acquisition times out after five seconds. This exception applies only to a measured small table.
+affected_data_and_clients: Normal post writes can pause for the bounded index build. Existing uniqueness is removed only after the new index exists. Larger installations must stop and use a separate reviewed concurrent-index plan.
+rollout_sequence: Measure the table and verify the backup, stage the migration at a quiet time, confirm the index predicate, and keep Trash routes disabled until synthetic concurrency tests pass.
+backup_checkpoint: Confirm the recovery checkpoint before migration and do not proceed on an oversized table or lock timeout.
+forward_fix_plan: If a larger table or unacceptable write pause is found, stop without changing the applied migration. Create a separately reviewed forward migration and rollout procedure.
+reviewer: Database and availability reviewers required.

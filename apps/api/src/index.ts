@@ -2,6 +2,9 @@ import { createAppForEnv, app } from "./app";
 import type { ApiEnv } from "./env";
 import { createMediaCleanupDispatcherForEnv } from "./infrastructure/jobs/media-cleanup-runtime";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
+import { readBetterAuthRuntimeConfiguration } from "./features/auth/better-auth";
+import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
+import { pruneExpiredGoogleManagementIntents } from "./features/account-policy/reauthenticate/google/google-proof.repository";
 
 export { app };
 export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
@@ -22,10 +25,22 @@ export default {
     // Scheduled repair owns a fresh database client. It never reuses request-scoped state.
     if (env.USER_REALTIME) context.waitUntil(createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: env.USER_REALTIME }).dispatchScheduled());
     context.waitUntil(runMediaCleanup(env));
+    context.waitUntil(runGoogleIntentExpiry(env));
   },
 };
 
 /** Counts only. The summary never carries object keys, owners, or errors. */
+async function runGoogleIntentExpiry(env: ApiEnv): Promise<void> {
+  try {
+    const configuration = readBetterAuthRuntimeConfiguration(env);
+    if (configuration?.google) await withHyperdriveDatabase(
+      configuration.hyperdrive, (database) => pruneExpiredGoogleManagementIntents(database),
+    );
+  } catch {
+    console.error("google management intent expiry failed");
+  }
+}
+
 async function runMediaCleanup(env: ApiEnv): Promise<void> {
   try {
     const summary = await createMediaCleanupDispatcherForEnv(env)?.dispatchScheduled();

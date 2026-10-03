@@ -4,6 +4,7 @@ import { schema, type DayliDatabase } from "@dayli/db";
 import type { RelationshipUserCard, RelationshipUserPage } from "./relationship-service";
 import { RelationshipStoreError } from "./relationship-service";
 import type { RelationshipQueryable } from "./relationship-postgres";
+import { buildDrizzleActiveAccountFilter } from "../../permissions";
 
 type FriendRow = {
   id: string;
@@ -61,6 +62,7 @@ export async function listFriendRows(queryable: RelationshipQueryable, actorId: 
     .where(and(
       eq(mine.userId, actorId),
       eq(mine.state, "active"),
+      buildDrizzleActiveAccountFilter(database, friend.id),
       isNotNull(friend.username),
       sql`(coalesce(${friend.banned}, false) = false or (${friend.banExpires} is not null and ${friend.banExpires} <= now()))`,
       notExists(

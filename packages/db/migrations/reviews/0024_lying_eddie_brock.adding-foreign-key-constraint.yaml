@@ -1,0 +1,6 @@
+reason: Seven existing direct user foreign keys are deliberately replaced with SET NULL actions so user detachment preserves durable messaging rows.
+affected_data_and_clients: Conversations, members, messages, reactions, and changes retain participant references. The outbox recipient user cascade is unchanged.
+rollout_sequence: Install and validate the replacement foreign keys only after final locks and the locked combined size check pass.
+backup_checkpoint: Confirm the approved target recovery posture before any hosted migration.
+forward_fix_plan: Use a reviewed forward migration for a constraint correction. Do not restore the legacy CASCADE actions.
+reviewer: Database, messaging, and privacy reviewers must approve the detachment contract.

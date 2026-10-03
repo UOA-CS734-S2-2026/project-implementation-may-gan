@@ -4,6 +4,7 @@ import { loadReactionSummaries, messageProjectionSelection, toStoredMessage } fr
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { activeUserIdForParticipant, conversationPairBlocked, conversationParticipantsAvailable } from "../../shared/conversation-participants";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
@@ -15,42 +16,21 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
       eq(schema.conversationMembers.conversationId, schema.conversations.id),
       eq(schema.conversationMembers.participantId, participantIdForUser(actorId)),
     )));
-  const blocked = exists(queryable
-    .select({ blockerId: schema.relationshipBlocks.blockerId })
-    .from(schema.relationshipBlocks)
-    .where(and(
-      isNull(schema.relationshipBlocks.unblockedAt),
-      or(
-        and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userLowId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userHighId),
-        ),
-        and(
-          eq(schema.relationshipBlocks.blockerId, schema.conversations.userHighId),
-          eq(schema.relationshipBlocks.blockedId, schema.conversations.userLowId),
-        ),
-      ),
-    )));
-  const availableParticipant = (
-    participantId: typeof schema.conversations.participantLowId | typeof schema.conversations.participantHighId,
-  ) => exists(queryable
-    .select({ id: schema.messagingParticipants.id })
-    .from(schema.messagingParticipants)
-    .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
-    .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.user.id))
-    .where(and(
-      eq(schema.messagingParticipants.id, participantId),
-      eq(schema.messagingParticipants.state, "active"),
-      or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
-    )));
-  const participantsAvailable = sql<boolean>`${availableParticipant(schema.conversations.participantLowId)} and ${availableParticipant(schema.conversations.participantHighId)}`;
+  const blocked = conversationPairBlocked(
+    queryable,
+    schema.conversations.participantLowId,
+    schema.conversations.participantHighId,
+  );
+  const participantsAvailable = conversationParticipantsAvailable(
+    schema.conversations.participantLowId,
+    schema.conversations.participantHighId,
+  );
   const [row] = await queryable
     .select({
-      user_low_id: schema.conversations.userLowId,
-      user_high_id: schema.conversations.userHighId,
       participant_low_id: schema.conversations.participantLowId,
       participant_high_id: schema.conversations.participantHighId,
       actor_participant_id: participantIdForUser(actorId),
+      peer_user_id: activeUserIdForParticipant(sql`case when ${schema.conversations.participantLowId} = ${participantIdForUser(actorId)} then ${schema.conversations.participantHighId} else ${schema.conversations.participantLowId} end`),
       request_state: schema.conversations.requestState,
       member: member.mapWith(Boolean),
       blocked: blocked.mapWith(Boolean),
@@ -63,7 +43,7 @@ export async function getAccess(queryable: MessageWriteQueryable, actorId: strin
   if (!row) return { conversationId, peerId: "", requestState: "declined", isMember: false, participantsAvailable: false, peerActivityBlocked: false };
   return {
     conversationId,
-    peerId: row.participant_low_id === row.actor_participant_id ? row.user_high_id : row.user_low_id,
+    peerId: row.peer_user_id ?? "",
     actorParticipantId: row.member ? row.actor_participant_id ?? undefined : undefined,
     requestState: row.request_state,
     isMember: row.member,

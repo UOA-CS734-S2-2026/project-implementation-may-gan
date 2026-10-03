@@ -25,6 +25,7 @@ class DailyPost {
     required this.releasedAt,
     required this.tomorrowNote,
     this.media = const [],
+    required this.voiceMemo,
   });
 
   final String id;
@@ -37,7 +38,7 @@ class DailyPost {
 
   final String reflectiveAnswer;
 
-  final String caption;
+  final String? caption;
 
   final int rating;
 
@@ -47,10 +48,13 @@ class DailyPost {
 
   final DateTime releasedAt;
 
-  final DailyPostTomorrowNote tomorrowNote;
+  final DailyPostTomorrowNote? tomorrowNote;
 
   /// The attached photos or video in display order. Empty for a text-only post.
   final List<DailyPostMedia> media;
+
+  /// The attached voice memo, or null when the post has none.
+  final DailyPostVoiceMemo? voiceMemo;
 
   @override
   bool operator ==(Object other) =>
@@ -67,7 +71,8 @@ class DailyPost {
           other.acceptedAt == acceptedAt &&
           other.releasedAt == releasedAt &&
           other.tomorrowNote == tomorrowNote &&
-          _deepEquality.equals(other.media, media);
+          _deepEquality.equals(other.media, media) &&
+          other.voiceMemo == voiceMemo;
 
   @override
   int get hashCode =>
@@ -77,17 +82,18 @@ class DailyPost {
       (localDate.hashCode) +
       (prompt.hashCode) +
       (reflectiveAnswer.hashCode) +
-      (caption.hashCode) +
+      (caption == null ? 0 : caption!.hashCode) +
       (rating.hashCode) +
       (audience.hashCode) +
       (acceptedAt.hashCode) +
       (releasedAt.hashCode) +
-      (tomorrowNote.hashCode) +
-      (media.hashCode);
+      (tomorrowNote == null ? 0 : tomorrowNote!.hashCode) +
+      (media.hashCode) +
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
-      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media]';
+      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -96,13 +102,26 @@ class DailyPost {
     json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
-    json[r'caption'] = this.caption;
+    if (this.caption != null) {
+      json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     json[r'rating'] = this.rating;
     json[r'audience'] = this.audience;
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
-    json[r'tomorrowNote'] = this.tomorrowNote;
+    if (this.tomorrowNote != null) {
+      json[r'tomorrowNote'] = this.tomorrowNote;
+    } else {
+      json[r'tomorrowNote'] = null;
+    }
     json[r'media'] = this.media;
+    if (this.voiceMemo != null) {
+      json[r'voiceMemo'] = this.voiceMemo;
+    } else {
+      json[r'voiceMemo'] = null;
+    }
     return json;
   }
 
@@ -115,12 +134,16 @@ class DailyPost {
     DailyPostPrompt? prompt,
     String? reflectiveAnswer,
     String? caption,
+    bool captionSetToNull = false,
     int? rating,
     PostAudience? audience,
     DateTime? acceptedAt,
     DateTime? releasedAt,
     DailyPostTomorrowNote? tomorrowNote,
+    bool tomorrowNoteSetToNull = false,
     List<DailyPostMedia>? media,
+    DailyPostVoiceMemo? voiceMemo,
+    bool voiceMemoSetToNull = false,
   }) =>
       DailyPost(
         id: id ?? this.id,
@@ -128,13 +151,15 @@ class DailyPost {
         localDate: localDate ?? this.localDate,
         prompt: prompt ?? this.prompt,
         reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
-        caption: caption ?? this.caption,
+        caption: captionSetToNull ? null : caption ?? this.caption,
         rating: rating ?? this.rating,
         audience: audience ?? this.audience,
         acceptedAt: acceptedAt ?? this.acceptedAt,
         releasedAt: releasedAt ?? this.releasedAt,
-        tomorrowNote: tomorrowNote ?? this.tomorrowNote,
+        tomorrowNote:
+            tomorrowNoteSetToNull ? null : tomorrowNote ?? this.tomorrowNote,
         media: media ?? this.media,
+        voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
       );
 
   /// Returns a new [DailyPost] instance and imports its values from
@@ -170,8 +195,6 @@ class DailyPost {
             'Required key "DailyPost[reflectiveAnswer]" has a null value in JSON.');
         assert(json.containsKey(r'caption'),
             'Required key "DailyPost[caption]" is missing from JSON.');
-        assert(json[r'caption'] != null,
-            'Required key "DailyPost[caption]" has a null value in JSON.');
         assert(json.containsKey(r'rating'),
             'Required key "DailyPost[rating]" is missing from JSON.');
         assert(json[r'rating'] != null,
@@ -190,12 +213,12 @@ class DailyPost {
             'Required key "DailyPost[releasedAt]" has a null value in JSON.');
         assert(json.containsKey(r'tomorrowNote'),
             'Required key "DailyPost[tomorrowNote]" is missing from JSON.');
-        assert(json[r'tomorrowNote'] != null,
-            'Required key "DailyPost[tomorrowNote]" has a null value in JSON.');
         assert(json.containsKey(r'media'),
             'Required key "DailyPost[media]" is missing from JSON.');
         assert(json[r'media'] != null,
             'Required key "DailyPost[media]" has a null value in JSON.');
+        assert(json.containsKey(r'voiceMemo'),
+            'Required key "DailyPost[voiceMemo]" is missing from JSON.');
         return true;
       }());
 
@@ -205,13 +228,14 @@ class DailyPost {
         localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: DailyPostPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
-        caption: mapValueOfType<String>(json, r'caption')!,
+        caption: mapValueOfType<String>(json, r'caption'),
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: PostAudience.fromJson(json[r'audience'])!,
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
-        tomorrowNote: DailyPostTomorrowNote.fromJson(json[r'tomorrowNote'])!,
+        tomorrowNote: DailyPostTomorrowNote.fromJson(json[r'tomorrowNote']),
         media: DailyPostMedia.listFromJson(json[r'media']),
+        voiceMemo: DailyPostVoiceMemo.fromJson(json[r'voiceMemo']),
       );
     }
     return null;
@@ -280,5 +304,6 @@ class DailyPost {
     'releasedAt',
     'tomorrowNote',
     'media',
+    'voiceMemo',
   };
 }

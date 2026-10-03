@@ -19,7 +19,7 @@ class ListConversations200Response {
 
   final List<Conversation> items;
 
-  final String nextCursor;
+  final String? nextCursor;
 
   @override
   bool operator ==(Object other) =>
@@ -31,7 +31,7 @@ class ListConversations200Response {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (items.hashCode) + (nextCursor.hashCode);
+      (items.hashCode) + (nextCursor == null ? 0 : nextCursor!.hashCode);
 
   @override
   String toString() =>
@@ -40,7 +40,11 @@ class ListConversations200Response {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
-    json[r'nextCursor'] = this.nextCursor;
+    if (this.nextCursor != null) {
+      json[r'nextCursor'] = this.nextCursor;
+    } else {
+      json[r'nextCursor'] = null;
+    }
     return json;
   }
 
@@ -49,10 +53,11 @@ class ListConversations200Response {
   ListConversations200Response copyWith({
     List<Conversation>? items,
     String? nextCursor,
+    bool nextCursorSetToNull = false,
   }) =>
       ListConversations200Response(
         items: items ?? this.items,
-        nextCursor: nextCursor ?? this.nextCursor,
+        nextCursor: nextCursorSetToNull ? null : nextCursor ?? this.nextCursor,
       );
 
   /// Returns a new [ListConversations200Response] instance and imports its values from
@@ -72,14 +77,12 @@ class ListConversations200Response {
             'Required key "ListConversations200Response[items]" has a null value in JSON.');
         assert(json.containsKey(r'nextCursor'),
             'Required key "ListConversations200Response[nextCursor]" is missing from JSON.');
-        assert(json[r'nextCursor'] != null,
-            'Required key "ListConversations200Response[nextCursor]" has a null value in JSON.');
         return true;
       }());
 
       return ListConversations200Response(
         items: Conversation.listFromJson(json[r'items']),
-        nextCursor: mapValueOfType<String>(json, r'nextCursor')!,
+        nextCursor: mapValueOfType<String>(json, r'nextCursor'),
       );
     }
     return null;

@@ -143,6 +143,123 @@ void main() {
   );
 
   test(
+    'requests the exact current version after the explicit action and sends one-use headers for email and Google',
+    () async {
+      final tokenStore = MemorySessionTokenStore();
+      final requests = <http.Request>[];
+      const digest =
+          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      const token =
+          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+      const binding =
+          'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: tokenStore,
+        client: MockClient((request) async {
+          requests.add(request);
+          if (request.url.path.endsWith('/legal/current')) {
+            return http.Response(
+              jsonEncode({
+                'status': 'effective',
+                'termsVersionId': 'terms-v1',
+                'termsContentDigest': digest,
+                'ageDeclarationVersion': 'age-16-v1',
+              }),
+              200,
+            );
+          }
+          if (request.url.path.endsWith('/registration-intent')) {
+            final payload = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(payload['termsVersionId'], 'terms-v1');
+            expect(payload['termsContentDigest'], digest);
+            expect(payload['acceptedTermsAndDeclaredAge16'], true);
+            expect(payload['flow'], anyOf('email', 'google_native'));
+            return http.Response(
+              jsonEncode({
+                'termsVersionId': 'terms-v1',
+                'token': token,
+                'binding': binding,
+                'expiresAt': '2026-10-02T01:00:00Z',
+              }),
+              200,
+            );
+          }
+          return http.Response(
+            '{}',
+            200,
+            headers: {'set-auth-token': 'session-token'},
+          );
+        }),
+      );
+      final terms = await session.currentRegistrationTerms();
+      final emailProof = await session.issueRegistrationProof(
+        flow: 'email',
+        terms: terms,
+      );
+      await session.signUp(
+        name: 'Mobile User',
+        username: 'mobile_user',
+        publicName: null,
+        email: 'mobile@example.test',
+        password: 'not-a-real-password',
+        registrationProof: emailProof,
+      );
+      final googleProof = await session.issueRegistrationProof(
+        flow: 'google_native',
+        terms: terms,
+      );
+      await session.signInWithGoogle(
+        FakeGoogleIdTokenProvider('google-id-token'),
+        registrationProof: googleProof,
+      );
+      for (final request in requests.where(
+        (request) =>
+            request.url.path.endsWith('/sign-up/email') ||
+            request.url.path.endsWith('/sign-in/social'),
+      )) {
+        expect(request.headers['x-dayli-registration-intent'], token);
+        expect(request.headers['x-dayli-registration-binding'], binding);
+        expect(request.body, isNot(contains(token)));
+      }
+    },
+  );
+
+  test(
+    'rejects a changed or invalid proof before creating a native account',
+    () async {
+      final requests = <http.Request>[];
+      final session = BetterAuthNativeSession(
+        baseUrl: 'https://api.example.test',
+        tokenStore: MemorySessionTokenStore(),
+        client: MockClient((request) async {
+          requests.add(request);
+          return http.Response(
+            '{"termsVersionId":"stale","token":"invalid","binding":"invalid"}',
+            200,
+          );
+        }),
+      );
+      await expectLater(
+        session.issueRegistrationProof(
+          flow: 'email',
+          terms: const RegistrationTerms(
+            versionId: 'current',
+            contentDigest: 'a',
+          ),
+        ),
+        throwsA(isA<AuthenticationFailure>()),
+      );
+      expect(
+        requests.where(
+          (request) => request.url.path.endsWith('/sign-up/email'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'exchanges a Google SDK ID token for the existing native session handoff',
     () async {
       final tokenStore = MemorySessionTokenStore();

@@ -67,35 +67,35 @@ export interface ProfileDetails {
     /**
      *
      */
-    bio: string;
+    bio: string | null;
     /**
      *
      */
-    mbti: Mbti;
+    mbti: Mbti | null;
     /**
      * Null when unset or when the bio is hidden.
      */
-    whatIDo: string;
+    whatIDo: string | null;
     /**
      * Null when unset or when the bio is hidden.
      */
-    listeningTo: string;
+    listeningTo: string | null;
     /**
      * A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden.
      */
-    avatarUrl: string;
+    avatarUrl: string | null;
     /**
      *
      */
-    streak: PostingStreak;
+    streak: PostingStreak | null;
     /**
      *
      */
-    stats: ProfileStats;
+    stats: ProfileStats | null;
     /**
      *
      */
-    owner: ProfileOwnerSettings;
+    owner: ProfileOwnerSettings | null;
 }
 
 

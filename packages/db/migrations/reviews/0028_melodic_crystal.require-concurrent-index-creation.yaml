@@ -1,0 +1,6 @@
+reason: The Google intent table was introduced as inactive metadata in migration 0025. No runtime role can write it before this migration, so the expiry index should be built on an empty table inside the coordinated migration. The staging preflight must confirm zero rows.
+affected_data_and_clients: No deployed app writer can use the intent table yet. A nonempty staging table is a stop condition, not a reason to scan it under this exception.
+rollout_sequence: Check the intent count and runtime grants on staging, then install the index and procedures before enabling the Google proof route.
+backup_checkpoint: Confirm the approved staging migration recovery checkpoint.
+forward_fix_plan: If the table contains data, do not use this exception. Investigate and create the index in a separately reviewed concurrent forward migration.
+reviewer: Database and authentication reviewers required.

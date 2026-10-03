@@ -6,7 +6,12 @@ import {
   type BoxSource,
 } from "../../../infrastructure/media/media-format";
 import type { MediaR2Reader } from "../../../infrastructure/media/r2";
-import { MAX_VIDEO_DURATION_SECONDS, type AllowedContentType } from "../shared/media-reservation-policy";
+import {
+  isAudioContentType,
+  MAX_VOICE_MEMO_SECONDS,
+  MAX_VIDEO_DURATION_SECONDS,
+  type AllowedContentType,
+} from "../shared/media-reservation-policy";
 import { toMediaReservationResponse } from "../shared/media-reservation-status";
 import type { MediaReservationResponse } from "../shared/media-reservation.contract";
 import type {
@@ -86,14 +91,17 @@ async function determineValidation(
     return { status: "failed", failureReason: "malformed_container" };
   }
 
-  if (!isVideo(record.contentType)) {
+  const audio = isAudioContentType(record.contentType);
+  if (!audio && !isVideo(record.contentType)) {
     return { status: "validated", failureReason: null };
   }
 
-  const duration = await extractIsoBmffDurationSeconds(source);
+  // Audio and video share one box walk; audio reads its `soun` track and must hold no video.
+  const duration = await extractIsoBmffDurationSeconds(source, undefined, audio ? "soun" : "vide");
   if (vanished) return { status: "failed", failureReason: "object_not_found" };
   if (duration.outcome === "malformed") return { status: "failed", failureReason: "malformed_container" };
-  if (duration.seconds > MAX_VIDEO_DURATION_SECONDS) {
+  const maxSeconds = audio ? MAX_VOICE_MEMO_SECONDS : MAX_VIDEO_DURATION_SECONDS;
+  if (duration.seconds > maxSeconds) {
     return { status: "failed", failureReason: "duration_exceeded" };
   }
   return { status: "validated", failureReason: null };

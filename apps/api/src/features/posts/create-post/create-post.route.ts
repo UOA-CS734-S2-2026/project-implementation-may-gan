@@ -1,5 +1,6 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../http/authenticated-actor";
+import { isAudioContentType } from "@dayli/contracts";
 import type { Context } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { ResolveSession } from "../../../http/middleware/require-session";
@@ -54,6 +55,7 @@ const createDailyPostRoute = createRoute({
 });
 
 function toResponse(post: StoredDailyPost): DailyPostResponse {
+  const voiceMemo = post.media.find((media) => isAudioContentType(media.contentType));
   return {
     id: post.id,
     authorId: post.authorId,
@@ -66,12 +68,15 @@ function toResponse(post: StoredDailyPost): DailyPostResponse {
     acceptedAt: post.acceptedAt.toISOString(),
     releasedAt: post.releasedAt.toISOString(),
     tomorrowNote: post.tomorrowNoteAvailableOn ? { availableOn: post.tomorrowNoteAvailableOn } : null,
-    media: post.media.map((media) => ({
+    media: post.media.filter((media) => !isAudioContentType(media.contentType)).map((media) => ({
       id: media.id,
       // The column is text, but a reservation only ever stores an allowed type.
       contentType: media.contentType as DailyPostResponse["media"][number]["contentType"],
       order: media.order,
     })),
+    voiceMemo: voiceMemo
+      ? { id: voiceMemo.id, contentType: voiceMemo.contentType as "audio/mp4" }
+      : null,
   };
 }
 
@@ -95,6 +100,9 @@ export function registerCreateDailyPostRoute(app: OpenAPIHono<AuthenticatedApiEn
     } catch (error) {
       if (error instanceof CreateDailyPostError) {
         if (error.reason === "PROMPT_UNAVAILABLE") return unavailable(context);
+        if (error.reason === "ACCOUNT_RESTRICTED") {
+          return apiErrorResponse(context, 403, "FORBIDDEN", error.message);
+        }
         if (error.reason === "MEDIA_NOT_ALLOWED") {
           return apiErrorResponse(context, 422, "VALIDATION_FAILED", error.message, {
             field: "attachments",
