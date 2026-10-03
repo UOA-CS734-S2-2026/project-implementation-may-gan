@@ -5,9 +5,11 @@ description: Check Dayli repositories, migrations, permissions, and concurrency 
 
 # PostgreSQL integration tests
 
-Posting one dayli looks simple until two requests arrive at nearly the same time. Both requests can read "no post yet" before either one writes. A service test with an in-memory store may accept the locking call, but it cannot tell us whether PostgreSQL actually makes the second transaction wait.
+Integration tests check whether separate parts of an application work together. A database integration test runs application code against a real test database rather than replacing the database with a fake.
 
-That is where an integration test fits. It keeps the Dayli repository code and PostgreSQL real, then checks the result across their boundary. These tests are slower than service tests, but they can catch SQL errors, missing constraints, incorrect grants, migration failures, and transaction races that a mock cannot reproduce.
+This matters because a fake can return exactly what the test expects while the real database rejects the query or stores something different. Integration tests catch problems in those connections, including incorrect queries, permissions, and changes to the database structure.
+
+Dayli uses PostgreSQL integration tests for saving posts, managing friendships, and storing messages. One example checks two posting transactions for the same author: the real database must make them wait their turn so both cannot save a post for the same day. A unit test alone cannot prove that database behaviour.
 
 Run commands on this page from the repository root.
 

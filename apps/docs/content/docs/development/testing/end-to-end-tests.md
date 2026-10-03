@@ -5,11 +5,11 @@ description: Run Dayli web journeys through local HTTPS services and understand 
 
 # End-to-end tests
 
-A sign-in form can pass its component tests while the complete journey is still broken. The browser might lose the protected return path, the API might set the wrong cookie, or the web proxy might send the request to the wrong place. Those pieces only meet when the app, API, and database run together.
+End-to-end tests imitate how someone uses a running application. On the web, an automated browser clicks controls, fills in forms, and checks what happens, much like a person would.
 
-End-to-end tests follow a user-visible journey through the assembled application. They are broader and slower than unit tests, so use them for paths where the connections matter. A failed journey tells you that the feature does not work as a whole, then narrower tests help find which boundary failed.
+These tests matter because they check the pieces working together. A sign-in journey can exercise the frontend, API calls, authentication, and database in one test. Each piece might pass its own tests while the complete feature is still broken. End-to-end tests help catch those gaps, though each test covers only the journey it follows, not every feature in the app.
 
-Dayli's current web suite uses real local services. Its current Flutter integration smoke uses fake services on a device. Those tests share a category because they drive an assembled interface, but they do not provide the same evidence.
+Dayli uses Playwright to test web journeys such as creating an account, signing in, and exchanging messages through real local services. Our current Flutter integration smoke drives the mobile interface with fake services instead, so it checks navigation but does not prove the complete frontend-to-backend connection.
 
 ## Where Dayli uses these tests
 
