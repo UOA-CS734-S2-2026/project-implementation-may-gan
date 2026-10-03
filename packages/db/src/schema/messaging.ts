@@ -194,6 +194,7 @@ export const pushDevices = pgTable("push_devices", {
 }, (table) => [
   unique("push_devices_token_hash_unique").on(table.tokenHash),
   unique("push_devices_user_installation_unique").on(table.userId, table.installationId),
+  unique("push_devices_id_user_unique").on(table.id, table.userId),
   index("push_devices_user_enabled_idx").on(table.userId, table.optedIn),
   check("push_devices_notification_schema_version_check", sql`${table.notificationSchemaVersion} is null or ${table.notificationSchemaVersion} = 1`),
 ]);

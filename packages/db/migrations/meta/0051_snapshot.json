@@ -3435,19 +3435,6 @@
         }
       },
       "foreignKeys": {
-        "notification_deliveries_event_id_notification_events_id_fk": {
-          "name": "notification_deliveries_event_id_notification_events_id_fk",
-          "tableFrom": "notification_deliveries",
-          "tableTo": "notification_events",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "notification_deliveries_recipient_id_user_id_fk": {
           "name": "notification_deliveries_recipient_id_user_id_fk",
           "tableFrom": "notification_deliveries",
@@ -3461,15 +3448,32 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "notification_deliveries_device_registration_id_push_devices_id_fk": {
-          "name": "notification_deliveries_device_registration_id_push_devices_id_fk",
+        "notification_deliveries_event_recipient_fk": {
+          "name": "notification_deliveries_event_recipient_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "notification_events",
+          "columnsFrom": [
+            "event_id",
+            "recipient_id"
+          ],
+          "columnsTo": [
+            "id",
+            "recipient_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_device_recipient_fk": {
+          "name": "notification_deliveries_device_recipient_fk",
           "tableFrom": "notification_deliveries",
           "tableTo": "push_devices",
           "columnsFrom": [
-            "device_registration_id"
+            "device_registration_id",
+            "recipient_id"
           ],
           "columnsTo": [
-            "id"
+            "id",
+            "user_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3625,6 +3629,14 @@
             "kind",
             "recipient_id",
             "deduplication_key"
+          ]
+        },
+        "notification_events_id_recipient_unique": {
+          "name": "notification_events_id_recipient_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "recipient_id"
           ]
         }
       },
@@ -4617,6 +4629,14 @@
           "columns": [
             "user_id",
             "installation_id"
+          ]
+        },
+        "push_devices_id_user_unique": {
+          "name": "push_devices_id_user_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "user_id"
           ]
         }
       },

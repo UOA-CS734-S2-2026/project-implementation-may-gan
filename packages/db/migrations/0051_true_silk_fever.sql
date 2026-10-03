@@ -3,6 +3,7 @@
 -- squawk-ignore-file constraint-missing-not-valid
 -- squawk-ignore-file require-concurrent-index-creation
 -- squawk-ignore-file identifier-too-long
+-- squawk-ignore-file disallowed-unique-constraint
 SET lock_timeout = '5s';--> statement-breakpoint
 SET statement_timeout = '5min';--> statement-breakpoint
 CREATE TYPE "public"."notification_delivery_status" AS ENUM('pending', 'leased', 'delivered', 'suppressed', 'failed');--> statement-breakpoint
@@ -53,6 +54,7 @@ CREATE TABLE "notification_events" (
 	"expires_at" timestamp with time zone NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "notification_events_dedup_unique" UNIQUE("kind","recipient_id","deduplication_key"),
+	CONSTRAINT "notification_events_id_recipient_unique" UNIQUE("id","recipient_id"),
 	CONSTRAINT "notification_events_dedup_key_check" CHECK (char_length("notification_events"."deduplication_key") between 1 and 255),
 	CONSTRAINT "notification_events_source_type_check" CHECK (char_length("notification_events"."source_type") between 1 and 64),
 	CONSTRAINT "notification_events_source_id_check" CHECK (char_length("notification_events"."source_id") between 1 and 255),
@@ -63,9 +65,10 @@ CREATE TABLE "notification_events" (
 --> statement-breakpoint
 ALTER TABLE "push_devices" ADD COLUMN "notification_schema_version" bigint;--> statement-breakpoint
 ALTER TABLE "account_notification_preferences" ADD CONSTRAINT "account_notification_preferences_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_event_id_notification_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."notification_events"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "push_devices" ADD CONSTRAINT "push_devices_id_user_unique" UNIQUE("id","user_id");--> statement-breakpoint
+ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_event_recipient_fk" FOREIGN KEY ("event_id","recipient_id") REFERENCES "public"."notification_events"("id","recipient_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_recipient_id_user_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_device_registration_id_push_devices_id_fk" FOREIGN KEY ("device_registration_id") REFERENCES "public"."push_devices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_device_recipient_fk" FOREIGN KEY ("device_registration_id","recipient_id") REFERENCES "public"."push_devices"("id","user_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notification_events" ADD CONSTRAINT "notification_events_recipient_id_user_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "notification_deliveries_due_idx" ON "notification_deliveries" USING btree ("status","available_at");--> statement-breakpoint
 CREATE INDEX "notification_deliveries_lease_idx" ON "notification_deliveries" USING btree ("status","lease_expires_at");--> statement-breakpoint
