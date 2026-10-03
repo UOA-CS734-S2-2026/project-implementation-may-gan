@@ -503,7 +503,7 @@ class TestHarness {
                     'id': testUserId,
                     'name': 'Jos',
                     'email': 'jos@example.test',
-                    'username': 'jos',
+                    'username': sessionUsername,
                   },
                   'session': {'id': 's1'},
                 }),
@@ -512,6 +512,13 @@ class TestHarness {
             : http.Response('null', 200);
       }
       if (path.endsWith('/sign-out')) return http.Response('{}', 200);
+      if (path.endsWith('/api/v1/profile/username') &&
+          request.method == 'POST' &&
+          request.headers['authorization'] == 'Bearer token-1') {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        sessionUsername = body['username'] as String;
+        return http.Response('{}', 200);
+      }
       return http.Response('{}', 404);
     });
     session = SessionController(
@@ -528,6 +535,9 @@ class TestHarness {
   }
 
   String testUserId = 'user-1';
+
+  /// Null makes the signed-in account finish username setup first.
+  String? sessionUsername = 'jos';
   final tokens = MemoryTokenStore();
   final users = MemoryUserCache();
   final drafts = MemoryDraftStore();
