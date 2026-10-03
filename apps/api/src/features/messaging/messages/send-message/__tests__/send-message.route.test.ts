@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../../../app";
 import type { MessagingRouteDependencies } from "../../../messaging.routes";
+import { MessagingError } from "../../../shared/messaging-error";
 
 const service = { send: vi.fn(async (actorId: string, conversationId: string) => ({ replayed: false, message: { id: "m1", conversationId, sequence: "1", senderId: actorId, clientMessageId: "client", text: "hello", replyToMessageId: null, replyPreview: null, version: 1, createdAt: "2026-09-28T00:00:00.000Z", editedAt: null, unsentAt: null, reactions: [] } })) };
 function app(resolveSession: MessagingRouteDependencies["resolveSession"] = async () => ({ userId: "alice" })) { return createApp({ messaging: { resolveSession, service } }); }
@@ -19,6 +20,16 @@ describe("POST /conversations/{id}/messages", () => {
   it("reports resolver outages as 503", async () => {
     const response = await request(app(async () => { throw new Error("auth down"); }));
     expect(response.status).toBe(503);
+  });
+
+  it("returns matching quota body and retry header without caching", async () => {
+    const limited = { send: vi.fn(async () => { throw new MessagingError("RATE_LIMITED", 17); }) };
+    const api = createApp({ messaging: { resolveSession: async () => ({ userId: "alice" }), service: limited } });
+    const response = await request(api);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("17");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ error: { code: "RATE_LIMITED", details: { retryAfterSeconds: 17 } } });
   });
 
   it("schedules bounded immediate dispatch only after a saved response", async () => {

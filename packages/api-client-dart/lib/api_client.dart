@@ -266,6 +266,12 @@ class ApiClient {
           return DailyPromptResponse.fromJson(value);
         case 'DeletionGrantRequest':
           return DeletionGrantRequest.fromJson(value);
+        case 'DirectMessageSendQuotaError':
+          return DirectMessageSendQuotaError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorError':
+          return DirectMessageSendQuotaErrorError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorErrorDetails':
+          return DirectMessageSendQuotaErrorErrorDetails.fromJson(value);
         case 'DirectPairLookup':
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':

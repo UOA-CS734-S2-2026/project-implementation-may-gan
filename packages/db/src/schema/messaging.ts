@@ -104,6 +104,7 @@ export const messages = pgTable("messages", {
   unique("messages_sender_client_message_unique").on(table.senderId, table.clientMessageId),
   unique("messages_sender_participant_client_message_unique").on(table.senderParticipantId, table.clientMessageId),
   index("messages_conversation_sequence_idx").on(table.conversationId, table.sequence),
+  index("messages_sender_created_at_idx").on(table.senderId, table.createdAt),
   check("messages_sender_participant_presence_check", sql`${table.senderParticipantId} is not null`),
   check("messages_sequence_positive_check", sql`${table.sequence} > 0`),
   check("messages_version_positive_check", sql`${table.version} > 0`),

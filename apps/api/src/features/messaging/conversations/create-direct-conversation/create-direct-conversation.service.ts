@@ -18,8 +18,9 @@ export interface CreateDirectConversationService {
 }
 
 export function createCreateDirectConversationService(dependencies: {
-  store: DirectConversationStore; now?: () => Date; generateId?: () => string;
+  store: DirectConversationStore; messageSendLimit?: number; now?: () => Date; generateId?: () => string;
 }): CreateDirectConversationService {
+  const messageSendLimit = dependencies.messageSendLimit ?? 30;
   const now = dependencies.now ?? (() => new Date());
   const generateId = dependencies.generateId ?? (() => crypto.randomUUID());
   return {
@@ -45,12 +46,14 @@ export function createCreateDirectConversationService(dependencies: {
           if (!friendshipActive && existing.requestState === "pending") throw new MessagingError("PENDING");
           if (!friendshipActive && existing.requestState === "declined") throw new MessagingError("DECLINED");
           const conversation = existing.requestState === "active" ? existing : await transaction.activateConversation(existing, now());
-          const message = await transaction.appendExistingMessage({ conversation, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now(), messageId: generateId() });
+          const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
+          const message = await transaction.appendExistingMessage({ conversation, senderId: actorId, clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt, messageId: generateId() });
           return { conversation, message: toMessageDto(message), replayed: false };
         }
         if (!await transaction.recipientExists(input.recipientId)) throw new MessagingError("NOT_FOUND");
         const requestState = friendshipActive ? "active" as const : "pending" as const;
-        const result = await transaction.createConversationWithMessage({ conversationId: generateId(), initiatorId: actorId, recipientId: input.recipientId, requestState, messageId: generateId(), clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt: now() });
+        const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
+        const result = await transaction.createConversationWithMessage({ conversationId: generateId(), initiatorId: actorId, recipientId: input.recipientId, requestState, messageId: generateId(), clientMessageId: input.clientMessageId, requestFingerprint: fingerprint, text: input.text, createdAt });
         return { conversation: result.conversation, message: toMessageDto(result.message), replayed: false };
       });
     },
