@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../../../app";
 import type { MessagingRouteDependencies } from "../../../messaging.routes";
+import { MessagingError } from "../../../shared/messaging-error";
 
 const service = { send: vi.fn(async (actorId: string, conversationId: string) => ({ replayed: false, message: { id: "m1", conversationId, sequence: "1", senderId: actorId, clientMessageId: "client", text: "hello", replyToMessageId: null, replyPreview: null, version: 1, createdAt: "2026-09-28T00:00:00.000Z", editedAt: null, unsentAt: null, reactions: [] } })) };
 function app(resolveSession: MessagingRouteDependencies["resolveSession"] = async () => ({ userId: "alice" })) { return createApp({ messaging: { resolveSession, service } }); }
@@ -19,6 +20,29 @@ describe("POST /conversations/{id}/messages", () => {
   it("reports resolver outages as 503", async () => {
     const response = await request(app(async () => { throw new Error("auth down"); }));
     expect(response.status).toBe(503);
+  });
+
+  it("returns matching quota body and retry header without caching", async () => {
+    const limited = { send: vi.fn(async () => { throw new MessagingError("RATE_LIMITED", 17); }) };
+    const api = createApp({ messaging: { resolveSession: async () => ({ userId: "alice" }), service: limited } });
+    const response = await request(api);
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("17");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ error: { code: "RATE_LIMITED", details: { retryAfterSeconds: 17 } } });
+  });
+
+  it("documents quota only on creation operations while retaining generic native 429 errors elsewhere", async () => {
+    const document = await (await createApp().request("/api/v1/openapi.json")).json<{
+      paths: Record<string, Record<string, { responses: Record<string, { content: Record<string, { schema: { $ref: string } }> }> }>>;
+    }>();
+    const schema = (path: string, method: string) => document.paths[path]![method]!.responses["429"]!.content["application/json"]!.schema.$ref;
+    expect(schema("/api/v1/conversations/direct", "post")).toBe("#/components/schemas/MessageCreationRateLimitError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages", "post")).toBe("#/components/schemas/MessageCreationRateLimitError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages", "get")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages/{messageId}", "patch")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/messages/{messageId}/reaction", "put")).toBe("#/components/schemas/ApiError");
+    expect(schema("/api/v1/conversations/{conversationId}/request", "put")).toBe("#/components/schemas/ApiError");
   });
 
   it("schedules bounded immediate dispatch only after a saved response", async () => {

@@ -32,6 +32,36 @@ export const messageSchema = z.object({
   reactions: z.array(z.object({ reaction: reactionKeySchema, count: z.number().int().min(1), reactedByActor: z.boolean(), reactors: z.array(z.object({ id: opaqueIdSchema, name: z.string() })) })),
 }).openapi("Message");
 
+export const messageQuotaErrorSchema = z.object({
+  error: z.object({
+    code: z.literal("RATE_LIMITED"),
+    message: z.string(),
+    requestId: z.string(),
+    details: z.object({ retryAfterSeconds: z.number().int().min(1) }),
+  }),
+}).openapi("DirectMessageSendQuotaError");
+
+export const messageQuotaErrorResponse = {
+  description: "The sender-wide rolling message quota was reached.",
+  headers: {
+    "Retry-After": {
+      description: "Wait in seconds before the oldest counted message expires.",
+      schema: { type: "integer", minimum: 1 },
+    },
+  },
+  content: { "application/json": { schema: messageQuotaErrorSchema } },
+} as const;
+
+export const messageCreationRateLimitErrorResponse = {
+  description: "A native request limit or the persistent sender-wide message quota was reached.",
+  headers: messageQuotaErrorResponse.headers,
+  content: {
+    "application/json": {
+      schema: z.union([apiErrorSchema, messageQuotaErrorSchema]).openapi("MessageCreationRateLimitError"),
+    },
+  },
+} as const;
+
 export const messagingErrorResponses = {
   401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } },
   403: { description: "The messaging action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } },

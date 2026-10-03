@@ -2,6 +2,7 @@ import { createDayliDatabase, schema } from "@dayli/db";
 import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createMessagingPersistenceServices } from "../../../../../app";
+import { claimNewMessageSlot, lockNewMessageSender } from "../../../shared/new-message-quota";
 import { createPostgresMessageWriteStore } from "../send-message.repository";
 import { createSendMessageService } from "../send-message.service";
 
@@ -34,7 +35,7 @@ async function waitFor(condition: () => Promise<boolean>, message: string): Prom
 suite("send message Postgres repository", () => {
   const database = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
   const contender = createDayliDatabase(connectionString ?? "postgresql://invalid/messaging_tests");
-  const users = Array.from({ length: 12 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 45 }, (_, index) => `send-message-${crypto.randomUUID()}-${index}`);
   const durableUsers = [users[10]!, users[11]!].sort();
   const durableParticipantIds = new Map([
     [durableUsers[0]!, `a-send-message-participant-${crypto.randomUUID()}`],
@@ -53,6 +54,10 @@ suite("send message Postgres repository", () => {
     await database.db.insert(friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[2]!, friendId: users[3]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[3]!, friendId: users[2]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[2]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[8]!, friendId: users[2]!, state: "active", stateChangedAt: new Date() },
       { userId: users[0]!, friendId: users[4]!, state: "active", stateChangedAt: new Date() },
       { userId: users[4]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
       { userId: users[0]!, friendId: users[5]!, state: "active", stateChangedAt: new Date() },
@@ -63,6 +68,14 @@ suite("send message Postgres repository", () => {
       { userId: users[9]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
       { userId: users[10]!, friendId: users[11]!, state: "active", stateChangedAt: new Date() },
       { userId: users[11]!, friendId: users[10]!, state: "active", stateChangedAt: new Date() },
+      ...[[28, 29], [28, 30], [31, 32], [31, 33], [34, 35]].flatMap(([left, right]) => [
+        { userId: users[left]!, friendId: users[right]!, state: "active" as const, stateChangedAt: new Date() },
+        { userId: users[right]!, friendId: users[left]!, state: "active" as const, stateChangedAt: new Date() },
+      ]),
+      ...users.slice(12, 28).flatMap((peerId) => [
+        { userId: users[2]!, friendId: peerId, state: "active" as const, stateChangedAt: new Date() },
+        { userId: peerId, friendId: users[2]!, state: "active" as const, stateChangedAt: new Date() },
+      ]),
     ]);
   });
 
@@ -130,6 +143,161 @@ suite("send message Postgres repository", () => {
     ]);
     expect(outbox?.count).toBe(4);
   });
+
+  it("serializes sender-wide client IDs across conversations with quota enabled or disabled", async () => {
+    const runRace = async (actorIndex: number, peerIndexes: [number, number], limit: number) => {
+      const primary = createMessagingPersistenceServices(database.db, { messageSendLimit: limit });
+      const secondary = createMessagingPersistenceServices(contender.db, { messageSendLimit: limit });
+      const left = await primary.direct.create(users[actorIndex]!, {
+        recipientId: users[peerIndexes[0]]!, clientMessageId: crypto.randomUUID(), text: "left",
+      });
+      const right = await secondary.direct.create(users[actorIndex]!, {
+        recipientId: users[peerIndexes[1]]!, clientMessageId: crypto.randomUUID(), text: "right",
+      });
+      if (limit > 0) {
+        const sameTargetId = crypto.randomUUID();
+        const sameTarget = await Promise.all([
+          primary.send.send(users[actorIndex]!, left.conversation.id, { clientMessageId: sameTargetId, text: "same" }),
+          secondary.send.send(users[actorIndex]!, left.conversation.id, { clientMessageId: sameTargetId, text: "same" }),
+        ]);
+        expect(sameTarget.map((result) => result.message.id).every((id) => id === sameTarget[0]!.message.id)).toBe(true);
+        expect(sameTarget.filter((result) => result.replayed)).toHaveLength(1);
+      }
+      const reusedId = crypto.randomUUID();
+      const race = await Promise.allSettled([
+        primary.send.send(users[actorIndex]!, left.conversation.id, { clientMessageId: reusedId, text: "left reuse" }),
+        secondary.send.send(users[actorIndex]!, right.conversation.id, { clientMessageId: reusedId, text: "right reuse" }),
+      ]);
+      expect(race.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      expect(race.filter((result) => result.status === "rejected").map((result) => (result as PromiseRejectedResult).reason.code))
+        .toEqual(["IDEMPOTENCY_KEY_REUSED"]);
+      const conflictAtCurrentUsage = await Promise.allSettled([
+        primary.send.send(users[actorIndex]!, left.conversation.id, { clientMessageId: reusedId, text: "third target" }),
+        secondary.send.send(users[actorIndex]!, right.conversation.id, { clientMessageId: reusedId, text: "fourth target" }),
+      ]);
+      expect(conflictAtCurrentUsage.map((result) => result.status)).toEqual(["rejected", "rejected"]);
+      expect(conflictAtCurrentUsage.map((result) => (result as PromiseRejectedResult).reason.code))
+        .toEqual(["IDEMPOTENCY_KEY_REUSED", "IDEMPOTENCY_KEY_REUSED"]);
+    };
+
+    await runRace(28, [29, 30], 4);
+    await runRace(31, [32, 33], 0);
+  }, 30_000);
+
+  it("counts the exact 60-second microsecond boundary and excludes the first instant after it", async () => {
+    const services = createMessagingPersistenceServices(database.db, { messageSendLimit: 1 });
+    const created = await services.direct.create(users[34]!, {
+      recipientId: users[35]!, clientMessageId: crypto.randomUUID(), text: "boundary",
+    });
+    const [clock] = await database.client`
+      select to_char(clock_timestamp() + interval '5 seconds', 'YYYY-MM-DD"T"HH24:MI:SS.USOF') as sampled_at
+    `;
+    const sampledAt = String(clock?.sampled_at);
+    await database.db.execute(sql`
+      update messages set created_at = ${sampledAt}::timestamptz - interval '60 seconds'
+      where id = ${created.message.id}
+    `);
+    await expect(database.db.transaction(async (transaction) => {
+      await lockNewMessageSender(transaction, users[34]!);
+      return claimNewMessageSlot(transaction, users[34]!, 1, sampledAt);
+    })).rejects.toMatchObject({ code: "RATE_LIMITED", retryAfterSeconds: 1 });
+
+    await database.db.execute(sql`
+      update messages set created_at = ${sampledAt}::timestamptz - interval '60 seconds 1 microsecond'
+      where id = ${created.message.id}
+    `);
+    await expect(database.db.transaction(async (transaction) => {
+      await lockNewMessageSender(transaction, users[34]!);
+      return claimNewMessageSlot(transaction, users[34]!, 1, sampledAt);
+    })).resolves.toBe(sampledAt);
+  });
+
+  it("atomically caps mixed cross-conversation sends and keeps replay and other senders eligible", async () => {
+    const actorId = users[2]!;
+    const primary = createMessagingPersistenceServices(database.db, { messageSendLimit: 30 });
+    const secondary = createMessagingPersistenceServices(contender.db, { messageSendLimit: 30 });
+    const first = await primary.direct.create(actorId, {
+      recipientId: users[3]!, clientMessageId: crypto.randomUUID(), text: "first conversation",
+    });
+    const second = await secondary.direct.create(actorId, {
+      recipientId: users[8]!, clientMessageId: crypto.randomUUID(), text: "second conversation",
+    });
+    const clientIds = Array.from({ length: 32 }, () => crypto.randomUUID());
+    const attempts = await Promise.allSettled(clientIds.map((clientMessageId, index) => {
+      if (index % 2 === 0) {
+        return primary.direct.create(actorId, {
+          recipientId: users[12 + index / 2]!, clientMessageId, text: `quota ${index}`,
+        });
+      }
+      return secondary.send.send(actorId, second.conversation.id, { clientMessageId, text: `quota ${index}` });
+    }));
+    expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(28);
+    expect(attempts.filter((result) => result.status === "rejected").map((result) => (result as PromiseRejectedResult).reason.code))
+      .toEqual(["RATE_LIMITED", "RATE_LIMITED", "RATE_LIMITED", "RATE_LIMITED"]);
+    const [persisted] = await database.db.select({ count: count() }).from(messages).where(eq(messages.senderId, actorId));
+    expect(persisted?.count).toBe(30);
+
+    const acceptedIndex = attempts.findIndex((result) => result.status === "fulfilled");
+    const accepted = attempts[acceptedIndex] as PromiseFulfilledResult<{ message: { id: string }; conversation?: { id: string } }>;
+    const acceptedConversationId = accepted.value.conversation?.id ?? second.conversation.id;
+    const retry = acceptedIndex % 2 === 0
+      ? primary.direct.create(actorId, { recipientId: users[12 + acceptedIndex / 2]!, clientMessageId: clientIds[acceptedIndex]!, text: `quota ${acceptedIndex}` })
+      : primary.send.send(actorId, acceptedConversationId, { clientMessageId: clientIds[acceptedIndex]!, text: `quota ${acceptedIndex}` });
+    await expect(retry).resolves.toMatchObject({ replayed: true, message: { id: accepted.value.message.id } });
+    await expect(primary.send.send(actorId, acceptedConversationId, {
+      clientMessageId: clientIds[acceptedIndex]!, text: "conflicting replay",
+    })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+
+    await database.db.update(messages).set({ body: null, unsentAt: new Date() }).where(eq(messages.id, accepted.value.message.id));
+    await expect(primary.send.send(actorId, acceptedConversationId, {
+      clientMessageId: crypto.randomUUID(), text: "tombstone still counts",
+    })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(primary.send.send(users[3]!, first.conversation.id, {
+      clientMessageId: crypto.randomUUID(), text: "independent sender",
+    })).resolves.toMatchObject({ replayed: false });
+
+    await database.db.execute(sql`
+      insert into messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at)
+      select 'quota-plan-' || n::text, ${first.conversation.id}, 100000 + n, ${users[3]!},
+        'quota-plan-client-' || n::text, 'quota-plan-fingerprint-' || n::text, 'history', 1,
+        clock_timestamp() - case when n % 4 = 0 then interval '30 seconds' else interval '2 hours' end
+      from generate_series(1, 3000) n
+      on conflict do nothing
+    `);
+    await database.db.execute(sql`analyze messages`);
+    const [planRow] = await database.client`
+      explain (analyze, format json)
+      select count(*), min(created_at) from messages
+      where sender_id = ${actorId} and created_at >= clock_timestamp() - interval '60 seconds'
+    `;
+    expect(JSON.stringify(planRow?.["QUERY PLAN"])).toContain("messages_sender_created_at_idx");
+
+    await database.db.execute(sql`update messages set created_at = clock_timestamp() - interval '59.5 seconds' where sender_id = ${actorId}`);
+    const holder = createDayliDatabase(connectionString!);
+    let releaseSenderLock: (() => void) | undefined;
+    const heldSenderLock = new Promise<void>((resolve) => { releaseSenderLock = resolve; });
+    let senderLockAcquired: (() => void) | undefined;
+    const acquiredSenderLock = new Promise<void>((resolve) => { senderLockAcquired = resolve; });
+    const lockKey = `direct-message-send:${actorId.length}:${actorId}`;
+    try {
+      const blocker = holder.db.transaction(async (transaction) => {
+        await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 734))`);
+        senderLockAcquired?.();
+        await heldSenderLock;
+      });
+      await acquiredSenderLock;
+      const delayedSend = primary.send.send(actorId, first.conversation.id, {
+        clientMessageId: crypto.randomUUID(), text: "sample time after sender lock wait",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+      releaseSenderLock!();
+      await blocker;
+      await expect(delayedSend).resolves.toMatchObject({ replayed: false });
+    } finally {
+      releaseSenderLock?.();
+      await holder.close();
+    }
+  }, 30_000);
 
   it("sends and replays by a divergent participant while retaining its legacy sender and change actor", async () => {
     const actorId = users[10]!;

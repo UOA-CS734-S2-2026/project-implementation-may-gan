@@ -264,6 +264,12 @@ class ApiClient {
           return DailyPromptResponse.fromJson(value);
         case 'DeletionGrantRequest':
           return DeletionGrantRequest.fromJson(value);
+        case 'DirectMessageSendQuotaError':
+          return DirectMessageSendQuotaError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorError':
+          return DirectMessageSendQuotaErrorError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorErrorDetails':
+          return DirectMessageSendQuotaErrorErrorDetails.fromJson(value);
         case 'DirectPairLookup':
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
@@ -314,6 +320,8 @@ class ApiClient {
           return MediaValidationFailureReasonTypeTransformer().decode(value);
         case 'Message':
           return Message.fromJson(value);
+        case 'MessageCreationRateLimitError':
+          return MessageCreationRateLimitError.fromJson(value);
         case 'MessageReactionsInner':
           return MessageReactionsInner.fromJson(value);
         case 'MessageReactionsInnerReactorsInner':
