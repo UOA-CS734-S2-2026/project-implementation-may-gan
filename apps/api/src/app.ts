@@ -49,6 +49,8 @@ import type { PostTrashRouteDependencies } from "./features/posts/trash-post/tra
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
+import type { ListOnThisDayRouteDependencies } from "./features/posts/list-on-this-day/list-on-this-day.route";
+import { createHyperdriveOnThisDayRepository } from "./features/posts/list-on-this-day/list-on-this-day.repository";
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
@@ -195,6 +197,7 @@ export interface AppDependencies {
   postMedia?: GetPostMediaRouteDependencies;
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
+  onThisDay?: ListOnThisDayRouteDependencies;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -229,6 +232,7 @@ export function createApp({
   postMedia,
   postVoiceMemo,
   profilePosts,
+  onThisDay,
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -309,6 +313,7 @@ export function createApp({
     voiceMemo: { ...(postVoiceMemo ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
+    onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -378,6 +383,12 @@ export function createAppForEnv(env: ApiEnv) {
     signMediaDownload,
   } satisfies ListProfilePostsRouteDependencies : undefined;
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
+  const onThisDay = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    repository: createHyperdriveOnThisDayRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies ListOnThisDayRouteDependencies : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
@@ -481,6 +492,7 @@ export function createAppForEnv(env: ApiEnv) {
     postMedia,
     postVoiceMemo,
     profilePosts,
+    onThisDay,
     media,
     relationships,
     messaging,

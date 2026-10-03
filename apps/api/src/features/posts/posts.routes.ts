@@ -8,6 +8,7 @@ import {
 } from "./get-post-voice-memo/get-post-voice-memo.route";
 import { registerGetPostMediaRoute, type GetPostMediaRouteDependencies } from "./get-post-media/get-post-media.route";
 import { registerListFeedRoute, type ListFeedRouteDependencies } from "./list-feed/list-feed.route";
+import { registerListOnThisDayRoute, type ListOnThisDayRouteDependencies } from "./list-on-this-day/list-on-this-day.route";
 import { registerListProfilePostsRoute, type ListProfilePostsRouteDependencies } from "./list-profile-posts/list-profile-posts.route";
 import { registerPostTrashRoutes, type PostTrashRouteDependencies } from "./trash-post/trash-post.route";
 
@@ -19,6 +20,7 @@ export interface PostsRouteDependencies {
   voiceMemo: GetPostVoiceMemoRouteDependencies;
   profilePosts: ListProfilePostsRouteDependencies;
   trash: PostTrashRouteDependencies;
+  onThisDay: ListOnThisDayRouteDependencies;
 }
 
 /** Register post actions without embedding post policy in the composition root. */
@@ -31,4 +33,5 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   registerGetPostMediaRoute(app, dependencies.media);
   registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
   registerListProfilePostsRoute(app, dependencies.profilePosts);
+  registerListOnThisDayRoute(app, dependencies.onThisDay);
 }

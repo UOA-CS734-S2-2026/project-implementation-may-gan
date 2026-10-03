@@ -393,6 +393,63 @@ class PostsApi {
     return null;
   }
 
+  /// List the caller's On This Day memories
+  ///
+  /// Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> postsListOnThisDayWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/me/memories/on-this-day';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List the caller's On This Day memories
+  ///
+  /// Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.
+  Future<OnThisDayMemories?> postsListOnThisDay({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListOnThisDayWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'OnThisDayMemories',
+      ) as OnThisDayMemories;
+    }
+    return null;
+  }
+
   /// List the posts on a profile
   ///
   /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.

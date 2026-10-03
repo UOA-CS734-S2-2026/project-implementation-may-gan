@@ -23,7 +23,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 
 | Feature | Scope and fallback |
 | --- | --- |
-| On this day | Anniversary reminders; labelled historical seeds for demos and defined leap-day handling. |
+| On this day | Anniversary reminders; labelled historical seeds for demos and defined leap-day handling. The owner-only memories API is built; see [On This Day](on-this-day.md). Clients and reminders are not. |
 | Future-self notes | Owner-only notes delivered on chosen dates, not cryptographic time locks. |
 | Night charging recap | Show while active/reopened and charging; otherwise opt-in nightly notification. No forced launch. |
 | Biometric lock | Protected local access, relock, obscured app-switcher preview; test passcode and enrolment changes. |
