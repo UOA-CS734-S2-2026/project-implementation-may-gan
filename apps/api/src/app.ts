@@ -203,6 +203,8 @@ import { registerRegistrationIntentRoutes, type RegistrationIntentRouteDependenc
 import { issueRegistrationIntent, readPublishedRegistrationTerms } from "./features/legal/shared/registration-intent.repository";
 import { approvedTermsDigest } from "./features/legal/shared/legal-publication";
 import type { ResolveSession } from "./http/middleware/require-session";
+import { registerNotificationRoutes, type NotificationRouteDependencies } from "./features/notifications/notifications.routes";
+import { createPostgresNotificationPreferenceStore } from "./features/notifications/preference/notification-preference.repository";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -244,6 +246,7 @@ export interface AppDependencies {
   googleManagementProof?: GoogleManagementProofDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
   legalRegistration?: RegistrationIntentRouteDependencies;
+  notifications?: NotificationRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -286,6 +289,7 @@ export function createApp({
   googleManagementProof,
   legalAcceptance,
   legalRegistration,
+  notifications = unavailableNotifications,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -340,6 +344,7 @@ export function createApp({
   registerGoogleManagementProofRoute(api, { ...(googleManagementProof ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? googleManagementProof?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
   registerRegistrationIntentRoutes(api, legalRegistration ?? {});
+  registerNotificationRoutes(api, { ...notifications, rateLimiter });
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
   registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
@@ -550,6 +555,17 @@ export function createAppForEnv(env: ApiEnv) {
       configuration.hyperdrive, async (database) => issueRegistrationIntent(database, input, await approvedTermsDigest()),
     ),
   } satisfies RegistrationIntentRouteDependencies : undefined;
+  const notifications = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    store: {
+      read: (userId: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        createPostgresNotificationPreferenceStore(database).read(userId)
+      )),
+      write: (userId: string, enabled: boolean) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        createPostgresNotificationPreferenceStore(database).write(userId, enabled)
+      )),
+    },
+  } satisfies NotificationRouteDependencies : undefined;
   // Profile photos are shown through links that expire after ten minutes.
   const signAvatar = r2Runtime
     ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
@@ -627,6 +643,7 @@ export function createAppForEnv(env: ApiEnv) {
     googleManagementProof,
     legalAcceptance,
     legalRegistration,
+    notifications,
     profileDetails,
     profileAvatar,
     profileUpdate,
@@ -661,6 +678,7 @@ export function createAppForEnv(env: ApiEnv) {
 }
 
 const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
+const unavailableNotifications: NotificationRouteDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,

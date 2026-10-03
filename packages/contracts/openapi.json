@@ -3853,6 +3853,107 @@
         }
       }
     },
+    "/api/v1/notifications/preference": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "getNotificationPreference",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The owner's global mobile notification preference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "503": {
+            "description": "Notification preference storage unavailable."
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "operationId": "updateNotificationPreference",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The owner's global mobile notification preference.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "enabled"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "503": {
+            "description": "Notification preference storage unavailable."
+          }
+        }
+      }
+    },
     "/api/v1/media-reservations": {
       "post": {
         "tags": [
@@ -10565,6 +10666,11 @@
                   },
                   "optedIn": {
                     "type": "boolean"
+                  },
+                  "notificationSchemaVersion": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1
                   }
                 },
                 "required": [

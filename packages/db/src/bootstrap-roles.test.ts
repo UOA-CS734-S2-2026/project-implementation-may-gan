@@ -35,6 +35,10 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("'data_export_object_cleanup_tasks'");
     expect(migratorBootstrap).toContain("'data_export_cleanup_incidents'");
     expect(migratorBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app");
+    expect(migratorBootstrap).toContain("'account_notification_preferences'");
+    expect(migratorBootstrap).toContain("'notification_deliveries'");
+    expect(migratorBootstrap).toContain("'notification_events'");
+    expect(migratorBootstrap).toContain("GRANT SELECT, INSERT, UPDATE ON TABLE public.account_notification_preferences TO app");
   });
 
   it("provides a read-only verification script for the restricted roles", async () => {

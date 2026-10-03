@@ -16,6 +16,7 @@ export interface RegisterPushDeviceStore {
     tokenKeyVersion: string;
     tokenHash: string;
     optedIn: boolean;
+    notificationSchemaVersion: number | undefined;
     now: Date;
   }): Promise<void>;
 }
@@ -23,7 +24,7 @@ export interface RegisterPushDeviceStore {
 export interface RegisterDeviceService {
   register(
     session: VerifiedPushSession,
-    device: { installationId: string; platform: PushPlatform; token: string; optedIn: boolean },
+    device: { installationId: string; platform: PushPlatform; token: string; optedIn: boolean; notificationSchemaVersion?: number },
   ): Promise<void>;
 }
 
@@ -38,6 +39,9 @@ export function createRegisterDeviceService(input: {
   return {
     async register(session, device) {
       if (device.token.length < 16 || device.token.length > 8_192) throw new Error("Invalid push token.");
+      if (device.notificationSchemaVersion !== undefined && device.notificationSchemaVersion !== 1) {
+        throw new Error("Unsupported notification schema version.");
+      }
       const encrypted = await input.protector.encrypt(device.token);
       await input.store.register({
         id: createId(),
@@ -49,6 +53,7 @@ export function createRegisterDeviceService(input: {
         tokenKeyVersion: encrypted.keyVersion,
         tokenHash: await hashPushToken(device.token),
         optedIn: device.optedIn,
+        notificationSchemaVersion: device.notificationSchemaVersion,
         now: now(),
       });
     },
