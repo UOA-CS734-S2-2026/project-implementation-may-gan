@@ -45,10 +45,10 @@ function SignInForm() {
   const router = useRouter();
   const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
   const { user } = useSession();
-  const [signInComplete, setSignInComplete] = useState(false);
+  const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!signInComplete || !user) return;
+    if (!expectedUserId || user?.id !== expectedUserId) return;
     let current = true;
     void getUsernameProfile().then((profile) => {
       if (current) router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
@@ -56,7 +56,7 @@ function SignInForm() {
       if (current) router.push(returnTo);
     });
     return () => { current = false; };
-  }, [returnTo, router, signInComplete, user]);
+  }, [expectedUserId, returnTo, router, user?.id]);
 
   const {
     control,
@@ -69,14 +69,19 @@ function SignInForm() {
   });
 
   const onSubmit = async ({ email, password }: SignInValues) => {
-    const { error } = await authClient.signIn.email({ email, password });
+    setExpectedUserId(null);
+    const { data, error } = await authClient.signIn.email({ email, password });
 
     if (error) {
       setError("root", { message: error.message ?? "Invalid credentials." });
       return;
     }
+    if (!data?.user?.id) {
+      setError("root", { message: "Your session could not be verified. Please try again." });
+      return;
+    }
 
-    setSignInComplete(true);
+    setExpectedUserId(data.user.id);
   };
 
   return (
