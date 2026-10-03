@@ -7,6 +7,7 @@ src/apis/AccountApi.ts
 src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
+src/apis/NotificationsApi.ts
 src/apis/PostingDaysApi.ts
 src/apis/PostsApi.ts
 src/apis/ProfileApi.ts
@@ -50,6 +51,7 @@ src/models/FeedPost.ts
 src/models/FeedPostAuthor.ts
 src/models/FeedPostPrompt.ts
 src/models/GetMessagingUnread200Response.ts
+src/models/GetNotificationPreference200Response.ts
 src/models/GoogleReauthenticationIntent.ts
 src/models/GoogleReauthenticationRequest.ts
 src/models/HealthResponse.ts
@@ -113,6 +115,7 @@ src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/TrashedPostStatus.ts
+src/models/UpdateNotificationPreferenceRequest.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts

@@ -1,0 +1,6 @@
+reason: Every index in this migration is built on a table created empty in the same transaction. Concurrent creation is unsupported inside the transaction and provides no benefit for empty unpublished tables.
+affected_data_and_clients: No existing client writes the new tables. Existing push_devices receives no new index.
+rollout_sequence: Apply schema first, verify indexes, then deploy API composition with publishers disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running.
+forward_fix_plan: If the tables are unexpectedly populated, stop and investigate the target. Add a reviewed concurrent index migration instead of editing applied SQL.
+reviewer: Database and availability reviewers required.

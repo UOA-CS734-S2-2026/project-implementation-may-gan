@@ -23,6 +23,8 @@ export interface ApiEnv {
   R2_SECRET_ACCESS_KEY?: string;
   /** Required in deployed delivery environments. Optional for DB-free and legacy test composition. */
   USER_REALTIME?: DurableObjectNamespace;
+  /** Exact string "true" enables generic notification publishers. All other values disable them. */
+  NOTIFICATION_PUBLISHERS_ENABLED?: string;
   /** Worker secret containing a Firebase service-account JSON document. */
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */
@@ -37,4 +39,9 @@ export interface ApiEnv {
   API_MEDIA_RATE_LIMIT?: RateLimitBinding;
   API_REALTIME_RATE_LIMIT?: RateLimitBinding;
   API_DIRECT_PUSH_RATE_LIMIT?: RateLimitBinding;
+}
+
+/** Missing, malformed, and differently cased values fail closed. */
+export function notificationPublishersEnabled(env: Pick<ApiEnv, "NOTIFICATION_PUBLISHERS_ENABLED">): boolean {
+  return env.NOTIFICATION_PUBLISHERS_ENABLED === "true";
 }
