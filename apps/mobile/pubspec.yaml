@@ -21,6 +21,7 @@ dependencies:
   http: ^1.6.0
   image_picker: ^1.2.3
   path_provider: ^2.1.6
+  permission_handler: ^13.0.2
   share_plus: ^13.3.1
   shared_preferences: ^2.5.5
   v_video_compressor: ^2.2.3
@@ -34,6 +35,8 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^5.0.0
   video_player_platform_interface: ^6.9.0
+  image_picker_platform_interface: ^2.11.1
+  plugin_platform_interface: ^2.1.8
 flutter:
   uses-material-design: true
   # Imported from the WDCC web frontend; see apps/web/ATTRIBUTION.md.

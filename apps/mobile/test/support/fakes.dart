@@ -135,12 +135,50 @@ class MemoryDraftStore implements DraftStore {
 
 class FakeMediaPicker implements MediaPicker {
   var picks = 0;
+  var captures = 0;
+  var settingsOpened = 0;
+
+  /// Queue outcomes to script the camera; otherwise each capture succeeds.
+  final captureOutcomes = <CaptureOutcome>[];
+
+  /// What [recoverLostCapture] returns once.
+  DraftAttachment? lostCapture;
 
   @override
   Future<DraftAttachment?> pickPhoto() async => _next();
 
   @override
   Future<DraftAttachment?> pickPhotoOrVideo() async => _next();
+
+  @override
+  Future<CaptureOutcome> capturePhoto() async => _capture('image', 'jpg');
+
+  @override
+  Future<CaptureOutcome> captureVideo() async => _capture('video', 'mp4');
+
+  @override
+  Future<DraftAttachment?> recoverLostCapture() async {
+    final lost = lostCapture;
+    lostCapture = null;
+    return lost;
+  }
+
+  @override
+  Future<bool> openSettings() async {
+    settingsOpened++;
+    return true;
+  }
+
+  CaptureOutcome _capture(String mediaType, String extension) {
+    final number = captures++;
+    if (captureOutcomes.isNotEmpty) return captureOutcomes.removeAt(0);
+    return Captured(
+      DraftAttachment(
+        localPath: '/camera/$number.$extension',
+        mediaType: mediaType,
+      ),
+    );
+  }
 
   DraftAttachment _next() =>
       DraftAttachment(localPath: '/photos/${picks++}.jpg', mediaType: 'image');
