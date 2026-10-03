@@ -15,8 +15,16 @@ class CachedStreak {
 /// Keeps the signed-in owner's last confirmed streak for offline display.
 /// It holds one account at a time and never anyone else's streak.
 abstract interface class StreakCache {
+  /// Changes on every [clear]. A load reads it before its request and passes
+  /// it to [write], so a response that lands after a clear is dropped.
+  int get epoch;
+
   Future<CachedStreak?> read(String userId);
-  Future<void> write(String userId, CachedStreak value);
+
+  /// Ignored unless [epoch] is still current.
+  Future<void> write(String userId, CachedStreak value, {required int epoch});
+
+  /// Finishes any write already started, then removes the value.
   Future<void> clear();
 }
 
@@ -28,8 +36,20 @@ class ProtectedStreakCache implements StreakCache {
   static const _key = 'dayli.streak.v1';
   final FlutterSecureStorage _storage;
 
+  int _epoch = 0;
+
+  /// Writes and clears, in the order they were asked for.
+  Future<void> _queue = Future.value();
+
+  Future<void> _enqueue(Future<void> Function() task) =>
+      _queue = _queue.then((_) => task()).catchError((Object _) {});
+
+  @override
+  int get epoch => _epoch;
+
   @override
   Future<CachedStreak?> read(String userId) async {
+    await _queue;
     try {
       final raw = await _storage.read(key: _key);
       if (raw == null) return null;
@@ -49,31 +69,30 @@ class ProtectedStreakCache implements StreakCache {
   }
 
   @override
-  Future<void> write(String userId, CachedStreak value) async {
-    try {
-      await _storage.write(
-        key: _key,
-        value: jsonEncode({
-          'userId': userId,
-          'streak': {
-            'current': value.streak.current,
-            'longest': value.streak.longest,
-            'postedToday': value.streak.postedToday,
-          },
-          'confirmedAt': value.confirmedAt.toUtc().toIso8601String(),
-        }),
-      );
-    } catch (_) {
-      // Offline display is a convenience; a failed write must not break the
-      // profile.
-    }
-  }
+  Future<void> write(String userId, CachedStreak value, {required int epoch}) =>
+      _enqueue(() async {
+        // Checked when the write runs, after any clear queued before it.
+        if (epoch != _epoch) return;
+        // Offline display is a convenience; a failed write must not break the
+        // profile, so errors are dropped by the queue.
+        await _storage.write(
+          key: _key,
+          value: jsonEncode({
+            'userId': userId,
+            'streak': {
+              'current': value.streak.current,
+              'longest': value.streak.longest,
+              'postedToday': value.streak.postedToday,
+            },
+            'confirmedAt': value.confirmedAt.toUtc().toIso8601String(),
+          }),
+        );
+      });
 
   @override
-  Future<void> clear() async {
-    try {
-      await _storage.delete(key: _key);
-    } catch (_) {}
+  Future<void> clear() {
+    _epoch++;
+    return _enqueue(() => _storage.delete(key: _key));
   }
 }
 
@@ -81,19 +100,29 @@ class ProtectedStreakCache implements StreakCache {
 class MemoryStreakCache implements StreakCache {
   String? _userId;
   CachedStreak? _value;
+  int _epoch = 0;
+
+  @override
+  int get epoch => _epoch;
 
   @override
   Future<CachedStreak?> read(String userId) async =>
       _userId == userId ? _value : null;
 
   @override
-  Future<void> write(String userId, CachedStreak value) async {
+  Future<void> write(
+    String userId,
+    CachedStreak value, {
+    required int epoch,
+  }) async {
+    if (epoch != _epoch) return;
     _userId = userId;
     _value = value;
   }
 
   @override
   Future<void> clear() async {
+    _epoch++;
     _userId = null;
     _value = null;
   }

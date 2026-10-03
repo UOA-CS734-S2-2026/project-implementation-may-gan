@@ -52,8 +52,12 @@ class _SocialProfileScreenState extends State<SocialProfileScreen>
   String? _authorizedProfileId;
   PostActivity? _activity;
 
-  /// The last profile the server returned for this account and handle, and
+  /// Counts loads so only the newest may change state or the cache.
+  int _generation = 0;
+
+  /// Your own profile as the server last returned it for this account, and
   /// when. A reload that fails offline keeps showing it, marked as stale.
+  /// Other profiles never fall back, since access to them can change.
   _LoadedProfile? _last;
   DateTime? _lastConfirmedAt;
 
@@ -71,35 +75,51 @@ class _SocialProfileScreenState extends State<SocialProfileScreen>
   /// relationship card is then read for the current one.
   Future<ApiResult<_LoadedProfile>> _load() async {
     final services = AppScope.of(context);
+    final generation = ++_generation;
     final accountId = _accountId;
     final username = widget.username;
+    // Taken before the request, so a cache cleared meanwhile, such as by
+    // signing out, refuses this load's write.
+    final cacheEpoch = services.streakCache.epoch;
+    bool current() =>
+        mounted &&
+        generation == _generation &&
+        accountId == _accountId &&
+        username == _loadedUsername;
+
     final result = await _fetch(services);
-    // The account or profile changed while this was loading.
-    if (!mounted || accountId != _accountId || username != _loadedUsername) {
-      return result;
-    }
+    // A newer load, another account or another profile has taken over.
+    if (!current()) return result;
     switch (result) {
-      case ApiSuccess(value: final loaded):
+      case ApiSuccess(value: final loaded) when loaded.$2.isOwner:
+        final (_, info) = loaded;
         final now = services.clock();
         _last = loaded;
         _lastConfirmedAt = now;
         _staleSince = null;
         _offlineStreak = null;
-        final (_, info) = loaded;
-        if (info.streak case final streak? when info.isOwner) {
-          if (accountId != null) {
-            unawaited(
-              services.streakCache.write(accountId, CachedStreak(streak, now)),
-            );
-          }
+        if ((info.streak, accountId) case (final streak?, final id?)) {
+          unawaited(
+            services.streakCache.write(
+              id,
+              CachedStreak(streak, now),
+              epoch: cacheEpoch,
+            ),
+          );
         }
+      case ApiSuccess():
+        _last = null;
+        _lastConfirmedAt = null;
+        _staleSince = null;
+        _offlineStreak = null;
       case ApiError(failure: NetworkUnavailable()):
         if (_last case final last?) {
           _staleSince = _lastConfirmedAt;
           return ApiSuccess(last);
         }
         if (accountId != null && _isOwnHandle(username)) {
-          _offlineStreak = await services.streakCache.read(accountId);
+          final cached = await services.streakCache.read(accountId);
+          if (current()) _offlineStreak = cached;
         }
       case ApiError():
         break;

@@ -228,7 +228,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
         );
         _changed = true;
-        services.postActivity.changed();
         _leave();
       case ApiError(failure: Unauthenticated()):
         await services.session.sessionExpired();

@@ -167,10 +167,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     // Close the keyboard: fields are read-only until the request settles.
     FocusScope.of(context).unfocus();
     await controller.submit();
-    if (mounted && controller.phase == ComposerPhase.posted) {
-      AppScope.of(context).postActivity.changed();
-      _close();
-    }
+    if (mounted && controller.phase == ComposerPhase.posted) _close();
   }
 
   @override

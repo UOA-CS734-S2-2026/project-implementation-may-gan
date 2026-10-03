@@ -25,10 +25,10 @@ class AppServices {
     required this.session,
     required this.postingDays,
     required this.feed,
-    required this.posts,
+    required this._posts,
     required this.friends,
     required this.drafts,
-    required this.submitter,
+    required this._submitter,
     MessagingController? messaging,
     this.profiles = const UnavailableProfileClient(),
     this.interactions = const UnavailableInteractionsClient(),
@@ -49,10 +49,19 @@ class AppServices {
   final SessionController session;
   final PostingDayClient postingDays;
   final FeedClient feed;
-  final PostClient posts;
+  final PostClient _posts;
+
+  /// Reports confirmed deletes to [postActivity].
+  late final PostClient posts = ReportingPostClient(_posts, postActivity);
   final FriendsClient friends;
   final DraftStore drafts;
-  final DailyPostSubmitter submitter;
+  final DailyPostSubmitter _submitter;
+
+  /// Reports accepted posts to [postActivity].
+  late final DailyPostSubmitter submitter = ReportingPostSubmitter(
+    _submitter,
+    postActivity,
+  );
   final MessagingController messaging;
   final ProfileClient profiles;
   final InteractionsClient interactions;
