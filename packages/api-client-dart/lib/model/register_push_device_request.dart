@@ -16,6 +16,7 @@ class RegisterPushDeviceRequest {
     required this.token,
     required this.platform,
     required this.optedIn,
+    this.notificationSchemaVersion,
   });
 
   final String token;
@@ -24,28 +25,49 @@ class RegisterPushDeviceRequest {
 
   final bool optedIn;
 
+  /// Minimum value: 1
+  /// Maximum value: 1
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final int? notificationSchemaVersion;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is RegisterPushDeviceRequest &&
           other.token == token &&
           other.platform == platform &&
-          other.optedIn == optedIn;
+          other.optedIn == optedIn &&
+          other.notificationSchemaVersion == notificationSchemaVersion;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (token.hashCode) + (platform.hashCode) + (optedIn.hashCode);
+      (token.hashCode) +
+      (platform.hashCode) +
+      (optedIn.hashCode) +
+      (notificationSchemaVersion == null
+          ? 0
+          : notificationSchemaVersion!.hashCode);
 
   @override
   String toString() =>
-      'RegisterPushDeviceRequest[token=$token, platform=$platform, optedIn=$optedIn]';
+      'RegisterPushDeviceRequest[token=$token, platform=$platform, optedIn=$optedIn, notificationSchemaVersion=$notificationSchemaVersion]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'token'] = this.token;
     json[r'platform'] = this.platform;
     json[r'optedIn'] = this.optedIn;
+    if (this.notificationSchemaVersion != null) {
+      json[r'notificationSchemaVersion'] = this.notificationSchemaVersion;
+    } else {
+      json[r'notificationSchemaVersion'] = null;
+    }
     return json;
   }
 
@@ -55,11 +77,14 @@ class RegisterPushDeviceRequest {
     String? token,
     RegisterPushDeviceRequestPlatformEnum? platform,
     bool? optedIn,
+    int? notificationSchemaVersion,
   }) =>
       RegisterPushDeviceRequest(
         token: token ?? this.token,
         platform: platform ?? this.platform,
         optedIn: optedIn ?? this.optedIn,
+        notificationSchemaVersion:
+            notificationSchemaVersion ?? this.notificationSchemaVersion,
       );
 
   /// Returns a new [RegisterPushDeviceRequest] instance and imports its values from
@@ -93,6 +118,8 @@ class RegisterPushDeviceRequest {
         platform:
             RegisterPushDeviceRequestPlatformEnum.fromJson(json[r'platform'])!,
         optedIn: mapValueOfType<bool>(json, r'optedIn')!,
+        notificationSchemaVersion:
+            mapValueOfType<int>(json, r'notificationSchemaVersion'),
       );
     }
     return null;

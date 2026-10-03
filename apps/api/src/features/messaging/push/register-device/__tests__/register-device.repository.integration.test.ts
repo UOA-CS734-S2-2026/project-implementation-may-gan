@@ -39,6 +39,7 @@ suite("register device Postgres repository", () => {
       tokenCiphertext: `ciphertext-${input.id}`,
       tokenKeyVersion: "test",
       optedIn: true,
+      notificationSchemaVersion: undefined,
       now,
     };
   }
@@ -172,6 +173,33 @@ suite("register device Postgres repository", () => {
         token_ciphertext: secondDevice.tokenCiphertext,
       },
     ]).toContainEqual(rows[0]);
+  });
+
+  it("clears generic capability when an older client replaces the same installation", async () => {
+    const installationId = `downgrade-installation-${crypto.randomUUID()}`;
+    const capable = device({
+      id: `register-device-capable-${crypto.randomUUID()}`,
+      userId: ids.alice,
+      sessionId: ids.aliceSessionTwo,
+      installationId,
+      tokenHash: tokenHash("f"),
+    });
+    await store.register({ ...capable, notificationSchemaVersion: 1 });
+    await store.register({
+      ...device({
+        id: `register-device-legacy-${crypto.randomUUID()}`,
+        userId: ids.alice,
+        sessionId: ids.aliceSessionTwo,
+        installationId,
+        tokenHash: tokenHash("g"),
+      }),
+      notificationSchemaVersion: undefined,
+    });
+
+    const rows = await database.db.select({ version: schema.pushDevices.notificationSchemaVersion })
+      .from(schema.pushDevices)
+      .where(and(eq(schema.pushDevices.userId, ids.alice), eq(schema.pushDevices.installationId, installationId)));
+    expect(rows).toEqual([{ version: null }]);
   });
 
   it("rejects stale and banned sessions before they can rotate a token", async () => {

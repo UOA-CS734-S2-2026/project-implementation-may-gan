@@ -32,6 +32,7 @@ BEGIN
     'account_google_reauthentication_intents',
     'account_lifecycles',
     'account_management_grants',
+    'account_notification_preferences',
     'account_purge_receipts',
     'age_declarations',
     'data_export_requests',
@@ -39,6 +40,8 @@ BEGIN
     'data_export_cleanup_incidents',
     'legal_document_versions',
     'messaging_participants',
+    'notification_deliveries',
+    'notification_events',
     'operator_cases',
     'registration_intents',
     'terms_acceptances'
@@ -52,6 +55,12 @@ BEGIN
   -- after the broad bootstrap grants above are re-applied.
   IF to_regclass('public.messaging_participants') IS NOT NULL THEN
     GRANT SELECT ON TABLE public.messaging_participants TO app;
+  END IF;
+
+  IF to_regclass('public.account_notification_preferences') IS NOT NULL THEN
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_notification_preferences TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.notification_events TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.notification_deliveries TO app;
   END IF;
 
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN

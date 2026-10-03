@@ -97,7 +97,8 @@ describe("explicit export data inventory", () => {
 
   it("keeps recipient and relationship data out of the inventory", () => {
     for (const table of ["conversation_changes", "conversation_members", "conversations", "messaging_participants",
-      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
+      "message_reactions", "messaging_outbox", "notification_deliveries", "notification_events",
+      "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
     }
@@ -137,6 +138,7 @@ describe("explicit export data inventory", () => {
     for (const field of ["id", "username", "email", "bio", "profile_visibility", "created_at"]) {
       expect(exportDataInventory.user!.included).toContain(field);
     }
+    expect(exportDataInventory.account_notification_preferences!.included).toContain("enabled");
     expect(exportDataInventory.terms_acceptances!.included).toContain("accepted_at");
     expect(exportDataInventory.age_declarations!.included).toContain("declared_at");
   });
