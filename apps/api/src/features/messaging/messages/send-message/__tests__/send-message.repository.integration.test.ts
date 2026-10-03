@@ -53,6 +53,10 @@ suite("send message Postgres repository", () => {
     await database.db.insert(friendships).values([
       { userId: users[0]!, friendId: users[1]!, state: "active", stateChangedAt: new Date() },
       { userId: users[1]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[2]!, friendId: users[3]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[3]!, friendId: users[2]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[2]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[8]!, friendId: users[2]!, state: "active", stateChangedAt: new Date() },
       { userId: users[0]!, friendId: users[4]!, state: "active", stateChangedAt: new Date() },
       { userId: users[4]!, friendId: users[0]!, state: "active", stateChangedAt: new Date() },
       { userId: users[0]!, friendId: users[5]!, state: "active", stateChangedAt: new Date() },
@@ -130,6 +134,89 @@ suite("send message Postgres repository", () => {
     ]);
     expect(outbox?.count).toBe(4);
   });
+
+  it("atomically caps mixed cross-conversation sends and keeps replay and other senders eligible", async () => {
+    const actorId = users[2]!;
+    const primary = createMessagingPersistenceServices(database.db, { messageSendLimit: 30 });
+    const secondary = createMessagingPersistenceServices(contender.db, { messageSendLimit: 30 });
+    const first = await primary.direct.create(actorId, {
+      recipientId: users[3]!, clientMessageId: crypto.randomUUID(), text: "first conversation",
+    });
+    const second = await secondary.direct.create(actorId, {
+      recipientId: users[8]!, clientMessageId: crypto.randomUUID(), text: "second conversation",
+    });
+    const clientIds = Array.from({ length: 32 }, () => crypto.randomUUID());
+    const attempts = await Promise.allSettled(clientIds.map((clientMessageId, index) => {
+      const service = index % 2 === 0 ? primary.send : secondary.send;
+      const conversationId = index % 2 === 0 ? first.conversation.id : second.conversation.id;
+      return service.send(actorId, conversationId, { clientMessageId, text: `quota ${index}` });
+    }));
+    expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(28);
+    expect(attempts.filter((result) => result.status === "rejected").map((result) => (result as PromiseRejectedResult).reason.code))
+      .toEqual(["RATE_LIMITED", "RATE_LIMITED", "RATE_LIMITED", "RATE_LIMITED"]);
+    const [persisted] = await database.db.select({ count: count() }).from(messages).where(eq(messages.senderId, actorId));
+    expect(persisted?.count).toBe(30);
+
+    const acceptedIndex = attempts.findIndex((result) => result.status === "fulfilled");
+    const accepted = attempts[acceptedIndex] as PromiseFulfilledResult<Awaited<ReturnType<typeof primary.send.send>>>;
+    const acceptedConversationId = acceptedIndex % 2 === 0 ? first.conversation.id : second.conversation.id;
+    await expect(primary.send.send(actorId, acceptedConversationId, {
+      clientMessageId: clientIds[acceptedIndex]!, text: `quota ${acceptedIndex}`,
+    })).resolves.toMatchObject({ replayed: true, message: { id: accepted.value.message.id } });
+    await expect(primary.send.send(actorId, acceptedConversationId, {
+      clientMessageId: clientIds[acceptedIndex]!, text: "conflicting replay",
+    })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
+
+    await database.db.update(messages).set({ body: null, unsentAt: new Date() }).where(eq(messages.id, accepted.value.message.id));
+    await expect(primary.send.send(actorId, acceptedConversationId, {
+      clientMessageId: crypto.randomUUID(), text: "tombstone still counts",
+    })).rejects.toMatchObject({ code: "RATE_LIMITED" });
+    await expect(primary.send.send(users[3]!, first.conversation.id, {
+      clientMessageId: crypto.randomUUID(), text: "independent sender",
+    })).resolves.toMatchObject({ replayed: false });
+
+    await database.db.execute(sql`
+      insert into messages (id, conversation_id, sequence, sender_id, client_message_id, request_fingerprint, body, version, created_at)
+      select 'quota-plan-' || n::text, ${first.conversation.id}, 100000 + n, ${users[3]!},
+        'quota-plan-client-' || n::text, 'quota-plan-fingerprint-' || n::text, 'history', 1,
+        clock_timestamp() - case when n % 4 = 0 then interval '30 seconds' else interval '2 hours' end
+      from generate_series(1, 3000) n
+      on conflict do nothing
+    `);
+    await database.db.execute(sql`analyze messages`);
+    const [planRow] = await database.client`
+      explain (analyze, format json)
+      select count(*), min(created_at) from messages
+      where sender_id = ${actorId} and created_at >= clock_timestamp() - interval '60 seconds'
+    `;
+    expect(JSON.stringify(planRow?.["QUERY PLAN"])).toContain("messages_sender_created_at_idx");
+
+    await database.db.execute(sql`update messages set created_at = clock_timestamp() - interval '59.5 seconds' where sender_id = ${actorId}`);
+    const holder = createDayliDatabase(connectionString!);
+    let releaseSenderLock: (() => void) | undefined;
+    const heldSenderLock = new Promise<void>((resolve) => { releaseSenderLock = resolve; });
+    let senderLockAcquired: (() => void) | undefined;
+    const acquiredSenderLock = new Promise<void>((resolve) => { senderLockAcquired = resolve; });
+    const lockKey = `direct-message-send:${actorId.length}:${actorId}`;
+    try {
+      const blocker = holder.db.transaction(async (transaction) => {
+        await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 734))`);
+        senderLockAcquired?.();
+        await heldSenderLock;
+      });
+      await acquiredSenderLock;
+      const delayedSend = primary.send.send(actorId, first.conversation.id, {
+        clientMessageId: crypto.randomUUID(), text: "sample time after sender lock wait",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+      releaseSenderLock!();
+      await blocker;
+      await expect(delayedSend).resolves.toMatchObject({ replayed: false });
+    } finally {
+      releaseSenderLock?.();
+      await holder.close();
+    }
+  }, 30_000);
 
   it("sends and replays by a divergent participant while retaining its legacy sender and change actor", async () => {
     const actorId = users[10]!;

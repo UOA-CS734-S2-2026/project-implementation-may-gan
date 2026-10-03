@@ -1,7 +1,6 @@
 import { apiErrorSchema, opaqueIdSchema, utcTimestampSchema } from "@dayli/contracts";
 import { z } from "@hono/zod-openapi";
-import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
-import { messageSchema } from "./message.contract";
+import { messageQuotaErrorResponse, messageSchema } from "./message.contract";
 
 const sequence = z.string().regex(/^\d+$/).openapi({ example: "42" });
 export const conversationParamsSchema = z.object({ conversationId: opaqueIdSchema });
@@ -35,4 +34,4 @@ export const unreadSchema = z.object({ inboxCount: z.number().int().min(0), requ
 export const messageListSchema = z.object({ items: z.array(messageSchema), nextCursor: sequence.nullable(), hasMore: z.boolean() });
 export const changesSchema = z.object({ items: z.array(z.object({ changeSequence: sequence, kind: z.string(), messageId: opaqueIdSchema.nullable(), memberId: opaqueIdSchema.nullable(), createdAt: utcTimestampSchema })), nextChangeSequence: sequence.nullable(), hasMore: z.boolean(), highWatermark: sequence });
 export const readSchema = z.object({ lastReadSequence: sequence, receiptSequence: sequence, unreadCount: z.number().int().min(0) });
-export const messagingReadErrors = { 401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } }, 403: { description: "The action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } }, 404: { description: "The conversation was not found.", content: { "application/json": { schema: apiErrorSchema } } }, 409: { description: "The action conflicts with current state.", content: { "application/json": { schema: apiErrorSchema } } }, 422: { description: "The request contains invalid values.", content: { "application/json": { schema: apiErrorSchema } } }, 429: rateLimitErrorResponse, 503: { description: "Messaging is temporarily unavailable.", content: { "application/json": { schema: apiErrorSchema } } } } as const;
+export const messagingReadErrors = { 401: { description: "Authentication is required.", content: { "application/json": { schema: apiErrorSchema } } }, 403: { description: "The action is not permitted.", content: { "application/json": { schema: apiErrorSchema } } }, 404: { description: "The conversation was not found.", content: { "application/json": { schema: apiErrorSchema } } }, 409: { description: "The action conflicts with current state.", content: { "application/json": { schema: apiErrorSchema } } }, 422: { description: "The request contains invalid values.", content: { "application/json": { schema: apiErrorSchema } } }, 429: messageQuotaErrorResponse, 503: { description: "Messaging is temporarily unavailable.", content: { "application/json": { schema: apiErrorSchema } } } } as const;

@@ -23,6 +23,8 @@ export interface DirectConversationTransaction {
     conversation: DirectConversation;
     message: StoredMessage;
   } | null>;
+  /** Claims a sender-wide slot after all checks and returns authoritative database time. */
+  claimNewMessageSlot(senderId: string, limit: number): Promise<Date>;
   /** Creates a pair-unique conversation and first message plus change/outbox work in one transaction. */
   createConversationWithMessage(input: {
     conversationId: string;

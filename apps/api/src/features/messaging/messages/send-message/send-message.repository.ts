@@ -5,6 +5,7 @@ import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } 
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { claimNewMessageSlot } from "../../shared/new-message-quota";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export interface StoredIdempotentMessage {
@@ -21,6 +22,7 @@ export interface SendMessageTransaction {
   activateForFriendship(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
+  claimNewMessageSlot(senderId: string, limit: number): Promise<Date>;
   insertMessage(input: {
     id: string;
     conversationId: string;
@@ -80,6 +82,9 @@ class PostgresMessageTransaction implements SendMessageTransaction {
   }
   async findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null> {
     return findMessage(this.queryable, this.actorId, conversationId, messageId);
+  }
+  async claimNewMessageSlot(senderId: string, limit: number): Promise<Date> {
+    return claimNewMessageSlot(this.queryable, senderId, limit);
   }
   async insertMessage(input: Parameters<SendMessageTransaction["insertMessage"]>[0]): Promise<StoredMessage> {
     const [allocated] = await this.queryable
