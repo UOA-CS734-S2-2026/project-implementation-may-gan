@@ -16,6 +16,7 @@ import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/compose/media_compressor.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
+import 'package:dayli_mobile/compose/pending_capture.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
@@ -115,6 +116,19 @@ class MemoryUserCache implements SessionUserCache {
   Future<void> write(SessionUser user) async => value = user;
 }
 
+class MemoryPendingCaptureStore implements PendingCaptureStore {
+  PendingCapture? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<PendingCapture?> read() async => value;
+
+  @override
+  Future<void> write(PendingCapture capture) async => value = capture;
+}
+
 class MemoryDraftStore implements DraftStore {
   final drafts = <String, DailyPostDraft>{};
   int writes = 0;
@@ -144,17 +158,33 @@ class FakeMediaPicker implements MediaPicker {
   /// What [recoverLostCapture] returns once.
   DraftAttachment? lostCapture;
 
-  @override
-  Future<DraftAttachment?> pickPhoto() async => _next();
+  /// Runs while the camera or library is open, so a test can see what the app
+  /// recorded about the pick before the result came back.
+  void Function()? whileOpen;
 
   @override
-  Future<DraftAttachment?> pickPhotoOrVideo() async => _next();
+  Future<DraftAttachment?> pickPhoto() async {
+    whileOpen?.call();
+    return _next();
+  }
 
   @override
-  Future<CaptureOutcome> capturePhoto() async => _capture('image', 'jpg');
+  Future<DraftAttachment?> pickPhotoOrVideo() async {
+    whileOpen?.call();
+    return _next();
+  }
 
   @override
-  Future<CaptureOutcome> captureVideo() async => _capture('video', 'mp4');
+  Future<CaptureOutcome> capturePhoto() async {
+    whileOpen?.call();
+    return _capture('image', 'jpg');
+  }
+
+  @override
+  Future<CaptureOutcome> captureVideo() async {
+    whileOpen?.call();
+    return _capture('video', 'mp4');
+  }
 
   @override
   Future<DraftAttachment?> recoverLostCapture() async {
@@ -626,6 +656,15 @@ class TestHarness {
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
+  final pendingStore = MemoryPendingCaptureStore();
+
+  /// Files the app removed because no one could claim them.
+  final deletedFiles = <String>[];
+  late final pendingCaptures = PendingCaptures(
+    store: pendingStore,
+    deleteFile: (path) async => deletedFiles.add(path),
+    clock: () => DateTime.utc(2026, 9, 25, 3),
+  );
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
 
@@ -648,6 +687,7 @@ class TestHarness {
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
+    pendingCaptures: pendingCaptures,
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
     clock: () => DateTime.utc(2026, 9, 25, 3),

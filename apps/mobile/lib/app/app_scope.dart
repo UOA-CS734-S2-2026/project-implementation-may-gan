@@ -10,6 +10,7 @@ import '../auth/native_session.dart';
 import '../auth/session_controller.dart';
 import '../compose/media_compressor.dart';
 import '../compose/media_picker.dart';
+import '../compose/pending_capture.dart';
 import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
@@ -33,12 +34,14 @@ class AppServices {
     this.accountExports,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
+    PendingCaptures? pendingCaptures,
     this.mediaUploads,
     MediaCompressor? mediaCompressor,
     this.clock = DateTime.now,
   }) : messaging =
            messaging ?? MessagingController(const UnavailableMessagingClient()),
-       mediaCompressor = mediaCompressor ?? DeviceMediaCompressor();
+       mediaCompressor = mediaCompressor ?? DeviceMediaCompressor(),
+       pendingCaptures = pendingCaptures ?? PendingCaptures();
 
   final SessionController session;
   final PostingDayClient postingDays;
@@ -57,6 +60,10 @@ class AppServices {
   /// Null when this build has no Google client ID configured.
   final GoogleIdTokenProvider? google;
   final MediaPicker mediaPicker;
+
+  /// Which user and draft a camera or library pick belongs to, so a photo
+  /// recovered after Android ended the app only reaches its own composer.
+  final PendingCaptures pendingCaptures;
 
   /// Null keeps picked media on the device without uploading it.
   final MediaUploadClient? mediaUploads;
