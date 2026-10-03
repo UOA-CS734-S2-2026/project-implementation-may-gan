@@ -21,6 +21,8 @@ export interface ApiEnv {
   R2_BUCKET_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  /** Disposable loopback S3 fixture used only by isolated local E2E runs. */
+  R2_LOCAL_ENDPOINT?: string;
   /** Required in deployed delivery environments. Optional for DB-free and legacy test composition. */
   USER_REALTIME?: DurableObjectNamespace;
   /** Worker secret containing a Firebase service-account JSON document. */

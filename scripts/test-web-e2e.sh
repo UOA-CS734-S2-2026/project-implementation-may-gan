@@ -12,8 +12,11 @@ certificate="$temporary_dir/localhost.pem"
 key="$temporary_dir/localhost-key.pem"
 api_log="$temporary_dir/api.log"
 web_log="$temporary_dir/web.log"
+media_log="$temporary_dir/media.log"
+media_root="$temporary_dir/media-objects"
 api_pid=""
 web_pid=""
+media_pid=""
 
 find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
@@ -22,6 +25,7 @@ find_free_port() {
 postgres_port="$(find_free_port)"
 api_port="$(find_free_port)"
 web_port="$(find_free_port)"
+media_port="$(find_free_port)"
 api_origin="https://localhost:${api_port}"
 web_origin="https://localhost:${web_port}"
 export POSTGRES_PORT="$postgres_port"
@@ -46,13 +50,15 @@ stop_process() {
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  for pid in "$web_pid" "$api_pid"; do stop_process "$pid"; done
+  for pid in "$web_pid" "$api_pid" "$media_pid"; do stop_process "$pid"; done
   docker compose -p "$compose_project" -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
   if [[ "$status" -ne 0 ]]; then
     echo 'API log:' >&2
     [[ -f "$api_log" ]] && tail -n 100 "$api_log" >&2 || true
     echo 'Web log:' >&2
     [[ -f "$web_log" ]] && tail -n 100 "$web_log" >&2 || true
+    echo 'Media store log:' >&2
+    [[ -f "$media_log" ]] && tail -n 100 "$media_log" >&2 || true
   fi
   rm -rf "$temporary_dir"
   exit "$status"
@@ -108,6 +114,12 @@ LOCAL_TEST_POSTGRES_PORT="$postgres_port" \
   DATABASE_URL="postgresql://migrator:migrator@localhost:${postgres_port}/dayli_test" \
   pnpm db:migrate
 
+echo 'Starting disposable local media store'
+mkdir -p "$media_root"
+node "$repo_root/scripts/fixtures/local-s3-media-server.mjs" "$media_root" "$media_port" >"$media_log" 2>&1 &
+media_pid=$!
+wait_for_url "http://127.0.0.1:${media_port}/health" "$media_pid" 'Local media store'
+
 echo 'Starting isolated local API'
 (
   exec env \
@@ -120,7 +132,12 @@ echo 'Starting isolated local API'
       --persist-to "$temporary_dir/wrangler" --log-level warn \
       --var 'BETTER_AUTH_SECRET:e2e-only-secret-that-is-at-least-32-characters' \
       --var "BETTER_AUTH_BASE_URL:${api_origin}" \
-      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin},${web_origin}"
+      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin},${web_origin}" \
+      --var 'R2_ACCOUNT_ID:local-e2e' \
+      --var 'R2_BUCKET_NAME:dayli-media-e2e' \
+      --var 'R2_ACCESS_KEY_ID:local-e2e-access' \
+      --var 'R2_SECRET_ACCESS_KEY:local-e2e-secret-that-is-not-a-real-credential' \
+      --var "R2_LOCAL_ENDPOINT:http://127.0.0.1:${media_port}"
 ) >"$api_log" 2>&1 &
 api_pid=$!
 wait_for_url "${api_origin}/api/v1/health" "$api_pid" 'API'
@@ -139,4 +156,4 @@ wait_for_url "$web_origin" "$web_pid" 'Web application'
 echo 'Running Playwright browser journeys'
 # `pnpm run <script> -- <args>` passes the separator through to shell scripts.
 if [[ "${1:-}" == "--" ]]; then shift; fi
-E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" pnpm --filter @dayli/web exec playwright test "$@"
+E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" pnpm --filter @dayli/web exec playwright test "$@"
