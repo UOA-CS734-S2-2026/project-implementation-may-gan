@@ -1,5 +1,5 @@
 {
-  "id": "3c0a5a4f-dae4-4456-9d82-431cf81e4e6d",
+  "id": "7ee58924-8595-42a3-aaef-83f6f9b31547",
   "prevId": "05d15877-8e69-4b58-b58b-397a48f044f8",
   "version": "7",
   "dialect": "postgresql",
@@ -3400,7 +3400,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "post_comments_author_id_user_id_fk": {
@@ -3441,7 +3441,7 @@
             "post_id",
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3668,7 +3668,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "post_likes_user_id_user_id_fk": {

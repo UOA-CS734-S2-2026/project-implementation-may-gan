@@ -261,9 +261,10 @@ export const postRevisions = pgTable("post_revisions", {
 /**
  * One like per person per post. Access is checked against the post on every
  * read and write, so a like never outlives the liker's access in any view.
+ * Likes go with their post when Trash cleanup purges it.
  */
 export const postLikes = pgTable("post_likes", {
-  postId: text("post_id").notNull().references(() => posts.id),
+  postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => user.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
@@ -277,11 +278,12 @@ export const postLikes = pgTable("post_likes", {
  * Comments and one level of replies. A reply's parent is a comment on the same
  * post, enforced by the composite key. clientCommentId makes a retried create
  * return the comment it already made. Deletion is a soft delete that also
- * hides the replies of a deleted top-level comment.
+ * hides the replies of a deleted top-level comment. Comments go with their
+ * post when Trash cleanup purges it.
  */
 export const postComments = pgTable("post_comments", {
   id: text("id").primaryKey(),
-  postId: text("post_id").notNull().references(() => posts.id),
+  postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
   authorId: text("author_id").notNull().references(() => user.id),
   parentCommentId: text("parent_comment_id"),
   clientCommentId: text("client_comment_id").notNull(),
@@ -297,7 +299,7 @@ export const postComments = pgTable("post_comments", {
     name: "post_comments_parent_same_post_fk",
     columns: [table.postId, table.parentCommentId],
     foreignColumns: [table.postId, table.id],
-  }),
+  }).onDelete("cascade"),
   index("post_comments_post_created_idx").on(table.postId, table.createdAt, table.id),
   index("post_comments_author_id_idx").on(table.authorId),
   check("post_comments_not_own_parent_check", sql`${table.parentCommentId} is null or ${table.parentCommentId} <> ${table.id}`),

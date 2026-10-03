@@ -26,7 +26,7 @@ Likes and comments show a public username, so every interaction route also uses 
 
 ## Deletion and retention
 
-Deleting a post hides its likes and comments because every route checks the post first. Like the post itself, they stay in the database until #163 purges deleted posts. Account deletion (#161) will need to remove or detach a deleted account's likes and comments; their foreign keys use `NO ACTION`, like the other user references.
+Moving a post to Trash hides its likes and comments, because every route checks the post first. When Trash cleanup purges the post, its likes and comments go with it: `post_likes.post_id`, `post_comments.post_id`, and the reply-to-parent key all cascade on delete, so `complete_post_trash_cleanup` needs no change. Account deletion (#161) will need to remove or detach a deleted account's own likes and comments; their user references use `NO ACTION`, like the other user references.
 
 ## Tests
 
