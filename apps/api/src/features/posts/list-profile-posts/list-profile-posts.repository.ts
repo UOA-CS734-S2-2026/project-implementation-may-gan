@@ -56,8 +56,8 @@ async function findProfileOwner(database: DayliDatabase, viewerId: string, usern
 /**
  * Lists one person's posts, newest Auckland day first, through the shared
  * visibility predicate. The owner sees every post, including solo and
- * unreleased ones; anyone else sees released `friends` posts only while an
- * unblocked, active friendship exists. The predicate is applied before the
+ * unreleased ones. Active friends see released `friends` posts, as does anyone
+ * for a public account. The predicate is applied before the
  * keyset limit, so a hidden post never leaves a hole in, or leaks into, a page.
  */
 export function createPostgresProfilePostsRepository(database: DayliDatabase): ProfilePostsRepository {
@@ -90,7 +90,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))
         .where(and(
           eq(posts.authorId, authorId),
-          buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "list" }),
+          buildDrizzlePostVisibilityFilter(database, { viewer: { userId: viewerId }, now, action: "profile" }),
           isNotNull(user.username),
           afterPostCursor(cursor),
         ))

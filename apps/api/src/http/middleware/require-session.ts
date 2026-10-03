@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import { apiErrorResponse } from "../api-error";
-import type { AuthenticatedActor, AuthenticatedApiEnv } from "../authenticated-actor";
+import type { AuthenticatedActor, AuthenticatedApiEnv, OptionalAuthenticatedApiEnv } from "../authenticated-actor";
 import { rateLimitedResponse, unavailableResponse, type ActorRateLimiter } from "./rate-limit";
 
 /** Resolves a Better Auth cookie or bearer credential to a server-verified actor. */
@@ -58,7 +58,7 @@ export function createRequireSession(
 export function createOptionalSession(
   resolveSession: ResolveSession,
   rateLimiter?: ActorRateLimiter,
-): MiddlewareHandler<AuthenticatedApiEnv> {
+): MiddlewareHandler<OptionalAuthenticatedApiEnv> {
   return async (context, next) => {
     context.header("Cache-Control", "no-store");
     const existingActor = context.get("actor");
@@ -70,7 +70,10 @@ export function createOptionalSession(
       }
       return next();
     }
-    if (!hasSessionCredential(context.req.raw)) return next();
+    if (!hasSessionCredential(context.req.raw)) {
+      context.set("actor", null);
+      return next();
+    }
 
     let actor: AuthenticatedActor | null | undefined;
     try {

@@ -68,7 +68,12 @@ function requireLocalTestUrl(value: string): string {
         expect((await findVisiblePost(transaction, postIds[1], anonymous))?.id).toBe(postIds[1]);
         expect(await findVisiblePost(transaction, postIds[2], anonymous)).toBeNull();
         expect(await findVisiblePost(transaction, postIds[3], anonymous)).toBeNull();
-        // Public detail access never widens a generic list query.
+        const publicProfile = { viewer: { userId: null }, now, action: "profile" as const };
+        const publicFirstPage = await listVisiblePosts(transaction, publicProfile, { limit: 1 });
+        const publicSecondPage = await listVisiblePosts(transaction, publicProfile, { limit: 1, offset: 1 });
+        expect(publicFirstPage.map(({ post }) => post.id)).toEqual([postIds[1]]);
+        expect(publicSecondPage.map(({ post }) => post.id)).toEqual([postIds[0]]);
+        // Public archive access never widens a generic feed list query.
         expect(await listVisiblePosts(transaction, { viewer: { userId: null }, now }, { limit: 10 })).toEqual([]);
 
         await transaction.insert(schema.relationshipBlocks).values({
@@ -81,6 +86,7 @@ function requireLocalTestUrl(value: string): string {
 
         await transaction.update(schema.user).set({ profileVisibility: "private" }).where(eq(schema.user.id, authorId));
         expect(await findVisiblePost(transaction, postIds[1], anonymous)).toBeNull();
+        expect(await listVisiblePosts(transaction, publicProfile, { limit: 10 })).toEqual([]);
         // Existing active-friend access is unchanged for private authors.
         expect((await findVisiblePost(transaction, postIds[1], input))?.id).toBe(postIds[1]);
         await transaction.update(schema.user).set({ profileVisibility: "public" }).where(eq(schema.user.id, authorId));

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { describe, expect, it, vi } from "vitest";
-import type { AuthenticatedApiEnv } from "../authenticated-actor";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import type { AuthenticatedActor, AuthenticatedApiEnv, OptionalAuthenticatedApiEnv } from "../authenticated-actor";
 import { createOptionalSession, createRequireSession } from "./require-session";
 
 function createApp(resolveSession: Parameters<typeof createRequireSession>[0]) {
@@ -56,8 +56,13 @@ describe("createRequireSession", () => {
 });
 
 describe("createOptionalSession", () => {
+  it("types the actor as nullable in optional-session routes", () => {
+    expectTypeOf<OptionalAuthenticatedApiEnv["Variables"]["actor"]>()
+      .toEqualTypeOf<AuthenticatedActor | null>();
+  });
+
   function createOptionalApp(resolveSession: Parameters<typeof createOptionalSession>[0]) {
-    const app = new Hono<AuthenticatedApiEnv>();
+    const app = new Hono<OptionalAuthenticatedApiEnv>();
     const operation = vi.fn((actor: string | null) => ({ actor }));
     app.use("/public-read", createOptionalSession(resolveSession));
     app.get("/public-read", (context) => context.json(operation(context.get("actor")?.userId ?? null)));

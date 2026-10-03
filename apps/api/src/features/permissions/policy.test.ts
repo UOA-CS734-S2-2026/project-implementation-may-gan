@@ -39,9 +39,11 @@ describe("post permission policy", () => {
     expect(decide(post, viewer).allowed).toBe(expected);
   });
 
-  it("keeps non-detail reads scoped and export author-only", () => {
+  it("opens profile archives without widening generic lists, revisions, or exports", () => {
     expect(decide({ friendshipActive: true }, "bob", "revision").allowed).toBe(true);
     expect(decide({}, "bob", "revision").allowed).toBe(false);
+    expect(decide({}, null, "profile").allowed).toBe(true);
+    expect(decide({ authorProfileVisibility: "private" }, null, "profile").allowed).toBe(false);
     expect(decide({}, null, "list").allowed).toBe(false);
     expect(decide({ friendshipActive: true }, "bob", "export").allowed).toBe(false);
     expect(decide({}, "alice", "export").allowed).toBe(true);
