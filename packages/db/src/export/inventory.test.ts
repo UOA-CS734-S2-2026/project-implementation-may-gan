@@ -1,4 +1,4 @@
-import { buildOwnedMediaObjectKey } from "@dayli/contracts";
+import { buildOwnedMediaObjectKey, exportSourceKinds } from "@dayli/contracts";
 import { describe, expect, it } from "vitest";
 import { currentExportJsonColumns, currentExportSchemaColumns, exportDataInventory, exportJsonKeyFamilies, exportObjectNamespaces, validateExportInventory, validateExportJsonFamilies } from "./inventory";
 
@@ -67,6 +67,20 @@ describe("explicit export data inventory", () => {
     };
     expect(validateExportJsonFamilies(currentExportJsonColumns(), withoutExtraKey))
       .toEqual([expect.stringContaining("extra-key fixtures")]);
+  });
+
+  it("maps every archive source kind to reviewed included tables", () => {
+    const sources = {
+      profile: ["user"], terms: ["terms_acceptances"], age: ["age_declarations"],
+      posts: ["posts"], revisions: ["post_revisions"], notes: ["tomorrow_notes"], messages: ["messages"],
+    } as const;
+    expect(Object.keys(sources)).toEqual([...exportSourceKinds]);
+    for (const tables of Object.values(sources)) {
+      for (const table of tables) {
+        expect(exportDataInventory[table]!.included.length).toBeGreaterThan(0);
+        expect(exportDataInventory[table]!.access).not.toMatch(/^excluded_/);
+      }
+    }
   });
 
   it("keeps authentication and push secrets out of the inventory", () => {
