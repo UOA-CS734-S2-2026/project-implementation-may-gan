@@ -40,6 +40,12 @@ class _ComposerScreenState extends State<ComposerScreen> {
   String? _captureNotice;
   bool _settingsCanFix = false;
 
+  String? _userId;
+
+  /// Settles what the system handed back after Android ended the app. A pick
+  /// waits for it, so a new record never lands on top of an unsettled one.
+  Future<void> _recovery = Future.value();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -47,6 +53,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final services = AppScope.of(context);
     final userId = services.session.user?.id;
     if (userId == null) return;
+    _userId = userId;
     _controller = ComposerController(
       userId: userId,
       postingDays: services.postingDays,
@@ -65,7 +72,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    unawaited(_controller!.load().then((_) => _recoverLostCapture()));
+    _recovery = _controller!.load().then((_) => _recoverLostCapture());
   }
 
   /// Copies a newly loaded draft into the text fields once, without fighting
@@ -107,15 +114,31 @@ class _ComposerScreenState extends State<ComposerScreen> {
       _captureNotice = null;
       _settingsCanFix = false;
     });
-    switch (source) {
-      case _MediaSource.photo:
-        await _capture(controller, slot, (picker) => picker.capturePhoto());
-      case _MediaSource.video:
-        await _capture(controller, slot, (picker) => picker.captureVideo());
-      case _MediaSource.library:
-        await _pick(controller, slot);
+    await _recovery;
+    final draft = controller.draft;
+    final userId = _userId;
+    if (!mounted || draft == null || userId == null) return;
+
+    // Android may end the app while the camera or library is open. Who started
+    // this pick is written down first, so that only they can get its result.
+    final captures = AppScope.of(context).pendingCaptures;
+    await captures.begin(userId: userId, draftKey: _draftKey(draft));
+    try {
+      switch (source) {
+        case _MediaSource.photo:
+          await _capture(controller, slot, (picker) => picker.capturePhoto());
+        case _MediaSource.video:
+          await _capture(controller, slot, (picker) => picker.captureVideo());
+        case _MediaSource.library:
+          await _pick(controller, slot);
+      }
+    } finally {
+      await captures.finish();
     }
   }
+
+  static String _draftKey(DailyPostDraft draft) =>
+      '${draft.localDate}:${draft.idempotencyKey}';
 
   Future<void> _pick(ComposerController controller, int slot) async {
     final picker = AppScope.of(context).mediaPicker;
@@ -160,23 +183,37 @@ class _ComposerScreenState extends State<ComposerScreen> {
     }
   }
 
-  /// Android can end the app while the camera is open. The photo or video taken
-  /// is waiting for it the next time the composer opens.
+  /// Android can end the app while the camera or library is open, and then hands
+  /// what the system finished to whoever asks first. That is the same for every
+  /// account on the phone, so it is only added here when the user and the draft
+  /// that started the pick are the ones open now. Otherwise it is kept for its
+  /// owner or removed, and never shown to this user.
   Future<void> _recoverLostCapture() async {
     if (!mounted) return;
     final controller = _controller;
-    final recovered = await AppScope.of(
-      context,
-    ).mediaPicker.recoverLostCapture();
-    final draft = controller?.draft;
-    if (!mounted || controller == null || draft == null || recovered == null) {
-      return;
+    final userId = _userId;
+    if (controller == null || userId == null) return;
+    final services = AppScope.of(context);
+    try {
+      // Always asked, so what the system holds is settled rather than left
+      // for a later composer, possibly another user's.
+      final lost = await services.mediaPicker.recoverLostCapture();
+      final draft = controller.draft;
+      final recovered = await services.pendingCaptures.recover(
+        userId: userId,
+        // A draft that didn't load can't be anyone's.
+        draftKey: draft == null ? '' : _draftKey(draft),
+        lost: lost,
+      );
+      if (!mounted || draft == null || recovered == null) return;
+      final known = draft.attachments.any(
+        (attachment) => attachment.localPath == recovered.localPath,
+      );
+      if (known || !canAddAttachment(draft.attachments)) return;
+      _attach(controller, draft.attachments.length, recovered);
+    } catch (_) {
+      // Recovery is a courtesy; the composer works without it.
     }
-    final known = draft.attachments.any(
-      (attachment) => attachment.localPath == recovered.localPath,
-    );
-    if (known || !canAddAttachment(draft.attachments)) return;
-    _attach(controller, draft.attachments.length, recovered);
   }
 
   void _attach(

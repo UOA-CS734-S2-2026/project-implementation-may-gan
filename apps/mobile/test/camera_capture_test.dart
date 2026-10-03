@@ -1,6 +1,7 @@
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
+import 'package:dayli_mobile/compose/pending_capture.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,6 +92,37 @@ Future<void> _post(WidgetTester tester) async {
 
 String _status(WidgetTester tester) =>
     tester.widget<Text>(find.byKey(const Key('composer.media.status'))).data!;
+
+/// Today's saved draft for the signed-in test user, whose identity is
+/// `2026-09-25:saved-key`.
+void _seedDraft(TestHarness harness) {
+  harness.drafts.drafts['user-1'] = DailyPostDraft(
+    userId: 'user-1',
+    localDate: '2026-09-25',
+    promptId: 'prompt-09-25',
+    promptText: 'What made you smile today?',
+    idempotencyKey: 'saved-key',
+    updatedAt: DateTime.utc(2026, 9, 25),
+  );
+}
+
+/// A pick the app recorded before Android ended it. [userId] and [draftKey]
+/// default to the signed-in test user's seeded draft.
+void _recordPick(
+  TestHarness harness, {
+  String userId = 'user-1',
+  String draftKey = '2026-09-25:saved-key',
+  DateTime? startedAt,
+}) {
+  harness.pendingStore.value = PendingCapture(
+    userId: userId,
+    draftKey: draftKey,
+    startedAt: startedAt ?? DateTime.utc(2026, 9, 25, 2),
+  );
+}
+
+DraftAttachment _lost(String path) =>
+    DraftAttachment(localPath: path, mediaType: 'image');
 
 void main() {
   group('the source sheet', () {
@@ -304,13 +336,67 @@ void main() {
     });
   });
 
-  group('after Android ended the app mid-capture', () {
-    testWidgets('adds the photo that was being taken', (tester) async {
+  group('who a pick belongs to', () {
+    testWidgets('is recorded before the camera opens and cleared after', (
+      tester,
+    ) async {
       final harness = TestHarness();
-      harness.mediaPicker.lostCapture = DraftAttachment(
-        localPath: '/camera/lost.jpg',
-        mediaType: 'image',
-      );
+      _seedDraft(harness);
+      PendingCapture? whileOpen;
+      harness.mediaPicker.whileOpen = () =>
+          whileOpen = harness.pendingStore.value;
+      await _openComposer(tester, harness);
+      await _openSheet(tester, 0);
+      await _choose(tester, _photoOption);
+
+      expect(whileOpen?.userId, 'user-1');
+      expect(whileOpen?.draftKey, '2026-09-25:saved-key');
+      expect(harness.pendingStore.value, isNull);
+    });
+
+    testWidgets('is recorded for the library too, since it can be killed too', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      PendingCapture? whileOpen;
+      harness.mediaPicker.whileOpen = () =>
+          whileOpen = harness.pendingStore.value;
+      await _openComposer(tester, harness);
+      await addFromLibrary(tester, 0);
+
+      expect(whileOpen?.userId, 'user-1');
+      expect(harness.pendingStore.value, isNull);
+    });
+
+    testWidgets('is cleared when the camera is closed or refused', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      harness.mediaPicker.captureOutcomes.addAll([
+        const CaptureCancelled(),
+        const CaptureFailed(CaptureFailure.denied),
+      ]);
+      await _openComposer(tester, harness);
+      await _openSheet(tester, 0);
+      await _choose(tester, _photoOption);
+      expect(harness.pendingStore.value, isNull);
+
+      await _openSheet(tester, 0);
+      await _choose(tester, _photoOption);
+      expect(harness.pendingStore.value, isNull);
+    });
+  });
+
+  group('after Android ended the app mid-capture', () {
+    testWidgets('adds the photo to the user and draft that started it', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      _recordPick(harness);
+      harness.mediaPicker.lostCapture = _lost('/camera/lost.jpg');
       await _openComposer(tester, harness);
       await tester.pumpAndSettle();
 
@@ -319,10 +405,82 @@ void main() {
         harness.mediaCompressor.compressed.single.localPath,
         '/camera/lost.jpg',
       );
+      expect(harness.pendingStore.value, isNull);
+    });
+
+    testWidgets('never adds another account\'s photo to this draft', (
+      tester,
+    ) async {
+      // user-9 started the capture and the app was killed; user-1 signs in and
+      // opens a composer first. Nothing may reach user-1's draft or account.
+      final harness = TestHarness();
+      _seedDraft(harness);
+      _recordPick(harness, userId: 'user-9');
+      harness.mediaPicker.lostCapture = _lost('/camera/user-9.jpg');
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(_status(tester), 'Optional. Add up to 3 photos, or 1 video.');
+      expect(harness.mediaCompressor.compressed, isEmpty);
+      expect(harness.mediaUploads.completed, isEmpty);
+      expect(harness.drafts.drafts['user-1']?.attachments, isEmpty);
+      // Kept for its owner, not deleted, and still theirs.
+      expect(harness.deletedFiles, isEmpty);
+      expect(harness.pendingStore.value?.userId, 'user-9');
+      expect(
+        harness.pendingStore.value?.recovered?.localPath,
+        '/camera/user-9.jpg',
+      );
+    });
+
+    testWidgets('never adds a photo started for a different draft', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      _recordPick(harness, draftKey: '2026-09-24:yesterday');
+      harness.mediaPicker.lostCapture = _lost('/camera/yesterday.jpg');
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(_status(tester), 'Optional. Add up to 3 photos, or 1 video.');
+      expect(harness.mediaCompressor.compressed, isEmpty);
+      expect(
+        harness.pendingStore.value?.recovered?.localPath,
+        '/camera/yesterday.jpg',
+      );
+    });
+
+    testWidgets('removes a photo nobody recorded starting', (tester) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      harness.mediaPicker.lostCapture = _lost('/camera/orphan.jpg');
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(_status(tester), 'Optional. Add up to 3 photos, or 1 video.');
+      expect(harness.mediaCompressor.compressed, isEmpty);
+      expect(harness.deletedFiles, ['/camera/orphan.jpg']);
+    });
+
+    testWidgets('removes a photo whose record is too old to trust', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      _seedDraft(harness);
+      _recordPick(harness, startedAt: DateTime.utc(2026, 9, 23, 3));
+      harness.mediaPicker.lostCapture = _lost('/camera/old.jpg');
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+
+      expect(harness.mediaCompressor.compressed, isEmpty);
+      expect(harness.deletedFiles, ['/camera/old.jpg']);
+      expect(harness.pendingStore.value, isNull);
     });
 
     testWidgets('does not add a photo the draft already has', (tester) async {
       final harness = TestHarness();
+      _seedDraft(harness);
       await _openComposer(tester, harness);
       await addFromLibrary(tester, 0);
       expect(_status(tester), contains('1/3 added'));
@@ -330,10 +488,8 @@ void main() {
       // Leave the composer and open it again, which asks the platform again.
       await tester.tap(find.byKey(const Key('composer.close')));
       await tester.pumpAndSettle();
-      harness.mediaPicker.lostCapture = DraftAttachment(
-        localPath: '/photos/0.jpg',
-        mediaType: 'image',
-      );
+      _recordPick(harness);
+      harness.mediaPicker.lostCapture = _lost('/photos/0.jpg');
       await tester.tap(find.byKey(const Key('shell.newDayli')));
       await tester.pumpAndSettle();
 
