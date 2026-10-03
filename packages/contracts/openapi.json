@@ -1483,7 +1483,12 @@
           },
           "edited": {
             "type": "boolean",
-            "description": "True when the author has edited the post since it was accepted."
+            "description": "True when the caller can read an earlier version of the post."
+          },
+          "revisionCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends."
           },
           "viewerIsAuthor": {
             "type": "boolean"
@@ -1519,6 +1524,7 @@
           "acceptedAt",
           "releasedAt",
           "edited",
+          "revisionCount",
           "viewerIsAuthor",
           "media",
           "voiceMemo"
@@ -1627,6 +1633,103 @@
           "kind"
         ],
         "description": "A restricted response has only kind and username. An archive response has kind and every ProfilePostsPage field."
+      },
+      "UpdatePostRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevisionCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The `revisionCount` of the post the author last read. If another edit has been saved since, the request is a 409.",
+            "example": 0
+          },
+          "reflectiveAnswer": {
+            "type": "string",
+            "example": "Walked to the harbour after class, then home along the beach."
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null removes the caption.",
+            "example": "Sunset at the wharf"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "example": 8
+          },
+          "audience": {
+            "$ref": "#/components/schemas/PostAudience"
+          }
+        },
+        "required": [
+          "expectedRevisionCount",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience"
+        ],
+        "additionalProperties": false,
+        "description": "Every editable field, as the post should read after the edit. Only values that differ are saved, and only then is a revision stored. The prompt, day, media and tomorrow note cannot be edited."
+      },
+      "PostRevisionsPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostRevision"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "PostRevision": {
+        "type": "object",
+        "properties": {
+          "revisionNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1 is the version first posted."
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "$ref": "#/components/schemas/PostAudience"
+          },
+          "replacedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "revisionNumber",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience",
+          "replacedAt"
+        ],
+        "description": "An earlier version of a post, which an edit replaced at `replacedAt`. The prompt, day and media are the same as the current post."
       },
       "PendingRequestPage": {
         "type": "object",
@@ -3801,7 +3904,7 @@
             }
           },
           "409": {
-            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
+            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, the post from an earlier submission with this key is in Trash (`POST_TRASHED`), an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4291,6 +4394,130 @@
           },
           "503": {
             "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.update",
+        "summary": "Edit a post",
+        "description": "Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The post as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist, was deleted, or belongs to someone else. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another edit was saved after the caller read the post. Read it again and reapply the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The post ID or a field is invalid, or a field is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4878,6 +5105,135 @@
           },
           "503": {
             "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/revisions": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listRevisions",
+        "summary": "List a post's earlier versions",
+        "description": "Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of earlier versions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostRevisionsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The post ID or query contains invalid values, including an unrecognised cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

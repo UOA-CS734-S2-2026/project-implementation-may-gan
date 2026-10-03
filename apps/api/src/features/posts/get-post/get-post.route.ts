@@ -10,8 +10,8 @@ import {
   signPostMedia,
   type SignMediaDownload,
 } from "../shared/post-media";
-import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "./get-post.contract";
-import type { PostDetailRepository } from "./get-post.repository";
+import { getPostErrorResponses, postDetailSchema, postIdParamsSchema } from "../shared/post-detail.contract";
+import type { PostDetailRepository } from "../shared/post-detail.repository";
 
 export interface GetPostRouteDependencies {
   /** Resolves the Better Auth cookie or bearer session; never trusts a request-supplied user. */
@@ -44,7 +44,7 @@ const getPostRoute = createRoute({
 });
 
 export function registerGetPostRoute(app: OpenAPIHono<OptionalAuthenticatedApiEnv>, dependencies: GetPostRouteDependencies) {
-  app.use("/api/v1/posts/:postId", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
+  app.on("GET", "/api/v1/posts/:postId", createOptionalSession(dependencies.resolveSession, dependencies.rateLimiter));
   app.openapi(getPostRoute, async (context) => {
     context.header("Cache-Control", "no-store");
     if (!dependencies.repository) {

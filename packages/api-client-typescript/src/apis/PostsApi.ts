@@ -44,6 +44,11 @@ import {
     PostMediaToJSON,
 } from '../models/PostMedia';
 import {
+    type PostRevisionsPage,
+    PostRevisionsPageFromJSON,
+    PostRevisionsPageToJSON,
+} from '../models/PostRevisionsPage';
+import {
     type PostVoiceMemo,
     PostVoiceMemoFromJSON,
     PostVoiceMemoToJSON,
@@ -68,6 +73,11 @@ import {
     TrashedPostStatusFromJSON,
     TrashedPostStatusToJSON,
 } from '../models/TrashedPostStatus';
+import {
+    type UpdatePostRequest,
+    UpdatePostRequestFromJSON,
+    UpdatePostRequestToJSON,
+} from '../models/UpdatePostRequest';
 
 export interface PostsCreateRequest {
     /**
@@ -149,6 +159,21 @@ export interface PostsListProfilePostsRequest {
     limit?: number;
 }
 
+export interface PostsListRevisionsRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
 export interface PostsRestoreRequest {
     /**
      *
@@ -161,6 +186,17 @@ export interface PostsTrashRequest {
      *
      */
     postId: string;
+}
+
+export interface PostsUpdateRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     *
+     */
+    updatePostRequest: UpdatePostRequest;
 }
 
 /**
@@ -646,6 +682,69 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for postsListRevisions without sending the request
+     */
+    async postsListRevisionsRequestOpts(requestParameters: PostsListRevisionsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsListRevisions().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/revisions`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+     * List a post\'s earlier versions
+     */
+    async postsListRevisionsRaw(requestParameters: PostsListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostRevisionsPage>> {
+        const requestOptions = await this.postsListRevisionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostRevisionsPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+     * List a post\'s earlier versions
+     */
+    async postsListRevisions(requestParameters: PostsListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostRevisionsPage> {
+        const response = await this.postsListRevisionsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for postsListTrash without sending the request
      */
     async postsListTrashRequestOpts(): Promise<runtime.RequestOpts> {
@@ -793,6 +892,71 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsTrash(requestParameters: PostsTrashRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TrashedPostStatus> {
         const response = await this.postsTrashRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsUpdate without sending the request
+     */
+    async postsUpdateRequestOpts(requestParameters: PostsUpdateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsUpdate().'
+            );
+        }
+
+        if (requestParameters['updatePostRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updatePostRequest',
+                'Required parameter "updatePostRequest" was null or undefined when calling postsUpdate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdatePostRequestToJSON(requestParameters['updatePostRequest']),
+        };
+    }
+
+    /**
+     * Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+     * Edit a post
+     */
+    async postsUpdateRaw(requestParameters: PostsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostDetail>> {
+        const requestOptions = await this.postsUpdateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+     * Edit a post
+     */
+    async postsUpdate(requestParameters: PostsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
+        const response = await this.postsUpdateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

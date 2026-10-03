@@ -21,6 +21,7 @@ Map<String, dynamic> _postDetail(Map<String, dynamic> extra) => {
   'acceptedAt': '2026-09-25T03:00:00.000Z',
   'releasedAt': '2026-09-25T12:00:00.000Z',
   'edited': false,
+  'revisionCount': 0,
   'viewerIsAuthor': false,
   'media': <Object>[],
   'voiceMemo': null,

@@ -1,4 +1,4 @@
-import { and, eq, exists, isNotNull, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter, findPrivatelyVisiblePostMedia } from "../../permissions";
@@ -7,8 +7,9 @@ import {
   readAttachedMedia,
   type PostVoiceMemoRef,
   type PostMediaRef,
-} from "../shared/post-media";
-import type { PostDetail } from "./get-post.contract";
+} from "./post-media";
+import { visibleRevisions } from "./post-revisions";
+import type { PostDetail } from "./post-detail.contract";
 
 /** The post with its media not yet signed; the route signs it for the response. */
 export type PostDetailRecord = Omit<PostDetail, "media" | "voiceMemo"> & {
@@ -48,12 +49,6 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
           audience: posts.audience,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
-          edited: exists(
-            database
-              .select({ revisionId: postRevisions.id })
-              .from(postRevisions)
-              .where(eq(postRevisions.postId, posts.id)),
-          ).mapWith(Boolean),
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))
@@ -66,6 +61,12 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         .limit(1);
       if (!row) return null;
       // Read only after the visibility filter allowed the post.
+      const viewerIsAuthor = row.authorId === viewerId;
+      const [revisions] = await database
+        .select({ count: count() })
+        .from(postRevisions)
+        .where(visibleRevisions(row.id, viewerIsAuthor));
+      const revisionCount = revisions?.count ?? 0;
       const media = (await readAttachedMedia(database, [row.id])).get(row.id) ?? [];
       const voiceMemo = await readAttachedVoiceMemo(database, row.id);
       const attachedMediaId = media[0]?.id ?? voiceMemo?.id;
@@ -86,8 +87,9 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         audience: row.audience,
         acceptedAt: row.acceptedAt.toISOString(),
         releasedAt: row.releasedAt.toISOString(),
-        edited: row.edited,
-        viewerIsAuthor: row.authorId === viewerId,
+        edited: revisionCount > 0,
+        revisionCount,
+        viewerIsAuthor,
         media,
         voiceMemo,
         publicMediaDelivery,

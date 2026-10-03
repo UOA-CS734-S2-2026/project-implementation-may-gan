@@ -31,7 +31,10 @@ export const postDetailSchema = z
     audience: z.enum(["solo", "friends"]),
     acceptedAt: utcTimestampSchema,
     releasedAt: utcTimestampSchema,
-    edited: z.boolean().openapi({ description: "True when the author has edited the post since it was accepted." }),
+    edited: z.boolean().openapi({ description: "True when the caller can read an earlier version of the post." }),
+    revisionCount: z.number().int().min(0).openapi({
+      description: "Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends.",
+    }),
     viewerIsAuthor: z.boolean(),
     media: z.array(postMediaSchema).openapi({
       description: "Attached photos or video in display order, each with a private download URL that expires after 5 minutes.",

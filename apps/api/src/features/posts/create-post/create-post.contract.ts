@@ -11,34 +11,7 @@ import {
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import { nullMember } from "../shared/post-media.contract";
-
-/**
- * Mirrors DAILY_POST_CONTENT_LIMITS in @dayli/db. Contracts may not import the
- * database package, and the database CHECK constraints remain authoritative.
- */
-export const DAILY_POST_LIMITS = {
-  ratingMin: 1,
-  ratingMax: 10,
-  reflectiveAnswerMaxCodePoints: 4_000,
-  captionMaxCodePoints: 1_000,
-  tomorrowNoteMaxCodePoints: 1_000,
-  idempotencyKeyMaxLength: 255,
-} as const;
-
-function codePoints(value: string): number {
-  return Array.from(value).length;
-}
-
-/** Trimmed, non-empty text counted in Unicode code points, as the database counts it. */
-function boundedText(maximum: number) {
-  return z
-    .string()
-    .refine((value) => value.trim().length > 0, { message: "Must not be blank." })
-    .refine((value) => value === value.trim(), { message: "Must not have leading or trailing whitespace." })
-    .refine((value) => codePoints(value) <= maximum, { message: `Must be at most ${maximum} characters.` });
-}
-
-export const postAudienceSchema = z.enum(["solo", "friends"]).openapi("PostAudience");
+import { boundedText, DAILY_POST_LIMITS, postAudienceSchema } from "../shared/post-content.contract";
 
 export const createDailyPostRequestSchema = z
   .object({
@@ -150,7 +123,7 @@ export const createDailyPostErrorResponses = {
     content: { "application/json": { schema: apiErrorSchema } },
   },
   409: {
-    description: "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
+    description: "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, the post from an earlier submission with this key is in Trash (`POST_TRASHED`), an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   422: {
