@@ -1,0 +1,23 @@
+{
+  "title": "Messaging",
+  "pages": [
+    "listMessages",
+    "sendMessage",
+    "getMessage",
+    "editMessage",
+    "unsendMessage",
+    "removeMessageReaction",
+    "setMessageReaction",
+    "createDirectConversation",
+    "findDirectConversation",
+    "listConversations",
+    "getConversation",
+    "getMessagingUnread",
+    "resolveMessageRequest",
+    "markConversationRead",
+    "listConversationChanges",
+    "createRealtimeTicket",
+    "unregisterPushDevice",
+    "registerPushDevice"
+  ]
+}
