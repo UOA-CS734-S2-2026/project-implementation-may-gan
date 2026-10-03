@@ -31,6 +31,11 @@ function fixture(value: string, role: string): string {
   const otherPost = `source-other-post-${nonce}`;
   const revision = `source-revision-${nonce}`;
   const attachment = `source-attachment-${nonce}`;
+  const liveMedia = `source-live-media-${nonce}`;
+  const foreignKeyMedia = `source-foreign-key-media-${nonce}`;
+  const liveReservation = `source-live-reservation-${nonce}`;
+  const foreignKeyReservation = `source-foreign-key-reservation-${nonce}`;
+  const avatarReservation = `source-avatar-reservation-${nonce}`;
   const note = `source-note-${nonce}`;
   const authored = `source-authored-${nonce}`;
   const received = `source-received-${nonce}`;
@@ -57,6 +62,19 @@ function fixture(value: string, role: string): string {
       (${otherPost}, ${peer}, '2026-10-02', 'prompt-10-02', 'Peer private journal', 5, 'solo', now() - interval '2 days', now() - interval '47 hours', null, null, null)`;
     await migrator`insert into public.post_media (id, post_id, attachment_order, detached_at)
       values (${attachment}, ${post}, 0, now() - interval '1 day')`;
+    await migrator`insert into public.media_reservation
+      (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
+      values (${liveReservation}, ${owner}, ${`media/${owner}/${liveReservation}`}, 'audio/mp4', 512,
+        'validated', now() - interval '1 day', now() + interval '1 day'),
+        (${foreignKeyReservation}, ${owner}, ${`media/${peer}/${foreignKeyReservation}`}, 'image/jpeg', 300,
+        'validated', now() - interval '1 day', now() + interval '1 day'),
+        (${avatarReservation}, ${owner}, ${`media/${owner}/${avatarReservation}`}, 'image/jpeg', 256,
+        'validated', now() - interval '1 day', now() + interval '1 day')`;
+    await migrator`insert into public.post_media (id, post_id, attachment_order, reservation_id, accepted_at)
+      values (${liveMedia}, ${restorable}, 0, ${liveReservation}, now() - interval '1 day'),
+        (${foreignKeyMedia}, ${post}, 1, ${foreignKeyReservation}, now() - interval '1 day')`;
+    await migrator`insert into public.profile_avatars (user_id, reservation_id, set_at)
+      values (${owner}, ${avatarReservation}, now() - interval '1 day')`;
     await migrator`insert into public.post_revisions
       (id, post_id, revision_number, previous_reflective_answer, previous_rating,
         previous_audience, previous_prompt_id, previous_attachment_refs, created_at)
@@ -92,7 +110,9 @@ function fixture(value: string, role: string): string {
       await migrator`delete from public.conversations where id = ${conversation}`;
       await migrator`delete from public.tomorrow_notes where id = ${note}`;
       await migrator`delete from public.post_revisions where id = ${revision}`;
-      await migrator`delete from public.post_media where id = ${attachment}`;
+      await migrator`delete from public.profile_avatars where user_id = ${owner}`;
+      await migrator`delete from public.post_media where id in (${attachment}, ${liveMedia}, ${foreignKeyMedia})`;
+      await migrator`delete from public.media_reservation where id in (${liveReservation}, ${foreignKeyReservation}, ${avatarReservation})`;
       await migrator`delete from public.posts where id in (${post}, ${restorable}, ${expired}, ${otherPost})`;
       await migrator`delete from public."user" where id in (${owner}, ${peer})`;
       await migrator`delete from public.messaging_participants where id in (${owner}, ${peer})`;
@@ -136,6 +156,27 @@ function fixture(value: string, role: string): string {
     ]);
     expect(entry?.payload).not.toHaveProperty("object_key");
     expect((await page("notes"))[0]?.payload).toMatchObject({ note: "Private tomorrow note", author_id: owner });
+  });
+
+  it("proves post and avatar references before returning internal R2 keys to the worker", async () => {
+    const files = await worker<{ file_id: string; post_id: string | null; file_kind: string; content_type: string; object_key: string }[]>`
+      select * from public.read_account_export_file_page(${request}, ${lease}, null, 25)`;
+    expect(files.map((file) => file.file_id).sort()).toEqual([`avatar:${owner}`, `post:${liveMedia}`].sort());
+    expect(files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ file_id: `post:${liveMedia}`, post_id: restorable,
+        content_type: "audio/mp4", object_key: `media/${owner}/${liveReservation}` }),
+      expect.objectContaining({ file_id: `avatar:${owner}`, post_id: null,
+        file_kind: "profile_avatar", object_key: `media/${owner}/${avatarReservation}` }),
+    ]));
+    expect(await worker`select * from public.read_account_export_file_page(${request}, 'wrong-token', null, 25)`)
+      .toEqual([]);
+    await expect(app`select * from public.read_account_export_file_page(${request}, ${lease}, null, 25)`)
+      .rejects.toThrow();
+    const [first] = await worker<{ file_id: string }[]>`
+      select * from public.read_account_export_file_page(${request}, ${lease}, null, 1)`;
+    expect((await worker<{ file_id: string }[]>`
+      select * from public.read_account_export_file_page(${request}, ${lease}, ${first!.file_id}, 1)`)[0]?.file_id)
+      .not.toBe(first?.file_id);
   });
 
   it("exports only currently readable authored messages, never received bodies or previews", async () => {
