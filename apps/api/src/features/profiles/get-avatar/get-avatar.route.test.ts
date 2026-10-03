@@ -31,6 +31,26 @@ describe("GET /api/v1/profiles/{username}/avatar", () => {
     expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([4, 5]);
   });
 
+  it("returns the complete replacement when a range validator names an old avatar", async () => {
+    const replacement = new Uint8Array([7, 8, 9, 10]);
+    const deps = dependencies(async () => avatar, async (_objectKey, request) => {
+      expect(request.headers.get("range")).toBe("bytes=2-3");
+      expect(request.headers.get("if-range")).toBe('"old-avatar"');
+      return new Response(replacement, {
+        status: 200,
+        headers: { "content-type": "image/jpeg", etag: '"new-avatar"', "content-length": String(replacement.byteLength) },
+      });
+    });
+    const response = await createApp({ profileAvatar: deps }).request(path, {
+      headers: { range: "bytes=2-3", "if-range": '"old-avatar"' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toBe('"new-avatar"');
+    expect(response.headers.get("content-range")).toBeNull();
+    expect(Array.from(new Uint8Array(await response.arrayBuffer()))).toEqual([7, 8, 9, 10]);
+  });
+
   it("passes a verified actor to the current profile decision", async () => {
     const deps = dependencies(async () => null, async () => new Response("must not read"));
     const response = await createApp({ profileAvatar: deps }).request(path, {

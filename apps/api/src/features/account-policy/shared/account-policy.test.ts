@@ -44,6 +44,8 @@ describe("account policy", () => {
     await expect(classify("POST", "/api/v1/account/export/request")).resolves.toBe("export");
     await expect(classify("GET", "/api/v1/account/export/request-id/download")).resolves.toBe("export");
     await expect(classify("GET", "/api/v1/account/export/request-id/download/extra")).resolves.toBe("ordinary");
+    await expect(classify("HEAD", "/api/v1/account/export/request-id/download")).resolves.toBe("ordinary");
+    await expect(classify("POST", "/api/v1/posts/post-1/media/media-1/content")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/account/deletion/request/extra")).resolves.toBe("ordinary");
     await expect(classify("POST", "/api/v1/legal/acceptance")).resolves.toBe("legal_acceptance");
     await expect(classify("POST", "/api/v1/account/reauthenticate/password", { action: "request_deletion" })).resolves.toBe("request_deletion");
@@ -189,6 +191,48 @@ describe("account policy", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(resolveSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["GET", "/api/v1/posts/post-1/media/media-1/content"],
+    ["HEAD", "/api/v1/posts/post-1/media/media-1/content"],
+    ["GET", "/api/v1/posts/post-1/voice-memo/content"],
+    ["HEAD", "/api/v1/posts/post-1/voice-memo/content"],
+    ["GET", "/api/v1/profiles/ben/avatar"],
+    ["HEAD", "/api/v1/profiles/ben/avatar"],
+  ])("lets anonymous media request %s %s reach its optional-session route", async (method, path) => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      postMediaContent: { resolveSession },
+      postVoiceMemoContent: { resolveSession },
+      profileAvatar: { resolveSession },
+    });
+
+    const response = await api.request(`https://api.example.test${path}`, { method });
+    expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(resolveSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["POST", "/api/v1/posts/post-1/media/media-1/content"],
+    ["DELETE", "/api/v1/posts/post-1/voice-memo/content"],
+    ["PUT", "/api/v1/profiles/ben/avatar"],
+    ["GET", "/api/v1/posts/post-1/media/media-1/content/extra"],
+    ["HEAD", "/api/v1/profiles/ben/avatar/extra"],
+    ["GET", "/api/v1/account/export/request-id/download"],
+  ])("keeps non-reviewed anonymous request %s %s fail closed", async (method, path) => {
+    const api = createApp({
+      accountPolicy: {
+        resolveSession: async () => null,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+    });
+    expect((await api.request(`https://api.example.test${path}`, { method })).status).toBe(401);
   });
 
   it("leaves the actual public test route available to guests and restricted accounts", async () => {

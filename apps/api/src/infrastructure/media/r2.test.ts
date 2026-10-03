@@ -99,6 +99,7 @@ describe("createR2MediaObjectStore", () => {
     }));
     const requestHeaders = new Headers({
       range: "bytes=0-0",
+      "if-range": '"previous-avatar"',
       "if-none-match": '"etag"',
       authorization: "Bearer user-session",
       cookie: "private=cookie",
@@ -113,6 +114,7 @@ describe("createR2MediaObjectStore", () => {
     const [input, init] = fetch.mock.calls[0]!;
     const sent = input instanceof Request ? input.headers : new Headers(init?.headers);
     expect(sent.get("range")).toBe("bytes=0-0");
+    expect(sent.get("if-range")).toBe('"previous-avatar"');
     expect(sent.get("if-none-match")).toBe('"etag"');
     expect(sent.get("authorization")).toMatch(/^AWS4-HMAC-SHA256 /);
     expect(sent.get("authorization")).not.toContain("user-session");

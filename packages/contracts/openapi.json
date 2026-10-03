@@ -4524,8 +4524,11 @@
               }
             }
           },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
           "416": {
-            "description": "The requested byte range is not satisfiable."
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
           },
           "429": {
             "description": "Rate limit reached.",
@@ -4630,8 +4633,11 @@
               }
             }
           },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
           "416": {
-            "description": "The requested byte range is not satisfiable."
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
           },
           "429": {
             "description": "Rate limit reached.",
@@ -9406,8 +9412,11 @@
               }
             }
           },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
           "416": {
-            "description": "The requested byte range is not satisfiable."
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
           },
           "429": {
             "description": "Rate limit reached.",
