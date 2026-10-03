@@ -89,6 +89,8 @@ class PrivateImage extends StatefulWidget {
 
 class _PrivateImageState extends State<PrivateImage>
     with _RefreshOnce<PrivateImage> {
+  Future<String?>? _bearerToken;
+
   @override
   String get postId => widget.postId;
   @override
@@ -98,6 +100,12 @@ class _PrivateImageState extends State<PrivateImage>
   void initState() {
     super.initState();
     resetTo(widget.media);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bearerToken ??= AppScope.of(context).session.bearerToken();
   }
 
   @override
@@ -112,17 +120,30 @@ class _PrivateImageState extends State<PrivateImage>
     if (failed || current == null) {
       return const _Unavailable('Photo unavailable');
     }
-    return Image.network(
-      current.toString(),
-      key: ValueKey(current),
-      fit: BoxFit.cover,
-      semanticLabel: widget.semanticLabel,
-      errorBuilder: (context, _, _) {
-        // Build can't await; ask after this frame and show the box meanwhile.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && url == current) unawaited(refresh());
-        });
-        return ColoredBox(color: DayliColors.of(context).backgroundSecondary);
+    return FutureBuilder<String?>(
+      future: _bearerToken,
+      builder: (context, token) {
+        if (token.connectionState != ConnectionState.done) {
+          return ColoredBox(color: DayliColors.of(context).backgroundSecondary);
+        }
+        return Image.network(
+          current.toString(),
+          key: ValueKey((current, token.data)),
+          headers: token.data == null
+              ? null
+              : {'authorization': 'Bearer ${token.data}'},
+          fit: BoxFit.cover,
+          semanticLabel: widget.semanticLabel,
+          errorBuilder: (context, _, _) {
+            // Build can't await; ask after this frame and show the box meanwhile.
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && url == current) unawaited(refresh());
+            });
+            return ColoredBox(
+              color: DayliColors.of(context).backgroundSecondary,
+            );
+          },
+        );
       },
     );
   }
@@ -150,6 +171,8 @@ class PrivateVideo extends StatefulWidget {
 class _PrivateVideoState extends State<PrivateVideo>
     with _RefreshOnce<PrivateVideo> {
   VideoPlayerController? _controller;
+  Future<String?>? _bearerToken;
+  bool _opened = false;
   bool _muted = true;
 
   @override
@@ -161,7 +184,16 @@ class _PrivateVideoState extends State<PrivateVideo>
   void initState() {
     super.initState();
     resetTo(widget.media);
-    unawaited(_open(url));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bearerToken ??= AppScope.of(context).session.bearerToken();
+    if (!_opened) {
+      _opened = true;
+      unawaited(_open(url));
+    }
   }
 
   @override
@@ -182,7 +214,14 @@ class _PrivateVideoState extends State<PrivateVideo>
       if (mounted) setState(() {});
       return;
     }
-    final controller = VideoPlayerController.networkUrl(source);
+    final token = await _bearerToken;
+    if (!mounted) return;
+    final controller = VideoPlayerController.networkUrl(
+      source,
+      httpHeaders: token == null
+          ? const {}
+          : {'authorization': 'Bearer $token'},
+    );
     _controller = controller;
     try {
       await controller.initialize();

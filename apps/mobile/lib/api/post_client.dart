@@ -280,9 +280,9 @@ class GeneratedPostClient implements PostClient {
   @override
   Future<ApiResult<PostDetail>> get(String postId) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -326,9 +326,9 @@ class GeneratedPostClient implements PostClient {
     String? cursor,
   }) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -371,9 +371,9 @@ class GeneratedPostClient implements PostClient {
   @override
   Future<ApiResult<PostMedia>> media(String postId, String mediaId) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
