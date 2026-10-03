@@ -188,4 +188,19 @@ function fixture(value: string, role: string): string {
     expect(messages[0]?.payload).not.toHaveProperty("reply_to_message_id");
     expect(await page("messages", null, "wrong-token")).toEqual([]);
   });
+
+  it("reauthorizes a file when its Trash restore deadline passes", async () => {
+    const fileId = `post:${liveMedia}`;
+    const [authorized] = await worker<{ object_key: string; byte_size: string; content_type: string }[]>`
+      select * from public.authorize_account_export_file(${request}, ${lease}, ${fileId})`;
+    expect(authorized).toMatchObject({ object_key: `media/${owner}/${liveReservation}`, content_type: "audio/mp4" });
+    expect(await worker`select * from public.authorize_account_export_file(${request}, 'wrong-token', ${fileId})`).toEqual([]);
+    expect(await worker`select * from public.authorize_account_export_file(${request}, ${lease}, ${`post:${foreignKeyMedia}`})`).toEqual([]);
+    await expect(app`select * from public.authorize_account_export_file(${request}, ${lease}, ${fileId})`)
+      .rejects.toThrow();
+    await migrator`update public.posts set trashed_at = now() - interval '169 hours',
+      restore_until = now() - interval '1 hour', trash_purge_due_at = now() + interval '167 hours'
+      where id = ${restorable}`;
+    expect(await worker`select * from public.authorize_account_export_file(${request}, ${lease}, ${fileId})`).toEqual([]);
+  });
 });

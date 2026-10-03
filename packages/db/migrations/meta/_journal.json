@@ -281,6 +281,20 @@
       "when": 1790990400000,
       "tag": "0039_export_owned_file_refs",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790991000000,
+      "tag": "0040_export_file_read_authorization",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790991600000,
+      "tag": "0041_export_archive_publication",
+      "breakpoints": true
     }
   ]
 }
