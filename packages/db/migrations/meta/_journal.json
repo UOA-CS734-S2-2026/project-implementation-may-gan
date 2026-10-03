@@ -267,6 +267,13 @@
       "when": 1790989200000,
       "tag": "0037_export_worker_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790989800000,
+      "tag": "0038_export_scoped_record_pages",
+      "breakpoints": true
     }
   ]
 }
