@@ -10,6 +10,7 @@
     "mobile-app",
     "database",
     "api-contracts-and-generated-clients",
-    "testing-and-contributing"
+    "testing",
+    "contributing"
   ]
 }
