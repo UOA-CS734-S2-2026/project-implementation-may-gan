@@ -3420,7 +3420,7 @@
             }
           },
           "409": {
-            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, the post from an earlier submission with this key was deleted (`POST_DELETED`), an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
+            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, the post from an earlier submission with this key is in Trash (`POST_TRASHED`), an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
             "content": {
               "application/json": {
                 "schema": {

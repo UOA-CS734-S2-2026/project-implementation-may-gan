@@ -99,7 +99,7 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         .select({
           requestFingerprint: schema.postIdempotencyKeys.requestFingerprint,
           postId: schema.postIdempotencyKeys.postId,
-          deletedAt: schema.posts.deletedAt,
+          trashedAt: schema.posts.trashedAt,
         })
         .from(schema.postIdempotencyKeys)
         .innerJoin(schema.posts, eq(schema.posts.id, schema.postIdempotencyKeys.postId))
@@ -109,11 +109,10 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
         ))
         .limit(1);
       if (!record) return null;
-      if (record.deletedAt) return { requestFingerprint: record.requestFingerprint, post: null };
-      const post = await readPost(queryable, record.postId);
-      // A retained key for a trashed post cannot replay hidden content or be
-      // reused for a replacement. Purge removes the key with its post.
-      if (!post) throw new CreateDailyPostError("IDEMPOTENCY_KEY_REUSED");
+      // A retained key for a trashed post can't replay hidden content or be
+      // reused for a replacement, so a retry gets POST_TRASHED. Purge removes
+      // the key with its post.
+      const post = record.trashedAt ? null : await readPost(queryable, record.postId);
       return { requestFingerprint: record.requestFingerprint, post };
     },
 

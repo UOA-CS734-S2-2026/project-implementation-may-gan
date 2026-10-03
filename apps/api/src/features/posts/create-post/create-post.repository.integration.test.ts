@@ -87,13 +87,17 @@ function requireLocalTestUrl(value: string): string {
     expect(row).toEqual({ posts: 1, notes: 1, keys: 1 });
   });
 
-  it("keeps a deleted post's key used and returns no content on replay", async () => {
+  it("keeps a trashed post's key used and returns no content on replay", async () => {
     const created = await service().createDailyPost(users[3]!, "key-deleted", input);
-    await migrator.db.update(schema.posts).set({ deletedAt: new Date("2026-09-25T04:00:00.000Z") })
+    await migrator.db.update(schema.posts).set({
+      trashedAt: new Date("2026-09-25T04:00:00.000Z"),
+      restoreUntil: new Date("2026-10-02T04:00:00.000Z"),
+      trashPurgeDueAt: new Date("2026-10-09T04:00:00.000Z"),
+    })
       .where(eq(schema.posts.id, created.post.id));
 
     await expect(service().createDailyPost(users[3]!, "key-deleted", input))
-      .rejects.toMatchObject({ reason: "POST_DELETED" });
+      .rejects.toMatchObject({ reason: "POST_TRASHED" });
     await expect(service().createDailyPost(users[3]!, "key-deleted", { ...input, rating: 2 }))
       .rejects.toMatchObject({ reason: "IDEMPOTENCY_KEY_REUSED" });
     await expect(service().createDailyPost(users[3]!, "key-again", input)).resolves.toMatchObject({ replayed: false });

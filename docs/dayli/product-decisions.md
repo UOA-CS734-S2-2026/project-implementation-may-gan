@@ -12,7 +12,7 @@ Authors may edit released posts. Each edit creates an immutable revision. Reader
 
 Agreed in October 2026 for #76–#78. Authors can edit the reflective answer, caption, rating, and audience of their own post, before or after release. The prompt, day, media, and tomorrow note stay as posted. Anyone other than the author sees only earlier versions that were shared with friends; a version written while the post was solo stays with its author.
 
-Authors can delete a post at any time. It disappears for everyone at once. If that Auckland day hasn't ended, they can post again for it; a past day can never be reposted. Deletion is a soft delete until the Trash, restore, and purge work in #163 lands, which follows the [deletion rules](#deletion-backups-and-recovery) below.
+Authors can delete a post at any time, which moves it to Trash (#250). It disappears for everyone at once and can be restored for 7 days. If that Auckland day hasn't ended, they can post again for it; a past day can never be reposted, and a restore is refused once the day has a newer post. Cleanup follows the [deletion rules](#deletion-backups-and-recovery) below.
 
 ## Daily prompt versions and tomorrow notes
 

@@ -263,7 +263,7 @@ void main() {
   }
 
   test('starts a new submission when the posted dayli was deleted', () async {
-    submitter.result = const SubmissionRejected(SubmissionConflict.postDeleted);
+    submitter.result = const SubmissionRejected(SubmissionConflict.postTrashed);
     final composer = controller();
     await composer.load();
     fill(composer);
@@ -272,7 +272,7 @@ void main() {
     await composer.close();
 
     expect(composer.phase, ComposerPhase.editing);
-    expect(composer.message, contains('posted and then deleted'));
+    expect(composer.message, contains('posted and then moved to Trash'));
     expect(composer.draft!.reflectiveAnswer, contains('harbour'));
     expect(composer.draft!.idempotencyKey, isNot(firstKey));
     expect(

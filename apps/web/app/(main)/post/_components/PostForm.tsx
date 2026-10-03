@@ -100,8 +100,8 @@ function failureMessage(failure: ApiFailure): string {
           return "A post already exists for today. Your current edits were not saved and remain in this form. Copy them before leaving this page.";
         case "IDEMPOTENCY_KEY_REUSED":
           return "An earlier version of this draft was already posted. These edits cannot be posted with this submission key, so copy them before leaving this page.";
-        case "POST_DELETED":
-          return "This dayli was posted and then deleted. Your words are still here; post again to share them.";
+        case "POST_TRASHED":
+          return "This dayli was posted and then moved to Trash. Your words are still here; post again to share them.";
         default:
           return failure.message;
       }
@@ -172,8 +172,8 @@ export default function PostForm({
     ) {
       onPostingDayChanged();
     }
-    // That submission was posted and then deleted; a new key posts these words again.
-    if (failure.kind === "conflict" && failure.reason === "POST_DELETED") {
+    // That submission was posted and then moved to Trash; a new key posts these words again.
+    if (failure.kind === "conflict" && failure.reason === "POST_TRASHED") {
       setIdempotencyKey(crypto.randomUUID());
     }
     setError("root", { message: failureMessage(failure) });

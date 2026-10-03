@@ -68,7 +68,7 @@ export interface AttachableMedia {
 
 export interface StoredIdempotentOutcome {
   requestFingerprint: string;
-  /** Null once the author deleted the post; the key stays used. */
+  /** Null once the author moved the post to Trash; the key stays used. */
   post: StoredDailyPost | null;
 }
 
@@ -107,7 +107,7 @@ export type CreateDailyPostErrorReason =
   | "PROMPT_CHANGED"
   | "ALREADY_POSTED"
   | "IDEMPOTENCY_KEY_REUSED"
-  | "POST_DELETED"
+  | "POST_TRASHED"
   | "PROMPT_UNAVAILABLE"
   | "MEDIA_NOT_READY"
   | "MEDIA_UNAVAILABLE"
@@ -120,7 +120,7 @@ const messages: Record<CreateDailyPostErrorReason, string> = {
   PROMPT_CHANGED: "The prompt does not match the prompt for this posting day.",
   ALREADY_POSTED: "A post already exists for this posting day.",
   IDEMPOTENCY_KEY_REUSED: "This idempotency key was already used for a different request.",
-  POST_DELETED: "The post from this submission was deleted.",
+  POST_TRASHED: "The post from this submission is in Trash.",
   PROMPT_UNAVAILABLE: "The daily prompt is temporarily unavailable.",
   MEDIA_NOT_READY: "An attachment is still being uploaded.",
   // One message for missing, someone else's, rejected, expired, and already
@@ -258,9 +258,9 @@ export function createDailyPostService(dependencies: CreateDailyPostServiceDepen
           if (previous.requestFingerprint !== requestFingerprint) {
             throw new CreateDailyPostError("IDEMPOTENCY_KEY_REUSED");
           }
-          // Deletion removes access at once, so a replay must not return the
+          // Trash removes access at once, so a replay must not return the
           // content. The key stays used: treating it as new would post again.
-          if (!previous.post) throw new CreateDailyPostError("POST_DELETED");
+          if (!previous.post) throw new CreateDailyPostError("POST_TRASHED");
           return { post: previous.post, replayed: true };
         }
 

@@ -101,16 +101,16 @@ describe("POST /api/v1/posts", () => {
     });
   });
 
-  it("returns no content when replaying a submission whose post was deleted", async () => {
+  it("returns no content when replaying a submission whose post is in Trash", async () => {
     const { deps, memory } = dependencies();
     const app = createApp({ posts: deps });
     await post(app, { user: "user-1" });
-    memory.posts[0]!.deleted = true;
+    memory.posts[0]!.trashed = true;
 
     const replay = await post(app, { user: "user-1" });
     expect(replay.status).toBe(409);
     const body = await replay.text();
-    expect(body).toContain("POST_DELETED");
+    expect(body).toContain("POST_TRASHED");
     expect(body).not.toContain("Walked");
 
     // The day is free again, but only under a new key.
