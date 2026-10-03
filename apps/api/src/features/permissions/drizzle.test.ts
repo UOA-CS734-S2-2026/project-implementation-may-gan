@@ -32,17 +32,23 @@ describe("concrete PostgreSQL permission filter", () => {
     expect(text).toContain('"unblocked_at" is null');
   });
 
-  it("binds an active public grant to one post and requires a public profile", () => {
-    const fragment = buildDrizzlePostVisibilityFilter(database, {
+  it("allows anonymous detail only for released friends posts from public profiles", () => {
+    const detail = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
       viewer: { userId: null },
       now: new Date("2026-09-22T00:00:00Z"),
-      validatedPublicLinkGrant: { postId: "post-1", active: true },
-    });
-    const query = sqlQuery(fragment);
+      action: "detail",
+    }));
+    const list = sqlQuery(buildDrizzlePostVisibilityFilter(database, {
+      viewer: { userId: null },
+      now: new Date("2026-09-22T00:00:00Z"),
+      action: "list",
+    }));
 
-    expect(query.sql).toContain('"posts"."id" = $');
-    expect(query.sql).toContain('"user"."profile_visibility"');
-    expect(query.params).toContain("post-1");
+    expect(detail.sql).toContain('"posts"."audience" = $');
+    expect(detail.sql).toContain('"user"."profile_visibility" = $');
+    expect(detail.params).toContain("friends");
+    expect(detail.params).toContain("public");
+    expect(list.params).not.toContain("public");
   });
 
   it("requires a currently attached media row", () => {

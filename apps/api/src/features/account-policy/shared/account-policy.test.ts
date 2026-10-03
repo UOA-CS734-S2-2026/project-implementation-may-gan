@@ -144,6 +144,29 @@ describe("account policy", () => {
     expect(failure.headers.get("cache-control")).toBe("no-store");
   });
 
+  it("lets anonymous post detail reach optional authentication but still rejects invalid credentials", async () => {
+    const resolveSession = vi.fn(async () => null);
+    const api = createApp({
+      accountPolicy: {
+        resolveSession,
+        policies: { resolve: async () => { throw new Error("must not resolve"); } },
+      },
+      postDetail: { resolveSession },
+    });
+
+    const anonymous = await api.request("https://api.example.test/api/v1/posts/post-1");
+    expect(anonymous.status).toBe(503);
+    // Account policy and optional authentication both skip session resolution
+    // when no credential exists. The route reaches its unavailable repository.
+    expect(resolveSession).not.toHaveBeenCalled();
+
+    const invalid = await api.request("https://api.example.test/api/v1/posts/post-1", {
+      headers: { authorization: "Bearer invalid" },
+    });
+    expect(invalid.status).toBe(401);
+    expect(resolveSession).toHaveBeenCalledTimes(1);
+  });
+
   it("leaves the actual public test route available to guests and restricted accounts", async () => {
     const guest = createApp({
       accountPolicy: { resolveSession: async () => null, policies: { resolve: async () => resolveAccountPolicy(undefined) } },

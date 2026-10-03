@@ -168,15 +168,6 @@ function requireLocalTestUrl(value: string): string {
     await expect(media().findMedia(users.author, id("unreleased"), id("unreleased-photo"), now)).resolves.not.toBeNull();
   });
 
-  it("honours a validated public link only for its own released friends post", async () => {
-    const grant = { postId: id("released"), active: true };
-    await expect(media().findMedia(null, id("released"), id("first"), now, grant)).resolves.not.toBeNull();
-    await expect(media().findMedia(null, id("released"), id("first"), now, { ...grant, active: false }))
-      .resolves.toBeNull();
-    await expect(media().findMedia(null, id("solo"), id("solo-photo"), now, { postId: id("solo"), active: true }))
-      .resolves.toBeNull();
-  });
-
   it("lists only attached, uploaded media for each post, in order", async () => {
     const byPost = await readAttachedMedia(app.db, [id("released"), id("solo")]);
     expect(byPost.get(id("released"))?.map((item) => [item.id, item.order])).toEqual([[id("first"), 0], [id("second"), 1]]);

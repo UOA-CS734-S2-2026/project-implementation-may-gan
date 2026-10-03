@@ -1181,7 +1181,7 @@
           "media",
           "voiceMemo"
         ],
-        "description": "One post the caller may read. Tomorrow notes are not part of this projection."
+        "description": "One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection."
       },
       "PostDetailAuthor": {
         "type": "object",
@@ -3718,8 +3718,9 @@
         ],
         "operationId": "posts.get",
         "summary": "Read one post",
-        "description": "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.",
+        "description": "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.",
         "security": [
+          {},
           {
             "BearerAuth": []
           },
@@ -3756,7 +3757,7 @@
             }
           },
           "401": {
-            "description": "Authentication is required.",
+            "description": "Presented credentials are invalid or expired.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3805,7 +3806,7 @@
             }
           },
           "503": {
-            "description": "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
+            "description": "Post storage is temporarily unavailable, media storage is unavailable, or public media delivery is pending the parent-authorized media route.",
             "content": {
               "application/json": {
                 "schema": {

@@ -1,13 +1,11 @@
 import { and, desc, eq, exists, isNull, lte, ne, not, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
-import type { PermissionAction, ValidatedPublicLinkGrant, Viewer } from "./policy";
+import type { PermissionAction, Viewer } from "./policy";
 
 interface DrizzlePostVisibilityInputBase {
   viewer: Viewer;
   now: Date;
-  /** This value is accepted only after #41 has validated the bearer token. */
-  validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type DrizzlePostVisibilityInput = DrizzlePostVisibilityInputBase & (
@@ -135,18 +133,16 @@ export function buildDrizzlePostVisibilityFilter(
       not(activeBlock(database, posts.authorId, viewerId)),
     );
 
-  const grant = input.validatedPublicLinkGrant;
-  const publicLink = grant?.active === true && grant.postId.length > 0
-    ? and(
-      eq(posts.id, grant.postId),
-      eq(posts.audience, "friends"),
-      eq(user.profileVisibility, "public"),
-    )
+  // Public-profile access is currently limited to direct post detail. Existing
+  // list routes retain their own scope, and media stays owner/friend-only until
+  // the parent-authorized Worker route lands.
+  const publicProfile = input.action === "detail"
+    ? and(eq(posts.audience, "friends"), eq(user.profileVisibility, "public"))
     : sql`false`;
 
   const access = input.action === "export"
     ? owner
-    : or(owner, and(released, or(friends, publicLink)));
+    : or(owner, and(released, or(friends, publicProfile)));
   const notBlocked = viewerId === null
     ? sql`true`
     : not(activeBlock(database, posts.authorId, viewerId));

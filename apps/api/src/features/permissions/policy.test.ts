@@ -26,33 +26,30 @@ const decide = (overrides: Partial<PostPermissionState>, viewer: string | null =
 describe("post permission policy", () => {
   it.each([
     ["owner before release", { releaseAt: new Date("2026-09-23"), friendshipActive: false }, "alice", true],
-    ["stranger", {}, "bob", false],
-    ["pending friend", { friendshipActive: false }, "bob", false],
-    ["active friend", { friendshipActive: true }, "bob", true],
-    ["later friend", { friendshipActive: true }, "carol", true],
-    ["ended friend", { friendshipActive: false }, "bob", false],
+    ["signed-in public-profile stranger", {}, "bob", true],
+    ["anonymous public-profile reader", {}, null, true],
+    ["private-profile stranger", { authorProfileVisibility: "private" }, "bob", false],
+    ["anonymous private-profile reader", { authorProfileVisibility: "private" }, null, false],
+    ["private-profile active friend", { authorProfileVisibility: "private", friendshipActive: true }, "bob", true],
+    ["private-profile ended friend", { authorProfileVisibility: "private", friendshipActive: false }, "bob", false],
     ["solo", { audience: "solo" }, "bob", false],
     ["unreleased", { releaseAt: new Date("2026-09-23"), friendshipActive: true }, "bob", false],
     ["either-direction block", { friendshipActive: true, blocked: true }, "bob", false],
-    ["public link", { publicLinkGrant: { postId: "post-1", active: true } }, "bob", true],
-    ["grant for another post", { publicLinkGrant: { postId: "post-2", active: true } }, "bob", false],
-    ["inactive public link", { publicLinkGrant: { postId: "post-1", active: false } }, "bob", false],
-    ["private account link", { authorProfileVisibility: "private", publicLinkGrant: { postId: "post-1", active: true } }, "bob", false],
-    ["private account link still permits friend", { authorProfileVisibility: "private", friendshipActive: true, publicLinkGrant: { postId: "post-1", active: true } }, "bob", true],
-    ["changed audience", { audience: "solo", publicLinkGrant: { postId: "post-1", active: true } }, "bob", false],
   ] as const)("%s", (_name, post, viewer, expected) => {
     expect(decide(post, viewer).allowed).toBe(expected);
   });
 
-  it("uses current post access for revisions and keeps export author-only", () => {
+  it("keeps non-detail reads scoped and export author-only", () => {
     expect(decide({ friendshipActive: true }, "bob", "revision").allowed).toBe(true);
+    expect(decide({}, "bob", "revision").allowed).toBe(false);
+    expect(decide({}, null, "list").allowed).toBe(false);
     expect(decide({ friendshipActive: true }, "bob", "export").allowed).toBe(false);
     expect(decide({}, "alice", "export").allowed).toBe(true);
   });
 
-  it("denies known blocked signed-in viewers even with a public link", () => {
-    expect(decide({ blocked: true, publicLinkGrant: { postId: "post-1", active: true } }).allowed).toBe(false);
-    expect(decide({ publicLinkGrant: { postId: "post-1", active: true } }, null).allowed).toBe(true);
+  it("denies known blocked signed-in viewers before public-profile access", () => {
+    expect(decide({ blocked: true }).allowed).toBe(false);
+    expect(decide({}, null).allowed).toBe(true);
   });
 
   it("denies deleted posts and detached media", () => {

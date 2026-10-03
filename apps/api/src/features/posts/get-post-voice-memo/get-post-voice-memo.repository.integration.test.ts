@@ -173,15 +173,6 @@ function requireLocalTestUrl(value: string): string {
     await migrator.db.update(schema.posts).set({ audience: "friends" }).where(eq(schema.posts.id, id("released")));
   });
 
-  it("honours a validated public link only for its own released friends post", async () => {
-    const grant = { postId: id("released"), active: true };
-    await expect(voiceMemos().findVoiceMemo(null, id("released"), now, grant)).resolves.not.toBeNull();
-    await expect(voiceMemos().findVoiceMemo(null, id("released"), now, { ...grant, active: false }))
-      .resolves.toBeNull();
-    await expect(voiceMemos().findVoiceMemo(null, id("solo"), now, { postId: id("solo"), active: true }))
-      .resolves.toBeNull();
-  });
-
   it("keeps the voice memo out of the photo and video list", async () => {
     const byPost = await readAttachedMedia(app.db, [id("released")]);
     expect(byPost.get(id("released"))?.map((item) => item.id)).toEqual([id("photo")]);
