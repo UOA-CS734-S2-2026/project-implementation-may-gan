@@ -4,11 +4,15 @@ import { docsContentRoute, docsImageRoute, docsRoute } from './shared';
 import { defineDocs } from 'fumadocs-mdx/macro';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { openapi } from './openapi';
+import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
 
 const docs = defineDocs({
   dir: 'content/docs',
   docs: {
     schema: pageSchema,
+    mdxOptions: {
+      remarkPlugins: [remarkMdxMermaid],
+    },
     postprocess: {
       includeProcessedMarkdown: true,
     },
