@@ -174,7 +174,13 @@ class _EditPostScreenState extends State<EditPostScreen> {
     final identity = _currentIdentity();
     final operationGeneration = ++_operationGeneration;
     setState(() => _reloading = true);
-    final result = await AppScope.of(context).posts.get(_base.id);
+    final services = AppScope.of(context);
+    final result = await services.posts.get(_base.id);
+    if (!_isCurrentOperation(operationGeneration, identity)) return;
+    if (result case ApiError(failure: Unauthenticated())) {
+      await services.session.sessionExpired();
+      return;
+    }
     if (!_isCurrentOperation(operationGeneration, identity)) return;
     setState(() {
       _reloading = false;

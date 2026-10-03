@@ -287,6 +287,37 @@ void main() {
       expect(find.text('Mine.'), findsOneWidget);
     });
 
+    testWidgets('expires the current session when conflict reload gets a 401', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', viewerIsAuthor: true)),
+        const ApiError(Unauthenticated()),
+      ]);
+      posts.updateResults
+        ..clear()
+        ..add(const ApiError(Conflict('edited elsewhere')));
+      final harness = harnessWith(posts);
+      await openEditor(tester, harness);
+
+      await tester.enterText(
+        find.byKey(const Key('editPost.answer')),
+        'Account A unsaved private edit.',
+      );
+      await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editPost.reload')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.reload')));
+      await tester.pumpAndSettle();
+
+      expect(harness.session.status, SessionStatus.signedOut);
+      expect(find.byKey(const Key('editPost.save')), findsNothing);
+      expect(find.text('Account A unsaved private edit.'), findsNothing);
+    });
+
     testWidgets('keeps the changes when offline', (tester) async {
       final posts = FakePostClient([
         ApiSuccess(postDetail('1', viewerIsAuthor: true)),
