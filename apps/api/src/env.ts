@@ -4,6 +4,8 @@ import type { RateLimitBinding } from "./http/middleware/rate-limit";
 /** Runtime bindings required before PostgreSQL-backed Better Auth is mounted. */
 export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
+  /** Restricted lifecycle_worker connection. Never reuse the ordinary app binding. */
+  EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
   /** Direct API origin for native callers and issued realtime ticket URLs. */

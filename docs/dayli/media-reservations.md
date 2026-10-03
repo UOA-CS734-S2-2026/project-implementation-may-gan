@@ -63,14 +63,14 @@ Known gaps: uploads pause while the composer is closed; compressed copies left b
 
 ## Downloads
 
-A post's media is shown through short-lived private download URLs. The Worker never proxies the bytes.
+Authenticated owner and friend views show a post's media through short-lived private download URLs. The public-profile media path is separate: it uses an authorized Worker route that rechecks the parent on every request and does not issue an anonymous signed URL. That route is not part of the current signed-download implementation.
 
 - **Where URLs come from.** `GET /api/v1/posts/{postId}` and `GET /api/v1/feed` return `media: [{ id, contentType, order, url, expiresAt }]`. The API reads media only for posts the shared visibility predicate has already allowed, in one query per response, and then signs one GET URL per object with `aws4fetch`. Only the `host` header is signed, so a plain image or video request works.
 - **Lifetime.** URLs expire after **5 minutes** (`MEDIA_DOWNLOAD_TTL_SECONDS`). A URL works for anyone who has it until then: never log, store, or cache it. Responses are `Cache-Control: no-store`.
 - **Refreshing.** `GET /api/v1/posts/{postId}/media/{mediaId}` returns one fresh URL through the permission module's `media` action: the same rules as reading the post, plus a live, attached `post_media` row. Missing, detached, and unreadable media all return the same `404`. Without R2 configuration it returns `503`, and so do the post and feed routes for a post or page that has media; text-only posts are unaffected. `url` and `expiresAt` are therefore always set when media is returned.
 - **Never signed.** Detached rows, legacy imports without an upload, and anything on a post the viewer may not read.
-- **Public links.** The media lookup accepts a validated public-link grant, so the public-link route can issue the same URLs to signed-out viewers.
-- **After access ends.** Unfriending, blocking, deleting the post, or detaching media stops new URLs immediately, but a URL already issued keeps working for up to 5 minutes, and downloaded copies can't be recalled.
+- **Public profiles.** Public-profile-only post access does not issue these signed URLs. Anonymous media requires the parent-authorized Worker route described above.
+- **After access ends.** Unfriending, blocking, deleting the post, or detaching media stops new authenticated URLs immediately, but a URL already issued keeps working for up to 5 minutes, and downloaded copies can't be recalled.
 
 Clients load a fresh URL once when media fails to load, then show "Photo unavailable" or "Video unavailable". The web renders photos unoptimized and keeps R2 out of `next.config`'s `remotePatterns`, because the Next image optimizer would fetch and cache private media on the server. Flutter caches images in memory only. In both clients the feed card shows the first photo, or a still tile for a video, and never plays video. The post page shows every photo, and plays a video on its own, muted and looping, with controls to unmute.
 

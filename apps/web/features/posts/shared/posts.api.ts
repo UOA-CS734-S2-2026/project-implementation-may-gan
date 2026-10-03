@@ -8,12 +8,16 @@ import {
   type PostRevision,
   type PostRevisionsPage,
   type ProfilePost,
-  type ProfilePostsPage,
   type UpdatePostRequest,
 } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { PostAudience, PostDetail, PostMedia, PostRevision, PostRevisionsPage, ProfilePost, ProfilePostsPage, UpdatePostRequest };
+export type { PostAudience, PostDetail, PostMedia, PostRevision, PostRevisionsPage, ProfilePost, UpdatePostRequest };
+export type ProfilePostsPage = {
+  items: ProfilePost[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
 
 export type PostFailure = "unauthenticated" | "notFound" | "conflict" | "invalid" | "network" | "unavailable";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
@@ -97,9 +101,15 @@ export const postsApi = {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
+      const page = await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username });
+      // Public and restricted archive rendering belongs to DPP-003. Existing
+      // signed-in screens consume only complete archive pages for now.
+      if (page.kind !== "archive" || !page.items || page.nextCursor === undefined || page.hasMore === undefined) {
+        return { ok: false, failure: "notFound" };
+      }
       return {
         ok: true,
-        value: await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username }),
+        value: { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore },
       };
     } catch (error) {
       return { ok: false, failure: await toFailure(error) };

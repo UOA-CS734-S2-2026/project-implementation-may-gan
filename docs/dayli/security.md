@@ -6,15 +6,15 @@ Content is server-readable. HTTPS, encryption at rest, and permissions protect i
 
 | Resource | Access |
 | --- | --- |
-| Solo post | Owner only. Solo posts cannot have public links. |
+| Solo post | Owner only. |
 | Friends post | Owner before release; active friends afterward, including friends who joined after release, subject to blocks. |
-| Public shared post | Anyone with its active opaque link after release; it remains unlisted. Private-account links grant no access. |
+| Public-account friends post | Anyone after release. A known signed-in block is denied before public-profile access. |
 | Messages | Authorised participants, subject to request/block policy. |
 | Mood history, recap, future note | Owner. |
-| Media | Pending reservations are owner-only. Future media reads must apply the same permission and release checks as their post. |
+| Media | Pending reservations are owner-only. Public avatar and post-media reads use an authorized Worker route that rechecks the current parent on every request. |
 | Socket | Verified user's own Durable Object. |
 
-Enforce checks on every list/detail/export/preview route. A public profile does not expose a journal through profile or discovery views; only an active opaque link exposes its linked released post. Restrict database exposure; privileged Drizzle connections can bypass RLS, so services must authorise independently. Keep private responses out of shared caches.
+Enforce checks on every list, detail, export, preview, and media route. A public profile exposes released `friends` posts, but never `solo`, unreleased, deleted, trashed, detached-media, or blocked content. Account visibility is the only anonymous journal-read grant. There are no public share tokens. Restrict database exposure; privileged Drizzle connections can bypass RLS, so services must authorise independently. Keep profile and post responses out of shared caches.
 
 ## Sessions and sockets
 
@@ -28,11 +28,11 @@ Password recovery uses expiring one-time tokens, throttling, safe email delivery
 
 ## Data and device protection
 
-Keep R2 private. The reservation route limits the declared type and a 10 MB size, completion checks the uploaded object's actual size, format, and 15-second video limit, and post creation enforces three photos or one video and 25 MB per post when it links uploads to the post. Clients strip photo EXIF and video location metadata before upload, and never log or store presigned URLs. Downloads use 5-minute private URLs, signed only after the post's own permission check and never proxied or cached; see [Downloads](media-reservations.md#downloads). Logs and errors never include signed URLs, object keys, or secrets. Revocation cannot recall downloaded copies or immediately cancel existing URLs. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
+Keep R2 private. The reservation route limits the declared type and a 10 MB size, completion checks the uploaded object's actual size, format, and 15-second video limit, and post creation enforces three photos or one video and 25 MB per post when it links uploads to the post. Clients strip photo EXIF and video location metadata before upload, and never log or store presigned URLs. Authenticated owner and friend downloads use 5-minute private URLs after the post permission check; see [Downloads](media-reservations.md#downloads). Anonymous public-profile media instead passes through an authorized Worker route that rechecks its parent on every request. It does not use a permanent public URL or an anonymous signed URL window. Logs and errors never include signed URLs, object keys, or secrets. Downloaded copies cannot be recalled. Deleted data becomes inaccessible immediately, cleanup removes active records and media, and encrypted backups expire within 30 days.
 
 Protect local drafts/credentials and hide app-switcher previews. `local_auth` alone does not prove protected key storage. Test passcode fallback, lockout, enrolment changes, and reinstall. Minimise browser persistence and temporary files.
 
-Push defaults to generic text. Remove account token associations on logout. Location/microphone need informed consent and preview. Screenshot reporting is best-effort. Store only hashes of public share tokens and support immediate revocation. Disclose that forwarded links work until invalidated.
+Push defaults to generic text. Remove account token associations on logout. Location and microphone access need informed consent and preview. Screenshot reporting is best-effort.
 
 ## Required review
 

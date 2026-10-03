@@ -45,12 +45,12 @@ export const postDetailSchema = z
     }),
   })
   .openapi("PostDetail", {
-    description: "One post the caller may read. Tomorrow notes are not part of this projection.",
+    description: "One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection.",
   });
 
 export const getPostErrorResponses = {
   401: {
-    description: "Authentication is required.",
+    description: "Presented credentials are invalid or expired.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
   404: {
@@ -63,7 +63,7 @@ export const getPostErrorResponses = {
   },
   429: rateLimitErrorResponse,
   503: {
-    description: "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
+    description: "Post or media storage is temporarily unavailable.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
 };
