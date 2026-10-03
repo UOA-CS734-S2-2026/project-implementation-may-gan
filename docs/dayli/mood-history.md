@@ -4,7 +4,7 @@
 
 ## Who sees it
 
-It reaches the same people as the profile's posts.
+Only the owner and their active friends see it, even when the account is public and anyone can read its posts.
 
 | Viewer | Ratings |
 |---|---|
