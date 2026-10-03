@@ -1,6 +1,6 @@
 import type { HyperdriveBinding } from "@dayli/db";
 import { createDurableObjectRealtimePublisher } from "../realtime/publisher";
-import { createFcmHttpV1Sender, type FcmServiceAccount } from "../push/fcm";
+import { createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../push/fcm";
 import { createHyperdrivePushDestinationResolver } from "../push/push-destination.repository";
 import { createPushOutboxHandler } from "../push/push-dispatcher";
 import { createWorkerPushTokenProtector } from "../push/token-encryption";
@@ -36,10 +36,10 @@ async function configuredPushHandlerOnce(env: MessagingDeliveryBindings) {
 }
 
 function configuredPushHandler(env: MessagingDeliveryBindings, protector: NonNullable<Awaited<ReturnType<typeof createWorkerPushTokenProtector>>>) {
-  let account: FcmServiceAccount;
-  try { account = JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON!) as FcmServiceAccount; }
+  let account;
+  try { account = normalizeFcmServiceAccount(JSON.parse(env.FCM_SERVICE_ACCOUNT_JSON!)); }
   catch { return async () => ({ ok: false as const, retryable: true, category: "unauthorized" as const }); }
-  if (!account.clientEmail || !account.privateKey || !account.projectId) return async () => ({ ok: false as const, retryable: true, category: "unauthorized" as const });
+  if (!account) return async () => ({ ok: false as const, retryable: true, category: "unauthorized" as const });
   return createPushOutboxHandler({
     destinations: createHyperdrivePushDestinationResolver(env.HYPERDRIVE, protector),
     sender: createFcmHttpV1Sender({ serviceAccount: account }),
