@@ -2,14 +2,19 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** New object writers must use a reviewed namespace constructor. */
-export function findFreeformObjectKeyAssignments(source) {
-  const matches = [];
-  const expression = /\b(?:objectKey|archiveObjectKey)\s*(?:=|:)\s*(['"`])/g;
-  for (const match of source.matchAll(expression)) {
-    matches.push(source.slice(0, match.index).split("\n").length);
+/** Reject raw object paths and direct object-store PUT sinks, including aliased keys. */
+export function findUnreviewedObjectWrites(source) {
+  const lines = new Set();
+  const expressions = [
+    /\b(?:objectKey|archiveObjectKey)\s*(?:=|:)\s*(['"`])/g,
+    /\.put\s*\(/g,
+  ];
+  for (const expression of expressions) {
+    for (const match of source.matchAll(expression)) {
+      lines.add(source.slice(0, match.index).split("\n").length);
+    }
   }
-  return matches;
+  return [...lines].sort((a, b) => a - b);
 }
 
 async function sourceFiles(directory) {
@@ -29,13 +34,13 @@ async function check() {
   for (const directory of paths) {
     for (const file of await sourceFiles(path.join(root, directory))) {
       const source = await readFile(file, "utf8");
-      for (const line of findFreeformObjectKeyAssignments(source)) {
+      for (const line of findUnreviewedObjectWrites(source)) {
         findings.push(`${path.relative(root, file)}:${line}`);
       }
     }
   }
   if (findings.length > 0) {
-    throw new Error(`Free-form object key assignments need reviewed constructors: ${findings.join(", ")}`);
+    throw new Error(`Unreviewed object writes need approved sink boundaries: ${findings.join(", ")}`);
   }
 }
 

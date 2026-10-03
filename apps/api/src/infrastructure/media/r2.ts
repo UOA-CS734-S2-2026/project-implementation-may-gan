@@ -1,3 +1,4 @@
+import { assertOwnedMediaObjectKey } from "@dayli/contracts";
 import { AwsClient, AwsV4Signer } from "aws4fetch";
 
 /** Runtime bindings required before presigned R2 uploads can be issued. */
@@ -87,6 +88,8 @@ export async function createPresignedUploadUrl(
   configuration: R2RuntimeConfiguration,
   input: CreatePresignedUploadUrlInput,
 ): Promise<PresignedUpload> {
+  // Enforce at the signing sink, including callers that alias or inline a key.
+  assertOwnedMediaObjectKey(input.objectKey);
   const requiredHeaders: Record<string, string> = {
     "content-type": input.contentType,
     "content-length": String(input.byteSize),

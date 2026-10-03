@@ -13,6 +13,8 @@ export const inventoryTestRegistry = {
   postsIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records approved journals notes and Trash fields" },
   messagesIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records authored readable messages without reply previews" },
   ownedMediaIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records media metadata while withholding raw object keys" },
+  jsonValidFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "accepts valid fixtures for every transformed JSON family" },
+  jsonUnknownKeyFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "rejects extra keys for every transformed JSON family" },
 } as const;
 
 type InventoryTestId = keyof typeof inventoryTestRegistry;
@@ -240,13 +242,30 @@ export const exportObjectNamespaces = {
 } as const;
 
 
+interface ExportJsonFamilyReview {
+  keys: readonly string[];
+  validator: `public.${string}(jsonb)`;
+  positiveFixture: string;
+  extraKeyFixture: string;
+  positiveTest: InventoryTestId;
+  extraKeyTest: InventoryTestId;
+}
+
+/** Every transformed JSON family requires SQL enforcement and executable fixtures. */
 export const exportJsonKeyFamilies = {
-  "post_revisions.previous_attachment_refs": ["media_id", "attachment_order", "status"],
-} as const;
+  "post_revisions.previous_attachment_refs": {
+    keys: ["media_id", "attachment_order", "status"],
+    validator: "public.dayli_attachment_refs_valid(jsonb)",
+    positiveFixture: '[{"media_id":"synthetic","attachment_order":0,"status":"attached"}]',
+    extraKeyFixture: '[{"media_id":"synthetic","attachment_order":0,"status":"attached","secret":"leak"}]',
+    positiveTest: "jsonValidFixture",
+    extraKeyTest: "jsonUnknownKeyFixture",
+  },
+} as const satisfies Readonly<Record<string, ExportJsonFamilyReview>>;
 
 // Compile-time check: a new or removed revision JSON key needs a decision.
 type RevisionAttachment = (typeof schema.postRevisions.$inferSelect.previousAttachmentRefs)[number];
-type RevisionJsonKey = typeof exportJsonKeyFamilies["post_revisions.previous_attachment_refs"][number];
+type RevisionJsonKey = typeof exportJsonKeyFamilies["post_revisions.previous_attachment_refs"]["keys"][number];
 type RevisionKeyDifference = Exclude<keyof RevisionAttachment, RevisionJsonKey>
   | Exclude<RevisionJsonKey, keyof RevisionAttachment>;
 const revisionJsonKeysClassified: RevisionKeyDifference extends never ? true : never = true;
@@ -275,11 +294,51 @@ export function currentExportJsonColumns(): string[] {
   return jsonColumns.sort();
 }
 
+function fixtureRecord(fixture: string): Readonly<Record<string, unknown>> | null {
+  try {
+    const parsed: unknown = JSON.parse(fixture);
+    const record: unknown = Array.isArray(parsed) && parsed.length === 1 ? parsed[0] : parsed;
+    return record !== null && typeof record === "object" && !Array.isArray(record)
+      ? record as Readonly<Record<string, unknown>> : null;
+  } catch {
+    return null;
+  }
+}
+
 /** A JSON column needs an explicit key-family decision even if excluded. */
-export function validateExportJsonFamilies(actual: readonly string[]): string[] {
-  const reviewed = Object.keys(exportJsonKeyFamilies).sort();
-  return JSON.stringify([...actual].sort()) === JSON.stringify(reviewed)
-    ? [] : [`Unclassified or stale JSON key family: expected ${reviewed.join(",")}; found ${[...actual].sort().join(",")}`];
+export function validateExportJsonFamilies(
+  actual: readonly string[],
+  families: Readonly<Record<string, ExportJsonFamilyReview>> = exportJsonKeyFamilies,
+  decisions: Readonly<Record<string, ExportTableDecision>> = exportDataInventory,
+): string[] {
+  const errors: string[] = [];
+  const reviewed = Object.keys(families).sort();
+  if (JSON.stringify([...actual].sort()) !== JSON.stringify(reviewed)) {
+    errors.push(`Unclassified or stale JSON key family: expected ${reviewed.join(",")}; found ${[...actual].sort().join(",")}`);
+  }
+  for (const [table, decision] of Object.entries(decisions)) {
+    for (const [column, keys] of Object.entries(decision.transformed ?? {})) {
+      const family = `${table}.${column}`;
+      if (JSON.stringify(families[family]?.keys) !== JSON.stringify(keys)) {
+        errors.push(`Missing or stale transformed JSON key decision: ${family}`);
+      }
+    }
+  }
+  for (const [name, review] of Object.entries(families)) {
+    const positive = fixtureRecord(review.positiveFixture);
+    const extra = fixtureRecord(review.extraKeyFixture);
+    const extraKeys = extra && positive
+      ? Object.keys(extra).filter((key) => !(key in positive)) : [];
+    const reviewedValues = positive && extra
+      ? Object.keys(positive).every((key) => JSON.stringify(positive[key]) === JSON.stringify(extra[key])) : false;
+    if (!/^public\.[a-z_][a-z_0-9]*\(jsonb\)$/.test(review.validator ?? "")
+      || !positive || !extra || !reviewedValues || extraKeys.length !== 1
+      || JSON.stringify(Object.keys(positive).sort()) !== JSON.stringify([...review.keys].sort())
+      || review.positiveTest !== "jsonValidFixture" || review.extraKeyTest !== "jsonUnknownKeyFixture") {
+      errors.push(`JSON family needs a SQL validator and valid plus extra-key fixtures: ${name}`);
+    }
+  }
+  return errors;
 }
 
 export function validateExportInventory(

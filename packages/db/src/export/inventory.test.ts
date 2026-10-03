@@ -36,7 +36,7 @@ describe("explicit export data inventory", () => {
     expect(exportDataInventory.media_reservation!.excluded).toContain("object_key");
     expect(exportDataInventory.posts!.excluded).toContain("trash_lease_token");
     expect(exportDataInventory.post_revisions!.transformed?.previous_attachment_refs)
-      .toEqual(exportJsonKeyFamilies["post_revisions.previous_attachment_refs"]);
+      .toEqual(exportJsonKeyFamilies["post_revisions.previous_attachment_refs"].keys);
   });
 
   it("registers only the reviewed object namespaces", () => {
@@ -54,6 +54,19 @@ describe("explicit export data inventory", () => {
     expect(validateExportJsonFamilies(currentExportJsonColumns())).toEqual([]);
     expect(validateExportJsonFamilies([...currentExportJsonColumns(), "user.new_private_json"]))
       .toEqual([expect.stringContaining("user.new_private_json")]);
+    const revision = exportJsonKeyFamilies["post_revisions.previous_attachment_refs"];
+    const withoutValidator = {
+      ...exportJsonKeyFamilies,
+      "post_revisions.previous_attachment_refs": { ...revision, validator: "public.invalid-name(jsonb)" as const },
+    };
+    expect(validateExportJsonFamilies(currentExportJsonColumns(), withoutValidator))
+      .toEqual([expect.stringContaining("needs a SQL validator")]);
+    const withoutExtraKey = {
+      ...exportJsonKeyFamilies,
+      "post_revisions.previous_attachment_refs": { ...revision, extraKeyFixture: revision.positiveFixture },
+    };
+    expect(validateExportJsonFamilies(currentExportJsonColumns(), withoutExtraKey))
+      .toEqual([expect.stringContaining("extra-key fixtures")]);
   });
 
   it("keeps authentication and push secrets out of the inventory", () => {
