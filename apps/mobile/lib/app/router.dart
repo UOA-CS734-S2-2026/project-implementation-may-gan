@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_screens.dart';
+import '../auth/public_return_intent.dart';
 import '../auth/session_controller.dart';
 import '../auth/username_setup_screen.dart';
 import '../compose/composer_screen.dart';
@@ -23,6 +24,9 @@ import 'splash_screen.dart';
 const _publicLocations = {'/welcome', '/sign-in', '/sign-up'};
 const _legalLocations = {'/privacy', '/terms'};
 
+bool _isPublicContent(String location) =>
+    location.startsWith('/u/') || location.startsWith('/posts/');
+
 /// A public welcome and auth pages; signed-in tabs inside the shell; and the
 /// composer and settings as full-screen pages above it.
 GoRouter buildRouter(
@@ -35,19 +39,35 @@ GoRouter buildRouter(
     final location = state.matchedLocation;
     if (_legalLocations.contains(location)) return null;
     final public = _publicLocations.contains(location);
+    final publicContent = _isPublicContent(location);
+    final returnIntent = PublicReturnIntent.fromAuthUri(state.uri);
     switch (session.status) {
       case SessionStatus.unknown:
-        return location == '/splash' ? null : '/splash';
+        // Public deep links render while session restoration runs. Once the
+        // actor is known, the screen refetches under that account.
+        return publicContent || location == '/splash' ? null : '/splash';
       case SessionStatus.signedOut:
-        return public ? null : '/welcome';
+        return public || publicContent ? null : '/welcome';
       case SessionStatus.needsUsernameSetup:
-        return location == '/setup-username' || location == '/account/export'
-            ? null
-            : '/setup-username';
+        if (location == '/account/export') return null;
+        if (location == '/setup-username') return null;
+        return returnIntent == null
+            ? '/setup-username'
+            : Uri(
+                path: '/setup-username',
+                queryParameters: {
+                  'returnTo': returnIntent.target,
+                  'action': returnIntent.action.value,
+                },
+              ).toString();
       case SessionStatus.signedIn:
-        return public || location == '/splash' || location == '/setup-username'
-            ? '/'
-            : null;
+        if (location == '/sign-in' ||
+            location == '/sign-up' ||
+            location == '/setup-username') {
+          return returnIntent?.returnLocation ?? '/';
+        }
+        if (location == '/splash' || public) return '/';
+        return null;
     }
   },
   routes: [
@@ -86,8 +106,22 @@ GoRouter buildRouter(
     ),
     GoRoute(
       path: '/posts/:id',
-      builder: (_, state) =>
-          PostDetailScreen(postId: state.pathParameters['id']!),
+      builder: (_, state) => PostDetailScreen(
+        postId: state.pathParameters['id']!,
+        intent: PublicReturnIntent.fromPublicUri(state.uri)?.action,
+      ),
+    ),
+    GoRoute(
+      path: '/u/:username',
+      builder: (_, state) {
+        final profile = SocialProfileScreen(
+          username: state.pathParameters['username']!,
+          intent: PublicReturnIntent.fromPublicUri(state.uri)?.action,
+        );
+        return session.status == SessionStatus.signedIn
+            ? AppShell(location: state.matchedLocation, child: profile)
+            : profile;
+      },
     ),
     ShellRoute(
       builder: (_, state, child) =>
@@ -95,11 +129,6 @@ GoRouter buildRouter(
       routes: [
         GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
         GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
-        GoRoute(
-          path: '/u/:username',
-          builder: (_, state) =>
-              SocialProfileScreen(username: state.pathParameters['username']!),
-        ),
         GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
         GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
         GoRoute(

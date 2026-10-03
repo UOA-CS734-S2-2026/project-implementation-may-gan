@@ -5,6 +5,8 @@ import '../api/api_failure.dart';
 import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/public_return_intent.dart';
+import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
@@ -17,9 +19,10 @@ import 'private_media.dart';
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({super.key, required this.postId, this.intent});
 
   final String postId;
+  final PublicActionIntent? intent;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -28,6 +31,9 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
+  SessionController? _session;
+  String? _accountId;
+  String? _intentNotice;
 
   /// True once the post was edited or deleted here. It is returned to the
   /// list that opened the post, so that list can refresh.
@@ -36,7 +42,35 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_result == null) _load();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+  }
+
+  void _syncActor() {
+    final accountId = _session?.user?.id;
+    if (_result == null || accountId != _accountId) {
+      _accountId = accountId;
+      _post = null;
+      _result = null;
+      _intentNotice = null;
+      _load();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -44,7 +78,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final result = await services.posts.get(widget.postId);
     if (!mounted) return;
     if (result case ApiError(failure: Unauthenticated())) {
-      await services.session.sessionExpired();
+      if (services.session.status == SessionStatus.signedIn) {
+        await services.session.sessionExpired();
+      }
       return;
     }
     setState(() {
@@ -413,11 +449,71 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
+              const SizedBox(height: 20),
+              if (widget.intent != null &&
+                  _session?.status == SessionStatus.signedIn)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    widget.intent == PublicActionIntent.like
+                        ? 'Your like intent was retained. Likes are not available in this app version yet.'
+                        : widget.intent == PublicActionIntent.comment
+                        ? 'Your comment intent was retained. Comments are not available in this app version yet.'
+                        : 'Continue from the author profile.',
+                    key: const Key('post.intent'),
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.like'),
+                      label: 'like',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.like),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.comment'),
+                      label: 'comment',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.comment),
+                    ),
+                  ),
+                ],
+              ),
+              if (_intentNotice != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _intentNotice!,
+                  key: const Key('post.interactionUnavailable'),
+                  style: muted,
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  void _interaction(PublicActionIntent action) {
+    if (_session?.status != SessionStatus.signedIn) {
+      context.go(
+        PublicReturnIntent(
+          target: '/posts/${widget.postId}',
+          action: action,
+        ).authLocation,
+      );
+      return;
+    }
+    setState(() {
+      _intentNotice = action == PublicActionIntent.like
+          ? 'Likes are not available in this app version yet.'
+          : 'Comments are not available in this app version yet.';
+    });
   }
 }
 

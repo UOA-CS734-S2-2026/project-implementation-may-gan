@@ -100,7 +100,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _loadFailure = null;
     _name.text = profile.displayName == profile.username
         ? ''
-        : profile.displayName;
+        : profile.displayName ?? '';
     _bio.text = profile.bio ?? '';
     _mbti = profile.mbti ?? '';
     _whatIDo.text = profile.whatIDo ?? '';

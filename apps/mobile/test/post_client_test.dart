@@ -66,13 +66,13 @@ void main() {
     expect((invalid as ApiError).failure, isA<NotFound>());
   });
 
-  test('maps other failures and never calls without a session', () async {
+  test('reads anonymously and maps credential or service failures', () async {
     final signedOut = await client(
-      (_) => http.Response('{}', 200),
+      (_) => http.Response(jsonEncode(body(audience: 'friends')), 200),
       token: null,
     ).get('post-1');
-    expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-    expect(requests, isEmpty);
+    expect(signedOut, isA<ApiSuccess<PostDetail>>());
+    expect(requests.single.headers['authorization'], isNull);
 
     final expired = await client((_) => http.Response('{}', 401)).get('post-1');
     final down = await client((_) => http.Response('{}', 503)).get('post-1');
@@ -126,7 +126,7 @@ void main() {
       );
     });
 
-    test('maps refusals and never calls without a session', () async {
+    test('maps refusals and permits anonymous media reads', () async {
       for (final status in [404, 422]) {
         final result = await client(
           (_) => http.Response('{}', status),
@@ -139,11 +139,11 @@ void main() {
       expect((noUrl as ApiError).failure, isA<ServiceUnavailable>());
 
       final signedOut = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(jsonEncode(mediaJson('m-1', 0)), 200),
         token: null,
       ).media('post-1', 'm-1');
-      expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(signedOut, isA<ApiSuccess<PostMedia>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
   });
 
@@ -190,14 +190,22 @@ void main() {
       expect((result as ApiError).failure, isA<NotFound>());
     });
 
-    test('does not call the API without a session', () async {
+    test('reads a public profile archive without a session', () async {
       final result = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(
+          jsonEncode({
+            'kind': 'archive',
+            'items': [profilePost()..['audience'] = 'friends'],
+            'nextCursor': null,
+            'hasMore': false,
+          }),
+          200,
+        ),
         token: null,
       ).profilePage('ana_walks');
 
-      expect((result as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(result, isA<ApiSuccess<ProfilePostsPage>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
   });
 
