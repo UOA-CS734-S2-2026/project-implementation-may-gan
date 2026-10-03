@@ -43,6 +43,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// overwrite a newer like.
   int _likeVersion = 0;
 
+  /// Changes whenever the counts are read again, so only the newest read is
+  /// shown and an older answer can't overwrite a newer comment's count.
+  int _countsVersion = 0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -124,8 +128,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   Future<void> _refreshCounts() async {
     final services = AppScope.of(context);
     final likeVersion = _likeVersion;
+    final version = ++_countsVersion;
     final result = await services.posts.get(widget.postId);
-    if (!mounted) return;
+    // A newer read started after this one, so its answer, including a 404,
+    // is the one that counts.
+    if (!mounted || version != _countsVersion) return;
     switch (result) {
       case ApiSuccess(:final value):
         final post = _post;

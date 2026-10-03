@@ -28,6 +28,9 @@ Future<TestHarness> openPost(
 
   /// What reading the post returns after a comment changes, if not a count.
   ApiResult<PostDetail>? detailAfter,
+
+  /// Replaces the post reads above, for tests that answer them by hand.
+  FakePostClient? posts,
 }) async {
   final client = interactions ?? FakeInteractionsClient();
   client.commentResults
@@ -53,11 +56,13 @@ Future<TestHarness> openPost(
         FeedPage(items: [feedPost('1')], nextCursor: null, hasMore: false),
       ),
     ]),
-    posts: FakePostClient([
-      detail(commentCount),
-      if (commentCountAfter != null) detail(commentCountAfter),
-      ?detailAfter,
-    ]),
+    posts:
+        posts ??
+        FakePostClient([
+          detail(commentCount),
+          if (commentCountAfter != null) detail(commentCountAfter),
+          ?detailAfter,
+        ]),
     interactions: client,
   );
   await signIn(tester, harness);
@@ -66,6 +71,32 @@ Future<TestHarness> openPost(
   await tester.tap(find.byKey(const Key('home.feed.post.1')));
   await tester.pumpAndSettle();
   return harness;
+}
+
+ApiResult<PostDetail> withComments(int count) =>
+    ApiSuccess(postDetail('1').copyWith(likeCount: 2, commentCount: count));
+
+/// Answers the first read of the post at once and holds every later read
+/// until the test answers it, in whatever order it chooses.
+class GatedPostClient extends FakePostClient {
+  GatedPostClient() : super([withComments(0)]);
+
+  final gates = <Completer<ApiResult<PostDetail>>>[];
+
+  @override
+  Future<ApiResult<PostDetail>> get(String postId) {
+    if (requested.isEmpty) return super.get(postId);
+    requested.add(postId);
+    final gate = Completer<ApiResult<PostDetail>>();
+    gates.add(gate);
+    return gate.future;
+  }
+}
+
+Future<void> sendComment(WidgetTester tester, String text) async {
+  await tester.ensureVisible(find.byKey(const Key('comments.input')));
+  await tester.enterText(find.byKey(const Key('comments.input')), text);
+  await tapVisible(tester, find.byKey(const Key('comments.send')));
 }
 
 Future<void> tapVisible(WidgetTester tester, Finder finder) async {
@@ -480,6 +511,84 @@ void main() {
 
       expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
       expect(find.byKey(const Key('comments')), findsNothing);
+    });
+
+    testWidgets('keeps the newest count when an older read answers last', (
+      tester,
+    ) async {
+      final posts = GatedPostClient();
+      final interactions = FakeInteractionsClient()
+        ..createResults.addAll([
+          ApiSuccess(postComment('c-1', text: 'One.')),
+          ApiSuccess(postComment('c-2', text: 'Two.')),
+        ]);
+      await openPost(tester, interactions: interactions, posts: posts);
+
+      await sendComment(tester, 'One.');
+      await sendComment(tester, 'Two.');
+      expect(posts.gates, hasLength(2));
+
+      posts.gates[1].complete(withComments(2));
+      await tester.pumpAndSettle();
+      expect(find.text('2 comments'), findsOneWidget);
+
+      // The read from before the second comment answers late.
+      posts.gates[0].complete(withComments(1));
+      await tester.pumpAndSettle();
+      expect(find.text('2 comments'), findsOneWidget);
+    });
+
+    testWidgets('keeps the count right when a new comment is deleted at once', (
+      tester,
+    ) async {
+      final posts = GatedPostClient();
+      final interactions = FakeInteractionsClient()
+        ..createResults.add(
+          ApiSuccess(postComment('c-9', text: 'Oops.', viewerCanDelete: true)),
+        );
+      await openPost(tester, interactions: interactions, posts: posts);
+
+      await sendComment(tester, 'Oops.');
+      await tapVisible(tester, find.byKey(const Key('comment.c-9.menu')));
+      await tester.tap(find.byKey(const Key('comment.delete')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('comment.deleteDialog.confirm')));
+      await tester.pumpAndSettle();
+      expect(interactions.deletedComments, ['c-9']);
+      expect(posts.gates, hasLength(2));
+
+      posts.gates[1].complete(withComments(0));
+      await tester.pumpAndSettle();
+      posts.gates[0].complete(withComments(1));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('comment.c-9')), findsNothing);
+      expect(find.text('0 comments'), findsOneWidget);
+    });
+
+    testWidgets('ignores an older 404 while a newer read is pending', (
+      tester,
+    ) async {
+      final posts = GatedPostClient();
+      final interactions = FakeInteractionsClient()
+        ..createResults.addAll([
+          ApiSuccess(postComment('c-1', text: 'One.')),
+          ApiSuccess(postComment('c-2', text: 'Two.')),
+        ]);
+      await openPost(tester, interactions: interactions, posts: posts);
+
+      await sendComment(tester, 'One.');
+      await sendComment(tester, 'Two.');
+
+      posts.gates[0].complete(const ApiError(NotFound()));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('post.unavailable')), findsNothing);
+      expect(find.byKey(const Key('comments')), findsOneWidget);
+
+      posts.gates[1].complete(withComments(2));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('post.unavailable')), findsNothing);
+      expect(find.text('2 comments'), findsOneWidget);
     });
 
     testWidgets('shows no options on someone else\'s comment', (tester) async {
