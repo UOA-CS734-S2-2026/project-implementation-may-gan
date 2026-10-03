@@ -19,6 +19,7 @@ import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
 import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
+import '../auth/biometric_service.dart';
 import '../profile/streak_cache.dart';
 import '../settings/account_export_client.dart';
 import '../weather/weather_lookup.dart';
@@ -33,6 +34,7 @@ class AppServices {
     required this.friends,
     required this.drafts,
     required this._submitter,
+    required this.biometric,
     MessagingController? messaging,
     this.profiles = const UnavailableProfileClient(),
     this.interactions = const UnavailableInteractionsClient(),
@@ -105,6 +107,7 @@ class AppServices {
   /// Fires when the server accepts or deletes one of the user's posts.
   final PostActivity postActivity;
   final DateTime Function() clock;
+  final BiometricService biometric;
 }
 
 class AppScope extends InheritedWidget {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'app_scope.dart';
+import '../auth/lock_screen.dart';
 import '../notifications/notification_router.dart';
 import 'router.dart';
 import 'theme.dart';
@@ -52,6 +53,8 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.services.messaging.foreground());
+    } else if (state == AppLifecycleState.paused) {
+      widget.services.biometric.lock();
     }
   }
 
@@ -73,6 +76,16 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
       title: 'Dayli',
       theme: buildDayliTheme(useGoogleFonts: widget.useGoogleFonts),
       routerConfig: _router,
+      builder: (context, child) => ListenableBuilder(
+        listenable: widget.services.biometric,
+        builder: (context, _) => Stack(
+          children: [
+            if (child != null) child,
+            if (widget.services.biometric.isLocked)
+              const LockScreen(),
+          ],
+        ),
+      ),
     ),
   );
 }
