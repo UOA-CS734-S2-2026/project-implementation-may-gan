@@ -39,6 +39,30 @@ describe("private export worker", () => {
     expect(input.store.fail).not.toHaveBeenCalled();
   });
 
+  it("splits uneven ZIP chunks into exact 5 MiB non-final R2 parts", async () => {
+    const input = fixtures();
+    const block = 512 * 1024;
+    const mediaBytes = 12 * block + 273;
+    vi.mocked(input.files.page).mockImplementation(async (_selection, after) => after === null ? [{
+      file_id: "post:media_1", post_id: "post_1", post_trashed: false, file_kind: "post_media",
+      content_type: "image/jpeg", byte_size: mediaBytes, object_key: "media/owner/owned",
+    }] : []);
+    input.files.read = async function* () {
+      for (let index = 0; index < 12; index += 1) yield new Uint8Array(block).fill(index);
+      yield new Uint8Array(273).fill(99);
+    };
+    expect(await createExportWorker(input).runOnce()).toEqual({ outcome: "ready" });
+    const chunks = vi.mocked(input.objects.uploadPart).mock.calls.map((call) => call[3]);
+    expect(chunks.length).toBe(2);
+    expect(chunks[0]?.byteLength).toBe(5 * 1024 * 1024);
+    expect(chunks[1]?.byteLength).toBeGreaterThan(0);
+    expect(chunks[1]?.byteLength).toBeLessThan(5 * 1024 * 1024);
+    expect(Buffer.concat(chunks.map((part) => Buffer.from(part))).subarray(0, 4).toString("hex")).toBe("504b0304");
+    expect(input.objects.complete).toHaveBeenCalledWith(key, "upload-1", [
+      { partNumber: 1, etag: '"etag"' }, { partNumber: 2, etag: '"etag"' },
+    ]);
+  });
+
   it("never starts R2 when the lease is fenced before reservation", async () => {
     const input = fixtures();
     vi.mocked(input.store.reserve).mockResolvedValue(null);

@@ -60,16 +60,15 @@ export function createExportWorker(input: {
         stage = "register";
         if (!await input.store.register(selection, key, uploadId)) throw new Error("Export upload was not registered.");
         const parts: MultipartPart[] = [];
-        let pending: Uint8Array[] = [];
+        let pending = new Uint8Array(partBytes);
         let pendingSize = 0;
         const flush = async () => {
           if (pendingSize === 0) return;
           if (parts.length >= maximumParts) throw new ExportZipLimitError("Export archive has too many parts.");
           await renew();
-          const bytes = new Uint8Array(pendingSize);
-          let at = 0;
-          for (const chunk of pending) { bytes.set(chunk, at); at += chunk.byteLength; }
-          pending = [];
+          // Every non-final part is exactly 5 MiB. Only the last part may be shorter.
+          const bytes = pendingSize === partBytes ? pending : pending.slice(0, pendingSize);
+          pending = new Uint8Array(partBytes);
           pendingSize = 0;
           operation = "storage";
           stage = "upload_part";
@@ -80,10 +79,14 @@ export function createExportWorker(input: {
         stage = "read_sources";
         for await (const chunk of streamExportZip(recordArchiveEntries(selection, input.records, input.files))) {
           await renew();
-          if (pendingSize + chunk.byteLength > partBytes) await flush();
-          pending.push(chunk);
-          pendingSize += chunk.byteLength;
-          if (pendingSize >= partBytes) await flush();
+          let offset = 0;
+          while (offset < chunk.byteLength) {
+            const length = Math.min(partBytes - pendingSize, chunk.byteLength - offset);
+            pending.set(chunk.subarray(offset, offset + length), pendingSize);
+            pendingSize += length;
+            offset += length;
+            if (pendingSize === partBytes) await flush();
+          }
         }
         await flush();
         await renew();
