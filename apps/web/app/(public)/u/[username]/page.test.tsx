@@ -12,8 +12,8 @@ const api = vi.hoisted(() => ({
   removeFriend: vi.fn(),
 }));
 vi.mock("@/lib/api/friends", () => api);
-let signedIn = true;
-vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: signedIn ? { id: "actor" } : null, isPending: false }) }));
+let actorId: string | null = "actor";
+vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: actorId ? { id: actorId } : null, isPending: false }) }));
 const replace = vi.fn();
 let query = "";
 vi.mock("next/navigation", () => ({
@@ -25,6 +25,7 @@ const profiles = vi.hoisted(() => ({ profilesApi: { details: vi.fn(), update: vi
 vi.mock("@/features/profiles/shared/profiles.api", () => profiles);
 vi.mock("@/features/posts/list-profile-posts/ProfilePosts", () => ({ ProfilePosts: ({ username }: { username: string }) => <p>posts for {username}</p> }));
 
+import { rememberPublicIntent } from "@/lib/routing/public-return-intent";
 import { Profile } from "./ClientPage";
 
 function authorized(overrides: Record<string, unknown> = {}) {
@@ -40,14 +41,15 @@ function renderProfile(username = "ada") {
 describe("public profile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    signedIn = true;
+    actorId = "actor";
     query = "";
+    window.sessionStorage.clear();
     profiles.profilesApi.details.mockResolvedValue(authorized());
     api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "friends" } });
   });
 
   it("renders a public projection and archive without a session", async () => {
-    signedIn = false;
+    actorId = null;
     profiles.profilesApi.details.mockResolvedValue({ ok: true, value: { kind: "public", username: "ada", displayName: "Ada", bio: "Counts things.", avatarUrl: "/api/v1/profiles/ada/avatar", streak: { current: 4, longest: 9 } } });
     renderProfile();
 
@@ -59,7 +61,7 @@ describe("public profile", () => {
   });
 
   it("renders only the username and generic private state anonymously", async () => {
-    signedIn = false;
+    actorId = null;
     profiles.profilesApi.details.mockResolvedValue({ ok: true, value: { kind: "restricted", username: "ada" } });
     renderProfile();
 
@@ -70,7 +72,7 @@ describe("public profile", () => {
   });
 
   it("clears a cached archive when a profile becomes restricted", async () => {
-    signedIn = false;
+    actorId = null;
     profiles.profilesApi.details.mockResolvedValue({ ok: true, value: { kind: "public", username: "ada", displayName: "Ada", bio: null, avatarUrl: null, streak: null } });
     const { client } = renderProfile();
     await screen.findByRole("heading", { name: "Ada" });
@@ -80,6 +82,38 @@ describe("public profile", () => {
     expect(await screen.findByText("This profile is private.")).toBeTruthy();
     await waitFor(() => expect(client.getQueryData(["posts", "anonymous", "profile", "ada"])).toBeUndefined());
     expect(screen.queryByText("posts for ada")).toBeNull();
+  });
+
+  it("conceals and evicts a public profile when a refetch becomes blocked", async () => {
+    actorId = null;
+    profiles.profilesApi.details
+      .mockResolvedValueOnce({ ok: true, value: { kind: "public", username: "ada", displayName: "Ada", bio: "Protected bio", avatarUrl: null, streak: null } })
+      .mockResolvedValue({ ok: false, failure: { kind: "notFound" } });
+    const { client } = renderProfile();
+    expect(await screen.findByText("Protected bio")).toBeTruthy();
+    client.setQueryData(["posts", "anonymous", "profile", "ada"], { pages: [{ kind: "archive", items: [{ protected: true }] }] });
+
+    await client.refetchQueries({ queryKey: ["profiles", "anonymous", "details", "ada"] });
+    expect(await screen.findByRole("heading", { name: "This profile is unavailable" })).toBeTruthy();
+    expect(screen.queryByText("Protected bio")).toBeNull();
+    await waitFor(() => {
+      expect(client.getQueryData(["profiles", "anonymous", "details", "ada"])).toBeUndefined();
+      expect(client.getQueryData(["posts", "anonymous", "profile", "ada"])).toBeUndefined();
+    });
+  });
+
+  it("evicts a friend's authorized projection and archive after concealment", async () => {
+    profiles.profilesApi.details.mockResolvedValueOnce(authorized()).mockResolvedValue({ ok: false, failure: { kind: "notFound" } });
+    const { client } = renderProfile();
+    expect(await screen.findByText("Counts things.")).toBeTruthy();
+    client.setQueryData(["posts", "actor", "profile", "ada"], { pages: [{ kind: "archive", items: [{ protected: true }] }] });
+
+    await client.refetchQueries({ queryKey: ["profiles", "actor", "details", "ada"] });
+    expect(await screen.findByRole("heading", { name: "This profile is unavailable" })).toBeTruthy();
+    await waitFor(() => {
+      expect(client.getQueryData(["profiles", "actor", "details", "ada"])).toBeUndefined();
+      expect(client.getQueryData(["posts", "actor", "profile", "ada"])).toBeUndefined();
+    });
   });
 
   it("asks before removing an existing friend", async () => {
@@ -95,12 +129,25 @@ describe("public profile", () => {
 
   it("refetches after sign-in and never submits the returned action", async () => {
     query = "intent=friend-request";
+    rememberPublicIntent("/u/ada?intent=friend-request");
     api.loadSocialProfile.mockResolvedValue({ ok: true, value: { id: "ada", username: "ada", displayName: "Ada", relationship: "none" } });
     renderProfile();
 
     expect(await screen.findByText(/Review this profile/)).toBeTruthy();
     await waitFor(() => expect(profiles.profilesApi.details.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect(api.sendFriendRequest).not.toHaveBeenCalled();
+  });
+
+  it("discards an intent bound to another account", async () => {
+    query = "intent=friend-request";
+    rememberPublicIntent("/u/ada?intent=friend-request");
+    const raw = [...Array(window.sessionStorage.length)].map((_, index) => window.sessionStorage.key(index)).find(Boolean)!;
+    const state = JSON.parse(window.sessionStorage.getItem(raw)!);
+    window.sessionStorage.setItem(raw, JSON.stringify({ ...state, actorId: "another-account" }));
+    renderProfile();
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/u/ada"));
+    expect(screen.queryByText(/Review this profile/)).toBeNull();
   });
 
   it("removes an unsupported intent from the address", async () => {

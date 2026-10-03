@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
 import type { PostDetail } from "@/features/posts/shared/posts.api";
 import { isVideo, PrivateImage, PrivateVideo } from "@/features/posts/shared/PrivateMedia";
 import { PostApiError } from "@/features/posts/shared/query-result";
 import { usePostQuery } from "./use-post-query";
 import { useSession } from "@/lib/session/hooks";
-import { isPublicAction, signInForPublicAction } from "@/lib/routing/public-return-intent";
+import { isPublicAction, rememberPublicIntent, resumePublicIntent, signInForPublicAction, withPublicAction, type PublicAction } from "@/lib/routing/public-return-intent";
+import { postKeys } from "@/features/posts/shared/posts.keys";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
 
@@ -33,6 +35,10 @@ function postedAt(post: PostDetail) {
 }
 
 const photoColumns = ["", "grid-cols-1", "grid-cols-2", "grid-cols-3"] as const;
+
+function rememberPostIntent(pathname: string, action: PublicAction) {
+  return rememberPublicIntent(withPublicAction(pathname, action));
+}
 
 /** One video, or up to three photos, each loaded from a private, expiring URL. */
 function PostMedia({ post }: { post: PostDetail }) {
@@ -75,16 +81,26 @@ export function PostDetailView({ username, postId }: { username: string; postId:
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user } = useSession();
+  const { user, isPending: sessionPending } = useSession();
+  const client = useQueryClient();
   const query = usePostQuery(postId);
   const failure = query.error instanceof PostApiError ? query.error.failure : undefined;
-  const post = query.data;
+  const post = failure === "notFound" ? undefined : query.data;
   const rawIntent = searchParams.get("intent");
-  const intent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
+  const candidateIntent = isPublicAction(rawIntent) && (rawIntent === "like" || rawIntent === "comment") ? rawIntent : null;
+  const intent = !sessionPending && candidateIntent && user && resumePublicIntent(`${pathname}?intent=${candidateIntent}`, user.id)
+    ? candidateIntent
+    : null;
 
   useEffect(() => {
-    if (rawIntent && !intent) router.replace(pathname);
-  }, [intent, pathname, rawIntent, router]);
+    if (rawIntent && !sessionPending && !intent) router.replace(pathname);
+  }, [intent, pathname, rawIntent, router, sessionPending]);
+  useEffect(() => {
+    if (failure !== "notFound") return;
+    const actor = user?.id ?? "anonymous";
+    void client.cancelQueries({ queryKey: postKeys.detail(actor, postId) });
+    client.removeQueries({ queryKey: postKeys.detail(actor, postId) });
+  }, [client, failure, postId, user?.id]);
   useEffect(() => {
     if (user && intent && query.isSuccess) void query.refetch();
     // Refetch once after the initial authenticated response settles. The action itself always needs another click.
@@ -180,14 +196,14 @@ export function PostDetailView({ username, postId }: { username: string; postId:
       <div className="flex flex-wrap gap-2 border-t border-foreground/10 pt-5" aria-label="Post actions">
         <Button
           href={user ? undefined : signInForPublicAction(pathname, "like")}
-          onClick={user ? () => router.replace(`${pathname}?intent=like`) : undefined}
+          onClick={user ? () => { rememberPostIntent(pathname, "like"); router.replace(`${pathname}?intent=like`); } : () => rememberPostIntent(pathname, "like")}
           variant={{ color: "accent", size: "sm", weight: "secondary" }}
         >
           like
         </Button>
         <Button
           href={user ? undefined : signInForPublicAction(pathname, "comment")}
-          onClick={user ? () => router.replace(`${pathname}?intent=comment`) : undefined}
+          onClick={user ? () => { rememberPostIntent(pathname, "comment"); router.replace(`${pathname}?intent=comment`); } : () => rememberPostIntent(pathname, "comment")}
           variant={{ color: "background", size: "sm", weight: "secondary" }}
         >
           comment
