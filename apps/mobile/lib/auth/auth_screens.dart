@@ -9,7 +9,6 @@ import '../ui/form_input.dart';
 import '../ui/google_sign_in_button.dart';
 import '../ui/surfaces.dart';
 import 'native_session.dart';
-import 'public_return_intent.dart';
 
 enum AuthMode { signIn, signUp }
 
@@ -430,20 +429,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 minimumSize: const Size(48, 48),
               ),
               onPressed: () {
-                final intent = PublicReturnIntent.fromAuthUri(
-                  GoRouterState.of(context).uri,
-                );
+                final intent = AppScope.of(context).session
+                    .resolvePublicReturnIntent(GoRouterState.of(context).uri);
                 final path = _signUp ? '/sign-in' : '/sign-up';
                 context.pushReplacement(
-                  intent == null
-                      ? path
-                      : Uri(
-                          path: path,
-                          queryParameters: {
-                            'returnTo': intent.target,
-                            'action': intent.action.value,
-                          },
-                        ).toString(),
+                  intent == null ? path : intent.authLocation(path),
                 );
               },
               child: Text(

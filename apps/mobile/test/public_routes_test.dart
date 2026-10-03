@@ -393,28 +393,119 @@ void main() {
     },
   );
 
-  test('rejects external, malformed, and unknown return state', () {
+  test('binds a fresh anonymous intent to its first authenticated actor', () {
+    final now = DateTime.utc(2026, 10, 3, 1);
+    final registry = PublicReturnIntentRegistry(
+      clock: () => now,
+      tokenFactory: () => 'a' * 48,
+    );
+    final issued = registry.issue('/posts/post-1', PublicActionIntent.like)!;
+
+    final bound = registry.resolveAuth(
+      Uri.parse(issued.authLocation()),
+      actorId: 'actor-a',
+    );
+    expect(bound?.boundActorId, 'actor-a');
+    final consumed = registry.consumePublic(
+      Uri.parse(bound!.returnLocation),
+      actorId: 'actor-a',
+    );
+    expect(consumed?.action, PublicActionIntent.like);
     expect(
-      PublicReturnIntent.fromAuthUri(
-        Uri.parse('/sign-in?returnTo=https%3A%2F%2Fevil.test&action=like'),
+      registry.consumePublic(
+        Uri.parse(bound.returnLocation),
+        actorId: 'actor-a',
+      ),
+      isNull,
+    );
+  });
+
+  test('rejects expired intents and actor replacement', () {
+    var now = DateTime.utc(2026, 10, 3, 1);
+    final registry = PublicReturnIntentRegistry(
+      clock: () => now,
+      tokenFactory: () => 'b' * 48,
+    );
+    final expiring = registry.issue(
+      '/u/ada',
+      PublicActionIntent.messageRequest,
+    )!;
+    now = now.add(const Duration(minutes: 10, milliseconds: 1));
+    expect(
+      registry.resolveAuth(
+        Uri.parse(expiring.authLocation()),
+        actorId: 'actor-a',
+      ),
+      isNull,
+    );
+
+    now = DateTime.utc(2026, 10, 3, 2);
+    final replacement = registry.issue(
+      '/u/ada',
+      PublicActionIntent.friendRequest,
+    )!;
+    expect(
+      registry.resolveAuth(
+        Uri.parse(replacement.authLocation()),
+        actorId: 'actor-a',
+      ),
+      isNotNull,
+    );
+    expect(
+      registry.resolveAuth(
+        Uri.parse(replacement.authLocation()),
+        actorId: 'actor-b',
+      ),
+      isNull,
+    );
+  });
+
+  test('rejects fabricated state and clears state on logout or restart', () {
+    final registry = PublicReturnIntentRegistry(
+      clock: () => DateTime.utc(2026, 10, 3, 1),
+      tokenFactory: () => 'c' * 48,
+    );
+    final issued = registry.issue('/posts/post-1', PublicActionIntent.like)!;
+    expect(
+      registry.resolveAuth(
+        Uri.parse('/sign-in?returnTo=%2Fposts%2Fpost-1&action=like'),
+        actorId: 'actor-a',
       ),
       isNull,
     );
     expect(
-      PublicReturnIntent.fromAuthUri(
-        Uri.parse('/sign-in?returnTo=%2Fsettings&action=like'),
+      registry.resolveAuth(
+        Uri.parse(issued.authLocation()),
+        actorId: 'actor-a',
       ),
       isNull,
     );
+
+    final logoutIntent = registry.issue(
+      '/u/ada',
+      PublicActionIntent.messageRequest,
+    )!;
+    registry.clear();
     expect(
-      PublicReturnIntent.fromAuthUri(
-        Uri.parse('/sign-in?returnTo=%2Fu%2Fada&action=delete'),
+      registry.resolveAuth(
+        Uri.parse(logoutIntent.authLocation()),
+        actorId: 'actor-a',
       ),
       isNull,
     );
+
+    final beforeRestart = registry.issue(
+      '/u/ada',
+      PublicActionIntent.messageRequest,
+    )!;
+    final restarted = PublicReturnIntentRegistry(
+      clock: () => DateTime.utc(2026, 10, 3, 1),
+      tokenFactory: () => 'd' * 48,
+    );
     expect(
-      PublicReturnIntent.fromAuthUri(
-        Uri.parse('/sign-in?returnTo=%2Fu%2Fada&action=like'),
+      restarted.resolveAuth(
+        Uri.parse(beforeRestart.authLocation()),
+        actorId: 'actor-a',
       ),
       isNull,
     );

@@ -20,11 +20,13 @@ class SocialProfileScreen extends StatefulWidget {
     required this.username,
     this.followRenames = true,
     this.intent,
+    this.intentActorId,
   });
 
   final String username;
   final bool followRenames;
   final PublicActionIntent? intent;
+  final String? intentActorId;
 
   @override
   State<SocialProfileScreen> createState() => _SocialProfileScreenState();
@@ -120,7 +122,8 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   void didUpdateWidget(covariant SocialProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.username != widget.username ||
-        oldWidget.intent != widget.intent) {
+        oldWidget.intent != widget.intent ||
+        oldWidget.intentActorId != widget.intentActorId) {
       _syncActor(force: true);
     }
   }
@@ -208,7 +211,8 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
 
   void _requireSignIn(PublicActionIntent action) {
     final target = '/u/${Uri.encodeComponent(widget.username)}';
-    context.go(PublicReturnIntent(target: target, action: action).authLocation);
+    final intent = _session?.issuePublicReturnIntent(target, action);
+    context.go(intent?.authLocation() ?? '/sign-in');
   }
 
   Future<void> _friend(FriendCard person) async {
@@ -443,7 +447,9 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                         ),
                       ),
                     const SizedBox(height: 22),
-                    if (intent != null && signedIn)
+                    if (intent != null &&
+                        signedIn &&
+                        widget.intentActorId == _session?.user?.id)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
