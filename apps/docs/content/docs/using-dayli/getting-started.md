@@ -61,4 +61,4 @@ See [Creating your daily post](./creating-your-daily-post) for every field, draf
 
 On the web sign-in page, choose **Forgot password?**, enter your email, and choose **Send reset link**. Open the email, enter a new password on **Choose a new password**, then choose **Reset**. A reset link lasts 15 minutes.
 
-The mobile app does not currently contain the password recovery screens. Open the web version of the same Dayli environment in a browser and use its reset flow. For example, a staging mobile account must use the staging web site, not the production site. Reset email delivery must also be configured in that environment, or no message can arrive.
+The mobile app does not currently contain the password recovery screens. Open the web version of the same Dayli environment in a browser and use its reset flow. For example, a staging mobile account must use the staging web site, not your local web app. Reset email delivery must also be configured in that environment, or no message can arrive.

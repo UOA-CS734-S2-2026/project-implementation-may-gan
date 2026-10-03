@@ -1,0 +1,8 @@
+{
+  "title": "Media",
+  "pages": [
+    "media.reservations.create",
+    "media.reservations.get",
+    "media.reservations.complete"
+  ]
+}
