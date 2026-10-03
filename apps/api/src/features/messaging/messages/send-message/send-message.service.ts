@@ -56,6 +56,12 @@ export function createSendMessageService(dependencies: {
           const parent = await transaction.findMessage(conversationId, replyToMessageId);
           if (!parent) throw new MessagingError("REPLY_NOT_FOUND");
         }
+        await transaction.lockNewMessageSender(actorId);
+        const concurrentPrevious = await transaction.findIdempotentMessage(actorId, input.clientMessageId);
+        if (concurrentPrevious) {
+          if (concurrentPrevious.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
+          return { message: toMessageDto(concurrentPrevious.message), replayed: true };
+        }
         const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
         const message = await transaction.insertMessage({
           id: generateId(),

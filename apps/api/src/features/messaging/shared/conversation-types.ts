@@ -1,4 +1,5 @@
 import type { StoredMessage } from "./messaging-types";
+import type { DatabaseTimestamp } from "./new-message-quota";
 
 export interface DirectConversation {
   id: string;
@@ -23,8 +24,10 @@ export interface DirectConversationTransaction {
     conversation: DirectConversation;
     message: StoredMessage;
   } | null>;
+  /** Serializes sender-wide idempotency and quota decisions after pair/conversation locks. */
+  lockNewMessageSender(senderId: string): Promise<void>;
   /** Claims a sender-wide slot after all checks and returns authoritative database time. */
-  claimNewMessageSlot(senderId: string, limit: number): Promise<Date>;
+  claimNewMessageSlot(senderId: string, limit: number): Promise<DatabaseTimestamp>;
   /** Creates a pair-unique conversation and first message plus change/outbox work in one transaction. */
   createConversationWithMessage(input: {
     conversationId: string;
@@ -35,7 +38,7 @@ export interface DirectConversationTransaction {
     clientMessageId: string;
     requestFingerprint: string;
     text: string;
-    createdAt: Date;
+    createdAt: DatabaseTimestamp;
   }): Promise<{ conversation: DirectConversation; message: StoredMessage }>;
   /** Activates an existing request after a current friendship is observed under the pair lock. */
   activateConversation(conversation: DirectConversation, now: Date): Promise<DirectConversation>;
@@ -46,7 +49,7 @@ export interface DirectConversationTransaction {
     clientMessageId: string;
     requestFingerprint: string;
     text: string;
-    createdAt: Date;
+    createdAt: DatabaseTimestamp;
     messageId: string;
   }): Promise<StoredMessage>;
 }

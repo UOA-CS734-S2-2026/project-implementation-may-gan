@@ -2407,6 +2407,16 @@
           "reactions"
         ]
       },
+      "MessageCreationRateLimitError": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          {
+            "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+          }
+        ]
+      },
       "DirectMessageSendQuotaError": {
         "type": "object",
         "properties": {
@@ -8448,7 +8458,7 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "A native request limit or the persistent sender-wide message quota was reached.",
             "headers": {
               "Retry-After": {
                 "description": "Wait in seconds before the oldest counted message expires.",
@@ -8461,7 +8471,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/MessageCreationRateLimitError"
                 }
               }
             }
@@ -8616,10 +8626,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -8629,7 +8639,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -8767,10 +8777,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -8780,7 +8790,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -8890,10 +8900,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -8903,7 +8913,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9013,10 +9023,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9026,7 +9036,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9166,10 +9176,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9179,7 +9189,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9289,10 +9299,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9302,7 +9312,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9527,7 +9537,7 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "A native request limit or the persistent sender-wide message quota was reached.",
             "headers": {
               "Retry-After": {
                 "description": "Wait in seconds before the oldest counted message expires.",
@@ -9540,7 +9550,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/MessageCreationRateLimitError"
                 }
               }
             }
@@ -9644,10 +9654,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9657,7 +9667,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9802,10 +9812,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9815,7 +9825,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9919,10 +9929,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9932,7 +9942,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -10040,10 +10050,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -10053,7 +10063,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -10180,10 +10190,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -10193,7 +10203,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -10339,10 +10349,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -10352,7 +10362,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -10545,10 +10555,10 @@
             }
           },
           "429": {
-            "description": "The sender-wide rolling message quota was reached.",
+            "description": "Too many requests.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Conservative wait in seconds.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -10558,7 +10568,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DirectMessageSendQuotaError"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }

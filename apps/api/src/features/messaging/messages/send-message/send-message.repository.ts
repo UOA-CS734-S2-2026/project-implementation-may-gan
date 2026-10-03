@@ -5,7 +5,7 @@ import { appendPeerChange, findMessage, getAccess, type MessageWriteQueryable } 
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import { participantIdForUser } from "../../shared/participant-identity";
-import { claimNewMessageSlot } from "../../shared/new-message-quota";
+import { claimNewMessageSlot, databaseTimestampValue, lockNewMessageSender, type DatabaseTimestamp } from "../../shared/new-message-quota";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 
 export interface StoredIdempotentMessage {
@@ -22,7 +22,8 @@ export interface SendMessageTransaction {
   activateForFriendship(actorId: string, conversationId: string): Promise<ConversationAccess>;
   findIdempotentMessage(senderId: string, clientMessageId: string): Promise<StoredIdempotentMessage | null>;
   findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null>;
-  claimNewMessageSlot(senderId: string, limit: number): Promise<Date>;
+  lockNewMessageSender(senderId: string): Promise<void>;
+  claimNewMessageSlot(senderId: string, limit: number): Promise<DatabaseTimestamp>;
   insertMessage(input: {
     id: string;
     conversationId: string;
@@ -31,7 +32,7 @@ export interface SendMessageTransaction {
     requestFingerprint: string;
     text: string;
     replyToMessageId: string | null;
-    createdAt: Date;
+    createdAt: DatabaseTimestamp;
   }): Promise<StoredMessage>;
   appendPeerChange(input: ConversationPeerChange): Promise<void>;
 }
@@ -83,16 +84,20 @@ class PostgresMessageTransaction implements SendMessageTransaction {
   async findMessage(conversationId: string, messageId: string): Promise<StoredMessage | null> {
     return findMessage(this.queryable, this.actorId, conversationId, messageId);
   }
-  async claimNewMessageSlot(senderId: string, limit: number): Promise<Date> {
+  async lockNewMessageSender(senderId: string): Promise<void> {
+    return lockNewMessageSender(this.queryable, senderId);
+  }
+  async claimNewMessageSlot(senderId: string, limit: number) {
     return claimNewMessageSlot(this.queryable, senderId, limit);
   }
   async insertMessage(input: Parameters<SendMessageTransaction["insertMessage"]>[0]): Promise<StoredMessage> {
+    const createdAt = databaseTimestampValue(input.createdAt);
     const [allocated] = await this.queryable
       .update(schema.conversations)
       .set({
         lastMessageSequence: sql`${schema.conversations.lastMessageSequence} + 1`,
-        lastActivityAt: input.createdAt,
-        updatedAt: input.createdAt,
+        lastActivityAt: createdAt,
+        updatedAt: createdAt,
       })
       .where(eq(schema.conversations.id, input.conversationId))
       .returning({ sequence: schema.conversations.lastMessageSequence });
@@ -111,7 +116,7 @@ class PostgresMessageTransaction implements SendMessageTransaction {
         body: input.text,
         replyToMessageId: input.replyToMessageId,
         version: 1,
-        createdAt: input.createdAt,
+        createdAt,
       })
       .returning(messageProjectionSelection);
     return toStoredMessage(message!);
