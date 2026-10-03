@@ -42,7 +42,7 @@ export interface FutureSelfNoteDetail {
     /**
      *
      */
-    deliveredAt: Date;
+    deliveredAt: Date | null;
     /**
      *
      */
@@ -86,7 +86,7 @@ export function FutureSelfNoteDetailFromJSONTyped(json: any, ignoreDiscriminator
         'id': json['id'],
         'deliverOn': json['deliverOn'],
         'status': FutureSelfNoteStatusFromJSON(json['status']),
-        'deliveredAt': (json['deliveredAt'] == null ? json['deliveredAt'] : parseDateTime(json['deliveredAt'])),
+        'deliveredAt': (json['deliveredAt'] == null ? null : parseDateTime(json['deliveredAt'])),
         'createdAt': (json['createdAt'] == null ? json['createdAt'] : parseDateTime(json['createdAt'])),
         'updatedAt': (json['updatedAt'] == null ? json['updatedAt'] : parseDateTime(json['updatedAt'])),
         'body': json['body'],

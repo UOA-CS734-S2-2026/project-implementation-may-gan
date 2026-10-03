@@ -34,7 +34,7 @@ export interface FutureSelfNotePage {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

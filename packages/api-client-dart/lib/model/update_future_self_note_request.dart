@@ -60,7 +60,7 @@ class UpdateFutureSelfNoteRequest {
       json[r'body'] = null;
     }
     if (this.deliverOn != null) {
-      json[r'deliverOn'] = _dateFormatter.format(this.deliverOn!);
+      json[r'deliverOn'] = this.deliverOn;
     } else {
       json[r'deliverOn'] = null;
     }
@@ -94,7 +94,7 @@ class UpdateFutureSelfNoteRequest {
 
       return UpdateFutureSelfNoteRequest(
         body: mapValueOfType<String>(json, r'body'),
-        deliverOn: mapDateTime(json, r'deliverOn', r''),
+        deliverOn: mapValueOfType<String>(json, r'deliverOn'),
       );
     }
     return null;

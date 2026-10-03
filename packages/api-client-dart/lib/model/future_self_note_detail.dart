@@ -28,7 +28,7 @@ class FutureSelfNoteDetail {
 
   final FutureSelfNoteStatus status;
 
-  final DateTime deliveredAt;
+  final DateTime? deliveredAt;
 
   final DateTime createdAt;
 
@@ -55,7 +55,7 @@ class FutureSelfNoteDetail {
       (id.hashCode) +
       (deliverOn.hashCode) +
       (status.hashCode) +
-      (deliveredAt.hashCode) +
+      (deliveredAt == null ? 0 : deliveredAt!.hashCode) +
       (createdAt.hashCode) +
       (updatedAt.hashCode) +
       (body.hashCode);
@@ -67,9 +67,13 @@ class FutureSelfNoteDetail {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
-    json[r'deliverOn'] = _dateFormatter.format(this.deliverOn);
+    json[r'deliverOn'] = this.deliverOn;
     json[r'status'] = this.status;
-    json[r'deliveredAt'] = this.deliveredAt.toUtc().toIso8601String();
+    if (this.deliveredAt != null) {
+      json[r'deliveredAt'] = this.deliveredAt!.toUtc().toIso8601String();
+    } else {
+      json[r'deliveredAt'] = null;
+    }
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
     json[r'updatedAt'] = this.updatedAt.toUtc().toIso8601String();
     json[r'body'] = this.body;
@@ -83,6 +87,7 @@ class FutureSelfNoteDetail {
     String? deliverOn,
     FutureSelfNoteStatus? status,
     DateTime? deliveredAt,
+    bool deliveredAtSetToNull = false,
     DateTime? createdAt,
     DateTime? updatedAt,
     String? body,
@@ -91,7 +96,8 @@ class FutureSelfNoteDetail {
         id: id ?? this.id,
         deliverOn: deliverOn ?? this.deliverOn,
         status: status ?? this.status,
-        deliveredAt: deliveredAt ?? this.deliveredAt,
+        deliveredAt:
+            deliveredAtSetToNull ? null : deliveredAt ?? this.deliveredAt,
         createdAt: createdAt ?? this.createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         body: body ?? this.body,
@@ -122,8 +128,6 @@ class FutureSelfNoteDetail {
             'Required key "FutureSelfNoteDetail[status]" has a null value in JSON.');
         assert(json.containsKey(r'deliveredAt'),
             'Required key "FutureSelfNoteDetail[deliveredAt]" is missing from JSON.');
-        assert(json[r'deliveredAt'] != null,
-            'Required key "FutureSelfNoteDetail[deliveredAt]" has a null value in JSON.');
         assert(json.containsKey(r'createdAt'),
             'Required key "FutureSelfNoteDetail[createdAt]" is missing from JSON.');
         assert(json[r'createdAt'] != null,
@@ -141,9 +145,9 @@ class FutureSelfNoteDetail {
 
       return FutureSelfNoteDetail(
         id: mapValueOfType<String>(json, r'id')!,
-        deliverOn: mapDateTime(json, r'deliverOn', r'')!,
+        deliverOn: mapValueOfType<String>(json, r'deliverOn')!,
         status: FutureSelfNoteStatus.fromJson(json[r'status'])!,
-        deliveredAt: mapDateTime(json, r'deliveredAt', r'')!,
+        deliveredAt: mapDateTime(json, r'deliveredAt', r''),
         createdAt: mapDateTime(json, r'createdAt', r'')!,
         updatedAt: mapDateTime(json, r'updatedAt', r'')!,
         body: mapValueOfType<String>(json, r'body')!,

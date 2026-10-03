@@ -42,7 +42,7 @@ class CreateFutureSelfNoteRequest {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'body'] = this.body;
-    json[r'deliverOn'] = _dateFormatter.format(this.deliverOn);
+    json[r'deliverOn'] = this.deliverOn;
     return json;
   }
 
@@ -81,7 +81,7 @@ class CreateFutureSelfNoteRequest {
 
       return CreateFutureSelfNoteRequest(
         body: mapValueOfType<String>(json, r'body')!,
-        deliverOn: mapDateTime(json, r'deliverOn', r'')!,
+        deliverOn: mapValueOfType<String>(json, r'deliverOn')!,
       );
     }
     return null;

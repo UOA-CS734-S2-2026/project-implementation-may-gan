@@ -20,7 +20,7 @@ class FutureSelfNotePage {
 
   final List<FutureSelfNote> items;
 
-  final String nextCursor;
+  final String? nextCursor;
 
   final bool hasMore;
 
@@ -35,7 +35,9 @@ class FutureSelfNotePage {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (items.hashCode) + (nextCursor.hashCode) + (hasMore.hashCode);
+      (items.hashCode) +
+      (nextCursor == null ? 0 : nextCursor!.hashCode) +
+      (hasMore.hashCode);
 
   @override
   String toString() =>
@@ -44,7 +46,11 @@ class FutureSelfNotePage {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
-    json[r'nextCursor'] = this.nextCursor;
+    if (this.nextCursor != null) {
+      json[r'nextCursor'] = this.nextCursor;
+    } else {
+      json[r'nextCursor'] = null;
+    }
     json[r'hasMore'] = this.hasMore;
     return json;
   }
@@ -54,11 +60,12 @@ class FutureSelfNotePage {
   FutureSelfNotePage copyWith({
     List<FutureSelfNote>? items,
     String? nextCursor,
+    bool nextCursorSetToNull = false,
     bool? hasMore,
   }) =>
       FutureSelfNotePage(
         items: items ?? this.items,
-        nextCursor: nextCursor ?? this.nextCursor,
+        nextCursor: nextCursorSetToNull ? null : nextCursor ?? this.nextCursor,
         hasMore: hasMore ?? this.hasMore,
       );
 
@@ -79,8 +86,6 @@ class FutureSelfNotePage {
             'Required key "FutureSelfNotePage[items]" has a null value in JSON.');
         assert(json.containsKey(r'nextCursor'),
             'Required key "FutureSelfNotePage[nextCursor]" is missing from JSON.');
-        assert(json[r'nextCursor'] != null,
-            'Required key "FutureSelfNotePage[nextCursor]" has a null value in JSON.');
         assert(json.containsKey(r'hasMore'),
             'Required key "FutureSelfNotePage[hasMore]" is missing from JSON.');
         assert(json[r'hasMore'] != null,
@@ -90,7 +95,7 @@ class FutureSelfNotePage {
 
       return FutureSelfNotePage(
         items: FutureSelfNote.listFromJson(json[r'items']),
-        nextCursor: mapValueOfType<String>(json, r'nextCursor')!,
+        nextCursor: mapValueOfType<String>(json, r'nextCursor'),
         hasMore: mapValueOfType<bool>(json, r'hasMore')!,
       );
     }
