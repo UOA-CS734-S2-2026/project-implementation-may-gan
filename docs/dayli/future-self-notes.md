@@ -75,4 +75,6 @@ Migration `0035_future_self_notes` is additive. The application role has table D
 
 ## Not built yet
 
-Push alerts for a delivered note ([#141](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/141)), clients, and the On This Day feature, which is tracked separately in [#39](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/39).
+Push alerts for a delivered note ([#141](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/141)) and clients.
+
+On This Day, the other part of [#39](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/39), is a separate feature. This document does not cover it.
