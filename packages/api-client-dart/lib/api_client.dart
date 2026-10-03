@@ -316,6 +316,12 @@ class ApiClient {
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'OnThisDayMemories':
+          return OnThisDayMemories.fromJson(value);
+        case 'OnThisDayMemory':
+          return OnThisDayMemory.fromJson(value);
+        case 'OnThisDayMemoryPrompt':
+          return OnThisDayMemoryPrompt.fromJson(value);
         case 'PasswordReauthenticationGrant':
           return PasswordReauthenticationGrant.fromJson(value);
         case 'PasswordReauthenticationRequest':
