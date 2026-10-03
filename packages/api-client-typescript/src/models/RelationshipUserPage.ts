@@ -34,7 +34,7 @@ export interface RelationshipUserPage {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
     /**
      *
      */

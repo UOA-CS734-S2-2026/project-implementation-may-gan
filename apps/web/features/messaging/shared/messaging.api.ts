@@ -75,7 +75,7 @@ export const messagingApi = {
   findDirect: (recipientId: string) => generated((client) => client.findDirectConversation({ recipientId }).then((value) => value as { conversationId: string })),
   conversation: (conversationId: string) => generated((client) => client.getConversation({ conversationId }).then((value) => value as unknown as MessagingConversation)),
   resolveRequest: (conversationId: string, decision: "accept" | "decline") => generated((client) => client.resolveMessageRequest({ conversationId, resolveMessageRequestRequest: { decision } }).then((value) => value as unknown as MessagingConversation)),
-  realtimeTicket: () => generated((client) => client.createRealtimeTicket({ requestBody: {} }).then((value) => value as unknown as RealtimeTicket)),
+  realtimeTicket: () => generated((client) => client.createRealtimeTicket({ body: {} }).then((value) => value as unknown as RealtimeTicket)),
   changes: (conversationId: string, afterChangeSequence: string) => generated((client) => client.listConversationChanges({ conversationId, afterChangeSequence }).then((value) => ({ ...value, items: value.items as unknown as MessagingChange[], nextCursor: value.nextChangeSequence ?? null } as MessagingChangePage))),
   messages: (conversationId: string, beforeSequence?: string) => generated((client) => client.listMessages({ conversationId, beforeSequence }).then((value) => ({ items: value.items as unknown as MessagingMessage[], nextCursor: value.nextCursor ?? null, hasMore: value.hasMore }))),
   message: (conversationId: string, messageId: string) => generated((client) => client.getMessage({ conversationId, messageId }).then((value) => value as unknown as MessagingMessage)),

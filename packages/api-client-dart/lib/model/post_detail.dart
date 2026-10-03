@@ -39,7 +39,7 @@ class PostDetail {
 
   final String reflectiveAnswer;
 
-  final String caption;
+  final String? caption;
 
   final int rating;
 
@@ -87,7 +87,7 @@ class PostDetail {
       (localDate.hashCode) +
       (prompt.hashCode) +
       (reflectiveAnswer.hashCode) +
-      (caption.hashCode) +
+      (caption == null ? 0 : caption!.hashCode) +
       (rating.hashCode) +
       (audience.hashCode) +
       (acceptedAt.hashCode) +
@@ -108,7 +108,11 @@ class PostDetail {
     json[r'localDate'] = this.localDate;
     json[r'prompt'] = this.prompt;
     json[r'reflectiveAnswer'] = this.reflectiveAnswer;
-    json[r'caption'] = this.caption;
+    if (this.caption != null) {
+      json[r'caption'] = this.caption;
+    } else {
+      json[r'caption'] = null;
+    }
     json[r'rating'] = this.rating;
     json[r'audience'] = this.audience;
     json[r'acceptedAt'] = this.acceptedAt.toUtc().toIso8601String();
@@ -133,6 +137,7 @@ class PostDetail {
     PostDetailPrompt? prompt,
     String? reflectiveAnswer,
     String? caption,
+    bool captionSetToNull = false,
     int? rating,
     PostDetailAudienceEnum? audience,
     DateTime? acceptedAt,
@@ -149,7 +154,7 @@ class PostDetail {
         localDate: localDate ?? this.localDate,
         prompt: prompt ?? this.prompt,
         reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
-        caption: caption ?? this.caption,
+        caption: captionSetToNull ? null : caption ?? this.caption,
         rating: rating ?? this.rating,
         audience: audience ?? this.audience,
         acceptedAt: acceptedAt ?? this.acceptedAt,
@@ -193,8 +198,6 @@ class PostDetail {
             'Required key "PostDetail[reflectiveAnswer]" has a null value in JSON.');
         assert(json.containsKey(r'caption'),
             'Required key "PostDetail[caption]" is missing from JSON.');
-        assert(json[r'caption'] != null,
-            'Required key "PostDetail[caption]" has a null value in JSON.');
         assert(json.containsKey(r'rating'),
             'Required key "PostDetail[rating]" is missing from JSON.');
         assert(json[r'rating'] != null,
@@ -234,7 +237,7 @@ class PostDetail {
         localDate: mapValueOfType<String>(json, r'localDate')!,
         prompt: PostDetailPrompt.fromJson(json[r'prompt'])!,
         reflectiveAnswer: mapValueOfType<String>(json, r'reflectiveAnswer')!,
-        caption: mapValueOfType<String>(json, r'caption')!,
+        caption: mapValueOfType<String>(json, r'caption'),
         rating: mapValueOfType<int>(json, r'rating')!,
         audience: PostDetailAudienceEnum.fromJson(json[r'audience'])!,
         acceptedAt: mapDateTime(json, r'acceptedAt', r'')!,

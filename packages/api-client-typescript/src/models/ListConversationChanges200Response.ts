@@ -34,7 +34,7 @@ export interface ListConversationChanges200Response {
     /**
      *
      */
-    nextChangeSequence: string;
+    nextChangeSequence: string | null;
     /**
      *
      */

@@ -20,7 +20,7 @@ class ChangeUsernameResponse {
   final String username;
 
   /// When the username can next change, or null when it can change now.
-  final DateTime usernameChangeAvailableAt;
+  final DateTime? usernameChangeAvailableAt;
 
   @override
   bool operator ==(Object other) =>
@@ -32,7 +32,10 @@ class ChangeUsernameResponse {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (username.hashCode) + (usernameChangeAvailableAt.hashCode);
+      (username.hashCode) +
+      (usernameChangeAvailableAt == null
+          ? 0
+          : usernameChangeAvailableAt!.hashCode);
 
   @override
   String toString() =>
@@ -41,8 +44,12 @@ class ChangeUsernameResponse {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'username'] = this.username;
-    json[r'usernameChangeAvailableAt'] =
-        this.usernameChangeAvailableAt.toUtc().toIso8601String();
+    if (this.usernameChangeAvailableAt != null) {
+      json[r'usernameChangeAvailableAt'] =
+          this.usernameChangeAvailableAt!.toUtc().toIso8601String();
+    } else {
+      json[r'usernameChangeAvailableAt'] = null;
+    }
     return json;
   }
 
@@ -51,11 +58,13 @@ class ChangeUsernameResponse {
   ChangeUsernameResponse copyWith({
     String? username,
     DateTime? usernameChangeAvailableAt,
+    bool usernameChangeAvailableAtSetToNull = false,
   }) =>
       ChangeUsernameResponse(
         username: username ?? this.username,
-        usernameChangeAvailableAt:
-            usernameChangeAvailableAt ?? this.usernameChangeAvailableAt,
+        usernameChangeAvailableAt: usernameChangeAvailableAtSetToNull
+            ? null
+            : usernameChangeAvailableAt ?? this.usernameChangeAvailableAt,
       );
 
   /// Returns a new [ChangeUsernameResponse] instance and imports its values from
@@ -75,15 +84,13 @@ class ChangeUsernameResponse {
             'Required key "ChangeUsernameResponse[username]" has a null value in JSON.');
         assert(json.containsKey(r'usernameChangeAvailableAt'),
             'Required key "ChangeUsernameResponse[usernameChangeAvailableAt]" is missing from JSON.');
-        assert(json[r'usernameChangeAvailableAt'] != null,
-            'Required key "ChangeUsernameResponse[usernameChangeAvailableAt]" has a null value in JSON.');
         return true;
       }());
 
       return ChangeUsernameResponse(
         username: mapValueOfType<String>(json, r'username')!,
         usernameChangeAvailableAt:
-            mapDateTime(json, r'usernameChangeAvailableAt', r'')!,
+            mapDateTime(json, r'usernameChangeAvailableAt', r''),
       );
     }
     return null;

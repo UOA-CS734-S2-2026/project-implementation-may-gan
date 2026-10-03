@@ -71,7 +71,7 @@ export interface PostDetail {
     /**
      *
      */
-    caption: string;
+    caption: string | null;
     /**
      *
      */

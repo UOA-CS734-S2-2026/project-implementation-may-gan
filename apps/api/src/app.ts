@@ -328,7 +328,7 @@ export function createApp({
   });
 
   api.doc("/api/v1/openapi.json", {
-    openapi: "3.1.0",
+    openapi: "3.0.3",
     info: {
       title: "Dayli API",
       version: "1.0.0",

@@ -38,20 +38,20 @@ class Message {
 
   final String clientMessageId;
 
-  final String text;
+  final String? text;
 
-  final String replyToMessageId;
+  final String? replyToMessageId;
 
-  final MessageReplyPreview replyPreview;
+  final MessageReplyPreview? replyPreview;
 
   /// Minimum value: 1
   final int version;
 
   final DateTime createdAt;
 
-  final DateTime editedAt;
+  final DateTime? editedAt;
 
-  final DateTime unsentAt;
+  final DateTime? unsentAt;
 
   final List<MessageReactionsInner> reactions;
 
@@ -81,13 +81,13 @@ class Message {
       (sequence.hashCode) +
       (senderId.hashCode) +
       (clientMessageId.hashCode) +
-      (text.hashCode) +
-      (replyToMessageId.hashCode) +
-      (replyPreview.hashCode) +
+      (text == null ? 0 : text!.hashCode) +
+      (replyToMessageId == null ? 0 : replyToMessageId!.hashCode) +
+      (replyPreview == null ? 0 : replyPreview!.hashCode) +
       (version.hashCode) +
       (createdAt.hashCode) +
-      (editedAt.hashCode) +
-      (unsentAt.hashCode) +
+      (editedAt == null ? 0 : editedAt!.hashCode) +
+      (unsentAt == null ? 0 : unsentAt!.hashCode) +
       (reactions.hashCode);
 
   @override
@@ -101,13 +101,33 @@ class Message {
     json[r'sequence'] = this.sequence;
     json[r'senderId'] = this.senderId;
     json[r'clientMessageId'] = this.clientMessageId;
-    json[r'text'] = this.text;
-    json[r'replyToMessageId'] = this.replyToMessageId;
-    json[r'replyPreview'] = this.replyPreview;
+    if (this.text != null) {
+      json[r'text'] = this.text;
+    } else {
+      json[r'text'] = null;
+    }
+    if (this.replyToMessageId != null) {
+      json[r'replyToMessageId'] = this.replyToMessageId;
+    } else {
+      json[r'replyToMessageId'] = null;
+    }
+    if (this.replyPreview != null) {
+      json[r'replyPreview'] = this.replyPreview;
+    } else {
+      json[r'replyPreview'] = null;
+    }
     json[r'version'] = this.version;
     json[r'createdAt'] = this.createdAt.toUtc().toIso8601String();
-    json[r'editedAt'] = this.editedAt.toUtc().toIso8601String();
-    json[r'unsentAt'] = this.unsentAt.toUtc().toIso8601String();
+    if (this.editedAt != null) {
+      json[r'editedAt'] = this.editedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'editedAt'] = null;
+    }
+    if (this.unsentAt != null) {
+      json[r'unsentAt'] = this.unsentAt!.toUtc().toIso8601String();
+    } else {
+      json[r'unsentAt'] = null;
+    }
     json[r'reactions'] = this.reactions;
     return json;
   }
@@ -121,12 +141,17 @@ class Message {
     String? senderId,
     String? clientMessageId,
     String? text,
+    bool textSetToNull = false,
     String? replyToMessageId,
+    bool replyToMessageIdSetToNull = false,
     MessageReplyPreview? replyPreview,
+    bool replyPreviewSetToNull = false,
     int? version,
     DateTime? createdAt,
     DateTime? editedAt,
+    bool editedAtSetToNull = false,
     DateTime? unsentAt,
+    bool unsentAtSetToNull = false,
     List<MessageReactionsInner>? reactions,
   }) =>
       Message(
@@ -135,13 +160,16 @@ class Message {
         sequence: sequence ?? this.sequence,
         senderId: senderId ?? this.senderId,
         clientMessageId: clientMessageId ?? this.clientMessageId,
-        text: text ?? this.text,
-        replyToMessageId: replyToMessageId ?? this.replyToMessageId,
-        replyPreview: replyPreview ?? this.replyPreview,
+        text: textSetToNull ? null : text ?? this.text,
+        replyToMessageId: replyToMessageIdSetToNull
+            ? null
+            : replyToMessageId ?? this.replyToMessageId,
+        replyPreview:
+            replyPreviewSetToNull ? null : replyPreview ?? this.replyPreview,
         version: version ?? this.version,
         createdAt: createdAt ?? this.createdAt,
-        editedAt: editedAt ?? this.editedAt,
-        unsentAt: unsentAt ?? this.unsentAt,
+        editedAt: editedAtSetToNull ? null : editedAt ?? this.editedAt,
+        unsentAt: unsentAtSetToNull ? null : unsentAt ?? this.unsentAt,
         reactions: reactions ?? this.reactions,
       );
 
@@ -178,16 +206,10 @@ class Message {
             'Required key "Message[clientMessageId]" has a null value in JSON.');
         assert(json.containsKey(r'text'),
             'Required key "Message[text]" is missing from JSON.');
-        assert(json[r'text'] != null,
-            'Required key "Message[text]" has a null value in JSON.');
         assert(json.containsKey(r'replyToMessageId'),
             'Required key "Message[replyToMessageId]" is missing from JSON.');
-        assert(json[r'replyToMessageId'] != null,
-            'Required key "Message[replyToMessageId]" has a null value in JSON.');
         assert(json.containsKey(r'replyPreview'),
             'Required key "Message[replyPreview]" is missing from JSON.');
-        assert(json[r'replyPreview'] != null,
-            'Required key "Message[replyPreview]" has a null value in JSON.');
         assert(json.containsKey(r'version'),
             'Required key "Message[version]" is missing from JSON.');
         assert(json[r'version'] != null,
@@ -198,12 +220,8 @@ class Message {
             'Required key "Message[createdAt]" has a null value in JSON.');
         assert(json.containsKey(r'editedAt'),
             'Required key "Message[editedAt]" is missing from JSON.');
-        assert(json[r'editedAt'] != null,
-            'Required key "Message[editedAt]" has a null value in JSON.');
         assert(json.containsKey(r'unsentAt'),
             'Required key "Message[unsentAt]" is missing from JSON.');
-        assert(json[r'unsentAt'] != null,
-            'Required key "Message[unsentAt]" has a null value in JSON.');
         assert(json.containsKey(r'reactions'),
             'Required key "Message[reactions]" is missing from JSON.');
         assert(json[r'reactions'] != null,
@@ -217,13 +235,13 @@ class Message {
         sequence: mapValueOfType<String>(json, r'sequence')!,
         senderId: mapValueOfType<String>(json, r'senderId')!,
         clientMessageId: mapValueOfType<String>(json, r'clientMessageId')!,
-        text: mapValueOfType<String>(json, r'text')!,
-        replyToMessageId: mapValueOfType<String>(json, r'replyToMessageId')!,
-        replyPreview: MessageReplyPreview.fromJson(json[r'replyPreview'])!,
+        text: mapValueOfType<String>(json, r'text'),
+        replyToMessageId: mapValueOfType<String>(json, r'replyToMessageId'),
+        replyPreview: MessageReplyPreview.fromJson(json[r'replyPreview']),
         version: mapValueOfType<int>(json, r'version')!,
         createdAt: mapDateTime(json, r'createdAt', r'')!,
-        editedAt: mapDateTime(json, r'editedAt', r'')!,
-        unsentAt: mapDateTime(json, r'unsentAt', r'')!,
+        editedAt: mapDateTime(json, r'editedAt', r''),
+        unsentAt: mapDateTime(json, r'unsentAt', r''),
         reactions: MessageReactionsInner.listFromJson(json[r'reactions']),
       );
     }

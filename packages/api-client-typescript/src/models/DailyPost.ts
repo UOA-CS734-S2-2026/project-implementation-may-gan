@@ -78,7 +78,7 @@ export interface DailyPost {
     /**
      *
      */
-    caption: string;
+    caption: string | null;
     /**
      *
      */
@@ -98,7 +98,7 @@ export interface DailyPost {
     /**
      *
      */
-    tomorrowNote: DailyPostTomorrowNote;
+    tomorrowNote: DailyPostTomorrowNote | null;
     /**
      * The attached photos or video in display order. Empty for a text-only post.
      */

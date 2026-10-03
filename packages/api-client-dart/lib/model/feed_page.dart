@@ -21,7 +21,7 @@ class FeedPage {
 
   final List<FeedPost> items;
 
-  final String nextCursor;
+  final String? nextCursor;
 
   final bool hasMore;
 
@@ -41,7 +41,7 @@ class FeedPage {
   int get hashCode =>
       // ignore: unnecessary_parenthesis
       (items.hashCode) +
-      (nextCursor.hashCode) +
+      (nextCursor == null ? 0 : nextCursor!.hashCode) +
       (hasMore.hashCode) +
       (feedDate.hashCode);
 
@@ -52,7 +52,11 @@ class FeedPage {
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'items'] = this.items;
-    json[r'nextCursor'] = this.nextCursor;
+    if (this.nextCursor != null) {
+      json[r'nextCursor'] = this.nextCursor;
+    } else {
+      json[r'nextCursor'] = null;
+    }
     json[r'hasMore'] = this.hasMore;
     json[r'feedDate'] = this.feedDate;
     return json;
@@ -63,12 +67,13 @@ class FeedPage {
   FeedPage copyWith({
     List<FeedPost>? items,
     String? nextCursor,
+    bool nextCursorSetToNull = false,
     bool? hasMore,
     String? feedDate,
   }) =>
       FeedPage(
         items: items ?? this.items,
-        nextCursor: nextCursor ?? this.nextCursor,
+        nextCursor: nextCursorSetToNull ? null : nextCursor ?? this.nextCursor,
         hasMore: hasMore ?? this.hasMore,
         feedDate: feedDate ?? this.feedDate,
       );
@@ -90,8 +95,6 @@ class FeedPage {
             'Required key "FeedPage[items]" has a null value in JSON.');
         assert(json.containsKey(r'nextCursor'),
             'Required key "FeedPage[nextCursor]" is missing from JSON.');
-        assert(json[r'nextCursor'] != null,
-            'Required key "FeedPage[nextCursor]" has a null value in JSON.');
         assert(json.containsKey(r'hasMore'),
             'Required key "FeedPage[hasMore]" is missing from JSON.');
         assert(json[r'hasMore'] != null,
@@ -105,7 +108,7 @@ class FeedPage {
 
       return FeedPage(
         items: FeedPost.listFromJson(json[r'items']),
-        nextCursor: mapValueOfType<String>(json, r'nextCursor')!,
+        nextCursor: mapValueOfType<String>(json, r'nextCursor'),
         hasMore: mapValueOfType<bool>(json, r'hasMore')!,
         feedDate: mapValueOfType<String>(json, r'feedDate')!,
       );

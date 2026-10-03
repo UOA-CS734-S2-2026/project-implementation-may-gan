@@ -32,7 +32,7 @@ class Conversation {
 
   final ConversationRequestStateEnum requestState;
 
-  final Message latestMessage;
+  final Message? latestMessage;
 
   /// Minimum value: 0
   final int unreadCount;
@@ -71,7 +71,7 @@ class Conversation {
       (id.hashCode) +
       (peer.hashCode) +
       (requestState.hashCode) +
-      (latestMessage.hashCode) +
+      (latestMessage == null ? 0 : latestMessage!.hashCode) +
       (unreadCount.hashCode) +
       (lastMessageSequence.hashCode) +
       (lastChangeSequence.hashCode) +
@@ -89,7 +89,11 @@ class Conversation {
     json[r'id'] = this.id;
     json[r'peer'] = this.peer;
     json[r'requestState'] = this.requestState;
-    json[r'latestMessage'] = this.latestMessage;
+    if (this.latestMessage != null) {
+      json[r'latestMessage'] = this.latestMessage;
+    } else {
+      json[r'latestMessage'] = null;
+    }
     json[r'unreadCount'] = this.unreadCount;
     json[r'lastMessageSequence'] = this.lastMessageSequence;
     json[r'lastChangeSequence'] = this.lastChangeSequence;
@@ -107,6 +111,7 @@ class Conversation {
     CreateDirectConversation200ResponseConversationPeer? peer,
     ConversationRequestStateEnum? requestState,
     Message? latestMessage,
+    bool latestMessageSetToNull = false,
     int? unreadCount,
     String? lastMessageSequence,
     String? lastChangeSequence,
@@ -119,7 +124,8 @@ class Conversation {
         id: id ?? this.id,
         peer: peer ?? this.peer,
         requestState: requestState ?? this.requestState,
-        latestMessage: latestMessage ?? this.latestMessage,
+        latestMessage:
+            latestMessageSetToNull ? null : latestMessage ?? this.latestMessage,
         unreadCount: unreadCount ?? this.unreadCount,
         lastMessageSequence: lastMessageSequence ?? this.lastMessageSequence,
         lastChangeSequence: lastChangeSequence ?? this.lastChangeSequence,
@@ -154,8 +160,6 @@ class Conversation {
             'Required key "Conversation[requestState]" has a null value in JSON.');
         assert(json.containsKey(r'latestMessage'),
             'Required key "Conversation[latestMessage]" is missing from JSON.');
-        assert(json[r'latestMessage'] != null,
-            'Required key "Conversation[latestMessage]" has a null value in JSON.');
         assert(json.containsKey(r'unreadCount'),
             'Required key "Conversation[unreadCount]" is missing from JSON.');
         assert(json[r'unreadCount'] != null,
@@ -193,7 +197,7 @@ class Conversation {
             json[r'peer'])!,
         requestState:
             ConversationRequestStateEnum.fromJson(json[r'requestState'])!,
-        latestMessage: Message.fromJson(json[r'latestMessage'])!,
+        latestMessage: Message.fromJson(json[r'latestMessage']),
         unreadCount: mapValueOfType<int>(json, r'unreadCount')!,
         lastMessageSequence:
             mapValueOfType<String>(json, r'lastMessageSequence')!,

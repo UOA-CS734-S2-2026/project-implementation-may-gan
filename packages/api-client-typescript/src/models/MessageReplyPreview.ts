@@ -30,11 +30,11 @@ export interface MessageReplyPreview {
     /**
      *
      */
-    text: string;
+    text: string | null;
     /**
      *
      */
-    unsentAt: Date;
+    unsentAt: Date | null;
 }
 
 /**
@@ -61,7 +61,7 @@ export function MessageReplyPreviewFromJSONTyped(json: any, ignoreDiscriminator:
         'id': json['id'],
         'senderId': json['senderId'],
         'text': json['text'],
-        'unsentAt': (json['unsentAt'] == null ? json['unsentAt'] : parseDateTime(json['unsentAt'])),
+        'unsentAt': (json['unsentAt'] == null ? null : parseDateTime(json['unsentAt'])),
     };
 }
 

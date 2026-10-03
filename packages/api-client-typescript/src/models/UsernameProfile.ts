@@ -22,11 +22,11 @@ export interface UsernameProfile {
     /**
      *
      */
-    username: string;
+    username: string | null;
     /**
      *
      */
-    publicName: string;
+    publicName: string | null;
     /**
      *
      */

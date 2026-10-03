@@ -18,9 +18,9 @@ class UsernameProfile {
     required this.needsUsernameSetup,
   });
 
-  final String username;
+  final String? username;
 
-  final String publicName;
+  final String? publicName;
 
   final bool needsUsernameSetup;
 
@@ -35,8 +35,8 @@ class UsernameProfile {
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (username.hashCode) +
-      (publicName.hashCode) +
+      (username == null ? 0 : username!.hashCode) +
+      (publicName == null ? 0 : publicName!.hashCode) +
       (needsUsernameSetup.hashCode);
 
   @override
@@ -45,8 +45,16 @@ class UsernameProfile {
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
-    json[r'username'] = this.username;
-    json[r'publicName'] = this.publicName;
+    if (this.username != null) {
+      json[r'username'] = this.username;
+    } else {
+      json[r'username'] = null;
+    }
+    if (this.publicName != null) {
+      json[r'publicName'] = this.publicName;
+    } else {
+      json[r'publicName'] = null;
+    }
     json[r'needsUsernameSetup'] = this.needsUsernameSetup;
     return json;
   }
@@ -55,12 +63,14 @@ class UsernameProfile {
   /// properties have changed.
   UsernameProfile copyWith({
     String? username,
+    bool usernameSetToNull = false,
     String? publicName,
+    bool publicNameSetToNull = false,
     bool? needsUsernameSetup,
   }) =>
       UsernameProfile(
-        username: username ?? this.username,
-        publicName: publicName ?? this.publicName,
+        username: usernameSetToNull ? null : username ?? this.username,
+        publicName: publicNameSetToNull ? null : publicName ?? this.publicName,
         needsUsernameSetup: needsUsernameSetup ?? this.needsUsernameSetup,
       );
 
@@ -77,12 +87,8 @@ class UsernameProfile {
       assert(() {
         assert(json.containsKey(r'username'),
             'Required key "UsernameProfile[username]" is missing from JSON.');
-        assert(json[r'username'] != null,
-            'Required key "UsernameProfile[username]" has a null value in JSON.');
         assert(json.containsKey(r'publicName'),
             'Required key "UsernameProfile[publicName]" is missing from JSON.');
-        assert(json[r'publicName'] != null,
-            'Required key "UsernameProfile[publicName]" has a null value in JSON.');
         assert(json.containsKey(r'needsUsernameSetup'),
             'Required key "UsernameProfile[needsUsernameSetup]" is missing from JSON.');
         assert(json[r'needsUsernameSetup'] != null,
@@ -91,8 +97,8 @@ class UsernameProfile {
       }());
 
       return UsernameProfile(
-        username: mapValueOfType<String>(json, r'username')!,
-        publicName: mapValueOfType<String>(json, r'publicName')!,
+        username: mapValueOfType<String>(json, r'username'),
+        publicName: mapValueOfType<String>(json, r'publicName'),
         needsUsernameSetup: mapValueOfType<bool>(json, r'needsUsernameSetup')!,
       );
     }

@@ -23,9 +23,9 @@ class MessageReplyPreview {
 
   final String senderId;
 
-  final String text;
+  final String? text;
 
-  final DateTime unsentAt;
+  final DateTime? unsentAt;
 
   @override
   bool operator ==(Object other) =>
@@ -41,8 +41,8 @@ class MessageReplyPreview {
       // ignore: unnecessary_parenthesis
       (id.hashCode) +
       (senderId.hashCode) +
-      (text.hashCode) +
-      (unsentAt.hashCode);
+      (text == null ? 0 : text!.hashCode) +
+      (unsentAt == null ? 0 : unsentAt!.hashCode);
 
   @override
   String toString() =>
@@ -52,8 +52,16 @@ class MessageReplyPreview {
     final json = <String, dynamic>{};
     json[r'id'] = this.id;
     json[r'senderId'] = this.senderId;
-    json[r'text'] = this.text;
-    json[r'unsentAt'] = this.unsentAt.toUtc().toIso8601String();
+    if (this.text != null) {
+      json[r'text'] = this.text;
+    } else {
+      json[r'text'] = null;
+    }
+    if (this.unsentAt != null) {
+      json[r'unsentAt'] = this.unsentAt!.toUtc().toIso8601String();
+    } else {
+      json[r'unsentAt'] = null;
+    }
     return json;
   }
 
@@ -63,13 +71,15 @@ class MessageReplyPreview {
     String? id,
     String? senderId,
     String? text,
+    bool textSetToNull = false,
     DateTime? unsentAt,
+    bool unsentAtSetToNull = false,
   }) =>
       MessageReplyPreview(
         id: id ?? this.id,
         senderId: senderId ?? this.senderId,
-        text: text ?? this.text,
-        unsentAt: unsentAt ?? this.unsentAt,
+        text: textSetToNull ? null : text ?? this.text,
+        unsentAt: unsentAtSetToNull ? null : unsentAt ?? this.unsentAt,
       );
 
   /// Returns a new [MessageReplyPreview] instance and imports its values from
@@ -93,20 +103,16 @@ class MessageReplyPreview {
             'Required key "MessageReplyPreview[senderId]" has a null value in JSON.');
         assert(json.containsKey(r'text'),
             'Required key "MessageReplyPreview[text]" is missing from JSON.');
-        assert(json[r'text'] != null,
-            'Required key "MessageReplyPreview[text]" has a null value in JSON.');
         assert(json.containsKey(r'unsentAt'),
             'Required key "MessageReplyPreview[unsentAt]" is missing from JSON.');
-        assert(json[r'unsentAt'] != null,
-            'Required key "MessageReplyPreview[unsentAt]" has a null value in JSON.');
         return true;
       }());
 
       return MessageReplyPreview(
         id: mapValueOfType<String>(json, r'id')!,
         senderId: mapValueOfType<String>(json, r'senderId')!,
-        text: mapValueOfType<String>(json, r'text')!,
-        unsentAt: mapDateTime(json, r'unsentAt', r'')!,
+        text: mapValueOfType<String>(json, r'text'),
+        unsentAt: mapDateTime(json, r'unsentAt', r''),
       );
     }
     return null;

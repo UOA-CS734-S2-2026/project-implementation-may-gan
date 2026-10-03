@@ -64,7 +64,7 @@ export interface FeedPost {
     /**
      *
      */
-    caption: string;
+    caption: string | null;
     /**
      *
      */

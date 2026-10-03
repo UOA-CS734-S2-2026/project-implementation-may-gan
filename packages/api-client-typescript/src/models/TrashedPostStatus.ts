@@ -50,7 +50,7 @@ export interface TrashedPostStatus {
     /**
      *
      */
-    failureCategory: string;
+    failureCategory: string | null;
 }
 
 /**

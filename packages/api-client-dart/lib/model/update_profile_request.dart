@@ -21,21 +21,9 @@ class UpdateProfileRequest {
     this.listeningTo,
   });
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   final String? bio;
 
   /// The name shown instead of the username. Null or blank shows the username.
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   final String? publicName;
 
   ///
@@ -49,20 +37,8 @@ class UpdateProfileRequest {
   /// One of the 16 types. Null or blank clears it.
   final UpdateProfileRequestMbtiEnum? mbti;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   final String? whatIDo;
 
-  ///
-  /// Please note: This property should have been non-nullable! Since the specification file
-  /// does not include a default value (using the "default:" property), however, the generated
-  /// source code must fall back to having a nullable type.
-  /// Consider adding a "default:" property in the specification file to hide this note.
-  ///
   final String? listeningTo;
 
   @override
@@ -129,20 +105,25 @@ class UpdateProfileRequest {
   /// properties have changed.
   UpdateProfileRequest copyWith({
     String? bio,
+    bool bioSetToNull = false,
     String? publicName,
+    bool publicNameSetToNull = false,
     ProfileVisibility? profileVisibility,
     UpdateProfileRequestMbtiEnum? mbti,
     bool mbtiSetToNull = false,
     String? whatIDo,
+    bool whatIDoSetToNull = false,
     String? listeningTo,
+    bool listeningToSetToNull = false,
   }) =>
       UpdateProfileRequest(
-        bio: bio ?? this.bio,
-        publicName: publicName ?? this.publicName,
+        bio: bioSetToNull ? null : bio ?? this.bio,
+        publicName: publicNameSetToNull ? null : publicName ?? this.publicName,
         profileVisibility: profileVisibility ?? this.profileVisibility,
         mbti: mbtiSetToNull ? null : mbti ?? this.mbti,
-        whatIDo: whatIDo ?? this.whatIDo,
-        listeningTo: listeningTo ?? this.listeningTo,
+        whatIDo: whatIDoSetToNull ? null : whatIDo ?? this.whatIDo,
+        listeningTo:
+            listeningToSetToNull ? null : listeningTo ?? this.listeningTo,
       );
 
   /// Returns a new [UpdateProfileRequest] instance and imports its values from

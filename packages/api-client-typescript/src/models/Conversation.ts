@@ -56,7 +56,7 @@ export interface Conversation {
     /**
      *
      */
-    latestMessage: Message;
+    latestMessage: Message | null;
     /**
      *
      */

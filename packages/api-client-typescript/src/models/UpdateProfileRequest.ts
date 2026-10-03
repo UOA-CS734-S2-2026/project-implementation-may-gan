@@ -30,11 +30,11 @@ export interface UpdateProfileRequest {
     /**
      *
      */
-    bio?: string;
+    bio?: string | null;
     /**
      * The name shown instead of the username. Null or blank shows the username.
      */
-    publicName?: string;
+    publicName?: string | null;
     /**
      *
      */
@@ -46,11 +46,11 @@ export interface UpdateProfileRequest {
     /**
      *
      */
-    whatIDo?: string;
+    whatIDo?: string | null;
     /**
      *
      */
-    listeningTo?: string;
+    listeningTo?: string | null;
 }
 
 
@@ -96,12 +96,12 @@ export function UpdateProfileRequestFromJSONTyped(json: any, ignoreDiscriminator
     }
     return {
 
-        'bio': json['bio'] == null ? undefined : json['bio'],
-        'publicName': json['publicName'] == null ? undefined : json['publicName'],
+        'bio': json['bio'] === undefined ? undefined : json['bio'] === null ? null : json['bio'],
+        'publicName': json['publicName'] === undefined ? undefined : json['publicName'] === null ? null : json['publicName'],
         'profileVisibility': json['profileVisibility'] == null ? undefined : ProfileVisibilityFromJSON(json['profileVisibility']),
         'mbti': json['mbti'] === undefined ? undefined : json['mbti'] === null ? null : json['mbti'],
-        'whatIDo': json['whatIDo'] == null ? undefined : json['whatIDo'],
-        'listeningTo': json['listeningTo'] == null ? undefined : json['listeningTo'],
+        'whatIDo': json['whatIDo'] === undefined ? undefined : json['whatIDo'] === null ? null : json['whatIDo'],
+        'listeningTo': json['listeningTo'] === undefined ? undefined : json['listeningTo'] === null ? null : json['listeningTo'],
     };
 }
 

@@ -172,8 +172,8 @@ abstract interface class PostClient {
 }
 
 /// Reads posts and profile posts with the stored Better Auth bearer session.
-/// Bodies are decoded here because the generated models treat the nullable
-/// `caption` as required.
+/// Bodies are decoded here because the generated models rejected a null
+/// `caption` until the generator fix in #195.
 class GeneratedPostClient implements PostClient {
   GeneratedPostClient({
     required String baseUrl,

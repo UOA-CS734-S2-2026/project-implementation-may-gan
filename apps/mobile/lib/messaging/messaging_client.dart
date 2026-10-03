@@ -387,9 +387,9 @@ class UnavailableMessagingClient implements MessagingClient {
   ) => _unavailable();
 }
 
-/// Generated-client boundary for messaging. The generated nullable DTOs are
-/// currently not nullable in Dart, so this adapter decodes the same generated
-/// OpenAPI operations from JSON without changing generated source.
+/// Generated-client boundary for messaging. The generated DTOs rejected null
+/// fields until the generator fix in #195, so this adapter decodes the same
+/// generated OpenAPI operations from JSON without changing generated source.
 class HttpMessagingClient implements MessagingClient {
   HttpMessagingClient({required String baseUrl, required this.bearerToken})
     : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');

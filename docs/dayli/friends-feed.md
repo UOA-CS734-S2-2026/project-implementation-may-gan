@@ -30,7 +30,7 @@ The whole page is one query with correlated `EXISTS` checks, so there are no per
 
 ## Clients
 
-Web (`apps/web/features/feed`) reads the feed through the generated TypeScript client with a TanStack infinite query keyed by user ID, so switching accounts never shows the previous account's posts. Flutter (`lib/api/feed_client.dart`, `lib/home/feed_controller.dart`) decodes the response itself because the generated Dart `FeedPost` treats the nullable `caption` as required. Its controller drops a page superseded by a newer refresh, and keeps earlier posts visible with a notice when a refresh fails.
+Web (`apps/web/features/feed`) reads the feed through the generated TypeScript client with a TanStack infinite query keyed by user ID, so switching accounts never shows the previous account's posts. Flutter (`lib/api/feed_client.dart`, `lib/home/feed_controller.dart`) decodes the response itself; it was written while the generated Dart `FeedPost` still rejected a null `caption` (fixed in #195). Its controller drops a page superseded by a newer refresh, and keeps earlier posts visible with a notice when a refresh fails.
 
 Both clients load more with a "Load more" button, skip a repeated post ID, offer a retry when the first page fails, and treat `401` as an ended session. Post cards show the first photo, or a still tile for a video (videos never play in the feed), and open [post detail](post-detail.md).
 

@@ -11,7 +11,7 @@ describe("API contracts", () => {
     }>();
 
     expect(response.status).toBe(200);
-    expect(document.openapi).toBe("3.1.0");
+    expect(document.openapi).toBe("3.0.3");
     expect(document.paths).toHaveProperty("/api/v1/test");
     expect(document.paths).toHaveProperty("/api/v1/posting-days/current");
     expect(document.components?.securitySchemes?.BearerAuth).toEqual({

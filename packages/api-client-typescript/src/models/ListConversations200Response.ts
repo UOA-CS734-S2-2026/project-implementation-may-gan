@@ -34,7 +34,7 @@ export interface ListConversations200Response {
     /**
      *
      */
-    nextCursor: string;
+    nextCursor: string | null;
 }
 
 /**

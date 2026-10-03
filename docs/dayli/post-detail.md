@@ -15,7 +15,7 @@ The response has the post ID, author (`id`, `username`, `displayName`), Auckland
 
 ## Clients
 
-Web opens `/u/{username}/{postId}` from the whole feed card. Existing `/{username}/{postId}` links redirect to that address. It reads the post with an account-keyed query and replaces a link whose username is stale or cased differently with the author's current address. Flutter opens `/posts/{id}` as a full-screen page when a feed card is tapped. Both show one "isn't available" message for a missing or hidden post, a retry for other failures, and the audience and edited marker to the author. Flutter reads the post again on every open and pull-to-refresh, so a post that was deleted or whose access was revoked is removed rather than shown from memory. The Flutter client decodes the body itself because the generated Dart `PostDetail` treats the nullable `caption` as required.
+Web opens `/u/{username}/{postId}` from the whole feed card. Existing `/{username}/{postId}` links redirect to that address. It reads the post with an account-keyed query and replaces a link whose username is stale or cased differently with the author's current address. Flutter opens `/posts/{id}` as a full-screen page when a feed card is tapped. Both show one "isn't available" message for a missing or hidden post, a retry for other failures, and the audience and edited marker to the author. Flutter reads the post again on every open and pull-to-refresh, so a post that was deleted or whose access was revoked is removed rather than shown from memory. The Flutter client decodes the body itself; it was written while the generated Dart `PostDetail` still rejected a null `caption` (fixed in #195).
 
 ## Tests
 

@@ -99,8 +99,8 @@ abstract interface class FeedClient {
 
 /// Reads `GET /api/v1/feed` with the stored Better Auth bearer session.
 ///
-/// The generated Dart model treats the nullable `caption` as required, so the
-/// body is decoded here instead of through `FeedPost.fromJson`.
+/// The body is decoded here rather than through `FeedPost.fromJson`, which
+/// rejected a null `caption` until the generator fix in #195.
 class GeneratedFeedClient implements FeedClient {
   GeneratedFeedClient({
     required String baseUrl,

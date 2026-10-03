@@ -26,13 +26,13 @@ class AccountDeletionStatus {
   /// Minimum value: 0
   final int generation;
 
-  final String requestId;
+  final String? requestId;
 
-  final DateTime requestedAt;
+  final DateTime? requestedAt;
 
-  final DateTime cancelUntil;
+  final DateTime? cancelUntil;
 
-  final DateTime purgeDueAt;
+  final DateTime? purgeDueAt;
 
   @override
   bool operator ==(Object other) =>
@@ -50,10 +50,10 @@ class AccountDeletionStatus {
       // ignore: unnecessary_parenthesis
       (state.hashCode) +
       (generation.hashCode) +
-      (requestId.hashCode) +
-      (requestedAt.hashCode) +
-      (cancelUntil.hashCode) +
-      (purgeDueAt.hashCode);
+      (requestId == null ? 0 : requestId!.hashCode) +
+      (requestedAt == null ? 0 : requestedAt!.hashCode) +
+      (cancelUntil == null ? 0 : cancelUntil!.hashCode) +
+      (purgeDueAt == null ? 0 : purgeDueAt!.hashCode);
 
   @override
   String toString() =>
@@ -63,10 +63,26 @@ class AccountDeletionStatus {
     final json = <String, dynamic>{};
     json[r'state'] = this.state;
     json[r'generation'] = this.generation;
-    json[r'requestId'] = this.requestId;
-    json[r'requestedAt'] = this.requestedAt.toUtc().toIso8601String();
-    json[r'cancelUntil'] = this.cancelUntil.toUtc().toIso8601String();
-    json[r'purgeDueAt'] = this.purgeDueAt.toUtc().toIso8601String();
+    if (this.requestId != null) {
+      json[r'requestId'] = this.requestId;
+    } else {
+      json[r'requestId'] = null;
+    }
+    if (this.requestedAt != null) {
+      json[r'requestedAt'] = this.requestedAt!.toUtc().toIso8601String();
+    } else {
+      json[r'requestedAt'] = null;
+    }
+    if (this.cancelUntil != null) {
+      json[r'cancelUntil'] = this.cancelUntil!.toUtc().toIso8601String();
+    } else {
+      json[r'cancelUntil'] = null;
+    }
+    if (this.purgeDueAt != null) {
+      json[r'purgeDueAt'] = this.purgeDueAt!.toUtc().toIso8601String();
+    } else {
+      json[r'purgeDueAt'] = null;
+    }
     return json;
   }
 
@@ -76,17 +92,23 @@ class AccountDeletionStatus {
     AccountDeletionStatusStateEnum? state,
     int? generation,
     String? requestId,
+    bool requestIdSetToNull = false,
     DateTime? requestedAt,
+    bool requestedAtSetToNull = false,
     DateTime? cancelUntil,
+    bool cancelUntilSetToNull = false,
     DateTime? purgeDueAt,
+    bool purgeDueAtSetToNull = false,
   }) =>
       AccountDeletionStatus(
         state: state ?? this.state,
         generation: generation ?? this.generation,
-        requestId: requestId ?? this.requestId,
-        requestedAt: requestedAt ?? this.requestedAt,
-        cancelUntil: cancelUntil ?? this.cancelUntil,
-        purgeDueAt: purgeDueAt ?? this.purgeDueAt,
+        requestId: requestIdSetToNull ? null : requestId ?? this.requestId,
+        requestedAt:
+            requestedAtSetToNull ? null : requestedAt ?? this.requestedAt,
+        cancelUntil:
+            cancelUntilSetToNull ? null : cancelUntil ?? this.cancelUntil,
+        purgeDueAt: purgeDueAtSetToNull ? null : purgeDueAt ?? this.purgeDueAt,
       );
 
   /// Returns a new [AccountDeletionStatus] instance and imports its values from
@@ -110,30 +132,22 @@ class AccountDeletionStatus {
             'Required key "AccountDeletionStatus[generation]" has a null value in JSON.');
         assert(json.containsKey(r'requestId'),
             'Required key "AccountDeletionStatus[requestId]" is missing from JSON.');
-        assert(json[r'requestId'] != null,
-            'Required key "AccountDeletionStatus[requestId]" has a null value in JSON.');
         assert(json.containsKey(r'requestedAt'),
             'Required key "AccountDeletionStatus[requestedAt]" is missing from JSON.');
-        assert(json[r'requestedAt'] != null,
-            'Required key "AccountDeletionStatus[requestedAt]" has a null value in JSON.');
         assert(json.containsKey(r'cancelUntil'),
             'Required key "AccountDeletionStatus[cancelUntil]" is missing from JSON.');
-        assert(json[r'cancelUntil'] != null,
-            'Required key "AccountDeletionStatus[cancelUntil]" has a null value in JSON.');
         assert(json.containsKey(r'purgeDueAt'),
             'Required key "AccountDeletionStatus[purgeDueAt]" is missing from JSON.');
-        assert(json[r'purgeDueAt'] != null,
-            'Required key "AccountDeletionStatus[purgeDueAt]" has a null value in JSON.');
         return true;
       }());
 
       return AccountDeletionStatus(
         state: AccountDeletionStatusStateEnum.fromJson(json[r'state'])!,
         generation: mapValueOfType<int>(json, r'generation')!,
-        requestId: mapValueOfType<String>(json, r'requestId')!,
-        requestedAt: mapDateTime(json, r'requestedAt', r'')!,
-        cancelUntil: mapDateTime(json, r'cancelUntil', r'')!,
-        purgeDueAt: mapDateTime(json, r'purgeDueAt', r'')!,
+        requestId: mapValueOfType<String>(json, r'requestId'),
+        requestedAt: mapDateTime(json, r'requestedAt', r''),
+        cancelUntil: mapDateTime(json, r'cancelUntil', r''),
+        purgeDueAt: mapDateTime(json, r'purgeDueAt', r''),
       );
     }
     return null;

@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { ABOUT_MAX_LENGTH, BIO_MAX_LENGTH, mbtiSchema, PUBLIC_NAME_MAX_LENGTH, profileVisibilitySchema, type ProfileVisibility } from "../shared/profile-details.contract";
+import { ABOUT_MAX_LENGTH, BIO_MAX_LENGTH, mbtiSchema, mbtiTypes, PUBLIC_NAME_MAX_LENGTH, profileVisibilitySchema, type ProfileVisibility } from "../shared/profile-details.contract";
 
 /** Blank text clears the field. */
 const clearable = (max: number) => z.string().trim().max(max).nullable().optional()
@@ -13,7 +13,8 @@ export const updateProfileRequestSchema = z
       description: "The name shown instead of the username. Null or blank shows the username.",
     }),
     profileVisibility: profileVisibilitySchema.optional(),
-    mbti: z.union([mbtiSchema, z.literal("")]).nullable().optional()
+    // One inline enum, not a union with the shared Mbti schema: the Dart generator cannot build a union of a referenced enum, a literal and null.
+    mbti: z.enum([...mbtiTypes, ""]).nullable().optional()
       .transform((value) => (value === "" ? null : value))
       .openapi({ description: "One of the 16 types. Null or blank clears it." }),
     whatIDo: clearable(ABOUT_MAX_LENGTH).openapi({ example: "Nursing student" }),
