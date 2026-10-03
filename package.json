@@ -40,6 +40,7 @@
     "lint": "node scripts/check-api-boundaries.mjs && node scripts/check-api-drizzle-queries.mjs && node scripts/check-export-object-namespaces.mjs && node --test scripts/check-export-object-namespaces.test.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "test:e2e:web": "bash scripts/test-web-e2e.sh",
+    "test:web-e2e-contract": "node --test scripts/test-web-e2e.test.mjs",
     "test:proxy-provenance": "pnpm --filter @dayli/api exec tsc -p ../../scripts/proxy-provenance/tsconfig.json && tsx --test scripts/proxy-provenance/diagnostic.test.ts && node --test scripts/proxy-provenance/workerd-smoke.mjs",
     "test:staging-release-contract": "node --test scripts/capture-staging-release.test.mjs scripts/ensure-staging-web-observability.test.mjs scripts/manual-database-migration-workflow-contract.test.mjs scripts/staging-messaging-0024-preflight.test.mjs scripts/staging-release-contract.test.mjs scripts/verify-staging-schema-target.test.mjs scripts/verify-staging-export-worker-target.test.mjs",
     "test:staging-auth-smoke-contract": "node --test scripts/staging-auth-smoke.test.mjs",

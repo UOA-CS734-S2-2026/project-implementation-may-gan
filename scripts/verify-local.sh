@@ -49,6 +49,7 @@ pnpm install --frozen-lockfile
 
 echo 'Running TypeScript verification'
 pnpm lint
+pnpm test:web-e2e-contract
 pnpm --filter @dayli/web exec next typegen
 pnpm typecheck
 node --test scripts/staging-origins.test.mjs scripts/staging-auth-bindings.test.mjs scripts/staging-media-bindings.test.mjs scripts/staging-auth-smoke.test.mjs
