@@ -7,6 +7,8 @@ export interface R2WorkerBindings {
   R2_BUCKET_NAME: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  /** Loopback-only S3 fixture endpoint. Accepted only for the reserved local-e2e account. */
+  R2_LOCAL_ENDPOINT?: string;
 }
 
 export interface R2RuntimeConfiguration {
@@ -14,6 +16,7 @@ export interface R2RuntimeConfiguration {
   bucketName: string;
   accessKeyId: string;
   secretAccessKey: string;
+  localEndpoint?: string;
 }
 
 export interface PresignedUpload {
@@ -45,7 +48,20 @@ export function readR2RuntimeConfiguration(
   const secretAccessKey = nonBlankString(bindings.R2_SECRET_ACCESS_KEY);
   if (!accountId || !bucketName || !accessKeyId || !secretAccessKey) return undefined;
 
-  return { accountId, bucketName, accessKeyId, secretAccessKey };
+  const endpoint = nonBlankString(bindings.R2_LOCAL_ENDPOINT);
+  let localEndpoint: string | undefined;
+  if (endpoint) {
+    try {
+      const parsed = new URL(endpoint);
+      const loopback = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
+      if (accountId !== "local-e2e" || !loopback || parsed.protocol !== "http:" || parsed.pathname !== "/" || parsed.search || parsed.hash) return undefined;
+      localEndpoint = parsed.origin;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return { accountId, bucketName, accessKeyId, secretAccessKey, ...(localEndpoint ? { localEndpoint } : {}) };
 }
 
 /** Matches AwsV4Signer's own default `datetime` format (ISO 8601 basic, no separators). */
@@ -58,7 +74,8 @@ function encodeObjectKeyPath(objectKey: string): string {
 }
 
 function buildObjectUrl(configuration: R2RuntimeConfiguration, objectKey: string): string {
-  return `https://${configuration.accountId}.r2.cloudflarestorage.com/${configuration.bucketName}/${encodeObjectKeyPath(objectKey)}`;
+  const origin = configuration.localEndpoint ?? `https://${configuration.accountId}.r2.cloudflarestorage.com`;
+  return `${origin}/${encodeURIComponent(configuration.bucketName)}/${encodeObjectKeyPath(objectKey)}`;
 }
 
 function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
