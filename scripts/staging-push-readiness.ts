@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   FcmOAuthError,
   normalizeFcmServiceAccount,
@@ -61,7 +62,6 @@ export async function runStagingPushReadiness(input: {
     return finish(1);
   }
   if (input.sourceCredentials === undefined || input.sourceCredentials === "") {
-    artifact.pass = true;
     artifact.outcome = "skipped";
     artifact.checks.push("credentials_missing");
     return finish(0);
@@ -111,4 +111,4 @@ async function main() {
   process.exitCode = result.exitCode;
 }
 
-if (import.meta.main) void main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) void main();
