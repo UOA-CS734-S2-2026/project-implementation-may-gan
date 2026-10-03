@@ -1,0 +1,6 @@
+reason: Notification query indexes are built on tables created empty in this transaction. The push-device composite unique constraint reuses an already unique primary-key prefix and must be available atomically for its ownership foreign key.
+affected_data_and_clients: No existing client writes the new notification tables. Existing push-device registration can retry if the bounded constraint lock is unavailable.
+rollout_sequence: Apply schema first, verify the ownership constraints and indexes, then deploy API composition with publishers disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running.
+forward_fix_plan: If the bounded push-device lock cannot be acquired, stop and retry in a quieter window. Do not deploy code that assumes the ownership foreign keys.
+reviewer: Database and availability reviewers required.

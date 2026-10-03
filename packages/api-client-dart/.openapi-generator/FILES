@@ -9,6 +9,7 @@ lib/api/account_api.dart
 lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
+lib/api/notifications_api.dart
 lib/api/posting_days_api.dart
 lib/api/posts_api.dart
 lib/api/profile_api.dart
@@ -58,6 +59,7 @@ lib/model/feed_post.dart
 lib/model/feed_post_author.dart
 lib/model/feed_post_prompt.dart
 lib/model/get_messaging_unread200_response.dart
+lib/model/get_notification_preference200_response.dart
 lib/model/google_reauthentication_intent.dart
 lib/model/google_reauthentication_request.dart
 lib/model/health_response.dart
@@ -121,6 +123,7 @@ lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
+lib/model/update_notification_preference_request.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart

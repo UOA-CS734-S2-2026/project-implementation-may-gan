@@ -45,6 +45,11 @@ import {
 } from "./legal";
 import { user, usernameReservations } from "./users";
 import { accountGoogleReauthenticationIntents } from "./google-reauth";
+import {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationEvents,
+} from "./notifications";
 
 export { profileVisibility, tier, user, usernameReservations } from "./users";
 
@@ -390,6 +395,14 @@ export {
 export { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationDeliveryStatus,
+  notificationEvents,
+  notificationKind,
+} from "./notifications";
+
+export {
   accountLifecycleState,
   accountLifecycles,
   accountManagementGrantAction,
@@ -421,6 +434,7 @@ export const schema = {
   accountGoogleReauthenticationIntents,
   accountLifecycles,
   accountManagementGrants,
+  accountNotificationPreferences,
   accountPurgeReceipts,
   ageDeclarations,
   conversationChanges,
@@ -439,6 +453,8 @@ export const schema = {
   messagingParticipants,
   messages,
   messagingOutbox,
+  notificationDeliveries,
+  notificationEvents,
   operatorCases,
   postIdempotencyKeys,
   postMedia,

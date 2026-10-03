@@ -278,6 +278,8 @@ class ApiClient {
           return FeedPostPrompt.fromJson(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GetNotificationPreference200Response':
+          return GetNotificationPreference200Response.fromJson(value);
         case 'GoogleReauthenticationIntent':
           return GoogleReauthenticationIntent.fromJson(value);
         case 'GoogleReauthenticationRequest':
@@ -404,6 +406,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdateNotificationPreferenceRequest':
+          return UpdateNotificationPreferenceRequest.fromJson(value);
         case 'UpdateProfileRequest':
           return UpdateProfileRequest.fromJson(value);
         case 'UsernameProfile':
