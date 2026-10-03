@@ -138,10 +138,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<void> _edit(PostDetail post) async {
+    final identity = _currentSessionIdentity();
+    final postId = widget.postId;
     final saved = await Navigator.of(context).push<PostDetail>(
       MaterialPageRoute(builder: (_) => EditPostScreen(post: post)),
     );
-    if (saved == null || !mounted) return;
+    if (saved == null ||
+        !mounted ||
+        identity != _currentSessionIdentity() ||
+        postId != widget.postId ||
+        saved.id != postId) {
+      return;
+    }
     setState(() {
       _changed = true;
       _post = saved;

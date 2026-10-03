@@ -96,6 +96,27 @@ wait_for_url() {
   done
 }
 
+sign_in() {
+  local email="$1"
+  local password="$2"
+  local fixture_ip="$3"
+  local key="$4"
+  local headers="$temporary_dir/${key}-sign-in.headers"
+  local body="$temporary_dir/${key}-sign-in.json"
+  local status
+  status="$(curl --silent --show-error --insecure \
+    --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
+    --request POST "${host_api_origin}/api/auth/sign-in/email" \
+    --header 'content-type: application/json' \
+    --header "cf-connecting-ip: ${fixture_ip}" \
+    --data "{\"email\":\"${email}\",\"password\":\"${password}\"}")"
+  if [[ "$status" != "200" ]]; then
+    echo "Synthetic sign-in failed with HTTP ${status}." >&2
+    return 1
+  fi
+  awk 'BEGIN { IGNORECASE=1 } /^set-auth-token:/ { gsub("\\r", "", $2); print $2; exit }' "$headers"
+}
+
 sign_up() {
   local username="$1"
   local email="$2"
@@ -254,17 +275,22 @@ VALUES (:'private_author_id', :'blocked_id', now());
 DELETE FROM public.session WHERE user_id = :'author_id';
 SQL
 
+author_token="$(sign_in "$public_email" "$fixture_password" '198.51.100.15' 'author')"
+if [[ -z "$author_token" ]]; then
+  echo 'Synthetic author sign-in returned no native session token.' >&2
+  exit 1
+fi
+
 export DPP004_API_BASE_URL="$device_api_origin"
 export DPP004_PUBLIC_USERNAME="$public_username"
 export DPP004_PRIVATE_USERNAME="$private_username"
 export DPP004_PUBLIC_POST_ID="$public_post_id"
 export DPP004_PRIVATE_POST_ID="$private_post_id"
+export DPP004_AUTHOR_TOKEN="$author_token"
 export DPP004_VIEWER_EMAIL="$viewer_email"
 export DPP004_VIEWER_PASSWORD="$viewer_password"
 export DPP004_VIEWER_TOKEN="$viewer_token"
 export DPP004_EXPIRED_TOKEN="$public_token"
-export DPP004_SECOND_VIEWER_EMAIL="$second_viewer_email"
-export DPP004_SECOND_VIEWER_PASSWORD="$second_viewer_password"
 export DPP004_SECOND_VIEWER_TOKEN="$second_viewer_token"
 export DPP004_CA_PEM_B64="$(base64 < "$certificate" | tr -d '\n')"
 node >"$defines" <<'NODE'
@@ -275,12 +301,11 @@ const keys = [
   'DPP004_PRIVATE_USERNAME',
   'DPP004_PUBLIC_POST_ID',
   'DPP004_PRIVATE_POST_ID',
+  'DPP004_AUTHOR_TOKEN',
   'DPP004_VIEWER_EMAIL',
   'DPP004_VIEWER_PASSWORD',
   'DPP004_VIEWER_TOKEN',
   'DPP004_EXPIRED_TOKEN',
-  'DPP004_SECOND_VIEWER_EMAIL',
-  'DPP004_SECOND_VIEWER_PASSWORD',
   'DPP004_SECOND_VIEWER_TOKEN',
   'DPP004_CA_PEM_B64',
 ];

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_page.dart';
+import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/ui/dayli_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +28,19 @@ Future<void> openPost(WidgetTester tester, TestHarness harness) async {
   await tester.ensureVisible(find.byKey(const Key('home.feed.post.1')));
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('home.feed.post.1')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> replaceActor(
+  WidgetTester tester,
+  TestHarness harness,
+  String actorId,
+) async {
+  harness.testUserId = actorId;
+  await harness.session.signIn(
+    email: '$actorId@example.test',
+    password: 'correct-password',
+  );
   await tester.pumpAndSettle();
 }
 
@@ -291,6 +307,128 @@ void main() {
       expect(find.text('Mine.'), findsOneWidget);
     });
 
+    testWidgets('discards a delayed account A save after switching to B', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(
+          postDetail('1', viewerIsAuthor: true, answer: 'Account A post.'),
+        ),
+        ApiSuccess(
+          postDetail('1', viewerIsAuthor: true, answer: 'Account B post.'),
+        ),
+      ]);
+      posts.updateResults
+        ..clear()
+        ..add(
+          ApiSuccess(
+            postDetail(
+              '1',
+              viewerIsAuthor: true,
+              answer: 'Delayed account A save.',
+            ),
+          ),
+        );
+      final held = Completer<void>();
+      posts.holdUpdate = held;
+      final harness = harnessWith(posts);
+      await openEditor(tester, harness);
+
+      await tester.enterText(
+        find.byKey(const Key('editPost.answer')),
+        'Delayed account A save.',
+      );
+      await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.save')));
+      await tester.pump();
+      expect(posts.edits, hasLength(1));
+      await replaceActor(tester, harness, 'user-2');
+
+      expect(find.byKey(const Key('editPost.save')), findsNothing);
+      held.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delayed account A save.'), findsNothing);
+      expect(find.text('Account B post.'), findsOneWidget);
+      expect(harness.session.user?.id, 'user-2');
+    });
+
+    testWidgets('ignores a delayed account A 401 after switching to B', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', viewerIsAuthor: true)),
+        ApiSuccess(
+          postDetail('1', viewerIsAuthor: true, answer: 'Account B post.'),
+        ),
+      ]);
+      posts.updateResults
+        ..clear()
+        ..add(const ApiError(Unauthenticated()));
+      final held = Completer<void>();
+      posts.holdUpdate = held;
+      final harness = harnessWith(posts);
+      await openEditor(tester, harness);
+
+      await tester.enterText(find.byKey(const Key('editPost.answer')), 'Mine.');
+      await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editPost.save')));
+      await tester.pump();
+      expect(posts.edits, hasLength(1));
+      await replaceActor(tester, harness, 'user-2');
+      held.complete();
+      await tester.pumpAndSettle();
+
+      expect(harness.session.status, SessionStatus.signedIn);
+      expect(harness.session.user?.id, 'user-2');
+      expect(find.text('Account B post.'), findsOneWidget);
+    });
+
+    testWidgets('closes an editor discard dialog on account switch', (
+      tester,
+    ) async {
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', viewerIsAuthor: true)),
+          ApiSuccess(
+            postDetail('1', viewerIsAuthor: true, answer: 'Account B post.'),
+          ),
+        ]),
+      );
+      await openEditor(tester, harness);
+      await tester.enterText(find.byKey(const Key('editPost.answer')), 'Mine.');
+      await tester.tap(find.byKey(const Key('editPost.back')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editPost.discard')), findsOneWidget);
+
+      await replaceActor(tester, harness, 'user-2');
+
+      expect(find.byKey(const Key('editPost.discard')), findsNothing);
+      expect(find.byKey(const Key('editPost.save')), findsNothing);
+      expect(find.text('Mine.'), findsNothing);
+      expect(find.text('Account B post.'), findsOneWidget);
+    });
+
+    testWidgets('clears and closes the editor on logout', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
+      );
+      await openEditor(tester, harness);
+      await tester.enterText(
+        find.byKey(const Key('editPost.answer')),
+        'Account A private draft.',
+      );
+
+      await harness.session.signOut();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('editPost.save')), findsNothing);
+      expect(find.text('Account A private draft.'), findsNothing);
+      expect(harness.session.status, SessionStatus.signedOut);
+    });
+
     testWidgets('asks before discarding changes', (tester) async {
       final harness = harnessWith(
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
@@ -418,6 +556,80 @@ void main() {
       expect(find.text('First try.'), findsOneWidget);
       expect(find.byKey(const Key('revisions.more')), findsNothing);
       expect(posts.revisionRequests, [('1', null), ('1', 'next')]);
+    });
+
+    testWidgets('discards delayed account A revisions after switching to B', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', edited: true, revisionCount: 1)),
+        ApiSuccess(
+          postDetail(
+            '1',
+            edited: true,
+            revisionCount: 1,
+            answer: 'Account B post.',
+          ),
+        ),
+      ]);
+      posts.revisionResults
+        ..clear()
+        ..add(
+          ApiSuccess(
+            PostPage(
+              items: [revision(1, 'Account A private revision.')],
+              nextCursor: null,
+              hasMore: false,
+            ),
+          ),
+        );
+      final held = Completer<void>();
+      posts.holdRevisions = held;
+      final harness = harnessWith(posts);
+      await openPost(tester, harness);
+
+      await tester.tap(find.byKey(const Key('post.history')));
+      await tester.pump();
+      await replaceActor(tester, harness, 'user-2');
+      expect(find.text('earlier versions'), findsNothing);
+
+      held.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Account A private revision.'), findsNothing);
+      expect(find.text('Account B post.'), findsOneWidget);
+    });
+
+    testWidgets('ignores a delayed revisions 401 after switching to B', (
+      tester,
+    ) async {
+      final posts = FakePostClient([
+        ApiSuccess(postDetail('1', edited: true, revisionCount: 1)),
+        ApiSuccess(
+          postDetail(
+            '1',
+            edited: true,
+            revisionCount: 1,
+            answer: 'Account B post.',
+          ),
+        ),
+      ]);
+      posts.revisionResults
+        ..clear()
+        ..add(const ApiError(Unauthenticated()));
+      final held = Completer<void>();
+      posts.holdRevisions = held;
+      final harness = harnessWith(posts);
+      await openPost(tester, harness);
+
+      await tester.tap(find.byKey(const Key('post.history')));
+      await tester.pump();
+      await replaceActor(tester, harness, 'user-2');
+      held.complete();
+      await tester.pumpAndSettle();
+
+      expect(harness.session.status, SessionStatus.signedIn);
+      expect(harness.session.user?.id, 'user-2');
+      expect(find.text('Account B post.'), findsOneWidget);
     });
 
     testWidgets('shows nothing once access has ended', (tester) async {
