@@ -10,17 +10,33 @@ import type { PostDetail } from "@/features/posts/shared/posts.api";
 import { postKeys } from "@/features/posts/shared/posts.keys";
 import { useSession } from "@/lib/session/hooks";
 
-type CommentPages = InfiniteData<PostCommentsPage, string | undefined>;
+type CommentPages = InfiniteData<CommentsPage, string | undefined>;
 
-/** Comments and replies in the order they were written. */
+/** A page the server refused because the viewer's access to the post is gone. */
+export type CommentsPage = PostCommentsPage & { unavailable?: true };
+
+/**
+ * Comments and replies in the order they were written. A 404 returns an empty
+ * "unavailable" page instead of throwing, which replaces the pages already
+ * loaded, and it clears the comments posted on this screen too, so nothing
+ * from before the access was revoked stays in the cache.
+ */
 export function useCommentsQuery(postId: string) {
   const { user } = useSession();
+  const client = useQueryClient();
   const userId = user?.id ?? "anonymous";
   return useInfiniteQuery({
     queryKey: interactionKeys.comments(userId, postId),
     enabled: Boolean(user?.id),
     initialPageParam: undefined as string | undefined,
-    queryFn: async ({ pageParam }) => unwrapInteraction(await interactionsApi.comments(postId, pageParam)),
+    queryFn: async ({ pageParam }): Promise<CommentsPage> => {
+      const result = await interactionsApi.comments(postId, pageParam);
+      if (!result.ok && result.failure === "notFound") {
+        client.setQueryData<PostComment[]>(interactionKeys.created(userId, postId), []);
+        return { items: [], nextCursor: null, hasMore: false, unavailable: true };
+      }
+      return unwrapInteraction(result);
+    },
     getNextPageParam: (page) => (page.hasMore ? page.nextCursor ?? undefined : undefined),
     retry: false,
   });
