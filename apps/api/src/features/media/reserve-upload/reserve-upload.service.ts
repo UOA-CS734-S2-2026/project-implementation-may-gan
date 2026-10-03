@@ -1,3 +1,4 @@
+import { buildOwnedMediaObjectKey } from "@dayli/contracts";
 import { MAX_PENDING_RESERVATIONS_PER_OWNER, RESERVATION_TTL_SECONDS } from "../shared/media-reservation-policy";
 import { createPresignedUploadUrl, type R2RuntimeConfiguration } from "../../../infrastructure/media/r2";
 import type {
@@ -28,7 +29,7 @@ export async function createMediaReservation(
 ): Promise<CreateMediaReservationResult> {
   const now = (deps.clock ?? (() => new Date()))();
   const id = (deps.generateId ?? defaultGenerateId)();
-  const objectKey = `media/${ownerId}/${id}`;
+  const objectKey = buildOwnedMediaObjectKey(ownerId, id);
   const expiresAt = new Date(now.getTime() + RESERVATION_TTL_SECONDS * 1000);
 
   // Presigning is a pure local computation (no DB/R2 network call), so it's safe to

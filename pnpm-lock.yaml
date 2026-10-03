@@ -320,6 +320,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@dayli/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@cloudflare/workers-types@5.20260925.1)(@types/pg@8.23.1)(kysely@0.29.6)(postgres@3.4.9)

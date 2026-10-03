@@ -37,7 +37,7 @@
     "local:auth:setup": "bash scripts/local-auth.sh setup",
     "dev:api:https": "bash scripts/local-auth.sh api",
     "dev:web:https": "bash scripts/local-auth.sh web",
-    "lint": "node scripts/check-api-boundaries.mjs && node scripts/check-api-drizzle-queries.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
+    "lint": "node scripts/check-api-boundaries.mjs && node scripts/check-api-drizzle-queries.mjs && node scripts/check-export-object-namespaces.mjs && node --test scripts/check-export-object-namespaces.test.mjs && eslint apps/api packages scripts && pnpm --filter @dayli/web lint",
     "test": "pnpm -r --if-present test",
     "test:e2e:web": "bash scripts/test-web-e2e.sh",
     "test:proxy-provenance": "pnpm --filter @dayli/api exec tsc -p ../../scripts/proxy-provenance/tsconfig.json && tsx --test scripts/proxy-provenance/diagnostic.test.ts && node --test scripts/proxy-provenance/workerd-smoke.mjs",

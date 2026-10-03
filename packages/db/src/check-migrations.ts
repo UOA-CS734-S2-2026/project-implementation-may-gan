@@ -8,7 +8,7 @@ import { migrationsRepositoryPath, migrationsRepositoryRoot } from "./migrations
 import { assertMigrationBaseIsAncestor, assertMigrationBasePrecedesHead, resolveMigrationBaseRef } from "./migrations/migration-base";
 import { parseMigrationReview } from "./migrations/reviews";
 import { migrationsFolder, readLocalMigrations } from "./migrations/state";
-import { currentExportSchemaColumns, validateExportInventory } from "./export/inventory";
+import { currentExportJsonColumns, currentExportSchemaColumns, inventoryTestRegistry, validateExportInventory, validateExportJsonFamilies } from "./export/inventory";
 
 const execFileAsync = promisify(execFile);
 
@@ -185,6 +185,12 @@ async function main(): Promise<void> {
   await ensureDriftFree();
   const unclassified = validateExportInventory(currentExportSchemaColumns());
   if (unclassified.length > 0) fail(`Export inventory is stale: ${unclassified.join("; ")}`);
+  const unclassifiedJson = validateExportJsonFamilies(currentExportJsonColumns());
+  if (unclassifiedJson.length > 0) fail(`Export JSON inventory is stale: ${unclassifiedJson.join("; ")}`);
+  for (const [id, test] of Object.entries(inventoryTestRegistry)) {
+    const source = await readFile(migrationsRepositoryPath(test.file), "utf8").catch(() => "");
+    if (!source.includes(`it("${test.name}"`)) fail(`Export inventory test is missing: ${id}`);
+  }
   await ensureSquawkReviews();
 
   const hashes = await readLocalMigrations();

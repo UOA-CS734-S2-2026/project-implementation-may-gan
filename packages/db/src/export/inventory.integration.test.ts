@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import { afterAll, describe, expect, it } from "vitest";
-import { exportDataInventory, validateExportInventory } from "./inventory";
+import { exportDataInventory, validateExportInventory, validateExportJsonFamilies } from "./inventory";
 
 const configuredUrl = process.env.TEST_DATABASE_URL;
 const port = process.env.VERIFY_POSTGRES_PORT ?? "5433";
@@ -32,5 +32,18 @@ function localMigratorUrl(value: string): string {
     expect(Object.keys(actual).length).toBeGreaterThanOrEqual(40);
     expect(validateExportInventory(actual)).toEqual([]);
     expect(Object.keys(exportDataInventory).sort()).toEqual(Object.keys(actual).sort());
+  });
+
+  it("detects every migrated JSON family and rejects unknown revision keys", async () => {
+    const columns = await client<{ table_name: string; column_name: string }[]>`
+      select table_name, column_name from information_schema.columns
+      where table_schema = 'public' and data_type in ('json', 'jsonb')
+    `;
+    expect(validateExportJsonFamilies(columns.map((row) => `${row.table_name}.${row.column_name}`))).toEqual([]);
+    const [validation] = await client<{ valid: boolean; unknown: boolean }[]>`
+      select public.dayli_attachment_refs_valid('[{"media_id":"synthetic","attachment_order":0,"status":"attached"}]'::jsonb) as valid,
+        public.dayli_attachment_refs_valid('[{"media_id":"synthetic","attachment_order":0,"status":"attached","secret":"leak"}]'::jsonb) as unknown
+    `;
+    expect(validation).toMatchObject({ valid: true, unknown: false });
   });
 });
