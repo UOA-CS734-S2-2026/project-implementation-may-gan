@@ -22,7 +22,7 @@ Likes and comments show a public username, so every interaction route also uses 
 
 ## Counts
 
-Post detail, the feed, and profile posts carry `likeCount`, `viewerHasLiked`, and `commentCount`. `readInteractionCounts` in `posts/shared` reads them for a whole page in three grouped queries. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. Both clients show the counts on feed and profile cards. Profile stats carry `loved`, the likes on the person's posts that haven't been deleted.
+Post detail, the feed, and profile posts carry `likeCount`, `viewerHasLiked`, and `commentCount`. `readInteractionCounts` in `posts/shared` reads them for a whole page in three grouped queries. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. Both clients show the counts on feed and profile cards. Profile stats carry `loved`, the likes on the person's posts that haven't been deleted. On Flutter, liking, unliking, commenting, or deleting a comment on post detail tells the list that opened the post to reload when you go back; a profile reloads its details too, so Loved stays current.
 
 ## Clients
 

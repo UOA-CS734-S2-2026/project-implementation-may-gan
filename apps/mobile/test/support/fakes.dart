@@ -384,6 +384,8 @@ ProfilePost profilePost(
   String displayName = 'Ada',
   String audience = 'friends',
   bool released = true,
+  int likeCount = 0,
+  bool viewerHasLiked = false,
 }) => ProfilePost(
   id: id,
   authorId: 'author-$username',
@@ -396,6 +398,8 @@ ProfilePost profilePost(
   rating: 7,
   acceptedAt: DateTime.utc(2026, 9, 25, 3),
   edited: false,
+  likeCount: likeCount,
+  viewerHasLiked: viewerHasLiked,
   audience: audience,
   released: released,
 );
