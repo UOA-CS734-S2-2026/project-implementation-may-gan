@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("desktop messaging polish", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
+test.describe("desktop messaging polish", { tag: "@desktop" }, () => {
+  test.beforeEach(async ({ page }) => {
     test.skip(process.env.E2E_MESSAGING !== "1", "mock messaging harness only");
-    test.skip(testInfo.project.name !== "desktop", "desktop-only assertions");
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { (window as Window & { copiedText?: string }).copiedText = value; } } });
     });
@@ -11,9 +10,11 @@ test.describe("desktop messaging polish", () => {
   });
 
   test("keeps the hover toolbar out of layout and exposes quick and full reactions", async ({ page }) => {
+    await page.clock.install();
     await page.getByRole("button", { name: "Simulate slow fetch" }).click();
     await expect(page.getByLabel("Loading conversations")).toBeVisible();
     await expect(page.getByLabel("Loading messages")).toBeVisible();
+    await page.clock.runFor(650);
     await expect(page.getByText("Conversation with Ada, A real message")).toBeVisible();
     const received = page.getByTestId("message-received");
     const before = await received.boundingBox();
@@ -56,10 +57,9 @@ test.describe("desktop messaging polish", () => {
   });
 });
 
-test.describe("mobile messaging polish", () => {
-  test.beforeEach(async ({ page }, testInfo) => {
+test.describe("mobile messaging polish", { tag: "@mobile" }, () => {
+  test.beforeEach(async ({ page }) => {
     test.skip(process.env.E2E_MESSAGING !== "1", "mock messaging harness only");
-    test.skip(testInfo.project.name !== "mobile", "mobile-only assertions");
     await page.goto("/e2e/messaging");
     await expect(page.getByText("Conversation with Ada, A real message")).toBeVisible();
   });
@@ -67,14 +67,15 @@ test.describe("mobile messaging polish", () => {
   test("uses a long press for reactions and actions, while scrolling cancels it", async ({ page }) => {
     const received = page.getByTestId("message-received");
     await expect(received.getByLabel("Add reaction")).toBeHidden();
+    await page.clock.install();
     await received.dispatchEvent("pointerdown", { pointerType: "touch" });
-    await page.waitForTimeout(550);
+    await page.clock.runFor(500);
     await expect(page.getByRole("dialog", { name: "Message actions" })).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
 
     await received.dispatchEvent("pointerdown", { pointerType: "touch" });
     await page.evaluate(() => window.dispatchEvent(new Event("scroll")));
-    await page.waitForTimeout(550);
+    await page.clock.runFor(500);
     await expect(page.getByRole("dialog", { name: "Message actions" })).toBeHidden();
   });
 

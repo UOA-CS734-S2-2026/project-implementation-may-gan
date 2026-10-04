@@ -77,3 +77,23 @@ test("the isolation contract is wired into local and hosted verification", () =>
   assert.match(fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8"), /pnpm test:web-e2e-contract/);
   assert.doesNotMatch(fs.readFileSync(path.join(repoRoot, "scripts/test-web-e2e.sh"), "utf8"), /PLAN_ONLY/);
 });
+
+test("the real service suite excludes the synthetic messaging harness", () => {
+  const config = fs.readFileSync(path.join(repoRoot, "apps/web/playwright.config.ts"), "utf8");
+  assert.match(config, /testIgnore: "\*\*\/messaging-polish\.spec\.ts"/);
+});
+
+test("messaging harness projects select their tagged tests during discovery", () => {
+  const config = fs.readFileSync(path.join(repoRoot, "apps/web/playwright.messaging.config.ts"), "utf8");
+  const spec = fs.readFileSync(path.join(repoRoot, "apps/web/e2e/messaging-polish.spec.ts"), "utf8");
+  assert.match(config, /name: "desktop", grep: \/@desktop\//);
+  assert.match(config, /name: "mobile", grep: \/@mobile\//);
+  assert.match(spec, /tag: "@desktop"/);
+  assert.match(spec, /tag: "@mobile"/);
+  assert.doesNotMatch(spec, /project\.name/);
+});
+
+test("hosted web E2E failures retain Playwright diagnostics", () => {
+  const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  assert.match(workflow, /if: failure\(\)[\s\S]*actions\/upload-artifact@v4[\s\S]*apps\/web\/playwright-report[\s\S]*apps\/web\/test-results/);
+});

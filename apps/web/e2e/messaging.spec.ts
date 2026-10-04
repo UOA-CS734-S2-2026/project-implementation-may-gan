@@ -116,7 +116,7 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     const recipientFirstBubble = messageBubble(recipientPage, firstMessage);
     if (testInfo.project.name === "mobile-chromium") {
       await recipientFirstBubble.dispatchEvent("pointerdown", { pointerType: "touch" });
-      await recipientPage.waitForTimeout(550);
+      await expect(recipientPage.getByRole("dialog", { name: "Message actions" })).toBeVisible();
     } else {
       await recipientFirstBubble.hover();
       await recipientFirstBubble.getByLabel("Add reaction").click();
