@@ -4,7 +4,7 @@ import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, asc, desc, eq, exists, gt, isNotNull, isNull, lte, notExists, or, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildDrizzleActiveAccountFilter, buildDrizzleFriendsReleaseFilter } from "../../features/permissions/drizzle";
-import { publishNotificationIntent, type PublishedNotificationKind } from "../../features/notifications/shared/publish-notification";
+import { publishNotificationIntent, type PublishedNotificationKind } from "./publish-notification";
 
 export function dailyNotificationWindow(now: Date) {
   const day = getAucklandDay(() => now);
