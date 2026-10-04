@@ -147,12 +147,14 @@ export function MoodChart({ from, to, trackedFrom, days, hiddenDays = [] }: {
             style={{ left: percent(x) }}
           />
         ))}
+        {/* Only the selected dot gets a halo: on a narrow chart, halos on every
+            dot would cover the line between neighbouring days. */}
         {points.map((point, index) => (dense && !lone.has(point.localDate) && index !== active ? null : (
           <span
             key={point.localDate}
             data-mood-dot
             aria-hidden
-            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground-accent ring-2 ring-background ${index === active ? "size-3" : "size-2"}`}
+            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground-accent ${index === active ? "size-3 ring-2 ring-background" : "size-1.5 sm:size-2"}`}
             style={{ left: percent(point.x), top: percent(point.y) }}
           />
         )))}
