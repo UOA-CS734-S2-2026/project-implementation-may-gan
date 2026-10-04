@@ -13,7 +13,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 | Feature | Scope and fallback |
 | --- | --- |
 | Unlock push and closing nudge | Opt-in generic reminders, quiet hours, stale-nudge rejection. Feed access never depends on push arrival. |
-| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. Not built yet: the Flutter composer picks from the gallery and compresses before upload. |
+| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. The Flutter composer takes a photo or records a video of up to 15 seconds with the device camera, using the system camera screen for preview and retake, or picks from the library; either goes through the same compress, upload and draft steps. |
 | Weather | Permission-based coarse location/provider snapshot; omit or select place manually. |
 | Music | Supported OS/provider title and artist; manual selection when unavailable. No universal cross-app access. |
 | Ambient sound | Explicit one-second recording with preview/removal. Never silent capture. |

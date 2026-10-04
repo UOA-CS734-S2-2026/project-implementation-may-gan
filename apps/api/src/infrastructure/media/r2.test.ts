@@ -34,6 +34,25 @@ describe("readR2RuntimeConfiguration", () => {
       R2_SECRET_ACCESS_KEY: configuration.secretAccessKey,
     })).toBeUndefined();
   });
+
+  it("accepts only the reserved local account at a loopback HTTP fixture", () => {
+    const local = {
+      R2_ACCOUNT_ID: "local-e2e",
+      R2_BUCKET_NAME: configuration.bucketName,
+      R2_ACCESS_KEY_ID: configuration.accessKeyId,
+      R2_SECRET_ACCESS_KEY: configuration.secretAccessKey,
+      R2_LOCAL_ENDPOINT: "http://127.0.0.1:49123",
+    };
+    expect(readR2RuntimeConfiguration(local)).toEqual({
+      accountId: "local-e2e",
+      bucketName: configuration.bucketName,
+      accessKeyId: configuration.accessKeyId,
+      secretAccessKey: configuration.secretAccessKey,
+      localEndpoint: "http://127.0.0.1:49123",
+    });
+    expect(readR2RuntimeConfiguration({ ...local, R2_ACCOUNT_ID: "production" })).toBeUndefined();
+    expect(readR2RuntimeConfiguration({ ...local, R2_LOCAL_ENDPOINT: "https://example.com" })).toBeUndefined();
+  });
 });
 
 describe("createPresignedUploadUrl", () => {
