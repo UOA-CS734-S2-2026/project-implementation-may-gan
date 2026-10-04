@@ -15,6 +15,7 @@ const registerBody = z.object({
   token: z.string().min(16).max(8192),
   platform: z.enum(["ios", "android"]),
   optedIn: z.boolean(),
+  notificationSchemaVersion: z.number().int().min(1).max(1).optional(),
 }).strict();
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
 const route = createRoute({

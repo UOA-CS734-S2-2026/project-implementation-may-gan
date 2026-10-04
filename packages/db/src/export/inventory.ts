@@ -63,6 +63,7 @@ const excludedRetention: Readonly<Record<string, string>> = {
   temporary_realtime_credential: "until_ticket_expiry_or_consumption",
   temporary_username_claim: "until_reservation_expiry_or_account_cleanup",
   one_time_authentication_proof: "until_verification_expiry_or_consumption",
+  note_submission_integrity_state: "until_parent_note_removal",
 };
 const excludedDeletion: Readonly<Record<string, string>> = {
   authentication_credentials: "purge_with_account_or_credential_rotation",
@@ -90,6 +91,7 @@ const excludedDeletion: Readonly<Record<string, string>> = {
   temporary_realtime_credential: "expire_or_consume",
   temporary_username_claim: "expire_or_purge_with_account",
   one_time_authentication_proof: "expire_or_consume",
+  note_submission_integrity_state: "purge_with_note_before_account",
 };
 const exclusionTestByReason: Readonly<Record<string, InventoryTestId>> = {
   authentication_credentials: "authSecretsExcluded",
@@ -117,6 +119,7 @@ const exclusionTestByReason: Readonly<Record<string, InventoryTestId>> = {
   temporary_realtime_credential: "authSecretsExcluded",
   temporary_username_claim: "catalogExcluded",
   one_time_authentication_proof: "authSecretsExcluded",
+  note_submission_integrity_state: "lifecycleOperationsExcluded",
 };
 const excluded = (columns: string, owner: string, reason: string): ExportTableDecision => {
   const retention = excludedRetention[reason];
@@ -150,6 +153,11 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   account_google_reauthentication_intents: excluded("state_digest,nonce_digest,user_id,session_id,action,lifecycle_generation,expires_at,claimed_at,created_at", "user_id", "temporary_authentication_proof"),
   account_lifecycles: excluded("user_id,state,request_id,idempotency_key_digest,generation,requested_at,cancel_until,purge_due_at,purge_started_at,last_error_category,next_attempt_at,lease_token,lease_expires_at,created_at,updated_at", "user_id", "private_lifecycle_control_state"),
   account_management_grants: excluded("token_digest,user_id,session_id,action,lifecycle_generation,credential_hash_digest,google_subject_digest,expires_at,consumed_at,created_at", "user_id", "action_bound_credentials"),
+  account_notification_preferences: owned({
+    owner: "user_id", retention: "account_lifetime", deletion: "purge_with_account", access: "owner_preference_procedure",
+    retainedForOthers: "not_applicable", trashRestore: "not_applicable",
+    included: fields("user_id,enabled,created_at,updated_at"), excluded: [],
+  }, "profileIncluded"),
   account_purge_receipts: { ...excluded("request_id,subject_digest,requested_at,completed_at,expires_at,outcome,completed_stage_count", "request_id_and_subject_digest", "30_days_after_cleanup"), deletion: "delete_30_days_after_cleanup" },
   age_declarations: owned({
     owner: "user_id", retention: "account_lifetime", deletion: "purge_with_account", access: "owner_procedure",
@@ -165,6 +173,16 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   data_export_requests: excluded("id,user_id,lifecycle_generation,status,requested_at,snapshot_cutoff_at,archive_object_key,ready_at,expires_at,archive_cleanup_task_id,lease_token,lease_expires_at,failure_category,created_at,updated_at", "user_id", "private_export_operations"),
   friend_requests: { ...excluded("id,sender_id,recipient_id,status,created_at,resolved_at", "sender_and_recipient", "relationship_privacy_deferred"), retention: "while_both_accounts_exist_for_throttling", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
   friendships: { ...excluded("user_id,friend_id,state,state_changed_at", "user_id_and_friend_id", "relationship_privacy_deferred"), retention: "while_both_accounts_exist", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
+  future_self_note_deliveries: excluded("id,note_id,schedule_version,deliver_on,status,lease_token,lease_expires_at,attempts,claimed_at,delivered_at", "note_id_to_owner_id", "private_delivery_operations"),
+  future_self_note_idempotency_keys: excluded("owner_id,idempotency_key,request_fingerprint,note_id,created_at", "owner_id", "note_submission_integrity_state"),
+  // The body stays out until an export owner decides how an undelivered note may be exported;
+  // the API never returns it to anyone before its Auckland delivery date.
+  future_self_notes: owned({
+    owner: "owner_id", retention: "while_owned", deletion: "purge_with_account",
+    access: "owner_scoped_note_procedure", retainedForOthers: "not_applicable", trashRestore: "not_applicable",
+    included: fields("id,owner_id,deliver_on,status,delivered_at,created_at,updated_at"),
+    excluded: fields("body,schedule_version"),
+  }, "postsIncluded"),
   legacy_cloudinary_media: excluded("media_id,cloudinary_public_id,cloudinary_url,legacy_type", "post_media_to_post", "unverified_legacy_object_provenance"),
   legal_document_versions: excluded("id,kind,version,content_digest,status,material_change,notice_starts_at,effective_at,urgent_change_reason,created_at", "public_policy_catalog", "published_documents_elsewhere"),
   media_reservation: owned({
@@ -183,6 +201,8 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   }, "messagesIncluded"),
   messaging_outbox: excluded("id,event_id,recipient_id,conversation_id,change_sequence,channel,device_registration_id,status,attempts,available_at,lease_token,lease_expires_at,failure_category,created_at,delivered_at", "recipient_id", "private_delivery_operations"),
   messaging_participants: { ...excluded("id,user_id,state,created_at", "user_id_or_deleted_account", "recipient_safe_identity_projection"), retainedForOthers: "deleted_account_label" },
+  notification_deliveries: excluded("id,event_id,recipient_id,device_registration_id,status,attempts,available_at,lease_token,lease_expires_at,failure_category,created_at,delivered_at", "recipient_id", "private_delivery_operations"),
+  notification_events: excluded("id,kind,recipient_id,deduplication_key,source_type,source_id,target_type,target_id,expires_at,created_at", "recipient_id", "private_delivery_operations"),
   operator_cases: excluded("id,subject_user_id,type,status,decision,reason_category,operator_reference,review_due_at,reviewed_at,resolved_at,created_at,updated_at", "subject_user_id", "private_incident_record"),
   post_comments: owned({
     owner: "author_id_and_current_readable_post", retention: "while_parent_post_exists",
@@ -216,7 +236,7 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
     access: "owner_scoped_file_procedure", retainedForOthers: "not_applicable", trashRestore: "not_applicable",
     included: fields("user_id,set_at"), excluded: fields("reservation_id"),
   }, "ownedMediaIncluded"),
-  push_devices: excluded("id,user_id,session_id,installation_id,platform,token,token_ciphertext,token_key_version,token_hash,opted_in,registered_at,invalidated_at", "user_id", "push_credentials_and_device_state"),
+  push_devices: excluded("id,user_id,session_id,installation_id,platform,token,token_ciphertext,token_key_version,token_hash,opted_in,notification_schema_version,registered_at,invalidated_at", "user_id", "push_credentials_and_device_state"),
   rateLimit: excluded("id,key,count,last_request", "request_key", "abuse_protection_state"),
   registration_intents: excluded("token_digest,terms_version_id,age_declaration_version,flow_binding_digest,expires_at,consumed_at,created_at", "registration_flow", "unconsumed_registration_proof"),
   relationship_blocks: { ...excluded("blocker_id,blocked_id,blocked_at,unblocked_at", "blocker_id_and_blocked_id", "relationship_privacy_deferred"), retention: "while_both_accounts_exist", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },

@@ -97,7 +97,8 @@ describe("explicit export data inventory", () => {
 
   it("keeps recipient and relationship data out of the inventory", () => {
     for (const table of ["conversation_changes", "conversation_members", "conversations", "messaging_participants",
-      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
+      "message_reactions", "messaging_outbox", "notification_deliveries", "notification_events",
+      "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
     }
@@ -110,6 +111,7 @@ describe("explicit export data inventory", () => {
   it("keeps lifecycle and operational fields out of the inventory", () => {
     for (const table of ["account_lifecycles", "account_purge_receipts", "data_export_requests",
       "data_export_object_cleanup_tasks", "operator_cases", "post_idempotency_keys", "rateLimit",
+      "future_self_note_deliveries", "future_self_note_idempotency_keys",
       "relationship_search_quota"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
@@ -137,6 +139,7 @@ describe("explicit export data inventory", () => {
     for (const field of ["id", "username", "email", "bio", "profile_visibility", "created_at"]) {
       expect(exportDataInventory.user!.included).toContain(field);
     }
+    expect(exportDataInventory.account_notification_preferences!.included).toContain("enabled");
     expect(exportDataInventory.terms_acceptances!.included).toContain("accepted_at");
     expect(exportDataInventory.age_declarations!.included).toContain("declared_at");
   });
@@ -148,6 +151,10 @@ describe("explicit export data inventory", () => {
     expect(exportDataInventory.post_revisions!.transformed?.previous_attachment_refs)
       .toEqual(["media_id", "attachment_order", "status"]);
     expect(exportDataInventory.tomorrow_notes!.included).toContain("note");
+    // A future-self note body is withheld from every projection until delivery rules decide otherwise.
+    expect(exportDataInventory.future_self_notes!.included).not.toContain("body");
+    expect(exportDataInventory.future_self_notes!.excluded).toContain("body");
+    expect(exportDataInventory.future_self_notes!.deletion).toBe("purge_with_account");
   });
 
   it("records authored readable messages without reply previews", () => {

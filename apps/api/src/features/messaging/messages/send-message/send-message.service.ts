@@ -22,10 +22,12 @@ export interface SendMessageService {
 
 export function createSendMessageService(dependencies: {
   store: SendMessageStore;
+  messageSendLimit?: number;
+  /** Retained for test-composition compatibility. Message timestamps come from PostgreSQL. */
   now?: () => Date;
   generateId?: () => string;
 }): SendMessageService {
-  const now = dependencies.now ?? (() => new Date());
+  const messageSendLimit = dependencies.messageSendLimit ?? 30;
   const generateId = dependencies.generateId ?? (() => crypto.randomUUID());
 
   return {
@@ -54,6 +56,13 @@ export function createSendMessageService(dependencies: {
           const parent = await transaction.findMessage(conversationId, replyToMessageId);
           if (!parent) throw new MessagingError("REPLY_NOT_FOUND");
         }
+        await transaction.lockNewMessageSender(actorId);
+        const concurrentPrevious = await transaction.findIdempotentMessage(actorId, input.clientMessageId);
+        if (concurrentPrevious) {
+          if (concurrentPrevious.requestFingerprint !== fingerprint) throw new MessagingError("IDEMPOTENCY_KEY_REUSED");
+          return { message: toMessageDto(concurrentPrevious.message), replayed: true };
+        }
+        const createdAt = await transaction.claimNewMessageSlot(actorId, messageSendLimit);
         const message = await transaction.insertMessage({
           id: generateId(),
           conversationId,
@@ -62,7 +71,7 @@ export function createSendMessageService(dependencies: {
           requestFingerprint: fingerprint,
           text: input.text,
           replyToMessageId,
-          createdAt: now(),
+          createdAt,
         });
         await transaction.appendPeerChange({ conversationId, messageId: message.id, kind: "message.created" });
         return { message: toMessageDto(message), replayed: false };

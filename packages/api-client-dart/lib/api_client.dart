@@ -240,6 +240,8 @@ class ApiClient {
               value);
         case 'CreateDirectConversationRequest':
           return CreateDirectConversationRequest.fromJson(value);
+        case 'CreateFutureSelfNoteRequest':
+          return CreateFutureSelfNoteRequest.fromJson(value);
         case 'CreateMediaReservationRequest':
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
@@ -266,6 +268,12 @@ class ApiClient {
           return DailyPromptResponse.fromJson(value);
         case 'DeletionGrantRequest':
           return DeletionGrantRequest.fromJson(value);
+        case 'DirectMessageSendQuotaError':
+          return DirectMessageSendQuotaError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorError':
+          return DirectMessageSendQuotaErrorError.fromJson(value);
+        case 'DirectMessageSendQuotaErrorErrorDetails':
+          return DirectMessageSendQuotaErrorErrorDetails.fromJson(value);
         case 'DirectPairLookup':
           return DirectPairLookup.fromJson(value);
         case 'EditMessageRequest':
@@ -278,8 +286,18 @@ class ApiClient {
           return FeedPostAuthor.fromJson(value);
         case 'FeedPostPrompt':
           return FeedPostPrompt.fromJson(value);
+        case 'FutureSelfNote':
+          return FutureSelfNote.fromJson(value);
+        case 'FutureSelfNoteDetail':
+          return FutureSelfNoteDetail.fromJson(value);
+        case 'FutureSelfNotePage':
+          return FutureSelfNotePage.fromJson(value);
+        case 'FutureSelfNoteStatus':
+          return FutureSelfNoteStatusTypeTransformer().decode(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GetNotificationPreference200Response':
+          return GetNotificationPreference200Response.fromJson(value);
         case 'GoogleReauthenticationIntent':
           return GoogleReauthenticationIntent.fromJson(value);
         case 'GoogleReauthenticationRequest':
@@ -318,12 +336,20 @@ class ApiClient {
           return MediaValidationFailureReasonTypeTransformer().decode(value);
         case 'Message':
           return Message.fromJson(value);
+        case 'MessageCreationRateLimitError':
+          return MessageCreationRateLimitError.fromJson(value);
         case 'MessageReactionsInner':
           return MessageReactionsInner.fromJson(value);
         case 'MessageReactionsInnerReactorsInner':
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'MoodDay':
+          return MoodDay.fromJson(value);
+        case 'MoodHistory':
+          return MoodHistory.fromJson(value);
+        case 'MoodPeriodSummary':
+          return MoodPeriodSummary.fromJson(value);
         case 'OnThisDayMemories':
           return OnThisDayMemories.fromJson(value);
         case 'OnThisDayMemory':
@@ -428,6 +454,10 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdateFutureSelfNoteRequest':
+          return UpdateFutureSelfNoteRequest.fromJson(value);
+        case 'UpdateNotificationPreferenceRequest':
+          return UpdateNotificationPreferenceRequest.fromJson(value);
         case 'UpdatePostCommentRequest':
           return UpdatePostCommentRequest.fromJson(value);
         case 'UpdatePostRequest':

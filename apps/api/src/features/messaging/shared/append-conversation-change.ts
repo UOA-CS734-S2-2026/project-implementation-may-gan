@@ -1,5 +1,5 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
-import { and, eq, gt, isNotNull, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 
 type Queryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 
@@ -10,7 +10,7 @@ export async function appendConversationChange(
   kind: string,
   messageId: string | null,
   memberId: string | null,
-  now: Date,
+  now: Date | SQL,
 ): Promise<void> {
   const [change] = await queryable
     .update(schema.conversations)

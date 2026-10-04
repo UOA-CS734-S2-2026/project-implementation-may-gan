@@ -44,7 +44,13 @@ import {
   termsAcceptances,
 } from "./legal";
 import { user, usernameReservations } from "./users";
+import { futureSelfNoteDeliveries, futureSelfNoteIdempotencyKeys, futureSelfNotes } from "./future-self-notes";
 import { accountGoogleReauthenticationIntents } from "./google-reauth";
+import {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationEvents,
+} from "./notifications";
 
 export { profileVisibility, tier, user, usernameReservations } from "./users";
 
@@ -449,6 +455,22 @@ export {
 export { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationDeliveryStatus,
+  notificationEvents,
+  notificationKind,
+} from "./notifications";
+
+export {
+  futureSelfNoteDeliveries,
+  futureSelfNoteDeliveryStatus,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNoteStatus,
+  futureSelfNotes,
+} from "./future-self-notes";
+
+export {
   accountLifecycleState,
   accountLifecycles,
   accountManagementGrantAction,
@@ -480,6 +502,7 @@ export const schema = {
   accountGoogleReauthenticationIntents,
   accountLifecycles,
   accountManagementGrants,
+  accountNotificationPreferences,
   accountPurgeReceipts,
   ageDeclarations,
   conversationChanges,
@@ -491,6 +514,9 @@ export const schema = {
   dailyPrompts,
   friendRequests,
   friendships,
+  futureSelfNoteDeliveries,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNotes,
   legalDocumentVersions,
   legacyCloudinaryMedia,
   mediaReservation,
@@ -498,6 +524,8 @@ export const schema = {
   messagingParticipants,
   messages,
   messagingOutbox,
+  notificationDeliveries,
+  notificationEvents,
   operatorCases,
   postComments,
   postIdempotencyKeys,

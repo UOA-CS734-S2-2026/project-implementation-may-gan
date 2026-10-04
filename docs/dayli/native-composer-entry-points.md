@@ -25,10 +25,10 @@ A link goes through the router's normal session redirect, so it can't skip sign-
 
 `ios/Runner/ComposerIntents.swift` defines `OpenTodaysComposerIntent`, an App Intent with an optional `Rating` parameter (1–10), and `DayliShortcuts`, an `AppShortcutsProvider` with these phrases:
 
-- "Open today's dayli in Dayli Mobile"
-- "Write today's dayli in Dayli Mobile"
+- "Open today's dayli in Dayli"
+- "Write today's dayli in Dayli"
 
-Siri says the app's display name, currently "Dayli Mobile". The rating can't be spoken in the phrase; set it in the Shortcuts app. The intent sets `authenticationPolicy` to `.requiresLocalDeviceAuthentication`, so the device must be unlocked before it runs. It opens the app (`openAppWhenRun`) and opens the composer link, so Flutter checks the rating again and applies the same sign-in rules. `openAppWhenRun` is deprecated from iOS 26 in favour of `supportedModes`, which needs iOS 26; the app supports iOS 16.
+Siri says the app's display name, currently "Dayli" (`CFBundleDisplayName`). The rating can't be spoken in the phrase; set it in the Shortcuts app. The intent sets `authenticationPolicy` to `.requiresLocalDeviceAuthentication`, so the device must be unlocked before it runs. It opens the app (`openAppWhenRun`) and opens the composer link, so Flutter checks the rating again and applies the same sign-in rules. `openAppWhenRun` is deprecated from iOS 26 in favour of `supportedModes`, which needs iOS 26; the app supports iOS 16.
 
 ## Android: launcher shortcut
 
@@ -42,8 +42,8 @@ None of these have been run on a device yet. Use a build signed in with a userna
 
 iOS 16 or newer (physical device for the lock checks):
 
-1. Install the app, then say "Hey Siri, open today's dayli in Dayli Mobile". The composer opens with no rating.
-2. In the Shortcuts app, find Dayli Mobile's **Open today's dayli** action, set Rating to 7, and run it. The composer opens with 7/10 and no audience chosen.
+1. Install the app, then say "Hey Siri, open today's dayli in Dayli". The composer opens with no rating.
+2. In the Shortcuts app, find Dayli's **Open today's dayli** action, set Rating to 7, and run it. The composer opens with 7/10 and no audience chosen.
 3. Lock the device and run the Siri phrase. The device asks to be unlocked before the app opens; cancelling leaves the app closed.
 4. Sign out, run the shortcut with a rating, sign in. The composer opens with that rating. Repeat with an account that still needs a username: setup comes first, then the composer.
 5. In Safari, open `dayli://app/post?rating=4`, then `dayli://app/post?rating=42`. The first opens 4/10, the second opens the composer unrated.

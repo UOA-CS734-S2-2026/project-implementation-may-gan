@@ -372,6 +372,27 @@
       "when": 1791001200000,
       "tag": "0052_staging_export_proof_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1791078168391,
+      "tag": "0053_purple_mordo",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791082161349,
+      "tag": "0054_tricky_blindfold",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791082761349,
+      "tag": "0055_future_self_notes",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,8 @@ export function sendMessageMemory(initial = storedMessage()) {
       return found ? { requestFingerprint: found.requestFingerprint, message: found } : null;
     },
     findMessage: async (_conversationId, messageId) => messages.get(messageId) ?? null,
+    lockNewMessageSender: async () => undefined,
+    claimNewMessageSlot: async () => new Date("2026-09-28T04:50:00.000Z"),
     insertMessage: async (input) => {
       const saved = storedMessage({
         id: input.id,
@@ -40,7 +42,7 @@ export function sendMessageMemory(initial = storedMessage()) {
         requestFingerprint: input.requestFingerprint,
         body: input.text,
         replyToMessageId: input.replyToMessageId,
-        createdAt: input.createdAt,
+        createdAt: new Date(input.createdAt),
         sequence: BigInt(messages.size + 1),
       });
       messages.set(saved.id, saved);
