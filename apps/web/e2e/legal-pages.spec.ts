@@ -8,7 +8,6 @@ async function expectDraftDocument(
   await expect(page).toHaveURL(new RegExp(`${path}$`));
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Draft, not approved");
-  await expect(page.getByText(/This is a working draft for review/i)).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "default");
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))

@@ -5,7 +5,7 @@
   "status": "draft",
   "version": "draft-2",
   "effectiveDate": null,
-  "summary": "This is a working draft for review. It sets out proposed rules for Dayli, but no final terms have been approved or accepted.",
+  "summary": "Draft for owner review. Public registration is not approved until final Terms, the 16+ declaration, and the effective version are verified.",
   "sections": [
     {
       "id": "draft-status",
@@ -23,7 +23,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli is operated by agroupforcoders, an informal group of friends based in New Zealand, not a registered company. Dayli is primarily intended for New Zealand and is available worldwide. The proposed minimum age is 16. The final terms must identify the responsible people and confirm how this age rule is checked and applied."
+          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. Contact the operator at agroupforcoders@gmail.com. The planned public service is available worldwide to people aged 16 or older. Public registration must require an explicit 16+ declaration and acceptance of the effective Terms; the current draft does not authorize registration for real users."
         }
       ]
     },
@@ -43,11 +43,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "You keep ownership of the posts, notes, messages, and other content you submit. The proposed final terms would give Dayli only the limited permission needed to host, process, back up if backups are later introduced, and show that content to you and the people you choose through available features. Dayli does not use personal content for research or AI training."
+          "text": "You keep ownership of the posts, notes, messages, and other content you submit. The proposed final terms would give Dayli the limited permission needed to host, process, show, and handle provider backup or recovery copies of that content where such copies exist. The actual provider recovery arrangements and retention periods remain unverified. Dayli does not use personal content for research or AI training."
         },
         {
           "type": "paragraph",
-          "text": "Solo posts are for their author. Friends posts are available to active friends after release, subject to blocks. Direct messages are available to people in the conversation. Editing a released post can retain an earlier revision. Do not rely on a block, edit, or unsend action to remove material another person has already seen or saved."
+          "text": "Solo and unreleased posts are for their author. A released friends-audience post on a public profile is available to anyone, including visitors without an account. On a private profile, active friends can read released friends-audience posts. Direct messages are available to the people in the conversation under the current access rules. Editing a released post can retain an earlier revision. Do not rely on a block, edit, or unsend action to remove material another person has already seen or saved."
         }
       ]
     },
@@ -67,7 +67,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli uses third-party services to operate the app. The operator currently reports Neon PostgreSQL and Cloudflare R2, with regions believed to be Sydney or Southeast Asia. Google sign-in, Firebase push delivery, and Resend authentication email may be enabled depending on the deployment. Exact provider processing locations and recovery arrangements still need verification."
+          "text": "Dayli uses Neon PostgreSQL and Cloudflare services to operate the app. Google sign-in, Firebase push delivery, and Resend authentication email may be enabled depending on the deployment. The optional mobile weather lookup uses Open-Meteo and the phone's geocoder; choosing location shares the approximate location with those services, not Dayli's API. Processing locations, provider recovery copies, analytics, and log retention have not been verified. This draft makes no regional-storage or recovery guarantee."
         },
         {
           "type": "paragraph",
@@ -81,7 +81,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The operator currently reports indefinite data storage and no operator-managed backups. Dayli does not currently offer a verified self-service account deletion or data export function. These draft terms do not promise an account-deletion process, a data-removal schedule, or a deadline for requests. Contact agroupforcoders@gmail.com with account questions, but email alone does not create an automated deletion workflow."
+          "text": "Signed-in users of the current staging deployment can request a single versioned ZIP export from their account page. A ready archive is available through an authenticated download for 24 hours, subject to account access and service availability. Dayli does not yet have a verified account-deletion or physical-purge process. Personal content may remain indefinitely while that process is unavailable. Contact agroupforcoders@gmail.com with access, correction, deletion, or other account requests. Email is not an automated deletion workflow, and these draft Terms make no promise that removal can currently be completed."
         }
       ]
     },
@@ -91,7 +91,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "No governing law, dispute process, arbitration term, warranty disclaimer, or liability limit has been approved for these draft terms. The operator needs legal review before choosing them, particularly because Dayli is available worldwide. Any final terms must preserve rights that cannot lawfully be excluded. The operator must also decide how material changes will be communicated."
+          "text": "The operator proposes New Zealand law for the final Terms, without limiting mandatory rights that apply where a user lives. No arbitration term or special dispute venue has been approved. No warranty exclusion or liability limit is claimed in this draft. Material changes would normally receive 30 days of notice; an urgent shorter period needs a recorded reason communicated to users. The final wording requires the owner's review before publication."
         },
         {
           "type": "link",
