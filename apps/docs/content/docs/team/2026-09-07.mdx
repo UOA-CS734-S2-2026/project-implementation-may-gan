@@ -5,25 +5,23 @@ description: Architecture, product rules, contracts, and database setup
 
 Period: 7 to 13 September 2026 (Pacific/Auckland).
 
-Reconstructed weekly progress log.
+We established our monorepo and agreed on our architecture and product policies before building the application. In Anton's architecture proposal ([PR #3](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/3)), we chose Flutter and Next.js clients, a Hono API on Cloudflare Workers, PostgreSQL with Drizzle, Better Auth, and private R2 media storage.
 
-The team established the monorepo and recorded the architecture and product policies before building the application. Anton's architecture proposal ([PR #3](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/3)) chose Flutter and Next.js clients, a Hono API on Cloudflare Workers, PostgreSQL with Drizzle, Better Auth, and private R2 media storage.
+## Our progress
 
-## Work recorded
+- We merged Jos's contribution guidelines and issue/PR templates in [PR #2](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/2). We also initialised our monorepo (Anton) in [PR #4](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/4).
+- We recorded our agreed product policies (Anton) in [PR #5](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/5). Our policies cover friendship history, released edits, blocking, public links, media limits, retention, and recovery targets.
+- We defined REST and OpenAPI contracts (Anton) in [PR #52](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/52), added API documentation in [PR #55](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/55), and generated TypeScript and Dart clients in [PR #56](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/56).
+- We configured Drizzle connectivity (Jos) in [PR #57](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/57). We verified staging Hyperdrive connectivity (Anton) in [PR #59](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/59).
+- We opened our initial task backlog, covering accounts, posting, media, messaging, reflection, sharing, and verification.
 
-- Jos's contribution guidelines and issue/PR templates merged in [PR #2](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/2). Anton initialised the monorepo in [PR #4](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/4).
-- Anton recorded agreed product policies in [PR #5](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/5). The PR covers friendship history, released edits, blocking, public links, media limits, retention, and recovery targets.
-- Anton defined REST and OpenAPI contracts in [PR #52](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/52), added API documentation in [PR #55](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/55), and generated TypeScript and Dart clients in [PR #56](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/56).
-- Jos configured Drizzle connectivity in [PR #57](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/57). Anton verified staging Hyperdrive connectivity in [PR #59](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/59).
-- The team opened the initial task backlog, covering accounts, posting, media, messaging, reflection, sharing, and verification.
+## Our decisions
 
-## Recorded decisions
+We adopted our architecture proposal and [product decisions](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/blob/main/docs/dayli/product-decisions.md) as our implementation plan.
 
-The architecture proposal and [product decisions](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/blob/main/docs/dayli/product-decisions.md) are the dated decision records. Merging the documents established the plan; it did not establish that every planned feature worked.
+## Next steps
 
-## Work carried forward
-
-Database migrations and transaction checks continued under [#8](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/8) and [#9](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/9). Authentication compatibility remained tracked in [#10](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/10).
+We continued our database migrations and transaction checks under [#8](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/8) and [#9](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/9). We continued tracking authentication compatibility in [#10](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/10).
 
 ## Source record
 
