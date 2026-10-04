@@ -24,6 +24,7 @@ export function ProfileStats({ profile, friendsHref }: { profile: Pick<ProfileDe
     <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl bg-gray-100/80 px-6 py-4">
       <Stat value={stats.posts} label={stats.posts === 1 ? "Post" : "Posts"} />
       {friendsHref ? <Link href={friendsHref} className="transition hover:opacity-70">{friends}</Link> : friends}
+      <Stat value={stats.loved} label="Loved" />
       <Stat value={streak.current} label="Day streak" accent />
     </div>
   );

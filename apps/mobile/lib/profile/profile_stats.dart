@@ -76,6 +76,7 @@ class ProfileStatsTile extends StatelessWidget {
             friends
           else
             GestureDetector(onTap: onFriends, child: friends),
+          stat('loved', stats.loved, 'Loved'),
           stat('streak', streak.current, 'Day streak', color: _streakOrange),
         ],
       ),

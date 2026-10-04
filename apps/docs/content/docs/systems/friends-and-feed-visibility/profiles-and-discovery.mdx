@@ -31,11 +31,11 @@ Web and Flutter provide search, friend lists, and incoming and outgoing requests
 
 ## Activity and streaks
 
-The full profile contains accepted-post and friend counts plus a posting streak. `calculatePostingStreak` derives the values from Auckland post dates on each read rather than maintaining a counter.
+The full profile contains accepted-post, friend, and `loved` counts plus a posting streak. `loved` is the number of likes on the owner's posts that aren't in Trash. `calculatePostingStreak` derives the values from Auckland post dates on each read rather than maintaining a counter.
 
 Solo and `friends` posts both count. Drafts and rejected submissions do not. The current streak ends today when the owner has posted today, or yesterday while today's posting window is still open. Today therefore does not break a streak before Auckland midnight. A whole missed day resets the current value, while `longest` keeps the best completed run.
 
-The API also returns `postedToday`, `lastPostDate`, and `asOf`. Moving a post to Trash removes it from these calculations immediately, even though the destructive Trash worker is disabled by default. The current interfaces show posts, friends, and the current day streak. They do not present the longest streak as a separate analytics feature.
+The API also returns `postedToday`, `lastPostDate`, and `asOf`. Moving a post to Trash removes it from these calculations immediately, even though the destructive Trash worker is disabled by default. The current interfaces show posts, friends, Loved, and the current day streak. They do not present the longest streak as a separate analytics feature.
 
 ## Changing profile details and usernames
 

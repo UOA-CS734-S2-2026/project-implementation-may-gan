@@ -176,6 +176,42 @@ class PostPreviewCard extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: 10),
+          Semantics(
+            key: Key('$keyPrefix.counts.${post.id}'),
+            container: true,
+            excludeSemantics: true,
+            label: [
+              post.likeCount == 1 ? '1 like' : '${post.likeCount} likes',
+              if (post.viewerHasLiked) 'including yours',
+              post.commentCount == 1
+                  ? '1 comment'
+                  : '${post.commentCount} comments',
+            ].join(', '),
+            child: Row(
+              children: [
+                Icon(
+                  post.viewerHasLiked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  size: 16,
+                  color: post.viewerHasLiked
+                      ? colors.foregroundAccent
+                      : colors.foregroundTertiary,
+                ),
+                const SizedBox(width: 4),
+                Text('${post.likeCount}', style: _countStyle(context)),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.mode_comment_outlined,
+                  size: 16,
+                  color: colors.foregroundTertiary,
+                ),
+                const SizedBox(width: 4),
+                Text('${post.commentCount}', style: _countStyle(context)),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -223,3 +259,9 @@ class _AuthorLink extends StatelessWidget {
     );
   }
 }
+
+TextStyle _countStyle(BuildContext context) => DayliText.sans(
+  context,
+  size: DayliTextSize.xs,
+  color: DayliColors.of(context).foregroundTertiary,
+);

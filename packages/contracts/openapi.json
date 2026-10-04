@@ -90,6 +90,18 @@
             "type": "boolean",
             "description": "True when the author has edited the post since it was accepted."
           },
+          "likeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "viewerHasLiked": {
+            "type": "boolean"
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Comments and replies the caller can see, leaving out deleted ones and people across a block."
+          },
           "media": {
             "type": "array",
             "items": {
@@ -111,6 +123,9 @@
           "releasedAt",
           "released",
           "edited",
+          "likeCount",
+          "viewerHasLiked",
+          "commentCount",
           "media"
         ],
         "description": "One post on a profile. Tomorrow notes are not part of this projection."
@@ -1342,6 +1357,18 @@
             "type": "boolean",
             "description": "True when the author has edited the post since it was accepted."
           },
+          "likeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "viewerHasLiked": {
+            "type": "boolean"
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Comments and replies the caller can see, leaving out deleted ones and people across a block."
+          },
           "media": {
             "type": "array",
             "items": {
@@ -1362,6 +1389,9 @@
           "acceptedAt",
           "releasedAt",
           "edited",
+          "likeCount",
+          "viewerHasLiked",
+          "commentCount",
           "media"
         ],
         "description": "A released post from an active friend. Tomorrow notes are not part of the feed projection."
@@ -3017,11 +3047,17 @@
           "friends": {
             "type": "integer",
             "minimum": 0
+          },
+          "loved": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Likes on the person's posts that aren't in Trash."
           }
         },
         "required": [
           "posts",
-          "friends"
+          "friends",
+          "loved"
         ],
         "description": "Null whenever the bio is hidden."
       },

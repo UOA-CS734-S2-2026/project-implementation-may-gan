@@ -15,6 +15,7 @@ class ProfileStats {
   ProfileStats({
     required this.posts,
     required this.friends,
+    required this.loved,
   });
 
   /// Accepted posts, solo ones included; the streak already reveals which days had one.
@@ -25,23 +26,33 @@ class ProfileStats {
   /// Minimum value: 0
   final int friends;
 
+  /// Likes on the person's posts that aren't in Trash.
+  ///
+  /// Minimum value: 0
+  final int loved;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ProfileStats && other.posts == posts && other.friends == friends;
+      other is ProfileStats &&
+          other.posts == posts &&
+          other.friends == friends &&
+          other.loved == loved;
 
   @override
   int get hashCode =>
       // ignore: unnecessary_parenthesis
-      (posts.hashCode) + (friends.hashCode);
+      (posts.hashCode) + (friends.hashCode) + (loved.hashCode);
 
   @override
-  String toString() => 'ProfileStats[posts=$posts, friends=$friends]';
+  String toString() =>
+      'ProfileStats[posts=$posts, friends=$friends, loved=$loved]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
     json[r'posts'] = this.posts;
     json[r'friends'] = this.friends;
+    json[r'loved'] = this.loved;
     return json;
   }
 
@@ -50,10 +61,12 @@ class ProfileStats {
   ProfileStats copyWith({
     int? posts,
     int? friends,
+    int? loved,
   }) =>
       ProfileStats(
         posts: posts ?? this.posts,
         friends: friends ?? this.friends,
+        loved: loved ?? this.loved,
       );
 
   /// Returns a new [ProfileStats] instance and imports its values from
@@ -75,12 +88,17 @@ class ProfileStats {
             'Required key "ProfileStats[friends]" is missing from JSON.');
         assert(json[r'friends'] != null,
             'Required key "ProfileStats[friends]" has a null value in JSON.');
+        assert(json.containsKey(r'loved'),
+            'Required key "ProfileStats[loved]" is missing from JSON.');
+        assert(json[r'loved'] != null,
+            'Required key "ProfileStats[loved]" has a null value in JSON.');
         return true;
       }());
 
       return ProfileStats(
         posts: mapValueOfType<int>(json, r'posts')!,
         friends: mapValueOfType<int>(json, r'friends')!,
+        loved: mapValueOfType<int>(json, r'loved')!,
       );
     }
     return null;
@@ -139,5 +157,6 @@ class ProfileStats {
   static const requiredKeys = <String>{
     'posts',
     'friends',
+    'loved',
   };
 }

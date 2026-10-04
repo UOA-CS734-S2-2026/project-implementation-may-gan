@@ -48,8 +48,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// The intent this visit came back with, once it has been consumed.
   PublicActionIntent? _consumedIntent;
 
-  /// True once the post was edited or deleted here. It is returned to the
-  /// list that opened the post, so that list can refresh.
+  /// True once the post was edited, deleted, liked, unliked, or commented on
+  /// here. It is returned to the list that opened the post, so that list can
+  /// refresh its counts.
   bool _changed = false;
 
   /// Changes on every load, so the comments reload with the post.
@@ -201,6 +202,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       final current = _post;
       switch (result) {
         case ApiSuccess(:final value):
+          _changed = true;
           if (current != null) {
             _post = current.copyWith(
               likeCount: value.likeCount,
@@ -230,6 +232,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// server counts comments on pages that aren't loaded. If the post is gone,
   /// the screen says so instead of showing it from memory.
   Future<void> _refreshCounts() async {
+    // A comment was added or deleted, so the list that opened the post is stale.
+    _changed = true;
     final services = AppScope.of(context);
     final likeVersion = _likeVersion;
     final version = ++_countsVersion;

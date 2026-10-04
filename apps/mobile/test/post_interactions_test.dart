@@ -107,6 +107,35 @@ Future<void> tapVisible(WidgetTester tester, Finder finder) async {
 }
 
 void main() {
+  testWidgets('shows likes and comments on feed cards', (tester) async {
+    final semantics = tester.ensureSemantics();
+    final harness = TestHarness(
+      feed: FakeFeedClient([
+        ApiSuccess(
+          FeedPage(
+            items: [
+              feedPost(
+                '1',
+                likeCount: 3,
+                viewerHasLiked: true,
+                commentCount: 1,
+              ),
+            ],
+            nextCursor: null,
+            hasMore: false,
+          ),
+        ),
+      ]),
+    );
+    await signIn(tester, harness);
+
+    expect(
+      find.bySemanticsLabel('3 likes, including yours, 1 comment'),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
   group('likes', () {
     testWidgets('likes at once and keeps the server count', (tester) async {
       final interactions = FakeInteractionsClient()
@@ -127,6 +156,38 @@ void main() {
       interactions.holdLike!.complete();
       await tester.pumpAndSettle();
       expect(find.text('5 likes'), findsOneWidget);
+    });
+
+    testWidgets('refreshes the feed after liking from it', (tester) async {
+      final harness = await openPost(tester);
+      expect(harness.feed.cursors, [null]);
+
+      await tapVisible(tester, find.byKey(const Key('post.like')));
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(harness.feed.cursors, [null, null]);
+    });
+
+    testWidgets('refreshes the feed after commenting from it', (tester) async {
+      final interactions = FakeInteractionsClient()
+        ..createResults.add(ApiSuccess(postComment('c-9', text: 'Lovely.')));
+      final harness = await openPost(
+        tester,
+        interactions: interactions,
+        commentCountAfter: 1,
+      );
+
+      await tester.ensureVisible(find.byKey(const Key('comments.input')));
+      await tester.enterText(
+        find.byKey(const Key('comments.input')),
+        'Lovely.',
+      );
+      await tapVisible(tester, find.byKey(const Key('comments.send')));
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(harness.feed.cursors, [null, null]);
     });
 
     testWidgets('puts the like back when it fails', (tester) async {
