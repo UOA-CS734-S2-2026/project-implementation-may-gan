@@ -8,7 +8,7 @@ Issue #10 tests Better Auth 1.7.5 in the Workers Vitest runtime. The slice uses 
 
 ## What the Worker test proves
 
-`apps/api/src/features/auth/route.test.ts` creates an isolated Better Auth instance and mounts its library-owned routes at `/api/auth/*`. It verifies:
+`apps/api/src/features/auth/__tests__/route.test.ts` creates an isolated Better Auth instance and mounts its library-owned routes at `/api/auth/*`. It verifies:
 
 - sign-up creates an HttpOnly, Secure, `SameSite=Lax` browser cookie;
 - the `set-auth-token` response header carries a signed token that Better Auth accepts as a native bearer session;
