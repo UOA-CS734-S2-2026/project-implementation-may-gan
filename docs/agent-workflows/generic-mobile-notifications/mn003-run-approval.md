@@ -41,6 +41,12 @@ The user requested batching for this and subsequent tickets:
 
 Follow the approved platform compatibility spike and native build requirements. Simulator compilation does not prove signing, APNs setup, token registration or physical-device delivery. Missing tooling must be reported rather than counted as success. Full Xcode was found at /Applications/Xcode.app; xcodebuild -version succeeds with a per-command DEVELOPER_DIR despite the system default pointing to Command Line Tools. Do not change the system developer selection or provision Apple resources.
 
+## Final verification amendment
+
+The user subsequently instructed: "ignore local just wait for cloud ci i dont have 10 mins to spare".
+
+For this final cycle, stop the full local rerun and use hosted CI as the final complete verification gate. Earlier focused regressions, independent review, native compilation and browser evidence remain accurately attributed to their tested heads. The interrupted full local run is not a pass. This explicitly replaces the earlier requirement for a completed full local run before PR publication; it does not waive independent review, native compatibility evidence, passing exact-head hosted checks, safe integration, or any operations restriction. No failed or skipped required hosted check may be bypassed.
+
 ## Approved inputs
 
 | File | SHA-256 |
