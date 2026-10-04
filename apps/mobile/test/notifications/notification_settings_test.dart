@@ -58,9 +58,15 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.byType(SwitchListTile), findsOneWidget);
+      final notificationSwitch = find.byKey(
+        const Key('settings.notifications'),
+      );
+      final tile = tester.widget<SwitchListTile>(notificationSwitch);
+      expect(tile.value, isTrue);
+      expect(tile.onChanged, isNotNull);
 
-      await tester.tap(find.byKey(const Key('settings.notifications')));
+      await tester.ensureVisible(notificationSwitch);
+      await tester.tap(notificationSwitch);
       await tester.pumpAndSettle();
 
       expect(preference.updates, [false]);
