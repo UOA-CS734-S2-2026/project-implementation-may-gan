@@ -30,9 +30,6 @@ import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
 import 'settings/account_export_client.dart';
 
-// A separate release change must enable this after provider and privacy review.
-const nativeExportEnabled = false;
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = AppConfig.fromEnvironment();
@@ -150,7 +147,7 @@ Future<void> main() async {
         drafts: drafts,
         messaging: messaging,
         notifications: notifications,
-        accountExports: nativeExportEnabled
+        accountExports: config.accountExportEnabled
             ? HttpAccountExportClient(
                 baseUrl: config.apiBaseUrl,
                 bearerToken: nativeSession.bearerToken,

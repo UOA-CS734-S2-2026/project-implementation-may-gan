@@ -6,7 +6,8 @@ import { createFutureSelfNoteDeliveryDispatcherForEnv } from "./infrastructure/j
 import { readBetterAuthRuntimeConfiguration } from "./features/auth/better-auth";
 import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
 import { pruneExpiredGoogleManagementIntents } from "./features/account-policy/reauthenticate/google/google-proof.repository";
-import { exportExecutionEnabled, readStagingExportProof } from "./features/data-export/shared/export-activation";
+import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEnabled,
+  stagingExportCleanupOnlyEnabled } from "./features/data-export/shared/export-activation";
 import { createExportRuntimeForEnv } from "./infrastructure/jobs/export-runtime";
 
 export { app };
@@ -29,8 +30,11 @@ export default {
     if (env.USER_REALTIME) context.waitUntil(createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: env.USER_REALTIME }).dispatchScheduled());
     context.waitUntil(runMediaCleanup(env));
     context.waitUntil(runGoogleIntentExpiry(env));
-    const proof = readStagingExportProof(env);
-    if (exportExecutionEnabled || proof?.cleanupEnabled) context.waitUntil(runExportMaintenance(env, proof ?? undefined));
+    const allStagingExports = stagingExportAllUsersEnabled(env);
+    const proof = allStagingExports ? null : readStagingExportProof(env);
+    if (exportExecutionEnabled || allStagingExports || stagingExportCleanupOnlyEnabled(env) || proof?.cleanupEnabled) {
+      context.waitUntil(runExportMaintenance(env, proof ?? undefined, allStagingExports));
+    }
     context.waitUntil(runFutureSelfNoteDelivery(env));
   },
 };
@@ -57,7 +61,7 @@ async function runFutureSelfNoteDelivery(env: ApiEnv): Promise<void> {
   }
 }
 
-async function runExportMaintenance(env: ApiEnv, proof?: { userId: string; buildEnabled: boolean }): Promise<void> {
+async function runExportMaintenance(env: ApiEnv, proof?: { userId: string; buildEnabled: boolean }, allStagingExports = false): Promise<void> {
   const runtime = createExportRuntimeForEnv(env, proof?.userId);
   if (!runtime) {
     console.error("export maintenance bindings unavailable");
@@ -65,7 +69,7 @@ async function runExportMaintenance(env: ApiEnv, proof?: { userId: string; build
   }
   const results = await Promise.allSettled([
     runtime.runCleanupOnce(),
-    ...((exportExecutionEnabled || proof?.buildEnabled) ? [runtime.runBuildOnce()] : []),
+    ...((exportExecutionEnabled || allStagingExports || proof?.buildEnabled) ? [runtime.runBuildOnce()] : []),
   ]);
   if (results[0]?.status === "rejected") console.error("export cleanup failed");
   if (results[1]?.status === "rejected") console.error("export build failed");
