@@ -42,6 +42,8 @@ export function createStagingWorkerConfigs({
   authVars = {},
   mediaVars = {},
   browserProxyEnabled = false,
+  notificationPublishersEnabled = false,
+  notificationDeliveryEnabled = false,
 }) {
   if (typeof workerName !== "string" || !/^dayli-api-staging$/.test(workerName)) {
     throw new Error("Refusing an unexpected staging Worker name.");
@@ -78,10 +80,13 @@ export function createStagingWorkerConfigs({
     throw new Error("Staging origins are required.");
   }
   if (typeof browserProxyEnabled !== "boolean") throw new Error("browserProxyEnabled must be boolean.");
+  if (typeof notificationPublishersEnabled !== "boolean" || typeof notificationDeliveryEnabled !== "boolean") {
+    throw new Error("Staging notification activation must use explicit booleans.");
+  }
   const vars = {
     API_RATE_LIMIT_SCOPE: "staging",
-    NOTIFICATION_PUBLISHERS_ENABLED: "false",
-    NOTIFICATION_DELIVERY_ENABLED: "false",
+    NOTIFICATION_PUBLISHERS_ENABLED: String(notificationPublishersEnabled),
+    NOTIFICATION_DELIVERY_ENABLED: String(notificationDeliveryEnabled),
     DIRECT_MESSAGE_SEND_LIMIT: "30",
     // The web workflow must use the same reviewed mode. Direct API remains the
     // public origin even when Better Auth moves to the web origin.
