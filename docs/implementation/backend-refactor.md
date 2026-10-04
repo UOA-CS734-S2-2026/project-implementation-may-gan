@@ -1,6 +1,6 @@
 # Backend action-slice refactor implementation plan
 
-Status: PR 1 implementation is in progress on `refactor/backend-action-slices`. The [backend architecture](../backend-architecture.md) records the target conventions and rationale. The [messaging handoff](messaging-implementation-handoff.md) is a separate feature implementation, not part of this behavior-preserving refactor.
+Status: PR 1 implementation is in progress on `refactor/backend-action-slices`. The [backend architecture](../backend-architecture.md) records the target conventions and rationale. The [messaging system guide](../../apps/docs/content/docs/systems/messaging/index.mdx) covers the separate feature implementation. It is not part of this behavior-preserving refactor.
 
 ## Two-PR delivery and parallel agent plan
 

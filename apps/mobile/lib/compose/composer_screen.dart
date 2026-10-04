@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,7 +12,10 @@ import '../ui/post_inputs.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
+import 'media_picker.dart';
 import 'media_upload_controller.dart';
+import 'voice_memo_input.dart';
+import 'voice_memo_recorder.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
 /// rating, the words, a note to tomorrow, and who can see it, with the Post
@@ -23,15 +28,44 @@ class ComposerScreen extends StatefulWidget {
   State<ComposerScreen> createState() => _ComposerScreenState();
 }
 
-class _ComposerScreenState extends State<ComposerScreen> {
+class _ComposerScreenState extends State<ComposerScreen>
+    with WidgetsBindingObserver {
   ComposerController? _controller;
 
   /// Null when this build doesn't upload media.
   MediaUploadController? _uploads;
+
+  /// Records the voice memo. Null when this build doesn't upload media, since
+  /// a memo can't be posted without uploading it.
+  VoiceMemoRecorderController? _voice;
   final _answer = TextEditingController();
   final _caption = TextEditingController();
   final _tomorrowNote = TextEditingController();
   String? _boundDraftKey;
+
+  /// Why the camera couldn't be used, and whether only Settings can fix it.
+  String? _captureNotice;
+  bool _settingsCanFix = false;
+
+  String? _userId;
+
+  /// Settles what the system handed back after Android ended the app. A pick
+  /// waits for it, so a new record never lands on top of an unsettled one.
+  Future<void> _recovery = Future.value();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Never record while the app isn't in front. What was said so far is kept.
+    if (state != AppLifecycleState.resumed) {
+      unawaited(_voice?.stopForBackground());
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -40,6 +74,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final services = AppScope.of(context);
     final userId = services.session.user?.id;
     if (userId == null) return;
+    _userId = userId;
     _controller = ComposerController(
       userId: userId,
       postingDays: services.postingDays,
@@ -51,6 +86,21 @@ class _ComposerScreenState extends State<ComposerScreen> {
     )..addListener(_syncText);
     final uploads = services.mediaUploads;
     if (uploads != null) {
+      _voice = VoiceMemoRecorderController(
+        ownerId: userId,
+        recorder: services.voiceMemos.createRecorder(),
+        permission: services.voiceMemos.permission,
+        files: services.voiceMemos.files,
+        clock: services.voiceMemos.clock,
+        // The memo shares the post's 25 MB with its photos or video.
+        otherBytes: () => [
+          for (final attachment in visualAttachments(
+            _controller?.draft?.attachments ?? const [],
+          ))
+            ?attachment.byteSize,
+        ],
+        onRecorded: _setVoiceMemo,
+      );
       _uploads = MediaUploadController(
         composer: _controller!,
         compressor: services.mediaCompressor,
@@ -58,7 +108,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    _controller!.load();
+    _recovery = _controller!.load().then((_) => _recoverLostCapture());
   }
 
   /// Copies a newly loaded draft into the text fields once, without fighting
@@ -77,6 +127,8 @@ class _ComposerScreenState extends State<ComposerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _voice?.dispose();
     _uploads?.dispose();
     _controller?.removeListener(_syncText);
     _controller?.dispose();
@@ -86,27 +138,237 @@ class _ComposerScreenState extends State<ComposerScreen> {
     super.dispose();
   }
 
-  Future<void> _pick(ComposerController controller, int slot) async {
+  /// Asks where the next attachment comes from. The camera is offered first, and
+  /// only the first slot can take a video.
+  Future<void> _choose(ComposerController controller, int slot) async {
     _uploads?.clearNotice();
+    final source = await showModalBottomSheet<_MediaSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _SourceSheet(videoAllowed: slot == 0),
+    );
+    if (source == null || !mounted) return;
+    setState(() {
+      _captureNotice = null;
+      _settingsCanFix = false;
+    });
+    await _recovery;
+    final draft = controller.draft;
+    final userId = _userId;
+    if (!mounted || draft == null || userId == null) return;
+
+    // Android may end the app while the camera or library is open. Who started
+    // this pick is written down first, so that only they can get its result.
+    final captures = AppScope.of(context).pendingCaptures;
+    await captures.begin(userId: userId, draftKey: _draftKey(draft));
+    try {
+      switch (source) {
+        case _MediaSource.photo:
+          await _capture(controller, slot, (picker) => picker.capturePhoto());
+        case _MediaSource.video:
+          await _capture(controller, slot, (picker) => picker.captureVideo());
+        case _MediaSource.library:
+          await _pick(controller, slot);
+      }
+    } finally {
+      await captures.finish();
+    }
+  }
+
+  /// True when the voice memo is the only attachment, so a media hold is about
+  /// it and not about any photo.
+  static bool _voiceMemoOnly(DailyPostDraft draft) =>
+      voiceMemoOf(draft.attachments) != null &&
+      visualAttachments(draft.attachments).isEmpty;
+
+  static String _draftKey(DailyPostDraft draft) =>
+      '${draft.localDate}:${draft.idempotencyKey}';
+
+  Future<void> _pick(ComposerController controller, int slot) async {
     final picker = AppScope.of(context).mediaPicker;
     final picked = slot == 0
         ? await picker.pickPhotoOrVideo()
         : await picker.pickPhoto();
+    _attach(controller, slot, picked);
+  }
+
+  /// Takes a photo or video. Whatever happens, the rest of the composer, the
+  /// library and posting without media all keep working.
+  Future<void> _capture(
+    ComposerController controller,
+    int slot,
+    Future<CaptureOutcome> Function(MediaPicker picker) take,
+  ) async {
+    final outcome = await take(AppScope.of(context).mediaPicker);
+    if (!mounted) return;
+    switch (outcome) {
+      case Captured(:final attachment):
+        _attach(controller, slot, attachment);
+      case CaptureCancelled():
+        break;
+      case CaptureFailed(:final reason):
+        setState(() {
+          _captureNotice = switch (reason) {
+            CaptureFailure.denied =>
+              'Camera access was declined. You can still choose from your '
+                  'library.',
+            CaptureFailure.permanentlyDenied =>
+              'Camera access is off for Dayli. Turn it on in Settings, or '
+                  'choose from your library.',
+            CaptureFailure.restricted =>
+              'The camera is restricted on this device. You can still choose '
+                  'from your library.',
+            CaptureFailure.unavailable =>
+              'No camera is available. You can still choose from your '
+                  'library.',
+          };
+          _settingsCanFix = reason == CaptureFailure.permanentlyDenied;
+        });
+    }
+  }
+
+  /// Android can end the app while the camera or library is open, and then hands
+  /// what the system finished to whoever asks first. That is the same for every
+  /// account on the phone, so it is only added here when the user and the draft
+  /// that started the pick are the ones open now. Otherwise it is kept for its
+  /// owner or removed, and never shown to this user.
+  Future<void> _recoverLostCapture() async {
+    if (!mounted) return;
+    final controller = _controller;
+    final userId = _userId;
+    if (controller == null || userId == null) return;
+    final services = AppScope.of(context);
+    try {
+      // Always asked, so what the system holds is settled rather than left
+      // for a later composer, possibly another user's.
+      final lost = await services.mediaPicker.recoverLostCapture();
+      final draft = controller.draft;
+      final recovered = await services.pendingCaptures.recover(
+        userId: userId,
+        // A draft that didn't load can't be anyone's.
+        draftKey: draft == null ? '' : _draftKey(draft),
+        lost: lost,
+      );
+      if (!mounted || draft == null || recovered == null) return;
+      final known = draft.attachments.any(
+        (attachment) => attachment.localPath == recovered.localPath,
+      );
+      if (known || !canAddAttachment(draft.attachments)) return;
+      _attach(
+        controller,
+        visualAttachments(draft.attachments).length,
+        recovered,
+      );
+    } catch (_) {
+      // Recovery is a courtesy; the composer works without it.
+    }
+  }
+
+  void _attach(
+    ComposerController controller,
+    int slot,
+    DraftAttachment? picked,
+  ) {
     final draft = controller.draft;
     if (picked == null || draft == null) return;
-    final attachments = [...draft.attachments];
-    if (slot < attachments.length) {
-      attachments[slot] = picked;
+    // Slots are the photos and video only; the voice memo stays last.
+    final visual = visualAttachments(draft.attachments);
+    if (slot < visual.length) {
+      visual[slot] = picked;
     } else {
-      attachments.add(picked);
+      visual.add(picked);
     }
-    controller.update(attachments: attachments);
+    controller.update(
+      attachments: withVoiceMemoLast(visual, draft.attachments),
+    );
   }
+
+  Future<void> _openSettings() =>
+      AppScope.of(context).mediaPicker.openSettings();
 
   void _remove(ComposerController controller, int slot) {
     final draft = controller.draft;
     if (draft == null) return;
-    controller.update(attachments: [...draft.attachments]..removeAt(slot));
+    final visual = visualAttachments(draft.attachments)..removeAt(slot);
+    controller.update(
+      attachments: withVoiceMemoLast(visual, draft.attachments),
+    );
+  }
+
+  /// Puts a finished recording in the draft, in place of any earlier one. The
+  /// earlier recording's file is removed with the rest of the copies the draft
+  /// no longer refers to.
+  void _setVoiceMemo(DraftAttachment memo) {
+    final controller = _controller;
+    final draft = controller?.draft;
+    if (controller == null || draft == null) {
+      unawaited(AppScope.of(context).voiceMemos.files.delete(memo.localPath));
+      return;
+    }
+    controller.update(
+      attachments: [...visualAttachments(draft.attachments), memo],
+    );
+  }
+
+  void _removeVoiceMemo(ComposerController controller) {
+    final draft = controller.draft;
+    if (draft == null) return;
+    controller.update(attachments: visualAttachments(draft.attachments));
+  }
+
+  Future<void> _recordVoiceMemo() async {
+    final voice = _voice;
+    if (voice == null) return;
+    await voice.start(explain: _explainMicrophone);
+  }
+
+  /// The short reason, shown once before the system asks for the microphone.
+  Future<bool> _explainMicrophone() async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Record a voice memo?'),
+        content: const Text(
+          "Dayli uses your microphone only while you're recording. You can "
+          'listen to it before you post, and remove it whenever you like.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('composer.voiceMemo.explain.decline'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            key: const Key('composer.voiceMemo.explain.continue'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    return agreed ?? false;
+  }
+
+  Widget _voiceMemo(
+    ComposerController controller,
+    DailyPostDraft draft,
+    String? error,
+  ) {
+    final voice = _voice!;
+    final uploads = _uploads!;
+    final memo = voiceMemoOf(draft.attachments);
+    return ListenableBuilder(
+      listenable: uploads,
+      builder: (context, _) => VoiceMemoInput(
+        recorder: voice,
+        memo: memo,
+        state: memo == null ? MediaTileState.local : _tileState(uploads, memo),
+        onRecord: () => unawaited(_recordVoiceMemo()),
+        onRemove: () => _removeVoiceMemo(controller),
+        onOpenSettings: () => unawaited(voice.openSettings()),
+        error: error,
+      ),
+    );
   }
 
   Widget _media(
@@ -117,27 +379,31 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final uploads = _uploads;
     if (uploads == null) {
       return MediaInput(
-        attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        attachments: visualAttachments(draft.attachments),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       );
     }
     return ListenableBuilder(
       listenable: uploads,
       builder: (context, _) => MediaInput(
-        attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        attachments: visualAttachments(draft.attachments),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
         uploads: true,
         states: [
-          for (final attachment in draft.attachments)
+          for (final attachment in visualAttachments(draft.attachments))
             _tileState(uploads, attachment),
         ],
         notice: uploads.notice,
         problem: uploads.problem,
         onRetry: uploads.retryNow,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       ),
     );
   }
@@ -297,8 +563,25 @@ class _ComposerScreenState extends State<ComposerScreen> {
         const _SectionLabel('your day in pictures'),
         _Lockable(
           locked: locked,
-          child: _media(controller, draft, errors.media),
+          child: _media(
+            controller,
+            draft,
+            // A hold that is only about the voice memo shows under it instead.
+            _voiceMemoOnly(draft) ? null : errors.media,
+          ),
         ),
+        if (_voice != null) ...[
+          const SizedBox(height: 28),
+          const _SectionLabel('your voice'),
+          _Lockable(
+            locked: locked,
+            child: _voiceMemo(
+              controller,
+              draft,
+              _voiceMemoOnly(draft) ? errors.media : null,
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         _SectionLabel(
           'rate your day',
@@ -705,6 +988,48 @@ class _UnpostedDraft extends StatelessWidget {
         fullWidth: true,
         height: 52,
         onPressed: onDiscard,
+      ),
+    );
+  }
+}
+
+enum _MediaSource { photo, video, library }
+
+/// Where the next photo or video comes from.
+class _SourceSheet extends StatelessWidget {
+  const _SourceSheet({required this.videoAllowed});
+
+  final bool videoAllowed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            key: const Key('composer.media.source.photo'),
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.of(context).pop(_MediaSource.photo),
+          ),
+          if (videoAllowed)
+            ListTile(
+              key: const Key('composer.media.source.video'),
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Record a video'),
+              subtitle: const Text('Up to 15 seconds'),
+              onTap: () => Navigator.of(context).pop(_MediaSource.video),
+            ),
+          ListTile(
+            key: const Key('composer.media.source.library'),
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(
+              videoAllowed ? 'Choose a photo or video' : 'Choose a photo',
+            ),
+            onTap: () => Navigator.of(context).pop(_MediaSource.library),
+          ),
+        ],
       ),
     );
   }

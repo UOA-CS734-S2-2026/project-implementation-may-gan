@@ -38,27 +38,24 @@ void main() {
 
   test('likes and unlikes with the bearer session', () async {
     final summary = jsonEncode({'likeCount': 3, 'viewerHasLiked': true});
-    final liked = await client(
-      (_) => http.Response(summary, 200),
-    ).setLike('post-1', liked: true);
+    final liked = await client((_) => http.Response(summary, 200))
+        .setLike('post-1', liked: true);
 
     expect(requests.single.method, 'PUT');
     expect(requests.single.url.path, '/api/v1/posts/post-1/like');
     expect(requests.single.headers['authorization'], 'Bearer token-1');
     expect((liked as ApiSuccess<LikeSummary>).value.likeCount, 3);
 
-    await client(
-      (_) => http.Response(summary, 200),
-    ).setLike('post-1', liked: false);
+    await client((_) => http.Response(summary, 200))
+        .setLike('post-1', liked: false);
     expect(requests.single.method, 'DELETE');
   });
 
   test(
     'treats a hidden post as not found and never calls signed out',
     () async {
-      final hidden = await client(
-        (_) => http.Response('{}', 404),
-      ).setLike('post-1', liked: true);
+      final hidden = await client((_) => http.Response('{}', 404))
+          .setLike('post-1', liked: true);
       expect((hidden as ApiError).failure, isA<NotFound>());
 
       final signedOut = await client(
@@ -113,9 +110,8 @@ void main() {
     ).createComment('post-1', clientCommentId: 'id-1', text: 'Beautiful.');
     expect(replayed, isA<ApiSuccess<PostComment>>());
 
-    final reused = await client(
-      (_) => http.Response('{}', 409),
-    ).createComment('post-1', clientCommentId: 'id-1', text: 'Other');
+    final reused = await client((_) => http.Response('{}', 409))
+        .createComment('post-1', clientCommentId: 'id-1', text: 'Other');
     expect((reused as ApiError).failure, isA<Conflict>());
   });
 
@@ -128,9 +124,8 @@ void main() {
     expect(jsonDecode(requests.single.body), {'text': 'Stunning.'});
     expect(edited, isA<ApiSuccess<PostComment>>());
 
-    final deleted = await client(
-      (_) => http.Response('', 204),
-    ).deleteComment('post-1', 'c-1');
+    final deleted = await client((_) => http.Response('', 204))
+        .deleteComment('post-1', 'c-1');
     expect(requests.single.method, 'DELETE');
     expect(deleted, isA<ApiSuccess<void>>());
   });

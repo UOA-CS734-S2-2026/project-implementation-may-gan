@@ -46,6 +46,8 @@ export interface ExportRouteDependencies {
   rateLimiter?: ActorRateLimiter;
   /** Disabled even when route dependencies are present until owner approval and provider proof. */
   enabled?: boolean;
+  /** A staging proof may admit only its one disposable account. */
+  allowedUserId?: string;
   status?: (userId: string, sessionId: string) => Promise<ExportOwnerStatus | null>;
   request?: (userId: string, sessionId: string, requestId: string) => Promise<{
     requestId: string; status: "requested" | "building" | "ready" | "expired"; requestedAt: string;
@@ -62,7 +64,7 @@ export function registerExportRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, deps
     context.header("Cache-Control", "no-store");
     const actor = context.get("actor");
     if (!actor?.sessionId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "A live session is required.");
-    if (!deps.enabled || !deps.status) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export is unavailable.");
+    if (!deps.enabled || (deps.allowedUserId !== undefined && deps.allowedUserId !== actor.userId) || !deps.status) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export is unavailable.");
     try {
       const state = await deps.status(actor.userId, actor.sessionId);
       return context.json(state ?? { requestId: null, status: "none" as const, requestedAt: null, readyAt: null, expiresAt: null }, 200);
@@ -72,7 +74,7 @@ export function registerExportRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, deps
     context.header("Cache-Control", "no-store");
     const actor = context.get("actor");
     if (!actor?.sessionId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "A live session is required.");
-    if (!deps.enabled || !deps.request || !deps.rateLimiter) {
+    if (!deps.enabled || (deps.allowedUserId !== undefined && deps.allowedUserId !== actor.userId) || !deps.request || !deps.rateLimiter) {
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export is unavailable.");
     }
     const limit = await deps.rateLimiter.check(context.req.raw, actor);
@@ -89,7 +91,7 @@ export function registerExportRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, deps
     context.header("Cache-Control", "no-store");
     const actor = context.get("actor");
     if (!actor?.sessionId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "A live session is required.");
-    if (!deps.enabled || !deps.download) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export is unavailable.");
+    if (!deps.enabled || (deps.allowedUserId !== undefined && deps.allowedUserId !== actor.userId) || !deps.download) return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Export is unavailable.");
     try {
       const download = await deps.download(actor.userId, actor.sessionId, context.req.valid("param").requestId);
       if (!download) return apiErrorResponse(context, 404, "NOT_FOUND", "No ready export was found.");

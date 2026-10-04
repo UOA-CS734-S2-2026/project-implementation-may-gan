@@ -147,10 +147,10 @@ Choose separate exact HTTPS web and API origins under the same registrable domai
 The staging owner removed the temporary passwordless probe role. The `migrator` migration secret and Cloudflare proof credentials are stored in the main-only GitHub environment; the API Worker has its own Better Auth secret. Google and Resend are not enabled. Before inviting testers:
 
 1. Add a required reviewer to the GitHub `staging` environment. Previous manual runs had explicit owner approval but no environment review gate.
-2. Configure the staging Google clients and a verified Resend sender as described in [Authentication compatibility](authentication-compatibility.md). Keep their secrets out of Git and enable complete provider bindings in one reviewed Worker version. Until then, email/password remains the only configured provider.
+2. Configure the staging Google clients and a verified Resend sender as described in [Authentication setup and operations](../../apps/docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx). Keep their secrets out of Git and enable complete provider bindings in one reviewed Worker version. Until then, email/password remains the only configured provider.
 3. Test Google on the staging web host and Android and iOS devices. Test password-reset delivery with an approved mailbox. Browser email/password and sign-out checks have passed manually, but native sessions, provider callbacks, and reset emails still need live tests.
 
-Google OAuth and Resend requirements are in [Authentication compatibility](authentication-compatibility.md). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
+Google OAuth and Resend requirements are in [Authentication setup and operations](../../apps/docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx). Do not record credentials, connection strings, project IDs, tokens, certificate keys, reset links, or session tokens in Git, chat, PRs, logs, or tracked Wrangler files.
 
 ### Production reset and release
 

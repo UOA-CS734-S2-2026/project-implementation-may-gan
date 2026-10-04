@@ -1,0 +1,119 @@
+---
+title: Design history and lessons
+description: Why Dayli separates durable messaging state from live delivery, and what changed between the early plan and the current code.
+---
+
+Messaging began with a broad requirement: direct text chat on web and mobile should feel live without making a dropped connection responsible for the message itself. Issues [#26 through #33](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/26), [#47](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/47), and [#127 through #133](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/127) split that requirement into storage, authorization, delivery, client recovery, and deferred work.
+
+The early plans mixed confirmed requirements with proposed defaults and a proposed file tree. They were not proof that the feature worked. The current implementation follows most of their architecture, but code, tests, and deployed evidence remain different kinds of evidence.
+
+## The main design problem
+
+Sending and receiving happen on different reliability schedules. A database commit should survive a browser closing immediately after the response. A socket may disappear while a phone sleeps. A push provider may be unavailable for several minutes. Treating one network connection as the source of truth would couple all three failures.
+
+The selected design uses four layers:
+
+1. REST commands and reads define the authenticated product contract.
+2. PostgreSQL stores messages, changes, read positions, and delivery intent.
+3. WebSockets notify foreground clients that durable state changed.
+4. FCM alerts eligible mobile installations in the background.
+
+Each layer can fail without changing what the others mean. A socket notification does not mean a message was read. An accepted outbox job does not prove a client rendered it. A push alert does not authorize access to a conversation.
+
+## Approaches considered
+
+### Put message bodies on WebSockets
+
+A socket-only protocol could send a message straight to connected clients. It looks simpler for a live demo, but reconnect recovery then needs another persistence protocol or an event replay service. It also puts private text into more delivery and logging paths.
+
+Dayli instead sends commands and history through REST. Socket events contain references only. This gives clients one authorization and projection path whether they are loading normally or recovering after a disconnect.
+
+### Poll the API
+
+Periodic polling is easy to understand and works behind ordinary HTTP infrastructure. Empty polls still consume requests, and choosing an interval trades server work against visible delay. Polling also does not remove the need to reconcile edits, reactions, and unsends correctly.
+
+Dayli uses a foreground socket plus event-driven REST refreshes. Manual refresh remains available when disconnected, but there is no periodic polling fallback.
+
+### Server-sent events or long polling
+
+Server-sent events provide one-way notifications, which is enough for invalidation. Long polling can do the same with repeated held requests. The design record did not assume either option had Cloudflare Durable Object hibernation behavior or cost equal to WebSockets.
+
+Hibernating WebSockets fit the existing Worker deployment and support multiple tabs or devices through one per-user object. Clients do not send application messages over the socket, so choosing WebSockets did not turn the Durable Object into a peer message relay.
+
+### A separate realtime service, broker, or managed provider
+
+A Node WebSocket service with Redis, MQTT, or a managed realtime provider could also work. It would add another deployed service, provider contract, and authorization boundary before the team had measured a need for one.
+
+The first implementation kept realtime inside the API Worker deployment. Publisher and push interfaces remain separate from message storage, so the transport can change later without rewriting conversation transactions.
+
+### Publish immediately after the transaction
+
+Calling a socket or FCM after commit is fast, but a Worker crash between commit and publish loses the notification. Calling the provider inside the transaction makes database locks wait on the network and still cannot atomically commit a provider response.
+
+The PostgreSQL outbox closes that gap. The message, change, and delivery rows commit together. The route starts a bounded dispatch after commit for the normal fast path. A minute cron repairs jobs that remain due.
+
+### Add a queue or Redis first
+
+A queue can be a good delivery component, but it does not remove the need to coordinate queue publication with the PostgreSQL commit. The first implementation avoids another service and uses leased outbox rows with `FOR UPDATE SKIP LOCKED`.
+
+The tradeoff is deliberate. PostgreSQL now handles bounded delivery claiming as well as message storage. Outbox age, failures, query plans, and dispatch workload need monitoring before assuming that choice scales without change.
+
+## Privacy rules shaped the data model
+
+A direct conversation is unique for an unordered pair. The implementation takes the same stable relationship-pair lock used by friendship and blocking writes, then locks the conversation. This serializes races such as sending while the other participant blocks.
+
+Message requests provide a narrow path for non-friends. The initial message is the request, and the sender gets no second message while it is pending. Pending reads remain private until acceptance. A decline is not a block, while a block stops all new peer-visible activity in either direction.
+
+History reads use membership queries rather than a general role check. An administrator is not automatically a participant. Unknown or unauthorized private resources normally return `404`, while a visible conversation action that current policy forbids can return `403`.
+
+The first schema referenced active user rows directly. Later privacy migrations added durable, profile-free participant IDs and changed messaging references so a physical user deletion can detach the active profile mapping without deleting the surviving participant's conversation history. Delivery rows, tickets, and device registrations remain tied to active users because a deleted account must receive no further events.
+
+This is retention, not anonymization. Message bodies and conversation context can still identify people. The migration record at `docs/implementation/privacy-messaging-identities.md` documents the staged schema transition and its migration gates.
+
+## Lessons from implementation
+
+### A notification cursor is not a message cursor
+
+New messages increase the conversation's message sequence. Edits, reactions, reads, request decisions, and unsends do not create a new message, but they still increase the change sequence. Reconnect logic therefore drains `conversation_changes` rather than asking only for messages after the latest message number.
+
+### Apply before advancing
+
+Both clients fetch current message projections for a change page before recording its high watermark. If a projection fails, they keep the old cursor so a later event or reconnect retries the durable range. Advancing first would permanently skip a tombstone or edit after a transient error.
+
+### Optimistic sends need a durable retry identity
+
+The browser can show a pending bubble before REST completes. The same `clientMessageId` follows a retry. The server stores a request fingerprint and either returns the canonical message or rejects conflicting key reuse. Client merging uses message ID and version so an older history response cannot erase a pending or newer bubble.
+
+The current mobile controller applies canonical mutation responses but does not promise offline send persistence across app termination. That remains outside the feature's contract.
+
+### Read state has a private and a shared meaning
+
+One cursor cannot represent both clearing your badge and telling another person you read their message. Pending requests and blocked conversations make the difference visible. Separate `lastReadSequence` and `receiptSequence` values let the server clear private unread state without leaking a peer receipt.
+
+### Realtime must follow the account session
+
+A socket ticket contains a session identity and expires no later than that session. The Durable Object checks PostgreSQL before sensitive publication and uses alarms to close expired hibernating sockets. Logout and server-side revocation also close matching sockets.
+
+Web remounts its Query client for each account and includes the user ID in every messaging query key. Flutter uses a generation counter to stop late results from an old session writing into a new account's state. These details matter more than clearing one visible screen.
+
+### Push registration must follow the installation session
+
+A device token can survive longer than an app login. Registrations therefore bind token, installation, user, and session. Token rotation can replace the old binding, and dispatch rechecks the session. Flutter serializes registration cleanup before credential replacement so a late old-account registration cannot win after sign-out.
+
+### Unsend needs projection cleanup
+
+Clearing the message row is not enough. Reactions are removed, the version increases, inbox previews and reply previews must fetch the tombstone, and delivery contains no cached body to recall. Even then, an already viewed message or delivered notification cannot be withdrawn.
+
+## Planned boundaries that remain boundaries
+
+The early handoff deferred group policy because membership changes, blocking, and retained history need rules beyond a direct pair. The current schema still permits only `kind = direct`.
+
+It also deferred attachments until the private R2 upload design could define message-specific association and read policy. Current messaging requests contain text and an optional reply ID only. Reusing an arbitrary media URL would bypass the reservation and parent-authorization rules described in [Media uploads and storage](/docs/systems/media-uploads-and-storage).
+
+Typing, presence, delivered-to-device receipts, browser push, offline message persistence, and end-to-end encryption were not added as accidental side effects of realtime. TLS protects transport, but this system is not E2EE.
+
+## Source history
+
+The issue series above preserves the original scope and dependency discussion. Backend action ownership was reviewed in [PR #150](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/150), building on the backend refactor in [PR #134](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/134) and the friends work in [PR #137](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/137). Commit [`c66160cf`](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/c66160cf) records the final combined local messaging verification update.
+
+The later durable participant migration remains documented in `docs/implementation/privacy-messaging-identities.md` because it is part of the active privacy and account-lifecycle work. Use the current code for present behavior, the API reference for the current REST shape, and dated verification evidence for claims about a particular run or environment.

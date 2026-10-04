@@ -1,0 +1,9 @@
+{
+  "title": "Messaging",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "design-history-and-lessons",
+    "setup-and-verification"
+  ]
+}

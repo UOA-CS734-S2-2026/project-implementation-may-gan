@@ -1,7 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
 import { PostApiError } from "@/features/posts/shared/query-result";
+import { postKeys } from "@/features/posts/shared/posts.keys";
+import { useSession } from "@/lib/session/hooks";
 import { usePostRevisionsQuery } from "./use-post-revisions-query";
 
 const NZ_TIME_ZONE = "Pacific/Auckland";
@@ -19,18 +23,29 @@ function replacedAt(value: Date) {
 
 /** Earlier versions of a post, as the caller is allowed to see them. */
 export function PostRevisions({ postId, viewerIsAuthor }: { postId: string; viewerIsAuthor: boolean }) {
+  const { user } = useSession();
+  const client = useQueryClient();
   const query = usePostRevisionsQuery(postId, true);
-  const revisions = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const failure = query.error instanceof PostApiError ? query.error.failure : undefined;
+  const revocationError = failure === "notFound" || failure === "unauthenticated";
+  const [revoked, setRevoked] = useState(false);
+  if (revocationError && !revoked) setRevoked(true);
+  const concealed = revoked || revocationError;
+  const revisions = concealed ? [] : query.data?.pages.flatMap((page) => page.items) ?? [];
 
+  useEffect(() => {
+    if (!revocationError) return;
+    const key = postKeys.revisions(user?.id ?? "anonymous", postId);
+    void client.cancelQueries({ queryKey: key });
+    client.removeQueries({ queryKey: key });
+  }, [client, postId, revocationError, user?.id]);
+
+  if (concealed) {
+    return <p role="alert" className="text-sm text-foreground-secondary">Earlier versions aren&apos;t available.</p>;
+  }
   if (query.isPending) return <p role="status" className="text-sm text-foreground-secondary">Loading earlier versions...</p>;
-  // A 404 means access ended, so history loaded earlier must not stay on screen.
-  const notFound = query.error instanceof PostApiError && query.error.failure === "notFound";
-  if (notFound || (query.isError && revisions.length === 0)) {
-    return (
-      <p role="alert" className="text-sm text-foreground-secondary">
-        {notFound ? "Earlier versions aren't available." : "Earlier versions couldn't be loaded right now."}
-      </p>
-    );
+  if (query.isError && revisions.length === 0) {
+    return <p role="alert" className="text-sm text-foreground-secondary">Earlier versions couldn&apos;t be loaded right now.</p>;
   }
 
   return (

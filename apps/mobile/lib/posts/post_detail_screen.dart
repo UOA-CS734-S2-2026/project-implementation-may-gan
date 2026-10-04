@@ -5,9 +5,12 @@ import '../api/api_failure.dart';
 import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/public_return_intent.dart';
+import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
+import '../ui/voice_player.dart';
 
 import 'edit_post_screen.dart';
 import 'post_comments.dart';
@@ -19,9 +22,16 @@ import 'private_media.dart';
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    this.intent,
+    this.intentActorId,
+  });
 
   final String postId;
+  final PublicActionIntent? intent;
+  final String? intentActorId;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -30,6 +40,13 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
+  SessionController? _session;
+  (SessionStatus, String?, int)? _sessionIdentity;
+  String? _loadedPostId;
+  int _requestGeneration = 0;
+
+  /// The intent this visit came back with, once it has been consumed.
+  PublicActionIntent? _consumedIntent;
 
   /// True once the post was edited, deleted, liked, unliked, or commented on
   /// here. It is returned to the list that opened the post, so that list can
@@ -51,17 +68,84 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_result == null) _load();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+  }
+
+  void _syncActor({bool force = false}) {
+    final identity = _currentSessionIdentity();
+    if (force ||
+        identity != _sessionIdentity ||
+        _loadedPostId != widget.postId) {
+      _sessionIdentity = identity;
+      _loadedPostId = widget.postId;
+      _post = null;
+      _result = null;
+      _consumedIntent =
+          widget.intent != null &&
+              _session?.status == SessionStatus.signedIn &&
+              widget.intentActorId == _session?.user?.id
+          ? widget.intent
+          : null;
+      _load();
+      if (mounted) setState(() {});
+    }
+  }
+
+  (SessionStatus, String?, int) _currentSessionIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentLoad(
+    int requestGeneration,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      requestGeneration == _requestGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
+  @override
+  void didUpdateWidget(covariant PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.intent != widget.intent ||
+        oldWidget.intentActorId != widget.intentActorId) {
+      _syncActor(force: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
     final services = AppScope.of(context);
-    final result = await services.posts.get(widget.postId);
-    if (!mounted) return;
+    final requestGeneration = ++_requestGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     if (result case ApiError(failure: Unauthenticated())) {
-      await services.session.sessionExpired();
+      if (identity.$1 == SessionStatus.signedIn) {
+        await services.session.sessionExpired();
+      }
       return;
     }
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     setState(() {
       _result = result;
       _loads++;
@@ -89,9 +173,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         viewerHasLiked: liked,
       );
     });
-    final result = await AppScope.of(
-      context,
-    ).interactions.setLike(post.id, liked: liked);
+    final result = await AppScope.of(context).interactions
+        .setLike(post.id, liked: liked);
     if (!mounted) return;
     setState(() {
       _liking = false;
@@ -166,10 +249,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<void> _edit(PostDetail post) async {
+    final identity = _currentSessionIdentity();
+    final postId = widget.postId;
     final saved = await Navigator.of(context).push<PostDetail>(
       MaterialPageRoute(builder: (_) => EditPostScreen(post: post)),
     );
-    if (saved == null || !mounted) return;
+    if (saved == null ||
+        !mounted ||
+        identity != _currentSessionIdentity() ||
+        postId != widget.postId ||
+        saved.id != postId) {
+      return;
+    }
     setState(() {
       _changed = true;
       _post = saved;
@@ -246,6 +337,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
+  /// A new URL for the post's voice memo, or null when it can't be read now.
+  Future<Uri?> _freshVoiceMemoUrl(String postId) async {
+    final result = await AppScope.of(context).posts.voiceMemo(postId);
+    return switch (result) {
+      ApiSuccess(value: final memo) => memo.url,
+      ApiError() => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -342,6 +442,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
 
     final stale = result is ApiError<PostDetail>;
+    final signedIn = _session?.status == SessionStatus.signedIn;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -483,6 +584,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 16),
                 _PostMedia(post: post),
               ],
+              if (post.voiceMemo?.url case final url?) ...[
+                const SizedBox(height: 16),
+                // Starts only when played. A URL that has expired is replaced
+                // once, by asking the server again.
+                VoicePlayerPill.network(
+                  key: ValueKey('post.voiceMemo.${post.id}'),
+                  url: url,
+                  label: post.viewerIsAuthor
+                      ? 'Your voice memo'
+                      : "${post.displayName}'s voice memo",
+                  onRefreshUrl: () => _freshVoiceMemoUrl(post.id),
+                ),
+              ],
               const SizedBox(height: 18),
               Text(
                 post.promptText,
@@ -517,62 +631,102 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  IconButton(
-                    key: const Key('post.like'),
-                    tooltip: post.viewerHasLiked ? 'Unlike' : 'Like',
-                    isSelected: post.viewerHasLiked,
-                    onPressed: _liking || stale
-                        ? null
-                        : () => _toggleLike(post),
-                    icon: Icon(
-                      post.viewerHasLiked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: colors.foregroundAccent,
+              if (signedIn) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    IconButton(
+                      key: const Key('post.like'),
+                      tooltip: post.viewerHasLiked ? 'Unlike' : 'Like',
+                      isSelected: post.viewerHasLiked,
+                      onPressed: _liking || stale
+                          ? null
+                          : () => _toggleLike(post),
+                      icon: Icon(
+                        post.viewerHasLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: colors.foregroundAccent,
+                      ),
                     ),
-                  ),
-                  TextButton(
-                    key: const Key('post.likes'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.foregroundSecondary,
-                    ),
-                    onPressed: post.likeCount == 0
-                        ? null
-                        : () => Navigator.of(context).push<void>(
-                            MaterialPageRoute(
-                              builder: (_) => PostLikersScreen(postId: post.id),
+                    TextButton(
+                      key: const Key('post.likes'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.foregroundSecondary,
+                      ),
+                      onPressed: post.likeCount == 0
+                          ? null
+                          : () => Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PostLikersScreen(postId: post.id),
+                              ),
                             ),
-                          ),
-                    child: Text(
-                      post.likeCount == 1
-                          ? '1 like'
-                          : '${post.likeCount} likes',
+                      child: Text(
+                        post.likeCount == 1
+                            ? '1 like'
+                            : '${post.likeCount} likes',
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    post.commentCount == 1
-                        ? '1 comment'
-                        : '${post.commentCount} comments',
-                    key: const Key('post.commentCount'),
-                    style: muted,
-                  ),
-                ],
-              ),
+                    const Spacer(),
+                    Text(
+                      post.commentCount == 1
+                          ? '1 comment'
+                          : '${post.commentCount} comments',
+                      key: const Key('post.commentCount'),
+                      style: muted,
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DayliButton(
+                        key: const Key('post.like'),
+                        label: 'like',
+                        color: ButtonColor.background,
+                        onPressed: () => _interaction(PublicActionIntent.like),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DayliButton(
+                        key: const Key('post.comment'),
+                        label: 'comment',
+                        color: ButtonColor.background,
+                        onPressed: () =>
+                            _interaction(PublicActionIntent.comment),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
         const SizedBox(height: 16),
-        PostComments(
-          key: ValueKey('comments.$_loads'),
-          postId: post.id,
-          onChanged: _refreshCounts,
-        ),
+        if (signedIn)
+          PostComments(
+            key: ValueKey('comments.$_loads'),
+            postId: post.id,
+            onChanged: _refreshCounts,
+            focusComposer: _consumedIntent == PublicActionIntent.comment,
+          ),
       ],
     );
+  }
+
+  /// Signed-out visitors are sent to sign in and come back to this post. A
+  /// returned intent is never replayed: a comment intent puts the cursor in
+  /// the comment box, and a like intent just lands on the post.
+  void _interaction(PublicActionIntent action) {
+    final intent = _session?.issuePublicReturnIntent(
+      '/posts/${widget.postId}',
+      action,
+    );
+    context.go(intent?.authLocation() ?? '/sign-in');
   }
 }
 

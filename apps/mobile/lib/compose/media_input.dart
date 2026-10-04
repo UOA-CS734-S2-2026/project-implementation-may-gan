@@ -43,6 +43,8 @@ class MediaInput extends StatelessWidget {
     this.notice,
     this.problem,
     this.onRetry,
+    this.captureNotice,
+    this.onOpenSettings,
   });
 
   final List<DraftAttachment> attachments;
@@ -64,6 +66,13 @@ class MediaInput extends StatelessWidget {
   /// Why uploads are paused, shown with a retry action.
   final String? problem;
   final VoidCallback? onRetry;
+
+  /// Why the camera couldn't be used. The library is still available.
+  final String? captureNotice;
+
+  /// Shown beside [captureNotice] when only the system Settings can turn the
+  /// camera on.
+  final VoidCallback? onOpenSettings;
 
   bool get _canAdd => canAddAttachment(attachments);
 
@@ -121,7 +130,18 @@ class MediaInput extends StatelessWidget {
                 ),
               ),
             ),
-            if (problem != null && onRetry != null && error == null)
+            if (captureNotice != null &&
+                onOpenSettings != null &&
+                error == null)
+              TextButton(
+                key: const Key('composer.media.settings'),
+                onPressed: onOpenSettings,
+                child: const Text('Open Settings'),
+              )
+            else if (problem != null &&
+                onRetry != null &&
+                error == null &&
+                captureNotice == null)
               TextButton(
                 key: const Key('composer.media.retry'),
                 onPressed: onRetry,
@@ -136,6 +156,7 @@ class MediaInput extends StatelessWidget {
   /// The line under the tiles, most urgent first, and whether it's a problem.
   (String, bool) _message() {
     if (error case final error?) return (error, true);
+    if (captureNotice case final captureNotice?) return (captureNotice, true);
     if (notice case final notice?) return (notice, true);
     if (problem case final problem?) return (problem, true);
     for (var index = 0; index < attachments.length; index++) {

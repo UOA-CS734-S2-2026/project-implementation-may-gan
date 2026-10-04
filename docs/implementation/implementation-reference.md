@@ -6,7 +6,7 @@ Use this while building. The other guides explain the design; this document reco
 
 - Hono on Workers gives mobile and web one independently deployed backend with direct Cloudflare bindings. Next.js routes would require less migration and can also scale. An always-on Node service is the fallback for incompatible dependencies or heavy processing, not a prerequisite for thousands of users.
 - REST/OpenAPI supports generated Dart and TypeScript clients. tRPC's TypeScript inference does not transfer to Flutter. GraphQL is unnecessary for the initial bounded operations.
-- REST owns commands/history; hibernating WebSockets carry small change notifications and clients fetch authorized state through REST. Push reaches suspended mobile apps through FCM/APNs. PostgreSQL remains authoritative. No periodic client polling is planned. See the [messaging handoff](messaging-implementation-handoff.md) for the agreed scope and implementation sequence.
+- REST owns commands/history; hibernating WebSockets carry small change notifications and clients fetch authorized state through REST. Push reaches suspended mobile apps through FCM/APNs. PostgreSQL remains authoritative. No periodic client polling is planned. See the [messaging system guide](../../apps/docs/content/docs/systems/messaging/index.mdx) for the implemented scope and current limits.
 - Domain services must not depend on `NextRequest`, Hono contexts, or `TRPCError`. Inject database, clock, and external-service interfaces. Map errors in adapters.
 - Better Auth in Hono is the sole identity authority. Temporary Next.js tRPC proxies call Hono with the user's verified credentials, not an unrestricted service account.
 

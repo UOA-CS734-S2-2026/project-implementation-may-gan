@@ -1,0 +1,68 @@
+---
+title: Profiles and discovery
+description: How Dayli reveals profile details, calculates streaks, changes usernames, and handles profile photos.
+---
+
+A profile combines identity, optional personal details, activity summaries, and a post archive. Those fields do not all have the same audience. Dayli returns a viewer-specific projection instead of sending a full profile and asking the client to hide parts of it.
+
+## Profile projections
+
+`GET /api/v1/profiles/{username}` accepts an optional session. The current account state, profile visibility, friendship, and blocks decide the response:
+
+| Reader | Profile result |
+| --- | --- |
+| Owner | Full details, activity, settings, and every active post in the archive |
+| Active friend | Full details and released `friends` posts |
+| Other reader of a public profile | Public name, username, bio, avatar, streak, and released `friends` posts |
+| Other reader of a private profile | A `restricted` result containing only the username |
+| Known reader blocked in either direction | `404`, like an unknown or inactive account |
+
+An authorized full profile can contain a public name, 160-character bio, one of the 16 MBTI values, `whatIDo`, and `listeningTo`. The last two fields allow 100 characters each. Blank or null values clear an optional field. A public projection deliberately omits the friend count and the extra about cards.
+
+A public name is display text, not an identifier. Routes and relationship commands continue to use the username or opaque account ID.
+
+## Discovery is narrower than a profile
+
+Authenticated username search begins after two characters and performs a case-insensitive prefix match. It returns only the account ID, username, display name, and the current relationship state. It does not return email, biography, avatar, visibility, activity, or archive data.
+
+Private accounts remain discoverable through this narrow result so someone can send a friend request. Search excludes the caller, accounts without a username, active blocks in either direction, inactive accounts, and current bans. A PostgreSQL-backed limit allows 30 searches in a rolling 60-second window per account, so the limit is shared across Worker isolates.
+
+Web and Flutter provide search, friend lists, and incoming and outgoing requests. Their state is scoped to the signed-in account. Late results from a previous account must not populate the next account's screen.
+
+## Activity and streaks
+
+The full profile contains accepted-post, friend, and `loved` counts plus a posting streak. `loved` is the number of likes on the owner's posts that aren't in Trash. `calculatePostingStreak` derives the values from Auckland post dates on each read rather than maintaining a counter.
+
+Solo and `friends` posts both count. Drafts and rejected submissions do not. The current streak ends today when the owner has posted today, or yesterday while today's posting window is still open. Today therefore does not break a streak before Auckland midnight. A whole missed day resets the current value, while `longest` keeps the best completed run.
+
+The API also returns `postedToday`, `lastPostDate`, and `asOf`. Moving a post to Trash removes it from these calculations immediately, even though the destructive Trash worker is disabled by default. The current interfaces show posts, friends, Loved, and the current day streak. They do not present the longest streak as a separate analytics feature.
+
+## Changing profile details and usernames
+
+`PATCH /api/v1/profile` changes only fields present in the request. It can update the bio, public name, visibility, MBTI value, `whatIDo`, and `listeningTo`. The dedicated profile route is used instead of Better Auth's generic user update because these fields have Dayli-specific validation and visibility rules.
+
+`PUT /api/v1/profile/username` changes an established username at most once every 30 days. The transaction locks the user row, changes the username, and reserves the previous lowercase handle for the same 30-day period. The claim trigger and per-handle advisory lock stop another account from racing to claim a live username or reservation.
+
+A request for the previous handle resolves to the owner's current profile during the reservation period. Web replaces the stale `/u/{old}` address with `/u/{new}`, and Flutter updates its route and signed-in profile state. A taken or reserved handle returns a conflict. The owner projection includes `usernameChangeAvailableAt` while the waiting period is active.
+
+## Profile photos
+
+A profile photo reuses the private media reservation flow. The owner reserves and uploads a JPEG, PNG, or WebP image, completes validation, then sends the validated reservation ID to `PUT /api/v1/profile/avatar`. The transaction locks the account and reservation, rejects a missing, foreign, unvalidated, non-image, or cleanup-claimed upload, and replaces the owner's one `profile_avatars` link.
+
+Authorized owner and friend views may receive a signed R2 URL that expires after ten minutes. Public-profile views receive `GET /api/v1/profiles/{username}/avatar`, a Dayli route that checks the parent profile on every request. A private or blocked profile therefore does not leave a reusable anonymous avatar URL.
+
+Web can upload and remove an avatar from Settings. Flutter currently displays profile photos but does not provide the avatar upload control. Replacing or removing a profile link does not make the old object public. Orphan cleanup can remove only reservations linked to neither a post nor a current profile avatar.
+
+[Media uploads and storage](/docs/systems/media-uploads-and-storage) explains reservation validation and R2 configuration.
+
+## Client and API gaps
+
+The API supports optional-session public and restricted profile results. The current web profile routes still require the signed-in app journey, and Flutter's profile client uses a bearer session. A complete anonymous client journey is therefore not implemented even though the API policy exists.
+
+Some older client copy still says that all daylies are friend-only. Current API policy is more specific: a public profile exposes released `friends` posts, while `solo` and unreleased posts remain owner-only. Authorization follows the server response, not that stale sentence.
+
+## Code and verification
+
+Profile actions are under `apps/api/src/features/profiles`, relationship discovery is under `apps/api/src/features/relationships`, and streak calculation is in `packages/domain/src/posting-streak.ts`. The archive query is under `apps/api/src/features/posts/list-profile-posts`.
+
+PostgreSQL integration tests cover profile projections, block concealment, literal username matching, streaks, avatar ownership, username reservations, and the 30-day wait. Route and client tests cover validation, partial updates, stale account state, and profile rendering. These checks establish local behavior against their fixtures, not an anonymous deployed browser journey or a production R2 configuration.

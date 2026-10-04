@@ -334,6 +334,184 @@ void main() {
     });
   });
 
+  group('a voice memo', () {
+    // A recording is already in the upload format, so it is never compressed.
+    const memo = DraftAttachment(
+      localPath: '/support/dayli-media/user-user-1/memo.m4a',
+      mediaType: 'audio',
+      compressedPath: '/support/dayli-media/user-user-1/memo.m4a',
+      contentType: 'audio/mp4',
+      byteSize: 400000,
+      durationMs: 21000,
+      waveform: [10, 90, 200, 40],
+    );
+
+    /// Everything about the recording that is not upload state.
+    void expectRecordingKept(DraftAttachment attachment) {
+      expect(attachment.mediaType, 'audio');
+      expect(attachment.compressedPath, memo.compressedPath);
+      expect(attachment.contentType, 'audio/mp4');
+      expect(attachment.byteSize, 400000);
+      expect(attachment.durationMs, 21000);
+      expect(attachment.waveform, [10, 90, 200, 40]);
+    }
+
+    test(
+      'uploads without compressing and keeps its length and waveform',
+      () async {
+        final (composer, _) = await open();
+        add(composer, memo);
+        await settle();
+
+        expect(compressor.compressed, isEmpty);
+        expect(client.reserved.single.contentType, 'audio/mp4');
+        final attachment = composer.draft!.attachments.single;
+        expect(attachment.status, AttachmentUploadStatus.validated);
+        expectRecordingKept(attachment);
+      },
+    );
+
+    test('keeps its length and waveform when the upload URL expired', () async {
+      client.uploadResults.add(const ApiError(Expired()));
+      final (composer, _) = await open();
+      add(composer, memo);
+      await settle();
+
+      expect(client.reserved, hasLength(2));
+      expect(compressor.compressed, isEmpty);
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.reservationId, 'reservation-2');
+      expect(attachment.status, AttachmentUploadStatus.validated);
+      expectRecordingKept(attachment);
+      // And the saved draft has them too, so a restart still draws the waveform.
+      expectRecordingKept(drafts.drafts['user-1']!.attachments.single);
+    });
+
+    test('keeps them when the reservation expired before completion', () async {
+      client.completeResults.add(const ApiError(Expired()));
+      final (composer, _) = await open();
+      add(composer, memo);
+      await settle();
+
+      expect(client.reserved, hasLength(2));
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.status, AttachmentUploadStatus.validated);
+      expectRecordingKept(attachment);
+      expectRecordingKept(drafts.drafts['user-1']!.attachments.single);
+    });
+
+    test('keeps them when the reservation disappeared', () async {
+      client.completeResults.add(const ApiError(NotFound()));
+      final (composer, _) = await open();
+      add(composer, memo);
+      await settle();
+
+      expect(client.reserved, hasLength(2));
+      final attachment = composer.draft!.attachments.single;
+      expect(attachment.status, AttachmentUploadStatus.validated);
+      expectRecordingKept(attachment);
+    });
+
+    test('keeps them through repeated expiries, even while backing off', () async {
+      // Three expired upload URLs in a row make the controller pause and retry.
+      client.uploadResults.addAll(const [
+        ApiError(Expired()),
+        ApiError(Expired()),
+        ApiError(Expired()),
+      ]);
+      final (composer, _) = await open();
+      add(composer, memo);
+      await settle();
+
+      final attachment = composer.draft!.attachments.single;
+      expectRecordingKept(attachment);
+      expectRecordingKept(drafts.drafts['user-1']!.attachments.single);
+      await settle();
+      expect(
+        composer.draft!.attachments.single.status,
+        AttachmentUploadStatus.validated,
+      );
+      expectRecordingKept(composer.draft!.attachments.single);
+    });
+
+    test(
+      'keeps them when an earlier upload never landed before a restart',
+      () async {
+        drafts.drafts['user-1'] = DailyPostDraft(
+          userId: 'user-1',
+          localDate: '2026-09-25',
+          promptId: 'prompt-09-25',
+          promptText: 'What made you smile today?',
+          idempotencyKey: 'saved-key',
+          updatedAt: DateTime.utc(2026, 9, 25),
+          attachments: [
+            memo.copyWith(
+              reservationId: () => 'reservation-9',
+              status: AttachmentUploadStatus.uploading,
+            ),
+          ],
+        );
+        client.completeResults.add(
+          const ApiSuccess(MediaCheck(MediaCheckStatus.pending)),
+        );
+        final (composer, _) = await open();
+        await settle();
+
+        expect(log.first, 'complete reservation-9');
+        expect(client.reserved, hasLength(1));
+        final attachment = composer.draft!.attachments.single;
+        expect(attachment.reservationId, 'reservation-1');
+        expect(attachment.status, AttachmentUploadStatus.validated);
+        expectRecordingKept(attachment);
+      },
+    );
+
+    test(
+      'keeps them when the server refuses the recording and it is sent again',
+      () async {
+        final (composer, _) = await open();
+        composer.update(
+          reflectiveAnswer: 'Coffee by the harbour',
+          rating: () => 7,
+          audience: PostAudience.solo,
+          attachments: [memo],
+        );
+        await settle();
+        expect(
+          composer.draft!.attachments.single.reservationId,
+          'reservation-1',
+        );
+
+        submitter.result = const SubmissionRejected(
+          SubmissionConflict.mediaUnavailable,
+        );
+        await composer.submit();
+        await settle();
+
+        expect(client.reserved, hasLength(2));
+        final attachment = composer.draft!.attachments.single;
+        expect(attachment.reservationId, 'reservation-2');
+        expect(attachment.status, AttachmentUploadStatus.validated);
+        expectRecordingKept(attachment);
+      },
+    );
+
+    test('is restarted without losing the recording facts', () async {
+      client.uploadResults.add(
+        const ApiError(InvalidRequest('The upload was refused.')),
+      );
+      final (composer, _) = await open();
+      add(composer, memo);
+      await settle();
+
+      // A file the server calls invalid is restarted from the recording itself,
+      // not recompressed, and still knows its length and waveform.
+      expect(compressor.compressed, isEmpty);
+      final attachment = composer.draft!.attachments.single;
+      expectRecordingKept(attachment);
+    });
+  });
+
   test('deletes the compressed copy of a removed attachment', () async {
     client.holdUpload = Completer<void>();
     final (composer, _) = await open();

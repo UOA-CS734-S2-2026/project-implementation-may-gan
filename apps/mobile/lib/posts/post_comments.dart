@@ -28,10 +28,15 @@ class PostComments extends StatefulWidget {
     super.key,
     required this.postId,
     required this.onChanged,
+    this.focusComposer = false,
   });
 
   final String postId;
   final VoidCallback onChanged;
+
+  /// Puts the cursor in the comment box once, as the screen opens. A visitor
+  /// who tapped "comment" while signed out lands here after signing in.
+  final bool focusComposer;
 
   @override
   State<PostComments> createState() => _PostCommentsState();
@@ -57,6 +62,16 @@ class _PostCommentsState extends State<PostComments> {
 
   /// The last comment posted went after pages that haven't loaded yet.
   bool _postedOutOfView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focusComposer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -461,9 +476,8 @@ class _CommentTile extends StatelessWidget {
                   child: Text(
                     [
                       comment.author.displayName,
-                      MaterialLocalizations.of(
-                        context,
-                      ).formatShortMonthDay(comment.createdAt.toLocal()),
+                      MaterialLocalizations.of(context)
+                          .formatShortMonthDay(comment.createdAt.toLocal()),
                       if (comment.editedAt != null) 'edited',
                     ].join(' · '),
                     style: muted,

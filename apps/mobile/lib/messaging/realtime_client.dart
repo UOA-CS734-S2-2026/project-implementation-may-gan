@@ -82,9 +82,8 @@ class MessagingRealtimeClient implements RealtimeConnection {
     _connecting = false;
     switch (ticket) {
       case ApiSuccess<RealtimeTicket>(:final value):
-        final uri = Uri.parse(
-          value.webSocketUrl,
-        ).replace(queryParameters: {'ticket': value.ticket});
+        final uri = Uri.parse(value.webSocketUrl)
+            .replace(queryParameters: {'ticket': value.ticket});
         _ready = false;
         final channel = (socketFactory ?? WebSocketChannel.connect)(uri);
         if (!_current(epoch)) {

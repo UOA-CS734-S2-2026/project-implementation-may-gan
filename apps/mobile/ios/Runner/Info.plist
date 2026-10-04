@@ -4,6 +4,10 @@
 <dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Dayli adds the photos and videos you choose to your daily post.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Dayli uses the camera when you take a photo or record a short video for your daily post.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dayli uses the microphone only while you record a voice memo for your daily post, and for the sound in videos you take.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
