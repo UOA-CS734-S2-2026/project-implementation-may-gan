@@ -1,0 +1,6 @@
+flutter_native_splash:
+  color: "#FBFAF9"
+  image: assets/branding/dayli-logo.png
+  android_12:
+    color: "#FBFAF9"
+    image: assets/branding/dayli-logo-android12.png

@@ -49,6 +49,8 @@ import type { PostTrashRouteDependencies } from "./features/posts/trash-post/tra
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
+import type { ListOnThisDayRouteDependencies } from "./features/posts/list-on-this-day/list-on-this-day.route";
+import { createHyperdriveOnThisDayRepository } from "./features/posts/list-on-this-day/list-on-this-day.repository";
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
@@ -221,6 +223,7 @@ export interface AppDependencies {
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
   postVoiceMemoContent?: GetPostVoiceMemoContentRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
+  onThisDay?: ListOnThisDayRouteDependencies;
   futureSelfNotes?: FutureSelfNotesRouteDependencies;
   postUpdate?: UpdatePostRouteDependencies;
   postRevisions?: ListPostRevisionsRouteDependencies;
@@ -264,6 +267,7 @@ export function createApp({
   postVoiceMemo,
   postVoiceMemoContent,
   profilePosts,
+  onThisDay,
   futureSelfNotes,
   postUpdate,
   postRevisions,
@@ -353,6 +357,7 @@ export function createApp({
     voiceMemoContent: { ...(postVoiceMemoContent ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
+    onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
     revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
   });
@@ -474,6 +479,12 @@ export function createAppForEnv(env: ApiEnv) {
     };
   })() : {};
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
+  const onThisDay = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    repository: createHyperdriveOnThisDayRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies ListOnThisDayRouteDependencies : undefined;
   const futureSelfNotes = configuration ? {
     resolveSession: createSessionResolver(configuration),
     hasUsername,
@@ -613,6 +624,7 @@ export function createAppForEnv(env: ApiEnv) {
     postVoiceMemo,
     postVoiceMemoContent,
     profilePosts,
+    onThisDay,
     futureSelfNotes,
     postUpdate,
     postRevisions,

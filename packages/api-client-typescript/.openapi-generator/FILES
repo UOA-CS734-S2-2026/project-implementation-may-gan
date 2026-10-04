@@ -80,6 +80,9 @@ src/models/Message.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/OnThisDayMemories.ts
+src/models/OnThisDayMemory.ts
+src/models/OnThisDayMemoryPrompt.ts
 src/models/PasswordReauthenticationGrant.ts
 src/models/PasswordReauthenticationRequest.ts
 src/models/PendingRelationshipRequest.ts

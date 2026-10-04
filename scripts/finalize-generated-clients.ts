@@ -160,6 +160,14 @@ async function finalizeGeneratedClients() {
       "feedDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/on_this_day_memories.dart",
+      "date",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/on_this_day_memory.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/future_self_note.dart",
       "deliverOn",
     ),
