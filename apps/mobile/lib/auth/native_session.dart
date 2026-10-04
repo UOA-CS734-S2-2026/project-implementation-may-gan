@@ -139,6 +139,16 @@ class RegistrationTerms {
   final String contentDigest;
 }
 
+class AccountPolicyStatus {
+  const AccountPolicyStatus(this.restriction);
+
+  final String restriction;
+
+  bool get requiresLegalAcceptance =>
+      restriction == 'terms_blocked' ||
+      restriction == 'age_declaration_blocked';
+}
+
 class RegistrationProof {
   const RegistrationProof({required this.token, required this.binding});
 
@@ -195,6 +205,53 @@ class BetterAuthNativeSession {
       throw const AuthenticationFailure('registration-terms', 502);
     }
     return RegistrationTerms(versionId: version, contentDigest: digest);
+  }
+
+  Future<AccountPolicyStatus> accountPolicy() async {
+    final token = await bearerToken();
+    if (token == null) throw const AuthenticationFailure('account-policy', 401);
+    final response = await _client.get(
+      _uri('/api/v1/account/status'),
+      headers: {'authorization': 'Bearer $token'},
+    );
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('account-policy', response.statusCode);
+    }
+    final value = jsonDecode(response.body);
+    if (value is! Map<String, dynamic>) {
+      throw const AuthenticationFailure('account-policy', 502);
+    }
+    // Pre-policy API builds replied with a successful empty object here. A
+    // non-200 remains unavailable (and therefore fail-closed); accepting this
+    // compatibility response lets an already-active account finish migration.
+    final restriction = value['restriction'];
+    if (restriction == null) return const AccountPolicyStatus('active');
+    if (restriction is! String) {
+      throw const AuthenticationFailure('account-policy', 502);
+    }
+    return AccountPolicyStatus(restriction);
+  }
+
+  Future<void> recordLegalAcceptance(RegistrationTerms terms) async {
+    final token = await bearerToken();
+    if (token == null) {
+      throw const AuthenticationFailure('legal-acceptance', 401);
+    }
+    final response = await _client.post(
+      _uri('/api/v1/legal/acceptance'),
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'termsVersionId': terms.versionId,
+        'termsContentDigest': terms.contentDigest,
+        'acceptedTermsAndDeclaredAge16': true,
+      }),
+    );
+    if (response.statusCode >= 400) {
+      throw AuthenticationFailure('legal-acceptance', response.statusCode);
+    }
   }
 
   Future<RegistrationProof?> issueRegistrationProof({

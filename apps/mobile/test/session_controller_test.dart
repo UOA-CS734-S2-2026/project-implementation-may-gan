@@ -606,6 +606,9 @@ void main() {
               headers: {'set-auth-token': 'bob-token'},
             );
           }
+          if (request.url.path.endsWith('/api/v1/account/status')) {
+            return http.Response('{"restriction":"active"}', 200);
+          }
           return http.Response('{}', 404);
         }),
       ),

@@ -46,6 +46,9 @@ class LegalDocumentScreen extends StatelessWidget {
         context.go('/splash');
       case SessionStatus.signedOut:
         context.go('/welcome');
+      case SessionStatus.legalAcceptanceRequired:
+      case SessionStatus.legalStatusUnavailable:
+        context.go('/legal/acceptance');
       case SessionStatus.needsUsernameSetup:
         context.go('/setup-username');
       case SessionStatus.signedIn:
