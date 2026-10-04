@@ -13,6 +13,7 @@ export const inventoryTestRegistry = {
   postsIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records approved journals notes and Trash fields" },
   messagesIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records authored readable messages without reply previews" },
   ownedMediaIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records media metadata while withholding raw object keys" },
+  commentsIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records authored comments without reply pointers or moderators" },
   jsonValidFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "accepts valid fixtures for every transformed JSON family" },
   jsonUnknownKeyFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "rejects extra keys for every transformed JSON family" },
 } as const;
@@ -138,6 +139,7 @@ const owned = (input: Omit<ExportTableDecision, "tests">, sourceTest: InventoryT
   const exclusions: Record<string, InventoryTestId> = {
     profileIncluded: "authSecretsExcluded", postsIncluded: "lifecycleOperationsExcluded",
     messagesIncluded: "recipientDataExcluded", ownedMediaIncluded: "unprovenMediaExcluded",
+    commentsIncluded: "recipientDataExcluded",
   };
   return { ...input, tests: input.excluded.length > 0
     ? [sourceTest, exclusions[sourceTest] ?? "lifecycleOperationsExcluded"] : [sourceTest] };
@@ -148,6 +150,11 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   account_google_reauthentication_intents: excluded("state_digest,nonce_digest,user_id,session_id,action,lifecycle_generation,expires_at,claimed_at,created_at", "user_id", "temporary_authentication_proof"),
   account_lifecycles: excluded("user_id,state,request_id,idempotency_key_digest,generation,requested_at,cancel_until,purge_due_at,purge_started_at,last_error_category,next_attempt_at,lease_token,lease_expires_at,created_at,updated_at", "user_id", "private_lifecycle_control_state"),
   account_management_grants: excluded("token_digest,user_id,session_id,action,lifecycle_generation,credential_hash_digest,google_subject_digest,expires_at,consumed_at,created_at", "user_id", "action_bound_credentials"),
+  account_notification_preferences: owned({
+    owner: "user_id", retention: "account_lifetime", deletion: "purge_with_account", access: "owner_preference_procedure",
+    retainedForOthers: "not_applicable", trashRestore: "not_applicable",
+    included: fields("user_id,enabled,created_at,updated_at"), excluded: [],
+  }, "profileIncluded"),
   account_purge_receipts: { ...excluded("request_id,subject_digest,requested_at,completed_at,expires_at,outcome,completed_stage_count", "request_id_and_subject_digest", "30_days_after_cleanup"), deletion: "delete_30_days_after_cleanup" },
   age_declarations: owned({
     owner: "user_id", retention: "account_lifetime", deletion: "purge_with_account", access: "owner_procedure",
@@ -158,7 +165,8 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   conversation_members: { ...excluded("conversation_id,user_id,participant_id,last_read_sequence,receipt_sequence,created_at,updated_at", "user_id_and_conversation", "recipient_safe_history"), retainedForOthers: "surviving_participant_history" },
   conversations: { ...excluded("id,kind,user_low_id,user_high_id,initiator_id,participant_low_id,participant_high_id,initiator_participant_id,request_state,last_message_sequence,last_change_sequence,last_activity_at,created_at,updated_at", "participants", "recipient_safe_history"), retainedForOthers: "until_last_participant_deleted" },
   daily_prompts: excluded("id,month_day,text,version,effective_date,source,source_commit", "service_catalog", "published_prompt_catalog"),
-  data_export_object_cleanup_tasks: excluded("id,archive_object_key,status,attempt_count,next_attempt_at,lease_token,lease_expires_at,failure_category,created_at,updated_at", "request_id_via_archive", "private_cleanup_metadata"),
+  data_export_cleanup_incidents: excluded("id,failure_category,failure_count,first_failed_at,last_failed_at,resolved_at,expires_at", "digest_of_cleanup_task", "private_incident_record"),
+  data_export_object_cleanup_tasks: excluded("id,archive_object_key,upload_id,upload_started_at,verified_absent_at,status,attempt_count,next_attempt_at,lease_token,lease_expires_at,failure_category,created_at,updated_at", "request_id_via_archive", "private_cleanup_metadata"),
   data_export_requests: excluded("id,user_id,lifecycle_generation,status,requested_at,snapshot_cutoff_at,archive_object_key,ready_at,expires_at,archive_cleanup_task_id,lease_token,lease_expires_at,failure_category,created_at,updated_at", "user_id", "private_export_operations"),
   friend_requests: { ...excluded("id,sender_id,recipient_id,status,created_at,resolved_at", "sender_and_recipient", "relationship_privacy_deferred"), retention: "while_both_accounts_exist_for_throttling", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
   friendships: { ...excluded("user_id,friend_id,state,state_changed_at", "user_id_and_friend_id", "relationship_privacy_deferred"), retention: "while_both_accounts_exist", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
@@ -180,8 +188,18 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   }, "messagesIncluded"),
   messaging_outbox: excluded("id,event_id,recipient_id,conversation_id,change_sequence,channel,device_registration_id,status,attempts,available_at,lease_token,lease_expires_at,failure_category,created_at,delivered_at", "recipient_id", "private_delivery_operations"),
   messaging_participants: { ...excluded("id,user_id,state,created_at", "user_id_or_deleted_account", "recipient_safe_identity_projection"), retainedForOthers: "deleted_account_label" },
+  notification_deliveries: excluded("id,event_id,recipient_id,device_registration_id,status,attempts,available_at,lease_token,lease_expires_at,failure_category,created_at,delivered_at", "recipient_id", "private_delivery_operations"),
+  notification_events: excluded("id,kind,recipient_id,deduplication_key,source_type,source_id,target_type,target_id,expires_at,created_at", "recipient_id", "private_delivery_operations"),
   operator_cases: excluded("id,subject_user_id,type,status,decision,reason_category,operator_reference,review_due_at,reviewed_at,resolved_at,created_at,updated_at", "subject_user_id", "private_incident_record"),
+  post_comments: owned({
+    owner: "author_id_and_current_readable_post", retention: "while_parent_post_exists",
+    deletion: "purge_with_post", access: "author_and_readable_post_procedure",
+    retainedForOthers: "shown_to_post_readers_until_deleted_or_post_purged", trashRestore: "include_only_while_restorable",
+    included: fields("id,post_id,body,created_at,edited_at,deleted_at"),
+    excluded: fields("author_id,parent_comment_id,client_comment_id,deleted_by"),
+  }, "commentsIncluded"),
   post_idempotency_keys: excluded("author_id,idempotency_key,request_fingerprint,post_id,created_at", "author_id", "submission_integrity_state"),
+  post_likes: { ...excluded("post_id,user_id,created_at", "user_id_and_post_id", "other_participant_identity_and_reactions_deferred"), retention: "while_parent_post_exists", deletion: "remove_on_unlike_or_purge_with_post", retainedForOthers: "shown_to_post_readers_until_unliked_or_post_purged" },
   post_media: owned({
     owner: "post_id_to_author_id", retention: "while_owned_or_restorable", deletion: "reference_checked_cleanup",
     access: "owner_scoped_file_procedure", retainedForOthers: "not_applicable", trashRestore: "include_only_while_restorable",
@@ -205,7 +223,7 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
     access: "owner_scoped_file_procedure", retainedForOthers: "not_applicable", trashRestore: "not_applicable",
     included: fields("user_id,set_at"), excluded: fields("reservation_id"),
   }, "ownedMediaIncluded"),
-  push_devices: excluded("id,user_id,session_id,installation_id,platform,token,token_ciphertext,token_key_version,token_hash,opted_in,registered_at,invalidated_at", "user_id", "push_credentials_and_device_state"),
+  push_devices: excluded("id,user_id,session_id,installation_id,platform,token,token_ciphertext,token_key_version,token_hash,opted_in,notification_schema_version,registered_at,invalidated_at", "user_id", "push_credentials_and_device_state"),
   rateLimit: excluded("id,key,count,last_request", "request_key", "abuse_protection_state"),
   registration_intents: excluded("token_digest,terms_version_id,age_declaration_version,flow_binding_digest,expires_at,consumed_at,created_at", "registration_flow", "unconsumed_registration_proof"),
   relationship_blocks: { ...excluded("blocker_id,blocked_id,blocked_at,unblocked_at", "blocker_id_and_blocked_id", "relationship_privacy_deferred"), retention: "while_both_accounts_exist", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },

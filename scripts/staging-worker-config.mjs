@@ -35,6 +35,8 @@ const durableObjectConfig = {
 export function createStagingWorkerConfigs({
   workerName,
   hyperdriveId,
+  exportWorkerHyperdriveId,
+  exportProofVars = {},
   authApiOrigin,
   authWebOrigin,
   authVars = {},
@@ -47,12 +49,27 @@ export function createStagingWorkerConfigs({
   if (typeof hyperdriveId !== "string" || !/^[a-f0-9]{32}$/.test(hyperdriveId)) {
     throw new Error("Refusing an invalid staging Hyperdrive ID.");
   }
+  if (exportWorkerHyperdriveId !== undefined &&
+      (typeof exportWorkerHyperdriveId !== "string" || !/^[a-f0-9]{32}$/.test(exportWorkerHyperdriveId) ||
+        exportWorkerHyperdriveId === hyperdriveId)) {
+    throw new Error("Refusing an invalid separate staging export worker Hyperdrive ID.");
+  }
+  const proofKeys = ["STAGING_EXPORT_PROOF_APPROVED", "STAGING_EXPORT_PROOF_USER_ID",
+    "STAGING_EXPORT_PROOF_BUILD_UNTIL", "STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER"];
+  if (Object.keys(exportProofVars).some((key) => !proofKeys.includes(key)) ||
+      (proofKeys.some((key) => exportProofVars[key] !== undefined) &&
+        (proofKeys.some((key) => typeof exportProofVars[key] !== "string" || !exportProofVars[key]) ||
+          exportProofVars.STAGING_EXPORT_PROOF_APPROVED !== "synthetic-only" || !exportWorkerHyperdriveId))) {
+    throw new Error("Staging export proof settings are incomplete.");
+  }
   if (typeof authApiOrigin !== "string" || typeof authWebOrigin !== "string") {
     throw new Error("Staging origins are required.");
   }
   if (typeof browserProxyEnabled !== "boolean") throw new Error("browserProxyEnabled must be boolean.");
   const vars = {
     API_RATE_LIMIT_SCOPE: "staging",
+    NOTIFICATION_PUBLISHERS_ENABLED: "false",
+    DIRECT_MESSAGE_SEND_LIMIT: "30",
     // The web workflow must use the same reviewed mode. Direct API remains the
     // public origin even when Better Auth moves to the web origin.
     BETTER_AUTH_BASE_URL: browserProxyEnabled ? authWebOrigin : authApiOrigin,
@@ -60,6 +77,7 @@ export function createStagingWorkerConfigs({
     BETTER_AUTH_TRUSTED_ORIGINS: `${authApiOrigin},${authWebOrigin}`,
     ...authVars,
     ...mediaVars,
+    ...exportProofVars,
   };
   const api = {
     ...sharedWorkerConfig,
@@ -69,7 +87,8 @@ export function createStagingWorkerConfigs({
     observability: { enabled: true },
     ratelimits: rateLimitConfig,
     vars,
-    hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId }],
+    hyperdrive: [{ binding: "HYPERDRIVE", id: hyperdriveId },
+      ...(exportWorkerHyperdriveId ? [{ binding: "EXPORT_WORKER_HYPERDRIVE", id: exportWorkerHyperdriveId }] : [])],
   };
   const probe = {
     ...sharedWorkerConfig,

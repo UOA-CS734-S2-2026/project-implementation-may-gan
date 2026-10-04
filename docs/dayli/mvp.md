@@ -13,7 +13,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 | Feature | Scope and fallback |
 | --- | --- |
 | Unlock push and closing nudge | Opt-in generic reminders, quiet hours, stale-nudge rejection. Feed access never depends on push arrival. |
-| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. Not built yet: the Flutter composer picks from the gallery and compresses before upload. |
+| Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. The Flutter composer takes a photo or records a video of up to 15 seconds with the device camera, using the system camera screen for preview and retake, or picks from the library; either goes through the same compress, upload and draft steps. |
 | Weather | Permission-based coarse location/provider snapshot; omit or select place manually. |
 | Music | Supported OS/provider title and artist; manual selection when unavailable. No universal cross-app access. |
 | Ambient sound | Explicit one-second recording with preview/removal. Never silent capture. |
@@ -23,7 +23,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 
 | Feature | Scope and fallback |
 | --- | --- |
-| On this day | Anniversary reminders; labelled historical seeds for demos and defined leap-day handling. |
+| On this day | Anniversary reminders; labelled historical seeds for demos and defined leap-day handling. The owner-only memories API is built; see [On This Day](on-this-day.md). Clients and reminders are not. |
 | Future-self notes | Owner-only notes delivered on chosen dates, not cryptographic time locks. |
 | Night charging recap | Show while active/reopened and charging; otherwise opt-in nightly notification. No forced launch. |
 | Biometric lock | Protected local access, relock, obscured app-switcher preview; test passcode and enrolment changes. |
@@ -34,7 +34,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 
 Add calendar, mood history, comparisons, and year-in-review backed by bounded SQL. Show missing data/sample sizes; avoid diagnostic claims.
 
-Public accounts can create opaque, unlisted links to released non-solo posts. Anyone with the link can view the post without signing in. Links remain valid until revoked, the post is deleted, or the account becomes private. Private-account links grant no access; viewers must sign in and be active friends.
+Anyone can discover an account by username. A public account exposes its profile details and released `friends` posts without requiring sign-in. A private account exposes only its username and a generic private-profile state to non-friends. `solo`, unreleased, deleted, trashed, and blocked content remains protected. Public media is delivered only through an authorized Worker route that rechecks the parent resource on every request.
 
 Siri/App Intents and supported Android App Actions open today's composer, optionally prefilling a validated rating. Require unlock and submission confirmation. Use launcher/deep-link fallback where voice support is unavailable; do not claim identical phrases work everywhere.
 

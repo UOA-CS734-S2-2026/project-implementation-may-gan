@@ -1,9 +1,11 @@
 /* tslint:disable */
 /* eslint-disable */
 export * from './AccountApi';
+export * from './InteractionsApi';
 export * from './LegalApi';
 export * from './MediaApi';
 export * from './MessagingApi';
+export * from './NotificationsApi';
 export * from './PostingDaysApi';
 export * from './PostsApi';
 export * from './ProfileApi';

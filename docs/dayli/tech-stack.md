@@ -60,6 +60,6 @@ To switch off, use the unchanged Next scripts. To remove the trial, replace the 
 
 Cloudflare-first still includes external PostgreSQL, email, weather/music providers, and mobile push. Neon staging and production ownership/secrets remain administrator-managed. See [Environments](environments.md) for the boundary between local simulation, staging, and future production.
 
-Use the [implementation reference](../implementation/implementation-reference.md) for runtime checks and deployment pitfalls. The [messaging handoff](../implementation/messaging-implementation-handoff.md) describes package placement: existing Cloudflare runtime tooling stays in `apps/api`, no new Cloudflare workspace package is needed, and messaging state remains in PostgreSQL.
+Use the [implementation reference](../implementation/implementation-reference.md) for runtime checks and deployment pitfalls. The [messaging system guide](../../apps/docs/content/docs/systems/messaging/index.mdx) describes the current package placement: Cloudflare runtime tooling stays in `apps/api`, there is no separate realtime workspace, and messaging state remains in PostgreSQL.
 
 [Hono deployment](https://hono.dev/docs/getting-started/cloudflare-workers) · [Wrangler](https://developers.cloudflare.com/workers/wrangler/) · [Next.js hosting](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/) · [Scaling and costs](scalability.md)

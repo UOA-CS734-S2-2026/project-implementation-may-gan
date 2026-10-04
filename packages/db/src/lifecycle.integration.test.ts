@@ -110,7 +110,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
       insert into public.account_lifecycles (user_id, generation)
       values (${lifecycleUserId}, ${maximumSafeInteger}::bigint)
     `;
-    await app`
+    await migrator`
       insert into public.data_export_requests (id, user_id, lifecycle_generation)
       values (${exportId}, ${exportUserId}, ${maximumSafeInteger}::bigint)
     `;
@@ -127,7 +127,7 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await expect(app.begin((tx) => tx`
       update public.account_lifecycles set generation = 9007199254740992 where user_id = ${lifecycleUserId}
     `)).rejects.toMatchObject({ code: "23514" });
-    await expect(app.begin((tx) => tx`
+    await expect(migrator.begin((tx) => tx`
       update public.data_export_requests set lifecycle_generation = -1 where id = ${exportId}
     `)).rejects.toMatchObject({ code: "23514" });
   });
@@ -144,22 +144,22 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     await migrator`set time zone 'America/New_York'`;
     await app`set time zone 'America/New_York'`;
     try {
-      await app`
+      await migrator`
         insert into public.data_export_requests (id, user_id, lifecycle_generation, requested_at)
         values (${firstId}, ${userId}, 3, ${requestedAt})
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         insert into public.data_export_requests (id, user_id, lifecycle_generation, requested_at)
         values (${secondId}, ${userId}, 3, ${requestedAt})
       `)).rejects.toMatchObject({ code: "23505" });
 
-      await app`
+      await migrator`
         update public.data_export_requests
         set status = 'ready', snapshot_cutoff_at = ${requestedAt}, archive_object_key = 'exports/opaque/archive',
             ready_at = ${readyAt}, expires_at = '2026-03-08T22:00:00.000Z'
         where id = ${firstId}
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         update public.data_export_requests
         set expires_at = ready_at + interval '1 day'
         where id = ${firstId}
@@ -169,13 +169,13 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
         insert into public.data_export_object_cleanup_tasks (id, archive_object_key, next_attempt_at)
         values (${cleanupTaskId}, 'exports/opaque/archive', ${readyAt})
       `;
-      await app`
+      await migrator`
         update public.data_export_requests
         set status = 'expired', snapshot_cutoff_at = null, archive_object_key = null,
             ready_at = null, expires_at = null, archive_cleanup_task_id = ${cleanupTaskId}
         where id = ${firstId}
       `;
-      await expect(app.begin((tx) => tx`
+      await expect(migrator.begin((tx) => tx`
         update public.data_export_requests
         set snapshot_cutoff_at = ${requestedAt}
         where id = ${firstId}
@@ -233,28 +233,33 @@ function requireLocalTestUrl(value: string | undefined, name: string, user: stri
     }
   });
 
-  it("keeps export cleanup tasks private after reapplying role bootstrap", async () => {
+  it("keeps every export operations table private after reapplying role bootstrap", async () => {
     const bootstrap = await readFile(repoPath("packages/db/admin/bootstrap-migrator.sql"), "utf8");
     await migrator.unsafe(bootstrap);
-
-    const privileges = await migrator`
-      select role_name,
-        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'SELECT') as can_select,
-        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'INSERT') as can_insert,
-        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'UPDATE') as can_update,
-        has_table_privilege(role_name, 'public.data_export_object_cleanup_tasks', 'DELETE') as can_delete
-      from (values ('app'), ('lifecycle_worker')) as roles(role_name)
-      order by role_name
+    const tables = ["data_export_requests", "data_export_object_cleanup_tasks", "data_export_cleanup_incidents"] as const;
+    const privileges = await migrator<{ table_name: string; role_name: string;
+      can_select: boolean; can_insert: boolean; can_update: boolean; can_delete: boolean }[]>`
+      select table_name, role_name,
+        has_table_privilege(role_name, format('public.%I', table_name), 'SELECT') as can_select,
+        has_table_privilege(role_name, format('public.%I', table_name), 'INSERT') as can_insert,
+        has_table_privilege(role_name, format('public.%I', table_name), 'UPDATE') as can_update,
+        has_table_privilege(role_name, format('public.%I', table_name), 'DELETE') as can_delete
+      from (values ('data_export_requests'), ('data_export_object_cleanup_tasks'),
+        ('data_export_cleanup_incidents')) as tables(table_name)
+      cross join (values ('app'), ('lifecycle_worker')) as roles(role_name)
+      order by table_name, role_name
     `;
-    expect(privileges).toEqual([
-      { role_name: "app", can_select: false, can_insert: false, can_update: false, can_delete: false },
-      { role_name: "lifecycle_worker", can_select: false, can_insert: false, can_update: false, can_delete: false },
-    ]);
+    expect(privileges).toHaveLength(6);
+    for (const row of privileges) {
+      expect(row).toMatchObject({ can_select: false, can_insert: false, can_update: false, can_delete: false });
+    }
     for (const client of [app, lifecycleWorker]) {
-      await expect(client`select * from public.data_export_object_cleanup_tasks`).rejects.toMatchObject({ code: "42501" });
-      await expect(client`insert into public.data_export_object_cleanup_tasks default values`).rejects.toMatchObject({ code: "42501" });
-      await expect(client`update public.data_export_object_cleanup_tasks set status = 'pending' where false`).rejects.toMatchObject({ code: "42501" });
-      await expect(client`delete from public.data_export_object_cleanup_tasks where false`).rejects.toMatchObject({ code: "42501" });
+      for (const table of tables) {
+        await expect(client.unsafe(`select * from public.${table}`)).rejects.toMatchObject({ code: "42501" });
+        await expect(client.unsafe(`insert into public.${table} default values`)).rejects.toMatchObject({ code: "42501" });
+        await expect(client.unsafe(`update public.${table} set id = id where false`)).rejects.toMatchObject({ code: "42501" });
+        await expect(client.unsafe(`delete from public.${table} where false`)).rejects.toMatchObject({ code: "42501" });
+      }
     }
   });
 

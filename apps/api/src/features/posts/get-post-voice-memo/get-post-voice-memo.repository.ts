@@ -2,19 +2,16 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { audioContentTypes, type AudioContentType } from "@dayli/contracts";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter, type ValidatedPublicLinkGrant } from "../../permissions";
+import { buildDrizzlePostVisibilityFilter } from "../../permissions";
 import type { PostVoiceMemoRef } from "../shared/post-media";
 
 export interface PostVoiceMemoRepository {
-  /**
-   * Null unless the post has an attached voice memo and the viewer may read the
-   * post now. A grant is accepted only after #41 has validated a public link token.
-   */
+  /** Null unless the post has an attached voice memo the viewer may read now. */
   findVoiceMemo(
     viewerId: string | null,
     postId: string,
     now: Date,
-    validatedPublicLinkGrant?: ValidatedPublicLinkGrant,
+    access?: "private" | "parent-authorized",
   ): Promise<PostVoiceMemoRef | null>;
 }
 
@@ -25,7 +22,7 @@ export interface PostVoiceMemoRepository {
 export function createPostgresPostVoiceMemoRepository(database: DayliDatabase): PostVoiceMemoRepository {
   const { posts, user, postMedia, mediaReservation } = schema;
   return {
-    async findVoiceMemo(viewerId, postId, now, validatedPublicLinkGrant) {
+    async findVoiceMemo(viewerId, postId, now, access = "private") {
       // The id alone reveals nothing: it is returned only if the filter below passes.
       const [attached] = await database
         .select({ id: postMedia.id })
@@ -56,9 +53,8 @@ export function createPostgresPostVoiceMemoRepository(database: DayliDatabase): 
           buildDrizzlePostVisibilityFilter(database, {
             viewer: { userId: viewerId },
             now,
-            action: "media",
+            action: access === "parent-authorized" ? "media" : "private-media",
             mediaId: attached.id,
-            validatedPublicLinkGrant,
           }),
           isNotNull(user.username),
         ))

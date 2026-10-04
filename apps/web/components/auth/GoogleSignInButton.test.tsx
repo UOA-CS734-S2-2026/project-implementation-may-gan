@@ -40,7 +40,7 @@ describe("GoogleSignInButton", () => {
     expect(mocks.social).not.toHaveBeenCalled();
   });
 
-  it.each(["https://attacker.example", "//attacker.example", "/%252e%252e//attacker.example"])("falls back to fixed same-origin home callbacks for %s", async (returnTo) => {
+  it.each(["https://attacker.example", "//attacker.example", "/%252e%252e//attacker.example", "/u/ada?intent=delete-account"])("falls back to fixed same-origin home callbacks for %s", async (returnTo) => {
     render(<GoogleSignInButton returnTo={returnTo} />);
     fireEvent.click(screen.getByRole("button", { name: /sign in with google/i }));
     await waitFor(() => expect(mocks.social).toHaveBeenCalledWith(expect.objectContaining({

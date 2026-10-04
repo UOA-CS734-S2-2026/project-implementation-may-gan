@@ -32,12 +32,16 @@ BEGIN
     'account_google_reauthentication_intents',
     'account_lifecycles',
     'account_management_grants',
+    'account_notification_preferences',
     'account_purge_receipts',
     'age_declarations',
     'data_export_requests',
     'data_export_object_cleanup_tasks',
+    'data_export_cleanup_incidents',
     'legal_document_versions',
     'messaging_participants',
+    'notification_deliveries',
+    'notification_events',
     'operator_cases',
     'registration_intents',
     'terms_acceptances'
@@ -53,9 +57,14 @@ BEGIN
     GRANT SELECT ON TABLE public.messaging_participants TO app;
   END IF;
 
+  IF to_regclass('public.account_notification_preferences') IS NOT NULL THEN
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.account_notification_preferences TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.notification_events TO app;
+    GRANT SELECT, INSERT, UPDATE ON TABLE public.notification_deliveries TO app;
+  END IF;
+
   IF to_regclass('public.account_lifecycles') IS NOT NULL THEN
     GRANT SELECT, INSERT, UPDATE ON TABLE public.account_lifecycles TO app;
-    GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app;
     GRANT SELECT, INSERT, UPDATE ON TABLE public.registration_intents TO app;
     GRANT SELECT, INSERT ON TABLE public.age_declarations TO app;
     GRANT SELECT, INSERT ON TABLE public.terms_acceptances TO app;

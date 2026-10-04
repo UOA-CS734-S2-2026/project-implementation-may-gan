@@ -1,0 +1,264 @@
+---
+title: Authentication security and verification
+description: The security problems we found, how we fixed them, and what our tests can and cannot prove.
+---
+
+Authentication is one of those systems where a green test can mean much less than it first appears. A local binding test cannot prove what Cloudflare does at the edge. A working login does not prove refresh and revocation. A successful deployment only proves that the deployment completed.
+
+This page explains the problems we found and the evidence we have through 2026-10-03. Historical results describe the tested revision, not necessarily whatever is running on staging today.
+
+## The rules we build around
+
+Page guards help people navigate, but they are not the security boundary. Every protected API operation checks the session and permissions again.
+
+The browser session cookie is host-only, Secure, HttpOnly, and `SameSite=Lax`. The proxy preserves separate `Set-Cookie` headers, including deletion attributes, and marks authentication and personalized responses `Cache-Control: no-store`.
+
+The proxy also has one configured upstream. Browser input cannot turn it into an arbitrary relay. Before forwarding, it removes hop-by-hop, forwarding, Cloudflare, and internal headers. WebSocket upgrades are rejected because browser WebSockets use direct API tickets. Upload bytes go directly to R2 through presigned URLs.
+
+Seeing a cookie is not enough to trust it. Better Auth validates the session. If that check needs to refresh or remove a cookie, a React Server Component cannot apply the change while rendering. It reports the mutation and sends the browser through `/auth/session-refresh`, where a real response can set the cookie. The short-lived loop marker on that route is not a session.
+
+Unsafe requests authenticated by a cookie also need a trusted origin. CORS alone is not protection. A browser can be stopped from reading a response after the server has already changed something.
+
+## Cross-origin requests were reaching mutations
+
+We found that the API rejected untrusted CORS preflights but allowed an actual unsafe request to continue into routing. A simple bodyless form submission from an untrusted sibling origin could reach a relationship mutation with the victim's cookie. The browser could hide the response while the mutation still happened.
+
+The fix, in [PR #217](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/217), moved strict origin checks in front of authentication and route services for unsafe `/api/v1` requests.
+
+The resulting rules are:
+
+- A non-empty untrusted origin, including `null` or malformed input, gets 403.
+- An unsafe request carrying a Better Auth cookie must include a trusted origin.
+- Adding an `Authorization` header beside the cookie does not bypass that rule.
+- An origin-less native bearer request can still continue to normal authentication.
+- A safe request from an untrusted origin may route, but gets no CORS permission to read the response.
+
+Tests cover a real bodyless relationship action, sibling and cross-site origins, malformed and `null` origins, missing origins, mixed credentials, trusted browser requests, native bearer requests, and preflights. In every rejected mutation case, they also check that the service never ran.
+
+## Rate-limit failures were allowing traffic
+
+The Cloudflare limiter adapter once treated a thrown backend error as an allowed decision. If the configured limiter failed, ingress, auth, reads, writes, and action limits could disappear silently.
+
+The same security fix changed missing bindings and backend failures to `unavailable`. A policy that cannot evaluate its configured limit now returns 503. A healthy but exhausted bucket returns 429, while a healthy available bucket proceeds.
+
+This chooses protection over availability during a limiter outage. The log signal is the fixed label `rate_limit_backend_unavailable`. It does not include limiter keys, source addresses, credentials, request data, or exception text.
+
+## Could another Worker choose its source identity?
+
+The browser proxy needs a source key for anonymous abuse controls. A service binding gives us a private transport, but Cloudflare does not say that it automatically preserves a trustworthy original browser IP.
+
+Cloudflare documents two awkward cases:
+
+- A same-zone Worker can affect the downstream `CF-Connecting-IP` value through `x-real-ip`.
+- A cross-zone Worker can appear with a fixed Cloudflare Worker address.
+
+The public API also needs to remain available for mobile, so CORS cannot stop scripts from calling it directly. We needed to know whether a caller Worker could choose its apparent rate-limit identity.
+
+Rejecting every `x-real-ip` header was not an option. Our normal browser samples carried that header too.
+
+## The temporary edge experiment
+
+On 2026-10-01, we ran a short-lived staging experiment with two randomly named Workers on new staging subdomains.
+
+The receiver imported the production `selectBrowserSource()` function. It returned only HMAC-SHA-256 source fingerprints, address family, and a few fixed flags. The caller sent a fixed set of cases to that receiver and could not choose another destination or forward incoming cookies.
+
+Neither Worker had access to the application, database, storage, service bindings, or real rate-limit buckets. Temporary Worker secrets protected the endpoint and keyed the fingerprints. A six-hour cutoff disabled access even if the token remained valid.
+
+The browser link kept its token in the URL fragment, removed the fragment after loading, and held the token only in memory. The code did not retain raw IPs, cookies, bearer values, copied headers, or login data. The Worker configs disabled diagnostic observability and Logpush, although that does not make a claim about all Cloudflare platform metadata.
+
+### Reproducing the experiment safely
+
+The code lives in `scripts/proxy-provenance/`. Its local checks are:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm test:proxy-provenance
+pnpm exec eslint scripts/proxy-provenance.mjs scripts/proxy-provenance
+```
+
+The deployed sequence was:
+
+```bash
+node scripts/proxy-provenance.mjs setup <account-id> <zone-id>
+node scripts/proxy-provenance.mjs check <private-state-file>
+node scripts/proxy-provenance.mjs cleanup <private-state-file>
+```
+
+The setup stores private state in a mode 0700 directory with mode 0600 files. It writes that state before deployment so a partial setup can still be cleaned up. Expiry only blocks access. It does not delete the Workers or domains, so cleanup is still required.
+
+New hostnames can briefly remain in the operating system's negative DNS cache. The check's `--public-dns` option resolves through 1.1.1.1, chooses IPv4, and keeps normal TLS hostname validation. It does not change system DNS or bypass certificates.
+
+This experiment sends deliberately forged forwarding metadata to isolated resources. Do not point it at the application or rerun it without a short time window, a cleanup plan, and agreement from the team.
+
+### What happened before the fix
+
+| Request | What we saw |
+| --- | --- |
+| Direct browser-style request | Accepted, with no Worker marker |
+| Direct request with either synthetic `x-real-ip` value | Selected identity stayed unchanged |
+| Direct request with a forged `CF-Worker` | The marker was absent at the receiver |
+| Direct request with combined forwarding forgeries | Cloudflare returned 403, but the result did not identify which header caused it |
+| Same-zone Worker with two synthetic `x-real-ip` values | Both were accepted and selected different identities |
+| Same-zone Worker omitting or forging `CF-Worker` | The receiver still saw the same-zone marker |
+| workers.dev caller | The receiver saw the documented fixed Worker address and a Worker marker |
+
+The same-zone baseline also got the fixed Worker address when it omitted `x-real-ip`, so that address alone could not classify the caller.
+
+This reproduced the source-identity problem at Cloudflare's edge using our real selector. It did not exercise login, cookies, application mutations, the named entrypoint, the database, or actual rate-limit buckets.
+
+We also compared two normal samples in the same run:
+
+| Device | Time in UTC | Address family | Result |
+| --- | --- | --- | --- |
+| PC | 2026-10-01 08:27:08 | IPv6 | Accepted, no Worker marker, no synthetic or fixed Worker identity |
+| Phone on mobile data | 2026-10-01 08:28:08 | IPv4 | Accepted, no Worker marker, no synthetic or fixed Worker identity |
+
+The fingerprints differed. That proves the selector chose two identities for those samples. It does not prove real bucket enforcement or even two independent physical networks, because the requests used different address families.
+
+## The Worker rejection fix
+
+[PR #219](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/219) added a narrow rule: reject any present `CF-Worker` header, including an empty value.
+
+The public web proxy and public API return a no-store 403 before forwarding or building the application. The selector rejects the marker independently. Server-side session and username helpers preserve it when rebuilding requests, so they cannot accidentally turn marked traffic into an apparently direct request. The refresh route preserves it as well.
+
+The API's named private entrypoint remains separate from the public fetch handler. It still validates its private source context and relies on the same-account service-binding boundary.
+
+This rule intentionally means that another Cloudflare Worker cannot call Dayli's public API. That includes Worker-based monitors and integrations. Direct browsers, native bearer clients, scheduled handlers, the private service binding, ticket WebSockets, and R2 uploads use other paths and remain supported.
+
+A second temporary deployment used the patched selector. It rejected all six same-zone cases and all six workers.dev cases, including attempts to omit or forge the marker. Direct requests still selected the edge-owned identity.
+
+The diagnostic itself returns 200 when it successfully records an observation. In that second run, `selectorAccepted: false` is the evidence. It is not an observed application 403. The actual 403 handlers are covered by local application and workerd tests.
+
+After both runs, we deleted the temporary Workers and domain mappings. Cloudflare inventory and authoritative DNS showed no resources left. Local token and private-link files were removed. Only sanitized local reports remained. The experiment never changed the app or database.
+
+## Better Auth compatibility tests
+
+The Worker unit suite creates an isolated Better Auth 1.7.5 instance with fresh in-memory tables for each test. It checks that:
+
+- signup creates an HttpOnly, Secure, `SameSite=Lax` cookie
+- `set-auth-token` creates a valid signed bearer session
+- an untrusted browser origin is rejected
+- malformed and expired bearer sessions are rejected
+- logout invalidates its session
+- revocation invalidates the remaining session
+
+The memory adapter belongs only to those tests. The normal local Worker never mounts process-memory auth routes.
+
+In the real path, each auth request creates a fresh Drizzle client from `env.HYPERDRIVE`, and closes its postgres.js client in `finally`. Better Auth uses the restricted `app` role. Only migration commands use `migrator`.
+
+Migration `0001_better_auth_postgres` introduced `user`, `account`, `session`, and `verification`. Migration `0002_add_better_auth_rate_limit` added the persistent `rateLimit` table for recovery and verification limits. IDs are stable text values, the user table keeps Dayli's profile fields, and username remains nullable for new email/password accounts. Those migrations did not import external auth records.
+
+Run the isolated PostgreSQL checks with:
+
+```bash
+pnpm db:test:up && pnpm db:test && pnpm db:test:down
+```
+
+They cover registration, sign-in, persistence across independently built apps, expiry, logout, revocation, invalid bearer authentication, stable IDs, profile fields, and account-row compatibility. They never contact an external database.
+
+The focused package checks are:
+
+```bash
+pnpm --filter @dayli/api test
+cd apps/mobile
+flutter test
+flutter analyze
+```
+
+## What our broader test runs establish
+
+The post-fix local run recorded 461 API tests, 150 web tests, two real workerd proxy tests, ten diagnostic tests including workerd, and a complete `pnpm verify:local`. That command also covered builds, generated clients, Flutter, and an isolated PostgreSQL fixture.
+
+The workerd fixture compiles the production web proxy rather than copying its forwarding logic. It still does not include the full deployed vinext adapter.
+
+The four hosted jobs for baseline `6e40eee5be877ff9b30b0a437211e2b2cbf2a927` eventually passed. Coordinated staging release [36840296341](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36840296341) then passed database identity, migration planning, schema verification, API deployment and Hyperdrive proof, and web deployment. No migration was pending in that release.
+
+We tried to run the complete cookie lifecycle through local workerd and Hyperdrive. After the assertions, the local socket polyfill produced an unhandled `This socket has been closed` rejection. We did not count a process with unhandled rejections as passing evidence. The workerd test therefore stays database-free, while API-level PostgreSQL tests cover persistence separately.
+
+| Evidence | What it tells us | What it does not tell us |
+| --- | --- | --- |
+| API tests | Origin rules, limiter outcomes, auth behavior, and public entrypoint rejection work under test conditions | The full hosted browser path works |
+| Web tests | Header handling, guards, return paths, refresh behavior, and marker preservation work locally | Cookies survive the deployed vinext and binding path |
+| Workerd binding tests | The production proxy can call the named entrypoint and local public/private paths differ | Cloudflare edge identity and deployed private isolation are proved |
+| Temporary edge experiment | A same-zone Worker could choose identity, then the patched selector rejected the tested Worker cases | Sessions, the app adapter, and real limiter buckets work |
+| PC and phone samples | Those two requests selected different identities without a Worker marker | Sustained two-network bucket separation works |
+| `verify:local` | Local lint, types, builds, Flutter, generated output, and isolated PostgreSQL checks passed | Staging providers and schema still match today |
+| Hosted CI | Automated jobs passed on that revision | Every manual provider or device path works |
+| Coordinated release | One revision passed release and database checks and reached both Workers | The complete post-release cookie lifecycle works |
+
+## Provider and mobile evidence
+
+Staging checks recorded browser Google sign-in, refresh, and logout. They also recorded Resend recovery, setting a new password, and rejection of the old password.
+
+Android Google sign-in worked with a separate Google account. When a Google email matched an existing password account, Android returned `401 OAUTH_LINK_ERROR`. That collision is why Dayli now has an explicit link flow instead of silently joining accounts by email.
+
+Those checks did not cover Android session persistence or logout, and they did not include iOS. Follow-up cases still include browser and Android linking, persistence and logout after linking, wrong-email and already-linked rejection, and the same flow on iOS.
+
+These are dated staging observations. Rerun them before making a claim about the current deployment.
+
+## The redirect is server-decided, but streamed
+
+In one anonymous check, `/settings?tab=account` returned HTTP 200 with no `Location` header or meta refresh. The streamed HTML contained a server-generated `NEXT_REDIRECT` instruction with the encoded return destination. With JavaScript disabled, the browser remained on the protected URL.
+
+So we know the server made the decision. We do not have evidence of a pre-stream 3xx, JavaScript-free navigation, or a measured performance improvement.
+
+## The staging browser smoke test
+
+[Synthetic testing](/docs/development/testing/synthetic-testing) explains the current workflow. Its history is useful because the first failures were in the test setup, not in authentication.
+
+The journey opens a protected deep link while signed out, checks its return query, signs in through the real UI, finds meaningful Settings content, reloads, opens a second tab, checks the exact `__Secure-better-auth.session_token` attributes in memory, signs out, and confirms both tabs lose protected access.
+
+It does not cover signup, mail delivery, Google OAuth, real expiry, independent revocation, native auth, WebSockets, R2, posts, relationships, or messages. It retains no screenshots, video, traces, HAR, HTML, browser storage, raw bodies, or full Playwright errors.
+
+Here is how the test reached its current form:
+
+1. Hosted run [36919168053](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36919168053) failed as `browser_failure` after 5 ms because Chromium had not been installed.
+2. After adding browser installation, run [36923119153](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36923119153) reached the journey and failed as `unexpected_host` after 2292 ms. Cloudflare had injected an analytics loader.
+3. The runner now recognizes one exact loader shape only to abort it: HTTPS, default port, `GET`, non-navigation script, host `static.cloudflareinsights.com`, a versioned `/beacon.min.js/v...` path, and no query. Any variation still fails.
+4. An anonymous Chromium check saw two matching loader requests and no other external host. It also showed that the protected URL reached DOM content loaded 778 ms before its streamed redirect reached trusted sign-in, which explains the bounded wait in the runner.
+5. The contract suite grew from 9 to 13 and then 16 tests. The last cookie change required the exact secure-prefixed name and rejected an otherwise valid unprefixed cookie. The release contract suite passed 22 tests.
+6. `pnpm verify:local:full` passed with immutable migration baseline `7e2f29fa070cb252fd39fa166960f1f2e1e06d55`, port 55433, and an isolated local PostgreSQL fixture. That baseline is an ancestor, not the repair commit's direct parent.
+7. Review found no code or workflow problem in candidate `9a4ea6a9c3ef0a0ffa6fde88443af10528a35d10`.
+8. The first credentialed staging attempt returned `401 INVALID_EMAIL_OR_PASSWORD`. After the private staging credentials were corrected, the same candidate completed the journey in 9200 ms and cleanup in 23 ms. No credential or cookie value was reported.
+
+That successful journey ran locally against staging, not in GitHub Actions. The rebased candidate passed both contract suites again, but the source record contains no later successful hosted journey.
+
+Hourly and post-release runs require `STAGING_AUTH_SMOKE_AUTOMATION_ENABLED=true`. Check the current repository variable and recent Actions runs before saying that monitoring is active or healthy.
+
+## What to check on a deployed proxy
+
+Use a dedicated staging account and record only status codes, cookie attribute names, service names, commit, and short outcomes. Do not retain cookie values, bearer tokens, request IDs, reset links, full addresses, or raw IPs.
+
+1. Confirm the web binding names the expected API Worker and `BrowserProxyEntrypoint`, and note whether proxy mode is enabled.
+2. Sign in through the web host and call `/api/auth/get-session?disableCookieCache=true` through that host. Record only whether a session is present.
+3. Check the cookie's exact name, host, Path, Secure, HttpOnly, and SameSite attributes without copying its value.
+4. Sign out, sign in again, revoke sessions, and try an expired test session. Record only status and session presence.
+5. Check that refresh, deletion, and multiple `Set-Cookie` headers survive the web Worker and service binding.
+6. Confirm realtime tickets point to the direct API `wss` origin.
+7. Confirm upload reservations point to R2 and upload bytes do not pass through the web proxy.
+8. Repeat the source check from another network using a short-lived salted bucket or server-side aggregate, never raw addresses.
+9. Save the commit, service names, outcomes, and evidence limits in the team's staging notes.
+
+Do not send forged private or forwarding headers to the application. That was the reason for using isolated Workers in the edge experiment.
+
+## Checks we still need
+
+The existing evidence does not yet cover:
+
+- expiry, revocation, refresh, deletion, and multiple cookies through the deployed proxy and binding as one complete flow
+- deployed private-entrypoint isolation beyond local workerd and the same-account configuration boundary
+- sustained two-network rate-limit bucket separation using real buckets
+- current native bearer, ticket WebSocket, and R2 upload behavior after release
+- Android persistence and logout after linking, plus the matching iOS flows
+- whether the streamed redirect meets the product expectation, with timing if we want to claim it is faster
+- a successful hosted smoke run after the final repair
+
+Keep the proxy recovery flag until the team accepts those gaps. Removing the old direct browser path must not remove the direct mobile, WebSocket, or R2 paths.
+
+## Platform references
+
+- [Cloudflare visitor IP behavior](https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-connecting-ip-in-worker-subrequests)
+- [Cloudflare CF-Worker header](https://developers.cloudflare.com/fundamentals/reference/http-request-headers/#cf-worker)
+- [Cloudflare service bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
+- [Cloudflare native rate limiting](https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/)
+- [Better Auth rate limiting](https://www.better-auth.com/docs/concepts/rate-limit)

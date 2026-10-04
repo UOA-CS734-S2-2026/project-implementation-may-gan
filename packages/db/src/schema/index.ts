@@ -32,6 +32,7 @@ import {
   accountLifecycles,
   accountManagementGrants,
   accountPurgeReceipts,
+  dataExportCleanupIncidents,
   dataExportObjectCleanupTasks,
   dataExportRequests,
   operatorCases,
@@ -44,6 +45,11 @@ import {
 } from "./legal";
 import { user, usernameReservations } from "./users";
 import { accountGoogleReauthenticationIntents } from "./google-reauth";
+import {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationEvents,
+} from "./notifications";
 
 export { profileVisibility, tier, user, usernameReservations } from "./users";
 
@@ -259,6 +265,65 @@ export const postRevisions = pgTable("post_revisions", {
 ]);
 
 /**
+ * One like per person per post. Access is checked against the post on every
+ * read and write, so a like never outlives the liker's access in any view.
+ * Likes go with their post when Trash cleanup purges it.
+ */
+export const postLikes = pgTable("post_likes", {
+  postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ name: "post_likes_pkey", columns: [table.postId, table.userId] }),
+  // Matches the likers list: one post, newest first, user_id as tie-breaker.
+  index("post_likes_post_created_idx").on(table.postId, table.createdAt, table.userId),
+  index("post_likes_user_id_idx").on(table.userId),
+]);
+
+/**
+ * Comments and one level of replies. A reply's parent is a comment on the same
+ * post, enforced by the composite key. clientCommentId makes a retried create
+ * return the comment it already made. Deletion is a soft delete that also
+ * hides the replies of a deleted top-level comment. Comments go with their
+ * post when Trash cleanup purges it.
+ */
+export const postComments = pgTable("post_comments", {
+  id: text("id").primaryKey(),
+  postId: text("post_id").notNull().references(() => posts.id, { onDelete: "cascade" }),
+  authorId: text("author_id").notNull().references(() => user.id),
+  parentCommentId: text("parent_comment_id"),
+  clientCommentId: text("client_comment_id").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  editedAt: timestamp("edited_at", { withTimezone: true }),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by").references(() => user.id),
+}, (table) => [
+  unique("post_comments_post_id_id_unique").on(table.postId, table.id),
+  unique("post_comments_author_client_comment_unique").on(table.authorId, table.clientCommentId),
+  foreignKey({
+    name: "post_comments_parent_same_post_fk",
+    columns: [table.postId, table.parentCommentId],
+    foreignColumns: [table.postId, table.id],
+  }).onDelete("cascade"),
+  index("post_comments_post_created_idx").on(table.postId, table.createdAt, table.id),
+  index("post_comments_author_id_idx").on(table.authorId),
+  check("post_comments_not_own_parent_check", sql`${table.parentCommentId} is null or ${table.parentCommentId} <> ${table.id}`),
+  check(
+    "post_comments_body_length_check",
+    sql`char_length(${table.body}) between 1 and 1000 and ${table.body} = btrim(${table.body})`,
+  ),
+  check(
+    "post_comments_client_comment_id_length_check",
+    sql`char_length(${table.clientCommentId}) between 1 and 255`,
+  ),
+  check(
+    "post_comments_deleted_by_check",
+    sql`(${table.deletedAt} is null) = (${table.deletedBy} is null)`,
+  ),
+]);
+
+/**
  * Tomorrow notes intentionally live outside post and revision projections.
  * availableOn is the first Auckland date on which the author may read it;
  * application authorization must still require that author identity.
@@ -389,12 +454,21 @@ export {
 export { accountGoogleReauthenticationIntents } from "./google-reauth";
 
 export {
+  accountNotificationPreferences,
+  notificationDeliveries,
+  notificationDeliveryStatus,
+  notificationEvents,
+  notificationKind,
+} from "./notifications";
+
+export {
   accountLifecycleState,
   accountLifecycles,
   accountManagementGrantAction,
   accountManagementGrants,
   accountPurgeReceipts,
   dataExportObjectCleanupStatus,
+  dataExportCleanupIncidents,
   dataExportObjectCleanupTasks,
   dataExportRequests,
   dataExportStatus,
@@ -419,11 +493,13 @@ export const schema = {
   accountGoogleReauthenticationIntents,
   accountLifecycles,
   accountManagementGrants,
+  accountNotificationPreferences,
   accountPurgeReceipts,
   ageDeclarations,
   conversationChanges,
   conversationMembers,
   conversations,
+  dataExportCleanupIncidents,
   dataExportObjectCleanupTasks,
   dataExportRequests,
   dailyPrompts,
@@ -436,8 +512,12 @@ export const schema = {
   messagingParticipants,
   messages,
   messagingOutbox,
+  notificationDeliveries,
+  notificationEvents,
   operatorCases,
+  postComments,
   postIdempotencyKeys,
+  postLikes,
   postMedia,
   postRevisions,
   posts,

@@ -433,6 +433,7 @@ class _FeedSection extends StatelessWidget {
             key: Key('home.feed.post.${post.id}'),
             post: post,
             keyPrefix: 'home.feed',
+            onChanged: () => feed.refresh(),
           ),
           const SizedBox(height: 16),
         ],

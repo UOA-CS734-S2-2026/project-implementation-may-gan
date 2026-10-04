@@ -49,19 +49,34 @@ import type { PostTrashRouteDependencies } from "./features/posts/trash-post/tra
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
+import type { ListOnThisDayRouteDependencies } from "./features/posts/list-on-this-day/list-on-this-day.route";
+import { createHyperdriveOnThisDayRepository } from "./features/posts/list-on-this-day/list-on-this-day.repository";
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
+import type { GetPostMediaContentRouteDependencies } from "./features/posts/get-post-media/get-post-media-content.route";
 import { createHyperdrivePostMediaRepository } from "./features/posts/get-post-media/get-post-media.repository";
 import type { GetPostVoiceMemoRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo.route";
+import type { GetPostVoiceMemoContentRouteDependencies } from "./features/posts/get-post-voice-memo/get-post-voice-memo-content.route";
 import { createHyperdrivePostVoiceMemoRepository } from "./features/posts/get-post-voice-memo/get-post-voice-memo.repository";
-import { createHyperdrivePostDetailRepository } from "./features/posts/get-post/get-post.repository";
+import { createHyperdrivePostDetailRepository } from "./features/posts/shared/post-detail.repository";
+import type { UpdatePostRouteDependencies } from "./features/posts/update-post/update-post.route";
+import { createHyperdriveUpdatePostRepository } from "./features/posts/update-post/update-post.repository";
+import type { ListPostRevisionsRouteDependencies } from "./features/posts/list-post-revisions/list-post-revisions.route";
+import { createHyperdrivePostRevisionsRepository } from "./features/posts/list-post-revisions/list-post-revisions.repository";
+import { registerInteractionsRoutes, type InteractionsRouteDependencies } from "./features/interactions/interactions.routes";
+import { createHyperdrivePostLikeRepository } from "./features/interactions/shared/post-like.repository";
+import { createHyperdrivePostLikesRepository } from "./features/interactions/list-post-likes/list-post-likes.repository";
+import { createHyperdrivePostCommentsRepository } from "./features/interactions/list-post-comments/list-post-comments.repository";
+import { createHyperdriveCreatePostCommentRepository } from "./features/interactions/create-post-comment/create-post-comment.repository";
+import { createHyperdriveUpdatePostCommentRepository } from "./features/interactions/update-post-comment/update-post-comment.repository";
+import { createHyperdriveDeletePostCommentRepository } from "./features/interactions/delete-post-comment/delete-post-comment.repository";
 import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
-import { createPresignedDownloadUrl, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
+import { createPresignedDownloadUrl, createR2MediaObjectStore, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
 import {
   createActorRateLimiter,
@@ -153,6 +168,8 @@ import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/
 import type { UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { registerProfilesRoutes } from "./features/profiles/profiles.routes";
 import type { GetProfileDetailsRouteDependencies } from "./features/profiles/get-profile-details/get-profile-details.route";
+import type { GetAvatarRouteDependencies } from "./features/profiles/get-avatar/get-avatar.route";
+import { createHyperdriveAvatarContentRepository } from "./features/profiles/shared/avatar-content.repository";
 import { createHyperdriveProfileDetailsRepository } from "./features/profiles/get-profile-details/get-profile-details.repository";
 import type { UpdateProfileRouteDependencies } from "./features/profiles/update-profile/update-profile.route";
 import { createHyperdriveUpdateProfileRepository } from "./features/profiles/update-profile/update-profile.repository";
@@ -168,6 +185,12 @@ import { allowsAccountCapability } from "./features/account-policy/shared/accoun
 import { createHyperdriveAccountPolicyResolver } from "./features/account-policy/shared/account-policy.repository";
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerDeletionRoutes, type DeletionRouteDependencies } from "./features/account-lifecycle/deletion/deletion.route";
+import { registerExportRoutes, type ExportRouteDependencies } from "./features/data-export/data-export.routes";
+import { exportExecutionEnabled, readStagingExportProof } from "./features/data-export/shared/export-activation";
+import { createExportOwnerRepository } from "./features/data-export/shared/export-owner.repository";
+import { authorizeExportDownload } from "./features/data-export/shared/export-download.repository";
+import { prepareExportDownload } from "./features/data-export/shared/export-download";
+import { createExportArchiveStore } from "./features/data-export/shared/export-r2-archive";
 import { readDeletionStatus } from "./features/account-lifecycle/shared/deletion-status.repository";
 import { cancelAccountDeletion } from "./features/account-lifecycle/shared/deletion-commands.repository";
 import { registerPasswordReauthenticationRoute, type PasswordReauthenticationDependencies } from "./features/account-policy/reauthenticate/password/password.route";
@@ -180,6 +203,9 @@ import { registerRegistrationIntentRoutes, type RegistrationIntentRouteDependenc
 import { issueRegistrationIntent, readPublishedRegistrationTerms } from "./features/legal/shared/registration-intent.repository";
 import { approvedTermsDigest } from "./features/legal/shared/legal-publication";
 import type { ResolveSession } from "./http/middleware/require-session";
+import { registerNotificationRoutes, type NotificationRouteDependencies } from "./features/notifications/notifications.routes";
+import { createPostgresNotificationPreferenceStore } from "./features/notifications/preference/notification-preference.repository";
+import { parseDirectMessageSendLimit } from "./features/messaging/shared/new-message-quota";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -193,8 +219,15 @@ export interface AppDependencies {
   feed?: ListFeedRouteDependencies;
   postDetail?: GetPostRouteDependencies;
   postMedia?: GetPostMediaRouteDependencies;
+  postMediaContent?: GetPostMediaContentRouteDependencies;
   postVoiceMemo?: GetPostVoiceMemoRouteDependencies;
+  postVoiceMemoContent?: GetPostVoiceMemoContentRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
+  onThisDay?: ListOnThisDayRouteDependencies;
+  postUpdate?: UpdatePostRouteDependencies;
+  postRevisions?: ListPostRevisionsRouteDependencies;
+  /** Likes and comments; any route left out is unavailable. */
+  interactions?: Partial<InteractionsRouteDependencies>;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -202,16 +235,19 @@ export interface AppDependencies {
   pushDevices?: PushDeviceDependencies;
   usernameProfile?: UsernameProfileRouteDependencies;
   profileDetails?: GetProfileDetailsRouteDependencies;
+  profileAvatar?: GetAvatarRouteDependencies;
   profileUpdate?: UpdateProfileRouteDependencies;
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   deletion?: DeletionRouteDependencies;
+  exportService?: ExportRouteDependencies;
   passwordReauthentication?: PasswordReauthenticationDependencies;
   googleManagementProof?: GoogleManagementProofDependencies;
   legalAcceptance?: LegalAcceptanceRouteDependencies;
   legalRegistration?: RegistrationIntentRouteDependencies;
+  notifications?: NotificationRouteDependencies;
   /** Exact browser origins allowed to call /api/v1 with credentials. */
   trustedOrigins?: readonly string[];
   /** Native Cloudflare rate-limit adapters. Omit only in DB-free route composition. */
@@ -227,8 +263,14 @@ export function createApp({
   feed,
   postDetail,
   postMedia,
+  postMediaContent,
   postVoiceMemo,
+  postVoiceMemoContent,
   profilePosts,
+  onThisDay,
+  postUpdate,
+  postRevisions,
+  interactions = {},
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -236,16 +278,19 @@ export function createApp({
   pushDevices = unavailablePushDevices,
   usernameProfile = unavailableUsernameProfile,
   profileDetails,
+  profileAvatar,
   profileUpdate,
   usernameChange,
   avatarSet,
   avatarRemove,
   accountPolicy,
   deletion,
+  exportService,
   passwordReauthentication,
   googleManagementProof,
   legalAcceptance,
   legalRegistration,
+  notifications = unavailableNotifications,
   trustedOrigins = [],
   rateLimiting,
 }: AppDependencies = {}) {
@@ -295,10 +340,12 @@ export function createApp({
   registerSystemRoutes(api);
   registerAccountPolicyRoutes(api, accountPolicy ?? {});
   registerDeletionRoutes(api, { ...(deletion ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? deletion?.rateLimiter });
+  registerExportRoutes(api, { ...(exportService ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? exportService?.rateLimiter });
   registerPasswordReauthenticationRoute(api, { ...(passwordReauthentication ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? passwordReauthentication?.rateLimiter });
   registerGoogleManagementProofRoute(api, { ...(googleManagementProof ?? { resolveSession: async () => null }), rateLimiter: rateLimiter ?? googleManagementProof?.rateLimiter });
   registerLegalAcceptanceRoute(api, legalAcceptance ?? { resolveSession: async () => null });
   registerRegistrationIntentRoutes(api, legalRegistration ?? {});
+  registerNotificationRoutes(api, { ...notifications, rateLimiter });
   registerMediaReservationRoutes(api, { ...media, rateLimiter });
   registerCurrentPostingDayRoute(api, { ...(postingDay ?? { resolveSession: async () => null }), rateLimiter });
   registerPostsRoutes(api, {
@@ -306,9 +353,27 @@ export function createApp({
     feed: { ...(feed ?? { resolveSession: async () => null }), rateLimiter },
     detail: { ...(postDetail ?? { resolveSession: async () => null }), rateLimiter },
     media: { ...(postMedia ?? { resolveSession: async () => null }), rateLimiter },
+    mediaContent: { ...(postMediaContent ?? { resolveSession: async () => null }), rateLimiter },
     voiceMemo: { ...(postVoiceMemo ?? { resolveSession: async () => null }), rateLimiter },
+    voiceMemoContent: { ...(postVoiceMemoContent ?? { resolveSession: async () => null }), rateLimiter },
     profilePosts: { ...(profilePosts ?? { resolveSession: async () => null }), rateLimiter },
     trash: { ...(postTrash ?? { resolveSession: async () => null }), rateLimiter },
+    onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
+    update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
+    revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
+  });
+  const interaction = <T extends object>(dependencies: T | undefined) => ({
+    ...(dependencies ?? { resolveSession: async () => null }),
+    rateLimiter,
+  });
+  registerInteractionsRoutes(api, {
+    like: interaction(interactions.like),
+    unlike: interaction(interactions.unlike),
+    likes: interaction(interactions.likes),
+    comments: interaction(interactions.comments),
+    createComment: interaction(interactions.createComment),
+    updateComment: interaction(interactions.updateComment),
+    deleteComment: interaction(interactions.deleteComment),
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -321,6 +386,7 @@ export function createApp({
   registerProfilesRoutes(api, {
     username: { ...usernameProfile, rateLimiter },
     details: { ...(profileDetails ?? { resolveSession: async () => null }), rateLimiter },
+    avatar: { ...(profileAvatar ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(profileUpdate ?? { resolveSession: async () => null }), rateLimiter },
     changeUsername: { ...(usernameChange ?? { resolveSession: async () => null }), rateLimiter },
     setAvatar: { ...(avatarSet ?? { resolveSession: async () => null }), rateLimiter },
@@ -352,6 +418,7 @@ export function createAppForEnv(env: ApiEnv) {
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
   const signMediaDownload = r2Runtime ? createR2MediaDownloadSigner(r2Runtime) : undefined;
+  const mediaObjects = r2Runtime ? createR2MediaObjectStore(r2Runtime) : undefined;
   const feed = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveFeedRepository(configuration.hyperdrive),
@@ -367,17 +434,57 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostMediaRouteDependencies : undefined;
+  const postMediaContent = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostMediaRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetPostMediaContentRouteDependencies : undefined;
   const postVoiceMemo = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdrivePostVoiceMemoRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies GetPostVoiceMemoRouteDependencies : undefined;
+  const postVoiceMemoContent = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostVoiceMemoRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetPostVoiceMemoContentRouteDependencies : undefined;
   const profilePosts = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveProfilePostsRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies ListProfilePostsRouteDependencies : undefined;
+  const postUpdate = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveUpdatePostRepository(configuration.hyperdrive),
+    detail: createHyperdrivePostDetailRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies UpdatePostRouteDependencies : undefined;
+  const postRevisions = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostRevisionsRepository(configuration.hyperdrive),
+  } satisfies ListPostRevisionsRouteDependencies : undefined;
+  const interactions: Partial<InteractionsRouteDependencies> = configuration ? (() => {
+    const resolveSession = createSessionResolver(configuration);
+    const hasUsername = createUsernameChecker(configuration);
+    const likeRepository = createHyperdrivePostLikeRepository(configuration.hyperdrive);
+    return {
+      like: { resolveSession, hasUsername, repository: likeRepository },
+      unlike: { resolveSession, hasUsername, repository: likeRepository },
+      likes: { resolveSession, hasUsername, repository: createHyperdrivePostLikesRepository(configuration.hyperdrive) },
+      comments: { resolveSession, hasUsername, repository: createHyperdrivePostCommentsRepository(configuration.hyperdrive) },
+      createComment: { resolveSession, hasUsername, repository: createHyperdriveCreatePostCommentRepository(configuration.hyperdrive) },
+      updateComment: { resolveSession, hasUsername, repository: createHyperdriveUpdatePostCommentRepository(configuration.hyperdrive) },
+      deleteComment: { resolveSession, hasUsername, repository: createHyperdriveDeletePostCommentRepository(configuration.hyperdrive) },
+    };
+  })() : {};
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
+  const onThisDay = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    repository: createHyperdriveOnThisDayRepository(configuration.hyperdrive),
+    signMediaDownload,
+  } satisfies ListOnThisDayRouteDependencies : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
@@ -398,6 +505,23 @@ export function createAppForEnv(env: ApiEnv) {
     // Request execution stays unregistered until the synthetic-staging gate is reviewed.
     requestEnabled: false,
   } satisfies DeletionRouteDependencies : undefined;
+  const stagingExportProof = readStagingExportProof(env);
+  const exportService = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    status: (userId: string, sessionId: string) => withHyperdriveDatabase(configuration.hyperdrive,
+      (database) => createExportOwnerRepository(database).status(userId, sessionId)),
+    request: (userId: string, sessionId: string, requestId: string) => withHyperdriveDatabase(configuration.hyperdrive,
+      (database) => createExportOwnerRepository(database).request(userId, sessionId, requestId)),
+    download: r2Runtime ? (userId: string, sessionId: string, requestId: string) => prepareExportDownload({
+      authorize: () => withHyperdriveDatabase(configuration.hyperdrive,
+        (database) => authorizeExportDownload(database, { userId, sessionId, requestId })),
+      objects: createExportArchiveStore(r2Runtime),
+    }) : undefined,
+    // Production is inert. Staging admits only the time-bounded synthetic owner.
+    allowedUserId: stagingExportProof?.userId,
+    enabled: (exportExecutionEnabled || stagingExportProof?.buildEnabled === true) &&
+      !!env.EXPORT_WORKER_HYPERDRIVE && !!r2Runtime,
+  } satisfies ExportRouteDependencies : undefined;
   const passwordReauthentication = configuration ? {
     resolveSession: createSessionResolver(configuration),
     issue: (input: Parameters<typeof issuePasswordManagementGrant>[1]) => withHyperdriveDatabase(
@@ -432,14 +556,33 @@ export function createAppForEnv(env: ApiEnv) {
       configuration.hyperdrive, async (database) => issueRegistrationIntent(database, input, await approvedTermsDigest()),
     ),
   } satisfies RegistrationIntentRouteDependencies : undefined;
+  const notifications = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    store: {
+      read: (userId: string) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        createPostgresNotificationPreferenceStore(database).read(userId)
+      )),
+      write: (userId: string, enabled: boolean) => withHyperdriveDatabase(configuration.hyperdrive, (database) => (
+        createPostgresNotificationPreferenceStore(database).write(userId, enabled)
+      )),
+    },
+  } satisfies NotificationRouteDependencies : undefined;
   // Profile photos are shown through links that expire after ten minutes.
   const signAvatar = r2Runtime
     ? async (objectKey: string) => (await createPresignedDownloadUrl(r2Runtime, { objectKey, expiresInSeconds: 10 * 60 })).url
     : undefined;
+  const publicAvatarUrl = configuration
+    ? (username: string) => new URL(`/api/v1/profiles/${encodeURIComponent(username)}/avatar`, configuration.baseURL).href
+    : undefined;
   const profileDetails = configuration ? {
     resolveSession: createSessionResolver(configuration),
-    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive, signAvatar),
+    repository: createHyperdriveProfileDetailsRepository(configuration.hyperdrive, signAvatar, publicAvatarUrl),
   } satisfies GetProfileDetailsRouteDependencies : undefined;
+  const profileAvatar = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveAvatarContentRepository(configuration.hyperdrive),
+    objects: mediaObjects,
+  } satisfies GetAvatarRouteDependencies : undefined;
   const profileUpdate = configuration ? {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveUpdateProfileRepository(configuration.hyperdrive, signAvatar),
@@ -479,8 +622,14 @@ export function createAppForEnv(env: ApiEnv) {
     feed,
     postDetail,
     postMedia,
+    postMediaContent,
     postVoiceMemo,
+    postVoiceMemoContent,
     profilePosts,
+    onThisDay,
+    postUpdate,
+    postRevisions,
+    interactions,
     media,
     relationships,
     messaging,
@@ -490,11 +639,14 @@ export function createAppForEnv(env: ApiEnv) {
     usernameProfile,
     accountPolicy,
     deletion,
+    exportService,
     passwordReauthentication,
     googleManagementProof,
     legalAcceptance,
     legalRegistration,
+    notifications,
     profileDetails,
+    profileAvatar,
     profileUpdate,
     usernameChange,
     avatarSet,
@@ -527,6 +679,7 @@ export function createAppForEnv(env: ApiEnv) {
 }
 
 const unavailableUsernameProfile: UsernameProfileRouteDependencies = { resolveSession: async () => null };
+const unavailableNotifications: NotificationRouteDependencies = { resolveSession: async () => null };
 const unavailableMessaging: MessagingRouteDependencies = { resolveSession: async () => null };
 const unavailableRealtimeTicket: RealtimeTicketRouteDependencies = {
   resolveSession: async () => null,
@@ -584,10 +737,11 @@ function createPostingDayDependencies(
   };
 }
 
-export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date } = {}) {
+export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date; messageSendLimit?: number } = {}) {
   const store = createPostgresMessageWriteStore(database);
+  const messageSendLimit = options.messageSendLimit ?? 30;
   return {
-    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
+    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now, messageSendLimit }),
     resolveMessageRequest: createPostgresResolveMessageRequestRepository(database),
     markConversationRead: createPostgresMarkConversationReadRepository(database),
     getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
@@ -597,7 +751,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     findDirectConversation: createPostgresGetDirectConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
-    send: createSendMessageService({ store, now: options.now }),
+    send: createSendMessageService({ store, now: options.now, messageSendLimit }),
     edit: createEditMessageService({ store: createPostgresEditMessageStore(database), now: options.now }),
     unsend: createUnsendMessageService({ store: createPostgresUnsendMessageStore(database), now: options.now }),
     set: createSetReactionService({ store: createPostgresSetReactionStore(database) }),
@@ -679,15 +833,16 @@ function createMessagingDependencies(
 ): MessagingRouteDependencies {
   const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
   const userRealtime = env.USER_REALTIME;
+  const messageSendLimit = parseDirectMessageSendLimit(env.DIRECT_MESSAGE_SEND_LIMIT);
   return {
     resolveSession: createSessionResolver(configuration),
     hasUsername,
-    service: createSendMessageService({ store }),
+    service: createSendMessageService({ store, messageSendLimit }),
     edit: createEditMessageService({ store: createHyperdriveEditMessageStore(configuration.hyperdrive) }),
     unsend: createUnsendMessageService({ store: createHyperdriveUnsendMessageStore(configuration.hyperdrive) }),
     setReaction: createSetReactionService({ store: createHyperdriveSetReactionStore(configuration.hyperdrive) }),
     removeReaction: createRemoveReactionService({ store: createHyperdriveRemoveReactionStore(configuration.hyperdrive) }),
-    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
+    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive), messageSendLimit }),
     resolveMessageRequest: createHyperdriveResolveMessageRequestRepository(configuration.hyperdrive),
     markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
     getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),

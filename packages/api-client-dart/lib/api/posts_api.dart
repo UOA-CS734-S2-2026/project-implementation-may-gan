@@ -96,7 +96,7 @@ class PostsApi {
 
   /// Read one post
   ///
-  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -134,7 +134,7 @@ class PostsApi {
 
   /// Read one post
   ///
-  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+  /// Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.
   ///
   /// Parameters:
   ///
@@ -240,6 +240,83 @@ class PostsApi {
     return null;
   }
 
+  /// Read currently authorized post media bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] mediaId (required):
+  Future<Response> postsGetMediaContentWithHttpInfo(
+    String postId,
+    String mediaId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/media/{mediaId}/content'
+        .replaceAll('{postId}', postId.toString())
+        .replaceAll('{mediaId}', mediaId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read currently authorized post media bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] mediaId (required):
+  Future<MultipartFile?> postsGetMediaContent(
+    String postId,
+    String mediaId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetMediaContentWithHttpInfo(
+      postId,
+      mediaId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
+    }
+    return null;
+  }
+
   /// Get a fresh download URL for a post's voice memo
   ///
   /// Returns a new private download URL, valid for 5 minutes, when an earlier one has expired. The same rules as reading the post apply, and the voice memo must still be attached to it.
@@ -305,6 +382,75 @@ class PostsApi {
         await _decodeBodyBytes(response),
         'PostVoiceMemo',
       ) as PostVoiceMemo;
+    }
+    return null;
+  }
+
+  /// Read currently authorized voice memo bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<Response> postsGetVoiceMemoContentWithHttpInfo(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/voice-memo/content'
+        .replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Read currently authorized voice memo bytes
+  ///
+  /// Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  Future<MultipartFile?> postsGetVoiceMemoContent(
+    String postId, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsGetVoiceMemoContentWithHttpInfo(
+      postId,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'MultipartFile',
+      ) as MultipartFile;
     }
     return null;
   }
@@ -393,9 +539,66 @@ class PostsApi {
     return null;
   }
 
+  /// List the caller's On This Day memories
+  ///
+  /// Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  Future<Response> postsListOnThisDayWithHttpInfo({
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/me/memories/on-this-day';
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List the caller's On This Day memories
+  ///
+  /// Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.
+  Future<OnThisDayMemories?> postsListOnThisDay({
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListOnThisDayWithHttpInfo(
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'OnThisDayMemories',
+      ) as OnThisDayMemories;
+    }
+    return null;
+  }
+
   /// List the posts on a profile
   ///
-  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  /// Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Note: This method returns the HTTP [Response].
   ///
@@ -447,7 +650,7 @@ class PostsApi {
 
   /// List the posts on a profile
   ///
-  /// Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+  /// Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
   ///
   /// Parameters:
   ///
@@ -457,7 +660,7 @@ class PostsApi {
   ///   Opaque continuation cursor
   ///
   /// * [int] limit:
-  Future<ProfilePostsPage?> postsListProfilePosts(
+  Future<ReadableProfilePosts?> postsListProfilePosts(
     String username, {
     String? cursor,
     int? limit,
@@ -479,8 +682,100 @@ class PostsApi {
         response.statusCode != HttpStatus.noContent) {
       return await apiClient.deserializeAsync(
         await _decodeBodyBytes(response),
-        'ProfilePostsPage',
-      ) as ProfilePostsPage;
+        'ReadableProfilePosts',
+      ) as ReadableProfilePosts;
+    }
+    return null;
+  }
+
+  /// List a post's earlier versions
+  ///
+  /// Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<Response> postsListRevisionsWithHttpInfo(
+    String postId, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path = r'/api/v1/posts/{postId}/revisions'
+        .replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    if (cursor != null) {
+      queryParams.addAll(_queryParams('', 'cursor', cursor));
+    }
+    if (limit != null) {
+      queryParams.addAll(_queryParams('', 'limit', limit));
+    }
+
+    const contentTypes = <String>[];
+
+    return apiClient.invokeAPI(
+      path,
+      'GET',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// List a post's earlier versions
+  ///
+  /// Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [String] cursor:
+  ///   Opaque continuation cursor
+  ///
+  /// * [int] limit:
+  Future<PostRevisionsPage?> postsListRevisions(
+    String postId, {
+    String? cursor,
+    int? limit,
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsListRevisionsWithHttpInfo(
+      postId,
+      cursor: cursor,
+      limit: limit,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostRevisionsPage',
+      ) as PostRevisionsPage;
     }
     return null;
   }
@@ -663,6 +958,82 @@ class PostsApi {
         await _decodeBodyBytes(response),
         'TrashedPostStatus',
       ) as TrashedPostStatus;
+    }
+    return null;
+  }
+
+  /// Edit a post
+  ///
+  /// Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  ///
+  /// Note: This method returns the HTTP [Response].
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [UpdatePostRequest] updatePostRequest (required):
+  Future<Response> postsUpdateWithHttpInfo(
+    String postId,
+    UpdatePostRequest updatePostRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    // ignore: prefer_const_declarations
+    final path =
+        r'/api/v1/posts/{postId}'.replaceAll('{postId}', postId.toString());
+
+    // ignore: prefer_final_locals
+    Object? postBody = updatePostRequest;
+
+    final queryParams = <QueryParam>[];
+    final headerParams = <String, String>{};
+    final formParams = <String, String>{};
+
+    const contentTypes = <String>['application/json'];
+
+    return apiClient.invokeAPI(
+      path,
+      'PATCH',
+      queryParams,
+      postBody,
+      headerParams,
+      formParams,
+      contentTypes.isEmpty ? null : contentTypes.first,
+      abortTrigger: abortTrigger,
+    );
+  }
+
+  /// Edit a post
+  ///
+  /// Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+  ///
+  /// Parameters:
+  ///
+  /// * [String] postId (required):
+  ///
+  /// * [UpdatePostRequest] updatePostRequest (required):
+  Future<PostDetail?> postsUpdate(
+    String postId,
+    UpdatePostRequest updatePostRequest, {
+    Future<void>? abortTrigger,
+  }) async {
+    final response = await postsUpdateWithHttpInfo(
+      postId,
+      updatePostRequest,
+      abortTrigger: abortTrigger,
+    );
+    if (response.statusCode >= HttpStatus.badRequest) {
+      throw ApiException(response.statusCode, await _decodeBodyBytes(response));
+    }
+    // When a remote server returns no body with a status of 204, we shall not decode it.
+    // At the time of writing this, `dart:convert` will throw an "Unexpected end of input"
+    // FormatException when trying to decode an empty string.
+    if (response.body.isNotEmpty &&
+        response.statusCode != HttpStatus.noContent) {
+      return await apiClient.deserializeAsync(
+        await _decodeBodyBytes(response),
+        'PostDetail',
+      ) as PostDetail;
     }
     return null;
   }

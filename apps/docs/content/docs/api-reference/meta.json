@@ -1,5 +1,13 @@
 {
   "title": "API reference",
   "defaultOpen": true,
-  "pages": ["index"]
+  "pages": [
+    "system",
+    "media",
+    "posting-days",
+    "posts",
+    "relationships",
+    "messaging",
+    "profile"
+  ]
 }

@@ -1,0 +1,10 @@
+{
+  "title": "Accounts and authentication",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "migration-history",
+    "setup-and-operations",
+    "security-and-verification"
+  ]
+}

@@ -104,6 +104,7 @@ export const messages = pgTable("messages", {
   unique("messages_sender_client_message_unique").on(table.senderId, table.clientMessageId),
   unique("messages_sender_participant_client_message_unique").on(table.senderParticipantId, table.clientMessageId),
   index("messages_conversation_sequence_idx").on(table.conversationId, table.sequence),
+  index("messages_sender_created_at_idx").on(table.senderId, table.createdAt),
   check("messages_sender_participant_presence_check", sql`${table.senderParticipantId} is not null`),
   check("messages_sequence_positive_check", sql`${table.sequence} > 0`),
   check("messages_version_positive_check", sql`${table.version} > 0`),
@@ -187,10 +188,14 @@ export const pushDevices = pgTable("push_devices", {
   tokenKeyVersion: text("token_key_version"),
   tokenHash: text("token_hash").notNull(),
   optedIn: boolean("opted_in").notNull().default(true),
+  /** Null identifies a legacy client. Version 1 is the only supported generic payload. */
+  notificationSchemaVersion: bigint("notification_schema_version", { mode: "number" }),
   registeredAt: timestamp("registered_at", { withTimezone: true }).notNull(),
   invalidatedAt: timestamp("invalidated_at", { withTimezone: true }),
 }, (table) => [
   unique("push_devices_token_hash_unique").on(table.tokenHash),
   unique("push_devices_user_installation_unique").on(table.userId, table.installationId),
+  unique("push_devices_id_user_unique").on(table.id, table.userId),
   index("push_devices_user_enabled_idx").on(table.userId, table.optedIn),
+  check("push_devices_notification_schema_version_check", sql`${table.notificationSchemaVersion} is null or ${table.notificationSchemaVersion} = 1`),
 ]);

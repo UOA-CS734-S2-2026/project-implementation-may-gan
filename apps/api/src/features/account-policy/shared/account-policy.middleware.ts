@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import { apiErrorResponse } from "../../../http/api-error";
 import type { AuthenticatedActor, AuthenticatedApiEnv } from "../../../http/authenticated-actor";
-import type { ResolveSession } from "../../../http/middleware/require-session";
+import { hasSessionCredential, type ResolveSession } from "../../../http/middleware/require-session";
 import { actionableAccountCapabilities, allowsAccountCapability, type AccountCapability, type AccountPolicy } from "./account-policy";
 
 export interface AccountPolicyResolver {
@@ -25,6 +25,8 @@ const managementApiRoutes = new Map<string, AccountCapability>([
   ["GET /api/v1/account/deletion", "policy_read"],
   ["POST /api/v1/account/deletion/request", "request_deletion"],
   ["POST /api/v1/account/deletion/cancel", "cancel_deletion_verification"],
+  ["GET /api/v1/account/export", "export"],
+  ["POST /api/v1/account/export/request", "export"],
   ["POST /api/v1/legal/acceptance", "legal_acceptance"],
 ]);
 
@@ -34,6 +36,22 @@ function pathSegments(pathname: string): string[] {
 
 function matches(segments: readonly string[], expected: readonly string[]): boolean {
   return segments.length === expected.length && expected.every((segment, index) => segment === "*" || segments[index] === segment);
+}
+
+function isOptionalSessionRoute(request: Request): boolean {
+  const method = request.method.toUpperCase();
+  const segments = pathSegments(new URL(request.url).pathname);
+  const publicDocument = method === "GET" && (
+    matches(segments, ["api", "v1", "posts", "*"])
+    || matches(segments, ["api", "v1", "profiles", "*"])
+    || matches(segments, ["api", "v1", "profiles", "*", "posts"])
+  );
+  const publicMedia = (method === "GET" || method === "HEAD") && (
+    matches(segments, ["api", "v1", "posts", "*", "media", "*", "content"])
+    || matches(segments, ["api", "v1", "posts", "*", "voice-memo", "content"])
+    || matches(segments, ["api", "v1", "profiles", "*", "avatar"])
+  );
+  return publicDocument || publicMedia;
 }
 
 async function cleanupCapability(request: Request, pathname: string): Promise<AccountCapability | undefined> {
@@ -71,6 +89,8 @@ export async function accountCapabilityForRequest(request: Request): Promise<Acc
     return body && typeof body === "object" && !Array.isArray(body) && (body as { action?: unknown }).action === "cancel_deletion"
       ? "cancel_deletion_verification" : "request_deletion";
   }
+  if (request.method.toUpperCase() === "GET"
+    && matches(pathSegments(url.pathname), ["api", "v1", "account", "export", "*", "download"])) return "export";
   return managementApiRoutes.get(key) ?? await cleanupCapability(request, url.pathname) ?? "ordinary";
 }
 
@@ -94,8 +114,12 @@ export function createAccountPolicyMiddleware(
   policies: AccountPolicyResolver,
 ): MiddlewareHandler<AuthenticatedApiEnv> {
   return async (context, next) => {
-    const capability = await accountCapabilityForRequest(context.req.raw);
+    const request = context.req.raw;
+    const capability = await accountCapabilityForRequest(request);
     if (!capability) return next();
+    // Public post detail is anonymous only when no credential was presented.
+    // Signed-in callers still pass through account lifecycle policy.
+    if (isOptionalSessionRoute(request) && !hasSessionCredential(request)) return next();
     context.header("Cache-Control", "no-store");
 
     let actor: AuthenticatedActor | null | undefined;

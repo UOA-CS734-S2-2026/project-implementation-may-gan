@@ -19,6 +19,8 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.hyperdrive, [{ binding: "HYPERDRIVE", id: "a".repeat(32) }]);
   assert.deepEqual(api.ratelimits, rateLimitConfig);
   assert.equal(api.vars.API_RATE_LIMIT_SCOPE, "staging");
+  assert.equal(api.vars.NOTIFICATION_PUBLISHERS_ENABLED, "false");
+  assert.equal(api.vars.DIRECT_MESSAGE_SEND_LIMIT, "30");
   assert.equal(api.vars.BETTER_AUTH_BASE_URL, "https://api.staging.example.test");
   assert.equal(api.vars.PUBLIC_API_BASE_URL, "https://api.staging.example.test");
   assert.equal(api.vars.PUSH_TOKEN_ENCRYPTION_KEY_VERSION, undefined);
@@ -45,6 +47,8 @@ test("keeps native rate-limit mappings and environment scopes aligned", () => {
     const config = JSON.parse(readFileSync(file, "utf8"));
     assert.deepEqual(config.ratelimits, rateLimitConfig, file);
     assert.equal(config.vars.API_RATE_LIMIT_SCOPE, scope, file);
+    assert.equal(config.vars.NOTIFICATION_PUBLISHERS_ENABLED, "false", file);
+    assert.equal(config.vars.DIRECT_MESSAGE_SEND_LIMIT, "30", file);
   }
 });
 
@@ -70,6 +74,36 @@ test("adds R2 media vars to the API Worker only", () => {
   assert.equal(api.vars.GOOGLE_WEB_CLIENT_ID, "public-client-id");
   assert.equal(probe.vars, undefined);
   assert.equal(createStagingWorkerConfigs(input).api.vars.R2_BUCKET_NAME, undefined);
+});
+
+test("binds the separate worker only on staging and requires complete synthetic proof settings", () => {
+  const workerId = "d".repeat(32);
+  const gated = createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId });
+  assert.deepEqual(gated.api.hyperdrive, [
+    { binding: "HYPERDRIVE", id: input.hyperdriveId },
+    { binding: "EXPORT_WORKER_HYPERDRIVE", id: workerId },
+  ]);
+  assert.equal(gated.api.vars.STAGING_EXPORT_PROOF_APPROVED, undefined);
+  assert.equal(gated.probe.hyperdrive, undefined);
+
+  const proofVars = {
+    STAGING_EXPORT_PROOF_APPROVED: "synthetic-only",
+    STAGING_EXPORT_PROOF_USER_ID: "synthetic-owner-123",
+    STAGING_EXPORT_PROOF_BUILD_UNTIL: "2026-10-04T00:30:00.000Z",
+    STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER: "2026-10-06T01:00:00.000Z",
+  };
+  assert.deepEqual(createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
+    { API_RATE_LIMIT_SCOPE: "staging", BETTER_AUTH_BASE_URL: input.authApiOrigin,
+      NOTIFICATION_PUBLISHERS_ENABLED: "false", DIRECT_MESSAGE_SEND_LIMIT: "30",
+      PUBLIC_API_BASE_URL: input.authApiOrigin,
+      BETTER_AUTH_TRUSTED_ORIGINS: `${input.authApiOrigin},${input.authWebOrigin}`,
+      ...input.authVars, ...proofVars });
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: proofVars }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: input.hyperdriveId }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+    exportProofVars: { STAGING_EXPORT_PROOF_USER_ID: proofVars.STAGING_EXPORT_PROOF_USER_ID } }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+    exportProofVars: { ...proofVars, STAGING_EXPORT_PROOF_APPROVED: "all-accounts" } }));
 });
 
 test("rejects an unreviewed Worker target or Hyperdrive ID", () => {

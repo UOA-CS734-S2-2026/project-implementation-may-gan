@@ -2,21 +2,17 @@ export type PostAudience = "solo" | "friends";
 export type ProfileVisibility = "public" | "private";
 export type PermissionAction =
   | "list"
+  | "profile"
   | "detail"
   | "revision"
   | "preview"
   | "export"
-  | "media";
+  | "media"
+  | "private-media";
 
 export interface Viewer {
   /** Anonymous viewers have no user id. */
   userId?: string | null;
-}
-
-export interface ValidatedPublicLinkGrant {
-  /** #41 owns token hashing, lookup, and revocation. */
-  postId: string;
-  active: boolean;
 }
 
 export interface PostPermissionState {
@@ -31,19 +27,18 @@ export interface PostPermissionState {
   blocked: boolean;
   /** False for media referenced only by an old revision. */
   mediaAttached?: boolean;
-  publicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type PermissionRequest =
   | {
-      action: "media";
+      action: "media" | "private-media";
       viewer: Viewer;
       post: PostPermissionState;
       mediaId: string;
       now?: Date;
     }
   | {
-      action: Exclude<PermissionAction, "media">;
+      action: Exclude<PermissionAction, "media" | "private-media">;
       viewer: Viewer;
       post: PostPermissionState;
       now?: Date;
@@ -56,7 +51,6 @@ export type DenialReason =
   | "not_released"
   | "not_owner"
   | "not_friend"
-  | "not_public_link"
   | "solo_post"
   | "detached_media";
 
@@ -89,24 +83,22 @@ export function decidePostPermission(request: PermissionRequest): PermissionDeci
   const isOwner = viewer.userId != null && viewer.userId === post.authorId;
 
   if (post.deleted) return denied("deleted");
-  if (request.action === "media" && post.mediaAttached !== true) return denied("detached_media");
+  if ((request.action === "media" || request.action === "private-media") && post.mediaAttached !== true) return denied("detached_media");
   if (request.action === "export" && !isOwner) return denied("not_owner");
   if (post.blocked && viewer.userId != null) return denied("blocked");
 
   // Export remains owner-only, including before release. All other owner reads
   // are also available before release.
   if (isOwner) return allowed();
-  if (request.action === "media" && post.audience === "solo") return denied("solo_post");
+  if ((request.action === "media" || request.action === "private-media") && post.audience === "solo") return denied("solo_post");
   if (post.releaseAt.getTime() > now.getTime()) return denied("not_released");
   if (post.audience === "solo") return denied("solo_post");
 
-  if (post.publicLinkGrant?.postId === post.postId && post.publicLinkGrant.active) {
-    // A public link is valid only for released friends posts on public profiles.
-    // A known signed-in block was handled above; anonymous bearer links cannot
-    // be matched to an individual block.
-    if (post.authorProfileVisibility === "public") return allowed();
-    if (viewer.userId == null) return denied("not_public_link");
-  }
+  // Public access is explicit for direct detail, profile archives, and the
+  // parent-authorized byte route. Generic lists and legacy signed downloads
+  // stay friend-scoped.
+  if ((request.action === "detail" || request.action === "profile" || request.action === "media")
+    && post.authorProfileVisibility === "public") return allowed();
 
   if (viewer.userId == null) return denied("anonymous");
   if (!post.friendshipActive) return denied("not_friend");
@@ -157,25 +149,21 @@ export interface PostVisibilityColumns {
   authorProfileVisibility?: SqlFragment;
   friendshipActive?: SqlFragment;
   blocked?: SqlFragment;
-  publicLinkActive?: SqlFragment;
-  publicLinkPostId?: SqlFragment;
   mediaAttached?: SqlFragment;
 }
 
 interface PostVisibilityFilterInputBase {
   viewer: Viewer;
   now: Date;
-  /** Supplied only by #41 after validating an active grant for this post. */
-  validatedPublicLinkGrant?: ValidatedPublicLinkGrant;
 }
 
 export type PostVisibilityFilterInput = PostVisibilityFilterInputBase & (
   | {
-      action: "media";
+      action: "media" | "private-media";
       columns: PostVisibilityColumns & { mediaAttached: SqlFragment };
     }
   | {
-      action?: Exclude<PermissionAction, "media">;
+      action?: Exclude<PermissionAction, "media" | "private-media">;
       columns: PostVisibilityColumns;
     }
 );
