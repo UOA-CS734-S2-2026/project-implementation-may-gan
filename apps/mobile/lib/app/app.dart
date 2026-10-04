@@ -31,10 +31,14 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
     widget.services.session,
     initialLocation: widget.initialLocation,
   );
-  late final NotificationRouter _notificationRouter = NotificationRouter(
-    session: widget.services.session,
-    go: _router.go,
-  );
+  late final NotificationRouter? _notificationRouter =
+      widget.services.notificationPreflight == null
+      ? null
+      : NotificationRouter(
+          session: widget.services.session,
+          preflight: widget.services.notificationPreflight!,
+          go: _router.go,
+        );
 
   @override
   void initState() {
@@ -42,9 +46,10 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     final notifications = widget.services.notifications;
     if (notifications != null) {
-      notifications.setNotificationTapHandler(
-        _notificationRouter.routeConversation,
-      );
+      final notificationRouter = _notificationRouter;
+      if (notificationRouter != null) {
+        notifications.setNotificationTapHandler(notificationRouter.route);
+      }
       unawaited(notifications.start());
     }
     widget.services.session.restore();
@@ -85,7 +90,7 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(widget.services.messaging.stopRealtime());
-    _notificationRouter.dispose();
+    _notificationRouter?.dispose();
     final notifications = widget.services.notifications;
     if (notifications != null) unawaited(notifications.stop());
     _router.dispose();

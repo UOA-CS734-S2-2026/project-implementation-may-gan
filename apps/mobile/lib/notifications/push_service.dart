@@ -4,6 +4,8 @@ import 'dart:async';
 /// until project ownership, APNs configuration, and physical-device release
 /// evidence are available. No token is persisted by this layer.
 abstract interface class PushTokenSource {
+  /// Reads platform authorization without displaying an OS prompt.
+  Future<PushPermission> currentPermission();
   Future<PushPermission> requestPermission();
   Future<String?> currentToken();
   Stream<String> get tokenRefreshes;
@@ -20,6 +22,7 @@ abstract interface class PushRegistrationClient {
     required String token,
     required String platform,
     required bool optedIn,
+    required int notificationSchemaVersion,
   });
   Future<void> unregister(String installationId);
 }
@@ -47,21 +50,35 @@ class PushService {
 
   bool _current(int epoch) => epoch == _epoch;
 
-  Future<void> start() async {
+  /// Resumes an already enabled account without displaying an OS prompt.
+  Future<bool> start() async {
     final epoch = ++_epoch;
-    final permission = await source.requestPermission();
-    if (!_current(epoch) || permission == PushPermission.denied) return;
+    final permission = await source.currentPermission();
+    return _activate(epoch, permission);
+  }
+
+  /// The only method that may display the platform permission prompt.
+  Future<PushPermission> requestPermission() => source.requestPermission();
+
+  Future<bool> startWithPermission(PushPermission permission) {
+    final epoch = ++_epoch;
+    return _activate(epoch, permission);
+  }
+
+  Future<bool> _activate(int epoch, PushPermission permission) async {
+    if (!_current(epoch) || permission == PushPermission.denied) return false;
     final token = await source.currentToken();
-    if (!_current(epoch)) return;
+    if (!_current(epoch)) return false;
     if (token != null) await _register(epoch, token);
-    if (!_current(epoch)) return;
+    if (!_current(epoch)) return false;
     await _subscription?.cancel();
-    if (!_current(epoch)) return;
+    if (!_current(epoch)) return false;
     _subscription = source.tokenRefreshes.listen((token) {
       // A refresh is best effort, but its write remains in the serialized
       // tail so stop can drain it before unregistering the installation.
       unawaited(_register(epoch, token).catchError((_) {}));
     });
+    return true;
   }
 
   Future<void> _register(int epoch, String token) {
@@ -73,6 +90,7 @@ class PushService {
         token: token,
         platform: platform,
         optedIn: true,
+        notificationSchemaVersion: 1,
       );
     });
     // Preserve the operation's error for an initial start caller, while the

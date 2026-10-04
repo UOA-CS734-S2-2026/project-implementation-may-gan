@@ -134,6 +134,14 @@ void main() {
     ).readAsStringSync();
     expect(androidGradle, contains('applicationIdSuffix = ".staging"'));
     expect(androidGradle, isNot(contains('com.google.gms.google-services')));
+    final androidManifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    expect(androidManifest, contains('firebase_messaging_auto_init_enabled'));
+    expect(
+      androidManifest,
+      contains('android:name="android.permission.POST_NOTIFICATIONS"'),
+    );
 
     final project = File(
       'ios/Runner.xcodeproj/project.pbxproj',
@@ -153,6 +161,11 @@ void main() {
     expect(debugInfo, contains('<string>remote-notification</string>'));
     expect(releaseInfo, isNot(contains('remote-notification')));
     expect(debugInfo, isNot(contains('FirebaseAppDelegateProxyEnabled')));
+    expect(debugInfo, contains('<key>FirebaseMessagingAutoInitEnabled</key>'));
+    expect(
+      releaseInfo,
+      contains('<key>FirebaseMessagingAutoInitEnabled</key>'),
+    );
 
     final entitlements = File(
       'ios/Runner/Runner-Debug.entitlements',

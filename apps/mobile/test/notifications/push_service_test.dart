@@ -14,6 +14,9 @@ class _Source implements PushTokenSource {
   Future<String?> currentToken() async => token;
 
   @override
+  Future<PushPermission> currentPermission() async => permission;
+
+  @override
   Future<PushPermission> requestPermission() async => permission;
 
   @override
@@ -43,6 +46,9 @@ class _DeferredSource implements PushTokenSource {
   final StreamController<String> controller = StreamController<String>();
 
   @override
+  Future<PushPermission> currentPermission() => permissions.removeAt(0).future;
+
+  @override
   Future<PushPermission> requestPermission() => permissions.removeAt(0).future;
 
   @override
@@ -69,6 +75,7 @@ class _DeferredWriteClient implements PushRegistrationClient {
     required String token,
     required String platform,
     required bool optedIn,
+    required int notificationSchemaVersion,
   }) async {
     observed.add('register-start:$token');
     if (deferredTokens.contains(token)) {
@@ -106,7 +113,10 @@ class _Client implements PushRegistrationClient {
     required String token,
     required String platform,
     required bool optedIn,
-  }) async => registrations.add('$installationId:$token:$platform:$optedIn');
+    required int notificationSchemaVersion,
+  }) async => registrations.add(
+    '$installationId:$token:$platform:$optedIn:$notificationSchemaVersion',
+  );
 
   @override
   Future<void> unregister(String installationId) async =>
@@ -130,8 +140,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       await service.stop();
       expect(client.registrations, [
-        'install:initial-token:ios:true',
-        'install:rotated-token:ios:true',
+        'install:initial-token:ios:true:1',
+        'install:rotated-token:ios:true:1',
       ]);
       expect(client.unregistrations, ['install']);
       expect(source.invalidated, isTrue);
@@ -167,7 +177,7 @@ void main() {
       bobToken.complete('bob-token');
       await bobStart;
       await aliceStart;
-      expect(client.registrations, ['install:bob-token:ios:true']);
+      expect(client.registrations, ['install:bob-token:ios:true:1']);
     },
   );
 

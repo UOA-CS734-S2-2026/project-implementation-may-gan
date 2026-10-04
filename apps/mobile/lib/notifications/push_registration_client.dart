@@ -26,10 +26,12 @@ class HttpPushRegistrationClient implements PushRegistrationClient {
     required String token,
     required String platform,
     required bool optedIn,
+    required int notificationSchemaVersion,
   }) => _request('PUT', installationId, {
     'token': token,
     'platform': platform,
     'optedIn': optedIn,
+    'notificationSchemaVersion': notificationSchemaVersion,
   });
 
   @override

@@ -31,6 +31,9 @@ class _StaticPushSource implements PushTokenSource {
   Future<void> invalidateLocalToken() async {}
 
   @override
+  Future<PushPermission> currentPermission() async => PushPermission.granted;
+
+  @override
   Future<PushPermission> requestPermission() async => PushPermission.granted;
 
   @override
@@ -47,6 +50,7 @@ class _DeferredRegistrationClient implements PushRegistrationClient {
     required String token,
     required String platform,
     required bool optedIn,
+    required int notificationSchemaVersion,
   }) async {
     operations.add('register-start');
     await registration.future;

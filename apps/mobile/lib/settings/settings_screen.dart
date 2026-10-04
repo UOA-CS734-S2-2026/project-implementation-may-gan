@@ -307,6 +307,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
+                  if (services.notificationConsent != null) ...[
+                    const SizedBox(height: 24),
+                    const _GroupLabel('notifications'),
+                    _Group(
+                      children: [
+                        AnimatedBuilder(
+                          animation: services.notificationConsent!,
+                          builder: (context, _) {
+                            final consent = services.notificationConsent!;
+                            return SwitchListTile(
+                              key: const Key('settings.notifications'),
+                              title: const Text('Mobile notifications'),
+                              subtitle: Text(
+                                consent.failure == null
+                                    ? 'Messages, friend requests, and daily reminders.'
+                                    : 'Could not update notifications. Try again.',
+                              ),
+                              value: consent.enabled,
+                              onChanged: consent.loading
+                                  ? null
+                                  : (value) async {
+                                      final enabled = await consent.setEnabled(
+                                        value,
+                                      );
+                                      if (!context.mounted ||
+                                          enabled == value) {
+                                        return;
+                                      }
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Notification permission was not granted.',
+                                          ),
+                                        ),
+                                      );
+                                    },
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const _GroupLabel('sign-in methods'),
                   _Group(
