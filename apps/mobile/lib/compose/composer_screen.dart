@@ -9,6 +9,7 @@ import '../drafts/daily_post_draft.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/post_inputs.dart';
+import '../ui/surfaces.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
@@ -540,26 +541,20 @@ class _ComposerScreenState extends State<ComposerScreen>
           const _Notice(
             "A saved draft couldn't be unlocked on this device and was removed.",
           ),
-        Text(
-          "today's prompt",
-          style: DayliText.sans(
-            context,
-            size: DayliTextSize.sm,
-            weight: FontWeight.w500,
-            color: colors.foregroundTertiary,
+        DayliCard(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Text(
+            draft.promptText,
+            style: DayliText.serif(
+              context,
+              fontSize: 26,
+              weight: FontWeight.w600,
+              tracking: DayliTracking.tighter,
+            ).copyWith(height: 1.25),
+            textAlign: TextAlign.center,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          draft.promptText,
-          style: DayliText.serif(
-            context,
-            fontSize: 28,
-            weight: FontWeight.w600,
-            tracking: DayliTracking.tighter,
-          ).copyWith(height: 1.2),
-        ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 32),
         const _SectionLabel('your day in pictures'),
         _Lockable(
           locked: locked,
