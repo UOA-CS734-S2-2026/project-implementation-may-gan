@@ -12,12 +12,16 @@ After passing tests and required reviews, successful main CI may run the existin
 
 The existing protected staging Environment and target-validation gates remain in force. Capture and inspect actual PR heads, migration suffixes and automatic workflow results. Do not apply unknown or unreviewed pending changes merely because they exist on main.
 
+## Later amendment
+
+The subsequent [admin merge amendment](messaging-admin-merge-approval.md) supersedes the earlier approving-GitHub-review restriction below for the five disclosed PRs. It does not expand the authorized automatic operations or waive technical gates. The [bounded merge follow-up](messaging-merge-follow-up-approval.md) records the subsequent implementation request.
+
 ## Exclusions and remaining gates
 
 This does not authorize production, Firebase/APNs provisioning, live OAuth readiness, notification sends, physical-device tests, key rotation, manual workflow dispatch, protection mutation or unrelated PR merges. No credential values may be printed or committed.
 
 Admin bypass cannot replace the approving PR review or sensitive-change owner review required by the existing batch approvals and CONTRIBUTING.md. Failed or missing checks, unresolved findings and migration conflicts still prevent merging. Planning PR publication approval did not independently waive its review requirements.
 
-The two schema PRs currently allocate migration 0051. Whichever integrates second must first rebase and regenerate or renumber its unmerged addition, then rerun verification and review. Preserve deployed migration history.
+Both schema PRs were prepared with migration 0051. Main has since integrated 0051_post_likes_comments from another PR. Both pending additions must now be regenerated or renumbered after current-main integration, using distinct later numbers, then reverified and reviewed. Preserve deployed migration history.
 
 Firebase/APNs setup guidance is informational. Supplying instructions is not authorization for the agent to perform provisioning or live tests. Keep push delivery disabled until the notification consent/dispatch/client prerequisites and separate live-operation approvals are ready.
