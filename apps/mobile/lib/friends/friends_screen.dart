@@ -70,20 +70,28 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     icon: const Icon(Icons.arrow_back_rounded),
                   )
                 else
-                  const SizedBox(width: 48),
+                  const SizedBox(width: 4),
                 Expanded(
                   child: Text(
                     'friends',
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.left,
                     style: DayliText.serif(
                       context,
-                      fontSize: 36,
-                      weight: FontWeight.w600,
-                      tracking: DayliTracking.tighter,
+                      fontSize: 34,
+                      weight: FontWeight.w400,
+                      tracking: -0.06,
                     ),
                   ),
                 ),
-                const SizedBox(width: 48),
+                IconButton(
+                  onPressed: () => _showDiscovery(context, controller),
+                  style: IconButton.styleFrom(
+                    backgroundColor: DayliColors.of(context).foregroundAccent,
+                    foregroundColor: DayliColors.of(context).background,
+                    shape: const CircleBorder(),
+                  ),
+                  icon: const Icon(Icons.add_rounded),
+                ),
               ],
             ),
             const SizedBox(height: 28),
@@ -163,28 +171,35 @@ class _FolderTabs extends StatelessWidget {
   final ValueChanged<_FriendsFolder> onChanged;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: Row(
-      children: [
-        Expanded(
-          child: _FolderTab(
-            label: 'Friends',
-            selected: selected == _FriendsFolder.friends,
-            onTap: () => onChanged(_FriendsFolder.friends),
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.backgroundAccent,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _FolderTab(
+              label: 'Friends',
+              selected: selected == _FriendsFolder.friends,
+              onTap: () => onChanged(_FriendsFolder.friends),
+            ),
           ),
-        ),
-        Expanded(
-          child: _FolderTab(
-            label: 'Requests',
-            count: incomingCount,
-            selected: selected == _FriendsFolder.requests,
-            onTap: () => onChanged(_FriendsFolder.requests),
+          Expanded(
+            child: _FolderTab(
+              label: 'Requests',
+              count: incomingCount,
+              selected: selected == _FriendsFolder.requests,
+              onTap: () => onChanged(_FriendsFolder.requests),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _FolderTab extends StatelessWidget {
@@ -210,16 +225,13 @@ class _FolderTab extends StatelessWidget {
       child: InkWell(
         key: Key('friends.tab.${label.toLowerCase()}'),
         onTap: onTap,
+        borderRadius: BorderRadius.circular(26),
         child: Container(
-          height: 50,
+          height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? colors.accent : colors.foreground,
-                width: selected ? 4 : 2,
-              ),
-            ),
+            color: selected ? colors.foregroundAccent : Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
           ),
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -230,24 +242,24 @@ class _FolderTab extends StatelessWidget {
                   label,
                   style: DayliText.sans(
                     context,
-                    size: DayliTextSize.xl,
+                    size: DayliTextSize.base,
                     weight: FontWeight.w500,
                     color: selected
-                        ? colors.foreground
+                        ? colors.background
                         : colors.foregroundSecondary,
                   ),
                 ),
                 if (count > 0) ...[
-                  const SizedBox(width: 7),
+                  const SizedBox(width: 6),
                   Container(
-                    constraints: const BoxConstraints(minWidth: 20),
+                    constraints: const BoxConstraints(minWidth: 18),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: colors.foregroundAccent,
-                      borderRadius: BorderRadius.circular(12),
+                      color: selected ? colors.background : colors.foregroundAccent,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       '$count',
@@ -256,7 +268,7 @@ class _FolderTab extends StatelessWidget {
                         context,
                         size: DayliTextSize.xs,
                         weight: FontWeight.w600,
-                        color: Colors.white,
+                        color: selected ? colors.foregroundAccent : Colors.white,
                       ),
                     ),
                   ),
