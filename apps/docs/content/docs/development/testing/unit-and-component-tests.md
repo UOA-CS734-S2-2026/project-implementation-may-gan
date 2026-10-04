@@ -17,7 +17,7 @@ Keep the code you're checking real. Replace dependencies outside that check, suc
 
 ## Where Dayli uses these tests
 
-We use unit tests for rules that need to stay correct regardless of which app calls them. That includes working out the Auckland posting day in `packages/domain/src/auckland-day.test.ts` and rejecting a second daily post in `apps/api/src/features/posts/create-post/create-post.service.test.ts`.
+We use unit tests for rules that need to stay correct regardless of which app calls them. That includes working out the Auckland posting day in `packages/domain/src/auckland-day.test.ts` and rejecting a second daily post in `apps/api/src/features/posts/create-post/__tests__/create-post.service.test.ts`.
 
 We use component tests where the result depends on what someone sees or does on a screen. Username search is covered in `apps/web/components/ui/layout/NavSearch.test.tsx`. The mobile feed is covered in `apps/mobile/test/home_feed_test.dart`, including showing posts and loading another page.
 
@@ -44,7 +44,7 @@ These commands run from the repository root. They avoid relying on argument forw
 node --import tsx --test packages/domain/src/auckland-day.test.ts
 
 # API service behavior with the API Vitest configuration
-pnpm --filter @dayli/api exec vitest run src/features/posts/create-post/create-post.service.test.ts
+pnpm --filter @dayli/api exec vitest run src/features/posts/create-post/__tests__/create-post.service.test.ts
 
 # React component behavior with the web Vitest configuration
 pnpm --filter @dayli/web exec vitest run --config vitest.config.ts components/ui/layout/NavSearch.test.tsx
@@ -93,7 +93,7 @@ A disabled Post button isn't enough to enforce one post a day. Someone could sub
 
 First, we can check the posting service's decision without involving a real database. The test accepts one post, tries another for the same author and day, and expects a rejection with only one post stored. It uses an in-memory store, a fixed clock, and predictable IDs so the situation is repeatable.
 
-Dayli covers this in `apps/api/src/features/posts/create-post/create-post.service.test.ts`. The important part of the test is:
+Dayli covers this in `apps/api/src/features/posts/create-post/__tests__/create-post.service.test.ts`. The important part of the test is:
 
 ```ts
 await service.createDailyPost("author-1", "key-1", input);
@@ -124,9 +124,9 @@ expect(response.status).toBe(401);
 
 A mock saying that session lookup ran would be weaker. The status is what an API caller receives.
 
-Our target API convention is to put test suites in an `__tests__` directory under the code's owner. Messaging already follows it, while moving the remaining API tests is pending. Until that refactor updates the files and runner configurations, the commands and example paths on this page refer to the current locations.
+API test suites live in `__tests__` directories under their owners. Standalone runtime tests live in `apps/api/test/__tests__`. The refactor is merged into `main`, so update an older checkout before running the focused commands above.
 
-For the full target layout, see [Backend architecture](../backend-architecture). Shared test helpers stay in `apps/api/test/support`, and architecture fixtures stay in `apps/api/test/boundaries`; they are not test suites. Web, mobile, and shared-package layouts are unchanged.
+For the full layout, see [Backend architecture](../backend-architecture). Shared test helpers stay in `apps/api/test/support`, and architecture fixtures stay in `apps/api/test/boundaries`; they are not test suites. Web, mobile, and shared-package layouts are unchanged.
 
 Use `.repository.integration.test.ts` for a test that requires PostgreSQL, and do not disguise one as a unit test by connecting to a developer database.
 

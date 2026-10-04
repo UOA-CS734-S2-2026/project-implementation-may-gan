@@ -63,8 +63,8 @@ The branding comes from WDCC: its colour tokens, Spectral headings with Epilogue
 Only the data layer is missing features:
 
 - Feed cards show the first photo, or a still tile for a video. The post screen shows every photo and plays a video muted and looping (#24). Likes and comments arrive with #79/#80.
-- My days is your own profile: every dayli you have posted, labelled when it is solo or not released yet. See [profile archive](../../docs/dayli/profile-archive.md).
-- Edit profile (from my days or Settings) changes the public name, bio, username, and privacy. See [profiles](../../docs/dayli/profiles.md).
+- My days is your own profile: every dayli you have posted, labelled when it is solo or not released yet. See [reflection and history](../docs/content/docs/systems/reflection-and-history/index.mdx#the-profile-archive).
+- Edit profile (from my days or Settings) changes the public name, bio, username, and privacy. See [profiles and discovery](../docs/content/docs/systems/friends-and-feed-visibility/profiles-and-discovery.mdx).
 - Media is optional, unlike WDCC, so a denied photo permission never blocks a text-only post. Chosen media is compressed and uploaded in the background (#22), and the post links the validated uploads. Feed cards and post detail can't show it until downloads are authorised (#24). Photos are not cropped.
 
 ## Structure
@@ -73,8 +73,8 @@ Only the data layer is missing features:
 - `lib/ui/`, `lib/shell/`, `lib/landing/`, `lib/home/`, `lib/profile/`, `lib/settings/`: the screens and shared components.
 - `lib/auth/`: the native Better Auth session and `SessionController`. Signing out removes the user's unsent draft from the device.
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
-- `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily post creation](../../docs/dayli/daily-posts.md) for how each server response is handled.
-- `lib/compose/media_compressor.dart`, `media_upload_controller.dart`, and `lib/api/media_upload_client.dart`: compress, reserve, upload, and complete each attachment (#22). See [the Flutter client flow](../../docs/dayli/media-reservations.md#flutter-client).
+- `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily posts and release timing](../docs/content/docs/systems/daily-posts-and-release-timing/index.mdx) for how acceptance and retries work.
+- `lib/compose/media_compressor.dart`, `media_upload_controller.dart`, and `lib/api/media_upload_client.dart`: compress, reserve, upload, and complete each attachment (#22). See [media uploads and storage](../docs/content/docs/systems/media-uploads-and-storage/index.mdx#what-the-clients-do-today).
 - `lib/posts/post_submitter.dart`: `GeneratedPostSubmitter` sends the draft through the generated Dart client with its stored idempotency key and the bearer session. It maps each `409` reason, `401`, `422`, outages, and lost connections to results the composer handles.
 
 iOS keeps Keychain entries after an app is deleted. On the first launch of a new installation, `clearProtectedStorageAfterReinstall` wipes the previous installation's session and drafts. A draft that can no longer be decrypted, for example after the platform key is invalidated, is removed and the author is told.

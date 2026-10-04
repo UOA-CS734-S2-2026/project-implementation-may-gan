@@ -90,9 +90,9 @@ function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
 /**
  * Build a short-lived, single-object, single-method presigned PUT URL against R2's
  * S3-compatible API. Signs content-type/content-length so R2 rejects any upload that
- * does not exactly match what was declared at reservation time (docs/dayli/
- * implementation-reference.md §6: "a signed PUT is not content validation" on its own,
- * this is what makes the declared quota actually enforceable at the storage layer).
+ * does not exactly match what was declared at reservation time. The media system
+ * guide explains why a signed PUT is not content validation on its own, while these
+ * signed headers make the declared quota enforceable at the storage layer.
  * Never exposes the underlying R2 credentials to the caller.
  *
  * Also signs `if-none-match: *`, R2's conditional-write header, so the object can
@@ -129,8 +129,8 @@ export async function createPresignedUploadUrl(
     // HTTP clients set/rewrite them, so they're normally untrustworthy to pin) —
     // allHeaders overrides that so the declared size/type are actually enforced by
     // R2 rejecting a mismatched PUT, not just advisory. Confirmed against staging R2
-    // on 2026-09-30: a mismatched content-length or content-type PUT gets 403
-    // (docs/dayli/media-reservations.md, "Staging verification").
+    // on 2026-09-30: a mismatched content-length or content-type PUT gets 403. The
+    // media setup and verification guide records the limits of that staging check.
     allHeaders: true,
     datetime: toAmzDatetime(input.now ?? new Date()),
   });
@@ -274,7 +274,7 @@ export type RangedReadResult =
 /**
  * A real, bounded GET against R2 using an HTTP Range request — callers must always
  * pass a bounded range, never read a whole object, to keep validation work cheap
- * and predictable (docs/dayli/implementation-reference.md's "safe processing limits").
+ * and predictable, as required by the bounded media validation policy.
  */
 export async function readR2ObjectRange(
   configuration: R2RuntimeConfiguration,

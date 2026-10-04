@@ -48,7 +48,7 @@ PostgreSQL stores accounts, posts, relationships, messages, and media reservatio
 
 The API uses a restricted application database role. Migration tooling connects separately with the migrator role. Updating the schema is a different job from serving someone's feed.
 
-Images and videos live in private R2 storage, not inside PostgreSQL. The database tracks their ownership and associations. The API authorizes access before handing a client a short-lived signed URL.
+Images and videos live in private R2 storage, not inside PostgreSQL. The database tracks their ownership and associations. After authorizing the parent post, the API gives an owner or active friend a short-lived signed URL. Public-profile reads use a Dayli content route that checks the parent again on every request.
 
 ## Following a request
 
@@ -62,13 +62,13 @@ Daily posts use server-owned Auckland dates and release rules. Choosing a `frien
 
 Uploading an image does not mean sending the whole file through a normal post request. The client first asks the API for a media reservation. It then uploads directly to R2 using a signed URL and asks the API to verify the uploaded object.
 
-Only validated reservations can be attached to a post. Reading media follows the same idea in reverse: the API checks access to the post before issuing a signed download URL. Having an object key is not permission to view it.
+Only validated reservations can be attached to a post. Reading media follows the same idea in reverse: the API checks access to the post before issuing a signed download URL or streaming the object through a parent-authorized route. Having an object key is not permission to view it.
 
 ## Messaging and background work
 
 Messaging has REST routes, PostgreSQL records, and realtime delivery code. A per-user Durable Object manages hibernating WebSocket connections. Its notifications tell clients that something changed; clients fetch the authorized message state through REST rather than receiving message bodies over the socket.
 
-The messaging outbox records delivery work in PostgreSQL. Immediate dispatch handles normal updates, and scheduled retries repair failed delivery. FCM handles mobile push notifications.
+The messaging outbox records delivery work in PostgreSQL. Immediate dispatch handles normal updates, and scheduled retries repair failed delivery. When provider and device configuration is present, FCM handles mobile push notifications.
 
 Scheduled work also handles media cleanup. Data export is implemented but currently disabled.
 

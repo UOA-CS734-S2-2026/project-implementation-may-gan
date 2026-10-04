@@ -86,9 +86,9 @@ Start with the behavior, then follow its owner.
 | Change repository automation | `scripts/`, root configuration, or `.github/workflows` | The matching script or workflow contract tests |
 | Explain the project | `apps/docs/content/docs` | Existing pages, so the new explanation links rather than repeats |
 
-For API tests, our target convention is an `__tests__` directory under the owning action, shared module, or infrastructure directory. Messaging already uses this layout, but migrating the remaining API tests is pending. Shared helpers stay in `apps/api/test/support`, and architecture fixtures stay in `apps/api/test/boundaries`.
+API test suites use `__tests__` directories under their owners, with standalone runtime suites in `apps/api/test/__tests__`. The refactor is merged into `main`. Shared helpers stay in `apps/api/test/support`, and architecture fixtures stay in `apps/api/test/boundaries`.
 
-This is an API-specific convention. Web tests currently use both component folders and `apps/web/tests`; mobile uses `apps/mobile/test` and `apps/mobile/integration_test`. Shared-package tests keep their existing layout. See [Backend architecture](./backend-architecture) for the target API tree and [Testing](./testing) for current executable commands.
+This is an API-specific convention. Web tests currently use both component folders and `apps/web/tests`; mobile uses `apps/mobile/test` and `apps/mobile/integration_test`. Shared-package tests keep their existing layout. See [Backend architecture](./backend-architecture) for the API tree and [Testing](./testing) for current executable commands.
 
 ## Adding a feature without scattering it
 

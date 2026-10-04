@@ -83,6 +83,8 @@ Profile visibility controls what non-friends can read:
 
 `solo` and unreleased posts remain owner-only even when the profile is public.
 
+This table describes API policy. The current web profile route still uses signed-in username guards, and Flutter's profile client requires a bearer session. The API can return public-profile posts without a session, but the checked-in clients do not yet provide a complete anonymous browsing journey. Web also maps the API's generic restricted-profile archive response to an unavailable state instead of a dedicated private-profile view.
+
 ## The authoritative post predicate
 
 `buildDrizzlePostVisibilityFilter` in `apps/api/src/features/permissions/drizzle.ts` is the shared database predicate for post detail, profile archives, the feed, revisions, exports, and media. It checks the current post and account state rather than trusting an earlier page or revision.
@@ -148,15 +150,17 @@ The storage, refresh, and public streaming paths are covered in [Media uploads a
 
 Visibility is evaluated against the post's current audience. An author can change `friends` to `solo`, which removes the current post from other readers on their next request. Revisions keep older content, but a non-author can read only revisions that were themselves shared with friends. A solo-era version does not become visible merely because the current post later changes to `friends`.
 
-A post in Trash is excluded from feed, profile, detail, revision, and media predicates immediately. Account lifecycle has the same immediate read effect: once an account is no longer active, its profile, relationship discovery, lists, and normal posts are hidden. Physical account and media cleanup is a separate fenced process. Its destructive execution is disabled by default, so immediate concealment should not be confused with completed purge.
+A post in Trash is excluded from feed, profile, detail, revision, and media predicates immediately. Account lifecycle has the same immediate read effect: once an account is no longer active, its profile, relationship discovery, lists, and normal posts are hidden. Physical account and media cleanup is a separate fenced process. Its destructive execution is disabled by default, so immediate concealment should not be confused with completed purge. [Reflection and history](/docs/systems/reflection-and-history) explains the current archive and client flows, including the disabled Trash route.
 
 The authentication system supplies the verified actor for all signed-in reads and commands. Cookie and bearer handling are explained in [Accounts and authentication](/docs/systems/accounts-and-authentication). No endpoint accepts a viewer ID from a query or request body as proof of identity.
 
+## Profiles and discovery
+
+Profile detail has a wider job than the feed. It combines viewer-specific biography fields, activity summaries, username changes, profile photos, and a narrow username-search exception for finding private accounts. [Profiles and discovery](/docs/systems/friends-and-feed-visibility/profiles-and-discovery) covers those rules and the current client gaps.
+
 ## What changed from the older records
 
-Some earlier records in `docs/dayli/friends-feed.md`, `profile-archive.md`, and `profiles.md` describe profile posts as friend-only or refer to proposed shared links. The checked-in permission predicate and current product decision now allow anonymous and non-friend reads of released `friends` posts when the author's profile is public. There are no public share tokens.
-
-The current code is the source for this page. The older files remain useful history, but their friend-only public-profile wording should not be used to implement a new route.
+The first feed and profile records described profile posts as friend-only and referred to proposed shared links. The checked-in permission predicate and current product decision now allow anonymous and non-friend reads of released `friends` posts when the author's profile is public. There are no public share tokens.
 
 ## What the implementation taught us
 

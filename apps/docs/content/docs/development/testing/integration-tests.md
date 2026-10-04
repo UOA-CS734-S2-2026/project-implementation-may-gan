@@ -19,9 +19,9 @@ Dayli has database integration tests in both the database package and API featur
 
 - `packages/db/src/migrations.integration.test.ts` checks migrations, role permissions, transaction rollback, advisory locks, and prompt constraints.
 - `packages/db/src/relationships.integration.test.ts` checks relationship constraints and concurrent changes.
-- `apps/api/src/features/posts/create-post/create-post.repository.integration.test.ts` checks daily-post persistence through the PostgreSQL repository.
-- `apps/api/src/features/posts/create-post/create-post.advisory-lock.repository.integration.test.ts` checks that concurrent post transactions serialize on the author's advisory lock.
-- `apps/api/src/features/relationships/shared/relationships.repository.integration.test.ts` checks the relationship repository against real tables and constraints.
+- `apps/api/src/features/posts/create-post/__tests__/create-post.repository.integration.test.ts` checks daily-post persistence through the PostgreSQL repository.
+- `apps/api/src/features/posts/create-post/__tests__/create-post.advisory-lock.repository.integration.test.ts` checks that concurrent post transactions serialize on the author's advisory lock.
+- `apps/api/src/features/relationships/shared/__tests__/relationships.repository.integration.test.ts` checks the relationship repository against real tables and constraints.
 - Messaging repository tests use the same layer under `apps/api/src/features/messaging/**/__tests__/*.repository.integration.test.ts`.
 
 The runner that provisions their databases is `scripts/verify-postgres.sh`. The Compose service it owns is defined in `packages/db/docker-compose.yml`.

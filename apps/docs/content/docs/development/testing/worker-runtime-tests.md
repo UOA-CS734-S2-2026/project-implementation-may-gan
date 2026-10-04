@@ -17,8 +17,8 @@ Run commands on this page from the repository root.
 
 Dayli currently has three related local checks:
 
-- `apps/api/src/infrastructure/realtime/user-realtime.runtime.test.ts` exercises the `UserRealtime` Durable Object through its namespace binding.
-- `apps/api/test/browser-proxy.workerd.test.ts` sends requests through the web proxy fixture, the public API, and the named `BrowserProxyEntrypoint` service binding.
+- `apps/api/test/__tests__/user-realtime.runtime.test.ts` exercises the `UserRealtime` Durable Object through its namespace binding.
+- `apps/api/test/__tests__/browser-proxy.workerd.test.ts` sends requests through the web proxy fixture, the public API, and the named `BrowserProxyEntrypoint` service binding.
 - `scripts/proxy-provenance/workerd-smoke.mjs` starts local Miniflare workers to check the fixed-destination proxy diagnostic without exposing its token or observed source value.
 
 Their configurations live in `apps/api/vitest.realtime.config.ts`, `apps/api/vitest.proxy-integration.config.ts`, `apps/api/wrangler.proxy-integration.jsonc`, and `scripts/proxy-provenance/`. The shell entry point for the browser-proxy binding test is `scripts/test-browser-proxy-workerd.sh`.
@@ -60,7 +60,7 @@ The same file supplies verified metadata for other cases. It checks that an acti
 
 The web Worker forwards browser API requests to a named API entry point. Dayli must not accept the same internal context headers through the public API handler.
 
-`apps/api/test/browser-proxy.workerd.test.ts` sends a forged request directly to the public handler and expects `503`. It sends malformed context to the private entry point and expects `400`. A request through the web proxy fixture can reach the health route and receives `200` with `cache-control: no-store`.
+`apps/api/test/__tests__/browser-proxy.workerd.test.ts` sends a forged request directly to the public handler and expects `503`. It sends malformed context to the private entry point and expects `400`. A request through the web proxy fixture can reach the health route and receives `200` with `cache-control: no-store`.
 
 The fixture compiles the real proxy source from `apps/web/lib/api/server/browser-proxy.ts`. It does not copy the security rules into test-only code. A local adapter adds a documentation-range source address because Miniflare cannot create Cloudflare edge metadata itself, then removes that local-only test header before forwarding.
 

@@ -102,7 +102,7 @@ Acceptance stores `released_at` as the next Auckland midnight. Before then, only
 
 The friends feed does not show today's newly accepted post. It shows the Auckland date released at the most recent midnight. [Friends and feed visibility](/docs/systems/friends-and-feed-visibility) explains that read policy and the difference between feed, profile archive, and detail.
 
-An author may later edit the answer, caption, rating, or audience. The prompt, Auckland date, media, and tomorrow note do not change. A real change stores the previous version as an immutable revision in the same transaction. The request carries `expectedRevisionCount`, so a stale editor gets a conflict instead of overwriting another edit. Sending the already-saved values is a no-op, which also makes an edit retry safe.
+An author may later edit the answer, caption, rating, or audience. The prompt, Auckland date, media, and tomorrow note do not change. A real change stores the previous version as an immutable revision in the same transaction. The request carries `expectedRevisionCount`, so a stale editor gets a conflict instead of overwriting another edit. Sending the already-saved values is a no-op, which also makes an edit retry safe. [Reflection and history](/docs/systems/reflection-and-history) follows the archive, detail, revision, tomorrow-note, and Trash flows.
 
 Moving a post to Trash hides it from normal post, revision, and media reads immediately. Restore and cleanup code exists, but the owner Trash routes and destructive worker remain opt-in and disabled by default. This is different from ordinary editing and should not be presented as generally activated deployment behavior.
 

@@ -19,7 +19,7 @@ Dayli's deployed staging proof is split across a few sources:
 
 - `.github/workflows/staging-release.yml` is the coordinated staging release entry point. It captures one reviewed commit and deployment mode, deploys the API first, then deploys the web app at the same SHA.
 - `.github/workflows/staging-hyperdrive.yml` verifies the schema target, applies reviewed staging migrations when required, deploys the API Worker, and runs the remote Hyperdrive proof.
-- `apps/api/test/hyperdrive.staging.test.ts` checks a query, transactions, constraints, role permissions, fresh-invocation visibility, and cleanup through the deployed staging Worker binding.
+- `apps/api/test/__tests__/hyperdrive.staging.test.ts` checks a query, transactions, constraints, role permissions, fresh-invocation visibility, and cleanup through the deployed staging Worker binding.
 - `.github/workflows/staging-web.yml` builds and deploys the staging web application for the captured release.
 - `.github/workflows/staging-auth-smoke.yml` runs the deployed browser authentication journey described in [synthetic testing](./synthetic-testing).
 - `.github/workflows/run-database-migrations.yml` is a separate manual migration workflow with explicit target and production safeguards. It is not a general application release workflow.
@@ -43,7 +43,7 @@ The actual staging commands are intentionally inside GitHub Actions. Run them fr
 
 A staging release needs more than a successful deploy command. The API schema, Worker, and web app must agree on the release being checked.
 
-`Deploy coordinated staging release` captures the commit SHA, migration mode, browser-proxy mode, and trusted tooling SHA before it delegates to the API and web workflows. The API workflow verifies that the direct database target matches configured Hyperdrive, checks the captured schema, deploys the Worker, and then runs `apps/api/test/hyperdrive.staging.test.ts` with remote bindings.
+`Deploy coordinated staging release` captures the commit SHA, migration mode, browser-proxy mode, and trusted tooling SHA before it delegates to the API and web workflows. The API workflow verifies that the direct database target matches configured Hyperdrive, checks the captured schema, deploys the Worker, and then runs `apps/api/test/__tests__/hyperdrive.staging.test.ts` with remote bindings.
 
 The Hyperdrive test creates a unique group, verifies committed and rolled-back rows, checks PostgreSQL constraint classes, confirms the app role cannot perform forbidden updates or DDL, and checks cleanup from a fresh invocation. The workflow writes a sanitized JSON result and retains its artifact for 90 days. It does not retain database URLs or row values as evidence.
 

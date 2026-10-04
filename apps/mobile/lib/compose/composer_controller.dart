@@ -9,7 +9,7 @@ import '../drafts/daily_post_draft.dart';
 import '../drafts/draft_store.dart';
 import '../posts/post_submitter.dart';
 
-/// Limits mirror the server contract (docs/dayli/daily-posts.md). The API
+/// Limits mirror the server contract documented in the daily-posts system guide. The API
 /// remains authoritative.
 abstract final class DailyPostLimits {
   static const ratingMin = 1;
