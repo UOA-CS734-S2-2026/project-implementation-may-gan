@@ -40,7 +40,7 @@ const accountId = required("CLOUDFLARE_ACCOUNT_ID");
 const apiToken = required("CLOUDFLARE_API_TOKEN");
 const hyperdriveId = required("CLOUDFLARE_STAGING_HYPERDRIVE_ID");
 const hyperdriveName = required("STAGING_HYPERDRIVE_NAME");
-const exportWorkerHyperdriveId = process.env.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID;
+const exportWorkerHyperdriveId = required("CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID");
 const proofKeys = ["STAGING_EXPORT_PROOF_APPROVED", "STAGING_EXPORT_PROOF_USER_ID",
   "STAGING_EXPORT_PROOF_BUILD_UNTIL", "STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER"];
 const proofValues = proofKeys.map((key) => process.env[key]);
@@ -52,7 +52,9 @@ const exportProofVars = proofValues.every(Boolean)
 for (const key of ["STAGING_EXPORT_ALL_USERS_APPROVED", "STAGING_EXPORT_CLEANUP_ONLY_APPROVED"]) {
   if (process.env[key]) exportProofVars[key] = process.env[key];
 }
-if (exportWorkerHyperdriveId) await verifyStagingExportWorkerTarget({});
+// Trash cleanup shares the existing restricted lifecycle_worker binding. Its
+// target and role preflight is mandatory for every staging API deployment.
+await verifyStagingExportWorkerTarget({});
 if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");
 if (required("STAGING_API_SERVICE_NAME") !== expectedWorkerName) throw new Error("STAGING_API_SERVICE_NAME must be dayli-api-staging.");
 if (!hyperdriveNamePattern.test(hyperdriveName)) throw new Error("Refusing an invalid expected Hyperdrive name.");
@@ -65,9 +67,8 @@ const { apiOrigin, webOrigin } = validateStagingOrigins({
 const browserProxyEnabled = readStagingBrowserProxyMode(process.env.STAGING_BROWSER_PROXY_ENABLED);
 const authBindings = readStagingAuthBindings(process.env);
 const mediaBindings = readStagingMediaBindings(process.env, accountId);
-if (Object.keys(exportProofVars).length > 0 &&
-    (!mediaBindings.vars.R2_BUCKET_NAME || mediaBindings.requiredSecrets.length !== 2)) {
-  throw new Error("Staging export execution and cleanup require complete R2 bindings.");
+if (!mediaBindings.vars.R2_BUCKET_NAME || mediaBindings.requiredSecrets.length !== 2) {
+  throw new Error("Staging Trash cleanup requires complete R2 bindings and paired credential secrets.");
 }
 const requiredSecretNames = [...authBindings.requiredSecrets, ...mediaBindings.requiredSecrets];
 // Read every source secret before any Cloudflare mutation.
