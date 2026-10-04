@@ -119,6 +119,9 @@ export function Feed() {
             promptResponse={post.reflectiveAnswer}
             media={post.media[0] ?? null}
             createdAt={post.acceptedAt}
+            likeCount={post.likeCount}
+            viewerHasLiked={post.viewerHasLiked}
+            commentCount={post.commentCount}
           />
         ))}
       </div>

@@ -11,10 +11,10 @@ Dayli has separate controls for a post's audience and your profile details. It i
 
 The composer makes you choose an audience before posting:
 
-- **Friends:** The post is released after the next Auckland midnight. Active friends can read it. If your profile is public, anyone with the profile or post address can read it too.
+- **Friends:** The post is released after the next Auckland midnight. Active friends can read it. If your profile is public, anyone with the profile or post address can read it too. A signed-in account you have blocked cannot read it.
 - **Solo:** Only you can see the post.
 
-There is no default selection. The audience and profile visibility work together, so check both before posting.
+There is no default selection. The audience and profile visibility work together, so check both before posting. The friends feed remains limited to active friends; making your profile public does not put your posts in other people's feeds.
 
 Your own archive marks a Solo post **Only you**. It marks a Friends post **Not released yet** until release time.
 
@@ -34,6 +34,8 @@ Open **Settings** on the web. On mobile, tap the profile circle at the top and o
 - A public profile lets signed-in and signed-out readers see its public details and released Friends posts.
 
 This setting does not override a Solo audience or release a Friends post early. Public readers do not receive owner-only profile fields.
+
+Changing the setting also affects Friends posts you released earlier. Switching to public opens them to other readers. Switching back to private removes that access on subsequent requests.
 
 ![Dayli web Settings page showing the profile visibility control](/images/using-dayli/privacy-web-profile-visibility.webp)
 

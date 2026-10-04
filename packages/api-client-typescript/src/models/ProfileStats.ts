@@ -27,6 +27,10 @@ export interface ProfileStats {
      *
      */
     friends: number;
+    /**
+     * Likes on the person's posts that aren't in Trash.
+     */
+    loved: number;
 }
 
 /**
@@ -35,6 +39,7 @@ export interface ProfileStats {
 export function instanceOfProfileStats(value: object): value is ProfileStats {
     if (!('posts' in value) || value['posts'] === undefined) return false;
     if (!('friends' in value) || value['friends'] === undefined) return false;
+    if (!('loved' in value) || value['loved'] === undefined) return false;
     return true;
 }
 
@@ -50,6 +55,7 @@ export function ProfileStatsFromJSONTyped(json: any, ignoreDiscriminator: boolea
 
         'posts': json['posts'],
         'friends': json['friends'],
+        'loved': json['loved'],
     };
 }
 
@@ -66,5 +72,6 @@ export function ProfileStatsToJSONTyped(value?: ProfileStats | null, ignoreDiscr
 
         'posts': value['posts'],
         'friends': value['friends'],
+        'loved': value['loved'],
     };
 }

@@ -9,6 +9,7 @@ import 'api/feed_client.dart';
 import 'api/profile_client.dart';
 import 'api/post_client.dart';
 import 'api/friends_client.dart';
+import 'api/interactions_client.dart';
 import 'api/media_upload_client.dart';
 import 'api/posting_day_client.dart';
 import 'app/app.dart';
@@ -28,10 +29,8 @@ import 'notifications/firebase_push_source.dart';
 import 'notifications/push_registration_client.dart';
 import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
+import 'profile/streak_cache.dart';
 import 'settings/account_export_client.dart';
-
-// A separate release change must enable this after provider and privacy review.
-const nativeExportEnabled = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +62,7 @@ Future<void> main() async {
 
   final tokenStore = ProtectedSessionTokenStore(storage: secureStorage);
   final drafts = ProtectedDraftStore(storage: secureStorage);
+  final streakCache = ProtectedStreakCache(secureStorage);
   // Shared so sign-out deletes the compressed media the composer saved.
   final mediaCompressor = DeviceMediaCompressor();
   final pendingCaptures = PendingCaptures(
@@ -119,8 +119,10 @@ Future<void> main() async {
     onSignedIn: integrations.start,
     // Must run before Better Auth stores a replacement token. [clear] always
     // stops and clears messaging, then rethrows any unsafe push cleanup error.
-    onBeforeSessionReplacement: integrations.clear,
-    onPrivateDataClear: integrations.clear,
+    onBeforeSessionReplacement: () =>
+        _clearEach([streakCache.clear, integrations.clear]),
+    onPrivateDataClear: () =>
+        _clearEach([streakCache.clear, integrations.clear]),
   );
 
   runApp(
@@ -147,10 +149,14 @@ Future<void> main() async {
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),
+        interactions: GeneratedInteractionsClient(
+          baseUrl: config.apiBaseUrl,
+          bearerToken: nativeSession.bearerToken,
+        ),
         drafts: drafts,
         messaging: messaging,
         notifications: notifications,
-        accountExports: nativeExportEnabled
+        accountExports: config.accountExportEnabled
             ? HttpAccountExportClient(
                 baseUrl: config.apiBaseUrl,
                 bearerToken: nativeSession.bearerToken,
@@ -167,6 +173,7 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         mediaCompressor: mediaCompressor,
+        streakCache: streakCache,
         pendingCaptures: pendingCaptures,
         mediaUploads: GeneratedMediaUploadClient(
           baseUrl: config.apiBaseUrl,
@@ -175,4 +182,20 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+/// Runs every cleanup step even when an earlier one fails, then rethrows the
+/// first failure so the session doesn't treat private data as removed.
+Future<void> _clearEach(List<Future<void> Function()> steps) async {
+  (Object, StackTrace)? failure;
+  for (final step in steps) {
+    try {
+      await step();
+    } catch (error, stackTrace) {
+      failure ??= (error, stackTrace);
+    }
+  }
+  if (failure case (final error, final stackTrace)) {
+    Error.throwWithStackTrace(error, stackTrace);
+  }
 }

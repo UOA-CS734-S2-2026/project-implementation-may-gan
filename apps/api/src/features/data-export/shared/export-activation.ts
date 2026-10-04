@@ -1,7 +1,18 @@
 import type { ApiEnv } from "../../../env";
 
-// Production execution and normal web and native clients remain disabled.
+// Production execution remains disabled. Staging needs a separate worker binding
+// and an exact operator approval to admit requests from all staging accounts.
 export const exportExecutionEnabled = false;
+
+export function stagingExportAllUsersEnabled(env: Partial<ApiEnv>): boolean {
+  return env.API_RATE_LIMIT_SCOPE === "staging" && !!env.EXPORT_WORKER_HYPERDRIVE &&
+    env.STAGING_EXPORT_ALL_USERS_APPROVED === "all-staging-accounts";
+}
+
+export function stagingExportCleanupOnlyEnabled(env: Partial<ApiEnv>): boolean {
+  return env.API_RATE_LIMIT_SCOPE === "staging" && !!env.EXPORT_WORKER_HYPERDRIVE &&
+    env.STAGING_EXPORT_CLEANUP_ONLY_APPROVED === "continue-existing-cleanup";
+}
 
 const proofUserPattern = /^[A-Za-z0-9_-]{8,128}$/;
 const hour = 60 * 60_000;

@@ -86,6 +86,18 @@ export interface FeedPost {
      */
     edited: boolean;
     /**
+     *
+     */
+    likeCount: number;
+    /**
+     *
+     */
+    viewerHasLiked: boolean;
+    /**
+     * Comments and replies the caller can see, leaving out deleted ones and people across a block.
+     */
+    commentCount: number;
+    /**
      * Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
      */
     media: Array<PostMedia>;
@@ -118,6 +130,9 @@ export function instanceOfFeedPost(value: object): value is FeedPost {
     if (!('acceptedAt' in value) || value['acceptedAt'] === undefined) return false;
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
+    if (!('likeCount' in value) || value['likeCount'] === undefined) return false;
+    if (!('viewerHasLiked' in value) || value['viewerHasLiked'] === undefined) return false;
+    if (!('commentCount' in value) || value['commentCount'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     return true;
 }
@@ -143,6 +158,9 @@ export function FeedPostFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         'acceptedAt': (json['acceptedAt'] == null ? json['acceptedAt'] : parseDateTime(json['acceptedAt'])),
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'edited': json['edited'],
+        'likeCount': json['likeCount'],
+        'viewerHasLiked': json['viewerHasLiked'],
+        'commentCount': json['commentCount'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
     };
 }
@@ -169,6 +187,9 @@ export function FeedPostToJSONTyped(value?: FeedPost | null, ignoreDiscriminator
         'acceptedAt': value['acceptedAt'] == null ? value['acceptedAt'] : serializeDateTime(value['acceptedAt']),
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'edited': value['edited'],
+        'likeCount': value['likeCount'],
+        'viewerHasLiked': value['viewerHasLiked'],
+        'commentCount': value['commentCount'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
     };
 }

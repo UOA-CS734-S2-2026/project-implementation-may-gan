@@ -5,6 +5,7 @@ class AppConfig {
     this.googleWebClientId = '',
     this.googleIosClientId = '',
     this.firebaseConfigured = false,
+    this.stagingExportApproved = false,
   });
 
   /// The Hono API origin, for example `https://api.example.test`. See
@@ -19,7 +20,13 @@ class AppConfig {
   /// Set only in builds that include owner-provided Firebase platform files.
   final bool firebaseConfigured;
 
+  /// Explicit for staging tester builds. Production API origins cannot open it.
+  final bool stagingExportApproved;
+
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty;
+  bool get accountExportEnabled =>
+      stagingExportApproved &&
+      apiBaseUrl == 'https://api.staging.dayli.agroupforcoders.com';
 
   static AppConfig fromEnvironment() {
     const apiBaseUrl = String.fromEnvironment('DAYLI_API_BASE_URL');
@@ -33,6 +40,9 @@ class AppConfig {
       googleWebClientId: String.fromEnvironment('DAYLI_GOOGLE_WEB_CLIENT_ID'),
       googleIosClientId: String.fromEnvironment('DAYLI_GOOGLE_IOS_CLIENT_ID'),
       firebaseConfigured: bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED'),
+      stagingExportApproved: bool.fromEnvironment(
+        'DAYLI_STAGING_EXPORT_APPROVED',
+      ),
     );
   }
 }

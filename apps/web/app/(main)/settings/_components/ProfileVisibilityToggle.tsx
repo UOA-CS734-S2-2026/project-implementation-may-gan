@@ -17,8 +17,8 @@ export function ProfileVisibilityToggle({ visibility }: { visibility: ProfileVis
           <span className="text-sm font-medium">Private profile</span>
           <span className="text-xs text-foreground/60">
             {isPrivate
-              ? "Only your friends can see your bio and streak"
-              : "Anyone signed in can see your bio and streak"}
+              ? "Only friends can see your bio, streak, and released Friends posts"
+              : "Anyone, including signed-out visitors, can see your bio, streak, and released Friends posts"}
           </span>
         </div>
         <button
@@ -39,7 +39,7 @@ export function ProfileVisibilityToggle({ visibility }: { visibility: ProfileVis
           />
         </button>
       </div>
-      <p className="text-xs text-foreground/60">Your daylies are always shared with friends only.</p>
+      <p className="text-xs text-foreground/60">Solo and unreleased posts remain visible only to you.</p>
       {save.isError && save.error instanceof ProfileApiError && (
         <p role="alert" className="text-xs text-red-500">{profileSaveMessage(save.error.failure)}</p>
       )}

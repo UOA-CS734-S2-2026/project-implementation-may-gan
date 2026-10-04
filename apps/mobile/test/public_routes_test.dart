@@ -6,6 +6,7 @@ import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/public_return_intent.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -163,6 +164,63 @@ void main() {
     expect(find.text('Anonymous detail.'), findsOneWidget);
     expect(posts.requested, ['public-post', 'public-post']);
   });
+
+  testWidgets(
+    'a returned comment intent focuses the comment box and posts nothing',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final posts = FakePostClient([
+        for (var i = 0; i < 6; i++)
+          ApiSuccess(postDetail('public-post', answer: 'Anonymous detail.')),
+      ]);
+      final harness = TestHarness(posts: posts);
+      await tester.pumpWidget(
+        DayliApp(
+          services: harness.services,
+          useGoogleFonts: false,
+          initialLocation: '/posts/public-post',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Signed out: sign-in buttons, and no comment box to type in.
+      expect(find.byKey(const Key('post.like')), findsOneWidget);
+      expect(find.byKey(const Key('post.comment')), findsOneWidget);
+      expect(find.byKey(const Key('comments.input')), findsNothing);
+
+      await tester.ensureVisible(find.byKey(const Key('post.comment')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('post.comment')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('auth.email')),
+        'jos@example.test',
+      );
+      await tester.enterText(
+        find.byKey(const Key('auth.password')),
+        'correct-password',
+      );
+      await tester.tap(find.byKey(const Key('auth.submit')));
+      await tester.pumpAndSettle();
+
+      // Back on the post, signed in: the real comment box has the cursor, the
+      // sign-in buttons and the old placeholder are gone, and nothing was sent.
+      expect(find.text('Anonymous detail.'), findsOneWidget);
+      final input = tester.widget<TextField>(
+        find.byKey(const Key('comments.input')),
+      );
+      expect(input.focusNode?.hasFocus, isTrue);
+      expect(find.byKey(const Key('post.comment')), findsNothing);
+      expect(
+        find.textContaining('not available in this app version'),
+        findsNothing,
+      );
+      expect(harness.interactions.created, isEmpty);
+      expect(harness.interactions.likeRequests, isEmpty);
+    },
+  );
 
   testWidgets('expired bearer restoration retries a post anonymously', (
     tester,

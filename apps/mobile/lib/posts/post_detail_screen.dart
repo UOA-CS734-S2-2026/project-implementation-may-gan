@@ -13,6 +13,8 @@ import '../ui/surfaces.dart';
 import '../ui/voice_player.dart';
 
 import 'edit_post_screen.dart';
+import 'post_comments.dart';
+import 'post_likers_screen.dart';
 import 'post_revisions_screen.dart';
 import 'private_media.dart';
 
@@ -42,11 +44,30 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   (SessionStatus, String?, int)? _sessionIdentity;
   String? _loadedPostId;
   int _requestGeneration = 0;
-  String? _intentNotice;
 
-  /// True once the post was edited or deleted here. It is returned to the
-  /// list that opened the post, so that list can refresh.
+  /// The intent this visit came back with, once it has been consumed.
+  PublicActionIntent? _consumedIntent;
+
+  /// True once the post was edited, deleted, liked, unliked, or commented on
+  /// here. It is returned to the list that opened the post, so that list can
+  /// refresh its counts.
   bool _changed = false;
+
+  /// Changes on every load, so the comments reload with the post.
+  int _loads = 0;
+  bool _liking = false;
+
+  /// Changes whenever a like starts, so an older read of the post can't
+  /// overwrite a newer like.
+  int _likeVersion = 0;
+
+  /// Changes whenever the counts are read again, so only the newest read is
+  /// shown and an older answer can't overwrite a newer comment's count.
+  int _countsVersion = 0;
+
+  /// Changes whenever the screen is reset for another post or account, so a
+  /// like or count read started before then can't write into the new state.
+  int _interactionGeneration = 0;
 
   @override
   void didChangeDependencies() {
@@ -73,7 +94,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       _loadedPostId = widget.postId;
       _post = null;
       _result = null;
-      _intentNotice = null;
+      _liking = false;
+      _interactionGeneration++;
+      _consumedIntent =
+          widget.intent != null &&
+              _session?.status == SessionStatus.signedIn &&
+              widget.intentActorId == _session?.user?.id
+          ? widget.intent
+          : null;
       _load();
       if (mounted) setState(() {});
     }
@@ -126,6 +154,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     setState(() {
       _result = result;
+      _loads++;
       switch (result) {
         case ApiSuccess(:final value):
           _post = value;
@@ -136,6 +165,114 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           break;
       }
     });
+  }
+
+  /// Whether an interaction started for [postId] by [identity] in
+  /// [generation] still belongs to what the screen shows.
+  bool _isCurrentInteraction(
+    int generation,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      generation == _interactionGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
+  /// Shows the like at once, then keeps the server's count, or puts it back.
+  Future<void> _toggleLike(PostDetail post) async {
+    final liked = !post.viewerHasLiked;
+    final messenger = ScaffoldMessenger.of(context);
+    final generation = _interactionGeneration;
+    final identity = _currentSessionIdentity();
+    setState(() {
+      _liking = true;
+      _likeVersion++;
+      _post = post.copyWith(
+        likeCount: (post.likeCount + (liked ? 1 : -1)).clamp(0, 1 << 31),
+        viewerHasLiked: liked,
+      );
+    });
+    final result = await AppScope.of(
+      context,
+    ).interactions.setLike(post.id, liked: liked);
+    if (!_isCurrentInteraction(generation, post.id, identity)) return;
+    setState(() {
+      _liking = false;
+      final current = _post;
+      switch (result) {
+        case ApiSuccess(:final value):
+          _changed = true;
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: value.likeCount,
+              viewerHasLiked: value.viewerHasLiked,
+            );
+          }
+        case ApiError():
+          if (current != null) {
+            _post = current.copyWith(
+              likeCount: post.likeCount,
+              viewerHasLiked: post.viewerHasLiked,
+            );
+          }
+      }
+    });
+    if (result is ApiError) {
+      messenger.showSnackBar(
+        const SnackBar(
+          key: Key('post.likeFailed'),
+          content: Text("Your like couldn't be saved. Try again."),
+        ),
+      );
+    }
+  }
+
+  /// Reads the post's counts again after a comment changes, because only the
+  /// server counts comments on pages that aren't loaded. If the post is gone,
+  /// the screen says so instead of showing it from memory.
+  Future<void> _refreshCounts() async {
+    // A comment was added or deleted, so the list that opened the post is stale.
+    _changed = true;
+    final services = AppScope.of(context);
+    final likeVersion = _likeVersion;
+    final version = ++_countsVersion;
+    final generation = _interactionGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
+    // A newer read started after this one, so its answer, including a 404,
+    // is the one that counts.
+    if (!_isCurrentInteraction(generation, postId, identity) ||
+        version != _countsVersion) {
+      return;
+    }
+    switch (result) {
+      case ApiSuccess(:final value):
+        final post = _post;
+        if (post == null) return;
+        // A like saved or started after this read began is newer than it.
+        final likeIsCurrent = !_liking && likeVersion == _likeVersion;
+        setState(
+          () => _post = post.copyWith(
+            likeCount: likeIsCurrent ? value.likeCount : post.likeCount,
+            viewerHasLiked: likeIsCurrent
+                ? value.viewerHasLiked
+                : post.viewerHasLiked,
+            commentCount: value.commentCount,
+          ),
+        );
+      case ApiError(failure: NotFound()):
+        setState(() {
+          _result = result;
+          _post = null;
+        });
+      case ApiError(failure: Unauthenticated()):
+        await services.session.sessionExpired();
+      case ApiError():
+        // The count is refreshed again after the next change.
+        break;
+    }
   }
 
   Future<void> _edit(PostDetail post) async {
@@ -332,6 +469,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
 
     final stale = result is ApiError<PostDetail>;
+    final signedIn = _session?.status == SessionStatus.signedIn;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -520,71 +658,102 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
-              const SizedBox(height: 20),
-              if (widget.intent != null &&
-                  _session?.status == SessionStatus.signedIn &&
-                  widget.intentActorId == _session?.user?.id)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text(
-                    widget.intent == PublicActionIntent.like
-                        ? 'Your like intent was retained. Likes are not available in this app version yet.'
-                        : widget.intent == PublicActionIntent.comment
-                        ? 'Your comment intent was retained. Comments are not available in this app version yet.'
-                        : 'Continue from the author profile.',
-                    key: const Key('post.intent'),
-                  ),
-                ),
-              Row(
-                children: [
-                  Expanded(
-                    child: DayliButton(
+              if (signedIn) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    IconButton(
                       key: const Key('post.like'),
-                      label: 'like',
-                      color: ButtonColor.background,
-                      onPressed: () => _interaction(PublicActionIntent.like),
+                      tooltip: post.viewerHasLiked ? 'Unlike' : 'Like',
+                      isSelected: post.viewerHasLiked,
+                      onPressed: _liking || stale
+                          ? null
+                          : () => _toggleLike(post),
+                      icon: Icon(
+                        post.viewerHasLiked
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: colors.foregroundAccent,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: DayliButton(
-                      key: const Key('post.comment'),
-                      label: 'comment',
-                      color: ButtonColor.background,
-                      onPressed: () => _interaction(PublicActionIntent.comment),
+                    TextButton(
+                      key: const Key('post.likes'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.foregroundSecondary,
+                      ),
+                      onPressed: post.likeCount == 0
+                          ? null
+                          : () => Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PostLikersScreen(postId: post.id),
+                              ),
+                            ),
+                      child: Text(
+                        post.likeCount == 1
+                            ? '1 like'
+                            : '${post.likeCount} likes',
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              if (_intentNotice != null) ...[
-                const SizedBox(height: 10),
-                Text(
-                  _intentNotice!,
-                  key: const Key('post.interactionUnavailable'),
-                  style: muted,
+                    const Spacer(),
+                    Text(
+                      post.commentCount == 1
+                          ? '1 comment'
+                          : '${post.commentCount} comments',
+                      key: const Key('post.commentCount'),
+                      style: muted,
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DayliButton(
+                        key: const Key('post.like'),
+                        label: 'like',
+                        color: ButtonColor.background,
+                        onPressed: () => _interaction(PublicActionIntent.like),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DayliButton(
+                        key: const Key('post.comment'),
+                        label: 'comment',
+                        color: ButtonColor.background,
+                        onPressed: () =>
+                            _interaction(PublicActionIntent.comment),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        if (signedIn)
+          PostComments(
+            key: ValueKey('comments.$_loads'),
+            postId: post.id,
+            onChanged: _refreshCounts,
+            focusComposer: _consumedIntent == PublicActionIntent.comment,
+          ),
       ],
     );
   }
 
+  /// Signed-out visitors are sent to sign in and come back to this post. A
+  /// returned intent is never replayed: a comment intent puts the cursor in
+  /// the comment box, and a like intent just lands on the post.
   void _interaction(PublicActionIntent action) {
-    if (_session?.status != SessionStatus.signedIn) {
-      final intent = _session?.issuePublicReturnIntent(
-        '/posts/${widget.postId}',
-        action,
-      );
-      context.go(intent?.authLocation() ?? '/sign-in');
-      return;
-    }
-    setState(() {
-      _intentNotice = action == PublicActionIntent.like
-          ? 'Likes are not available in this app version yet.'
-          : 'Comments are not available in this app version yet.';
-    });
+    final intent = _session?.issuePublicReturnIntent(
+      '/posts/${widget.postId}',
+      action,
+    );
+    context.go(intent?.authLocation() ?? '/sign-in');
   }
 }
 

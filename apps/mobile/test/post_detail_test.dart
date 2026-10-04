@@ -503,9 +503,13 @@ void main() {
       final harness = harnessWith(
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
       );
+      var postChanges = 0;
+      harness.postActivity.addListener(() => postChanges++);
       await confirmDelete(tester, harness);
 
       expect(harness.posts.deleted, ['1']);
+      // Deleting may end a streak, so profiles reload it.
+      expect(postChanges, 1);
       expect(find.byKey(const Key('post.deleted')), findsOneWidget);
       expect(find.byKey(const Key('post.menu')), findsNothing);
       expect(find.byKey(const Key('home.feed.post.1')), findsOneWidget);
@@ -517,7 +521,10 @@ void main() {
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
       );
       harness.posts.deleteResult = const ApiError(ServiceUnavailable());
+      var postChanges = 0;
+      harness.postActivity.addListener(() => postChanges++);
       await confirmDelete(tester, harness);
+      expect(postChanges, 0);
 
       expect(find.byKey(const Key('post.deleteFailed')), findsOneWidget);
       expect(find.text('Walked to the harbour.'), findsOneWidget);

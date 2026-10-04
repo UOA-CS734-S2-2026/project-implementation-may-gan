@@ -58,12 +58,19 @@ export function validatePushReadiness(value) {
   return value;
 }
 
+export function captureExportApproval(value, expected) {
+  if (value === undefined || value === "") return "none";
+  if (value !== expected) fail("Staging export approval value is invalid.");
+  return value;
+}
+
 function git(args, { cwd, stdio = "pipe" } = {}) {
   const result = execFileSync("git", args, { cwd, encoding: "utf8", stdio });
   return typeof result === "string" ? result.trim() : "";
 }
 
-export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, pushReadiness, cwd = process.cwd() }) {
+export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, browserProxyEnabled, pushReadiness,
+  exportAllUsersApproved, exportCleanupOnlyApproved, cwd = process.cwd() }) {
   const mainSha = git(["rev-parse", "origin/main"], { cwd });
   const hasCommit = (sha) => {
     try {
@@ -90,11 +97,13 @@ export function captureRelease({ eventSha, inputSha, dispatchSha, toolingSha, br
     toolingSha,
     browserProxyEnabled: validateBrowserProxyMode(browserProxyEnabled),
     pushReadiness: validatePushReadiness(pushReadiness),
+    exportApproval: captureExportApproval(exportAllUsersApproved, "all-staging-accounts"),
+    exportCleanupOnly: captureExportApproval(exportCleanupOnlyApproved, "continue-existing-cleanup"),
   };
 }
 
-function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled, pushReadiness }, outputPath) {
-  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\npush_readiness=${pushReadiness}\n`;
+function writeOutputs({ commitSha, migrationMode, toolingSha, browserProxyEnabled, pushReadiness, exportApproval, exportCleanupOnly }, outputPath) {
+  const output = `commit_sha=${commitSha}\nmigration_mode=${migrationMode}\ntooling_sha=${toolingSha}\nbrowser_proxy_enabled=${browserProxyEnabled}\npush_readiness=${pushReadiness}\nexport_approval=${exportApproval}\nexport_cleanup_only=${exportCleanupOnly}\n`;
   if (outputPath) {
     appendFileSync(outputPath, output);
   } else {
@@ -110,6 +119,8 @@ function main() {
     toolingSha: process.env.TOOLING_SHA,
     browserProxyEnabled: process.env.STAGING_BROWSER_PROXY_ENABLED,
     pushReadiness: process.env.PUSH_READINESS,
+    exportAllUsersApproved: process.env.STAGING_EXPORT_ALL_USERS_APPROVED,
+    exportCleanupOnlyApproved: process.env.STAGING_EXPORT_CLEANUP_ONLY_APPROVED,
   });
   writeOutputs(release, process.env.GITHUB_OUTPUT);
 }

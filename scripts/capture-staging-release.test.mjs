@@ -4,7 +4,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { captureRelease, validateBrowserProxyMode, validatePushReadiness } from "./capture-staging-release.mjs";
+import { captureExportApproval, captureRelease, validateBrowserProxyMode, validatePushReadiness } from "./capture-staging-release.mjs";
+
+const noExport = { exportApproval: "none", exportCleanupOnly: "none" };
 
 function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -46,7 +48,7 @@ test("automatic staging releases accept only the current main commit", () => wit
     browserProxyEnabled: "false",
     pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false", ...noExport });
 
   assert.throws(() => captureRelease({
     eventSha: previousSha,
@@ -65,7 +67,7 @@ test("manual dispatch captures an explicit OAuth readiness request", () => withR
     browserProxyEnabled: "true",
     pushReadiness: "true",
     cwd: root,
-  }), { commitSha: previousSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "true", pushReadiness: "true" });
+  }), { commitSha: previousSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "true", pushReadiness: "true", ...noExport });
 
   assert.deepEqual(captureRelease({
     inputSha: currentSha,
@@ -74,7 +76,7 @@ test("manual dispatch captures an explicit OAuth readiness request", () => withR
     browserProxyEnabled: "false",
     pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
+  }), { commitSha: currentSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false", ...noExport });
 
   assert.deepEqual(captureRelease({
     dispatchSha: currentSha,
@@ -82,7 +84,7 @@ test("manual dispatch captures an explicit OAuth readiness request", () => withR
     browserProxyEnabled: "false",
     pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false", ...noExport });
 
   assert.throws(() => captureRelease({
     dispatchSha: previousSha,
@@ -101,6 +103,18 @@ test("captured browser proxy and push-readiness modes must be explicit booleans"
   assert.equal(validatePushReadiness("false"), "false");
   assert.throws(() => validatePushReadiness("enabled"), /must be true or false/);
 });
+
+test("captured staging export modes are explicit, validated, and immutable", () => withReleaseRepository(({ root, currentSha }) => {
+  assert.equal(captureExportApproval(undefined, "all-staging-accounts"), "none");
+  assert.throws(() => captureExportApproval("true", "all-staging-accounts"), /approval value is invalid/);
+  assert.deepEqual(captureRelease({ dispatchSha: currentSha, toolingSha: currentSha,
+    browserProxyEnabled: "true", pushReadiness: "false", exportAllUsersApproved: "all-staging-accounts",
+    exportCleanupOnlyApproved: "continue-existing-cleanup", cwd: root }), {
+    commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha,
+    browserProxyEnabled: "true", pushReadiness: "false", exportApproval: "all-staging-accounts",
+    exportCleanupOnly: "continue-existing-cleanup",
+  });
+}));
 
 test("release capture rejects an unpinned tooling revision", () => withReleaseRepository(({ root, currentSha }) => {
   assert.throws(() => captureRelease({
