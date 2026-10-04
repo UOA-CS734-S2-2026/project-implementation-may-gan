@@ -649,14 +649,37 @@ class GeneratedPostClient implements PostClient, PostTrashClient {
     final sent = await _send((api) => api.postsRestoreWithHttpInfo(postId));
     if (sent case ApiError(:final failure)) return ApiError(failure);
     final response = (sent as ApiSuccess<http.Response>).value;
+    if (response.statusCode == HttpStatus.conflict) {
+      String? reason;
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic> &&
+            body['error'] is Map<String, dynamic>) {
+          final error = body['error'] as Map<String, dynamic>;
+          if (error['details'] is Map<String, dynamic>) {
+            final details = error['details'] as Map<String, dynamic>;
+            reason = details['reason'] is String
+                ? details['reason'] as String
+                : null;
+          }
+        }
+      } on FormatException {
+        // Keep the generic conflict below.
+      }
+      final message = switch (reason) {
+        'day_occupied' =>
+          'This day already has a replacement, so the original cannot be restored.',
+        'expired' => 'The 7-day restore period has ended.',
+        'restricted' =>
+          'This post cannot be restored while the account lifecycle is restricted.',
+        _ =>
+          'Cleanup has already claimed this post. Refresh Trash and try again.',
+      };
+      return ApiError(Conflict(message, reason: reason));
+    }
     return switch (response.statusCode) {
       HttpStatus.ok => const ApiSuccess(null),
       HttpStatus.notFound => const ApiError(NotFound()),
-      HttpStatus.conflict => const ApiError(
-        Conflict(
-          'This day already has a replacement, so the original cannot be restored.',
-        ),
-      ),
       final status => ApiError(failureForStatus(status, null)),
     };
   }

@@ -23,7 +23,9 @@ export type ProfilePostsPage = {
 export type ReadableProfilePosts = ProfilePostsPage | { kind: "restricted"; username: string };
 
 export type PostFailure = "unauthenticated" | "notFound" | "conflict" | "invalid" | "network" | "unavailable";
+export type PostRestoreFailure = PostFailure | "expired" | "dayOccupied" | "restricted";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
+export type PostRestoreResult<T> = { ok: true; value: T } | { ok: false; failure: PostRestoreFailure };
 
 /** For a write, 422 is a field the server rejected rather than a bad ID. */
 async function toFailure(error: unknown, writes = false): Promise<PostFailure> {
@@ -96,13 +98,22 @@ export const postsApi = {
     }
   },
 
-  async restore(postId: string): Promise<PostResult<void>> {
+  async restore(postId: string): Promise<PostRestoreResult<void>> {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
       await new PostsApi(configuration).postsRestore({ postId });
       return { ok: true, value: undefined };
     } catch (error) {
+      if (error instanceof ResponseError && error.response.status === 409) {
+        try {
+          const body = await error.response.clone().json() as { error?: { details?: { reason?: unknown } } };
+          const reason = body.error?.details?.reason;
+          if (reason === "expired") return { ok: false, failure: "expired" };
+          if (reason === "day_occupied") return { ok: false, failure: "dayOccupied" };
+          if (reason === "restricted") return { ok: false, failure: "restricted" };
+        } catch { /* The generic sanitized conflict remains safe. */ }
+      }
       return { ok: false, failure: await toFailure(error, true) };
     }
   },

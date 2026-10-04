@@ -607,7 +607,9 @@ class TestHarness {
     FakeProfileClient? profiles,
     FakeInteractionsClient? interactions,
     this.google,
-  }) : friends = friends ?? FakeFriendsClient(),
+    DateTime Function()? clock,
+  }) : clock = clock ?? (() => DateTime.utc(2026, 9, 25, 3)),
+       friends = friends ?? FakeFriendsClient(),
        interactions = interactions ?? FakeInteractionsClient(),
        profiles = profiles ?? FakeProfileClient(),
        feed = feed ?? FakeFeedClient(),
@@ -795,6 +797,7 @@ class TestHarness {
   final AccountExportClient? accountExports;
   final NotificationConsentController? notificationConsent;
   final GoogleIdTokenProvider? google;
+  final DateTime Function() clock;
   int legalProofRequests = 0;
   List<String?>? signupProofHeaders;
   late final SessionController session;
@@ -830,7 +833,7 @@ class TestHarness {
     streakCache: streakCache,
     postActivity: postActivity,
     google: google,
-    clock: () => DateTime.utc(2026, 9, 25, 3),
+    clock: clock,
     biometric: biometric,
   );
 }

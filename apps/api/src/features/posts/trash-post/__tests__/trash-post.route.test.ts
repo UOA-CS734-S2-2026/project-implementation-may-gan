@@ -10,11 +10,15 @@ const status = {
 };
 const base = "https://api.example.test/api/v1/posts";
 
-function fixture(repositoryAvailable: boolean, resolveSession: PostTrashRouteDependencies["resolveSession"] = async () => actor) {
+function fixture(
+  repositoryAvailable: boolean,
+  resolveSession: PostTrashRouteDependencies["resolveSession"] = async () => actor,
+  transitionOutcome?: "invalid_session" | "expired" | "day_occupied" | "restricted" | "conflict",
+) {
   const list = vi.fn(async () => [status]);
   const transition = vi.fn(async (input: { action: "trash" | "restore" }) => ({
-    outcome: input.action === "trash" ? "trashed" as const : "restored" as const,
-    status: input.action === "trash" ? status : null,
+    outcome: transitionOutcome ?? (input.action === "trash" ? "trashed" as const : "restored" as const),
+    status: input.action === "trash" && !transitionOutcome ? status : null,
   }));
   const postTrash: PostTrashRouteDependencies = {
     resolveSession,
@@ -46,6 +50,21 @@ describe("Post Trash routes", () => {
     expect(transition).toHaveBeenCalledWith({ userId: actor.userId, sessionId: actor.sessionId,
       postId: "post-001", action: "trash" });
     expect((await app.request(new Request(`${base}/post-001/restore`, { method: "POST" }))).status).toBe(200);
+  });
+
+  it("maps a session revoked after middleware authentication to 401", async () => {
+    const revoked = fixture(true, async () => actor, "invalid_session");
+    expect((await revoked.app.request(new Request(`${base}/post-001/trash`, { method: "POST" }))).status).toBe(401);
+    expect((await revoked.app.request(new Request(`${base}/post-001/restore`, { method: "POST" }))).status).toBe(401);
+  });
+
+  it("preserves typed restore conflict reasons", async () => {
+    for (const reason of ["expired", "day_occupied", "restricted", "conflict"] as const) {
+      const rejected = fixture(true, async () => actor, reason);
+      const response = await rejected.app.request(new Request(`${base}/post-001/restore`, { method: "POST" }));
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ error: { details: { reason } } });
+    }
   });
 
   it("rejects an unresolved session and an actor without a live session ID", async () => {

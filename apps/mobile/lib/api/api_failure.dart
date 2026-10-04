@@ -33,9 +33,12 @@ class Expired extends ApiFailure {
 
 /// The request clashes with the current state, such as a taken username.
 class Conflict extends ApiFailure {
-  const Conflict(this.message, {this.availableAt});
+  const Conflict(this.message, {this.availableAt, this.reason});
 
   final String message;
+
+  /// A sanitized machine-readable conflict category returned by the API.
+  final String? reason;
 
   /// When the action becomes possible again, if the server said.
   final DateTime? availableAt;
