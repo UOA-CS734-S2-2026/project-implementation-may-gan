@@ -598,14 +598,23 @@ class _PostMedia extends StatelessWidget {
   Widget build(BuildContext context) {
     final first = post.media.first;
     if (first.isVideo) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: PrivateVideo(
-            postId: post.id,
-            media: first,
-            semanticLabel: "${post.displayName}'s video",
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: DayliColors.of(context).foreground.withOpacity(0.1),
+          ),
+          boxShadow: DayliShadows.md,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: PrivateVideo(
+              postId: post.id,
+              media: first,
+              semanticLabel: "${post.displayName}'s video",
+            ),
           ),
         ),
       );
@@ -614,16 +623,25 @@ class _PostMedia extends StatelessWidget {
       children: [
         for (final (index, media) in post.media.indexed) ...[
           if (index > 0) const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(14),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: PrivateImage(
-                key: Key('post.photo.$index'),
-                postId: post.id,
-                media: media,
-                semanticLabel:
-                    "${post.displayName}'s photo ${index + 1} of ${post.media.length}",
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: DayliColors.of(context).foreground.withOpacity(0.1),
+              ),
+              boxShadow: DayliShadows.md,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: PrivateImage(
+                  key: Key('post.photo.$index'),
+                  postId: post.id,
+                  media: media,
+                  semanticLabel:
+                      "${post.displayName}'s photo ${index + 1} of ${post.media.length}",
+                ),
               ),
             ),
           ),
