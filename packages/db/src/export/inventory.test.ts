@@ -1,4 +1,4 @@
-import { buildOwnedMediaObjectKey } from "@dayli/contracts";
+import { buildOwnedMediaObjectKey, exportSourceKinds } from "@dayli/contracts";
 import { describe, expect, it } from "vitest";
 import { currentExportJsonColumns, currentExportSchemaColumns, exportDataInventory, exportJsonKeyFamilies, exportObjectNamespaces, validateExportInventory, validateExportJsonFamilies } from "./inventory";
 
@@ -69,6 +69,21 @@ describe("explicit export data inventory", () => {
       .toEqual([expect.stringContaining("extra-key fixtures")]);
   });
 
+  it("maps every archive source kind to reviewed included tables", () => {
+    const sources = {
+      profile: ["user"], terms: ["terms_acceptances"], age: ["age_declarations"],
+      posts: ["posts"], post_media: ["post_media"], profile_avatars: ["profile_avatars"],
+      revisions: ["post_revisions"], notes: ["tomorrow_notes"], messages: ["messages"],
+    } as const;
+    expect(Object.keys(sources)).toEqual([...exportSourceKinds]);
+    for (const tables of Object.values(sources)) {
+      for (const table of tables) {
+        expect(exportDataInventory[table]!.included.length).toBeGreaterThan(0);
+        expect(exportDataInventory[table]!.access).not.toMatch(/^excluded_/);
+      }
+    }
+  });
+
   it("keeps authentication and push secrets out of the inventory", () => {
     for (const table of ["account", "session", "account_management_grants", "account_google_reauthentication_intents",
       "socket_tickets", "social_link_confirmation", "push_devices", "verification", "registration_intents"] as const) {
@@ -82,7 +97,7 @@ describe("explicit export data inventory", () => {
 
   it("keeps recipient and relationship data out of the inventory", () => {
     for (const table of ["conversation_changes", "conversation_members", "conversations", "messaging_participants",
-      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks"] as const) {
+      "message_reactions", "messaging_outbox", "friend_requests", "friendships", "relationship_blocks", "post_likes"] as const) {
       expect(exportDataInventory[table]!.included).toEqual([]);
       expect([...exportDataInventory[table]!.excluded].sort()).toEqual(baseline[table]);
     }
@@ -145,6 +160,15 @@ describe("explicit export data inventory", () => {
     expect(exportDataInventory.messages!.included).toContain("body");
     expect(exportDataInventory.messages!.excluded).toContain("reply_to_message_id");
     expect(exportDataInventory.messages!.retainedForOthers).toBe("retain_for_surviving_recipients");
+  });
+
+  it("records authored comments without reply pointers or moderators", () => {
+    expect(exportDataInventory.post_comments!.owner).toBe("author_id_and_current_readable_post");
+    expect(exportDataInventory.post_comments!.included).toContain("body");
+    for (const column of ["parent_comment_id", "client_comment_id", "deleted_by"]) {
+      expect(exportDataInventory.post_comments!.excluded).toContain(column);
+    }
+    expect(exportDataInventory.post_comments!.deletion).toBe("purge_with_post");
   });
 
   it("records media metadata while withholding raw object keys", () => {

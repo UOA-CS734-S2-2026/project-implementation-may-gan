@@ -31,7 +31,10 @@ describe("Neon role bootstrap scripts", () => {
     expect(migratorBootstrap).toContain("REVOKE ALL ON SCHEMA drizzle FROM PUBLIC, app");
     expect(migratorBootstrap).toContain("REVOKE DELETE ON TABLE public.\"user\" FROM app");
     expect(migratorBootstrap).toContain("REVOKE ALL ON TABLE public.%I FROM app, lifecycle_worker");
+    expect(migratorBootstrap).toContain("'data_export_requests'");
     expect(migratorBootstrap).toContain("'data_export_object_cleanup_tasks'");
+    expect(migratorBootstrap).toContain("'data_export_cleanup_incidents'");
+    expect(migratorBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE ON TABLE public.data_export_requests TO app");
   });
 
   it("provides a read-only verification script for the restricted roles", async () => {
@@ -43,6 +46,7 @@ describe("Neon role bootstrap scripts", () => {
     expect(verification).toContain("lifecycle_worker_public_usage");
     expect(verification).toContain("lifecycle_worker_cannot_use_drizzle");
     expect(verification).toContain("roles_have_no_memberships");
+    expect(verification).toContain("export_operations_private");
     const executableSql = verification
       .replace(/--.*$/gm, "")
       .replace(/'(?:''|[^'])*'/g, "");

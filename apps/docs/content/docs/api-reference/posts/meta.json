@@ -1,0 +1,10 @@
+{
+  "title": "Posts",
+  "pages": [
+    "posts.create",
+    "posts.listFeed",
+    "posts.get",
+    "posts.getMedia",
+    "posts.listProfilePosts"
+  ]
+}

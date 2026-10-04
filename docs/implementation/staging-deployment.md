@@ -45,7 +45,7 @@ Set these `staging` Environment variables:
 - `STAGING_BROWSER_PROXY_ENABLED`, `false` by default. Only `true` or `false` are accepted. Do not set `true` until the approved service-binding, source-IP, cookie, and OAuth proof is recorded.
 - `STAGING_GOOGLE_WEB_CLIENT_ID`, `STAGING_GOOGLE_IOS_CLIENT_ID`, and `STAGING_GOOGLE_ANDROID_CLIENT_ID` together, or leave all three blank
 - `STAGING_RESEND_FROM` only when Resend is enabled
-- `STAGING_R2_BUCKET_NAME` only when media uploads are enabled (see [media reservations](../dayli/media-reservations.md#one-time-cloudflare-setup)); the Worker's `R2_ACCOUNT_ID` is `CLOUDFLARE_ACCOUNT_ID`
+- `STAGING_R2_BUCKET_NAME` only when media uploads are enabled (see [media setup and verification](../../apps/docs/content/docs/systems/media-uploads-and-storage/setup-and-verification.mdx#cloudflare-setup)); the Worker's `R2_ACCOUNT_ID` is `CLOUDFLARE_ACCOUNT_ID`
 
 Set these `staging` Environment secrets:
 

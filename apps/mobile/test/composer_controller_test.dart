@@ -262,6 +262,25 @@ void main() {
     });
   }
 
+  test('starts a new submission when the posted dayli was deleted', () async {
+    submitter.result = const SubmissionRejected(SubmissionConflict.postTrashed);
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    final firstKey = composer.draft!.idempotencyKey;
+    await composer.submit();
+    await composer.close();
+
+    expect(composer.phase, ComposerPhase.editing);
+    expect(composer.message, contains('posted and then moved to Trash'));
+    expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+    expect(composer.draft!.idempotencyKey, isNot(firstKey));
+    expect(
+      drafts.drafts['user-1']!.idempotencyKey,
+      composer.draft!.idempotencyKey,
+    );
+  });
+
   test(
     'reloads the day when the draft is dated before the server day',
     () async {
@@ -513,6 +532,41 @@ void main() {
         composer.dispose();
       },
     );
+
+    test('uploads a voice memo again with its length and waveform', () async {
+      submitter.result = const SubmissionRejected(
+        SubmissionConflict.mediaUnavailable,
+      );
+      const memo = DraftAttachment(
+        localPath: '/support/dayli-media/user-user-1/memo.m4a',
+        mediaType: 'audio',
+        compressedPath: '/support/dayli-media/user-user-1/memo.m4a',
+        contentType: 'audio/mp4',
+        byteSize: 400000,
+        durationMs: 21000,
+        waveform: [10, 90, 200, 40],
+        reservationId: 'reservation-7',
+        status: AttachmentUploadStatus.validated,
+      );
+      final composer = await filledWithUpload();
+      composer.update(attachments: [composer.draft!.attachments.single, memo]);
+      await composer.submit();
+      await composer.close();
+
+      final again = composer.draft!.attachments.last;
+      expect(again.isVoiceMemo, isTrue);
+      expect(again.status, AttachmentUploadStatus.pending);
+      expect(again.reservationId, isNull);
+      expect(again.compressedPath, memo.compressedPath);
+      expect(again.byteSize, 400000);
+      expect(again.durationMs, 21000);
+      expect(again.waveform, [10, 90, 200, 40]);
+      // Saved too, so a restart still has the picture and the length.
+      final saved = drafts.drafts['user-1']!.attachments.last;
+      expect(saved.durationMs, 21000);
+      expect(saved.waveform, [10, 90, 200, 40]);
+      composer.dispose();
+    });
 
     test('uploads every attachment again from its compressed copy', () async {
       submitter.result = const SubmissionRejected(

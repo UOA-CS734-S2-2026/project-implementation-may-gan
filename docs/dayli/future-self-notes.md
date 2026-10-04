@@ -71,7 +71,7 @@ A job holding an expired lease is fenced: its late completion changes nothing.
 | `future_self_note_idempotency_keys` | Accepted create outcomes, keyed by owner and key. |
 | `future_self_note_deliveries` | The reminder and delivery record, unique per note and schedule version. Holds no note text. |
 
-Migration `0035_future_self_notes` is additive. The application role has table DML only, and `lifecycle_worker` has none. The note's account key is `NO ACTION`: account cleanup removes delivery and idempotency rows, then notes, then the account. A cleanup that skips a step fails on the foreign key instead of losing data silently. Post Trash cleanup never touches these tables, because a note belongs to its owner, not a post. The export inventory lists the tables, and withholds `body` until an export owner decides how an undelivered note may be exported.
+Migration `0053_future_self_notes` is additive. The application role has table DML only, and `lifecycle_worker` has none. The note's account key is `NO ACTION`: account cleanup removes delivery and idempotency rows, then notes, then the account. A cleanup that skips a step fails on the foreign key instead of losing data silently. Post Trash cleanup never touches these tables, because a note belongs to its owner, not a post. The export inventory lists the tables, and withholds `body` until an export owner decides how an undelivered note may be exported.
 
 ## Not built yet
 

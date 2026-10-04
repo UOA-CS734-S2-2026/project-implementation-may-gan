@@ -58,12 +58,14 @@ class DraftAttachment {
     this.reservationId,
     this.status = AttachmentUploadStatus.pending,
     this.failureReason,
+    this.durationMs,
+    this.waveform,
   });
 
   /// The file the author picked.
   final String localPath;
 
-  /// `image` or `video`.
+  /// `image`, `video` or `audio` (a voice memo).
   final String mediaType;
 
   /// The compressed copy in app support storage, which is what gets uploaded.
@@ -79,6 +81,18 @@ class DraftAttachment {
 
   /// The server's `failureReason` when [status] is `failed`.
   final String? failureReason;
+
+  /// How long a voice memo plays, in milliseconds. Voice memos only.
+  final int? durationMs;
+
+  /// The loudness of a voice memo over time, a few dozen values from 0 to 255,
+  /// to draw while the author listens back. Never uploaded. Voice memos only.
+  final List<int>? waveform;
+
+  bool get isVoiceMemo => mediaType == voiceMemoMediaType;
+
+  /// The [mediaType] of a recorded voice memo.
+  static const voiceMemoMediaType = 'audio';
 
   DraftAttachment copyWith({
     String? compressedPath,
@@ -96,12 +110,26 @@ class DraftAttachment {
     reservationId: reservationId == null ? this.reservationId : reservationId(),
     status: status ?? this.status,
     failureReason: failureReason == null ? this.failureReason : failureReason(),
+    durationMs: durationMs,
+    waveform: waveform,
+  );
+
+  /// The same attachment with the server's reservation and result forgotten, so
+  /// the upload starts again from the compressed copy. Everything else is kept,
+  /// including what is known only about a voice memo (its length and waveform),
+  /// because this copies the attachment and resets only the upload state.
+  DraftAttachment withoutReservation() => copyWith(
+    reservationId: () => null,
+    status: AttachmentUploadStatus.pending,
+    failureReason: () => null,
   );
 
   /// The same picked file with no upload state, to start over from
-  /// compression.
-  DraftAttachment restarted() =>
-      DraftAttachment(localPath: localPath, mediaType: mediaType);
+  /// compression. A recorded voice memo is never compressed, so it keeps what
+  /// the recorder wrote and only forgets the server's reservation.
+  DraftAttachment restarted() => isVoiceMemo
+      ? withoutReservation()
+      : DraftAttachment(localPath: localPath, mediaType: mediaType);
 
   /// Attachments compare by value: a draft reloaded from storage holds new
   /// instances of the same attachments.
@@ -115,7 +143,9 @@ class DraftAttachment {
       other.byteSize == byteSize &&
       other.reservationId == reservationId &&
       other.status == status &&
-      other.failureReason == failureReason;
+      other.failureReason == failureReason &&
+      other.durationMs == durationMs &&
+      _sameWaveform(other.waveform, waveform);
 
   @override
   int get hashCode => Object.hash(
@@ -127,7 +157,18 @@ class DraftAttachment {
     reservationId,
     status,
     failureReason,
+    durationMs,
+    waveform == null ? null : Object.hashAll(waveform!),
   );
+
+  static bool _sameWaveform(List<int>? a, List<int>? b) {
+    if (a == null || b == null) return a == b;
+    if (a.length != b.length) return false;
+    for (var index = 0; index < a.length; index++) {
+      if (a[index] != b[index]) return false;
+    }
+    return true;
+  }
 
   Map<String, Object?> toJson() => {
     'localPath': localPath,
@@ -138,6 +179,8 @@ class DraftAttachment {
     if (reservationId != null) 'reservationId': reservationId,
     if (status != AttachmentUploadStatus.pending) 'status': status.name,
     if (failureReason != null) 'failureReason': failureReason,
+    if (durationMs != null) 'durationMs': durationMs,
+    if (waveform != null) 'waveform': waveform,
   };
 
   /// Returns null without a usable path and media type. Malformed upload
@@ -153,6 +196,8 @@ class DraftAttachment {
     }
 
     final byteSize = json['byteSize'];
+    final durationMs = json['durationMs'];
+    final peaks = json['waveform'];
     final reservationId = text('reservationId');
     // Every status past pending refers to a reservation. Without one there is
     // nothing to resume or link, so upload again.
@@ -169,6 +214,13 @@ class DraftAttachment {
       status: status,
       failureReason: status == AttachmentUploadStatus.failed
           ? text('failureReason')
+          : null,
+      durationMs: durationMs is int && durationMs > 0 ? durationMs : null,
+      // Anything that isn't a list of 0-255 integers is dropped, which only
+      // costs the picture: the memo still plays.
+      waveform:
+          peaks is List && peaks.every((v) => v is int && v >= 0 && v <= 255)
+          ? List<int>.unmodifiable(peaks.cast<int>())
           : null,
     );
   }
@@ -221,6 +273,7 @@ class DailyPostDraft {
   DailyPostDraft copyWith({
     String? promptId,
     String? promptText,
+    String? idempotencyKey,
     DateTime? updatedAt,
     String? reflectiveAnswer,
     String? caption,
@@ -233,7 +286,7 @@ class DailyPostDraft {
     localDate: localDate,
     promptId: promptId ?? this.promptId,
     promptText: promptText ?? this.promptText,
-    idempotencyKey: idempotencyKey,
+    idempotencyKey: idempotencyKey ?? this.idempotencyKey,
     updatedAt: updatedAt ?? this.updatedAt,
     reflectiveAnswer: reflectiveAnswer ?? this.reflectiveAnswer,
     caption: caption ?? this.caption,

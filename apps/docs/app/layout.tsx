@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import './global.css';
 import { Inter } from 'next/font/google';
@@ -5,6 +6,12 @@ import { Inter } from 'next/font/google';
 const inter = Inter({
   subsets: ['latin'],
 });
+
+export const metadata: Metadata = {
+  metadataBase: new URL('https://dayli-docs.agroupforcoders.com'),
+  title: 'Dayli Docs',
+  description: 'Guides for using, building, operating, and reviewing Dayli.',
+};
 
 export default function Layout({ children }: LayoutProps<'/'>) {
   return (

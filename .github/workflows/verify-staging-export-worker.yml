@@ -1,0 +1,30 @@
+name: Verify staging export worker connection
+
+# Read-only preflight for the owner-provisioned restricted Hyperdrive config.
+# It does not bind a Worker, activate exports, or change a database.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check separate restricted, uncached staging database target
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/verify-staging-export-worker-target.mjs

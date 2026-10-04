@@ -1,0 +1,7 @@
+{
+  "title": "System",
+  "pages": [
+    "system.health",
+    "system.testContracts"
+  ]
+}

@@ -428,8 +428,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 foregroundColor: colors.foregroundAccent,
                 minimumSize: const Size(48, 48),
               ),
-              onPressed: () =>
-                  context.pushReplacement(_signUp ? '/sign-in' : '/sign-up'),
+              onPressed: () {
+                final intent = AppScope.of(context).session
+                    .resolvePublicReturnIntent(GoRouterState.of(context).uri);
+                final path = _signUp ? '/sign-in' : '/sign-up';
+                context.pushReplacement(
+                  intent == null ? path : intent.authLocation(path),
+                );
+              },
               child: Text(
                 _signUp ? 'Sign in' : 'Create an account',
                 style: DayliText.sans(

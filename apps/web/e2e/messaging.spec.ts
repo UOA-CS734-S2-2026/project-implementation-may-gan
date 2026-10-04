@@ -31,8 +31,13 @@ function messageBubble(page: Page, text: string) {
   return page.locator("article").filter({ has: page.getByText(text, { exact: true }) });
 }
 
-function messageContent(page: Page, text: string) {
-  return messageBubble(page, text).locator("[data-message-content]");
+async function settledMessageContent(page: Page, text: string) {
+  const bubble = messageBubble(page, text);
+  await expect(bubble).toHaveCount(1);
+  await expect(bubble).toHaveAttribute("data-testid", /^message-(?!pending:).+$/);
+  const content = bubble.locator("[data-message-content]");
+  await expect(content).toBeVisible();
+  return content;
 }
 
 async function openRecipientRequest(recipient: Page, sender: Account, firstMessage: string) {
@@ -89,12 +94,16 @@ test("two people exchange live messages and synchronize unread state", async ({ 
     // the message column. Together these fail if bubbles return to full width.
     const longMessage = `A deliberately long message ${sender.username} `.repeat(12);
     await sendWithEnter(page, longMessage);
-    const longBubble = messageBubble(page, longMessage);
-    await expect(longBubble).toBeVisible();
-    const [shortBubbleWidth, longBubbleWidth] = await Promise.all([firstMessage, longMessage].map((text) => messageContent(page, text).evaluate((element) => ({
+    const [shortBubble, longBubble] = await Promise.all([
+      settledMessageContent(page, firstMessage),
+      settledMessageContent(page, longMessage),
+    ]);
+    const measure = (element: HTMLElement) => ({
       bubble: element.getBoundingClientRect().width,
       messageColumn: element.closest("article")?.parentElement?.parentElement?.getBoundingClientRect().width ?? 0,
-    }))));
+    });
+    const shortBubbleWidth = await shortBubble.evaluate(measure);
+    const longBubbleWidth = await longBubble.evaluate(measure);
     expect(shortBubbleWidth.bubble).toBeLessThan(longBubbleWidth.bubble);
     expect(longBubbleWidth.bubble).toBeLessThanOrEqual(longBubbleWidth.messageColumn * 0.84 + 1);
 

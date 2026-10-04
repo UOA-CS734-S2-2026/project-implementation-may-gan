@@ -43,7 +43,7 @@ import {
 } from './Mbti';
 
 /**
- *
+ * The full profile projection returned only to the owner or an active friend.
  * @export
  * @interface ProfileDetails
  */
