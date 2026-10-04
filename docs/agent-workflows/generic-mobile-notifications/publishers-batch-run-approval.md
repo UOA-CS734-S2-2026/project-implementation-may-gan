@@ -30,6 +30,12 @@ Keep notification publishing and delivery disabled by default. No other tickets,
 
 Preserve the original dirty checkout, existing worktrees, deployed migration history, REST/realtime behaviour, messaging outbox semantics, quota locks and idempotency guarantees. New source intent and delivery work uses the shared notification storage and fenced dispatcher. Approved input meaning and original digest pins remain unchanged.
 
+## Immediate staging activation amendment
+
+The user requested "ACTIVATE IT" and then answered the staging-only activation question with "just do it now no ci or review or readiness pass we need it in less than 15". This replaces the user-imposed waiting gates for staging activation and authorizes enabling staging publishing and delivery now. Production remains excluded. Do not change protected Environments or fabricate verification. Deployment still uses the existing protected staging pipeline and its built-in controls.
+
+Expose explicit staging-only activation options while keeping unspecified configurations and other environments default-off. Set the two protected staging variables to true. Preserve user opt-in, schema-v1 device eligibility and runtime fail-closed credential handling. Do not retrieve, install or rotate credential values or encryption keys under this amendment. No physical-device receipt or latency result may be claimed. GitHub staging and repository secret-name listings did not expose an FCM source credential. Existing Cloudflare provider configuration remains unverified.
+
 ## Approved inputs
 
 | File | SHA-256 |

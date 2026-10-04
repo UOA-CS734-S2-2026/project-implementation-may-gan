@@ -28,6 +28,14 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.equal(JSON.parse(serializeWranglerConfig(api)).name, "dayli-api-staging");
 });
 
+test("activates staging notifications only through explicit options", () => {
+  const { api } = createStagingWorkerConfigs({ ...input, notificationPublishersEnabled: true, notificationDeliveryEnabled: true });
+  assert.equal(api.vars.NOTIFICATION_PUBLISHERS_ENABLED, "true");
+  assert.equal(api.vars.NOTIFICATION_DELIVERY_ENABLED, "true");
+  assert.equal(api.vars.DIRECT_MESSAGE_SEND_LIMIT, "30");
+  assert.throws(() => createStagingWorkerConfigs({ ...input, notificationDeliveryEnabled: "true" }));
+});
+
 test("selects direct or proxied Better Auth origin only through the validated staging mode", () => {
   assert.equal(readStagingBrowserProxyMode(undefined), false);
   assert.equal(readStagingBrowserProxyMode("false"), false);

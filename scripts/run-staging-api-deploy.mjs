@@ -106,6 +106,8 @@ const { api, probe } = createStagingWorkerConfigs({
   authVars: authBindings.vars,
   mediaVars: mediaBindings.vars,
   browserProxyEnabled,
+  notificationPublishersEnabled: process.env.STAGING_NOTIFICATION_PUBLISHERS_ENABLED === "true",
+  notificationDeliveryEnabled: process.env.STAGING_NOTIFICATION_DELIVERY_ENABLED === "true",
 });
 writeFileSync("apps/api/wrangler.staging.jsonc", serializeWranglerConfig(api));
 writeFileSync("apps/api/wrangler.hyperdrive-test.jsonc", serializeWranglerConfig(probe));
