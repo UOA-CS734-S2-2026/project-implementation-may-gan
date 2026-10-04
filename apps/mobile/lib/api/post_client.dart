@@ -385,8 +385,9 @@ class GeneratedPostClient implements PostClient {
 
     final http.Response response;
     try {
-      response = await generated.PostsApi(client)
-          .postsListProfilePostsWithHttpInfo(username, cursor: cursor);
+      response = await generated.PostsApi(
+        client,
+      ).postsListProfilePostsWithHttpInfo(username, cursor: cursor);
     } on generated.ApiException catch (error) {
       return ApiError(failureForStatus(error.code, error.innerException));
     } on IOException {
@@ -429,8 +430,9 @@ class GeneratedPostClient implements PostClient {
 
     final http.Response response;
     try {
-      response = await generated.PostsApi(client)
-          .postsGetMediaWithHttpInfo(postId, mediaId);
+      response = await generated.PostsApi(
+        client,
+      ).postsGetMediaWithHttpInfo(postId, mediaId);
     } on generated.ApiException catch (error) {
       return ApiError(failureForStatus(error.code, error.innerException));
     } on IOException {
@@ -472,8 +474,9 @@ class GeneratedPostClient implements PostClient {
 
     final http.Response response;
     try {
-      response = await generated.PostsApi(client)
-          .postsGetVoiceMemoWithHttpInfo(postId);
+      response = await generated.PostsApi(
+        client,
+      ).postsGetVoiceMemoWithHttpInfo(postId);
     } on generated.ApiException catch (error) {
       return ApiError(failureForStatus(error.code, error.innerException));
     } on IOException {

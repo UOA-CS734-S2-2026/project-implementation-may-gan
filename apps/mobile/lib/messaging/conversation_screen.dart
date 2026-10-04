@@ -34,11 +34,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Future<void> _markVisibleRead() async {
-    final messages = AppScope.of(context).messaging
-        .thread(widget.conversationId);
+    final messages = AppScope.of(
+      context,
+    ).messaging.thread(widget.conversationId);
     if (messages.isNotEmpty) {
-      await AppScope.of(context).messaging
-          .markRead(widget.conversationId, messages.last.sequence);
+      await AppScope.of(
+        context,
+      ).messaging.markRead(widget.conversationId, messages.last.sequence);
     }
   }
 
@@ -134,8 +136,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
         _composer.text = message.text ?? '';
       });
     } else if (action == 'unsend') {
-      await AppScope.of(context).messaging
-          .unsend(widget.conversationId, message);
+      await AppScope.of(
+        context,
+      ).messaging.unsend(widget.conversationId, message);
     } else if (action == 'react') {
       await _chooseReaction(message);
     }
@@ -172,11 +175,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         .where((item) => item.reactedByActor)
         .firstOrNull;
     if (current?.reaction == action) {
-      await AppScope.of(context).messaging
-          .removeReaction(widget.conversationId, message);
+      await AppScope.of(
+        context,
+      ).messaging.removeReaction(widget.conversationId, message);
     } else {
-      await AppScope.of(context).messaging
-          .setReaction(widget.conversationId, message, action);
+      await AppScope.of(
+        context,
+      ).messaging.setReaction(widget.conversationId, message, action);
     }
   }
 
@@ -365,16 +370,16 @@ class _RequestBanner extends StatelessWidget {
         ? [
             TextButton(
               key: const Key('messages.declineRequest'),
-              onPressed: () =>
-                  AppScope.of(context).messaging
-                      .resolveRequest(conversationId, 'decline'),
+              onPressed: () => AppScope.of(
+                context,
+              ).messaging.resolveRequest(conversationId, 'decline'),
               child: const Text('Decline'),
             ),
             FilledButton(
               key: const Key('messages.acceptRequest'),
-              onPressed: () =>
-                  AppScope.of(context).messaging
-                      .resolveRequest(conversationId, 'accept'),
+              onPressed: () => AppScope.of(
+                context,
+              ).messaging.resolveRequest(conversationId, 'accept'),
               child: const Text('Accept'),
             ),
           ]

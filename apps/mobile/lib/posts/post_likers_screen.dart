@@ -31,8 +31,9 @@ class _PostLikersScreenState extends State<PostLikersScreen> {
   }
 
   Future<void> _load({String? cursor}) async {
-    final result = await AppScope.of(context).interactions
-        .likes(widget.postId, cursor: cursor);
+    final result = await AppScope.of(
+      context,
+    ).interactions.likes(widget.postId, cursor: cursor);
     if (!mounted) return;
     setState(() {
       _loading = false;
