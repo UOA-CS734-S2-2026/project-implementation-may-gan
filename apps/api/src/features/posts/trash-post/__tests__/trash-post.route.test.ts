@@ -10,21 +10,22 @@ const status = {
 };
 const base = "https://api.example.test/api/v1/posts";
 
-function fixture(enabled: boolean, resolveSession: PostTrashRouteDependencies["resolveSession"] = async () => actor) {
+function fixture(repositoryAvailable: boolean, resolveSession: PostTrashRouteDependencies["resolveSession"] = async () => actor) {
   const list = vi.fn(async () => [status]);
   const transition = vi.fn(async (input: { action: "trash" | "restore" }) => ({
     outcome: input.action === "trash" ? "trashed" as const : "restored" as const,
     status: input.action === "trash" ? status : null,
   }));
   const postTrash: PostTrashRouteDependencies = {
-    enabled, resolveSession, repository: { list, transition },
+    resolveSession,
+    ...(repositoryAvailable ? { repository: { list, transition } } : {}),
     rateLimiter: { check: async () => "allowed" },
   };
   return { app: createApp({ postTrash }), list, transition };
 }
 
-describe("gated Post Trash routes", () => {
-  it("is unavailable without explicit activation and never calls the store", async () => {
+describe("Post Trash routes", () => {
+  it("is unavailable without a repository and never calls the store", async () => {
     const { app, list, transition } = fixture(false);
     expect((await app.request(new Request(`${base}/trash`))).status).toBe(503);
     expect((await app.request(new Request(`${base}/post-001/trash`, { method: "POST" }))).status).toBe(503);

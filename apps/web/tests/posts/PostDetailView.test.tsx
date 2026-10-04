@@ -199,10 +199,10 @@ describe("PostDetailView", () => {
       render(<PostDetailView username="ana_walks" postId="post-1" />);
 
       await actor.click(await screen.findByRole("button", { name: "Delete" }));
-      const dialog = screen.getByRole("alertdialog", { name: "Delete this dayli?" });
-      expect(dialog.textContent).toMatch(/can't post this day again/);
+      const dialog = screen.getByRole("alertdialog", { name: "Move this dayli to Trash?" });
+      expect(dialog.textContent).toMatch(/restore it for 7 days/);
       expect(remove).not.toHaveBeenCalled();
-      await actor.click(within(dialog).getByRole("button", { name: "Delete" }));
+      await actor.click(within(dialog).getByRole("button", { name: "Move to Trash" }));
 
       await waitFor(() => expect(replace).toHaveBeenCalledWith("/u/ana_walks"));
       expect(remove).toHaveBeenCalledWith("post-1");
@@ -217,12 +217,12 @@ describe("PostDetailView", () => {
 
       await actor.click(await screen.findByRole("button", { name: "Delete" }));
       const dialog = screen.getByRole("alertdialog");
-      await actor.click(within(dialog).getByRole("button", { name: "Delete" }));
+      await actor.click(within(dialog).getByRole("button", { name: "Move to Trash" }));
       await actor.click(dialog.parentElement!);
       expect(screen.getByRole("alertdialog")).toBeTruthy();
 
       answer({ ok: false, failure: "unavailable" });
-      expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be deleted/);
+      expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be moved to Trash/);
     });
 
     it("stays open with an error when deletion fails", async () => {
@@ -232,9 +232,9 @@ describe("PostDetailView", () => {
       render(<PostDetailView username="ana_walks" postId="post-1" />);
 
       await actor.click(await screen.findByRole("button", { name: "Delete" }));
-      await actor.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete" }));
+      await actor.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Move to Trash" }));
 
-      expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be deleted/);
+      expect((await within(screen.getByRole("alertdialog")).findByRole("alert")).textContent).toMatch(/couldn't be moved to Trash/);
       expect(replace).not.toHaveBeenCalled();
     });
   });
