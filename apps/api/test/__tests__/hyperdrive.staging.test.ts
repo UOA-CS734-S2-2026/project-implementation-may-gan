@@ -20,6 +20,15 @@ interface HyperdriveIntegrationService {
     rolledBackAbsent: boolean;
     cleanup: boolean;
   }>;
+  proveStagingRevision: () => Promise<{ revision: string; storageDigest: string }>;
+  provePostTrashWorkerFence: () => Promise<{
+    appRoleDenied: boolean;
+    lifecycleWorkerRole: boolean;
+    aggregateReadable: boolean;
+    due: number;
+    failed: number;
+    leased: number;
+  }>;
 }
 
 declare global {

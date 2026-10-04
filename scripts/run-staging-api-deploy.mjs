@@ -102,6 +102,7 @@ const { api, probe } = createStagingWorkerConfigs({
   hyperdriveId,
   exportWorkerHyperdriveId,
   exportProofVars,
+  releaseSha: required("STAGING_RELEASE_SHA"),
   authApiOrigin: apiOrigin,
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,

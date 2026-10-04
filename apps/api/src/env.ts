@@ -6,6 +6,8 @@ export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
   /** Restricted lifecycle_worker connection shared by export and Trash cleanup. Never reuse the ordinary app binding. */
   EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
+  /** Immutable release attribution. Staging deploy tooling accepts only an exact commit SHA. */
+  STAGING_RELEASE_SHA?: string;
   /** Staging-only synthetic export proof. Never set in production. */
   STAGING_EXPORT_ALL_USERS_APPROVED?: string;
   STAGING_EXPORT_CLEANUP_ONLY_APPROVED?: string;

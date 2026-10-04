@@ -157,6 +157,7 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_RELEASE_SHA: ${{ inputs.commit_sha }}
           CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID }}
           STAGING_EXPORT_ALL_USERS_APPROVED: ${{ inputs.export_approval == 'all-staging-accounts' && inputs.export_approval || '' }}
           STAGING_EXPORT_CLEANUP_ONLY_APPROVED: ${{ inputs.export_cleanup_only == 'continue-existing-cleanup' && inputs.export_cleanup_only || '' }}

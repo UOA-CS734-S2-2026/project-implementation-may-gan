@@ -1,0 +1,107 @@
+name: Prove staging Trash lifecycle
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact current main SHA already deployed to staging
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-database-state-staging
+  cancel-in-progress: false
+
+jobs:
+  prove:
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Require exact current main target
+        id: revision
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Target must be an exact commit SHA.' >&2; exit 1; }
+          CHECKED_OUT_SHA="$(git rev-parse HEAD)"
+          MAIN_SHA="$(git ls-remote origin refs/heads/main | cut -f1)"
+          [[ "$TARGET_SHA" == "$CHECKED_OUT_SHA" && "$TARGET_SHA" == "$MAIN_SHA" ]] || { echo 'Target is not current main.' >&2; exit 1; }
+          printf 'checked_out_sha=%s\nmain_sha=%s\n' "$CHECKED_OUT_SHA" "$MAIN_SHA" >> "$GITHUB_OUTPUT"
+      - name: Verify exact staging API origin routes to the attested service
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STAGING_API_SERVICE_NAME: ${{ vars.STAGING_API_SERVICE_NAME }}
+          STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+          STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+        run: node scripts/verify-staging-trash-proof-target.mjs
+      - name: Verify restricted uncached lifecycle worker target
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/verify-staging-export-worker-target.mjs
+      - name: Verify complete staging object storage metadata
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_R2_BUCKET_NAME: ${{ vars.STAGING_R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: node scripts/verify-staging-trash-proof-storage.mjs
+      - name: Configure private service-entrypoint attestation
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          STAGING_API_SERVICE_NAME: ${{ vars.STAGING_API_SERVICE_NAME }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_R2_BUCKET_NAME: ${{ vars.STAGING_R2_BUCKET_NAME }}
+        run: node scripts/create-staging-trash-proof-probe.mjs
+      - name: Attest deployed revision and aggregate role fence
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: pnpm --filter @dayli/api exec vitest run --config vitest.staging-trash-proof.config.ts
+      - name: Run accelerated synthetic proof through normal APIs and real scheduler
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          CHECKED_OUT_SHA: ${{ steps.revision.outputs.checked_out_sha }}
+          MAIN_SHA: ${{ steps.revision.outputs.main_sha }}
+          DEPLOYED_SHA: ${{ inputs.target_sha }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_AUTH_SITE_HOST: ${{ vars.STAGING_AUTH_SITE_HOST }}
+          STAGING_AUTH_API_ORIGIN: ${{ vars.STAGING_AUTH_API_ORIGIN }}
+          STAGING_AUTH_WEB_ORIGIN: ${{ vars.STAGING_AUTH_WEB_ORIGIN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          STAGING_R2_BUCKET_NAME: ${{ vars.STAGING_R2_BUCKET_NAME }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          EVIDENCE_PATH: ${{ runner.temp }}/staging-trash-proof/evidence.json
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: pnpm --dir packages/db exec tsx scripts/staging-trash-lifecycle-proof.ts
+      - name: Upload sanitized proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-trash-proof-${{ inputs.target_sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/staging-trash-proof/evidence.json
+          if-no-files-found: warn
+          retention-days: 90
