@@ -272,7 +272,7 @@ suite("send message Postgres repository", () => {
     `;
     expect(JSON.stringify(planRow?.["QUERY PLAN"])).toContain("messages_sender_created_at_idx");
 
-    await database.db.execute(sql`update messages set created_at = clock_timestamp() - interval '59.5 seconds' where sender_id = ${actorId}`);
+    await database.db.execute(sql`update messages set created_at = clock_timestamp() where sender_id = ${actorId}`);
     const holder = createDayliDatabase(connectionString!);
     let releaseSenderLock: (() => void) | undefined;
     const heldSenderLock = new Promise<void>((resolve) => { releaseSenderLock = resolve; });
@@ -282,14 +282,25 @@ suite("send message Postgres repository", () => {
     try {
       const blocker = holder.db.transaction(async (transaction) => {
         await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 734))`);
+        await transaction.execute(sql`
+          update messages set created_at = clock_timestamp() - interval '61 seconds'
+          where sender_id = ${actorId}
+        `);
         senderLockAcquired?.();
         await heldSenderLock;
       });
       await acquiredSenderLock;
       const delayedSend = primary.send.send(actorId, first.conversation.id, {
-        clientMessageId: crypto.randomUUID(), text: "sample time after sender lock wait",
+        clientMessageId: crypto.randomUUID(), text: "sample quota after sender lock wait",
       });
-      await new Promise((resolve) => setTimeout(resolve, 1_100));
+      await waitFor(async () => {
+        const [waiting] = await database.client`
+          select exists (
+            select 1 from pg_locks where locktype = 'advisory' and not granted
+          ) as found
+        `;
+        return waiting?.found === true;
+      }, "Expected send to wait for the sender advisory lock.");
       releaseSenderLock!();
       await blocker;
       await expect(delayedSend).resolves.toMatchObject({ replayed: false });
