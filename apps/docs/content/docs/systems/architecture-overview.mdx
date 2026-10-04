@@ -72,7 +72,7 @@ Messaging has REST routes, PostgreSQL records, and realtime delivery code. A per
 
 The messaging outbox records delivery work in PostgreSQL. Immediate dispatch handles normal updates, and scheduled retries repair failed delivery. When provider and device configuration is present, FCM handles mobile push notifications.
 
-Scheduled work also handles media cleanup. Data export code is implemented, but ordinary API and client activation remains disabled. Staging has a separate, time-bounded path for one synthetic owner when all reviewed proof settings and the restricted export Hyperdrive binding are present.
+Scheduled work also handles media cleanup. The restricted export Hyperdrive binding and explicit approval enable owner-scoped exports for all staging accounts, with an active staging web page and separate Android staging tester build. The earlier time-bounded single-owner proof is not the current staging mode. Separate production execution, ordinary mobile builds, public-registration approval, and destructive account cleanup remain disabled.
 
 ## Where to go next
 

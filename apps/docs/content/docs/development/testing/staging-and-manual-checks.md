@@ -50,11 +50,11 @@ The Hyperdrive test creates a unique group, verifies committed and rolled-back r
 
 The release workflow also retains a non-sensitive attribution artifact for one day. The authentication smoke can use it to report which release triggered the run. That attribution does not prove that the same revision was still deployed when a later browser check started, so the smoke reports the deployed revision as unverified.
 
-## Restricted export proof
+## Staging export proof and limits
 
-Export has a narrower staging path than ordinary feature checks. The coordinated API deployment accepts the proof only when all four reviewed `STAGING_EXPORT_PROOF_*` values and the separate `EXPORT_WORKER_HYPERDRIVE` binding are present. Runtime code then limits requests, build claims, downloads, and cleanup claims to one named synthetic owner. The build window can extend no more than one hour, while cleanup stays active through the later operator review so a delayed archive cannot be left behind.
+The coordinated API and web release captures the explicit `STAGING_EXPORT_ALL_USERS_APPROVED=all-staging-accounts` approval once. It requires the separate `EXPORT_WORKER_HYPERDRIVE` binding and complete R2 configuration. The staging API and web entry then admit all staging accounts. A separately built Android staging tester APK enables its export entry; ordinary installed builds and separate production execution remain disabled. The earlier four-variable `STAGING_EXPORT_PROOF_*` gate was a bounded single-owner proof, not the currently deployed all-account mode.
 
-This path is not enabled by the general export constant, and neither checked-in client enables its export interface. A successful target check, local export test, browser or emulator fixture journey, or synthetic staging proof establishes only the boundary it exercised. None of them proves self-service export is available to staging users or that production exists.
+The protected synthetic account completed a staging request, authenticated ZIP download, and a manual synthetic-only accelerated two-pass cleanup. See [issue #64](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/64#issuecomment-5977704005) for the sanitized record. Advancing database clocks does not prove a real 24-hour wait or late R2 completion. Nor does the one-account journey prove live isolation between two signed-in owners. To stop new staging requests, approve cleanup-only mode, remove the all-account approval, and run a new coordinated release. Do not stop cleanup for archives already accepted. Staging export activation does not authorize real-user registration or a separate production release.
 
 ## Manual feature checks
 

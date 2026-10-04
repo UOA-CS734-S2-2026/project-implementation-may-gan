@@ -127,9 +127,7 @@ Web and Flutter nevertheless show **Delete** on an author's post detail and call
 
 The checked-in export work has owner-scoped projections for active and still-restorable posts, revisions, private tomorrow notes, approved profile fields, and other reviewed account data. It also has a versioned ZIP builder and authenticated download checks.
 
-Normal API execution and both clients remain disabled for exports. Web passes `enabled={false}` to its export panel, Flutter sets `nativeExportEnabled` to `false`, and the server-wide `exportExecutionEnabled` constant is also `false`.
-
-There is one narrower exception for staging proof. If the reviewed staging variables, private R2 configuration, and separate `EXPORT_WORKER_HYPERDRIVE` binding are all present, the API admits one named synthetic owner for a time-bounded build. Scheduled cleanup remains enabled after the build window so delayed work can finish and an operator can review it at the configured checkpoint. This fence is evidence for the staged export machinery, not a public self-service release or production availability.
+The production `exportExecutionEnabled` constant remains `false`. The reviewed staging all-account approval and separate `EXPORT_WORKER_HYPERDRIVE` binding enable the staging API, its scheduled work, and the staging web `/account/export` page. The ordinary Flutter build is disabled; a separate Android staging tester APK includes the entry. The earlier time-bounded, one-owner synthetic proof gate is not the current staging mode. Rollback must stop new requests without stopping accepted-archive cleanup. No real-user registration or separate production rollout is approved by this staging export activation.
 
 An export is a private account archive with a per-source selection cutoff, not an atomic snapshot and not a replacement for profile history. It does not make tomorrow notes visible to friends or expose received private content.
 
@@ -146,7 +144,7 @@ The implemented reflection and history experience currently includes:
 - mood history for the owner and active friends;
 - owner-only On This Day and future-self note APIs, without client screens.
 
-It does not currently include reflection search, calendar browsing, recaps, a tomorrow-note reader, On This Day or future-self note screens, an enabled Trash and restore journey, or an enabled self-service export. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
+It does not currently include reflection search, calendar browsing, recaps, a tomorrow-note reader, On This Day or future-self note screens, or an enabled Trash and restore journey. The export is available separately on staging web and in the Android staging tester build, not in ordinary production clients. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
 
 ## Code and verification
 
@@ -154,4 +152,4 @@ Post history, detail, editing, revisions, mood history, On This Day, and Trash r
 
 Web history code is under `apps/web/features/posts` and the `/u` routes. Flutter uses `apps/mobile/lib/profile`, `friends`, `posts`, and `drafts`.
 
-Route and PostgreSQL integration tests cover archive paging, public and private profiles, stored prompts, ratings, edit conflicts, immutable revisions, solo-era privacy, block and friendship changes, interactions, and Trash concealment. Web and Flutter tests cover public route transitions, profile paging, detail refresh, media reads, edits, revision lists, and deletion failure states. These tests establish checked-in behavior against local fixtures. Separate emulator and browser records cover synthetic public and export journeys, but they do not activate Trash, exports for ordinary accounts, or tomorrow-note reading in a deployed environment.
+Route and PostgreSQL integration tests cover archive paging, public and private profiles, stored prompts, ratings, edit conflicts, immutable revisions, solo-era privacy, block and friendship changes, interactions, and Trash concealment. Web and Flutter tests cover public route transitions, profile paging, detail refresh, media reads, edits, revision lists, and deletion failure states. These tests establish checked-in behavior against local fixtures. Separate emulator and browser records cover synthetic public and export journeys. A protected synthetic staging account also completed a deployed request, ZIP download, and accelerated cleanup after all-account staging activation. These checks do not activate Trash or tomorrow-note reading or prove a real delayed cleanup pass.

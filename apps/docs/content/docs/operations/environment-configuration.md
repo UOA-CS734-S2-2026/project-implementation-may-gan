@@ -26,7 +26,7 @@ Values beginning with `NEXT_PUBLIC_` are public build inputs. They must never co
 
 ## GitHub `staging` environment variables
 
-The protected GitHub environment inventory contained these 12 ordinary variables. GitHub Actions reads them through the `vars` context. The current deployment code also recognizes four staging-only export proof variables described below; this page does not claim they are presently set.
+The initial protected GitHub environment inventory contained these 12 ordinary variables. This is a historical name-only snapshot, not the complete current configuration. GitHub Actions reads values through the `vars` context. The current export activation variables and the older synthetic-only proof gate are documented below.
 
 | Variable | Purpose and source | Consumer | Destination |
 | --- | --- | --- | --- |
@@ -45,9 +45,20 @@ The protected GitHub environment inventory contained these 12 ordinary variables
 
 Sources: `.github/workflows/staging-release.yml`, `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-web.yml`, `scripts/run-staging-api-deploy.mjs`, `scripts/staging-auth-bindings.mjs`, `scripts/staging-media-bindings.mjs`, and `scripts/staging-worker-config.mjs`.
 
-### Staging export proof variables recognized by the workflow
+### Current staging export activation and rollback variables
 
-These four values form one all-or-nothing gate. The deployment script rejects a partial set, any approval value other than `synthetic-only`, or a proof without the separate export Hyperdrive binding.
+The coordinated release captures these exact values once and passes the same mode to API and web. The generated API Worker receives them as plaintext configuration. The web build compiles `NEXT_PUBLIC_STAGING_EXPORT_APPROVED` only for all-account approval; cleanup-only leaves the web entry disabled. Both modes require the separate restricted export Hyperdrive and complete R2 bindings.
+
+| Variable | Consumer and runtime effect |
+| --- | --- |
+| `STAGING_EXPORT_ALL_USERS_APPROVED` | Exact value `all-staging-accounts`. The release, API config generator, and web build enable requests, worker builds, authenticated downloads, and the staging web entry for eligible staging accounts. This is the currently active staging mode, not permission to open registration to real users. |
+| `STAGING_EXPORT_CLEANUP_ONLY_APPROVED` | Exact value `continue-existing-cleanup`. The release and API config generator retain scheduled cleanup of accepted archives when new requests are stopped; the web build stays off if all-account approval is absent. This is not currently set. |
+
+The older proof variables below cannot be combined with either activation mode. The generator does not make all-account and cleanup-only values mutually exclusive: if both are present, all-account approval still admits new requests. For rollback, set cleanup-only, remove all-account approval, then deploy API and web together. Changing GitHub variables alone does not stop an in-flight release or rewrite deployed Workers.
+
+### Historical single-owner staging proof variables
+
+These four values form the older all-or-nothing gate. The deployment script rejects a partial set, any approval value other than `synthetic-only`, or a proof without the separate export Hyperdrive binding.
 
 | Variable | Runtime purpose |
 | --- | --- |
@@ -56,7 +67,7 @@ These four values form one all-or-nothing gate. The deployment script rejects a 
 | `STAGING_EXPORT_PROOF_BUILD_UNTIL` | Allows archive builds for at most one hour from the runtime check. |
 | `STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER` | Sets the operator review checkpoint at least 48 hours after the build window. Cleanup remains enabled so delayed provider work can finish. |
 
-These variables can make a reviewed staging proof possible. Their presence in workflow code is not evidence that a proof window is currently open or that an ordinary account can request an export.
+These proof variables alone permit only the named synthetic account, not an ordinary staging account. They are not the currently active all-account staging mode.
 
 ## GitHub `staging` environment secrets
 
@@ -76,7 +87,7 @@ The protected environment contained these 11 secret names. GitHub does not expos
 | `SMOKE_TEST_EMAIL` | Credentials for the staging-only browser smoke account. | `staging-auth-smoke.yml` | CI-only browser test input. |
 | `SMOKE_TEST_PASSWORD` | Password for the same staging-only smoke account. | `staging-auth-smoke.yml` | CI-only browser test input. |
 
-Sources: `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-auth-smoke.yml`, `.github/workflows/run-database-migrations.yml`, `.github/workflows/verify-staging-export-worker.yml`, `scripts/staging-secret-sync.mjs`, `scripts/run-staging-api-deploy.mjs`, and `scripts/staging-worker-config.mjs`. The target workflow verifies that the restricted, uncached Hyperdrive reaches the same database through the `lifecycle_worker` role. The staging deployment can now bind it to the API Worker, but export requests remain closed unless the complete synthetic proof gate is also valid.
+Sources: `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-auth-smoke.yml`, `.github/workflows/run-database-migrations.yml`, `.github/workflows/verify-staging-export-worker.yml`, `scripts/staging-secret-sync.mjs`, `scripts/run-staging-api-deploy.mjs`, and `scripts/staging-worker-config.mjs`. The target workflow verifies that the restricted, uncached Hyperdrive reaches the same database through the `lifecycle_worker` role. The staging deployment binds it to the API Worker. Export requests require either the complete older named-owner proof gate or the separately captured all-account staging approval; the latter is the currently active mode.
 
 ## Repository-level configuration
 
@@ -152,9 +163,9 @@ This Worker had no secrets. Its bindings were:
 | `IMAGES` | Images |
 | `WORKER_SELF_REFERENCE` | Service binding to `dayli-docs` |
 
-Only these three Workers were present in the recorded account listing. There was no standalone export Worker. Current code runs the narrowly gated export builder and cleanup from the API Worker's scheduled handler, so a fourth Worker is not a requirement. It does require the separate `EXPORT_WORKER_HYPERDRIVE` binding, private R2 configuration, and the complete synthetic proof gate. The recorded binding table above predates that projection and does not prove a current deployment either way.
+Only these three Workers were present in the recorded account listing. There is no standalone export Worker. The API Worker's scheduled handler runs the staging export builder and cleanup with a separate `EXPORT_WORKER_HYPERDRIVE` binding and private R2 configuration. The older binding table predates that deployment, so use the latest coordinated release evidence to check its actual bindings.
 
-Normal export execution is still a compile-time false constant. Web and Flutter also keep their export clients disabled. The staging gate admits only its named synthetic owner during the bounded build window, then retains cleanup for review. Do not describe that as self-service staging or production activation.
+Production export execution remains a compile-time false constant. The reviewed staging gate admits all staging accounts when `STAGING_EXPORT_ALL_USERS_APPROVED=all-staging-accounts` was captured for the coordinated API and web deployment. The staging web export page is active; the ordinary Flutter app remains off, but a separate staging Android tester APK has export enabled. The older named-owner synthetic proof gate is not the current all-account mode. Changing an approval variable alone cannot revoke an in-flight release. Roll back by approving cleanup-only mode, removing all-account approval, and deploying API and web together, while keeping cleanup running for accepted archives. This is not public-registration or separate production approval.
 
 ## How staging deployment moves configuration
 
@@ -176,7 +187,7 @@ Do not begin by editing a generated `wrangler.staging.jsonc` file. It is an outp
 2. Check the consumer and destination in the tables above. A CI-only secret must remain CI-only.
 3. Provision the smallest provider grant that works. R2 keys should be bucket-scoped. Deployment tokens should have only the control-plane permissions used by the workflows. Database roles must keep `migrator`, app, and restricted lifecycle work separate.
 4. Update the protected `staging` environment through the approved repository settings process. Do not paste values into an issue, terminal transcript, workflow output, or committed env file.
-5. Run the workflow that owns the setting. Runtime API and web changes go through the coordinated staging release. The smoke credentials belong to the authentication smoke workflow. The restricted export Hyperdrive has a read-only target workflow; only the coordinated API deployment can project its binding and any complete synthetic proof gate.
+5. Run the workflow that owns the setting. Runtime API and web changes go through the coordinated staging release. The smoke credentials belong to the authentication smoke workflow. The restricted export Hyperdrive has a read-only target workflow; only the coordinated API deployment can project its binding and the captured staging export mode.
 6. Verify names first, then run a focused service check. Name presence alone is not a health check.
 
 Provider tuples must remain complete. Google needs all three public client IDs and `GOOGLE_CLIENT_SECRET`. Resend needs `STAGING_RESEND_FROM` and `RESEND_API_KEY`. R2 needs the bucket name and both S3 credential parts. The deployment scripts reject incomplete pairs rather than deploying a partly configured API.
