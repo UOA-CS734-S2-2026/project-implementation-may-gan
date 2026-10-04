@@ -110,6 +110,8 @@ src/models/PostMediaContentType.ts
 src/models/PostRevision.ts
 src/models/PostRevisionsPage.ts
 src/models/PostVoiceMemo.ts
+src/models/PostWeather.ts
+src/models/PostWeatherCondition.ts
 src/models/PostingStreak.ts
 src/models/PostsListTrash200Response.ts
 src/models/PostsRestore200Response.ts

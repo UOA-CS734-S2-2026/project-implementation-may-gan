@@ -41,6 +41,13 @@ import {
     PostDetailAuthorToJSON,
     PostDetailAuthorToJSONTyped,
 } from './PostDetailAuthor';
+import type { PostWeather } from './PostWeather';
+import {
+    PostWeatherFromJSON,
+    PostWeatherFromJSONTyped,
+    PostWeatherToJSON,
+    PostWeatherToJSONTyped,
+} from './PostWeather';
 
 /**
  * One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection.
@@ -120,6 +127,10 @@ export interface PostDetail {
      * The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
      */
     voiceMemo: PostVoiceMemo | null;
+    /**
+     * The weather snapshot the author added, or null when the post has none. It is the author's own snapshot, not verified. Only post detail carries it; feeds and profile lists do not.
+     */
+    weather: PostWeather | null;
 }
 
 
@@ -155,6 +166,7 @@ export function instanceOfPostDetail(value: object): value is PostDetail {
     if (!('viewerIsAuthor' in value) || value['viewerIsAuthor'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
+    if (!('weather' in value) || value['weather'] === undefined) return false;
     return true;
 }
 
@@ -186,6 +198,7 @@ export function PostDetailFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'viewerIsAuthor': json['viewerIsAuthor'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
         'voiceMemo': PostVoiceMemoFromJSON(json['voiceMemo']),
+        'weather': PostWeatherFromJSON(json['weather']),
     };
 }
 
@@ -218,5 +231,6 @@ export function PostDetailToJSONTyped(value?: PostDetail | null, ignoreDiscrimin
         'viewerIsAuthor': value['viewerIsAuthor'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
         'voiceMemo': PostVoiceMemoToJSON(value['voiceMemo']),
+        'weather': PostWeatherToJSON(value['weather']),
     };
 }

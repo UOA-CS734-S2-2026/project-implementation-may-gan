@@ -21,6 +21,7 @@ class CreateDailyPostRequest {
     required this.audience,
     this.tomorrowNote,
     this.attachments = const [],
+    this.weather,
   });
 
   /// The Auckland day the draft was written for. It must still be the server's current day when the post is accepted.
@@ -57,6 +58,15 @@ class CreateDailyPostRequest {
   /// Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. Omit it or send an empty list for a text-only post.
   final List<String> attachments;
 
+  /// An optional weather snapshot from the author's phone. Omit it for a post without weather. The server checks its shape and ranges but cannot verify it. It cannot be added or changed after the post is created.
+  ///
+  /// Please note: This property should have been non-nullable! Since the specification file
+  /// does not include a default value (using the "default:" property), however, the generated
+  /// source code must fall back to having a nullable type.
+  /// Consider adding a "default:" property in the specification file to hide this note.
+  ///
+  final PostWeather? weather;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -68,7 +78,8 @@ class CreateDailyPostRequest {
           other.rating == rating &&
           other.audience == audience &&
           other.tomorrowNote == tomorrowNote &&
-          _deepEquality.equals(other.attachments, attachments);
+          _deepEquality.equals(other.attachments, attachments) &&
+          other.weather == weather;
 
   @override
   int get hashCode =>
@@ -80,11 +91,12 @@ class CreateDailyPostRequest {
       (rating.hashCode) +
       (audience.hashCode) +
       (tomorrowNote == null ? 0 : tomorrowNote!.hashCode) +
-      (attachments.hashCode);
+      (attachments.hashCode) +
+      (weather == null ? 0 : weather!.hashCode);
 
   @override
   String toString() =>
-      'CreateDailyPostRequest[localDate=$localDate, promptId=$promptId, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, tomorrowNote=$tomorrowNote, attachments=$attachments]';
+      'CreateDailyPostRequest[localDate=$localDate, promptId=$promptId, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, tomorrowNote=$tomorrowNote, attachments=$attachments, weather=$weather]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -104,6 +116,11 @@ class CreateDailyPostRequest {
       json[r'tomorrowNote'] = null;
     }
     json[r'attachments'] = this.attachments;
+    if (this.weather != null) {
+      json[r'weather'] = this.weather;
+    } else {
+      json[r'weather'] = null;
+    }
     return json;
   }
 
@@ -118,6 +135,7 @@ class CreateDailyPostRequest {
     PostAudience? audience,
     String? tomorrowNote,
     List<String>? attachments,
+    PostWeather? weather,
   }) =>
       CreateDailyPostRequest(
         localDate: localDate ?? this.localDate,
@@ -128,6 +146,7 @@ class CreateDailyPostRequest {
         audience: audience ?? this.audience,
         tomorrowNote: tomorrowNote ?? this.tomorrowNote,
         attachments: attachments ?? this.attachments,
+        weather: weather ?? this.weather,
       );
 
   /// Returns a new [CreateDailyPostRequest] instance and imports its values from
@@ -177,6 +196,7 @@ class CreateDailyPostRequest {
                 .cast<String>()
                 .toList(growable: false)
             : const [],
+        weather: PostWeather.fromJson(json[r'weather']),
       );
     }
     return null;

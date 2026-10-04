@@ -134,6 +134,8 @@ part 'model/post_media_content_type.dart';
 part 'model/post_revision.dart';
 part 'model/post_revisions_page.dart';
 part 'model/post_voice_memo.dart';
+part 'model/post_weather.dart';
+part 'model/post_weather_condition.dart';
 part 'model/posting_streak.dart';
 part 'model/posts_list_trash200_response.dart';
 part 'model/posts_restore200_response.dart';

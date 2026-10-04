@@ -93,6 +93,8 @@ export * from './PostMediaContentType';
 export * from './PostRevision';
 export * from './PostRevisionsPage';
 export * from './PostVoiceMemo';
+export * from './PostWeather';
+export * from './PostWeatherCondition';
 export * from './PostingStreak';
 export * from './PostsListTrash200Response';
 export * from './PostsRestore200Response';

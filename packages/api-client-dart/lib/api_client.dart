@@ -392,6 +392,10 @@ class ApiClient {
           return PostRevisionsPage.fromJson(value);
         case 'PostVoiceMemo':
           return PostVoiceMemo.fromJson(value);
+        case 'PostWeather':
+          return PostWeather.fromJson(value);
+        case 'PostWeatherCondition':
+          return PostWeatherConditionTypeTransformer().decode(value);
         case 'PostingStreak':
           return PostingStreak.fromJson(value);
         case 'PostsListTrash200Response':

@@ -91,6 +91,9 @@ String parameterToString(dynamic value) {
   if (value is PostMediaContentType) {
     return PostMediaContentTypeTypeTransformer().encode(value).toString();
   }
+  if (value is PostWeatherCondition) {
+    return PostWeatherConditionTypeTransformer().encode(value).toString();
+  }
   if (value is ProfileVisibility) {
     return ProfileVisibilityTypeTransformer().encode(value).toString();
   }
