@@ -25,6 +25,7 @@ import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/notifications/notification_consent.dart';
 import 'package:dayli_mobile/posts/post_activity.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:dayli_mobile/settings/account_deletion_client.dart';
 import 'package:dayli_mobile/settings/account_export_client.dart';
 import 'package:dayli_mobile/profile/streak_cache.dart';
 import 'package:flutter/services.dart';
@@ -605,6 +606,7 @@ class TestHarness {
     this.accountRestriction = 'active',
     this.acceptanceExpired = false,
     this.accountExports,
+    this.accountDeletion,
     this.notificationConsent,
     FakeProfileClient? profiles,
     FakeInteractionsClient? interactions,
@@ -815,6 +817,7 @@ class TestHarness {
   String accountRestriction;
   bool acceptanceExpired;
   final AccountExportClient? accountExports;
+  final AccountDeletionClient? accountDeletion;
   final NotificationConsentController? notificationConsent;
   final GoogleIdTokenProvider? google;
   final DateTime Function() clock;
@@ -825,6 +828,7 @@ class TestHarness {
   AppServices get services => AppServices(
     session: session,
     accountExports: accountExports,
+    accountDeletion: accountDeletion,
     notificationConsent: notificationConsent,
     postingDays: postingDays,
     feed: feed,

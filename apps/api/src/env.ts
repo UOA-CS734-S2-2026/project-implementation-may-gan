@@ -17,6 +17,11 @@ export interface ApiEnv {
   STAGING_EXPORT_PROOF_USER_ID?: string;
   STAGING_EXPORT_PROOF_BUILD_UNTIL?: string;
   STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER?: string;
+  /** Exact staging-only account deletion admission. All values must be present and exact. */
+  STAGING_ACCOUNT_DELETION_APPROVED?: string;
+  STAGING_ACCOUNT_DELETION_PROOF_APPROVED?: string;
+  STAGING_ACCOUNT_DELETION_PURGE_PROVEN?: string;
+  STAGING_ACCOUNT_DELETION_PROOF_USER_ID?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
   /** Direct API origin for native callers and issued realtime ticket URLs. */

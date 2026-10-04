@@ -6,6 +6,7 @@ class AppConfig {
     this.googleIosClientId = '',
     this.firebaseConfigured = false,
     this.stagingExportApproved = false,
+    this.stagingAccountDeletionApproval = '',
   });
 
   /// The Hono API origin, for example `https://api.example.test`. See
@@ -24,9 +25,15 @@ class AppConfig {
   /// Explicit for staging tester builds. Production API origins cannot open it.
   final bool stagingExportApproved;
 
+  /// Exact opt-in for a single staging build. Any other value is inert.
+  final String stagingAccountDeletionApproval;
+
   bool get googleSignInConfigured => googleWebClientId.isNotEmpty;
   bool get accountExportEnabled =>
       stagingExportApproved &&
+      apiBaseUrl == 'https://api.staging.dayli.agroupforcoders.com';
+  bool get accountDeletionEnabled =>
+      stagingAccountDeletionApproval == 'request-deletion-staging' &&
       apiBaseUrl == 'https://api.staging.dayli.agroupforcoders.com';
 
   static AppConfig fromEnvironment() {
@@ -43,6 +50,9 @@ class AppConfig {
       firebaseConfigured: bool.fromEnvironment('DAYLI_FIREBASE_CONFIGURED'),
       stagingExportApproved: bool.fromEnvironment(
         'DAYLI_STAGING_EXPORT_APPROVED',
+      ),
+      stagingAccountDeletionApproval: String.fromEnvironment(
+        'DAYLI_STAGING_ACCOUNT_DELETION_APPROVED',
       ),
     );
   }
