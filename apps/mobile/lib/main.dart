@@ -79,8 +79,7 @@ Future<void> main() async {
   final messaging = MessagingController(messagingClient);
   PushService? push;
   FirebasePushLifecycle? notifications;
-  if (config.firebaseConfigured) {
-    await initializeFirebasePush();
+  if (await initializeFirebasePushIfConfigured(config.firebaseConfigured)) {
     push = PushService(
       source: FirebasePushTokenSource(),
       client: HttpPushRegistrationClient(

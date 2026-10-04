@@ -160,9 +160,11 @@ Do not use shared preferences for tokens or draft content. It is used for the no
 
 ## Build-time configuration is public
 
-`AppConfig.fromEnvironment()` reads values supplied with `--dart-define`. `DAYLI_API_BASE_URL` is required. Google client IDs and the Firebase configured switch enable optional integrations when the platform build is prepared for them.
+`AppConfig.fromEnvironment()` reads values supplied with `--dart-define`. `DAYLI_API_BASE_URL` is required. Google client IDs enable optional sign-in. `DAYLI_FIREBASE_CONFIGURED` enables the registered staging Firebase project only in Android or iOS debug builds, and defaults to false. Release and profile builds reject an enabled Firebase switch rather than connecting to staging.
 
-Dart defines are compiled into the app. They are suitable for API origins, OAuth client IDs, and feature switches, but not secrets. Anyone with the application artifact can inspect public configuration. Provider secrets, private keys, API credentials, and signing material do not belong in a define or in source control.
+Dart defines are compiled into the app. They are suitable for API origins, OAuth client IDs, and feature switches, but not secrets. Anyone with the application artifact can inspect public configuration. The typed Firebase mobile options are public client metadata for the registered staging apps. Provider secrets, service-account files, APNs keys, private keys, API credentials, and signing material do not belong in a define or in source control.
+
+The mobile Firebase integration is for Cloud Messaging only. Authentication remains on Better Auth and application data remains in PostgreSQL. Firebase Authentication, Firestore, and web push are not part of this configuration. Apple signing, provisioning, APNs provider setup, and physical-device delivery checks remain owner-operated tasks. See the mobile README for the debug command and platform setup.
 
 The development CA define is a special debug-only input used to trust the local mkcert root. Release and profile builds ignore that path. Follow [Environments](./environments) for supported run commands and device connection details rather than copying certificate commands into feature notes.
 
