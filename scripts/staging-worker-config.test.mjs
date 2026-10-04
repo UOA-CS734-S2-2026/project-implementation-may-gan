@@ -92,6 +92,7 @@ test("binds the separate worker only on staging and requires complete synthetic 
   };
   assert.deepEqual(createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
     { API_RATE_LIMIT_SCOPE: "staging", BETTER_AUTH_BASE_URL: input.authApiOrigin,
+      NOTIFICATION_PUBLISHERS_ENABLED: "false",
       PUBLIC_API_BASE_URL: input.authApiOrigin,
       BETTER_AUTH_TRUSTED_ORIGINS: `${input.authApiOrigin},${input.authWebOrigin}`,
       ...input.authVars, ...proofVars });
