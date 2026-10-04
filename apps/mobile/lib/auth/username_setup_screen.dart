@@ -47,8 +47,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
         username: username,
         publicName: _publicName.text,
       );
-      if (mounted) {
-        context.go(returnIntent?.returnLocation ?? '/');
+      // A public post or profile that sent the visitor here comes first.
+      // Otherwise the router's session redirect leaves this page, opening a
+      // composer link that was waiting for setup, or home.
+      if (mounted && returnIntent != null) {
+        context.go(returnIntent.returnLocation);
       }
     } on AuthenticationFailure catch (error) {
       if (mounted) {

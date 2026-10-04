@@ -33,6 +33,20 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- dayli://app/post opens today's composer, optionally with
+                 ?rating=1-10. Flutter passes the link to go_router, which
+                 applies the usual sign-in and username checks. See
+                 docs/dayli/native-composer-entry-points.md. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="dayli" android:host="app"/>
+            </intent-filter>
+            <!-- The launcher shortcut that opens the composer link. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts"/>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

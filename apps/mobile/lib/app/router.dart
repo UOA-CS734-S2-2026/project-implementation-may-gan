@@ -1,9 +1,11 @@
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_screens.dart';
 import '../auth/public_return_intent.dart';
 import '../auth/session_controller.dart';
 import '../auth/username_setup_screen.dart';
+import '../compose/composer_link.dart';
 import '../compose/composer_screen.dart';
 import '../friends/friends_screen.dart';
 import '../friends/social_profile_screen.dart';
@@ -19,6 +21,7 @@ import '../profile/my_days_screen.dart';
 import '../settings/account_export_screen.dart';
 import '../settings/settings_screen.dart';
 import '../shell/app_shell.dart';
+import 'pending_destination.dart';
 import 'splash_screen.dart';
 
 const _publicLocations = {'/welcome', '/sign-in', '/sign-up'};
@@ -32,7 +35,11 @@ bool _isPublicContent(String location) =>
 GoRouter buildRouter(
   SessionController session, {
   String initialLocation = '/',
+  PendingDestination? pending,
+  ComposerLinkSequence? links,
 }) {
+  final waiting = pending ?? PendingDestination();
+  final linkSequence = links ?? ComposerLinkSequence();
   PublicReturnIntent? presentedIntent;
   String? presentedLocation;
 
@@ -64,6 +71,22 @@ GoRouter buildRouter(
     refreshListenable: session,
     redirect: (context, state) {
       final location = state.matchedLocation;
+      final uri = state.uri;
+      if (location == composerPath) {
+        // Each link from outside the app is an event, even a repeat of the
+        // last one.
+        if (uri.scheme == composerLinkScheme) linkSequence.arrived();
+        // Keep only a valid rating, and drop the custom scheme and host.
+        final composer = composerLocation(uri);
+        if (session.status != SessionStatus.signedIn) {
+          waiting.remember(composer);
+        } else if (uri.toString() != composer) {
+          return composer;
+        }
+      } else if (uri.scheme == composerLinkScheme) {
+        // An outside link can only open the composer.
+        return '/';
+      }
       if (_legalLocations.contains(location)) return null;
       final public = _publicLocations.contains(location);
       final publicContent = _isPublicContent(location);
@@ -90,9 +113,9 @@ GoRouter buildRouter(
           if (location == '/sign-in' ||
               location == '/sign-up' ||
               location == '/setup-username') {
-            return returnIntent?.returnLocation ?? '/';
+            return returnIntent?.returnLocation ?? waiting.take() ?? '/';
           }
-          if (location == '/splash' || public) return '/';
+          if (location == '/splash' || public) return waiting.take() ?? '/';
           return null;
       }
     },
@@ -120,7 +143,20 @@ GoRouter buildRouter(
         builder: (_, _) => const UsernameSetupScreen(),
       ),
       // Full-screen pages above the tabs.
-      GoRoute(path: '/post', builder: (_, _) => const ComposerScreen()),
+      GoRoute(
+        path: composerPath,
+        // The composer can already be open when the same link arrives again,
+        // so it rebuilds on each arrival, not only when the location changes.
+        builder: (_, state) => ListenableBuilder(
+          listenable: linkSequence,
+          builder: (_, _) => ComposerScreen(
+            initialRating: parsePrefilledRating(
+              state.uri.queryParameters[composerRatingParameter],
+            ),
+            linkSequence: linkSequence.current,
+          ),
+        ),
+      ),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
       GoRoute(
         path: '/account/export',
