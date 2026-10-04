@@ -11,6 +11,7 @@ import { pruneExpiredGoogleManagementIntents } from "./features/account-policy/r
 import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEnabled,
   stagingExportCleanupOnlyEnabled } from "./features/data-export/shared/export-activation";
 import { createExportRuntimeForEnv } from "./infrastructure/jobs/export-runtime";
+import { runPostTrashCleanupForEnv } from "./infrastructure/jobs/post-trash-runtime";
 
 export { app };
 export { BrowserProxyEntrypoint } from "./http/browser-proxy-entrypoint";
@@ -32,6 +33,7 @@ export default {
     if (env.USER_REALTIME) context.waitUntil(createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: env.USER_REALTIME }).dispatchScheduled());
     context.waitUntil(runNotificationMaintenance(env));
     context.waitUntil(runMediaCleanup(env));
+    context.waitUntil(runPostTrashCleanup(env));
     context.waitUntil(runGoogleIntentExpiry(env));
     const allStagingExports = stagingExportAllUsersEnabled(env);
     const proof = allStagingExports ? null : readStagingExportProof(env);
@@ -54,6 +56,16 @@ async function runNotificationMaintenance(env: ApiEnv): Promise<void> {
     await (await createNotificationDeliveryDispatcher(env)).dispatchScheduled();
   } catch {
     console.error("notification maintenance failed");
+  }
+}
+
+/** Counts only. Invalid or missing lifecycle/storage bindings perform no work. */
+async function runPostTrashCleanup(env: ApiEnv): Promise<void> {
+  try {
+    const summary = await runPostTrashCleanupForEnv(env);
+    if (summary && summary.claimed > 0) console.info("post trash cleanup", summary);
+  } catch {
+    console.error("post trash cleanup failed");
   }
 }
 

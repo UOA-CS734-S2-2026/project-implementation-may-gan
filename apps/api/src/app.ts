@@ -46,6 +46,7 @@ import { schema, type DayliDatabase } from "@dayli/db";
 import { and, eq, gt, sql } from "drizzle-orm";
 import type { CreateDailyPostRouteDependencies } from "./features/posts/create-post/create-post.route";
 import type { PostTrashRouteDependencies } from "./features/posts/trash-post/trash-post.route";
+import { createHyperdrivePostTrashRepository } from "./features/posts/trash-post/trash-post.repository";
 import type { ListFeedRouteDependencies } from "./features/posts/list-feed/list-feed.route";
 import { createHyperdriveFeedRepository } from "./features/posts/list-feed/list-feed.repository";
 import type { ListProfilePostsRouteDependencies } from "./features/posts/list-profile-posts/list-profile-posts.route";
@@ -429,6 +430,10 @@ export function createAppForEnv(env: ApiEnv) {
     : undefined;
   const postingDay = configuration ? createPostingDayDependencies(configuration) : undefined;
   const posts = configuration ? createDailyPostDependencies(configuration) : undefined;
+  const postTrash = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdrivePostTrashRepository(configuration.hyperdrive),
+  } satisfies PostTrashRouteDependencies : undefined;
   const signMediaDownload = r2Runtime ? createR2MediaDownloadSigner(r2Runtime) : undefined;
   const mediaObjects = r2Runtime ? createR2MediaObjectStore(r2Runtime) : undefined;
   const feed = configuration ? {
@@ -646,6 +651,7 @@ export function createAppForEnv(env: ApiEnv) {
   const api = createApp({
     postingDay,
     posts,
+    postTrash,
     feed,
     postDetail,
     postMedia,

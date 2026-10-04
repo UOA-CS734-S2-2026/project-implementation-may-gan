@@ -11,8 +11,6 @@ export interface PostTrashRouteDependencies {
   resolveSession: ResolveSession;
   repository?: PostTrashRepository;
   rateLimiter?: ActorRateLimiter;
-  /** Kept false until a separate staged activation approves owner Trash APIs. */
-  enabled?: boolean;
 }
 
 const security: Array<Record<string, string[]>> = [{ BearerAuth: [] }, { cookieAuth: [] }];
@@ -56,7 +54,7 @@ export function registerPostTrashRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, d
   const unavailable = <E extends AuthenticatedApiEnv>(context: Context<E>) => apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Post Trash is disabled.");
   app.openapi(listRoute, async (context) => {
     context.header("Cache-Control", "no-store");
-    if (!dependencies.enabled || !dependencies.repository) return unavailable(context);
+    if (!dependencies.repository) return unavailable(context);
     try { return context.json({ posts: (await dependencies.repository.list(context.get("actor").userId)).map(response) }, 200); }
     catch { return unavailable(context); }
   });
@@ -64,7 +62,7 @@ export function registerPostTrashRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, d
     context.header("Cache-Control", "no-store");
     const actor = context.get("actor");
     if (!actor.sessionId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "A live session is required.");
-    if (!dependencies.enabled || !dependencies.repository) return unavailable(context);
+    if (!dependencies.repository) return unavailable(context);
     try {
       const result = await dependencies.repository.transition({ userId: actor.userId, sessionId: actor.sessionId, postId: context.req.valid("param").postId, action: "trash" });
       if (result.outcome === "not_found") return apiErrorResponse(context, 404, "NOT_FOUND", "Post not found.");
@@ -76,7 +74,7 @@ export function registerPostTrashRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, d
     context.header("Cache-Control", "no-store");
     const actor = context.get("actor");
     if (!actor.sessionId) return apiErrorResponse(context, 401, "UNAUTHENTICATED", "A live session is required.");
-    if (!dependencies.enabled || !dependencies.repository) return unavailable(context);
+    if (!dependencies.repository) return unavailable(context);
     try {
       const result = await dependencies.repository.transition({ userId: actor.userId, sessionId: actor.sessionId, postId: context.req.valid("param").postId, action: "restore" });
       if (result.outcome === "not_found") return apiErrorResponse(context, 404, "NOT_FOUND", "Post not found.");
