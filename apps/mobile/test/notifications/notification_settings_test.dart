@@ -51,19 +51,28 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('settings.notifications')), findsOneWidget);
+      final notificationSwitch = find.byKey(
+        const Key('settings.notifications'),
+      );
+      expect(notificationSwitch, findsOneWidget);
+      expect(
+        find.descendant(
+          of: notificationSwitch,
+          matching: find.text('Mobile notifications'),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.text(
           'Enabled for your account on supported devices. You can turn it off here.',
         ),
         findsOneWidget,
       );
-      final notificationSwitch = find.byKey(
-        const Key('settings.notifications'),
-      );
       final tile = tester.widget<SwitchListTile>(notificationSwitch);
       expect(tile.value, isTrue);
       expect(tile.onChanged, isNotNull);
+      expect(find.byKey(const Key('settings.biometricUnlock')), findsOneWidget);
+      expect(find.byType(SwitchListTile), findsNWidgets(2));
 
       await tester.ensureVisible(notificationSwitch);
       await tester.tap(notificationSwitch);
