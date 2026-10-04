@@ -5,6 +5,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../firebase_options.dart';
+import 'notification_event.dart';
+import 'notification_presenter.dart';
 import 'push_service.dart';
 
 /// Firebase-backed token source. Call [initializeFirebasePushIfConfigured]
@@ -15,72 +17,141 @@ class FirebasePushTokenSource implements PushTokenSource {
 
   final FirebaseMessaging _messaging;
 
-  @override
-  Future<PushPermission> requestPermission() async {
-    final settings = await _messaging.requestPermission();
-    return switch (settings.authorizationStatus) {
-      AuthorizationStatus.authorized => PushPermission.granted,
-      AuthorizationStatus.provisional => PushPermission.provisional,
-      _ => PushPermission.denied,
-    };
-  }
+  PushPermission _permission(NotificationSettings settings) =>
+      switch (settings.authorizationStatus) {
+        AuthorizationStatus.authorized => PushPermission.granted,
+        AuthorizationStatus.provisional => PushPermission.provisional,
+        _ => PushPermission.denied,
+      };
 
   @override
-  Future<String?> currentToken() => _messaging.getToken();
+  Future<PushPermission> currentPermission() async =>
+      _permission(await _messaging.getNotificationSettings());
+
+  @override
+  Future<PushPermission> requestPermission() async =>
+      _permission(await _messaging.requestPermission());
+
+  @override
+  Future<String?> currentToken() async {
+    await _messaging.setAutoInitEnabled(true);
+    return _messaging.getToken();
+  }
 
   @override
   Stream<String> get tokenRefreshes => _messaging.onTokenRefresh;
 
   @override
-  Future<void> invalidateLocalToken() => _messaging.deleteToken();
+  Future<void> invalidateLocalToken() async {
+    await _messaging.deleteToken();
+    await _messaging.setAutoInitEnabled(false);
+  }
 }
 
-/// Registers Firebase handlers without showing a foreground OS banner. The
-/// app refreshes through its authenticated REST/realtime coordinator instead.
+/// Owns remote callbacks. Foreground remote presentation is suppressed and
+/// replaced by exactly one local banner after strict envelope decoding.
 class FirebasePushLifecycle {
   FirebasePushLifecycle({
-    required this.onForegroundData,
+    required this.presenter,
+    required this.onForegroundEvent,
     required this.onNotificationTap,
   });
 
-  final FutureOr<void> Function(Map<String, String> data) onForegroundData;
-  FutureOr<void> Function(String conversationId) onNotificationTap;
+  final NotificationPresenter presenter;
+  final FutureOr<bool> Function(NotificationEvent event) onForegroundEvent;
+  FutureOr<void> Function(NotificationEvent event) onNotificationTap;
   StreamSubscription<RemoteMessage>? _foreground;
   StreamSubscription<RemoteMessage>? _opened;
+  bool _enabled = false;
+  bool _initialMessageRead = false;
+  NotificationEvent? _pendingTap;
+  int _epoch = 0;
 
   void setNotificationTapHandler(
-    FutureOr<void> Function(String conversationId) handler,
+    FutureOr<void> Function(NotificationEvent event) handler,
   ) {
     onNotificationTap = handler;
   }
 
   Future<void> start() async {
-    _foreground ??= FirebaseMessaging.onMessage.listen((message) {
-      final data = <String, String>{
-        for (final entry in message.data.entries)
-          if (entry.value is String) entry.key: entry.value as String,
-      };
-      unawaited(Future<void>.sync(() => onForegroundData(data)));
-    });
-    _opened ??= FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
-    final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) await _handleTap(initial);
+    await presenter.initialize(_handleLocalTap);
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+          alert: false,
+          badge: false,
+          sound: false,
+        );
+    _foreground ??= FirebaseMessaging.onMessage.listen(_handleForeground);
+    _opened ??= FirebaseMessaging.onMessageOpenedApp.listen(_handleRemoteTap);
+    if (!_initialMessageRead) {
+      _initialMessageRead = true;
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) await _handleRemoteTap(initial);
+    }
+  }
+
+  void enable() {
+    _enabled = true;
+    _epoch++;
+    final pending = _pendingTap;
+    _pendingTap = null;
+    if (pending != null) {
+      unawaited(Future<void>.sync(() => onNotificationTap(pending)));
+    }
+  }
+
+  Future<void> disableAndClear() async {
+    _enabled = false;
+    _pendingTap = null;
+    _epoch++;
+    await presenter.clear();
   }
 
   Future<void> stop() async {
+    await disableAndClear();
     await _foreground?.cancel();
     await _opened?.cancel();
     _foreground = null;
     _opened = null;
   }
 
-  Future<void> _handleTap(RemoteMessage message) async {
-    final conversationId = message.data['conversationId'];
-    if (conversationId != null && conversationId.isNotEmpty) {
-      // Navigation input is only a hint. The destination must fetch REST data
-      // under the current session before rendering the conversation.
-      await onNotificationTap(conversationId);
+  Future<void> _handleForeground(RemoteMessage message) => handleForeground(
+    data: message.data,
+    title: message.notification?.title,
+    body: message.notification?.body,
+  );
+
+  @visibleForTesting
+  Future<void> handleForeground({
+    required Map<String, Object?> data,
+    required String? title,
+    required String? body,
+  }) async {
+    if (!_enabled) return;
+    final epoch = _epoch;
+    final event = NotificationEvent.decode(data);
+    if (event == null || title == null || body == null) return;
+    final authorized = await onForegroundEvent(event);
+    if (!authorized || !_enabled || epoch != _epoch) return;
+    await presenter.show(event: event, title: title, body: body);
+  }
+
+  Future<void> _handleRemoteTap(RemoteMessage message) async {
+    final event = NotificationEvent.decode(message.data);
+    if (event == null) return;
+    if (!_enabled) {
+      _pendingTap = event;
+      return;
     }
+    await onNotificationTap(event);
+  }
+
+  Future<void> _handleLocalTap(NotificationEvent event) async {
+    if (!_enabled) {
+      _pendingTap = event;
+      return;
+    }
+    await onNotificationTap(event);
   }
 }
 

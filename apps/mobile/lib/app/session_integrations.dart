@@ -16,14 +16,14 @@ class SessionIntegrations {
   final Future<void> Function() startRealtime;
   final Future<void> Function() stopRealtime;
   final void Function() clearMessaging;
-  final Future<void> Function()? startPush;
+  final void Function(SessionStartup startup)? startPush;
   final Future<void> Function()? stopPush;
 
   Future<void> start(SessionStartup startup) async {
     if (!startup.isCurrent) return;
     await startRealtime();
     if (!startup.isCurrent) return;
-    await startPush?.call();
+    startPush?.call(startup);
   }
 
   Future<void> clear() async {

@@ -8,6 +8,8 @@
     <!-- Approximate location only, asked when the author chooses to add the
          weather to a post. The precise permission is deliberately not declared. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Requested only from the explicit notification settings action. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Posting never needs a camera, so devices without one can still install. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
@@ -15,6 +17,10 @@
         android:label="Dayli"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Consent code explicitly enables token generation after opt-in. -->
+        <meta-data
+            android:name="firebase_messaging_auto_init_enabled"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

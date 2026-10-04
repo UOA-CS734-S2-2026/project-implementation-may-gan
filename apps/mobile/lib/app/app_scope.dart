@@ -17,6 +17,8 @@ import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
+import '../notifications/notification_consent.dart';
+import '../notifications/notification_router.dart';
 import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
 import '../profile/streak_cache.dart';
@@ -37,6 +39,8 @@ class AppServices {
     this.profiles = const UnavailableProfileClient(),
     this.interactions = const UnavailableInteractionsClient(),
     this.notifications,
+    this.notificationConsent,
+    this.notificationPreflight,
     this.accountExports,
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
@@ -75,6 +79,8 @@ class AppServices {
   final ProfileClient profiles;
   final InteractionsClient interactions;
   final FirebasePushLifecycle? notifications;
+  final NotificationConsentController? notificationConsent;
+  final NotificationPreflight? notificationPreflight;
 
   /// Null until export provider proof and an explicit release decision.
   final AccountExportClient? accountExports;

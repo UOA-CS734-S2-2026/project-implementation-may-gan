@@ -63,6 +63,16 @@ The remaining Apple steps require the owner. Enable Push Notifications and Backg
 
 This setup is only for Firebase Cloud Messaging. Dayli authentication remains on Better Auth and application data remains in PostgreSQL. Do not enable Firebase Authentication or Firestore for this client, and do not put service-account files, APNs `.p8` files, or other provider credentials in the repository or Dart defines. Web push is outside this mobile configuration.
 
+### Notification consent and native presentation
+
+The account setting defaults to off. Startup reads it without requesting OS permission. Only switching "Mobile notifications" on can display the permission prompt. A granted device registers notification schema version 1. A denied device does not register, and it does not turn off notifications for the account's other devices.
+
+Firebase token auto-initialization is disabled in both native platforms. Consent enables it before reading a token, and logout, account replacement, or disabling the setting removes the local token and registration. Generic payloads accept only version 1 and the four known type and target combinations. Foreground messages use `flutter_local_notifications`; Firebase foreground alert presentation stays off so one event cannot produce both a remote and local banner. Background and terminated notifications remain provider-presented.
+
+The compatibility spike used Flutter 3.47.2, Dart 3.13.2, JDK 17, and Xcode 26.6. The configured Android debug APK compiled with `DAYLI_FIREBASE_CONFIGURED=true`. The configured iOS debug simulator app also compiled unsigned. Xcode's build environment did not expose `xcrun` to the Dart native-asset hook, so the compile used a temporary `xcrun` wrapper that set the same `/Applications/Xcode.app` developer directory. The wrapper was not added to the repository.
+
+These compile checks do not prove permission UI, lock-screen appearance, tap callbacks, APNs setup, signing, token registration, or delivery on a physical device. An OS banner that was already displayed can remain visible after logout or an account switch. Dayli clears local banners and pending in-memory routing data, then rechecks the current signed-in account before presenting foreground content or navigating from a tap.
+
 ## Connecting Google to a password account
 
 Dayli never connects identities merely because their emails match. After signing in with email and password, open **Settings**, choose **Connect Google**, enter the current Dayli password, and choose the Google account with the same verified email. The Worker verifies the password against the authenticated bearer session in the link request, then verifies the Google token. The app does not accept a client-only confirmation and does not replace the stored bearer token during linking.

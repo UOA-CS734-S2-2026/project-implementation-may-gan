@@ -26,6 +26,10 @@ import 'drafts/draft_store.dart';
 import 'messaging/messaging_client.dart';
 import 'messaging/messaging_controller.dart';
 import 'notifications/firebase_push_source.dart';
+import 'notifications/notification_consent.dart';
+import 'notifications/notification_event.dart';
+import 'notifications/notification_presenter.dart';
+import 'notifications/notification_router.dart';
 import 'notifications/push_registration_client.dart';
 import 'notifications/push_service.dart';
 import 'posts/post_submitter.dart';
@@ -76,11 +80,31 @@ Future<void> main() async {
     baseUrl: config.apiBaseUrl,
     bearerToken: nativeSession.bearerToken,
   );
+  final friendsClient = GeneratedFriendsClient(
+    baseUrl: config.apiBaseUrl,
+    bearerToken: nativeSession.bearerToken,
+  );
+  final feedClient = GeneratedFeedClient(
+    baseUrl: config.apiBaseUrl,
+    bearerToken: nativeSession.bearerToken,
+  );
+  final postingDayClient = GeneratedPostingDayClient(
+    baseUrl: config.apiBaseUrl,
+    bearerToken: nativeSession.bearerToken,
+  );
   final messaging = MessagingController(messagingClient);
-  PushService? push;
+  NotificationConsentController? notificationConsent;
   FirebasePushLifecycle? notifications;
+  NotificationPreflight? notificationPreflight;
   if (await initializeFirebasePushIfConfigured(config.firebaseConfigured)) {
-    push = PushService(
+    final preflight = ApiNotificationPreflight(
+      messaging: messagingClient,
+      friends: friendsClient,
+      postingDays: postingDayClient,
+      feed: feedClient,
+    );
+    notificationPreflight = preflight;
+    final push = PushService(
       source: FirebasePushTokenSource(),
       client: HttpPushRegistrationClient(
         baseUrl: config.apiBaseUrl,
@@ -90,21 +114,32 @@ Future<void> main() async {
       platform: Platform.isIOS ? 'ios' : 'android',
     );
     notifications = FirebasePushLifecycle(
-      onForegroundData: (_) => messaging.refreshInbox(),
-      // DayliApp replaces this callback with deferred authenticated routing.
+      presenter: LocalNotificationPresenter(),
+      onForegroundEvent: (event) async {
+        final authorized = await preflight.authorize(event);
+        if (authorized && event.kind == NotificationKind.directMessage) {
+          await messaging.refreshInbox();
+        }
+        return authorized;
+      },
+      // DayliApp replaces this callback with session-fenced routing.
       onNotificationTap: (_) {},
+    );
+    notificationConsent = NotificationConsentController(
+      client: HttpNotificationPreferenceClient(
+        baseUrl: config.apiBaseUrl,
+        bearerToken: nativeSession.bearerToken,
+      ),
+      push: push,
+      lifecycle: notifications,
     );
   }
   final integrations = SessionIntegrations(
     startRealtime: messaging.startRealtime,
     stopRealtime: messaging.stopRealtime,
     clearMessaging: messaging.clear,
-    startPush: () async {
-      await push?.start();
-    },
-    stopPush: () async {
-      await push?.stop();
-    },
+    startPush: notificationConsent?.start,
+    stopPush: notificationConsent?.clear,
   );
   final session = SessionController(
     session: nativeSession,
@@ -128,22 +163,13 @@ Future<void> main() async {
     DayliApp(
       services: AppServices(
         session: session,
-        postingDays: GeneratedPostingDayClient(
-          baseUrl: config.apiBaseUrl,
-          bearerToken: nativeSession.bearerToken,
-        ),
-        feed: GeneratedFeedClient(
-          baseUrl: config.apiBaseUrl,
-          bearerToken: nativeSession.bearerToken,
-        ),
+        postingDays: postingDayClient,
+        feed: feedClient,
         posts: GeneratedPostClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
         ),
-        friends: GeneratedFriendsClient(
-          baseUrl: config.apiBaseUrl,
-          bearerToken: nativeSession.bearerToken,
-        ),
+        friends: friendsClient,
         profiles: GeneratedProfileClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,
@@ -155,6 +181,8 @@ Future<void> main() async {
         drafts: drafts,
         messaging: messaging,
         notifications: notifications,
+        notificationConsent: notificationConsent,
+        notificationPreflight: notificationPreflight,
         accountExports: config.accountExportEnabled
             ? HttpAccountExportClient(
                 baseUrl: config.apiBaseUrl,
