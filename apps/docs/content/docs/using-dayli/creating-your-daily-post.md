@@ -13,7 +13,9 @@ On the web, choose **new dayli** in the navigation. The page is headed **Post yo
 
 On mobile, tap the raised **new dayli** button in the middle of the bottom bar.
 
-> **Screenshot placeholder `UD-CDP-01`:** Web composer before anything has been entered, with today's prompt and the Post button visible.
+![Empty Dayli web composer showing today's prompt, rating, audience, and Post button](/images/using-dayli/create-web-empty-composer.webp)
+
+<!-- Screenshot ID: UD-CDP-01 -->
 
 ## Fill in today's post
 

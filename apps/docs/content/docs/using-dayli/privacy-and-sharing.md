@@ -18,7 +18,9 @@ There is no default selection. A Friends post is not public, and a Solo post is 
 
 Your own archive marks a Solo post **Only you**. It marks a Friends post **Not released yet** until release time.
 
-> **Screenshot placeholder `UD-PS-01`:** Mobile composer audience picker with neither Friends nor Solo selected.
+![Dayli mobile audience picker before Friends or Solo has been selected](/images/using-dayli/privacy-mobile-audience-unselected.webp)
+
+<!-- Screenshot ID: UD-PS-01 -->
 
 Dayli does not currently provide public post pages or public share links. Public share links with revocation are planned. The intended flow will let an author create a link and revoke it later, but it is not available in the current web or mobile interface.
 
@@ -31,7 +33,9 @@ Open **Settings** on the web. On mobile, tap the profile circle at the top and o
 
 This setting covers profile details. It does not turn your daylis public, override a Solo audience, or release a Friends post early.
 
-> **Screenshot placeholder `UD-PS-02`:** Web Settings page showing the profile visibility control and its audience description.
+![Dayli web Settings page showing the profile visibility control](/images/using-dayli/privacy-web-profile-visibility.webp)
+
+<!-- Screenshot ID: UD-PS-02 -->
 
 ## Friends and changing access
 

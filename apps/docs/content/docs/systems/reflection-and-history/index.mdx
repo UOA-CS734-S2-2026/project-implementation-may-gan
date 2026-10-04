@@ -46,11 +46,13 @@ A public profile does not reveal `solo` or unreleased posts. A private profile d
 
 The web profile route is `/u/{username}`. It renders profile cards that open `/u/{username}/{postId}`. On an owner's archive, cards mark unreleased posts as **Not released yet** and released solo posts as **Only you**. Flutter uses the same paginated API for social profiles and the **my days** tab.
 
+![Dayli web profile history with an unreleased synthetic reflection](/images/product/web-profile-history.webp)
+
 There is an API and interface gap here. Profile and post-detail reads accept an optional session so the backend can return public-profile posts anonymously. The current web profile pages still sit behind username and session guards, and Flutter's profile-post client requires a bearer token. The generated web client also maps the API's private-profile `restricted` response to its unavailable state instead of rendering a dedicated restricted-profile archive. Public read policy is implemented in the API, but a complete signed-out public browsing journey is not.
 
 ## Post detail is the full reflection view
 
-`GET /api/v1/posts/{postId}` returns the post, stored prompt, answer, caption, rating, audience, timestamps, media, and edit metadata. The response never includes a tomorrow note. The author can open an active `solo` or unreleased post. Other readers need a released `friends` post that the current visibility policy allows.
+`GET /api/v1/posts/{postId}` returns the post, stored prompt, answer, caption, rating, audience, timestamps, media, and edit metadata. The response never includes a tomorrow note. It also returns `likeCount`, `viewerHasLiked`, and `commentCount` from the post interaction projections. The remaining repository guide at `docs/dayli/likes-and-comments.md` explains those interactions. The author can open an active `solo` or unreleased post. Other readers need a released `friends` post that the current visibility policy allows.
 
 Like profile history, detail supports anonymous reads for a released `friends` post on a public profile. An unreadable post and an unknown ID both return `404`. The web uses `/u/{username}/{postId}` and replaces a stale username in the URL with the author's current one. Flutter uses `/posts/{id}`. Both current interfaces require a signed-in app journey even though the API's public read is optional-auth.
 

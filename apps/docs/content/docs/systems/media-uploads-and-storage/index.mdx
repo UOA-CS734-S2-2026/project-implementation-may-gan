@@ -130,7 +130,21 @@ The two post composers are not at the same stage.
 
 **Web does not upload post attachments yet.** Its composer lets someone select photos or video, but explains that the files remain on the device and submits a text-only post. Web does use the reservation flow for profile avatar uploads from Settings. Browser upload therefore depends on the R2 bucket's CORS policy even though browser post uploads are still missing.
 
-Both clients can display authorized post media. Their feed cards show the first photo and a non-playing video tile. Post detail shows all photos or the single looping video. Voice memo API support exists, but the documented mobile recording work is separate from the storage flow.
+Both clients can display authorized post media. Their feed cards show the first photo and a non-playing video tile. Post detail shows all photos or the single looping video.
+
+### Recording a voice memo on mobile
+
+Flutter's **your voice** section records one optional memo with tap-to-start and tap-to-stop controls. It is hidden in builds without media uploads. Microphone access is requested only after tapping record, with an explanation first. Refusing permission leaves text and visual uploads working; permanent refusal offers **Open Settings**, while a device restriction is explained separately.
+
+The recorder writes mono AAC at 64 kbps directly into an `.m4a` file in the user's media folder. It stops at 59 seconds to leave headroom under the API's strict 60-second limit. Takes shorter than a second are discarded. Leaving the foreground stops recording and keeps the take so far; closing the composer during a take discards it. Recording never starts automatically or continues in the background.
+
+The composer shows elapsed time and a live level meter. It saves 48 waveform bars locally for playback; these never leave the device. The saved player supports play, pause, and seeking. **Re-record** replaces the old memo only when the new take is saved, so cancelling keeps the previous one. **Remove** deletes the file.
+
+The memo counts toward the same 25 MB total as photos or video. The client checks the combined size both when a recording ends and when another photo is added. Oversized recordings are discarded with guidance rather than uploaded. A saved memo goes straight through reserve, PUT, and complete without compression. Its validated reservation ID follows the photos in `attachments`, and posting waits for validation.
+
+Protected drafts retain the memo, waveform, duration, and upload state across app restarts and upload retries. Removing or replacing a memo, successful-post draft cleanup, and sign-out delete its local file. Uploaded but unattached recordings follow the server's orphan cleanup rules.
+
+Flutter post detail plays voice memos for authorized readers with a progress bar and elapsed time. Playback never starts automatically and pauses when the app leaves the foreground. A failed load triggers one request for a fresh URL at `GET /api/v1/posts/{postId}/voice-memo`, then shows **Voice memo unavailable** if recovery fails. Readers do not receive waveform bars because the API stores none. Feed and profile cards do not play audio. The web composer does not record voice memos.
 
 ### Mobile capture and recovery
 
