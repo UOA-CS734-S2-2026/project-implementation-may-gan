@@ -77,6 +77,9 @@ import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media"
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
+import { registerFutureSelfNotesRoutes, type FutureSelfNotesRouteDependencies } from "./features/future-self-notes/future-self-notes.routes";
+import { createFutureSelfNoteService } from "./features/future-self-notes/shared/future-self-note.service";
+import { createHyperdriveFutureSelfNoteStore } from "./features/future-self-notes/shared/future-self-note.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
 import { createPresignedDownloadUrl, createR2MediaObjectStore, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
@@ -226,6 +229,7 @@ export interface AppDependencies {
   postVoiceMemoContent?: GetPostVoiceMemoContentRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
   onThisDay?: ListOnThisDayRouteDependencies;
+  futureSelfNotes?: FutureSelfNotesRouteDependencies;
   postUpdate?: UpdatePostRouteDependencies;
   postRevisions?: ListPostRevisionsRouteDependencies;
   /** Likes and comments; any route left out is unavailable. */
@@ -271,6 +275,7 @@ export function createApp({
   postVoiceMemoContent,
   profilePosts,
   onThisDay,
+  futureSelfNotes,
   postUpdate,
   postRevisions,
   interactions = {},
@@ -380,6 +385,7 @@ export function createApp({
     updateComment: interaction(interactions.updateComment),
     deleteComment: interaction(interactions.deleteComment),
   });
+  registerFutureSelfNotesRoutes(api, { ...(futureSelfNotes ?? { resolveSession: async () => null }), rateLimiter });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
     ...messaging,
@@ -490,6 +496,15 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdriveOnThisDayRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies ListOnThisDayRouteDependencies : undefined;
+  const futureSelfNotes = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    service: createFutureSelfNoteService({
+      store: createHyperdriveFutureSelfNoteStore(configuration.hyperdrive),
+      clock: { now: () => new Date() },
+      dayService: createAucklandDayService({ now: () => new Date() }),
+    }),
+  } satisfies FutureSelfNotesRouteDependencies : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
@@ -636,6 +651,7 @@ export function createAppForEnv(env: ApiEnv) {
     postVoiceMemoContent,
     profilePosts,
     onThisDay,
+    futureSelfNotes,
     postUpdate,
     postRevisions,
     interactions,

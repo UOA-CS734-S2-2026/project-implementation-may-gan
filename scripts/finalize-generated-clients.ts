@@ -171,6 +171,10 @@ async function finalizeGeneratedClients() {
       "localDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/create_future_self_note_request.dart",
+      "deliverOn",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/current_posting_day_response.dart",
       "localDate",
     ),
@@ -199,6 +203,14 @@ async function finalizeGeneratedClients() {
       "localDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/future_self_note.dart",
+      "deliverOn",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/future_self_note_detail.dart",
+      "deliverOn",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/post_detail.dart",
       "localDate",
     ),
@@ -218,6 +230,10 @@ async function finalizeGeneratedClients() {
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/trashed_post_status.dart",
       "localDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/update_future_self_note_request.dart",
+      "deliverOn",
     ),
     normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/mood_day.dart",

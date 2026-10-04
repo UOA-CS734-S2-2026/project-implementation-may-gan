@@ -1,0 +1,6 @@
+reason: Owner and note foreign keys on new empty tables keep notes and their idempotency and delivery records tied to their parents. The note-to-user key is NO ACTION so an account cannot be removed while notes remain; delivery and idempotency rows cascade from their note.
+affected_data_and_clients: The three new tables only; a brief SHARE ROW EXCLUSIVE lock on user is taken while the tables are empty.
+rollout_sequence: Apply during the protected workflow before the dependent Worker release.
+forward_fix_plan: Add a new reviewed migration for any key correction; never edit this migration after release.
+backup_checkpoint: Confirm the required Neon restore point before protected-environment execution.
+reviewer: Required database CODEOWNER review in the pull request before protected migration execution.
