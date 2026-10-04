@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PredictiveBackEvent;
 import 'package:go_router/go_router.dart';
 
-import 'app_scope.dart';
 import '../auth/lock_screen.dart';
 import '../notifications/notification_router.dart';
+import 'app_scope.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -51,14 +52,34 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      unawaited(widget.services.messaging.foreground());
-    } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
-      widget.services.biometric.lock();
+    final biometric = widget.services.biometric;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        biometric.reveal();
+        unawaited(widget.services.messaging.foreground());
+      case AppLifecycleState.inactive:
+        // Also sent while the system authentication prompt is open; the
+        // service ignores it then.
+        biometric.obscure();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        // Locks even while a prompt is open, so leaving a confirmation prompt
+        // behind the home screen can't keep the app unlocked.
+        biometric.lockForBackground();
+      case AppLifecycleState.detached:
+        break;
     }
   }
+
+  // The lock screen sits above the router's Navigator, so a PopScope there
+  // has no route to guard. Consume system back here instead, before the
+  // router can pop a hidden page or close the app.
+  @override
+  Future<bool> didPopRoute() async => widget.services.biometric.isLocked;
+
+  @override
+  bool handleStartBackGesture(PredictiveBackEvent backEvent) =>
+      widget.services.biometric.isLocked;
 
   @override
   void dispose() {
@@ -80,13 +101,27 @@ class _DayliAppState extends State<DayliApp> with WidgetsBindingObserver {
       routerConfig: _router,
       builder: (context, child) => ListenableBuilder(
         listenable: widget.services.biometric,
-        builder: (context, _) => Stack(
-          children: [
-            if (child != null) child,
-            if (widget.services.biometric.isLocked)
-              const LockScreen(),
-          ],
-        ),
+        builder: (context, _) {
+          final biometric = widget.services.biometric;
+          final locked = biometric.isLocked;
+          final shielded = !locked && biometric.isObscured;
+          return Stack(
+            children: [
+              if (child != null)
+                // Covered content must not reach screen readers or keep
+                // keyboard focus behind the lock.
+                ExcludeSemantics(
+                  excluding: locked || shielded,
+                  child: ExcludeFocus(excluding: locked, child: child),
+                ),
+              if (locked)
+                // A new key after each background trip prompts again.
+                LockScreen(key: ValueKey(biometric.lockGeneration))
+              else if (shielded)
+                const PrivacyShield(),
+            ],
+          );
+        },
       ),
     ),
   );

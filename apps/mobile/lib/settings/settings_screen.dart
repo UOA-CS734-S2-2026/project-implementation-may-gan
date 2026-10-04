@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/biometric_service.dart';
 
 /// Account settings show the established username. Signing out also removes the unsent draft.
 class SettingsScreen extends StatefulWidget {
@@ -81,6 +82,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     controller.dispose();
     return password;
+  }
+
+  Future<void> _setBiometricUnlock(bool enabled) async {
+    final services = AppScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    void tell(String text) =>
+        messenger.showSnackBar(SnackBar(content: Text(text)));
+
+    final result = await services.biometric.setEnabled(enabled);
+    if (!mounted) return;
+    switch (result) {
+      case BiometricResult.success:
+        return;
+      case BiometricResult.unavailable when enabled:
+        tell('Set up Face ID, fingerprint, or a device passcode first.');
+      case BiometricResult.unavailable:
+        await _offerAccountRecovery();
+      case BiometricResult.lockedOut:
+        tell('Too many attempts. Try again in a moment.');
+      case BiometricResult.failed:
+        tell(
+          enabled
+              ? 'Could not turn on Biometric Unlock.'
+              : 'Biometric Unlock is still on.',
+        );
+    }
+  }
+
+  /// Device authentication is gone, so turning the lock off needs the Dayli
+  /// account instead.
+  Future<void> _offerAccountRecovery() async {
+    final services = AppScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign in again to turn off'),
+        content: const Text(
+          "This device has no passcode, Face ID, or fingerprint, so Dayli "
+          "can't confirm it's you. Sign in to your account again to turn off "
+          'Biometric Unlock. Your draft stays on this device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('settings.biometricRecover'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sign in again'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    var recovered = false;
+    try {
+      recovered = await services.biometric.recoverWithAccount(services.session);
+    } catch (_) {}
+    if (!recovered) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text("Couldn't sign out. Try again.")),
+      );
+    }
   }
 
   @override
@@ -284,49 +350,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       ListenableBuilder(
                         listenable: AppScope.of(context).biometric,
-                        builder: (context, _) => SwitchListTile.adaptive(
-                          title: Text(
-                            'Biometric Unlock',
-                            style: DayliText.sans(
-                              context,
-                              weight: FontWeight.w500,
+                        builder: (context, _) {
+                          final enabled = AppScope.of(
+                            context,
+                          ).biometric.isEnabled;
+                          return SwitchListTile.adaptive(
+                            key: const Key('settings.biometricUnlock'),
+                            title: Text(
+                              'Biometric Unlock',
+                              style: DayliText.sans(
+                                context,
+                                weight: FontWeight.w500,
+                              ),
                             ),
-                          ),
-                          subtitle: Text(
-                            'Require Face ID or fingerprint to open Dayli.',
-                            style: DayliText.sans(
-                              context,
-                              size: DayliTextSize.sm,
-                              color: colors.foregroundTertiary,
+                            subtitle: Text(
+                              'Require Face ID, fingerprint, or your device '
+                              'passcode to open Dayli.',
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.sm,
+                                color: colors.foregroundTertiary,
+                              ),
                             ),
-                          ),
-                          secondary: SvgPicture.asset(
-                            AppScope.of(context).biometric.isEnabled
-                                ? 'assets/wdcc/face_id.svg'
-                                : 'assets/wdcc/face_id_off.svg',
-                            width: 24,
-                            height: 24,
-                            colorFilter: ColorFilter.mode(
-                              AppScope.of(context).biometric.isEnabled
-                                  ? colors.foregroundAccent
-                                  : colors.foregroundSecondary,
-                              BlendMode.srcIn,
+                            secondary: SvgPicture.asset(
+                              enabled
+                                  ? 'assets/wdcc/face_id.svg'
+                                  : 'assets/wdcc/face_id_off.svg',
+                              width: 24,
+                              height: 24,
+                              colorFilter: ColorFilter.mode(
+                                enabled
+                                    ? colors.foregroundAccent
+                                    : colors.foregroundSecondary,
+                                BlendMode.srcIn,
+                              ),
                             ),
-                          ),
-                          value: AppScope.of(context).biometric.isEnabled,
-                          onChanged: (value) async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final biometric = AppScope.of(context).biometric;
-                            final success = await biometric.setEnabled(value);
-                            if (!success && mounted && value) {
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text('Could not enable biometric unlock.'),
-                                ),
-                              );
-                            }
-                          },
-                        ),
+                            value: enabled,
+                            onChanged: _setBiometricUnlock,
+                          );
+                        },
                       ),
                     ],
                   ),

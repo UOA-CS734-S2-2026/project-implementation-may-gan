@@ -279,7 +279,16 @@ class SessionController extends ChangeNotifier {
 
   /// Signs out and removes this user's protected draft, and the media saved
   /// for it, from the device.
-  Future<void> signOut() async {
+  Future<void> signOut() => _signOut(removeDraft: true);
+
+  /// Signs out so the same person must prove their account again, for
+  /// example when Biometric Unlock can no longer use device authentication.
+  /// Revocation and private-data cleanup match [signOut], but, as with an
+  /// expired session, the protected draft and its media stay for this user's
+  /// next sign-in.
+  Future<void> signOutToReauthenticate() => _signOut(removeDraft: false);
+
+  Future<void> _signOut({required bool removeDraft}) async {
     _publicReturnIntents.clear();
     final userId = _user?.id;
     // Fence a late authenticated startup before its cleanup awaits.
@@ -298,7 +307,7 @@ class SessionController extends ChangeNotifier {
       // must retry its revoke before it can authenticate anyone else.
       await _tokenStore.quarantineActiveToken();
     }
-    if (userId != null) {
+    if (removeDraft && userId != null) {
       await _drafts.clear(userId);
       try {
         await clearUserMedia?.call(userId);

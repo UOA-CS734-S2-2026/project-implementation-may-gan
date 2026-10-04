@@ -34,6 +34,8 @@ import 'package:http/testing.dart';
 import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:dayli_mobile/weather/weather_location.dart';
 import 'package:dayli_mobile/weather/weather_lookup.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_platform_interface/types/auth_messages.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
@@ -768,7 +770,11 @@ class TestHarness {
   );
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
-  final biometric = FakeBiometricService();
+  final biometricPreference = MemoryBiometricPreferenceStore();
+  final localAuth = FakeLocalAuthentication();
+
+  /// Created on first use, so tests can set [biometricPreference] first.
+  late final biometric = BiometricService(biometricPreference, localAuth);
 
   /// The weather provider, phone location and place lookup the composer uses.
   final weatherProvider = FakeWeatherProvider();
@@ -1135,52 +1141,57 @@ class FakeInteractionsClient implements InteractionsClient {
   }
 }
 
-class FakeBiometricService extends ChangeNotifier implements BiometricService {
-  bool _isEnabled = false;
-  bool _isLocked = false;
-  bool _isAuthenticating = false;
-  
-  @override
-  bool get isEnabled => _isEnabled;
-  
-  @override
-  bool get isLocked => _isLocked;
-
-  set enabled(bool value) {
-    _isEnabled = value;
-    notifyListeners();
-  }
-
-  set locked(bool value) {
-    _isLocked = value;
-    notifyListeners();
-  }
-
-  set isAuthenticating(bool value) {
-    _isAuthenticating = value;
-  }
+class MemoryBiometricPreferenceStore implements BiometricPreferenceStore {
+  bool enabled = false;
 
   @override
-  void lock() {
-    if (_isEnabled && !_isLocked && !_isAuthenticating) {
-      _isLocked = true;
-      notifyListeners();
-    }
-  }
+  bool readEnabled() => enabled;
 
   @override
-  Future<bool> setEnabled(bool enabled) async {
-    _isEnabled = enabled;
-    notifyListeners();
-    return true;
+  Future<void> writeEnabled(bool value) async => enabled = value;
+}
+
+/// Device authentication that tests control. [holdNextPrompt] keeps the next
+/// prompt open until the test completes it, like a system prompt on screen.
+class FakeLocalAuthentication extends LocalAuthentication {
+  bool biometricsAvailable = true;
+  bool deviceSupported = true;
+  bool result = true;
+
+  /// Thrown by [authenticate] in place of a result, like the platform plugin.
+  PlatformException? error;
+  final reasons = <String>[];
+  Completer<bool>? _held;
+
+  int get prompts => reasons.length;
+
+  Completer<bool> holdNextPrompt() => _held = Completer<bool>();
+
+  /// Simulates removing the device passcode and biometrics in Settings.
+  void removeDeviceAuthentication() {
+    biometricsAvailable = false;
+    deviceSupported = false;
+    error = PlatformException(code: 'PasscodeNotSet');
   }
 
   @override
-  Future<bool> authenticate({String reason = 'Unlock Dayli'}) async {
-    if (_isLocked) {
-      _isLocked = false;
-      notifyListeners();
-    }
-    return true;
+  Future<bool> get canCheckBiometrics async => biometricsAvailable;
+
+  @override
+  Future<bool> isDeviceSupported() async => deviceSupported;
+
+  @override
+  Future<bool> authenticate({
+    required String localizedReason,
+    Iterable<AuthMessages> authMessages = const <AuthMessages>[],
+    AuthenticationOptions options = const AuthenticationOptions(),
+  }) {
+    reasons.add(localizedReason);
+    final held = _held;
+    _held = null;
+    if (held != null) return held.future;
+    final error = this.error;
+    if (error != null) return Future.error(error);
+    return Future.value(result);
   }
 }
