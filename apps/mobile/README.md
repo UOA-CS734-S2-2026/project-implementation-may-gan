@@ -61,6 +61,18 @@ git checkout ios/Runner/Info.plist ios/Runner.xcodeproj/project.pbxproj
 
 The last line drops reformatting and an unrelated build setting the tools add. The native launch screen can't show Flutter UI, so it shows the full Dayli logo on the landing screen's cream until the first frame. The website's circular favicon is `apps/web/app/icon.svg` with `favicon.ico` as the fallback.
 
+## Weather on posts
+
+The composer's **the weather** section adds a condition, a temperature, and a place name to a post. Nothing runs until the author taps **Add the weather** and picks an option in the explanation, and the system's location prompt follows only **Use my location**.
+
+- Weather and place search come from [Open-Meteo](https://open-meteo.com), which needs no key. Its free tier is for non-commercial use and asks for attribution, which the composer shows. Revisit it before a commercial launch.
+- Location uses `geolocator` at low accuracy, one reading at a time. Android declares `ACCESS_COARSE_LOCATION` only; keep it that way, and check the merged manifest after adding a plugin. iOS uses the `NSLocationWhenInUseUsageDescription` string in `Info.plist`.
+- The place name comes from the phone's geocoder through `geocoding`, so the position goes to the platform's place lookup. Posts never carry coordinates, and the position is cut to two decimal places before any request.
+- All of it sits behind `WeatherServices` in `AppServices`. Tests replace the provider, location and place namer with the fakes in `test/support/weather_fakes.dart`, so no test touches the network or the phone.
+- To try it on an emulator, set a location in the emulator's extended controls (Android) or **Features > Location** (iOS Simulator) and use a made-up place. Do not put a real address in a screenshot.
+
+Only automated tests and an Android debug build have exercised this so far. The iOS side has not been built or run, so check the permission prompt on a simulator or an iPhone before relying on it.
+
 ## Design
 
 The app keeps the WDCC Dayli frontend's branding and lays it out for phones. That frontend was imported under the reuse approval in [product decisions](../../docs/dayli/product-decisions.md#existing-frontend-reuse), from [UOA-CS732-S1-2026/group-project-wdcc](https://github.com/UOA-CS732-S1-2026/group-project-wdcc) at commit `3f961fe`. `assets/wdcc/` holds its logo, dot grid, squiggles, and search icon. The logo's CSS-variable fills are replaced by their fallback colour, and the squiggles are exported from their React components with WDCC's stroke colours.

@@ -53,6 +53,14 @@ Messages have their own inbox and request rules. A nonfriend can send one initia
 
 Messages are not end-to-end encrypted. Dayli's authorized backend can read stored content to deliver and manage conversations. Use **Unsend** when it is available if you want to remove a sent message from the conversation, but remember that unsending cannot recall a message somebody has already seen or saved.
 
+## Weather and your location
+
+If you add the weather on mobile, your post carries only three things: the weather, the temperature, and the name of a place such as a city. Dayli does not store your coordinates, and they are not sent to Dayli.
+
+Your phone reads your approximate location once, and only after you choose **Use my location**. That location goes to the weather service (Open-Meteo.com) and to your phone's own place lookup, so they can find the weather and the place name. You can choose a place by name instead, which uses no location at all.
+
+The weather has the same audience as the rest of the post: anyone who can open your dayli can see the place name. It appears only on the post itself, not in the feed or on profile lists, and it is removed with the post. The weather is what your phone reported when you added it. Dayli does not check it.
+
 ## Notes to tomorrow's you
 
 A note to tomorrow is stored privately with your dayli and is not part of the Friends post audience. Dayli does not yet have a reading screen for these notes. Reading them from the next day is planned.
