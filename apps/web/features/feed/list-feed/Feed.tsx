@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PostCard } from "@/components/ui/PostCard";
 import { Button } from "@/components/ui/core/Button";
+import { Skeleton } from "@/components/ui/core/Skeleton";
 import type { FeedPost } from "@/features/feed/shared/feed.api";
 import { FeedApiError } from "@/features/feed/shared/query-result";
 import { useFeedQuery } from "./use-feed-query";
@@ -37,6 +38,22 @@ function Message({ children }: { children: React.ReactNode }) {
   );
 }
 
+function FeedSkeleton() {
+  return (
+    <div role="status" aria-label="Loading friends' daylies" className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div key={index} className="rounded-sm bg-white p-5 shadow-md">
+          <Skeleton className="aspect-square w-full rounded-none" />
+          <div className="space-y-3 pt-4">
+            <div className="flex items-center gap-2"><Skeleton className="h-9 w-9 rounded-full" /><div className="space-y-2"><Skeleton className="h-3 w-24" /><Skeleton className="h-2.5 w-16" /></div></div>
+            <Skeleton className="h-3 w-4/5" /><Skeleton className="h-3 w-full" /><Skeleton className="h-3 w-3/5" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Yesterday's posts from friends, loaded a page at a time. */
 export function Feed() {
   const router = useRouter();
@@ -61,13 +78,7 @@ export function Feed() {
     return [...seen.values()];
   }, [feed.data]);
 
-  if (feed.isPending) {
-    return (
-      <Message>
-        <p role="status">Loading your friends&apos; daylies...</p>
-      </Message>
-    );
-  }
+  if (feed.isPending) return <FeedSkeleton />;
 
   if (feed.isError && posts.length === 0) {
     return (

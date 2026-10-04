@@ -4,6 +4,7 @@ import { appendConversationChange } from "../../shared/append-conversation-chang
 import { messageProjectionSelection, toStoredMessage } from "../../shared/message-projection";
 import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import { participantIdForUser } from "../../shared/participant-identity";
+import { claimNewMessageSlot, databaseTimestampValue, lockNewMessageSender } from "../../shared/new-message-quota";
 import type {
   DirectConversation,
   DirectConversationStore,
@@ -132,6 +133,14 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     };
   }
 
+  async lockNewMessageSender(senderId: string): Promise<void> {
+    return lockNewMessageSender(this.queryable, senderId);
+  }
+
+  async claimNewMessageSlot(senderId: string, limit: number) {
+    return claimNewMessageSlot(this.queryable, senderId, limit);
+  }
+
   async activateConversation(conversation: DirectConversation, now: Date): Promise<DirectConversation> {
     await this.queryable
       .update(schema.conversations)
@@ -142,6 +151,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   }
 
   async createConversationWithMessage(input: Parameters<DirectConversationTransaction["createConversationWithMessage"]>[0]) {
+    const createdAt = databaseTimestampValue(input.createdAt);
     await this.queryable.insert(schema.conversations).values({
       id: input.conversationId,
       kind: "direct",
@@ -156,9 +166,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
       requestState: input.requestState,
       lastMessageSequence: 1,
       lastChangeSequence: 0,
-      lastActivityAt: input.createdAt,
-      createdAt: input.createdAt,
-      updatedAt: input.createdAt,
+      lastActivityAt: createdAt,
+      createdAt,
+      updatedAt: createdAt,
     });
     await this.queryable.insert(schema.conversationMembers).values([
       {
@@ -167,8 +177,8 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         participantId: participantIdForUser(input.initiatorId),
         lastReadSequence: 0,
         receiptSequence: 0,
-        createdAt: input.createdAt,
-        updatedAt: input.createdAt,
+        createdAt,
+        updatedAt: createdAt,
       },
       {
         conversationId: input.conversationId,
@@ -176,8 +186,8 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         participantId: participantIdForUser(input.recipientId),
         lastReadSequence: 0,
         receiptSequence: 0,
-        createdAt: input.createdAt,
-        updatedAt: input.createdAt,
+        createdAt,
+        updatedAt: createdAt,
       },
     ]);
     const [message] = await this.queryable
@@ -192,10 +202,10 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         requestFingerprint: input.requestFingerprint,
         body: input.text,
         version: 1,
-        createdAt: input.createdAt,
+        createdAt,
       })
       .returning(messageProjectionSelection);
-    await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, input.createdAt);
+    await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, createdAt);
     const [recipient] = await this.queryable
       .select({ id: schema.messagingParticipants.id })
       .from(schema.messagingParticipants)
@@ -209,12 +219,13 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
   }
 
   async appendExistingMessage(input: Parameters<DirectConversationTransaction["appendExistingMessage"]>[0]): Promise<StoredMessage> {
+    const createdAt = databaseTimestampValue(input.createdAt);
     const [allocated] = await this.queryable
       .update(schema.conversations)
       .set({
         lastMessageSequence: sql`${schema.conversations.lastMessageSequence} + 1`,
-        lastActivityAt: input.createdAt,
-        updatedAt: input.createdAt,
+        lastActivityAt: createdAt,
+        updatedAt: createdAt,
       })
       .where(eq(schema.conversations.id, input.conversation.id))
       .returning({ sequence: schema.conversations.lastMessageSequence });
@@ -232,10 +243,10 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         requestFingerprint: input.requestFingerprint,
         body: input.text,
         version: 1,
-        createdAt: input.createdAt,
+        createdAt,
       })
       .returning(messageProjectionSelection);
-    await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, input.createdAt);
+    await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, createdAt);
     return toStoredMessage(message!);
   }
 }

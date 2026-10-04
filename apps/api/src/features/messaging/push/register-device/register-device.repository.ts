@@ -42,6 +42,7 @@ export function createPostgresRegisterDeviceStore(database: DayliDatabase): Regi
             tokenKeyVersion: device.tokenKeyVersion,
             tokenHash: device.tokenHash,
             optedIn: device.optedIn,
+            notificationSchemaVersion: device.notificationSchemaVersion ?? null,
             registeredAt: device.now,
             invalidatedAt: null,
           })
@@ -55,6 +56,7 @@ export function createPostgresRegisterDeviceStore(database: DayliDatabase): Regi
               tokenKeyVersion: sql`excluded.token_key_version`,
               tokenHash: sql`excluded.token_hash`,
               optedIn: sql`excluded.opted_in`,
+              notificationSchemaVersion: sql`excluded.notification_schema_version`,
               registeredAt: sql`excluded.registered_at`,
               invalidatedAt: null,
             },

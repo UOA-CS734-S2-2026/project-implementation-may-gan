@@ -1,18 +1,16 @@
 ---
-   title: What dayli is.
-   description: A description of what dayli is.
+title: What Dayli is
+description: A daily reflection app for keeping a journal and staying in touch with friends.
 ---
 
-   # Getting started
+# What Dayli is
 
- Hello hello! Welcome to the Dayli Docs. 
+Dayli is a daily reflection app made with students in mind. Each day you answer one prompt, rate the day from 1 to 10, and decide who can read the post.
 
-Our first topic is what is dayli? 
+The idea came from a friend group split across countries by travel and work. As schedules stopped lining up, keeping up with the ordinary parts of each other's lives became harder. Dayli gives those small updates one place to land without turning them into a live social feed.
 
-Dayli is a daily reflection app primarily for students. Each day you respond to a prompt, rate how you're feeling and share your day with friends.
+A post belongs to the Auckland calendar day and must arrive before midnight. Friends posts are released after that midnight, so people write about their own day before reading everyone else's. A Solo post stays private to its author.
 
-The idea is very simple, make time to notice what happened today and share it with your friends. A post by default is shared to your friends but optionally you can keep it private to yourself.
+Dayli now has web and mobile apps for daily posts, profile history, friends, and messages. Mobile can attach photos, video, and a voice memo when media uploads are configured. Public profiles also have signed-out profile and post pages. That public setting applies only to released Friends posts. Solo and unreleased posts remain private.
 
-Dayli is built around one daily post. For our scope posts are tied to the Auckland calender day and are released at midnight, so frirnds can catch up on each other's days and reflections the day after.
-
-The original idea came from late last year, where our friend group was split up between countries for various reasons. In our case it was travel and work but the point was, "as life gets busier, friends move away and schedules stop alligning." Staying connected got hard.
+Dayli does not choose an audience by default. The author must select Friends or Solo for every post, then can change the post audience later. See [Core concepts and daily rules](./core-concepts-and-daily-rules) for the timing rules and [Privacy and sharing](/docs/using-dayli/privacy-and-sharing) for how post audience and profile visibility work together.

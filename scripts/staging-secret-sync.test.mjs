@@ -44,6 +44,16 @@ test("supports the initial no-push release without FCM or a push key", () => {
   }));
 });
 
+test("omitting the source FCM secret does not project deletion of an existing Worker binding", () => {
+  const source = readStagingWorkerSecretSource({ BETTER_AUTH_SECRET: "test-auth" }, ["BETTER_AUTH_SECRET"]);
+  assert.doesNotThrow(() => assertProjectedWorkerSecretPairing({
+    existingSecretNames: new Set(["BETTER_AUTH_SECRET", "FCM_SERVICE_ACCOUNT_JSON", "PUSH_TOKEN_ENCRYPTION_KEY"]),
+    source,
+    requiredSecretNames: ["BETTER_AUTH_SECRET"],
+  }));
+  assert.deepEqual(source.values, { BETTER_AUTH_SECRET: "test-auth" });
+});
+
 test("requires public provider pairing and a Cloudflare-provisioned key for FCM", () => {
   const source = readStagingWorkerSecretSource(sourceEnvironment, ["BETTER_AUTH_SECRET"]);
   assert.throws(

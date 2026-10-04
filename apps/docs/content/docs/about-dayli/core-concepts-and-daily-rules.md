@@ -21,14 +21,14 @@ If you miss a day, you can't go back and submit a post for it. You can still wri
 
 Before posting, you choose who the post is for.
 
-- **Friends** means your friends can see it once it is released.
+- **Friends** means active friends can see it once it is released. If your profile is public, other signed-in and signed-out readers can open it too.
 - **Solo** means the post stays private to you.
 
-You don't have to share every day with other people. Sometimes you might just want to write things down for yourself.
+Dayli does not select either option for you. You don't have to share every day with other people. Sometimes you might just want to write things down for yourself.
 
 ## Why posts wait until midnight
 
-Friends posts are released at the next Auckland midnight. Until then, you can see your own post, but your friends can't.
+Friends posts are released at the next Auckland midnight. Until then, only you can see your own post.
 
 This gives everyone the day to write their own reflection before catching up on each other's days.
 

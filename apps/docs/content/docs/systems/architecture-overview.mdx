@@ -48,7 +48,7 @@ PostgreSQL stores accounts, posts, relationships, messages, and media reservatio
 
 The API uses a restricted application database role. Migration tooling connects separately with the migrator role. Updating the schema is a different job from serving someone's feed.
 
-Images and videos live in private R2 storage, not inside PostgreSQL. The database tracks their ownership and associations. After authorizing the parent post, the API gives an owner or active friend a short-lived signed URL. Public-profile reads use a Dayli content route that checks the parent again on every request.
+Images, videos, and voice memos live in private R2 storage, not inside PostgreSQL. The database tracks their ownership and associations. After authorizing the parent post, the API gives an owner or active friend a short-lived signed URL. Public-profile reads use a Dayli content route that checks the parent again on every request.
 
 ## Following a request
 
@@ -56,7 +56,9 @@ Most interactions take the same path. A client sends a request, the backend chec
 
 Authentication differs slightly between the clients. The browser sends a session cookie with credentialed requests. Mobile stores its session token in platform-protected storage and sends it as a bearer token. Both reach the same authorization checks.
 
-Daily posts use server-owned Auckland dates and release rules. Choosing a `friends` audience does not make a post immediately readable by everyone. The backend checks the relationship, blocks, and release timing when someone requests it. A `solo` post stays private to its author.
+Daily posts use server-owned Auckland dates and release rules. Choosing a `friends` audience does not make a post immediately readable. After release, active friends can read it, and a public profile also permits signed-in and signed-out profile and detail reads. The backend checks relationships, blocks, profile visibility, and release timing on each request. A `solo` post stays private to its author.
+
+Likes and comments keep a narrower boundary. Their routes require a signed-in owner or active friend with a username, even when a public reader may open the parent post. The API support is active, but the current web and mobile interfaces do not perform those interaction writes.
 
 ## Media takes a small detour
 
@@ -70,7 +72,7 @@ Messaging has REST routes, PostgreSQL records, and realtime delivery code. A per
 
 The messaging outbox records delivery work in PostgreSQL. Immediate dispatch handles normal updates, and scheduled retries repair failed delivery. When provider and device configuration is present, FCM handles mobile push notifications.
 
-Scheduled work also handles media cleanup. Data export is implemented but currently disabled.
+Scheduled work also handles media cleanup. Data export code is implemented, but ordinary API and client activation remains disabled. Staging has a separate, time-bounded path for one synthetic owner when all reviewed proof settings and the restricted export Hyperdrive binding are present.
 
 ## Where to go next
 

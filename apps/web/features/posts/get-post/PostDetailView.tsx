@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
+import { Skeleton } from "@/components/ui/core/Skeleton";
 import { PostLikeBar } from "@/features/interactions/like-post/PostLikeBar";
 import { PostComments } from "@/features/interactions/post-comments/PostComments";
 import { DeletePostDialog } from "@/features/posts/delete-post/DeletePostDialog";
@@ -88,6 +89,16 @@ function Centered({ children }: { children: React.ReactNode }) {
   );
 }
 
+function PostDetailSkeleton() {
+  return (
+    <article role="status" aria-label="Loading dayli" className="mx-auto max-w-2xl space-y-6 rounded-2xl bg-white p-8 shadow-card">
+      <header className="flex items-center gap-3"><Skeleton className="h-11 w-11 rounded-full" /><div className="space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-20" /></div><Skeleton className="ml-auto h-5 w-10" /></header>
+      <Skeleton className="h-3 w-48" />
+      <div className="space-y-3"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-4/5" /><Skeleton className="h-6 w-3/5" /></div>
+    </article>
+  );
+}
+
 export function PostDetailView({ username, postId }: { username: string; postId: string }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -144,13 +155,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
     }
   }, [intent, post, username, router]);
 
-  if (query.isPending) {
-    return (
-      <Centered>
-        <p role="status">Loading this dayli...</p>
-      </Centered>
-    );
-  }
+  if (query.isPending) return <PostDetailSkeleton />;
 
   if (!post) {
     if (accessRevoked) {
