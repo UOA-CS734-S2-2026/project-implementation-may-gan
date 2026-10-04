@@ -6,6 +6,11 @@ export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
   /** Restricted lifecycle_worker connection. Never reuse the ordinary app binding. */
   EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
+  /** Staging-only synthetic export proof. Never set in production. */
+  STAGING_EXPORT_PROOF_APPROVED?: string;
+  STAGING_EXPORT_PROOF_USER_ID?: string;
+  STAGING_EXPORT_PROOF_BUILD_UNTIL?: string;
+  STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER?: string;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
   /** Direct API origin for native callers and issued realtime ticket URLs. */

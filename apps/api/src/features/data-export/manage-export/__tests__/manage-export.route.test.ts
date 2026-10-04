@@ -36,8 +36,23 @@ describe("account export routes", () => {
     expect(deps.download).not.toHaveBeenCalled();
   });
 
+  it("does not expose a staging proof to any other signed-in owner", async () => {
+    const deps = { ...dependencies(), allowedUserId: "synthetic-owner" };
+    const app = createApp({ exportService: deps });
+    for (const [method, path] of [["GET", "/api/v1/account/export"],
+      ["POST", "/api/v1/account/export/request"],
+      ["GET", `/api/v1/account/export/${requestId}/download`]]) {
+      const response = await app.request(`https://api.example.test${path}`, { method });
+      expect(response.status).toBe(503);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(deps.status).not.toHaveBeenCalled();
+    expect(deps.request).not.toHaveBeenCalled();
+    expect(deps.download).not.toHaveBeenCalled();
+  });
+
   it("allows eligible Terms-blocked owners to request, check, and stream without a signed URL", async () => {
-    const deps = dependencies();
+    const deps = { ...dependencies(), allowedUserId: owner.userId };
     const app = createApp({ exportService: deps, accountPolicy: {
       resolveSession: deps.resolveSession,
       policies: { resolve: async () => ({ restriction: "terms_blocked" as const, allowed: new Set(["export" as const]) }) },
