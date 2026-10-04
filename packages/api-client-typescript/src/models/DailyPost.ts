@@ -48,6 +48,13 @@ import {
     DailyPostPromptToJSON,
     DailyPostPromptToJSONTyped,
 } from './DailyPostPrompt';
+import type { PostWeather } from './PostWeather';
+import {
+    PostWeatherFromJSON,
+    PostWeatherFromJSONTyped,
+    PostWeatherToJSON,
+    PostWeatherToJSONTyped,
+} from './PostWeather';
 
 /**
  *
@@ -107,6 +114,10 @@ export interface DailyPost {
      * The attached voice memo, or null when the post has none.
      */
     voiceMemo: DailyPostVoiceMemo | null;
+    /**
+     * The post's weather snapshot, or null when the post has none.
+     */
+    weather: PostWeather | null;
 }
 
 
@@ -128,6 +139,7 @@ export function instanceOfDailyPost(value: object): value is DailyPost {
     if (!('tomorrowNote' in value) || value['tomorrowNote'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
+    if (!('weather' in value) || value['weather'] === undefined) return false;
     return true;
 }
 
@@ -154,6 +166,7 @@ export function DailyPostFromJSONTyped(json: any, ignoreDiscriminator: boolean):
         'tomorrowNote': DailyPostTomorrowNoteFromJSON(json['tomorrowNote']),
         'media': ((json['media'] as Array<any>).map(DailyPostMediaFromJSON)),
         'voiceMemo': DailyPostVoiceMemoFromJSON(json['voiceMemo']),
+        'weather': PostWeatherFromJSON(json['weather']),
     };
 }
 
@@ -181,5 +194,6 @@ export function DailyPostToJSONTyped(value?: DailyPost | null, ignoreDiscriminat
         'tomorrowNote': DailyPostTomorrowNoteToJSON(value['tomorrowNote']),
         'media': ((value['media'] as Array<any>).map(DailyPostMediaToJSON)),
         'voiceMemo': DailyPostVoiceMemoToJSON(value['voiceMemo']),
+        'weather': PostWeatherToJSON(value['weather']),
     };
 }

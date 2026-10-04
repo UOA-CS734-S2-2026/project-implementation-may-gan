@@ -118,6 +118,8 @@ lib/model/post_media_content_type.dart
 lib/model/post_revision.dart
 lib/model/post_revisions_page.dart
 lib/model/post_voice_memo.dart
+lib/model/post_weather.dart
+lib/model/post_weather_condition.dart
 lib/model/posting_streak.dart
 lib/model/posts_list_trash200_response.dart
 lib/model/posts_restore200_response.dart

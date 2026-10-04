@@ -26,6 +26,7 @@ class DailyPost {
     required this.tomorrowNote,
     this.media = const [],
     required this.voiceMemo,
+    required this.weather,
   });
 
   final String id;
@@ -56,6 +57,9 @@ class DailyPost {
   /// The attached voice memo, or null when the post has none.
   final DailyPostVoiceMemo? voiceMemo;
 
+  /// The post's weather snapshot, or null when the post has none.
+  final PostWeather? weather;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -72,7 +76,8 @@ class DailyPost {
           other.releasedAt == releasedAt &&
           other.tomorrowNote == tomorrowNote &&
           _deepEquality.equals(other.media, media) &&
-          other.voiceMemo == voiceMemo;
+          other.voiceMemo == voiceMemo &&
+          other.weather == weather;
 
   @override
   int get hashCode =>
@@ -89,11 +94,12 @@ class DailyPost {
       (releasedAt.hashCode) +
       (tomorrowNote == null ? 0 : tomorrowNote!.hashCode) +
       (media.hashCode) +
-      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode) +
+      (weather == null ? 0 : weather!.hashCode);
 
   @override
   String toString() =>
-      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media, voiceMemo=$voiceMemo]';
+      'DailyPost[id=$id, authorId=$authorId, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, tomorrowNote=$tomorrowNote, media=$media, voiceMemo=$voiceMemo, weather=$weather]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -122,6 +128,11 @@ class DailyPost {
     } else {
       json[r'voiceMemo'] = null;
     }
+    if (this.weather != null) {
+      json[r'weather'] = this.weather;
+    } else {
+      json[r'weather'] = null;
+    }
     return json;
   }
 
@@ -144,6 +155,8 @@ class DailyPost {
     List<DailyPostMedia>? media,
     DailyPostVoiceMemo? voiceMemo,
     bool voiceMemoSetToNull = false,
+    PostWeather? weather,
+    bool weatherSetToNull = false,
   }) =>
       DailyPost(
         id: id ?? this.id,
@@ -160,6 +173,7 @@ class DailyPost {
             tomorrowNoteSetToNull ? null : tomorrowNote ?? this.tomorrowNote,
         media: media ?? this.media,
         voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
+        weather: weatherSetToNull ? null : weather ?? this.weather,
       );
 
   /// Returns a new [DailyPost] instance and imports its values from
@@ -219,6 +233,8 @@ class DailyPost {
             'Required key "DailyPost[media]" has a null value in JSON.');
         assert(json.containsKey(r'voiceMemo'),
             'Required key "DailyPost[voiceMemo]" is missing from JSON.');
+        assert(json.containsKey(r'weather'),
+            'Required key "DailyPost[weather]" is missing from JSON.');
         return true;
       }());
 
@@ -236,6 +252,7 @@ class DailyPost {
         tomorrowNote: DailyPostTomorrowNote.fromJson(json[r'tomorrowNote']),
         media: DailyPostMedia.listFromJson(json[r'media']),
         voiceMemo: DailyPostVoiceMemo.fromJson(json[r'voiceMemo']),
+        weather: PostWeather.fromJson(json[r'weather']),
       );
     }
     return null;
@@ -305,5 +322,6 @@ class DailyPost {
     'tomorrowNote',
     'media',
     'voiceMemo',
+    'weather',
   };
 }
