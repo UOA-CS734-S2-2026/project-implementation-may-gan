@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/core/Button";
@@ -14,6 +14,7 @@ import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
 import { getUsernameProfile } from "@/lib/profile/username";
+import { useSession } from "@/lib/session/hooks";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -43,6 +44,20 @@ function GoogleSignInError() {
 function SignInForm() {
   const router = useRouter();
   const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
+  const { user } = useSession();
+  const signInInFlight = useRef(false);
+  const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expectedUserId || user?.id !== expectedUserId) return;
+    let current = true;
+    void getUsernameProfile().then((profile) => {
+      if (current) router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
+    }).catch(() => {
+      if (current) router.push(returnTo);
+    });
+    return () => { current = false; };
+  }, [expectedUserId, returnTo, router, user?.id]);
 
   const {
     control,
@@ -55,18 +70,24 @@ function SignInForm() {
   });
 
   const onSubmit = async ({ email, password }: SignInValues) => {
-    const { error } = await authClient.signIn.email({ email, password });
-
-    if (error) {
-      setError("root", { message: error.message ?? "Invalid credentials." });
-      return;
-    }
-
+    if (signInInFlight.current) return;
+    signInInFlight.current = true;
+    setExpectedUserId(null);
     try {
-      const profile = await getUsernameProfile();
-      router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
-    } catch {
-      router.push(returnTo);
+      const { data, error } = await authClient.signIn.email({ email, password });
+
+      if (error) {
+        setError("root", { message: error.message ?? "Invalid credentials." });
+        return;
+      }
+      if (!data?.user?.id) {
+        setError("root", { message: "Your session could not be verified. Please try again." });
+        return;
+      }
+
+      setExpectedUserId(data.user.id);
+    } finally {
+      signInInFlight.current = false;
     }
   };
 
@@ -74,7 +95,7 @@ function SignInForm() {
     <form
       method="post"
       className="flex flex-col gap-8"
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={(event) => void handleSubmit(onSubmit)(event)}
     >
       <p className="font-serif text-2xl font-semibold text-foreground tracking-tight">
         Welcome back

@@ -5,6 +5,32 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Better Auth deliberately limits sign-up and sign-in bursts by source IP. Give
+# every spec and browser project its own complete local fixture so no scenario
+# can spend another scenario's production-equivalent auth budget.
+if [[ -z "${DAYLI_WEB_E2E_SINGLE_FIXTURE:-}" && "$#" -eq 0 ]]; then
+  aggregate_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e-aggregate.XXXXXX")"
+  trap 'rm -rf "$aggregate_dir"' EXIT INT TERM
+  plan_report="$aggregate_dir/plan.json"
+  (
+    cd "$repo_root/apps/web"
+    PLAYWRIGHT_JSON_OUTPUT_FILE="$plan_report" pnpm exec playwright test --list --reporter=json >/dev/null
+  )
+  result_reports=()
+  fixture_number=0
+  while IFS=$'\t' read -r spec project; do
+    fixture_number=$((fixture_number + 1))
+    result_report="$aggregate_dir/result-${fixture_number}.json"
+    result_reports+=("$result_report")
+    echo "Running e2e/$spec for $project in an isolated local fixture"
+    DAYLI_WEB_E2E_SINGLE_FIXTURE=1 E2E_RESULT_FILE="$result_report" \
+      bash "$repo_root/scripts/test-web-e2e.sh" "e2e/$spec" "--project=$project"
+  done < <(node "$repo_root/scripts/web-e2e-isolation.mjs" plan "$plan_report")
+  node "$repo_root/scripts/web-e2e-isolation.mjs" summarize "${result_reports[@]}"
+  exit 0
+fi
+
 compose_file="$repo_root/packages/db/docker-compose.yml"
 compose_project="dayli-web-e2e-${$}-${RANDOM}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e.XXXXXX")"
@@ -156,4 +182,10 @@ wait_for_url "$web_origin" "$web_pid" 'Web application'
 echo 'Running Playwright browser journeys'
 # `pnpm run <script> -- <args>` passes the separator through to shell scripts.
 if [[ "${1:-}" == "--" ]]; then shift; fi
-E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" pnpm --filter @dayli/web exec playwright test "$@"
+if [[ -n "${E2E_RESULT_FILE:-}" ]]; then
+  E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" \
+    PLAYWRIGHT_JSON_OUTPUT_FILE="$E2E_RESULT_FILE" pnpm --filter @dayli/web exec playwright test "$@" --reporter=json
+else
+  E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" \
+    pnpm --filter @dayli/web exec playwright test "$@"
+fi

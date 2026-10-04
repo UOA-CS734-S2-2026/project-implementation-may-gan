@@ -11,6 +11,7 @@ import '../auth/session_controller.dart';
 import '../compose/media_compressor.dart';
 import '../compose/media_picker.dart';
 import '../compose/pending_capture.dart';
+import '../compose/voice_recorder.dart';
 import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
@@ -35,6 +36,7 @@ class AppServices {
     this.google,
     this.mediaPicker = const DeviceMediaPicker(),
     PendingCaptures? pendingCaptures,
+    this.voiceMemos = const VoiceMemoServices(),
     this.mediaUploads,
     MediaCompressor? mediaCompressor,
     this.clock = DateTime.now,
@@ -64,6 +66,10 @@ class AppServices {
   /// Which user and draft a camera or library pick belongs to, so a photo
   /// recovered after Android ended the app only reaches its own composer.
   final PendingCaptures pendingCaptures;
+
+  /// Recording a voice memo: the microphone, its permission, and where the
+  /// recording is written.
+  final VoiceMemoServices voiceMemos;
 
   /// Null keeps picked media on the device without uploading it.
   final MediaUploadClient? mediaUploads;

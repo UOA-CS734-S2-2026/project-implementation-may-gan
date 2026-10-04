@@ -14,6 +14,8 @@ import 'deadline_countdown.dart';
 import 'media_input.dart';
 import 'media_picker.dart';
 import 'media_upload_controller.dart';
+import 'voice_memo_input.dart';
+import 'voice_memo_recorder.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
 /// rating, the words, a note to tomorrow, and who can see it, with the Post
@@ -26,11 +28,16 @@ class ComposerScreen extends StatefulWidget {
   State<ComposerScreen> createState() => _ComposerScreenState();
 }
 
-class _ComposerScreenState extends State<ComposerScreen> {
+class _ComposerScreenState extends State<ComposerScreen>
+    with WidgetsBindingObserver {
   ComposerController? _controller;
 
   /// Null when this build doesn't upload media.
   MediaUploadController? _uploads;
+
+  /// Records the voice memo. Null when this build doesn't upload media, since
+  /// a memo can't be posted without uploading it.
+  VoiceMemoRecorderController? _voice;
   final _answer = TextEditingController();
   final _caption = TextEditingController();
   final _tomorrowNote = TextEditingController();
@@ -45,6 +52,20 @@ class _ComposerScreenState extends State<ComposerScreen> {
   /// Settles what the system handed back after Android ended the app. A pick
   /// waits for it, so a new record never lands on top of an unsettled one.
   Future<void> _recovery = Future.value();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Never record while the app isn't in front. What was said so far is kept.
+    if (state != AppLifecycleState.resumed) {
+      unawaited(_voice?.stopForBackground());
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -65,6 +86,21 @@ class _ComposerScreenState extends State<ComposerScreen> {
     )..addListener(_syncText);
     final uploads = services.mediaUploads;
     if (uploads != null) {
+      _voice = VoiceMemoRecorderController(
+        ownerId: userId,
+        recorder: services.voiceMemos.createRecorder(),
+        permission: services.voiceMemos.permission,
+        files: services.voiceMemos.files,
+        clock: services.voiceMemos.clock,
+        // The memo shares the post's 25 MB with its photos or video.
+        otherBytes: () => [
+          for (final attachment in visualAttachments(
+            _controller?.draft?.attachments ?? const [],
+          ))
+            ?attachment.byteSize,
+        ],
+        onRecorded: _setVoiceMemo,
+      );
       _uploads = MediaUploadController(
         composer: _controller!,
         compressor: services.mediaCompressor,
@@ -91,6 +127,8 @@ class _ComposerScreenState extends State<ComposerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _voice?.dispose();
     _uploads?.dispose();
     _controller?.removeListener(_syncText);
     _controller?.dispose();
@@ -136,6 +174,12 @@ class _ComposerScreenState extends State<ComposerScreen> {
       await captures.finish();
     }
   }
+
+  /// True when the voice memo is the only attachment, so a media hold is about
+  /// it and not about any photo.
+  static bool _voiceMemoOnly(DailyPostDraft draft) =>
+      voiceMemoOf(draft.attachments) != null &&
+      visualAttachments(draft.attachments).isEmpty;
 
   static String _draftKey(DailyPostDraft draft) =>
       '${draft.localDate}:${draft.idempotencyKey}';
@@ -210,7 +254,11 @@ class _ComposerScreenState extends State<ComposerScreen> {
         (attachment) => attachment.localPath == recovered.localPath,
       );
       if (known || !canAddAttachment(draft.attachments)) return;
-      _attach(controller, draft.attachments.length, recovered);
+      _attach(
+        controller,
+        visualAttachments(draft.attachments).length,
+        recovered,
+      );
     } catch (_) {
       // Recovery is a courtesy; the composer works without it.
     }
@@ -223,13 +271,16 @@ class _ComposerScreenState extends State<ComposerScreen> {
   ) {
     final draft = controller.draft;
     if (picked == null || draft == null) return;
-    final attachments = [...draft.attachments];
-    if (slot < attachments.length) {
-      attachments[slot] = picked;
+    // Slots are the photos and video only; the voice memo stays last.
+    final visual = visualAttachments(draft.attachments);
+    if (slot < visual.length) {
+      visual[slot] = picked;
     } else {
-      attachments.add(picked);
+      visual.add(picked);
     }
-    controller.update(attachments: attachments);
+    controller.update(
+      attachments: withVoiceMemoLast(visual, draft.attachments),
+    );
   }
 
   Future<void> _openSettings() =>
@@ -238,7 +289,86 @@ class _ComposerScreenState extends State<ComposerScreen> {
   void _remove(ComposerController controller, int slot) {
     final draft = controller.draft;
     if (draft == null) return;
-    controller.update(attachments: [...draft.attachments]..removeAt(slot));
+    final visual = visualAttachments(draft.attachments)..removeAt(slot);
+    controller.update(
+      attachments: withVoiceMemoLast(visual, draft.attachments),
+    );
+  }
+
+  /// Puts a finished recording in the draft, in place of any earlier one. The
+  /// earlier recording's file is removed with the rest of the copies the draft
+  /// no longer refers to.
+  void _setVoiceMemo(DraftAttachment memo) {
+    final controller = _controller;
+    final draft = controller?.draft;
+    if (controller == null || draft == null) {
+      unawaited(AppScope.of(context).voiceMemos.files.delete(memo.localPath));
+      return;
+    }
+    controller.update(
+      attachments: [...visualAttachments(draft.attachments), memo],
+    );
+  }
+
+  void _removeVoiceMemo(ComposerController controller) {
+    final draft = controller.draft;
+    if (draft == null) return;
+    controller.update(attachments: visualAttachments(draft.attachments));
+  }
+
+  Future<void> _recordVoiceMemo() async {
+    final voice = _voice;
+    if (voice == null) return;
+    await voice.start(explain: _explainMicrophone);
+  }
+
+  /// The short reason, shown once before the system asks for the microphone.
+  Future<bool> _explainMicrophone() async {
+    final agreed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Record a voice memo?'),
+        content: const Text(
+          "Dayli uses your microphone only while you're recording. You can "
+          'listen to it before you post, and remove it whenever you like.',
+        ),
+        actions: [
+          TextButton(
+            key: const Key('composer.voiceMemo.explain.decline'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            key: const Key('composer.voiceMemo.explain.continue'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    return agreed ?? false;
+  }
+
+  Widget _voiceMemo(
+    ComposerController controller,
+    DailyPostDraft draft,
+    String? error,
+  ) {
+    final voice = _voice!;
+    final uploads = _uploads!;
+    final memo = voiceMemoOf(draft.attachments);
+    return ListenableBuilder(
+      listenable: uploads,
+      builder: (context, _) => VoiceMemoInput(
+        recorder: voice,
+        memo: memo,
+        state: memo == null ? MediaTileState.local : _tileState(uploads, memo),
+        onRecord: () => unawaited(_recordVoiceMemo()),
+        onRemove: () => _removeVoiceMemo(controller),
+        onOpenSettings: () => unawaited(voice.openSettings()),
+        error: error,
+      ),
+    );
   }
 
   Widget _media(
@@ -249,7 +379,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final uploads = _uploads;
     if (uploads == null) {
       return MediaInput(
-        attachments: draft.attachments,
+        attachments: visualAttachments(draft.attachments),
         onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
@@ -260,13 +390,13 @@ class _ComposerScreenState extends State<ComposerScreen> {
     return ListenableBuilder(
       listenable: uploads,
       builder: (context, _) => MediaInput(
-        attachments: draft.attachments,
+        attachments: visualAttachments(draft.attachments),
         onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
         uploads: true,
         states: [
-          for (final attachment in draft.attachments)
+          for (final attachment in visualAttachments(draft.attachments))
             _tileState(uploads, attachment),
         ],
         notice: uploads.notice,
@@ -433,8 +563,25 @@ class _ComposerScreenState extends State<ComposerScreen> {
         const _SectionLabel('your day in pictures'),
         _Lockable(
           locked: locked,
-          child: _media(controller, draft, errors.media),
+          child: _media(
+            controller,
+            draft,
+            // A hold that is only about the voice memo shows under it instead.
+            _voiceMemoOnly(draft) ? null : errors.media,
+          ),
         ),
+        if (_voice != null) ...[
+          const SizedBox(height: 28),
+          const _SectionLabel('your voice'),
+          _Lockable(
+            locked: locked,
+            child: _voiceMemo(
+              controller,
+              draft,
+              _voiceMemoOnly(draft) ? errors.media : null,
+            ),
+          ),
+        ],
         const SizedBox(height: 28),
         _SectionLabel(
           'rate your day',

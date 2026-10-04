@@ -7,6 +7,15 @@ import 'package:v_video_compressor/v_video_compressor.dart';
 import '../drafts/daily_post_draft.dart';
 import 'composer_controller.dart';
 
+/// The folder in app support storage that holds every user's media copies.
+const mediaFolderName = 'dayli-media';
+
+/// One user's folder inside [mediaFolderName]. Everything in it is removed when
+/// that user signs out, so anything private that the app creates for a user
+/// (compressed copies, recorded voice memos) belongs here and nowhere else.
+String userMediaFolder(String ownerId) =>
+    'user-${Uri.encodeComponent(ownerId)}';
+
 /// A compressed copy ready to reserve and upload.
 class CompressedMedia {
   const CompressedMedia({
@@ -92,7 +101,7 @@ class DeviceMediaCompressor implements MediaCompressor {
        _encodeVideo = encodeVideo ?? _encodeMp4,
        _newName = newName ?? generateIdempotencyKey;
 
-  static const _folder = 'dayli-media';
+  static const _folder = mediaFolderName;
 
   /// Longest edge of a compressed photo, in pixels.
   static const photoEdgeMax = 2048;
@@ -112,9 +121,8 @@ class DeviceMediaCompressor implements MediaCompressor {
 
   /// The owner's folder. Encoding keeps the ID to one path segment, and the
   /// prefix stops it being `.` or `..`, which encoding leaves as they are.
-  Future<Directory> _ownerDirectory(String ownerId) async => Directory(
-    '${(await _mediaRoot()).path}/user-${Uri.encodeComponent(ownerId)}',
-  );
+  Future<Directory> _ownerDirectory(String ownerId) async =>
+      Directory('${(await _mediaRoot()).path}/${userMediaFolder(ownerId)}');
 
   @override
   Future<CompressionResult> compress(

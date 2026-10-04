@@ -5,11 +5,9 @@ export default defineConfig({
     environment: "node",
     fileParallelism: false,
     include: [
-      "src/features/**/postgres.integration.test.ts",
-      "src/features/**/__tests__/**/*.repository.integration.test.ts",
-      "src/features/**/*.repository.integration.test.ts",
-      "src/features/permissions/**/*.test.ts",
-      "src/infrastructure/**/*.integration.test.ts",
+      "src/features/**/__tests__/**/*.integration.test.ts",
+      "src/features/permissions/__tests__/**/*.test.ts",
+      "src/infrastructure/**/__tests__/**/*.integration.test.ts",
     ],
   },
 });

@@ -186,7 +186,7 @@ import { createHyperdriveAccountPolicyResolver } from "./features/account-policy
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerDeletionRoutes, type DeletionRouteDependencies } from "./features/account-lifecycle/deletion/deletion.route";
 import { registerExportRoutes, type ExportRouteDependencies } from "./features/data-export/data-export.routes";
-import { exportExecutionEnabled } from "./features/data-export/shared/export-activation";
+import { exportExecutionEnabled, readStagingExportProof } from "./features/data-export/shared/export-activation";
 import { createExportOwnerRepository } from "./features/data-export/shared/export-owner.repository";
 import { authorizeExportDownload } from "./features/data-export/shared/export-download.repository";
 import { prepareExportDownload } from "./features/data-export/shared/export-download";
@@ -499,6 +499,7 @@ export function createAppForEnv(env: ApiEnv) {
     // Request execution stays unregistered until the synthetic-staging gate is reviewed.
     requestEnabled: false,
   } satisfies DeletionRouteDependencies : undefined;
+  const stagingExportProof = readStagingExportProof(env);
   const exportService = configuration ? {
     resolveSession: createSessionResolver(configuration),
     status: (userId: string, sessionId: string) => withHyperdriveDatabase(configuration.hyperdrive,
@@ -510,8 +511,10 @@ export function createAppForEnv(env: ApiEnv) {
         (database) => authorizeExportDownload(database, { userId, sessionId, requestId })),
       objects: createExportArchiveStore(r2Runtime),
     }) : undefined,
-    // A release change must turn on the shared API and scheduled-job gate.
-    enabled: exportExecutionEnabled && !!env.EXPORT_WORKER_HYPERDRIVE && !!r2Runtime,
+    // Production is inert. Staging admits only the time-bounded synthetic owner.
+    allowedUserId: stagingExportProof?.userId,
+    enabled: (exportExecutionEnabled || stagingExportProof?.buildEnabled === true) &&
+      !!env.EXPORT_WORKER_HYPERDRIVE && !!r2Runtime,
   } satisfies ExportRouteDependencies : undefined;
   const passwordReauthentication = configuration ? {
     resolveSession: createSessionResolver(configuration),

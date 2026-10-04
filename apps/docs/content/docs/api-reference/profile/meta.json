@@ -1,0 +1,12 @@
+{
+  "title": "Profile",
+  "pages": [
+    "profile.getUsername",
+    "profile.claimInitialUsername",
+    "profile.changeUsername",
+    "profile.getDetails",
+    "profile.update",
+    "profile.removeAvatar",
+    "profile.setAvatar"
+  ]
+}
