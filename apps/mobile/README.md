@@ -49,6 +49,18 @@ Dayli never connects identities merely because their emails match. After signing
 
 If the link is rejected, check that the Google email exactly matches the Dayli email and that it is not already connected to another Dayli account. If the password is unavailable, complete password recovery first, then sign in and try again. Do not create a duplicate account to bypass the mismatch. This flow has local unit coverage but still needs the explicit Android persistence/logout and iOS staging checks above.
 
+## App icon and launch screen
+
+The icon is the Dayli "D" in the logo violet on cream (`#FBFAF9`, the landing screen's background). The icon art in `assets/branding/` is drawn for Android's adaptive-icon safe zone: the D stays inside the central 66 dp circle of the 108 dp layer, so circle, squircle, and rounded-square masks never clip it. After changing the art or either config, regenerate the native files and commit the result:
+
+```sh
+dart run flutter_launcher_icons -f flutter_launcher_icons.yaml
+dart run flutter_native_splash:create --path=flutter_native_splash.yaml
+git checkout ios/Runner/Info.plist ios/Runner.xcodeproj/project.pbxproj
+```
+
+The last line drops reformatting and an unrelated build setting the tools add. The native launch screen can't show Flutter UI, so it shows the full Dayli logo on the landing screen's cream until the first frame. The website's circular favicon is `apps/web/app/icon.svg` with `favicon.ico` as the fallback.
+
 ## Design
 
 The app keeps the WDCC Dayli frontend's branding and lays it out for phones. That frontend was imported under the reuse approval in [product decisions](../../docs/dayli/product-decisions.md#existing-frontend-reuse), from [UOA-CS732-S1-2026/group-project-wdcc](https://github.com/UOA-CS732-S1-2026/group-project-wdcc) at commit `3f961fe`. `assets/wdcc/` holds its logo, dot grid, squiggles, and search icon. The logo's CSS-variable fills are replaced by their fallback colour, and the squiggles are exported from their React components with WDCC's stroke colours.
