@@ -2,6 +2,7 @@ import { createHyperdriveDatabase, schema, sql, type DayliDatabase, type Hyperdr
 import { and, eq, gt, isNotNull, isNull, lte, notExists, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { allowsAccountCapability } from "../../features/account-policy/shared/account-policy";
+import { conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
 import { readAccountPolicy } from "../../features/account-policy/shared/account-policy.repository";
 import type { PushTokenProtector } from "../push/token-encryption";
 import type { NotificationJob } from "./notification-store";
@@ -12,11 +13,16 @@ export interface ResolvedDirectMessageNotification {
   targetId: string;
   title: string;
   body: string;
+  /** Internal compare-and-set identity. Never include it in provider payloads or logs. */
+  registrationGeneration: { sessionId: string; tokenHash: string };
 }
 
 export interface DirectMessageNotificationResolver {
-  resolve(job: NotificationJob): Promise<ResolvedDirectMessageNotification | null>;
-  invalidate(job: Pick<NotificationJob, "deviceRegistrationId" | "recipientId">): Promise<void>;
+  resolve(job: NotificationJob, options?: { signal?: AbortSignal }): Promise<ResolvedDirectMessageNotification | null>;
+  invalidate(
+    job: Pick<NotificationJob, "deviceRegistrationId" | "recipientId">,
+    generation: ResolvedDirectMessageNotification["registrationGeneration"],
+  ): Promise<void>;
 }
 
 /** Reads current preview and every recipient authorization fence immediately before send. */
@@ -28,7 +34,12 @@ export function createPostgresDirectMessageNotificationResolver(
   const senderParticipant = alias(schema.messagingParticipants, "notification_sender_participant");
   const sender = alias(schema.user, "notification_sender");
   return {
-    async resolve(job) {
+    async resolve(job, options) {
+      if (options?.signal?.aborted) return null;
+      const participantsAvailable = conversationParticipantsAvailable(
+        schema.conversations.participantLowId,
+        schema.conversations.participantHighId,
+      );
       const unblocked = notExists(database.select({ value: sql`1` })
         .from(schema.relationshipBlocks)
         .where(and(
@@ -47,10 +58,13 @@ export function createPostgresDirectMessageNotificationResolver(
       const [row] = await database.select({
         tokenCiphertext: schema.pushDevices.tokenCiphertext,
         tokenKeyVersion: schema.pushDevices.tokenKeyVersion,
+        tokenHash: schema.pushDevices.tokenHash,
+        sessionId: schema.pushDevices.sessionId,
         eventId: schema.notificationEvents.id,
         targetId: schema.notificationEvents.targetId,
         title: sender.name,
         body: schema.messages.body,
+        participantsAvailable,
       })
         .from(schema.notificationDeliveries)
         .innerJoin(schema.notificationEvents, and(
@@ -94,6 +108,7 @@ export function createPostgresDirectMessageNotificationResolver(
           isNull(schema.messages.unsentAt),
           isNotNull(schema.messages.body),
         ))
+        .innerJoin(schema.conversations, eq(schema.conversations.id, schema.messages.conversationId))
         .innerJoin(senderParticipant, and(
           eq(senderParticipant.id, schema.messages.senderParticipantId),
           eq(senderParticipant.state, "active"),
@@ -117,21 +132,33 @@ export function createPostgresDirectMessageNotificationResolver(
           unblocked,
         ))
         .limit(1);
-      if (!row || !row.body || !row.title || !row.tokenCiphertext || !row.tokenKeyVersion) return null;
+      if (!row || !row.participantsAvailable || !row.body || !row.title || !row.tokenCiphertext || !row.tokenKeyVersion) return null;
+      if (options?.signal?.aborted) return null;
       try {
         if (!allowsAccountCapability(await readAccountPolicy(database, job.recipientId), "ordinary")) return null;
       } catch {
         return null;
       }
+      if (options?.signal?.aborted) return null;
       const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
-      return token ? { token, eventId: row.eventId, targetId: row.targetId, title: row.title, body: row.body } : null;
+      if (options?.signal?.aborted) return null;
+      return token ? {
+        token,
+        eventId: row.eventId,
+        targetId: row.targetId,
+        title: row.title,
+        body: row.body,
+        registrationGeneration: { sessionId: row.sessionId, tokenHash: row.tokenHash },
+      } : null;
     },
-    async invalidate(job) {
+    async invalidate(job, generation) {
       await database.update(schema.pushDevices)
         .set({ invalidatedAt: sql`now()`, optedIn: false })
         .where(and(
           eq(schema.pushDevices.id, job.deviceRegistrationId),
           eq(schema.pushDevices.userId, job.recipientId),
+          eq(schema.pushDevices.sessionId, generation.sessionId),
+          eq(schema.pushDevices.tokenHash, generation.tokenHash),
           isNull(schema.pushDevices.invalidatedAt),
         ));
     },
@@ -148,7 +175,7 @@ export function createHyperdriveDirectMessageNotificationResolver(
     finally { await client.close(); }
   };
   return {
-    resolve: (job) => run((resolver) => resolver.resolve(job)),
-    invalidate: (job) => run((resolver) => resolver.invalidate(job)),
+    resolve: (job, options) => run((resolver) => resolver.resolve(job, options)),
+    invalidate: (job, generation) => run((resolver) => resolver.invalidate(job, generation)),
   };
 }

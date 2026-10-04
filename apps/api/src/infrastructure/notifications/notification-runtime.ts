@@ -12,7 +12,7 @@ export interface NotificationDeliveryBindings {
   PUSH_TOKEN_ENCRYPTION_KEY?: string;
 }
 
-const empty = () => ({ claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0 });
+const empty = () => ({ claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0, released: 0 });
 const disabledDispatcher: NotificationDispatcher = {
   dispatchImmediately: async () => empty(),
   dispatchScheduled: async () => empty(),

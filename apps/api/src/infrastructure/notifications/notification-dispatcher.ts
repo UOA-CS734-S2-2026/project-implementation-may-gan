@@ -22,6 +22,7 @@ export interface NotificationDispatchSummary {
   rescheduled: number;
   failed: number;
   fenced: number;
+  released: number;
 }
 
 export interface NotificationDispatcher {
@@ -30,7 +31,7 @@ export interface NotificationDispatcher {
 }
 
 const emptySummary = (): NotificationDispatchSummary => ({
-  claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0,
+  claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0, released: 0,
 });
 
 export function createNotificationDispatcher(input: {
@@ -43,6 +44,7 @@ export function createNotificationDispatcher(input: {
   immediateBudgetMs?: number;
   immediateBatchSize?: number;
   scheduledBatchSize?: number;
+  scheduledBudgetMs?: number;
   leaseForMs?: number;
   deliveryTimeoutMs?: number;
   maxAttempts?: number;
@@ -53,6 +55,7 @@ export function createNotificationDispatcher(input: {
   const immediateBudgetMs = input.immediateBudgetMs ?? 1_500;
   const immediateBatchSize = input.immediateBatchSize ?? 10;
   const scheduledBatchSize = input.scheduledBatchSize ?? 100;
+  const scheduledBudgetMs = input.scheduledBudgetMs ?? 25_000;
   const leaseForMs = input.leaseForMs ?? 30_000;
   const maxAttempts = input.maxAttempts ?? 12;
   const deliveryTimeoutMs = Math.max(1, Math.min(input.deliveryTimeoutMs ?? 20_000, leaseForMs - 1_000));
@@ -63,11 +66,21 @@ export function createNotificationDispatcher(input: {
       const [claimed] = await input.store.claimDue({ now: now(), limit: 1, leaseForMs, maxAttempts, leaseToken: createLeaseToken });
       if (!claimed) break;
       summary.claimed += 1;
+      if (now().getTime() >= deadline) {
+        if (await input.store.releaseLease(claimed, now())) summary.released += 1;
+        else summary.fenced += 1;
+        break;
+      }
       const job = await input.store.renewLease(claimed, { now: now(), leaseForMs });
       if (!job) { summary.fenced += 1; continue; }
 
-      const resolved = await input.resolver.resolve(job);
-      if (!resolved) {
+      const resolution = await resolveWithinDeadline(input.resolver, job, deadline, now);
+      if (resolution.timedOut || now().getTime() >= deadline) {
+        if (await input.store.releaseLease(job, now())) summary.released += 1;
+        else summary.fenced += 1;
+        break;
+      }
+      if (!resolution.notification) {
         if (await input.store.markSuppressed(job, "ineligible")) summary.suppressed += 1;
         else summary.fenced += 1;
         continue;
@@ -75,14 +88,24 @@ export function createNotificationDispatcher(input: {
 
       const renewed = await input.store.renewLease(job, { now: now(), leaseForMs });
       if (!renewed) { summary.fenced += 1; continue; }
-      const result = await sendWithTimeout(input.sender, resolved, deliveryTimeoutMs);
+      const remainingBudgetMs = Math.max(0, deadline - now().getTime());
+      if (remainingBudgetMs === 0) {
+        if (await input.store.releaseLease(renewed, now())) summary.released += 1;
+        else summary.fenced += 1;
+        break;
+      }
+      const result = await sendWithTimeout(
+        input.sender,
+        resolution.notification,
+        Math.min(deliveryTimeoutMs, remainingBudgetMs),
+      );
       if (result.ok) {
         if (await input.store.markDelivered(renewed, now())) summary.delivered += 1;
         else summary.fenced += 1;
         continue;
       }
       if (!result.retryable && result.category === "provider_rejected") {
-        await input.resolver.invalidate(renewed);
+        await input.resolver.invalidate(renewed, resolution.notification.registrationGeneration);
       }
       const terminal = !result.retryable || renewed.attempts >= maxAttempts;
       const availableAt = new Date(now().getTime() + (result.retryAfterMs ?? retryDelayMs(renewed.attempts, random)));
@@ -96,8 +119,31 @@ export function createNotificationDispatcher(input: {
 
   return {
     dispatchImmediately: () => dispatch(immediateBatchSize, now().getTime() + immediateBudgetMs),
-    dispatchScheduled: () => dispatch(scheduledBatchSize, Number.POSITIVE_INFINITY),
+    dispatchScheduled: () => dispatch(scheduledBatchSize, now().getTime() + scheduledBudgetMs),
   };
+}
+
+async function resolveWithinDeadline(
+  resolver: DirectMessageNotificationResolver,
+  job: Parameters<DirectMessageNotificationResolver["resolve"]>[0],
+  deadline: number,
+  now: () => Date,
+): Promise<{
+  notification: Awaited<ReturnType<DirectMessageNotificationResolver["resolve"]>>;
+  timedOut: boolean;
+}> {
+  const controller = new AbortController();
+  const remaining = Math.max(0, deadline - now().getTime());
+  if (remaining === 0) return { notification: null, timedOut: true };
+  const timer = setTimeout(() => controller.abort(), remaining);
+  try {
+    const notification = await resolver.resolve(job, { signal: controller.signal });
+    return { notification, timedOut: controller.signal.aborted };
+  } catch {
+    return { notification: null, timedOut: controller.signal.aborted };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function sendWithTimeout(
@@ -107,21 +153,27 @@ async function sendWithTimeout(
 ): Promise<DeliveryResult> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  const operation = sender.send({
+    token: notification.token,
+    eventId: notification.eventId,
+    targetId: notification.targetId,
+    title: notification.title,
+    body: notification.body,
+    type: "direct_message",
+    targetType: "conversation",
+  }, { signal: controller.signal });
   try {
     const timeout = new Promise<DeliveryResult>((resolve) => {
       timer = setTimeout(() => {
+        timedOut = true;
         controller.abort();
         resolve({ ok: false, retryable: true, category: "transient" });
       }, timeoutMs);
     });
-    return await Promise.race([
-      sender.send({
-        ...notification,
-        type: "direct_message",
-        targetType: "conversation",
-      }, { signal: controller.signal }),
-      timeout,
-    ]);
+    const result = await Promise.race([operation, timeout]);
+    if (timedOut) await operation.catch(() => undefined);
+    return result;
   } catch {
     return { ok: false, retryable: true, category: "unknown" };
   } finally {

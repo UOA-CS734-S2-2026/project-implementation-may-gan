@@ -13,7 +13,7 @@ describe("notification delivery runtime", () => {
     ]) {
       const dispatcher = await createNotificationDeliveryDispatcher(environment);
       await expect(dispatcher.dispatchImmediately()).resolves.toEqual({
-        claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0,
+        claimed: 0, delivered: 0, suppressed: 0, rescheduled: 0, failed: 0, fenced: 0, released: 0,
       });
     }
   });
