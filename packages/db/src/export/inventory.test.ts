@@ -147,6 +147,7 @@ describe("explicit export data inventory", () => {
   it("records approved journals notes and Trash fields", () => {
     expect(exportDataInventory.posts!.included).toEqual(expect.arrayContaining([
       "reflective_answer", "caption", "trashed_at", "restore_until", "trash_purge_due_at",
+      "weather_condition", "weather_temperature_c", "weather_place_name",
     ]));
     expect(exportDataInventory.post_revisions!.transformed?.previous_attachment_refs)
       .toEqual(["media_id", "attachment_order", "status"]);

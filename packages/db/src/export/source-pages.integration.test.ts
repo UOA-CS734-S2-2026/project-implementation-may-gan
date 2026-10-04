@@ -60,6 +60,9 @@ function fixture(value: string, role: string): string {
       (${restorable}, ${owner}, '2026-10-01', 'prompt-10-02', 'Restorable journal', 5, 'solo', now() - interval '2 days', now() - interval '47 hours', now() - interval '1 hour', now() + interval '167 hours', now() + interval '335 hours'),
       (${expired}, ${owner}, '2026-09-30', 'prompt-10-02', 'Expired trash', 5, 'solo', now() - interval '10 days', now() - interval '9 days', now() - interval '200 hours', now() - interval '32 hours', now() + interval '136 hours'),
       (${otherPost}, ${peer}, '2026-10-02', 'prompt-10-02', 'Peer private journal', 5, 'solo', now() - interval '2 days', now() - interval '47 hours', null, null, null)`;
+    await migrator`update public.posts
+      set weather_condition = 'rain', weather_temperature_c = 11, weather_place_name = 'Auckland'
+      where id = ${post}`;
     await migrator`insert into public.post_media (id, post_id, attachment_order, detached_at)
       values (${attachment}, ${post}, 0, now() - interval '1 day')`;
     await migrator`insert into public.media_reservation
@@ -142,6 +145,12 @@ function fixture(value: string, role: string): string {
     expect(posts.map((row) => row.record_key).sort()).toEqual([post, restorable].sort());
     expect(posts.find((row) => row.record_key === restorable)?.payload).toMatchObject({ reflective_answer: "Restorable journal" });
     expect(posts[0]?.payload).not.toHaveProperty("trash_lease_token");
+    expect(posts.find((row) => row.record_key === post)?.payload).toMatchObject({
+      weather_condition: "rain", weather_temperature_c: 11, weather_place_name: "Auckland",
+    });
+    expect(posts.find((row) => row.record_key === restorable)?.payload).toMatchObject({
+      weather_condition: null, weather_temperature_c: null, weather_place_name: null,
+    });
     const first = await page("posts", null, lease, 1);
     expect(first).toHaveLength(1);
     const rest = await page("posts", first[0]!.record_key, lease, 1);

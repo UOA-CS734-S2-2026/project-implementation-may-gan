@@ -228,7 +228,7 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   posts: owned({
     owner: "author_id", retention: "while_owned_or_restorable", deletion: "purge_with_account_or_post_trash",
     access: "owner_scoped_post_procedure", retainedForOthers: "not_applicable", trashRestore: "include_only_while_restorable",
-    included: fields("id,author_id,local_date,prompt_id,reflective_answer,caption,rating,audience,accepted_at,released_at,trashed_at,restore_until,trash_purge_due_at,created_at,updated_at"),
+    included: fields("id,author_id,local_date,prompt_id,reflective_answer,caption,rating,audience,weather_condition,weather_temperature_c,weather_place_name,accepted_at,released_at,trashed_at,restore_until,trash_purge_due_at,created_at,updated_at"),
     excluded: fields("trash_generation,trash_lease_token,trash_lease_expires_at,trash_failure_category,trash_next_attempt_at"),
   }, "postsIncluded"),
   profile_avatars: owned({
