@@ -390,4 +390,3 @@ class _FaceIdBadge extends StatelessWidget {
     );
   }
 }
-
