@@ -43,8 +43,9 @@ void main() {
   test(
     'reads a post with the bearer session, including a null caption',
     () async {
-      final result = await client((_) => http.Response(jsonEncode(body()), 200))
-          .get('post-1');
+      final result = await client(
+        (_) => http.Response(jsonEncode(body()), 200),
+      ).get('post-1');
 
       expect(requests.single.url.path, '/api/v1/posts/post-1');
       expect(requests.single.headers['authorization'], 'Bearer token-1');
@@ -189,8 +190,9 @@ void main() {
       'maps voice memo refusals and never calls without a session',
       () async {
         for (final status in [404, 422]) {
-          final result = await client((_) => http.Response('{}', status))
-              .voiceMemo('post-1');
+          final result = await client(
+            (_) => http.Response('{}', status),
+          ).voiceMemo('post-1');
           expect((result as ApiError).failure, isA<NotFound>());
         }
         final noUrl = await client(
@@ -210,8 +212,9 @@ void main() {
 
     test('maps refusals and permits anonymous media reads', () async {
       for (final status in [404, 422]) {
-        final result = await client((_) => http.Response('{}', status))
-            .media('post-1', 'm-1');
+        final result = await client(
+          (_) => http.Response('{}', status),
+        ).media('post-1', 'm-1');
         expect((result as ApiError).failure, isA<NotFound>());
       }
       final noUrl = await client(
@@ -263,8 +266,9 @@ void main() {
     );
 
     test('treats an unknown or blocked profile as not found', () async {
-      final result = await client((_) => http.Response('{}', 404))
-          .profilePage('nobody');
+      final result = await client(
+        (_) => http.Response('{}', 404),
+      ).profilePage('nobody');
 
       expect(result, isA<ApiError<ProfilePostsPage>>());
       expect((result as ApiError).failure, isA<NotFound>());
@@ -317,15 +321,17 @@ void main() {
     });
 
     test('reports a stale revision count as a conflict', () async {
-      final result = await client((_) => http.Response('{}', 409))
-          .update('post-1', edit);
+      final result = await client(
+        (_) => http.Response('{}', 409),
+      ).update('post-1', edit);
 
       expect((result as ApiError).failure, isA<Conflict>());
     });
 
     test('treats someone else\'s or a deleted post as not found', () async {
-      final result = await client((_) => http.Response('{}', 404))
-          .update('post-1', edit);
+      final result = await client(
+        (_) => http.Response('{}', 404),
+      ).update('post-1', edit);
 
       expect((result as ApiError).failure, isA<NotFound>());
     });
@@ -339,12 +345,14 @@ void main() {
     expect(requests.single.url.path, '/api/v1/posts/post-1/trash');
     expect(deleted, isA<ApiSuccess<void>>());
 
-    final missing = await client((_) => http.Response('{}', 404))
-        .delete('post-1');
+    final missing = await client(
+      (_) => http.Response('{}', 404),
+    ).delete('post-1');
     expect((missing as ApiError).failure, isA<NotFound>());
 
-    final refused = await client((_) => http.Response('{}', 409))
-        .delete('post-1');
+    final refused = await client(
+      (_) => http.Response('{}', 409),
+    ).delete('post-1');
     expect((refused as ApiError).failure, isA<Conflict>());
 
     // Trash is switched off until it's enabled for the environment.
@@ -380,8 +388,9 @@ void main() {
     expect(page.items.single.replacedAt, DateTime.utc(2026, 9, 29, 8));
     expect(page.nextCursor, 'next');
 
-    final hidden = await client((_) => http.Response('{}', 404))
-        .revisions('post-1');
+    final hidden = await client(
+      (_) => http.Response('{}', 404),
+    ).revisions('post-1');
     expect((hidden as ApiError).failure, isA<NotFound>());
   });
 }

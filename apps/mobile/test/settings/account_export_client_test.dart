@@ -47,40 +47,43 @@ void main() {
     ]);
   });
 
-  test('a disabled route, malformed state, or missing bearer does not authorize an export', () async {
-    final denied = HttpAccountExportClient(
-      baseUrl: 'https://api.example.test',
-      bearerToken: () async => null,
-      client: MockClient((_) async => throw StateError('network used')),
-    );
-    await expectLater(denied.status(), throwsStateError);
-    await expectLater(denied.request(), throwsStateError);
-    final unavailable = HttpAccountExportClient(
-      baseUrl: 'https://api.example.test',
-      bearerToken: () async => 'token',
-      client: MockClient((_) async => http.Response('{}', 503)),
-    );
-    await expectLater(unavailable.status(), throwsStateError);
-    final malformed = HttpAccountExportClient(
-      baseUrl: 'https://api.example.test',
-      bearerToken: () async => 'token',
-      client: MockClient(
-        (_) async => http.Response(
-          '{"requestId":null,"status":"ready","requestedAt":null,"readyAt":null,"expiresAt":null}',
-          200,
+  test(
+    'a disabled route, malformed state, or missing bearer does not authorize an export',
+    () async {
+      final denied = HttpAccountExportClient(
+        baseUrl: 'https://api.example.test',
+        bearerToken: () async => null,
+        client: MockClient((_) async => throw StateError('network used')),
+      );
+      await expectLater(denied.status(), throwsStateError);
+      await expectLater(denied.request(), throwsStateError);
+      final unavailable = HttpAccountExportClient(
+        baseUrl: 'https://api.example.test',
+        bearerToken: () async => 'token',
+        client: MockClient((_) async => http.Response('{}', 503)),
+      );
+      await expectLater(unavailable.status(), throwsStateError);
+      final malformed = HttpAccountExportClient(
+        baseUrl: 'https://api.example.test',
+        bearerToken: () async => 'token',
+        client: MockClient(
+          (_) async => http.Response(
+            '{"requestId":null,"status":"ready","requestedAt":null,"readyAt":null,"expiresAt":null}',
+            200,
+          ),
         ),
-      ),
-    );
-    await expectLater(malformed.status(), throwsFormatException);
-    final oversized = HttpAccountExportClient(
-      baseUrl: 'https://api.example.test',
-      bearerToken: () async => 'token',
-      client: MockClient(
-        (_) async => http.Response('a' * (16 * 1024 + 1), 200),
-      ),
-    );
-    await expectLater(oversized.status(), throwsFormatException);
-  });
+      );
+      await expectLater(malformed.status(), throwsFormatException);
+      final oversized = HttpAccountExportClient(
+        baseUrl: 'https://api.example.test',
+        bearerToken: () async => 'token',
+        client: MockClient(
+          (_) async => http.Response('a' * (16 * 1024 + 1), 200),
+        ),
+      );
+      await expectLater(oversized.status(), throwsFormatException);
+    },
+  );
 
   test(
     'download stays streamed through the same authenticated client',

@@ -412,27 +412,30 @@ void main() {
       expectRecordingKept(attachment);
     });
 
-    test('keeps them through repeated expiries, even while backing off', () async {
-      // Three expired upload URLs in a row make the controller pause and retry.
-      client.uploadResults.addAll(const [
-        ApiError(Expired()),
-        ApiError(Expired()),
-        ApiError(Expired()),
-      ]);
-      final (composer, _) = await open();
-      add(composer, memo);
-      await settle();
+    test(
+      'keeps them through repeated expiries, even while backing off',
+      () async {
+        // Three expired upload URLs in a row make the controller pause and retry.
+        client.uploadResults.addAll(const [
+          ApiError(Expired()),
+          ApiError(Expired()),
+          ApiError(Expired()),
+        ]);
+        final (composer, _) = await open();
+        add(composer, memo);
+        await settle();
 
-      final attachment = composer.draft!.attachments.single;
-      expectRecordingKept(attachment);
-      expectRecordingKept(drafts.drafts['user-1']!.attachments.single);
-      await settle();
-      expect(
-        composer.draft!.attachments.single.status,
-        AttachmentUploadStatus.validated,
-      );
-      expectRecordingKept(composer.draft!.attachments.single);
-    });
+        final attachment = composer.draft!.attachments.single;
+        expectRecordingKept(attachment);
+        expectRecordingKept(drafts.drafts['user-1']!.attachments.single);
+        await settle();
+        expect(
+          composer.draft!.attachments.single.status,
+          AttachmentUploadStatus.validated,
+        );
+        expectRecordingKept(composer.draft!.attachments.single);
+      },
+    );
 
     test(
       'keeps them when an earlier upload never landed before a restart',

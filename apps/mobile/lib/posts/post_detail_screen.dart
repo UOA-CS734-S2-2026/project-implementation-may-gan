@@ -173,8 +173,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         viewerHasLiked: liked,
       );
     });
-    final result = await AppScope.of(context).interactions
-        .setLike(post.id, liked: liked);
+    final result = await AppScope.of(
+      context,
+    ).interactions.setLike(post.id, liked: liked);
     if (!mounted) return;
     setState(() {
       _liking = false;

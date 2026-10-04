@@ -476,8 +476,9 @@ class _CommentTile extends StatelessWidget {
                   child: Text(
                     [
                       comment.author.displayName,
-                      MaterialLocalizations.of(context)
-                          .formatShortMonthDay(comment.createdAt.toLocal()),
+                      MaterialLocalizations.of(
+                        context,
+                      ).formatShortMonthDay(comment.createdAt.toLocal()),
                       if (comment.editedAt != null) 'edited',
                     ].join(' · '),
                     style: muted,

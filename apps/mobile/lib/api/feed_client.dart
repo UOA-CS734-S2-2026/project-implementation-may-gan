@@ -139,8 +139,9 @@ class GeneratedFeedClient implements FeedClient {
 
     final http.Response response;
     try {
-      response = await generated.PostsApi(client)
-          .postsListFeedWithHttpInfo(cursor: cursor);
+      response = await generated.PostsApi(
+        client,
+      ).postsListFeedWithHttpInfo(cursor: cursor);
     } on generated.ApiException catch (error) {
       return ApiError(failureForStatus(error.code, error.innerException));
     } on IOException {
