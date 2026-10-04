@@ -3,7 +3,7 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresRelationshipsStore } from "../../../features/relationships/shared/relationships.repository";
 import { createRelationshipsService } from "../../../app";
-import { publishNotificationIntent } from "../../../features/notifications/shared/publish-notification";
+import { publishNotificationIntent } from "../publish-notification";
 import { dailyNotificationWindow, publishDailyNotifications } from "../daily-notification-scheduler";
 import { createPostgresNotificationResolver } from "../notification-resolver";
 import type { NotificationJob } from "../notification-store";
@@ -17,7 +17,7 @@ const database = createDayliDatabase(connectionString);
 const other = createDayliDatabase(connectionString);
 const users = Array.from({ length: 30 }, () => `notify-publisher-${crypto.randomUUID()}`);
 const service = createRelationshipsService(createPostgresRelationshipsStore(database.db, { notificationPublishersEnabled: true }));
-const promptId = `prompt-01-01-v${9_000_000 + Math.floor(Math.random() * 1_000_000)}`;
+let promptId: string;
 const night = new Date("2099-01-01T10:15:00.000Z");
 const window = dailyNotificationWindow(night);
 const protector = { encrypt: async () => ({ ciphertext: "fake-cipher", keyVersion: "v1" }), decrypt: async () => "fake-token" };
@@ -28,7 +28,7 @@ async function device(index: number, version: number | null = 1) {
   const id = crypto.randomUUID();
   await database.db.insert(schema.session).values({ id: sessionId, userId, token: crypto.randomUUID(), expiresAt: new Date("2101-01-01T00:00:00Z"), createdAt: new Date(), updatedAt: new Date() });
   await database.db.insert(schema.accountNotificationPreferences).values({ userId, enabled: true }).onConflictDoUpdate({ target: schema.accountNotificationPreferences.userId, set: { enabled: true } });
-  await database.db.insert(schema.pushDevices).values({ id, userId, sessionId, installationId: crypto.randomUUID(), platform: "android", token: "fake-legacy", tokenCiphertext: "fake-cipher", tokenKeyVersion: "v1", tokenHash: "a".repeat(64), optedIn: true, notificationSchemaVersion: version, registeredAt: new Date() });
+  await database.db.insert(schema.pushDevices).values({ id, userId, sessionId, installationId: crypto.randomUUID(), platform: "android", token: `fake-${id}`, tokenCiphertext: `fake-cipher-${id}`, tokenKeyVersion: "v1", tokenHash: crypto.randomUUID().replaceAll("-", "").repeat(2), optedIn: true, notificationSchemaVersion: version, registeredAt: new Date() });
   return id;
 }
 
@@ -47,7 +47,9 @@ async function post(index: number, date: string, audience: "solo" | "friends", r
 
 beforeAll(async () => {
   await database.db.insert(schema.user).values(users.map((id, index) => ({ id, name: "Private signup name", username: `notify${index}${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`, displayUsername: `Public sender ${index}`, email: `${id}@example.test` })));
-  await database.db.insert(schema.dailyPrompts).values({ id: promptId, monthDay: "01-01", text: "Test", version: Number(promptId.split("-v")[1]), effectiveDate: "2099-01-01", source: "test", sourceCommit: "test" });
+  const [prompt] = await database.db.select({ id: schema.dailyPrompts.id }).from(schema.dailyPrompts).limit(1);
+  expect(prompt).toBeDefined();
+  promptId = prompt!.id;
 });
 
 afterAll(async () => {
@@ -57,7 +59,6 @@ afterAll(async () => {
     await database.db.delete(schema.relationshipBlocks).where(or(inArray(schema.relationshipBlocks.blockerId, users), inArray(schema.relationshipBlocks.blockedId, users)));
     await database.db.delete(schema.posts).where(inArray(schema.posts.authorId, users));
     await database.db.delete(schema.user).where(inArray(schema.user.id, users));
-    await database.db.delete(schema.dailyPrompts).where(eq(schema.dailyPrompts.id, promptId));
   } finally { await other.close(); await database.close(); }
 });
 
@@ -101,7 +102,7 @@ describe("transactional friend request notifications", () => {
     const resolver = createPostgresNotificationResolver(database.db, protector);
     const resolved = await resolver.resolve(job!);
     expect(resolved).not.toBeNull();
-    await database.db.update(schema.pushDevices).set({ tokenHash: "b".repeat(64), tokenCiphertext: "replacement" }).where(eq(schema.pushDevices.id, registration));
+    await database.db.update(schema.pushDevices).set({ tokenHash: crypto.randomUUID().replaceAll("-", "").repeat(2), tokenCiphertext: "replacement" }).where(eq(schema.pushDevices.id, registration));
     await resolver.invalidate(job!, resolved!.registrationGeneration);
     const [current] = await database.db.select().from(schema.pushDevices).where(eq(schema.pushDevices.id, registration));
     expect(current!.invalidatedAt).toBeNull();

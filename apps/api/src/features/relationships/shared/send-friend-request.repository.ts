@@ -1,5 +1,5 @@
 import { schema } from "@dayli/db";
-import { publishFriendRequestNotification } from "../../notifications/shared/publish-notification";
+import { publishFriendRequestNotification } from "../../../infrastructure/notifications/publish-notification";
 import { and, count, eq, gte, min } from "drizzle-orm";
 import { RelationshipStoreError, type StoredRelationshipSnapshot } from "./relationship-service";
 import type { RelationshipPostgresContext } from "./relationship-postgres";
