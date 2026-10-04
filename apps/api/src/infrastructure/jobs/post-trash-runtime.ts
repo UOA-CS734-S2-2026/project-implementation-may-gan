@@ -12,16 +12,22 @@ function connectionString(binding: HyperdriveBinding | undefined): string | unde
   return typeof value === "string" && value.trim() === value && value.length > 0 ? value : undefined;
 }
 
+function hasLifecycleWorkerRole(value: string): boolean {
+  try { return decodeURIComponent(new URL(value).username) === "lifecycle_worker"; }
+  catch { return false; }
+}
+
 /**
  * Cleanup is admitted only with a distinct lifecycle-worker connection and a
  * complete object-store configuration. It never falls back to the app role.
  */
 export function hasPostTrashCleanupDependencies(env: Partial<ApiEnv>): env is ApiEnv & {
-  TRASH_WORKER_HYPERDRIVE: HyperdriveBinding;
+  EXPORT_WORKER_HYPERDRIVE: HyperdriveBinding;
 } {
   const app = connectionString(env.HYPERDRIVE);
-  const worker = connectionString(env.TRASH_WORKER_HYPERDRIVE);
-  return !!app && !!worker && app !== worker && !!readR2RuntimeConfiguration(env);
+  const worker = connectionString(env.EXPORT_WORKER_HYPERDRIVE);
+  return !!app && !!worker && app !== worker && hasLifecycleWorkerRole(worker) &&
+    !!readR2RuntimeConfiguration(env);
 }
 
 /** Returns null without opening a database or deleting objects when configuration is invalid. */
@@ -32,7 +38,7 @@ export async function runPostTrashCleanupForEnv(
   const r2 = readR2RuntimeConfiguration(env);
   if (!r2) return null;
 
-  const database = createHyperdriveDatabase(env.TRASH_WORKER_HYPERDRIVE);
+  const database = createHyperdriveDatabase(env.EXPORT_WORKER_HYPERDRIVE);
   try {
     return await createPostTrashCleanupDispatcher({
       mode: "execute",

@@ -1,8 +1,11 @@
+import { createServer } from "node:http";
+import { once } from "node:events";
 import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresSetAvatarRepository } from "../../../features/profiles/set-avatar/set-avatar.repository";
 import { createPostgresPostTrashRepository } from "../../../features/posts/trash-post/trash-post.repository";
 import { createPostgresPostTrashCleanupStore } from "../post-trash-cleanup";
+import { runPostTrashCleanupForEnv } from "../post-trash-runtime";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;
@@ -33,6 +36,9 @@ function fixtureUrl(value: string) {
   const sharedPost = id("shared-post");
   const laterPost = id("later-post");
   const sharedReservation = id("shared-reservation");
+  const runtimePost = id("runtime-post");
+  const runtimeReservation = id("runtime-reservation");
+  const runtimeMedia = id("runtime-media");
   const media = id("media");
   const reservation = id("reservation");
   const postRepo = createPostgresPostTrashRepository(app.db);
@@ -68,9 +74,9 @@ function fixtureUrl(value: string) {
   afterAll(async () => {
     try {
       await migrator.client`delete from public.profile_avatars where user_id = ${owner}`;
-      await migrator.client`delete from public.post_media where post_id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost})`;
-      await migrator.client`delete from public.posts where id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost})`;
-      await migrator.client`delete from public.media_reservation where id in (${reservation}, ${sharedReservation})`;
+      await migrator.client`delete from public.post_media where post_id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost}, ${runtimePost})`;
+      await migrator.client`delete from public.posts where id in (${post}, ${replacement}, ${accountPost}, ${sharedPost}, ${laterPost}, ${runtimePost})`;
+      await migrator.client`delete from public.media_reservation where id in (${reservation}, ${sharedReservation}, ${runtimeReservation})`;
       await migrator.client`delete from public."user" where id in (${owner}, ${other})`;
     } finally {
       await Promise.all([migrator.close(), app.close(), worker.close()]);
@@ -238,6 +244,69 @@ function fixtureUrl(value: string) {
     const [recovered] = await cleanup.claim(1, id("recovered-lease"), 60);
     expect(recovered?.postId).toBe(sharedPost);
     expect(await cleanup.complete(recovered!)).toBe("deleted");
+  });
+
+  it("executes the scheduled runtime through the restricted role and deletes actual loopback object bytes", async () => {
+    const objectKey = `media/${owner}/${runtimeMedia}`;
+    const objects = new Map([[`/trash-runtime/${objectKey}`, Buffer.from("synthetic-trash-object")]]);
+    const server = createServer((request, response) => {
+      if (request.method !== "DELETE" || !request.headers.authorization) {
+        response.writeHead(403).end();
+        return;
+      }
+      if (!objects.delete(request.url ?? "")) {
+        response.writeHead(404).end();
+        return;
+      }
+      response.writeHead(204).end();
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Loopback object store did not bind a port.");
+    try {
+      await migrator.db.insert(schema.posts).values({
+        id: runtimePost, authorId: owner, localDate: "2026-10-03", promptId: "prompt-10-03",
+        reflectiveAnswer: "Runtime object fixture", rating: 6, audience: "friends",
+        acceptedAt: new Date("2026-10-03T01:00:00Z"), releasedAt: new Date("2026-10-03T12:00:00Z"),
+      });
+      await migrator.db.insert(schema.mediaReservation).values({
+        id: runtimeReservation, ownerId: owner, objectKey, status: "validated",
+        contentType: "image/jpeg", byteSize: objects.values().next().value!.byteLength,
+        expiresAt: new Date("2090-01-01T00:00:00Z"), validatedAt: new Date(),
+      });
+      await migrator.db.insert(schema.postMedia).values({
+        id: runtimeMedia, postId: runtimePost, reservationId: runtimeReservation, attachmentOrder: 0,
+      });
+      expect((await postRepo.transition({ userId: owner, sessionId: session,
+        postId: runtimePost, action: "trash" })).outcome).toBe("trashed");
+      expect((await postRepo.list(owner)).map((entry) => entry.id)).toContain(runtimePost);
+      await migrator.client`update public.posts set trashed_at = '2025-09-01T00:00:00Z',
+        restore_until = '2025-09-08T00:00:00Z', trash_purge_due_at = '2025-09-15T00:00:00Z'
+        where id = ${runtimePost}`;
+
+      const summary = await runPostTrashCleanupForEnv({
+        HYPERDRIVE: { connectionString: fixtureUrl(appUrl!) },
+        EXPORT_WORKER_HYPERDRIVE: { connectionString: fixtureUrl(workerUrl!) },
+        BETTER_AUTH_SECRET: "unused-runtime-proof-secret",
+        BETTER_AUTH_BASE_URL: "https://local.invalid",
+        BETTER_AUTH_TRUSTED_ORIGINS: "https://local.invalid",
+        R2_ACCOUNT_ID: "local-e2e",
+        R2_BUCKET_NAME: "trash-runtime",
+        R2_ACCESS_KEY_ID: "local-access",
+        R2_SECRET_ACCESS_KEY: "local-secret",
+        R2_LOCAL_ENDPOINT: `http://127.0.0.1:${address.port}`,
+      });
+      expect(summary).toMatchObject({ claimed: 1, deleted: 1, rescheduled: 0, failed: 0, fenced: 0 });
+      expect(objects.size).toBe(0);
+      const [remaining] = await migrator.client`select
+        (select count(*)::int from public.posts where id = ${runtimePost}) as posts,
+        (select count(*)::int from public.media_reservation where id = ${runtimeReservation}) as reservations`;
+      expect(remaining).toMatchObject({ posts: 0, reservations: 0 });
+    } finally {
+      server.close();
+      await once(server, "close");
+    }
   });
 
   it("fences post cleanup and restore when account deletion becomes pending", async () => {
