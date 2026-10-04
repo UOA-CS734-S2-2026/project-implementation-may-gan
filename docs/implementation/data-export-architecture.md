@@ -1,6 +1,6 @@
 # Data export architecture and data inventory
 
-Status: approved engineering direction, not an enabled export service. The inventory prerequisite is merged as PR #251. Merged PR #252 implements restricted sources and archive processing. Its routes and scheduled jobs remain disabled. This document records the owner decisions for #157 and #162. It does not approve production activation, legal publication, provider purchases, or destructive lifecycle execution.
+Status: approved engineering direction with staging-only export activation. PR #251 established the inventory and PR #252 implemented restricted sources and archive processing. PR #289 enabled reviewed staging API and web routes for all staging accounts; the ordinary production build remains disabled. This document records the owner decisions for #157 and #162. It does not approve public registration, a separate production deployment, legal publication, provider purchases, or destructive lifecycle execution.
 
 ## Decisions
 
@@ -14,7 +14,7 @@ Status: approved engineering direction, not an enabled export service. The inven
 
 Main includes the checked-in inventory from PR #251 and the reviewed export code from PR #252. The older PR #191 is unfinished and must not be merged wholesale. Its duplicated source lists and unpublished migrations do not establish ownership of media bytes, current message readability, or restorable Trash.
 
-PR #252 added reviewed source projections, a versioned ZIP, lease-fenced media reads, authenticated downloads, and durable archive cleanup. Irreversible purge clears ready access and advances cleanup in one database transaction. Web and native account routes allow eligible owners past the ordinary username gate, but API execution, scheduled work, and both client entries remain hard-disabled. Detached post media contributes metadata without granting byte access. Local CI uses synthetic provider responses. On 2026-10-03, a dedicated empty R2 proof bucket passed a synthetic multipart upload with an exact 5 MiB non-final part, bounded range read, upload listing and abort, and object deletion. This does not establish production configuration, delayed-completion recovery, or physical device sharing. Do not activate exports without a separate owner decision and rollout review.
+PR #252 added reviewed source projections, a versioned ZIP, lease-fenced media reads, authenticated downloads, and durable archive cleanup. Irreversible purge clears ready access and advances cleanup in one database transaction. Web and native account routes allow eligible owners past the ordinary username gate. Reviewed staging-only activation now enables the staging API and web; a separate Android tester build also passed. Ordinary mobile builds and separate production execution remain off. Detached post media contributes metadata without granting byte access. On 2026-10-03, a dedicated empty R2 proof bucket passed a synthetic multipart upload with an exact 5 MiB non-final part, bounded range read, upload listing and abort, and object deletion. A subsequent protected staging account completed request, build, authenticated download, and accelerated two-pass cleanup. This does not establish a real delayed provider recovery, worldwide privacy compliance, or authorization to admit real users.
 
 ## Target design
 

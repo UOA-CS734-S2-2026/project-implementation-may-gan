@@ -5,7 +5,7 @@
   "status": "draft",
   "version": "draft-2",
   "effectiveDate": null,
-  "summary": "This is a working draft for review. It explains the handling Dayli currently reports and identifies decisions that must be made before a final policy can take effect.",
+  "summary": "Draft for owner review. It describes the current staging service and the checks still needed before admitting real users.",
   "sections": [
     {
       "id": "draft-status",
@@ -23,7 +23,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli is operated by agroupforcoders, an informal group of friends based in New Zealand. It is not a registered company. For privacy questions, account requests, or support, contact agroupforcoders@gmail.com. The people responsible for the group and any address or other disclosure needed for a final policy still need to be confirmed."
+          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. The owner personally monitors agroupforcoders@gmail.com for privacy, access, correction, under-16, security, and deletion requests. Delivery to that inbox and an absence arrangement still need a live check before public registration."
         }
       ]
     },
@@ -33,7 +33,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli is primarily intended for people in New Zealand and is available worldwide. It is intended for people aged 16 and over. The current software does not yet include a confirmed age-checking or consent-recording flow, so the operator must decide how this rule will be applied before final publication."
+          "text": "The planned public service is available worldwide to people aged 16 and over. Public registration requires an explicit, initially unchecked 16+ declaration and acceptance of the effective Terms. The current documents remain drafts; neither their display nor a prior sign-in establishes that acceptance. Dayli does not ask for a birth date or identity document by default. Report a possible under-16 account by email for an individual review and appeal, not automatic deletion."
         }
       ]
     },
@@ -51,7 +51,7 @@
         },
         {
           "type": "paragraph",
-          "text": "Dayli handles the journal content and social information needed for its features. This includes posts, captions, ratings, tomorrow notes, audiences, release times, revisions, friendships, friend requests, blocks, direct messages, message edits, message reactions, and message-request decisions. Earlier post revisions can remain stored when a post is edited."
+          "text": "Dayli handles the journal content and social information needed for its features. This includes posts, captions, ratings, optional weather condition, temperature and place name, tomorrow notes, audiences, release times, revisions, friendships, friend requests, blocks, direct messages, message edits, message reactions, and message-request decisions. Earlier post revisions can remain stored when a post is edited. Dayli does not store coordinates for the optional weather snapshot."
         },
         {
           "type": "paragraph",
@@ -79,7 +79,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Solo posts are available to their author. Friends posts are available to active friends after release, subject to blocks. Direct messages are available to the people in the relevant conversation. Blocking limits future access and interaction, but it cannot take back information another person has already seen, copied, or saved."
+          "text": "Solo and unreleased posts are for their author. A released friends-audience post from a public account can be read by anyone, including a visitor without an account. On a private account, active friends can read released friends-audience posts. Direct messages are available to conversation participants under the current access rules. Blocking limits future access for the affected signed-in accounts, but cannot take back information someone already saw, copied, or saved."
         }
       ]
     },
@@ -89,7 +89,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The operator currently reports using Neon PostgreSQL for application data and Cloudflare R2 for storage. The operator believes those services use Sydney or Southeast Asia regions, but this has not been independently verified and is not a promise that every copy, log, support operation, or provider process stays in a particular place. Dayli may also use Google for enabled sign-in and Firebase for enabled mobile push delivery. Resend may process authentication email when configured."
+          "text": "Dayli uses Neon PostgreSQL for application data and Cloudflare services for storage and application delivery. Depending on configuration, Google may process sign-in, Firebase may deliver mobile push, and Resend may process authentication email. If a person chooses weather by location in the mobile composer, their phone sends the approximate location to Open-Meteo and its own geocoder to obtain weather and a place name. If they search for a place, the search and weather request go to Open-Meteo. Only the resulting condition, temperature, and place name are sent to Dayli with the post. The operator has not verified the location of every copy, log, recovery operation, or provider process. This draft does not promise storage or processing in any one region."
         },
         {
           "type": "paragraph",
@@ -103,11 +103,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The operator currently reports that Dayli stores data indefinitely and does not operate its own backups. Provider recovery copies, recovery history, exports, object versioning, and logs still need verification. This draft does not promise a particular storage location, a deletion date, the absence of recoverable copies, or a backup-purge period."
+          "text": "Account content may be retained indefinitely while no verified account-deletion process is operating. Provider recovery copies, recovery history, object versions, and log-retention settings remain unverified. The planned 7-day cancellation, 14-day active cleanup, and 30-day backup expiry are not live promises. Dayli does not use a backup to selectively restore content you deleted, but this draft does not promise that every provider recovery copy has expired."
         },
         {
           "type": "paragraph",
-          "text": "You can contact agroupforcoders@gmail.com about your information. Dayli does not currently provide a verified self-service account deletion or data export function, and no response deadline or deletion schedule has been approved. Emailing a request does not by itself create an automated deletion process."
+          "text": "Signed-in staging users can request one owner-scoped, versioned ZIP export from /account/export. When ready, its authenticated download remains available for 24 hours unless account access ends sooner. The archive includes approved owned records and may exclude received message bodies and other people's private data; it is not a full response to every formal access request. Dayli does not yet provide verified account deletion or physical purge. Contact agroupforcoders@gmail.com about access, correction, or deletion. The operator will review requests under applicable law, but email does not trigger an automated deletion process, and this draft cannot claim that removal is currently available."
         }
       ]
     },
@@ -117,7 +117,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli uses account controls and secure cookie settings, but no system can guarantee absolute security. The operator must decide how final policy changes will be communicated and who approves them."
+          "text": "Dayli uses access controls and secure session handling, but no system can guarantee absolute security. The operator approves policy changes and normally gives 30 days of notice for material Terms changes. An urgent shorter period requires an explained notice. This draft is not a final privacy notice or a statement that public registration is ready."
         },
         {
           "type": "link",
