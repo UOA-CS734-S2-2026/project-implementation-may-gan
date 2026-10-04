@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -51,6 +53,21 @@ test("aggregate results reject any failed fixture", () => {
     () => summarizeReports([report([{ file: "journey.spec.ts", project: "desktop", status: "failed" }])]),
     /contain 1 non-passing test/,
   );
+});
+
+test("the report CLI propagates empty discovery and all-skipped failures", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "dayli-web-e2e-contract-"));
+  try {
+    const empty = path.join(directory, "empty.json");
+    const skipped = path.join(directory, "skipped.json");
+    fs.writeFileSync(empty, JSON.stringify(report([])));
+    fs.writeFileSync(skipped, JSON.stringify(report([{ file: "polish.spec.ts", project: "desktop", status: "skipped" }])));
+    const helper = path.join(repoRoot, "scripts/web-e2e-isolation.mjs");
+    assert.equal(spawnSync(process.execPath, [helper, "plan", empty]).status, 1);
+    assert.equal(spawnSync(process.execPath, [helper, "summarize", skipped]).status, 1);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("the isolation contract is wired into local and hosted verification", () => {
