@@ -395,18 +395,22 @@ class _FeedSection extends StatelessWidget {
               textAlign: TextAlign.center,
               style: DayliText.serif(
                 context,
-                size: DayliTextSize.lg,
-                weight: FontWeight.w500,
-                tracking: DayliTracking.tight,
+                size: DayliTextSize.base,
+                weight: FontWeight.w400,
                 color: colors.foregroundSecondary,
-              ).copyWith(height: 1.1),
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          Opacity(
-            opacity: 0.5,
-            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
+          const SizedBox(height: 24),
+          SvgPicture.string(
+            '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>''',
+            height: 42,
+            colorFilter: ColorFilter.mode(
+              colors.foregroundSecondary.withValues(alpha: 0.35),
+              BlendMode.srcIn,
+            ),
           ),
+          const SizedBox(height: 12),
         ],
       );
     }

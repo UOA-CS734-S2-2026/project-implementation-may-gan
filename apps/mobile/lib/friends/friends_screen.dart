@@ -83,14 +83,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     ),
                   ),
                 ),
-                IconButton(
+                FilledButton.icon(
                   onPressed: () => _showDiscovery(context, controller),
-                  style: IconButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     backgroundColor: DayliColors.of(context).foregroundAccent,
                     foregroundColor: DayliColors.of(context).background,
-                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
-                  icon: const Icon(Icons.add_rounded),
+                  icon: const Icon(Icons.add_rounded, size: 20),
+                  label: const Text('Add friend', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -150,11 +151,20 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Future<void> _showDiscovery(
     BuildContext context,
     FriendsController controller,
-  ) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) => _DiscoverySheet(controller: controller),
-  );
+  ) {
+    final colors = DayliColors.of(context);
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(color: colors.foreground.withValues(alpha: 0.1), width: 1),
+      ),
+      builder: (sheetContext) => _DiscoverySheet(controller: controller),
+    );
+  }
 }
 
 enum _FriendsFolder { friends, requests }
@@ -175,7 +185,8 @@ class _FolderTabs extends StatelessWidget {
     final colors = DayliColors.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: colors.backgroundAccent,
+        color: Colors.transparent,
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.1)),
         borderRadius: BorderRadius.circular(30),
       ),
       padding: const EdgeInsets.all(4),
@@ -230,7 +241,7 @@ class _FolderTab extends StatelessWidget {
           height: 40,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? colors.foregroundAccent : Colors.transparent,
+            color: selected ? const Color(0xFFEADDFF) : Colors.transparent,
             borderRadius: BorderRadius.circular(26),
           ),
           child: FittedBox(
@@ -245,7 +256,7 @@ class _FolderTab extends StatelessWidget {
                     size: DayliTextSize.base,
                     weight: FontWeight.w500,
                     color: selected
-                        ? colors.background
+                        ? const Color(0xFF4F378B)
                         : colors.foregroundSecondary,
                   ),
                 ),
@@ -258,7 +269,7 @@ class _FolderTab extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: selected ? colors.background : colors.foregroundAccent,
+                      color: selected ? const Color(0xFF4F378B) : colors.foregroundAccent,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
@@ -268,7 +279,7 @@ class _FolderTab extends StatelessWidget {
                         context,
                         size: DayliTextSize.xs,
                         weight: FontWeight.w600,
-                        color: selected ? colors.foregroundAccent : Colors.white,
+                        color: Colors.white,
                       ),
                     ),
                   ),
