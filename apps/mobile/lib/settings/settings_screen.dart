@@ -443,18 +443,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  if (services.accountExports != null) ...[
-                    const SizedBox(height: 24),
-                    const _GroupLabel('your data'),
-                    _Group(
-                      children: [
+                  const SizedBox(height: 24),
+                  const _GroupLabel('your data'),
+                  _Group(
+                    children: [
+                      ListTile(
+                        key: const Key('settings.trash'),
+                        title: const Text('Trash'),
+                        subtitle: const Text(
+                          'Restore deleted posts for 7 days.',
+                        ),
+                        onTap: () => context.push('/trash'),
+                      ),
+                      if (services.accountExports != null)
                         ListTile(
                           title: const Text('Your data export'),
                           onTap: () => context.push('/account/export'),
                         ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   _Group(
                     children: [

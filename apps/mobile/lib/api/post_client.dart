@@ -295,6 +295,67 @@ class ProfilePost extends FeedPost {
 
 typedef ProfilePostsPage = PostPage<ProfilePost>;
 
+class TrashedPost {
+  const TrashedPost({
+    required this.id,
+    required this.localDate,
+    required this.restoreUntil,
+    required this.purgeDueAt,
+    required this.generation,
+    required this.pendingCleanup,
+  });
+
+  final String id;
+  final String localDate;
+  final DateTime restoreUntil;
+  final DateTime purgeDueAt;
+  final int generation;
+  final bool pendingCleanup;
+
+  static TrashedPost? tryParse(Object? value) {
+    if (value is! Map<String, Object?>) return null;
+    final id = value['id'];
+    final localDate = value['localDate'];
+    final restoreUntil = DateTime.tryParse(
+      value['restoreUntil']?.toString() ?? '',
+    );
+    final purgeDueAt = DateTime.tryParse(value['purgeDueAt']?.toString() ?? '');
+    final generation = value['generation'];
+    final pendingCleanup = value['pendingCleanup'];
+    if (id is! String ||
+        localDate is! String ||
+        restoreUntil == null ||
+        purgeDueAt == null ||
+        generation is! int ||
+        pendingCleanup is! bool) {
+      return null;
+    }
+    return TrashedPost(
+      id: id,
+      localDate: localDate,
+      restoreUntil: restoreUntil,
+      purgeDueAt: purgeDueAt,
+      generation: generation,
+      pendingCleanup: pendingCleanup,
+    );
+  }
+}
+
+abstract interface class PostTrashClient {
+  Future<ApiResult<List<TrashedPost>>> listTrash();
+  Future<ApiResult<void>> restore(String postId);
+}
+
+class UnavailablePostTrashClient implements PostTrashClient {
+  const UnavailablePostTrashClient();
+  @override
+  Future<ApiResult<List<TrashedPost>>> listTrash() async =>
+      const ApiError(ServiceUnavailable());
+  @override
+  Future<ApiResult<void>> restore(String postId) async =>
+      const ApiError(ServiceUnavailable());
+}
+
 abstract interface class PostClient {
   Future<ApiResult<PostDetail>> get(String postId);
 
@@ -330,7 +391,7 @@ abstract interface class PostClient {
 /// Reads posts and profile posts with the stored Better Auth bearer session.
 /// Bodies are decoded here because the generated models rejected a null
 /// `caption` until the generator fix in #195.
-class GeneratedPostClient implements PostClient {
+class GeneratedPostClient implements PostClient, PostTrashClient {
   GeneratedPostClient({
     required String baseUrl,
     required this._bearerToken,
@@ -557,6 +618,44 @@ class GeneratedPostClient implements PostClient {
       HttpStatus.unprocessableEntity => const ApiError(NotFound()),
       HttpStatus.conflict => const ApiError(
         Conflict("This dayli can't be deleted right now."),
+      ),
+      final status => ApiError(failureForStatus(status, null)),
+    };
+  }
+
+  @override
+  Future<ApiResult<List<TrashedPost>>> listTrash() async {
+    final sent = await _send((api) => api.postsListTrashWithHttpInfo());
+    if (sent case ApiError(:final failure)) return ApiError(failure);
+    final response = (sent as ApiSuccess<http.Response>).value;
+    if (response.statusCode != HttpStatus.ok) {
+      return ApiError(failureForStatus(response.statusCode, null));
+    }
+    try {
+      final json = jsonDecode(response.body);
+      final values = json is Map<String, Object?> ? json['posts'] : null;
+      if (values is! List) return const ApiError(ServiceUnavailable());
+      final posts = values.map(TrashedPost.tryParse).toList();
+      return posts.any((post) => post == null)
+          ? const ApiError(ServiceUnavailable())
+          : ApiSuccess(posts.cast<TrashedPost>());
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    }
+  }
+
+  @override
+  Future<ApiResult<void>> restore(String postId) async {
+    final sent = await _send((api) => api.postsRestoreWithHttpInfo(postId));
+    if (sent case ApiError(:final failure)) return ApiError(failure);
+    final response = (sent as ApiSuccess<http.Response>).value;
+    return switch (response.statusCode) {
+      HttpStatus.ok => const ApiSuccess(null),
+      HttpStatus.notFound => const ApiError(NotFound()),
+      HttpStatus.conflict => const ApiError(
+        Conflict(
+          'This day already has a replacement, so the original cannot be restored.',
+        ),
       ),
       final status => ApiError(failureForStatus(status, null)),
     };

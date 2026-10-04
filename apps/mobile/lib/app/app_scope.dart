@@ -66,8 +66,11 @@ class AppServices {
   final FeedClient feed;
   final PostClient _posts;
 
-  /// Reports confirmed deletes to [postActivity].
+  /// Reports confirmed Trash changes to [postActivity].
   late final PostClient posts = ReportingPostClient(_posts, postActivity);
+  late final PostTrashClient postTrash = _posts is PostTrashClient
+      ? ReportingPostTrashClient(_posts as PostTrashClient, postActivity)
+      : const UnavailablePostTrashClient();
   final FriendsClient friends;
   final DraftStore drafts;
   final DailyPostSubmitter _submitter;

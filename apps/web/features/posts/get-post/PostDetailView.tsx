@@ -270,7 +270,7 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         open={confirmingDelete}
         isPending={remove.isPending}
         isToday={post.localDate === aucklandToday()}
-        error={remove.isError ? "This dayli couldn't be deleted right now. Try again." : undefined}
+        error={remove.isError ? "This dayli couldn't be moved to Trash. It has not been changed." : undefined}
         onClose={() => setConfirmingDelete(false)}
         onConfirm={() => remove.mutate(undefined, {
           onSuccess: () => router.replace(`/u/${encodeURIComponent(post.author.username)}`),
