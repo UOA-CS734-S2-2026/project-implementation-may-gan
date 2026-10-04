@@ -9,11 +9,19 @@ let renderQueue: Promise<unknown> = Promise.resolve();
 export function Mermaid({ chart }: { chart: string }) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, '');
   const { resolvedTheme } = useTheme();
-  const [result, setResult] = useState<{ svg?: string; error?: boolean }>({});
+  const [rendered, setRendered] = useState<{
+    chart: string;
+    theme: string | undefined;
+    svg?: string;
+    error?: boolean;
+  }>();
+  const result =
+    rendered?.chart === chart && rendered.theme === resolvedTheme
+      ? rendered
+      : undefined;
 
   useEffect(() => {
     let cancelled = false;
-    setResult({});
 
     const render = renderQueue.then(async () => {
       const { default: mermaid } = await import('mermaid');
@@ -78,11 +86,11 @@ export function Mermaid({ chart }: { chart: string }) {
       });
 
       const { svg } = await mermaid.render(`mermaid${id}`, chart);
-      if (!cancelled) setResult({ svg });
+      if (!cancelled) setRendered({ chart, theme: resolvedTheme, svg });
     });
 
     renderQueue = render.catch(() => {
-      if (!cancelled) setResult({ error: true });
+      if (!cancelled) setRendered({ chart, theme: resolvedTheme, error: true });
     });
 
     return () => {
@@ -90,7 +98,7 @@ export function Mermaid({ chart }: { chart: string }) {
     };
   }, [chart, id, resolvedTheme]);
 
-  if (result.error) {
+  if (result?.error) {
     return (
       <div role="alert">
         <p>Could not render this diagram. Here is its source:</p>
@@ -103,10 +111,10 @@ export function Mermaid({ chart }: { chart: string }) {
     <div
       role="img"
       aria-label="Mermaid diagram"
-      aria-busy={!result.svg}
+      aria-busy={!result?.svg}
       className="my-6 min-w-0 max-w-full overflow-x-auto [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
     >
-      {result.svg ? (
+      {result?.svg ? (
         <div dangerouslySetInnerHTML={{ __html: result.svg }} />
       ) : (
         <p role="status">Loading diagram...</p>

@@ -7,6 +7,8 @@ Signing in looks simple from the outside. Enter your details, press the button, 
 
 Dayli uses Better Auth in the shared backend. The web and mobile apps use the same accounts and sessions, but they carry their session credentials differently. Web uses a cookie. Mobile uses a bearer token stored on the device.
 
+![Dayli web sign-in screen](/images/product/web-sign-in.webp)
+
 ## A little context before we get into authentication
 
 First, let's meet the three pieces involved: the browser, the web server, and the API. They pass requests between each other, but each has a different job. Knowing which one receives a request helps explain where the session cookie goes.

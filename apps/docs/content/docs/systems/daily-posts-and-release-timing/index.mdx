@@ -7,6 +7,8 @@ A daily post has a boundary that an ordinary form does not. Someone can start wr
 
 The API owns that decision. It calculates dates and midnight boundaries in `Pacific/Auckland`, selects the prompt for that Auckland date, and accepts at most one active post per author and date. An accepted post is private until the following Auckland midnight unless its author reads it.
 
+![Empty Dayli web composer showing today's prompt, rating, audience, and Post button](/images/using-dayli/create-web-empty-composer.webp)
+
 ```mermaid
 flowchart LR
   Client[Web or mobile composer] -->|Read day and prompt| API[Dayli API]

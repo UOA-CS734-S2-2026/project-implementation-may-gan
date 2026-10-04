@@ -61,6 +61,8 @@ The router listens to `SessionController` through `refreshListenable`. Its redir
 
 Legal routes remain public in every session state.
 
+![Dayli mobile home screen with profile button and bottom navigation](/images/using-dayli/getting-started-mobile-navigation.webp)
+
 This gate is navigation behavior, not API authorization. Every private API request still needs a current bearer token, and the server still decides whether that account may read or change a resource. When a client returns `Unauthenticated`, the screen or controller calls `sessionExpired()`. The notifier changes state, and the router takes the user back through the signed-out flow.
 
 Use `context.go` when replacing the current location and `context.push` when the person should return to the previous screen. Home uses `push('/post')`, waits for the composer to close, and reloads the prompt and feed afterward.

@@ -20,7 +20,9 @@ From a web profile, you can add the person, accept a request they have already s
 
 On a mobile profile, a pending request may only say that a request is waiting or was sent. Use the **Requests** tab to act on it.
 
-> **Screenshot placeholder `UD-FF-01`:** Mobile friends screen with the Friends and Requests tabs and Find people by username action.
+![Dayli mobile friends screen with Friends and Requests tabs and username discovery](/images/using-dayli/friends-mobile-tabs-and-discovery.webp)
+
+<!-- Screenshot ID: UD-FF-01 -->
 
 ## Handle friend requests
 

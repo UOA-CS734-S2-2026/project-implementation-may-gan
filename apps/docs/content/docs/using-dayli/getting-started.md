@@ -22,7 +22,9 @@ Fill in:
 
 Choose **Let's go** to create the account.
 
-> **Screenshot placeholder `UD-GS-01`:** Web sign-up form showing the username, public name, email, and password fields.
+![Dayli web sign-up form with username, public name, email, and password fields](/images/using-dayli/getting-started-web-sign-up.webp)
+
+<!-- Screenshot ID: UD-GS-01 -->
 
 ## Sign in
 
@@ -49,7 +51,9 @@ On the web, the navigation is on the left on larger screens. On a narrow screen,
 
 On mobile, the bottom bar has **daylies**, **friends**, **my days**, and **messages**. The raised button in the middle opens **new dayli**. Tap the profile circle at the top right for settings.
 
-> **Screenshot placeholder `UD-GS-02`:** Mobile signed-in home screen with the bottom navigation, new dayli button, and profile circle visible.
+![Dayli mobile home screen with profile button and bottom navigation](/images/using-dayli/getting-started-mobile-navigation.webp)
+
+<!-- Screenshot ID: UD-GS-02 -->
 
 ## Your first dayli
 
