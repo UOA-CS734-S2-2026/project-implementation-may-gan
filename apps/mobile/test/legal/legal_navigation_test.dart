@@ -20,7 +20,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Privacy Policy'), findsOneWidget);
-    expect(find.byKey(const Key('legal.draftNotice')), findsOneWidget);
+    expect(find.byKey(const Key('legal.draftNotice')), findsNothing);
+    expect(find.text('Effective 2026-10-04'), findsOneWidget);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 

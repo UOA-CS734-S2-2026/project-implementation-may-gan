@@ -57,13 +57,15 @@ void main() {
     );
   });
 
-  testWidgets('loads the bundled privacy document without a network request', (
-    tester,
-  ) async {
-    final document = await loadLegalDocument('privacy');
+  testWidgets(
+    'loads the approved bundled privacy notice without a network request',
+    (tester) async {
+      final document = await loadLegalDocument('privacy');
 
-    expect(document.title, 'Privacy Policy');
-    expect(document.effectiveDate, isNull);
-    expect(document.sections.first.id, 'draft-status');
-  });
+      expect(document.title, 'Privacy Policy');
+      expect(document.isDraft, isFalse);
+      expect(document.effectiveDate, '2026-10-04');
+      expect(document.sections.first.id, 'notice-and-effective-date');
+    },
+  );
 }

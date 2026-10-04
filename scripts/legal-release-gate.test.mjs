@@ -6,23 +6,16 @@ import { join } from "node:path";
 import test from "node:test";
 import { validateLegalDocument } from "../packages/legal-content/types.ts";
 
-test("draft legal content cannot pass the release gate", () => {
-  assert.throws(
-    () => execFileSync(process.execPath, ["scripts/sync-legal-content.mjs", "--release"], {
-      encoding: "utf8",
-      stdio: "pipe",
-    }),
-    (error) => {
-      assert.equal(error.status, 1);
-      assert.match(`${error.stdout}${error.stderr}`, /draft or has no approved effective date/i);
-      return true;
-    },
-  );
+test("owner-approved dated legal content passes the release gate", () => {
+  assert.doesNotThrow(() => execFileSync(process.execPath, ["scripts/sync-legal-content.mjs", "--release"], {
+    encoding: "utf8",
+    stdio: "pipe",
+  }));
 });
 
 test("a draft cannot acquire an effective date in either validator", async () => {
   const terms = JSON.parse(await readFile("packages/legal-content/terms.json", "utf8"));
-  const datedDraft = { ...terms, effectiveDate: "2026-10-02" };
+  const datedDraft = { ...terms, status: "draft", effectiveDate: "2026-10-02" };
   assert.throws(() => validateLegalDocument(datedDraft), /draft.*effective date/i);
 
   const root = await mkdtemp(join(tmpdir(), "dayli-legal-draft-"));

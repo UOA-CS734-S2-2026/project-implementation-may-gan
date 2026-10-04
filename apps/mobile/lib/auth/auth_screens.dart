@@ -428,12 +428,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ],
-        LegalLinks(
-          center: true,
-          compact: true,
-          draftMarker: _terms == null,
-          notice: false,
-        ),
+        LegalLinks(center: true, compact: true, notice: false),
         const SizedBox(height: 28),
         DayliButton(
           key: const Key('auth.submit'),

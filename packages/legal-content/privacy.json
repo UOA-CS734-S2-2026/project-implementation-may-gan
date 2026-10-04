@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "id": "privacy",
   "title": "Privacy Policy",
-  "status": "draft",
-  "version": "draft-2",
-  "effectiveDate": null,
-  "summary": "Draft for owner review. It describes the current staging service and the checks still needed before admitting real users.",
+  "status": "approved",
+  "version": "1",
+  "effectiveDate": "2026-10-04",
+  "summary": "This notice explains what Dayli handles, who can see shared content, the known providers, and how to make a privacy request.",
   "sections": [
     {
-      "id": "draft-status",
-      "title": "Draft status",
+      "id": "notice-and-effective-date",
+      "title": "Notice and effective date",
       "blocks": [
         {
           "type": "paragraph",
-          "text": "This policy is a draft. It has not been approved, has no effective date, and is not a final privacy notice. Reading it, following a link to it, or using Dayli does not record acceptance. Dayli must not present it as the final policy until the operator, processing details, retention practice, and final wording have been approved."
+          "text": "This Privacy Policy is effective from 4 October 2026. It describes the current Dayli deployment and what the operator has not yet verified. Reading this notice or following a link does not record consent. When registration becomes available, Dayli records acknowledgement of this notice alongside explicit acceptance of the current Terms and a 16+ declaration. Acknowledgement is not broad consent to unrelated processing."
         }
       ]
     },
@@ -23,7 +23,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. The owner personally monitors agroupforcoders@gmail.com for privacy, access, correction, under-16, security, and deletion requests. Delivery to that inbox and an absence arrangement still need a live check before public registration."
+          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. Contact agroupforcoders@gmail.com with privacy, access, correction, under-16, security, and deletion requests. The operator reviews messages at this address personally."
         }
       ]
     },
@@ -33,7 +33,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The planned public service is available worldwide to people aged 16 and over. Public registration requires an explicit, initially unchecked 16+ declaration and acceptance of the effective Terms. The current documents remain drafts; neither their display nor a prior sign-in establishes that acceptance. Dayli does not ask for a birth date or identity document by default. Report a possible under-16 account by email for an individual review and appeal, not automatic deletion."
+          "text": "Dayli is intended for people worldwide aged 16 and over. Registration requires an explicit, initially unchecked 16+ declaration and acceptance of the effective Terms. Neither displaying the documents nor a previous sign-in establishes acceptance. Dayli does not ask for a birth date or identity document by default. Report a possible under-16 account by email for individual review and appeal, not automatic deletion."
         }
       ]
     },
@@ -55,7 +55,7 @@
         },
         {
           "type": "paragraph",
-          "text": "The mobile app stores a bearer session, cached identity, and unsent drafts in protected device storage. Media selected in the current web and mobile composer stays on the device and is not posted yet. If push notifications are enabled, Dayli handles a device registration token. Notification payloads are designed to identify a conversation without message text."
+          "text": "The mobile app stores a bearer session, cached identity, and unsent drafts in protected device storage. Selected media may be compressed and uploaded to Dayli's private object storage while a post is still being edited, before it is submitted or visible to anyone else. If push delivery is enabled and a recipient opts in, Dayli stores a protected device token and may send the sender's name and direct-message text through Firebase to that device. A notification can appear on a device lock screen, and content already delivered cannot be recalled."
         }
       ]
     },
@@ -89,11 +89,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli uses Neon PostgreSQL for application data and Cloudflare services for storage and application delivery. Depending on configuration, Google may process sign-in, Firebase may deliver mobile push, and Resend may process authentication email. If a person chooses weather by location in the mobile composer, their phone sends the approximate location to Open-Meteo and its own geocoder to obtain weather and a place name. If they search for a place, the search and weather request go to Open-Meteo. Only the resulting condition, temperature, and place name are sent to Dayli with the post. The operator has not verified the location of every copy, log, recovery operation, or provider process. This draft does not promise storage or processing in any one region."
+          "text": "Dayli uses Neon PostgreSQL for application data and Cloudflare services for storage and application delivery. Depending on configuration, Google may process sign-in, Firebase may deliver mobile push, and Resend may process authentication email. If a person chooses weather by location in the mobile composer, their phone sends the approximate location to Open-Meteo and its own geocoder to obtain weather and a place name. If they search for a place, the search and weather request go to Open-Meteo. Only the resulting condition, temperature, and place name are sent to Dayli with the post. The operator has not verified the location of every copy, log, recovery operation, or provider process. We do not promise storage or processing in any one region."
         },
         {
           "type": "paragraph",
-          "text": "The operator reports using only Cloudflare-provided analytics. The enabled analytics products, identifiers, logs, purposes, and retention settings have not yet been inventoried. This draft therefore does not claim that Dayli has no analytics or tracking."
+          "text": "The operator reports using Cloudflare-provided analytics. The enabled analytics products, identifiers, logs, purposes, and retention settings have not yet been inventoried. We do not claim that Dayli has no analytics or tracking."
         }
       ]
     },
@@ -103,11 +103,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Account content may be retained indefinitely while no verified account-deletion process is operating. Provider recovery copies, recovery history, object versions, and log-retention settings remain unverified. The planned 7-day cancellation, 14-day active cleanup, and 30-day backup expiry are not live promises. Dayli does not use a backup to selectively restore content you deleted, but this draft does not promise that every provider recovery copy has expired."
+          "text": "Account content may be retained indefinitely while no verified account-deletion process is operating. Provider recovery copies, recovery history, object versions, and log-retention settings remain unverified. The planned 7-day cancellation, 14-day active cleanup, and 30-day backup expiry are not live service commitments. Dayli does not use a backup to selectively restore content you deleted, but we cannot promise that every provider recovery copy has expired."
         },
         {
           "type": "paragraph",
-          "text": "Signed-in staging users can request one owner-scoped, versioned ZIP export from /account/export. When ready, its authenticated download remains available for 24 hours unless account access ends sooner. The archive includes approved owned records and may exclude received message bodies and other people's private data; it is not a full response to every formal access request. Dayli does not yet provide verified account deletion or physical purge. Contact agroupforcoders@gmail.com about access, correction, or deletion. The operator will review requests under applicable law, but email does not trigger an automated deletion process, and this draft cannot claim that removal is currently available."
+          "text": "Signed-in users can request one owner-scoped, versioned ZIP export from /account/export. When ready, its authenticated download remains available for 24 hours unless account access ends sooner. The archive contains approved owned records and excludes received message bodies and other people's private data; it is not a full response to every formal access request. Dayli does not yet provide verified account deletion or physical purge. Contact agroupforcoders@gmail.com about access, correction, or deletion. The operator will review requests under applicable law, but email does not trigger an automated deletion process, and removal is not currently verified as available."
         }
       ]
     },
@@ -117,11 +117,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli uses access controls and secure session handling, but no system can guarantee absolute security. The operator approves policy changes and normally gives 30 days of notice for material Terms changes. An urgent shorter period requires an explained notice. This draft is not a final privacy notice or a statement that public registration is ready."
+          "text": "Dayli uses access controls and secure session handling, but no system can guarantee absolute security. The operator approves policy changes and normally gives 30 days of notice for material Terms changes. An urgent shorter period requires an explained notice. Publishing this notice does not by itself open registration or verify a deletion process."
         },
         {
           "type": "link",
-          "label": "Read the draft Terms of Service",
+          "label": "Read the Terms of Service",
           "href": "/terms"
         }
       ]
