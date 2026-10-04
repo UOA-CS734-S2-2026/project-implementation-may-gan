@@ -23,15 +23,22 @@ class _Preference implements NotificationPreferenceClient {
   final updateStarted = Completer<void>();
 
   @override
-  Future<bool> get() async {
+  Future<bool> get(NotificationPreferenceOperation operation) async {
     if (getError case final error?) throw error;
-    return deferredGet?.future ?? value;
+    final pending = deferredGet;
+    return pending?.future ?? value;
   }
 
   @override
-  Future<bool> update(bool enabled) async {
+  Future<bool> update(
+    bool enabled,
+    NotificationPreferenceOperation operation,
+  ) async {
     if (!updateStarted.isCompleted) updateStarted.complete();
     await deferredUpdateCredential?.future;
+    if (!operation.isCurrent) {
+      throw const NotificationPreferenceOperationCancelled();
+    }
     updates.add(enabled);
     await deferredUpdateResponse?.future;
     value = enabled;
@@ -241,48 +248,115 @@ void main() {
   );
 
   test(
-    'account cleanup drains deferred credential and response before replacement',
+    'HTTP client rejects a retired bearer lookup before sending transport',
+    () async {
+      final signedIn = await _signedIn();
+      final bearer = Completer<String?>();
+      var requests = 0;
+      String? authorization;
+      final client = HttpNotificationPreferenceClient(
+        baseUrl: 'https://api.example.test',
+        bearerToken: () => bearer.future,
+        httpClient: MockClient((request) async {
+          requests++;
+          authorization = request.headers['authorization'];
+          return http.Response('{"enabled":true}', 200);
+        }),
+      );
+      final controller = NotificationConsentController(client: client);
+      controller.start(signedIn.startup);
+      await _settle();
+
+      await controller.clear();
+      bearer.complete('replacement-token');
+      await _settle();
+
+      expect(requests, 0);
+      expect(authorization, isNull);
+      expect(controller.enabled, isFalse);
+    },
+  );
+
+  test(
+    'cleanup cancels a deferred bearer before transport and does not wait',
     () async {
       final signedIn = await _signedIn();
       final credential = Completer<void>();
-      final response = Completer<void>();
       final preference = _Preference()
         ..value = true
-        ..deferredUpdateCredential = credential
-        ..deferredUpdateResponse = response;
+        ..deferredUpdateCredential = credential;
       final controller = NotificationConsentController(client: preference);
       controller.start(signedIn.startup);
       await _settle();
 
       final disabling = controller.setEnabled(false);
       await preference.updateStarted.future;
-      var cleared = false;
-      final clearing = controller.clear().then((_) => cleared = true);
-      await _settle();
-      expect(cleared, isFalse);
+      await controller.clear();
+      expect(await disabling, isFalse);
       expect(preference.updates, isEmpty);
 
       credential.complete();
       await _settle();
-      expect(preference.updates, [false]);
-      expect(cleared, isFalse);
-
-      response.complete();
-      await clearing;
-      expect(await disabling, isFalse);
+      expect(preference.updates, isEmpty);
       expect(controller.enabled, isFalse);
     },
   );
 
   test(
-    'account replacement cannot install Bob bearer during Alice preference write',
+    'account transition cancels deferred enable before transport and token IO',
+    () async {
+      final signedIn = await _signedIn();
+      final credential = Completer<void>();
+      final preference = _Preference()..deferredUpdateCredential = credential;
+      final source = _Source();
+      final registration = _Registration();
+      final controller = _controller(preference, source, registration);
+      controller.start(signedIn.startup);
+      await _settle();
+
+      final enabling = controller.setEnabled(true);
+      await preference.updateStarted.future;
+      await controller.clear();
+      expect(await enabling, isFalse);
+      credential.complete();
+      await _settle();
+
+      expect(preference.updates, isEmpty);
+      expect(registration.versions, isEmpty);
+      expect(controller.enabled, isFalse);
+    },
+  );
+
+  test('late old PUT success cannot change current controller state', () async {
+    final signedIn = await _signedIn();
+    final response = Completer<void>();
+    final preference = _Preference()
+      ..value = true
+      ..deferredUpdateResponse = response;
+    final controller = NotificationConsentController(client: preference);
+    controller.start(signedIn.startup);
+    await _settle();
+
+    final disabling = controller.setEnabled(false);
+    await preference.updateStarted.future;
+    await controller.clear();
+    controller.start(signedIn.startup);
+    await _settle();
+    expect(controller.enabled, isTrue);
+
+    response.complete();
+    await disabling;
+    await _settle();
+    expect(controller.enabled, isTrue);
+  });
+
+  test(
+    'replacement proceeds while an old HTTP write remains unsettled',
     () async {
       final tokens = MemoryTokenStore()..value = 'alice-token';
-      final credential = Completer<void>();
       final response = Completer<void>();
       final preference = _Preference()
         ..value = true
-        ..deferredUpdateCredential = credential
         ..deferredUpdateResponse = response;
       late final NotificationConsentController controller;
       var bob = false;
@@ -337,21 +411,93 @@ void main() {
         email: 'bob@example.test',
         password: 'correct-password',
       );
-      await _settle();
-      expect(signInCalls, 0);
-      expect(tokens.value, 'alice-token');
-
-      credential.complete();
-      await _settle();
-      expect(signInCalls, 0);
-      expect(tokens.value, 'alice-token');
-
-      response.complete();
       await disabling;
       await replacement;
       expect(signInCalls, 1);
       expect(tokens.value, 'bob-token');
       expect(session.user?.id, 'bob');
+      expect(controller.enabled, isTrue);
+
+      // A late old-account transport failure is observed but cannot affect Bob.
+      response.completeError(StateError('old request failed'));
+      await _settle();
+      expect(session.user?.id, 'bob');
+      expect(controller.enabled, isTrue);
+    },
+  );
+
+  test(
+    'logout and the next actor proceed when startup GET never settles',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'alice-token';
+      final never = Completer<bool>();
+      final preference = _Preference()..deferredGet = never;
+      late final NotificationConsentController controller;
+      var bob = false;
+      var signOutCalls = 0;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) {
+              final id = bob ? 'bob' : 'alice';
+              return http.Response(
+                jsonEncode({
+                  'user': {
+                    'id': id,
+                    'name': id,
+                    'email': '$id@example.test',
+                    'username': id,
+                  },
+                }),
+                200,
+              );
+            }
+            if (request.url.path.endsWith('/sign-out')) {
+              signOutCalls++;
+              return http.Response('{}', 200);
+            }
+            if (request.url.path.endsWith('/sign-in/email')) {
+              bob = true;
+              return http.Response(
+                '{}',
+                200,
+                headers: {'set-auth-token': 'bob-token'},
+              );
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: MemoryUserCache(),
+        drafts: MemoryDraftStore(),
+        onBeforeSessionReplacement: () => controller.clear(),
+        onPrivateDataClear: () => controller.clear(),
+        onSignedIn: (startup) => controller.start(startup),
+      );
+      controller = NotificationConsentController(client: preference);
+      await session.restore();
+      await _settle();
+
+      await session.signOut();
+      expect(session.status, SessionStatus.signedOut);
+      expect(signOutCalls, 1);
+
+      // The retired Alice read remains unresolved. Bob uses the fresh lane.
+      preference.deferredGet = null;
+      preference.value = true;
+      await session.signIn(
+        email: 'bob@example.test',
+        password: 'correct-password',
+      );
+      await _settle();
+      expect(session.user?.id, 'bob');
+      expect(controller.loading, isFalse);
+      expect(controller.enabled, isTrue);
+      expect(await controller.setEnabled(false), isFalse);
+      expect(preference.updates, [false]);
+      expect(never.isCompleted, isFalse);
     },
   );
 
