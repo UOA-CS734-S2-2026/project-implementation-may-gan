@@ -39,5 +39,23 @@ test("fails with a sanitized bounded timeout while the previous receiver remains
   }, {
     timeoutMs: 10, retryMs: 5, now: () => clock, wait: async () => { clock += 5; },
   }), /private staging RPC deployment did not become ready/);
-  assert.equal(calls, 3);
+  assert.equal(calls, 2);
+});
+
+test("caps a non-divisible retry interval and never invokes RPC after the deadline", async () => {
+  let clock = 0;
+  const invocationTimes: number[] = [];
+  const waits: number[] = [];
+  await assert.rejects(() => awaitRpcDeployment("proveStagingRevision", async () => {
+    invocationTimes.push(clock);
+    throw new TypeError('The RPC receiver does not implement the method "proveStagingRevision".');
+  }, {
+    timeoutMs: 45, retryMs: 2, now: () => clock,
+    wait: async (milliseconds) => { waits.push(milliseconds); clock += milliseconds; },
+  }), /private staging RPC deployment did not become ready/);
+
+  assert.equal(clock, 45);
+  assert.equal(invocationTimes.at(-1), 44);
+  assert.equal(invocationTimes.every((time) => time < 45), true);
+  assert.equal(waits.at(-1), 1);
 });

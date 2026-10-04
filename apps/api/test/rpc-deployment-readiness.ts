@@ -27,14 +27,20 @@ export async function awaitRpcDeployment<T>(
   const now = options.now ?? Date.now;
   const wait = options.wait ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const deadline = now() + timeoutMs;
+  let attempted = false;
 
   for (;;) {
+    if (attempted && now() >= deadline) {
+      throw new Error("The private staging RPC deployment did not become ready before the deadline.");
+    }
+    attempted = true;
     try {
       return await invoke();
     } catch (error) {
       if (!isPreviousDeploymentReceiver(error, method)) throw error;
-      if (now() >= deadline) throw new Error("The private staging RPC deployment did not become ready before the deadline.");
-      await wait(retryMs);
+      const remainingMs = deadline - now();
+      if (remainingMs <= 0) throw new Error("The private staging RPC deployment did not become ready before the deadline.");
+      await wait(Math.min(retryMs, remainingMs));
     }
   }
 }
