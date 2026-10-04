@@ -290,8 +290,9 @@ suite("send message Postgres repository", () => {
         await heldSenderLock;
       });
       await acquiredSenderLock;
-      const delayedSend = primary.send.send(actorId, first.conversation.id, {
-        clientMessageId: crypto.randomUUID(), text: "sample quota after sender lock wait",
+      const delayedClaim = contender.db.transaction(async (transaction) => {
+        await lockNewMessageSender(transaction, actorId);
+        return claimNewMessageSlot(transaction, actorId, 30);
       });
       await waitFor(async () => {
         const [waiting] = await database.client`
@@ -300,10 +301,10 @@ suite("send message Postgres repository", () => {
           ) as found
         `;
         return waiting?.found === true;
-      }, "Expected send to wait for the sender advisory lock.");
+      }, "Expected quota claim to wait for the sender advisory lock.");
       releaseSenderLock!();
       await blocker;
-      await expect(delayedSend).resolves.toMatchObject({ replayed: false });
+      await expect(delayedClaim).resolves.toEqual(expect.any(String));
     } finally {
       releaseSenderLock?.();
       await holder.close();
