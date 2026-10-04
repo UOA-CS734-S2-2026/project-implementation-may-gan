@@ -101,7 +101,13 @@ test("manual publisher is main-only, staging-only, and verifies both deployed Wo
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /environment: staging/);
-  assert.match(workflow, /group: staging-database-state-staging/);
+  assert.match(workflow, /group: staging-signup-activation/);
+  const freezeJob = workflow.indexOf("\n  freeze:\n");
+  const publishJob = workflow.indexOf("\n  publish:\n");
+  const databaseLock = workflow.indexOf("group: staging-database-state-staging");
+  assert.ok(freezeJob > 0 && publishJob > freezeJob && databaseLock > publishJob);
+  assert.doesNotMatch(workflow.slice(freezeJob, publishJob), /group: staging-database-state-staging/);
+  assert.match(workflow.slice(publishJob), /needs: freeze/);
   assert.match(workflow, /actions: write/);
   assert.match(workflow, /Freeze staging release entry points and drain historical reruns/);
   assert.match(workflow, /freezeStagingReleaseEntryPoints/);

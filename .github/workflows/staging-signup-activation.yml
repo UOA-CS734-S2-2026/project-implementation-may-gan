@@ -19,16 +19,14 @@ permissions:
   actions: write
   contents: read
 
-# This serializes current workflows that use this group. It cannot serialize a
-# historical workflow rerun whose old definition did not join the group; the
-# publish job therefore freezes the staging release entry points below. This
-# file has only the staging target.
+# Serialize activation attempts without holding the database-state lock while
+# an in-flight coordinated release finishes its API and web deployments.
 concurrency:
-  group: staging-database-state-staging
+  group: staging-signup-activation
   cancel-in-progress: false
 
 jobs:
-  publish:
+  freeze:
     if: github.ref == 'refs/heads/main'
     environment: staging
     runs-on: ubuntu-latest
@@ -96,8 +94,37 @@ jobs:
             const { freezeStagingReleaseEntryPoints } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/freeze-staging-release-entry-points.mjs`);
             const { owner, repo } = context.repo;
             await freezeStagingReleaseEntryPoints({ github, owner, repo });
-      # Keep this final active-version check adjacent to the mutation. It runs
-      # only after the historical deployment paths are frozen above.
+
+  publish:
+    needs: freeze
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    runs-on: ubuntu-latest
+    # Only acquire this lock after the old release has finished its web job.
+    concurrency:
+      group: staging-database-state-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check approved legal source before database publication
+        run: pnpm legal:release:check
+      - name: Verify direct migrator target matches configured staging Hyperdrive before publication
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/verify-staging-schema-target.mjs
+      # Final active-version and current-main check is adjacent to mutation.
       - name: Recheck current main and deployed Worker revisions immediately before mutation
         env:
           DISPATCH_SHA: ${{ github.sha }}
