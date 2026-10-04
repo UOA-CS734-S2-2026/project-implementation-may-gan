@@ -21,6 +21,7 @@ import 'package:dayli_mobile/compose/pending_capture.dart';
 import 'package:dayli_mobile/compose/voice_recorder.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
+import 'package:dayli_mobile/notifications/notification_consent.dart';
 import 'package:dayli_mobile/posts/post_activity.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:dayli_mobile/settings/account_export_client.dart';
@@ -599,6 +600,7 @@ class TestHarness {
     this.uploadMedia = true,
     this.effectiveTerms = false,
     this.accountExports,
+    this.notificationConsent,
     FakeProfileClient? profiles,
     FakeInteractionsClient? interactions,
     this.google,
@@ -729,6 +731,9 @@ class TestHarness {
       userCache: users,
       drafts: drafts,
       clearUserMedia: mediaCompressor.discardAll,
+      onSignedIn: notificationConsent?.start,
+      onBeforeSessionReplacement: notificationConsent?.clear,
+      onPrivateDataClear: notificationConsent?.clear,
     );
   }
 
@@ -780,6 +785,7 @@ class TestHarness {
   final bool uploadMedia;
   final bool effectiveTerms;
   final AccountExportClient? accountExports;
+  final NotificationConsentController? notificationConsent;
   final GoogleIdTokenProvider? google;
   int legalProofRequests = 0;
   List<String?>? signupProofHeaders;
@@ -788,6 +794,7 @@ class TestHarness {
   AppServices get services => AppServices(
     session: session,
     accountExports: accountExports,
+    notificationConsent: notificationConsent,
     postingDays: postingDays,
     feed: feed,
     posts: posts,

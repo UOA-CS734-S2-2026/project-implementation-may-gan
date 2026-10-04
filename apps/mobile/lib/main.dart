@@ -93,7 +93,7 @@ Future<void> main() async {
     bearerToken: nativeSession.bearerToken,
   );
   final messaging = MessagingController(messagingClient);
-  NotificationConsentController? notificationConsent;
+  PushService? push;
   FirebasePushLifecycle? notifications;
   NotificationPreflight? notificationPreflight;
   if (await initializeFirebasePushIfConfigured(config.firebaseConfigured)) {
@@ -104,7 +104,7 @@ Future<void> main() async {
       feed: feedClient,
     );
     notificationPreflight = preflight;
-    final push = PushService(
+    push = PushService(
       source: FirebasePushTokenSource(),
       client: HttpPushRegistrationClient(
         baseUrl: config.apiBaseUrl,
@@ -125,21 +125,21 @@ Future<void> main() async {
       // DayliApp replaces this callback with session-fenced routing.
       onNotificationTap: (_) {},
     );
-    notificationConsent = NotificationConsentController(
-      client: HttpNotificationPreferenceClient(
-        baseUrl: config.apiBaseUrl,
-        bearerToken: nativeSession.bearerToken,
-      ),
-      push: push,
-      lifecycle: notifications,
-    );
   }
+  final notificationConsent = NotificationConsentController(
+    client: HttpNotificationPreferenceClient(
+      baseUrl: config.apiBaseUrl,
+      bearerToken: nativeSession.bearerToken,
+    ),
+    push: push,
+    lifecycle: notifications,
+  );
   final integrations = SessionIntegrations(
     startRealtime: messaging.startRealtime,
     stopRealtime: messaging.stopRealtime,
     clearMessaging: messaging.clear,
-    startPush: notificationConsent?.start,
-    stopPush: notificationConsent?.clear,
+    startPush: notificationConsent.start,
+    stopPush: notificationConsent.clear,
   );
   final session = SessionController(
     session: nativeSession,

@@ -158,6 +158,26 @@ void main() {
 
     final debugInfo = File('ios/Runner/Info-Debug.plist').readAsStringSync();
     final releaseInfo = File('ios/Runner/Info.plist').readAsStringSync();
+    const sharedNativeSettings = [
+      '<key>NSPhotoLibraryUsageDescription</key>',
+      '<key>NSCameraUsageDescription</key>',
+      '<key>NSMicrophoneUsageDescription</key>',
+      '<string>\$(GOOGLE_REVERSED_CLIENT_ID)</string>',
+      '<string>\$(PRODUCT_BUNDLE_IDENTIFIER).composer</string>',
+      '<string>dayli</string>',
+    ];
+    for (final setting in sharedNativeSettings) {
+      expect(releaseInfo, contains(setting));
+      expect(debugInfo, contains(setting));
+    }
+    expect(
+      RegExp(r'<key>CFBundleURLSchemes</key>').allMatches(releaseInfo),
+      hasLength(2),
+    );
+    expect(
+      RegExp(r'<key>CFBundleURLSchemes</key>').allMatches(debugInfo),
+      hasLength(2),
+    );
     expect(debugInfo, contains('<string>remote-notification</string>'));
     expect(releaseInfo, isNot(contains('remote-notification')));
     expect(debugInfo, isNot(contains('FirebaseAppDelegateProxyEnabled')));
