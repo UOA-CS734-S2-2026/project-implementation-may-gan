@@ -5,19 +5,30 @@ import '../api/api_failure.dart';
 import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/public_return_intent.dart';
+import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 
+import 'edit_post_screen.dart';
+import 'post_revisions_screen.dart';
 import 'private_media.dart';
 
 /// One post, opened from the feed. Every open and refresh asks the server
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    this.intent,
+    this.intentActorId,
+  });
 
   final String postId;
+  final PublicActionIntent? intent;
+  final String? intentActorId;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -26,21 +37,92 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
+  SessionController? _session;
+  (SessionStatus, String?, int)? _sessionIdentity;
+  String? _loadedPostId;
+  int _requestGeneration = 0;
+  String? _intentNotice;
+
+  /// True once the post was edited or deleted here. It is returned to the
+  /// list that opened the post, so that list can refresh.
+  bool _changed = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_result == null) _load();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+  }
+
+  void _syncActor({bool force = false}) {
+    final identity = _currentSessionIdentity();
+    if (force ||
+        identity != _sessionIdentity ||
+        _loadedPostId != widget.postId) {
+      _sessionIdentity = identity;
+      _loadedPostId = widget.postId;
+      _post = null;
+      _result = null;
+      _intentNotice = null;
+      _load();
+      if (mounted) setState(() {});
+    }
+  }
+
+  (SessionStatus, String?, int) _currentSessionIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentLoad(
+    int requestGeneration,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      requestGeneration == _requestGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
+  @override
+  void didUpdateWidget(covariant PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.intent != widget.intent ||
+        oldWidget.intentActorId != widget.intentActorId) {
+      _syncActor(force: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
     final services = AppScope.of(context);
-    final result = await services.posts.get(widget.postId);
-    if (!mounted) return;
+    final requestGeneration = ++_requestGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     if (result case ApiError(failure: Unauthenticated())) {
-      await services.session.sessionExpired();
+      if (identity.$1 == SessionStatus.signedIn) {
+        await services.session.sessionExpired();
+      }
       return;
     }
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     setState(() {
       _result = result;
       switch (result) {
@@ -55,42 +137,137 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     });
   }
 
+  Future<void> _edit(PostDetail post) async {
+    final identity = _currentSessionIdentity();
+    final postId = widget.postId;
+    final saved = await Navigator.of(context).push<PostDetail>(
+      MaterialPageRoute(builder: (_) => EditPostScreen(post: post)),
+    );
+    if (saved == null ||
+        !mounted ||
+        identity != _currentSessionIdentity() ||
+        postId != widget.postId ||
+        saved.id != postId) {
+      return;
+    }
+    setState(() {
+      _changed = true;
+      _post = saved;
+      _result = ApiSuccess(saved);
+    });
+  }
+
+  Future<void> _history(PostDetail post) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => PostRevisionsScreen(
+        postId: post.id,
+        viewerIsAuthor: post.viewerIsAuthor,
+      ),
+    ),
+  );
+
+  Future<void> _confirmDelete(PostDetail post) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const Key('post.deleteDialog'),
+        title: const Text('Delete this dayli?'),
+        content: const Text(
+          'It disappears for you and your friends straight away. If it was '
+          "today's dayli, you can post a new one before midnight.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            key: const Key('post.deleteDialog.confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: DayliColors.of(context).danger,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final services = AppScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await services.posts.delete(post.id);
+    if (!mounted) return;
+    switch (result) {
+      // Already gone counts as deleted.
+      case ApiSuccess() || ApiError(failure: NotFound()):
+        messenger.showSnackBar(
+          const SnackBar(
+            key: Key('post.deleted'),
+            content: Text('Dayli deleted.'),
+          ),
+        );
+        _changed = true;
+        _leave();
+      case ApiError(failure: Unauthenticated()):
+        await services.session.sessionExpired();
+      case ApiError(:final failure):
+        messenger.showSnackBar(
+          SnackBar(
+            key: const Key('post.deleteFailed'),
+            content: Text(
+              failure is NetworkUnavailable
+                  ? "You're offline, so this dayli wasn't deleted."
+                  : "This dayli couldn't be deleted. Try again.",
+            ),
+          ),
+        );
+    }
+  }
+
+  void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: colors.foregroundAccent,
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () =>
-                        context.canPop() ? context.pop() : context.go('/'),
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  Text(
-                    'dayli',
-                    style: DayliText.serif(
-                      context,
-                      size: DayliTextSize.xl,
-                      weight: FontWeight.w600,
-                      tracking: DayliTracking.tight,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: colors.foregroundAccent,
+            onRefresh: _load,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 32),
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Back',
+                      onPressed: _leave,
+                      icon: const Icon(Icons.arrow_back_rounded),
                     ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _body(context),
-              ),
-            ],
+                    Text(
+                      'dayli',
+                      style: DayliText.serif(
+                        context,
+                        size: DayliTextSize.xl,
+                        weight: FontWeight.w600,
+                        tracking: DayliTracking.tight,
+                      ),
+                    ),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: _body(context),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -232,19 +409,56 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       ),
                     ),
                   ),
+                  if (post.viewerIsAuthor && !stale)
+                    PopupMenuButton<String>(
+                      key: const Key('post.menu'),
+                      tooltip: 'Post options',
+                      onSelected: (action) =>
+                          action == 'edit' ? _edit(post) : _confirmDelete(post),
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          key: Key('post.edit'),
+                          value: 'edit',
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem(
+                          key: Key('post.delete'),
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 14),
               Text(
                 [
                   longDayLabel(post.localDate),
-                  if (post.edited) 'Edited',
                   if (post.viewerIsAuthor)
                     post.audience == 'solo' ? 'Only you' : 'Friends',
                 ].join(' · '),
                 key: const Key('post.meta'),
                 style: muted,
               ),
+              if (post.edited)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    key: const Key('post.history'),
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 44),
+                      foregroundColor: colors.foregroundSecondary,
+                    ),
+                    onPressed: () => _history(post),
+                    child: Text(
+                      'Edited · see earlier versions',
+                      style: muted.copyWith(
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
               if (post.media.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _PostMedia(post: post),
@@ -283,11 +497,71 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
+              const SizedBox(height: 20),
+              if (widget.intent != null &&
+                  _session?.status == SessionStatus.signedIn &&
+                  widget.intentActorId == _session?.user?.id)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    widget.intent == PublicActionIntent.like
+                        ? 'Your like intent was retained. Likes are not available in this app version yet.'
+                        : widget.intent == PublicActionIntent.comment
+                        ? 'Your comment intent was retained. Comments are not available in this app version yet.'
+                        : 'Continue from the author profile.',
+                    key: const Key('post.intent'),
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.like'),
+                      label: 'like',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.like),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.comment'),
+                      label: 'comment',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.comment),
+                    ),
+                  ),
+                ],
+              ),
+              if (_intentNotice != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _intentNotice!,
+                  key: const Key('post.interactionUnavailable'),
+                  style: muted,
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  void _interaction(PublicActionIntent action) {
+    if (_session?.status != SessionStatus.signedIn) {
+      final intent = _session?.issuePublicReturnIntent(
+        '/posts/${widget.postId}',
+        action,
+      );
+      context.go(intent?.authLocation() ?? '/sign-in');
+      return;
+    }
+    setState(() {
+      _intentNotice = action == PublicActionIntent.like
+          ? 'Likes are not available in this app version yet.'
+          : 'Comments are not available in this app version yet.';
+    });
   }
 }
 

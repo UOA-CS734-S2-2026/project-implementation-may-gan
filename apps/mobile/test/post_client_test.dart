@@ -66,13 +66,13 @@ void main() {
     expect((invalid as ApiError).failure, isA<NotFound>());
   });
 
-  test('maps other failures and never calls without a session', () async {
+  test('reads anonymously and maps credential or service failures', () async {
     final signedOut = await client(
-      (_) => http.Response('{}', 200),
+      (_) => http.Response(jsonEncode(body(audience: 'friends')), 200),
       token: null,
     ).get('post-1');
-    expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-    expect(requests, isEmpty);
+    expect(signedOut, isA<ApiSuccess<PostDetail>>());
+    expect(requests.single.headers['authorization'], isNull);
 
     final expired = await client((_) => http.Response('{}', 401)).get('post-1');
     final down = await client((_) => http.Response('{}', 503)).get('post-1');
@@ -126,7 +126,7 @@ void main() {
       );
     });
 
-    test('maps refusals and never calls without a session', () async {
+    test('maps refusals and permits anonymous media reads', () async {
       for (final status in [404, 422]) {
         final result = await client(
           (_) => http.Response('{}', status),
@@ -139,11 +139,11 @@ void main() {
       expect((noUrl as ApiError).failure, isA<ServiceUnavailable>());
 
       final signedOut = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(jsonEncode(mediaJson('m-1', 0)), 200),
         token: null,
       ).media('post-1', 'm-1');
-      expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(signedOut, isA<ApiSuccess<PostMedia>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
   });
 
@@ -190,14 +190,123 @@ void main() {
       expect((result as ApiError).failure, isA<NotFound>());
     });
 
-    test('does not call the API without a session', () async {
+    test('reads a public profile archive without a session', () async {
       final result = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(
+          jsonEncode({
+            'kind': 'archive',
+            'items': [profilePost()..['audience'] = 'friends'],
+            'nextCursor': null,
+            'hasMore': false,
+          }),
+          200,
+        ),
         token: null,
       ).profilePage('ana_walks');
 
-      expect((result as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(result, isA<ApiSuccess<ProfilePostsPage>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
+  });
+
+  group('editing', () {
+    const edit = PostEdit(
+      expectedRevisionCount: 2,
+      reflectiveAnswer: 'Walked further.',
+      caption: null,
+      rating: 9,
+      audience: 'friends',
+    );
+
+    test('sends every field and returns the saved post', () async {
+      final result = await client(
+        (_) => http.Response(jsonEncode({...body(), 'revisionCount': 3}), 200),
+      ).update('post-1', edit);
+
+      final request = requests.single;
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/v1/posts/post-1');
+      expect(jsonDecode(request.body), {
+        'expectedRevisionCount': 2,
+        'reflectiveAnswer': 'Walked further.',
+        'caption': null,
+        'rating': 9,
+        'audience': 'friends',
+      });
+      expect((result as ApiSuccess<PostDetail>).value.revisionCount, 3);
+    });
+
+    test('reports a stale revision count as a conflict', () async {
+      final result = await client(
+        (_) => http.Response('{}', 409),
+      ).update('post-1', edit);
+
+      expect((result as ApiError).failure, isA<Conflict>());
+    });
+
+    test('treats someone else\'s or a deleted post as not found', () async {
+      final result = await client(
+        (_) => http.Response('{}', 404),
+      ).update('post-1', edit);
+
+      expect((result as ApiError).failure, isA<NotFound>());
+    });
+  });
+
+  test('deletes a post by moving it to Trash', () async {
+    final deleted = await client(
+      (_) => http.Response(jsonEncode({'postId': 'post-1'}), 200),
+    ).delete('post-1');
+    expect(requests.single.method, 'POST');
+    expect(requests.single.url.path, '/api/v1/posts/post-1/trash');
+    expect(deleted, isA<ApiSuccess<void>>());
+
+    final missing = await client(
+      (_) => http.Response('{}', 404),
+    ).delete('post-1');
+    expect((missing as ApiError).failure, isA<NotFound>());
+
+    final refused = await client(
+      (_) => http.Response('{}', 409),
+    ).delete('post-1');
+    expect((refused as ApiError).failure, isA<Conflict>());
+
+    // Trash is switched off until it's enabled for the environment.
+    final off = await client((_) => http.Response('{}', 503)).delete('post-1');
+    expect((off as ApiError).failure, isA<ServiceUnavailable>());
+  });
+
+  test('reads a page of earlier versions with its cursor', () async {
+    final result = await client(
+      (_) => http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'revisionNumber': 2,
+              'reflectiveAnswer': 'Second try.',
+              'caption': null,
+              'rating': 6,
+              'audience': 'friends',
+              'replacedAt': '2026-09-29T08:00:00.000Z',
+            },
+          ],
+          'nextCursor': 'next',
+          'hasMore': true,
+        }),
+        200,
+      ),
+    ).revisions('post-1', cursor: 'abc');
+
+    expect(requests.single.url.path, '/api/v1/posts/post-1/revisions');
+    expect(requests.single.url.queryParameters['cursor'], 'abc');
+    final page = (result as ApiSuccess).value;
+    expect(page.items.single.reflectiveAnswer, 'Second try.');
+    expect(page.items.single.replacedAt, DateTime.utc(2026, 9, 29, 8));
+    expect(page.nextCursor, 'next');
+
+    final hidden = await client(
+      (_) => http.Response('{}', 404),
+    ).revisions('post-1');
+    expect((hidden as ApiError).failure, isA<NotFound>());
   });
 }

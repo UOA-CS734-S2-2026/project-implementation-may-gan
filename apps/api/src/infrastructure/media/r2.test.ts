@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createPresignedDownloadUrl,
   createPresignedUploadUrl,
+  createR2MediaObjectStore,
   deleteR2Object,
   headR2Object,
   R2ReadInfrastructureError,
@@ -32,6 +33,25 @@ describe("readR2RuntimeConfiguration", () => {
       R2_ACCESS_KEY_ID: configuration.accessKeyId,
       R2_SECRET_ACCESS_KEY: configuration.secretAccessKey,
     })).toBeUndefined();
+  });
+
+  it("accepts only the reserved local account at a loopback HTTP fixture", () => {
+    const local = {
+      R2_ACCOUNT_ID: "local-e2e",
+      R2_BUCKET_NAME: configuration.bucketName,
+      R2_ACCESS_KEY_ID: configuration.accessKeyId,
+      R2_SECRET_ACCESS_KEY: configuration.secretAccessKey,
+      R2_LOCAL_ENDPOINT: "http://127.0.0.1:49123",
+    };
+    expect(readR2RuntimeConfiguration(local)).toEqual({
+      accountId: "local-e2e",
+      bucketName: configuration.bucketName,
+      accessKeyId: configuration.accessKeyId,
+      secretAccessKey: configuration.secretAccessKey,
+      localEndpoint: "http://127.0.0.1:49123",
+    });
+    expect(readR2RuntimeConfiguration({ ...local, R2_ACCOUNT_ID: "production" })).toBeUndefined();
+    expect(readR2RuntimeConfiguration({ ...local, R2_LOCAL_ENDPOINT: "https://example.com" })).toBeUndefined();
   });
 });
 
@@ -87,6 +107,38 @@ describe("createPresignedUploadUrl", () => {
     const smallSignature = new URL(small.url).searchParams.get("X-Amz-Signature");
     const largeSignature = new URL(large.url).searchParams.get("X-Amz-Signature");
     expect(smallSignature).not.toEqual(largeSignature);
+  });
+});
+
+describe("createR2MediaObjectStore", () => {
+  it("signs an internal request and forwards only supported read preconditions", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(new Uint8Array([1]), {
+      status: 206,
+      headers: { "content-range": "bytes 0-0/1" },
+    }));
+    const requestHeaders = new Headers({
+      range: "bytes=0-0",
+      "if-range": '"previous-avatar"',
+      "if-none-match": '"etag"',
+      authorization: "Bearer user-session",
+      cookie: "private=cookie",
+    });
+
+    const response = await createR2MediaObjectStore(configuration).fetch("media/user/object", {
+      method: "GET",
+      headers: requestHeaders,
+    });
+
+    expect(response.status).toBe(206);
+    const [input, init] = fetch.mock.calls[0]!;
+    const sent = input instanceof Request ? input.headers : new Headers(init?.headers);
+    expect(sent.get("range")).toBe("bytes=0-0");
+    expect(sent.get("if-range")).toBe('"previous-avatar"');
+    expect(sent.get("if-none-match")).toBe('"etag"');
+    expect(sent.get("authorization")).toMatch(/^AWS4-HMAC-SHA256 /);
+    expect(sent.get("authorization")).not.toContain("user-session");
+    expect(sent.has("cookie")).toBe(false);
+    expect(sent.get("x-amz-security-token")).toBeNull();
   });
 });
 

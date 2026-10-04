@@ -1,0 +1,1 @@
+export const MAX_EXPORT_ARCHIVE_BYTES = 250 * 1024 * 1024;

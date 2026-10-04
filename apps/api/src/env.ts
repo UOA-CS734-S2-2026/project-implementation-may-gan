@@ -4,6 +4,8 @@ import type { RateLimitBinding } from "./http/middleware/rate-limit";
 /** Runtime bindings required before PostgreSQL-backed Better Auth is mounted. */
 export interface ApiEnv {
   HYPERDRIVE: HyperdriveBinding;
+  /** Restricted lifecycle_worker connection. Never reuse the ordinary app binding. */
+  EXPORT_WORKER_HYPERDRIVE?: HyperdriveBinding;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_BASE_URL: string;
   /** Direct API origin for native callers and issued realtime ticket URLs. */
@@ -19,6 +21,8 @@ export interface ApiEnv {
   R2_BUCKET_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
+  /** Disposable loopback S3 fixture used only by isolated local E2E runs. */
+  R2_LOCAL_ENDPOINT?: string;
   /** Required in deployed delivery environments. Optional for DB-free and legacy test composition. */
   USER_REALTIME?: DurableObjectNamespace;
   /** Worker secret containing a Firebase service-account JSON document. */

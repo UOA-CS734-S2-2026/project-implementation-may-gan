@@ -12,7 +12,7 @@ export function useProfileMutation<T>(change: (input: T) => Promise<ProfileDetai
   return useMutation({
     mutationFn: change,
     onSuccess: (profile) => {
-      client.setQueryData(profileKeys.details(userId, profile.username), profile);
+      client.setQueryData(profileKeys.details(userId, profile.username), { kind: "authorized", ...profile });
       void client.invalidateQueries({ queryKey: profileKeys.all(userId) });
       void client.invalidateQueries({ queryKey: ["social-profile", userId] });
       void client.invalidateQueries({ queryKey: ["username-profile", userId] });

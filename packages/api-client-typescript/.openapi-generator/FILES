@@ -17,6 +17,8 @@ src/index.ts
 src/models/AccountDeletionCancellationResult.ts
 src/models/AccountDeletionRequestResult.ts
 src/models/AccountDeletionStatus.ts
+src/models/AccountExportRequestResult.ts
+src/models/AccountExportStatus.ts
 src/models/ApiError.ts
 src/models/ApiErrorCode.ts
 src/models/ApiErrorError.ts
@@ -82,6 +84,8 @@ src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
 src/models/PostMedia.ts
 src/models/PostMediaContentType.ts
+src/models/PostRevision.ts
+src/models/PostRevisionsPage.ts
 src/models/PostVoiceMemo.ts
 src/models/PostingStreak.ts
 src/models/PostsListTrash200Response.ts
@@ -94,6 +98,9 @@ src/models/ProfilePostPrompt.ts
 src/models/ProfilePostsPage.ts
 src/models/ProfileStats.ts
 src/models/ProfileVisibility.ts
+src/models/PublicProfile.ts
+src/models/ReadableProfile.ts
+src/models/ReadableProfilePosts.ts
 src/models/RegisterPushDeviceRequest.ts
 src/models/RegistrationIntentRequest.ts
 src/models/RegistrationIntentResponse.ts
@@ -103,12 +110,15 @@ src/models/RelationshipStatus.ts
 src/models/RelationshipUserCard.ts
 src/models/RelationshipUserPage.ts
 src/models/ResolveMessageRequestRequest.ts
+src/models/RestrictedProfile.ts
+src/models/RestrictedProfilePosts.ts
 src/models/SendMessageRequest.ts
 src/models/SendRelationshipRequest.ts
 src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/TrashedPostStatus.ts
+src/models/UpdatePostRequest.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts
 src/models/UsernameSetupRequest.ts

@@ -25,6 +25,8 @@ lib/auth/oauth.dart
 lib/model/account_deletion_cancellation_result.dart
 lib/model/account_deletion_request_result.dart
 lib/model/account_deletion_status.dart
+lib/model/account_export_request_result.dart
+lib/model/account_export_status.dart
 lib/model/api_error.dart
 lib/model/api_error_code.dart
 lib/model/api_error_error.dart
@@ -90,6 +92,8 @@ lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
 lib/model/post_media.dart
 lib/model/post_media_content_type.dart
+lib/model/post_revision.dart
+lib/model/post_revisions_page.dart
 lib/model/post_voice_memo.dart
 lib/model/posting_streak.dart
 lib/model/posts_list_trash200_response.dart
@@ -102,6 +106,9 @@ lib/model/profile_post_prompt.dart
 lib/model/profile_posts_page.dart
 lib/model/profile_stats.dart
 lib/model/profile_visibility.dart
+lib/model/public_profile.dart
+lib/model/readable_profile.dart
+lib/model/readable_profile_posts.dart
 lib/model/register_push_device_request.dart
 lib/model/registration_intent_request.dart
 lib/model/registration_intent_response.dart
@@ -111,12 +118,15 @@ lib/model/relationship_status.dart
 lib/model/relationship_user_card.dart
 lib/model/relationship_user_page.dart
 lib/model/resolve_message_request_request.dart
+lib/model/restricted_profile.dart
+lib/model/restricted_profile_posts.dart
 lib/model/send_message_request.dart
 lib/model/send_relationship_request.dart
 lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
+lib/model/update_post_request.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart
 lib/model/username_setup_request.dart

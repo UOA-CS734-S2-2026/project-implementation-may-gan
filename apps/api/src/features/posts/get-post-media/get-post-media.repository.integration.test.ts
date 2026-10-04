@@ -86,6 +86,7 @@ function requireLocalTestUrl(value: string): string {
         name: key,
         email: `${userId}@example.test`,
         username: `p${run}${key}`.slice(0, 30),
+        profileVisibility: key === "author" ? "public" : "private",
       });
     }
     for (const other of [users.friend, users.blocked]) {
@@ -150,6 +151,19 @@ function requireLocalTestUrl(value: string): string {
     }
   });
 
+  it("allows public-only readers only through parent-authorized delivery and withdraws on privacy change", async () => {
+    await expect(media().findMedia(null, id("released"), id("first"), now, "parent-authorized")).resolves.not.toBeNull();
+    await expect(media().findMedia(users.stranger, id("released"), id("first"), now, "parent-authorized")).resolves.not.toBeNull();
+    await expect(media().findMedia(users.blocked, id("released"), id("first"), now, "parent-authorized")).resolves.toBeNull();
+
+    await migrator.db.update(schema.user).set({ profileVisibility: "private" }).where(inArray(schema.user.id, [users.author]));
+    try {
+      await expect(media().findMedia(null, id("released"), id("first"), now, "parent-authorized")).resolves.toBeNull();
+    } finally {
+      await migrator.db.update(schema.user).set({ profileVisibility: "public" }).where(inArray(schema.user.id, [users.author]));
+    }
+  });
+
   it("refuses detached, legacy, and mismatched media even on a readable post", async () => {
     await expect(media().findMedia(users.friend, id("released"), id("removed"), now)).resolves.toBeNull();
     await expect(media().findMedia(users.friend, id("released"), id("legacy"), now)).resolves.toBeNull();
@@ -166,15 +180,6 @@ function requireLocalTestUrl(value: string): string {
   it("lets the author reach their own solo and unreleased media", async () => {
     await expect(media().findMedia(users.author, id("solo"), id("solo-photo"), now)).resolves.not.toBeNull();
     await expect(media().findMedia(users.author, id("unreleased"), id("unreleased-photo"), now)).resolves.not.toBeNull();
-  });
-
-  it("honours a validated public link only for its own released friends post", async () => {
-    const grant = { postId: id("released"), active: true };
-    await expect(media().findMedia(null, id("released"), id("first"), now, grant)).resolves.not.toBeNull();
-    await expect(media().findMedia(null, id("released"), id("first"), now, { ...grant, active: false }))
-      .resolves.toBeNull();
-    await expect(media().findMedia(null, id("solo"), id("solo-photo"), now, { postId: id("solo"), active: true }))
-      .resolves.toBeNull();
   });
 
   it("lists only attached, uploaded media for each post, in order", async () => {

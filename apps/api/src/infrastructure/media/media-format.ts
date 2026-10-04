@@ -757,10 +757,10 @@ export async function extractIsoBmffDurationSeconds(
 
     // mvhd's duration alone is just a declared header field with no structural
     // tie to the actual media — cross-check it against each matching track's OWN
-    // media header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so
-    // both would have to be faked together. Only tracks of the wanted handler type
-    // are judged: another kind of track's duration can legitimately diverge from
-    // mvhd, and the first trak isn't necessarily the one we want.
+    // media header (mdia/mdhd, same v0/v1 layout, in the track's timescale), so a
+    // track can't outlast the header that was checked against the limit. Only tracks
+    // of the wanted handler type are judged: another kind of track's duration can
+    // legitimately diverge from mvhd, and the first trak isn't necessarily the one we want.
     // Every track of the wanted kind has to check out, not just the first: a
     // second one that disagrees with the movie header, or can't be read, would
     // otherwise be skipped and could run past the duration limit unseen. Tracks of
@@ -784,9 +784,13 @@ export async function extractIsoBmffDurationSeconds(
       const trackSeconds = times.duration / times.timescale;
       if (!Number.isFinite(trackSeconds)) return { outcome: "malformed" };
 
-      const larger = Math.max(movieSeconds, trackSeconds);
-      const tolerance = Math.max(1, larger * 0.05); // rounding across different timescales, not a hard equality
-      if (larger - Math.min(movieSeconds, trackSeconds) > tolerance) return { outcome: "malformed" };
+      // The movie header covers the longest track, so a track can be shorter than it:
+      // a camera clip's video routinely starts after its sound and ends before it, and
+      // that is a gap of a second or more on real recordings. A track LONGER than the
+      // header is what's inconsistent (the header understating the media), so only that
+      // is refused. The duration reported below is still the longest any header claims,
+      // so a short track can't hide a long movie from the limit.
+      if (trackSeconds - movieSeconds > Math.max(1, trackSeconds * 0.05)) return { outcome: "malformed" };
 
       let acceptedSeconds = trackSeconds;
       if (handlerType === "soun") {

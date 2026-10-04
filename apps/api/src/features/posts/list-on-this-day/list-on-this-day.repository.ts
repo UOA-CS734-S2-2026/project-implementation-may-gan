@@ -50,7 +50,7 @@ export function createPostgresOnThisDayRepository(database: DayliDatabase): OnTh
           caption: posts.caption,
           rating: posts.rating,
           audience: posts.audience,
-          edited: postEdited(),
+          edited: postEdited(ownerId),
         })
         .from(posts)
         .innerJoin(dailyPrompts, eq(posts.promptId, dailyPrompts.id))

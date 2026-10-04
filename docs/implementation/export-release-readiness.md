@@ -1,0 +1,20 @@
+# Export release readiness review
+
+Status: **not approved for activation**. The API worker, scheduled execution, native client, and web entry remain disabled. This review records evidence and outstanding decisions; it does not change any runtime flag or authorize a production migration.
+
+## Evidence checked
+
+- The owner reported revoking the temporary credentials used for the synthetic live R2 proof. This repository cannot verify token revocation. PR #274 records the separate proof against the dedicated empty `dayli-export-proof` bucket, not the configured staging or production bucket.
+- The export service merged in PR #252. A coordinated staging release at [`f7baf569`](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/37124643816) applied pending reviewed migrations, verified the configured Hyperdrive target and schema, deployed API and web, and passed the generic private Worker Hyperdrive check. The later [staging release at `aed66932`](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/37160090287) also passed. No pending migrations were applied on that later run. These checks do not prove export execution or archive access with the deployed Worker configuration.
+- On an isolated local PostgreSQL fixture, the migration and integration verifier passed, including 60 API database test files and 316 tests. The cleanup unit tests passed 10 tests across two files. They cover a second durable cleanup pass after a simulated late object completion; the database integration test verifies retention of a cleanup task until its 24-hour recheck and restricted app-role denial. This is deterministic fault injection, not a live delayed R2 completion.
+- On a local disposable database and API, the new Playwright check passed on desktop and mobile Chromium. A signed-in synthetic owner could reach `/account/export`, saw the disabled message, and made no export API request. It does not prove a ready archive download in a deployed browser.
+- On an Android emulator, the new isolated test used a synthetic empty ZIP and a fake export client without network access. The real Android share chooser appeared, the 22-byte synthetic ZIP existed in app cache while it was open, and the app removed the temporary file after the chooser was dismissed. The owner accepted emulator-only sharing evidence for this gate. This does not establish physical-device or iOS behavior, or a real account download. Reproduce with `bash scripts/test-export-emulator-share.sh <emulator-id>`.
+
+## Rollout review and remaining gates
+
+1. Leave `exportExecutionEnabled`, `nativeExportEnabled`, and the web `ExportPanel` flag false until an explicit owner activation decision. A successful deployment alone must not turn any of them on.
+2. Before production execution, verify the production database schema and the restricted worker and app roles, the intended R2 bucket, scoped provider credentials, object namespace, multipart behavior, and cleanup permissions against the actual deployment. The dedicated proof bucket and generic staging Hyperdrive check cannot substitute for these checks. Do not use real account data for provider proof.
+3. Demonstrate a complete authenticated request, build, publication, bounded download, expiry, and cleanup journey against a reviewed isolated deployment, including a late provider completion after an earlier successful cleanup pass. The current local fault injection covers the cleanup logic, but no live delayed-completion or deployed end-to-end export has been demonstrated.
+4. Obtain a separate owner approval for the precise environment and staged activation sequence. Production migrations, legal publication, export activation, and real-user-data tests are not authorized by this evidence. Keep a rollback path that disables all three entry points and continues durable cleanup of already owned synthetic archives.
+
+The release decision remains **hold** until the deployment-specific and end-to-end checks are satisfied and the owner explicitly approves activation. The emulator-only decision changes the device evidence requirement, not the other gates.

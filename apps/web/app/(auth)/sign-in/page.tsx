@@ -12,7 +12,8 @@ import { FormInput } from "@/components/ui/FormInput";
 import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
-import { safeReturnPath } from "@/lib/routing/safe-return-path";
+import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
+import { getUsernameProfile } from "@/lib/profile/username";
 
 const signInSchema = z.object({
   email: z.email("Invalid email address"),
@@ -41,7 +42,7 @@ function GoogleSignInError() {
 
 function SignInForm() {
   const router = useRouter();
-  const returnTo = safeReturnPath(useSearchParams().get("next"), "/home");
+  const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
 
   const {
     control,
@@ -61,7 +62,12 @@ function SignInForm() {
       return;
     }
 
-    router.push(returnTo);
+    try {
+      const profile = await getUsernameProfile();
+      router.push(profile.needsUsernameSetup ? `/setup-username?next=${encodeURIComponent(returnTo)}` : returnTo);
+    } catch {
+      router.push(returnTo);
+    }
   };
 
   return (
@@ -128,7 +134,7 @@ function SignInForm() {
             {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
           <Button
-            href="/sign-up"
+            href={`/sign-up?next=${encodeURIComponent(returnTo)}`}
             variant={{ weight: "secondary", size: "sm", color: "foreground" }}
           >
             Sign up
