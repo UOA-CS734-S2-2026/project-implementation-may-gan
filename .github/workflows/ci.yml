@@ -131,13 +131,19 @@ jobs:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    env:
-      MIGRATION_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || format('{0}~1', github.sha) }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
+      - name: Set migration history base
+        shell: bash
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}"
+          if ! git rev-parse --verify "${base}^{commit}" >/dev/null 2>&1; then
+            base="$(git rev-parse HEAD~1)"
+          fi
+          echo "MIGRATION_BASE_REF=$(git merge-base HEAD "$base")" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
