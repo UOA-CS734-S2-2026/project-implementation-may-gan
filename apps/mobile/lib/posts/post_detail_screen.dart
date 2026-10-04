@@ -310,10 +310,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         key: const Key('post.deleteDialog'),
-        title: const Text('Delete this dayli?'),
+        title: const Text('Move this dayli to Trash?'),
         content: const Text(
-          'It disappears for you and your friends straight away. If it was '
-          "today's dayli, you can post a new one before midnight.",
+          'It disappears straight away and can be restored for 7 days. If it '
+          "was today's dayli, posting a replacement prevents restoration. "
+          'Permanent cleanup starts after 14 days.',
         ),
         actions: [
           TextButton(
@@ -326,7 +327,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             style: TextButton.styleFrom(
               foregroundColor: DayliColors.of(context).danger,
             ),
-            child: const Text('Delete'),
+            child: const Text('Move to Trash'),
           ),
         ],
       ),

@@ -32,6 +32,23 @@ class ReportingPostSubmitter implements DailyPostSubmitter {
 
 /// Reports each delete the server confirms, whether or not the screen that
 /// asked for it is still open.
+class ReportingPostTrashClient implements PostTrashClient {
+  ReportingPostTrashClient(this._inner, this._activity);
+
+  final PostTrashClient _inner;
+  final PostActivity _activity;
+
+  @override
+  Future<ApiResult<List<TrashedPost>>> listTrash() => _inner.listTrash();
+
+  @override
+  Future<ApiResult<void>> restore(String postId) async {
+    final result = await _inner.restore(postId);
+    if (result case ApiSuccess()) _activity.changed();
+    return result;
+  }
+}
+
 class ReportingPostClient implements PostClient {
   ReportingPostClient(this._inner, this._activity);
 

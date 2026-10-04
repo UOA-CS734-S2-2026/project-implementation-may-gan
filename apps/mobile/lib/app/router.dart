@@ -20,6 +20,7 @@ import '../profile/edit_profile_screen.dart';
 import '../profile/my_days_screen.dart';
 import '../settings/account_export_screen.dart';
 import '../settings/settings_screen.dart';
+import '../settings/trash_screen.dart';
 import '../shell/app_shell.dart';
 import 'pending_destination.dart';
 import 'splash_screen.dart';
@@ -158,6 +159,7 @@ GoRouter buildRouter(
         ),
       ),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: '/trash', builder: (_, _) => const TrashScreen()),
       GoRoute(
         path: '/account/export',
         builder: (_, _) => const AccountExportScreen(),

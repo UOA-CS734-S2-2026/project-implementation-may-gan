@@ -13,6 +13,7 @@ import { AvatarForm } from "@/features/profiles/update-profile/AvatarForm";
 import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUsernameForm";
 import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
 import { Skeleton } from "@/components/ui/core/Skeleton";
+import { TrashPanel } from "@/features/posts/trash/TrashPanel";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -67,6 +68,8 @@ export default function SettingsPage() {
           <p className="text-xs text-foreground/60">Google is connected only when you choose it here. Matching emails are never connected automatically.</p>
           <LinkGoogleAccount />
         </section>
+
+        <TrashPanel key={user.id} actorId={user.id} />
 
         <section className="space-y-2 rounded-lg border border-foreground/10 p-4">
           <h2 className="text-sm font-medium">Legal</h2>

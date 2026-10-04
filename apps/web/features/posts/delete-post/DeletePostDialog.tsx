@@ -36,11 +36,11 @@ export function DeletePostDialog({
         className="w-full max-w-sm rounded-lg bg-background p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
       >
-        <h2 id="delete-post-title" className="mb-2 text-base font-semibold">Delete this dayli?</h2>
+        <h2 id="delete-post-title" className="mb-2 text-base font-semibold">Move this dayli to Trash?</h2>
         <p id="delete-post-description" className="mb-4 text-sm text-foreground-secondary">
           {isToday
-            ? "It disappears for you and your friends straight away. You can post a new one before midnight."
-            : "It disappears for you and your friends straight away. You can't post this day again."}
+            ? "It disappears straight away. You can restore it for 7 days, unless you post a replacement before midnight. Permanent cleanup starts after 14 days."
+            : "It disappears straight away. You can restore it for 7 days. Permanent cleanup starts after 14 days."}
         </p>
         {error && <p role="alert" className="mb-4 text-sm text-red-500">{error}</p>}
         <div className="flex justify-end gap-3">
@@ -53,7 +53,7 @@ export function DeletePostDialog({
             variant={{ weight: "secondary", size: "sm", color: "foreground" }}
             className="bg-rose-100 text-rose-600 hover:bg-rose-200"
           >
-            {isPending ? "Deleting..." : "Delete"}
+            {isPending ? "Moving..." : "Move to Trash"}
           </Button>
         </div>
       </div>

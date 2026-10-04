@@ -7,12 +7,13 @@ import {
   type PostMedia,
   type PostRevision,
   type PostRevisionsPage,
+  type TrashedPostStatus,
   type ProfilePost,
   type UpdatePostRequest,
 } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { PostAudience, PostDetail, PostMedia, PostRevision, PostRevisionsPage, ProfilePost, UpdatePostRequest };
+export type { PostAudience, PostDetail, PostMedia, PostRevision, PostRevisionsPage, ProfilePost, TrashedPostStatus, UpdatePostRequest };
 export type ProfilePostsPage = {
   kind: "archive";
   items: ProfilePost[];
@@ -73,12 +74,33 @@ export const postsApi = {
     }
   },
 
-  /** Deletes the author's post by moving it to Trash; unavailable while Trash is switched off. */
+  /** Moves the author's post to Trash. */
   async remove(postId: string): Promise<PostResult<void>> {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
       await new PostsApi(configuration).postsTrash({ postId });
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error, true) };
+    }
+  },
+
+  async trash(): Promise<PostResult<TrashedPostStatus[]>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      return { ok: true, value: (await new PostsApi(configuration).postsListTrash()).posts };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error) };
+    }
+  },
+
+  async restore(postId: string): Promise<PostResult<void>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      await new PostsApi(configuration).postsRestore({ postId });
       return { ok: true, value: undefined };
     } catch (error) {
       return { ok: false, failure: await toFailure(error, true) };
