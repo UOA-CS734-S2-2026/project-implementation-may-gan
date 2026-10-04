@@ -1,6 +1,6 @@
 # Dayli API
 
-For local HTTPS sign-in, staging and production boundaries, see [Environments](../../docs/dayli/environments.md). For Google OAuth and Resend, see [Authentication compatibility](../../docs/dayli/authentication-compatibility.md).
+For local HTTPS sign-in, staging and production boundaries, see [Environments](../../docs/dayli/environments.md). For Google OAuth and Resend, see [Authentication setup and operations](../docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx).
 
 ## Staging Hyperdrive check
 

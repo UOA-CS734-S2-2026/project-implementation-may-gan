@@ -86,4 +86,4 @@ flutter test
 flutter analyze
 ```
 
-See [the authentication compatibility slice](../../docs/dayli/authentication-compatibility.md) for the Worker proof and staging prerequisites.
+See [Authentication setup and operations](../docs/content/docs/systems/accounts-and-authentication/setup-and-operations.mdx) for staging prerequisites and [Security and verification](../docs/content/docs/systems/accounts-and-authentication/security-and-verification.mdx) for Worker and mobile test coverage.
