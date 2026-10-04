@@ -114,19 +114,21 @@ class DraftAttachment {
     waveform: waveform,
   );
 
+  /// The same attachment with the server's reservation and result forgotten, so
+  /// the upload starts again from the compressed copy. Everything else is kept,
+  /// including what is known only about a voice memo (its length and waveform),
+  /// because this copies the attachment and resets only the upload state.
+  DraftAttachment withoutReservation() => copyWith(
+    reservationId: () => null,
+    status: AttachmentUploadStatus.pending,
+    failureReason: () => null,
+  );
+
   /// The same picked file with no upload state, to start over from
   /// compression. A recorded voice memo is never compressed, so it keeps what
   /// the recorder wrote and only forgets the server's reservation.
   DraftAttachment restarted() => isVoiceMemo
-      ? DraftAttachment(
-          localPath: localPath,
-          mediaType: mediaType,
-          compressedPath: compressedPath,
-          contentType: contentType,
-          byteSize: byteSize,
-          durationMs: durationMs,
-          waveform: waveform,
-        )
+      ? withoutReservation()
       : DraftAttachment(localPath: localPath, mediaType: mediaType);
 
   /// Attachments compare by value: a draft reloaded from storage holds new

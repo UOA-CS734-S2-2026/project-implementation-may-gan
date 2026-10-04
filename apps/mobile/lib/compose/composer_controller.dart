@@ -553,13 +553,7 @@ class ComposerController extends ChangeNotifier {
     _draft = current.copyWith(
       attachments: [
         for (final attachment in current.attachments)
-          DraftAttachment(
-            localPath: attachment.localPath,
-            mediaType: attachment.mediaType,
-            compressedPath: attachment.compressedPath,
-            contentType: attachment.contentType,
-            byteSize: attachment.byteSize,
-          ),
+          attachment.withoutReservation(),
       ],
       updatedAt: _clock(),
     );
