@@ -40,6 +40,8 @@ adb install build/app/outputs/flutter-apk/app-debug.apk
 
 ## Google sign-in is optional
 
+> Google sign-in on mobile is not available in a build made from this guide. Use email and password, which covers every feature. Google sign-in works on mobile only on team devices whose signing key is registered with Google, and on the [staging web app](https://staging.dayli.agroupforcoders.com).
+
 Email and password covers every feature. **Continue with Google** is always shown, but without the staging web client ID it reports "Google sign-in isn't set up for this build yet." To enable it, also pass the client ID:
 
 ```bash
