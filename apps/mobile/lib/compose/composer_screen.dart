@@ -531,6 +531,9 @@ class _ComposerScreenState extends State<ComposerScreen>
   void _close() => context.canPop() ? context.pop() : context.go('/');
 
   Future<void> _submit(ComposerController controller) async {
+    // A weather lookup that finishes after the post is sent can't be added to
+    // it, so posting waits for the lookup (or the author skipping it).
+    if (_weather?.isWorking ?? false) return;
     // Close the keyboard: fields are read-only until the request settles.
     FocusScope.of(context).unfocus();
     await controller.submit();
@@ -547,7 +550,7 @@ class _ComposerScreenState extends State<ComposerScreen>
         child: controller == null
             ? const SizedBox.shrink()
             : ListenableBuilder(
-                listenable: controller,
+                listenable: Listenable.merge([controller, ?_weather]),
                 builder: (context, _) => Column(
                   children: [
                     _Header(controller: controller, onClose: _close),
@@ -555,6 +558,7 @@ class _ComposerScreenState extends State<ComposerScreen>
                     if (controller.phase == ComposerPhase.editing)
                       _SubmitBar(
                         submitting: controller.submitting,
+                        waitingForWeather: _weather?.isWorking ?? false,
                         onSubmit: () => _submit(controller),
                       ),
                   ],
@@ -842,14 +846,23 @@ class _Header extends StatelessWidget {
 }
 
 class _SubmitBar extends StatelessWidget {
-  const _SubmitBar({required this.submitting, required this.onSubmit});
+  const _SubmitBar({
+    required this.submitting,
+    required this.waitingForWeather,
+    required this.onSubmit,
+  });
 
   final bool submitting;
+
+  /// A weather lookup is running. Posting waits for it so the weather can't
+  /// be left out of a post the author meant to include it in.
+  final bool waitingForWeather;
   final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
+    final blocked = submitting || waitingForWeather;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: BoxDecoration(
@@ -860,13 +873,17 @@ class _SubmitBar extends StatelessWidget {
       ),
       child: DayliButton(
         key: const Key('composer.submit'),
-        label: submitting ? 'Posting…' : 'Post',
+        label: submitting
+            ? 'Posting…'
+            : waitingForWeather
+            ? 'Getting the weather…'
+            : 'Post',
         weight: ButtonWeight.primary,
         size: ButtonSize.lg,
         fullWidth: true,
         height: 52,
-        arrow: !submitting,
-        onPressed: submitting ? null : onSubmit,
+        arrow: !blocked,
+        onPressed: blocked ? null : onSubmit,
       ),
     );
   }

@@ -73,6 +73,16 @@ class WeatherInputController extends ChangeNotifier {
 
   Future<void> openLocationSettings() => lookup.location.openLocationSettings();
 
+  /// Gives up on a lookup in progress, so the author can post without waiting.
+  /// A result that arrives afterwards is ignored.
+  void cancel() {
+    if (!_working) return;
+    _generation++;
+    _working = false;
+    _failure = null;
+    _notify();
+  }
+
   /// Forgets the last failure, such as when the author leaves it be.
   void dismissFailure() {
     if (_failure == null) return;
