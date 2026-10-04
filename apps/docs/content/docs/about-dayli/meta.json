@@ -1,5 +1,12 @@
 {
   "title": "About Dayli",
   "defaultOpen": true,
-  "pages": ["what-dayli-is", "core-concepts-and-daily-rules", "project-status"]
+  "pages": [
+    "what-dayli-is",
+    "core-concepts-and-daily-rules",
+    "target-users",
+    "user-stories",
+    "task-completion",
+    "project-status"
+  ]
 }
