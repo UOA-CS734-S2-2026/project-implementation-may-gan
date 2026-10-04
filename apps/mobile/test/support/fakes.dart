@@ -30,10 +30,13 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:dayli_mobile/weather/weather_location.dart';
+import 'package:dayli_mobile/weather/weather_lookup.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
 import 'voice_fakes.dart';
+import 'weather_fakes.dart';
 
 class FakeFriendsClient implements FriendsClient {
   static const emptyFriends = FriendPage(
@@ -762,6 +765,14 @@ class TestHarness {
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
 
+  /// The weather provider, phone location and place lookup the composer uses.
+  final weatherProvider = FakeWeatherProvider();
+  final weatherLocation = FakeLocationAccess(
+    permission: LocationPermissionStatus.askable,
+    afterRequest: LocationPermissionStatus.granted,
+  );
+  final weatherPlaceNamer = FakePlaceNamer();
+
   /// False gives the app no upload client, so picked media stays on the device.
   final bool uploadMedia;
   final bool effectiveTerms;
@@ -790,6 +801,11 @@ class TestHarness {
       files: voiceFiles,
       // Widget tests move fake time, not the wall clock.
       clock: () => TestWidgetsFlutterBinding.ensureInitialized().clock.now(),
+    ),
+    weather: WeatherServices(
+      createProvider: () => weatherProvider,
+      location: weatherLocation,
+      placeNamer: weatherPlaceNamer,
     ),
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
