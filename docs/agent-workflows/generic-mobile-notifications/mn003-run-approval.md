@@ -23,7 +23,9 @@ This does not authorize #262 or other tickets, production setup, live OAuth read
 
 The original approved named-agent route remains implementor-sol for MN-003. Use reviewer for independent correctness review. No scout role is newly authorized.
 
-Start only after confirming #260 is actually merged. Preflight against current merged origin/main and verify the unchanged spec, plan and MN-003 digest pins below. Use this isolated worktree and preserve the original dirty checkout and other branches. Do not silently import unmerged Firebase wiring or other changes.
+Start only after confirming #260 is actually merged. Preflight against current merged origin/main and verify the unchanged spec, plan and MN-003 digest pins below. Use this isolated worktree and preserve the original dirty checkout and other branches. Do not silently import unmerged changes.
+
+The user separately selected "Include it in #261 as one mobile batch (Recommended)" when asked about the already-reviewed staging Firebase wiring. Import only that explicitly approved local change, originally a25b6884eeea723ab18128fa9fa25e45c53f2db8 and rebased as 86824c85c3790a11ec048f6e60e6188c8f7af221, from antga/staging-firebase-mobile-config. Keep staging/debug-only restrictions and disabled defaults. Reconcile current-main mobile and native configuration rather than overwriting newer changes. This avoids a separate Firebase PR and does not authorize server credentials, provisioning, activation or live sends. Preserve the existing Firebase worktree and branch.
 
 ## Batching and final gates
 
