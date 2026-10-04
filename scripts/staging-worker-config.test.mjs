@@ -6,6 +6,7 @@ import { createStagingWorkerConfigs, rateLimitConfig, readStagingBrowserProxyMod
 const input = {
   workerName: "dayli-api-staging",
   hyperdriveId: "a".repeat(32),
+  releaseSha: "c".repeat(40),
   authApiOrigin: "https://api.staging.example.test",
   authWebOrigin: "https://staging.example.test",
   authVars: { GOOGLE_WEB_CLIENT_ID: "public-client-id" },
@@ -19,6 +20,7 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.hyperdrive, [{ binding: "HYPERDRIVE", id: "a".repeat(32) }]);
   assert.deepEqual(api.ratelimits, rateLimitConfig);
   assert.equal(api.vars.API_RATE_LIMIT_SCOPE, "staging");
+  assert.equal(api.vars.STAGING_RELEASE_SHA, "c".repeat(40));
   assert.equal(api.vars.NOTIFICATION_PUBLISHERS_ENABLED, "false");
   assert.equal(api.vars.NOTIFICATION_DELIVERY_ENABLED, "false");
   assert.equal(api.vars.DIRECT_MESSAGE_SEND_LIMIT, "30");
@@ -104,7 +106,8 @@ test("binds the separate worker only on staging and requires complete synthetic 
     STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER: "2026-10-06T01:00:00.000Z",
   };
   assert.deepEqual(createStagingWorkerConfigs({ ...input, mediaVars, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
-    { API_RATE_LIMIT_SCOPE: "staging", BETTER_AUTH_BASE_URL: input.authApiOrigin,
+    { API_RATE_LIMIT_SCOPE: "staging", STAGING_RELEASE_SHA: input.releaseSha,
+      BETTER_AUTH_BASE_URL: input.authApiOrigin,
       NOTIFICATION_PUBLISHERS_ENABLED: "false", NOTIFICATION_DELIVERY_ENABLED: "false",
       DIRECT_MESSAGE_SEND_LIMIT: "30",
       PUBLIC_API_BASE_URL: input.authApiOrigin,
@@ -148,4 +151,5 @@ test("explicit all-staging and cleanup-only modes require the separate worker an
 test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
   assert.throws(() => createStagingWorkerConfigs({ ...input, workerName: "production-api" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, hyperdriveId: "not-an-id" }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, releaseSha: "main" }));
 });

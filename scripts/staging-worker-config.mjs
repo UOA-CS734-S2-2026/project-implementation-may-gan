@@ -37,6 +37,7 @@ export function createStagingWorkerConfigs({
   hyperdriveId,
   exportWorkerHyperdriveId,
   exportProofVars = {},
+  releaseSha,
   authApiOrigin,
   authWebOrigin,
   authVars = {},
@@ -76,6 +77,9 @@ export function createStagingWorkerConfigs({
        typeof mediaVars.R2_BUCKET_NAME !== "string" || !mediaVars.R2_BUCKET_NAME)) {
     throw new Error("Staging export execution and cleanup require complete R2 bindings.");
   }
+  if (typeof releaseSha !== "string" || !/^[a-f0-9]{40}$/.test(releaseSha)) {
+    throw new Error("Refusing invalid staging release attribution.");
+  }
   if (typeof authApiOrigin !== "string" || typeof authWebOrigin !== "string") {
     throw new Error("Staging origins are required.");
   }
@@ -85,6 +89,7 @@ export function createStagingWorkerConfigs({
   }
   const vars = {
     API_RATE_LIMIT_SCOPE: "staging",
+    STAGING_RELEASE_SHA: releaseSha,
     NOTIFICATION_PUBLISHERS_ENABLED: String(notificationPublishersEnabled),
     NOTIFICATION_DELIVERY_ENABLED: String(notificationDeliveryEnabled),
     DIRECT_MESSAGE_SEND_LIMIT: "30",
