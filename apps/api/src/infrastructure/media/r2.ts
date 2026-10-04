@@ -7,6 +7,8 @@ export interface R2WorkerBindings {
   R2_BUCKET_NAME: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  /** Loopback-only S3 fixture endpoint. Accepted only for the reserved local-e2e account. */
+  R2_LOCAL_ENDPOINT?: string;
 }
 
 export interface R2RuntimeConfiguration {
@@ -14,6 +16,7 @@ export interface R2RuntimeConfiguration {
   bucketName: string;
   accessKeyId: string;
   secretAccessKey: string;
+  localEndpoint?: string;
 }
 
 export interface PresignedUpload {
@@ -45,7 +48,20 @@ export function readR2RuntimeConfiguration(
   const secretAccessKey = nonBlankString(bindings.R2_SECRET_ACCESS_KEY);
   if (!accountId || !bucketName || !accessKeyId || !secretAccessKey) return undefined;
 
-  return { accountId, bucketName, accessKeyId, secretAccessKey };
+  const endpoint = nonBlankString(bindings.R2_LOCAL_ENDPOINT);
+  let localEndpoint: string | undefined;
+  if (endpoint) {
+    try {
+      const parsed = new URL(endpoint);
+      const loopback = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "[::1]";
+      if (accountId !== "local-e2e" || !loopback || parsed.protocol !== "http:" || parsed.pathname !== "/" || parsed.search || parsed.hash) return undefined;
+      localEndpoint = parsed.origin;
+    } catch {
+      return undefined;
+    }
+  }
+
+  return { accountId, bucketName, accessKeyId, secretAccessKey, ...(localEndpoint ? { localEndpoint } : {}) };
 }
 
 /** Matches AwsV4Signer's own default `datetime` format (ISO 8601 basic, no separators). */
@@ -58,7 +74,8 @@ function encodeObjectKeyPath(objectKey: string): string {
 }
 
 function buildObjectUrl(configuration: R2RuntimeConfiguration, objectKey: string): string {
-  return `https://${configuration.accountId}.r2.cloudflarestorage.com/${configuration.bucketName}/${encodeObjectKeyPath(objectKey)}`;
+  const origin = configuration.localEndpoint ?? `https://${configuration.accountId}.r2.cloudflarestorage.com`;
+  return `${origin}/${encodeURIComponent(configuration.bucketName)}/${encodeObjectKeyPath(objectKey)}`;
 }
 
 function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
@@ -73,9 +90,9 @@ function createAwsClient(configuration: R2RuntimeConfiguration): AwsClient {
 /**
  * Build a short-lived, single-object, single-method presigned PUT URL against R2's
  * S3-compatible API. Signs content-type/content-length so R2 rejects any upload that
- * does not exactly match what was declared at reservation time (docs/dayli/
- * implementation-reference.md §6: "a signed PUT is not content validation" on its own,
- * this is what makes the declared quota actually enforceable at the storage layer).
+ * does not exactly match what was declared at reservation time. The media system
+ * guide explains why a signed PUT is not content validation on its own, while these
+ * signed headers make the declared quota enforceable at the storage layer.
  * Never exposes the underlying R2 credentials to the caller.
  *
  * Also signs `if-none-match: *`, R2's conditional-write header, so the object can
@@ -112,8 +129,8 @@ export async function createPresignedUploadUrl(
     // HTTP clients set/rewrite them, so they're normally untrustworthy to pin) —
     // allHeaders overrides that so the declared size/type are actually enforced by
     // R2 rejecting a mismatched PUT, not just advisory. Confirmed against staging R2
-    // on 2026-09-30: a mismatched content-length or content-type PUT gets 403
-    // (docs/dayli/media-reservations.md, "Staging verification").
+    // on 2026-09-30: a mismatched content-length or content-type PUT gets 403. The
+    // media setup and verification guide records the limits of that staging check.
     allHeaders: true,
     datetime: toAmzDatetime(input.now ?? new Date()),
   });
@@ -257,7 +274,7 @@ export type RangedReadResult =
 /**
  * A real, bounded GET against R2 using an HTTP Range request — callers must always
  * pass a bounded range, never read a whole object, to keep validation work cheap
- * and predictable (docs/dayli/implementation-reference.md's "safe processing limits").
+ * and predictable, as required by the bounded media validation policy.
  */
 export async function readR2ObjectRange(
   configuration: R2RuntimeConfiguration,

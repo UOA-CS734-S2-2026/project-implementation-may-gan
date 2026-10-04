@@ -39,6 +39,8 @@ jobs:
         run: pnpm legal:test
       - name: Lint
         run: pnpm lint
+      - name: Test web E2E isolation contract
+        run: pnpm test:web-e2e-contract
       - name: Generate Next.js route types
         run: pnpm --filter @dayli/web exec next typegen
       - name: Typecheck

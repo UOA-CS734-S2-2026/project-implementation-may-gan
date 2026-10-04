@@ -152,8 +152,7 @@ class _AccountExportScreenState extends State<AccountExportScreen> {
       } on FileSystemException {
         if (mounted) {
           setState(
-            () => _error =
-                'The temporary export could not be removed. Clear this app\'s cache on this device.',
+            () => _error = 'The temporary export could not be removed. Clear this app\'s cache on this device.',
           );
         }
       }

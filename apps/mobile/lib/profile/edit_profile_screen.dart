@@ -100,7 +100,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _loadFailure = null;
     _name.text = profile.displayName == profile.username
         ? ''
-        : profile.displayName;
+        : profile.displayName ?? '';
     _bio.text = profile.bio ?? '';
     _mbti = profile.mbti ?? '';
     _whatIDo.text = profile.whatIDo ?? '';
@@ -171,9 +171,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _savingPrivacy = true;
       _privacyNotice = null;
     });
-    final result = await AppScope.of(
-      context,
-    ).profiles.update(isPrivate: isPrivate);
+    final result = await AppScope.of(context).profiles
+        .update(isPrivate: isPrivate);
     if (!mounted) return;
     setState(() {
       _savingPrivacy = false;

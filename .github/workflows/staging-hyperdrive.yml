@@ -133,6 +133,12 @@ jobs:
           STAGING_R2_BUCKET_NAME: ${{ vars.STAGING_R2_BUCKET_NAME }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID }}
+          STAGING_EXPORT_PROOF_APPROVED: ${{ vars.STAGING_EXPORT_PROOF_APPROVED }}
+          STAGING_EXPORT_PROOF_USER_ID: ${{ vars.STAGING_EXPORT_PROOF_USER_ID }}
+          STAGING_EXPORT_PROOF_BUILD_UNTIL: ${{ vars.STAGING_EXPORT_PROOF_BUILD_UNTIL }}
+          STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER: ${{ vars.STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER }}
         run: node scripts/run-staging-api-deploy.mjs
       - name: Dry-run generated Worker configurations
         env:

@@ -40,12 +40,14 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
       _error = null;
     });
     try {
+      final returnIntent = AppScope.of(context).session
+          .resolvePublicReturnIntent(GoRouterState.of(context).uri);
       await AppScope.of(context).session.completeUsernameSetup(
         username: username,
         publicName: _publicName.text,
       );
       if (mounted) {
-        context.go('/');
+        context.go(returnIntent?.returnLocation ?? '/');
       }
     } on AuthenticationFailure catch (error) {
       if (mounted) {

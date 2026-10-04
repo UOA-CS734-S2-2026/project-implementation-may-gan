@@ -7,7 +7,11 @@ import { interactionsApi } from "@/features/interactions/shared/interactions.api
 import { postsApi } from "@/features/posts/shared/posts.api";
 
 vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: { id: "me" }, session: { id: "me" }, isPending: false }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/u/ana_walks/post-1",
+  useSearchParams: () => new URLSearchParams(""),
+}));
 vi.mock("@/features/posts/shared/posts.api", () => ({
   postsApi: { get: vi.fn(), media: vi.fn(), update: vi.fn(), remove: vi.fn(), revisions: vi.fn() },
 }));

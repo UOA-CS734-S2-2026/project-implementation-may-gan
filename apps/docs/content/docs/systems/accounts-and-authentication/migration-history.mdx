@@ -1,0 +1,158 @@
+---
+title: How we got to the browser auth proxy
+description: Why Dayli moved browser authentication to the web origin, what we tried first, and what staging taught us.
+---
+
+Dayli's browser authentication changed because of a small but annoying problem: people who were already signed in could briefly see the public landing page before the app sent them home.
+
+Fixing that flash led us into cookies, Cloudflare Worker boundaries, rate limiting, database migrations, and a few staging surprises. This page tells that story. For the current request flow, start with [Accounts and authentication](/docs/systems/accounts-and-authentication).
+
+## The original problem
+
+The investigation began against main revision `d6704a1`. When a signed-in visitor opened `/`, Dayli did this:
+
+1. The web server rendered the public landing page.
+2. The browser loaded JavaScript and hydrated React.
+3. Better Auth fetched the session from the API origin.
+4. The page fetched username readiness.
+5. A client effect redirected to `/home` or `/setup-username`.
+
+While those requests were pending, the page could look signed out. We traced that to our application flow, not to a demonstrated vinext defect. We did not collect an authenticated timing trace, so we do not have a numerical before-and-after performance claim.
+
+At first, the obvious answer seemed to be checking the session while rendering on the server. That worked in an earlier single-application setup, but Dayli had since split the web and API Workers.
+
+Better Auth's cookie belonged to the API hostname. A browser request to the web hostname did not include it, and a request made by the web server did not somehow inherit the browser's API cookie. The problem was the browser-facing cookie origin, not simply having two services.
+
+## What we considered
+
+### Redirecting through the API
+
+Our first implementation sent the browser through `/api/auth/landing` on the API origin. The API could read its own cookie, check username readiness, and return the browser to the right web page.
+
+```text
+Browser -> web landing page
+Browser -> API landing endpoint
+API -> web home, username setup, or public landing
+```
+
+The `landing=signed-out` query value stopped signed-out visitors from entering a redirect loop. It never contained session data and was not proof of authentication.
+
+This removed the wait for hydration before the first decision, but it also added another navigation for signed-out visitors. More importantly, the web server still did not receive a reusable, validated session result. We closed this approach as superseded in [PR #189](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/189).
+
+That work also exposed an unrelated E2E fixture collision. Desktop and mobile projects shared Better Auth's local fallback IP bucket, which caused signup to return 429. Clearing only the disposable fixture's limiter records fixed the tests. It did not tell us whether deployed visitor identity worked correctly.
+
+### Sharing a parent-domain cookie
+
+A cookie scoped to a shared parent domain could reach more than one hostname. We did not need that wider browser credential scope just to let the web server check a session, so we kept the cookie host-only.
+
+### Moving authentication into the web app
+
+Moving Better Auth into Next.js would have duplicated or displaced an authority that mobile and protected API operations already depended on. We kept Better Auth and permission checks in the API.
+
+## The solution we chose
+
+Browser REST and authentication now enter through the web origin. The existing web Worker forwards them through `API_BROWSER_PROXY` to the API's named `BrowserProxyEntrypoint`.
+
+```text
+Browser REST/auth -> web /api/* -> private API entrypoint
+Browser page -> web session helper -> private API entrypoint
+Mobile -> public API directly
+Browser WebSocket -> public API with a short-lived ticket
+Media upload -> R2 with a presigned URL
+```
+
+Because the login response reaches the browser through the web hostname, its host-only session cookie comes back on later page requests. The web server can forward that credential to Better Auth before choosing what to render.
+
+The proxy has one configured destination. It is not an arbitrary relay. API transport, trusted ingress handling, and rate-limit storage sit behind small adapters, while page and policy code remain independent of the Cloudflare call shape. That reduces new platform coupling, but it does not make the whole app portable. Hyperdrive, Worker deployment, R2 details, native rate limiting, and Durable Object realtime would still need work on another platform.
+
+The first complete implementation landed in [PR #197](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/197), with merge commit `78cbd9b`.
+
+## Challenges during implementation
+
+### Framework and build boundaries
+
+Ordinary Next.js builds initially tried to load `cloudflare:workers`. We moved that import behind a runtime boundary and kept its types narrow.
+
+We also found that dynamic `process.env[name]` access prevented `NEXT_PUBLIC_*` settings from being compiled into browser bundles. Static references fixed that. Production bundle inspection then confirmed that enabled and disabled builds contained the selected web and API origins.
+
+### Session results were more nuanced than expected
+
+Better Auth returns a successful `200` response with JSON `null` when there is no session. Our first version treated that as an unavailable service. It now means signed out.
+
+A server session lookup can also ask the browser to refresh or clear a cookie. React Server Components cannot write response cookies while rendering, so the helper reports `cookie-mutation-required`. The browser-facing `/auth/session-refresh` route repeats the check and applies the cookie on a real response.
+
+The refresh marker only bounds loops. It is not a session and never proves that someone is signed in.
+
+### Safe return paths needed another validation pass
+
+We preserve protected deep links through sign-in, including their query strings. An early normalizer allowed encoded dot segments to become a protocol-relative destination after decoding. We now validate the normalized result too.
+
+Generic layout guards also lost the real destination by falling back to `/home`. Route-local wrappers now preserve the actual path and query. Email sign-in, Google sign-in, legacy aliases, and refresh handling all use the same relative-destination rules.
+
+### API and web had to change mode together
+
+Proxy mode changes where Better Auth sets its browser cookie. Independent API and web deployments could disagree about that origin, so the coordinated release captures one commit and one `STAGING_BROWSER_PROXY_ENABLED` value. It deploys and proves the API first, then builds and deploys the web app with the same mode.
+
+The switch remains useful for recovery. Changing it can require another browser sign-in because host-only cookies do not move between domains.
+
+## What staging taught us
+
+### A Request is not always the same Request
+
+The first enabled staging deployment produced an empty 500 from the web session endpoint, while the direct API returned `200` with JSON `null`. Web logs showed:
+
+```text
+TypeError: Invalid URL: [object Request]
+```
+
+The proxy had called `new Request(request, ...)`. The vinext request wrapper was not recognised as a cloneable Request by the other runtime constructor, so it became the string `[object Request]`.
+
+We fixed this by reconstructing the outgoing request from its explicit URL, method, sanitized headers, redirect mode, signal, and streamed body. A regression test reproduced the cross-runtime failure. The deployed anonymous endpoint then returned `200`, JSON `null`, and `Cache-Control: no-store`. The fix is recorded in [PR #202](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/202).
+
+An earlier theory blamed dynamic platform loading. The live stack did not support that theory, so we discarded that change instead of keeping a speculative fix.
+
+### Healthy infrastructure does not mean the schema is current
+
+A later staging release broke password login, password reset, Google login, messaging, and media cleanup. The code expected migrations `0015` through `0018`, while staging had only verified through `0014_link_post_media`.
+
+Migration `0016` added `user.username_changed_at`, which the auth adapter's full user schema used. Migration `0018` added media cleanup fields. The logs did not include the nested SQLSTATE, so missing columns started as a strongly supported diagnosis rather than direct database proof. After the pending migrations ran, staging checks showed normal authentication and messaging again.
+
+The existing Hyperdrive probe had still passed. It checked connectivity, roles, transactions, constraints, and a dedicated table, not the application's complete migration ledger.
+
+We added a release gate that compares the direct migrator target with Hyperdrive, verifies exact ordered migration hashes, and stops deployment before secrets or Workers change. It later caught pending migration `0019_privacy_legal_foundation` in run [36824749946](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36824749946).
+
+Normal forward staging releases now plan and apply a reviewed pending migration suffix before deployment. An explicit historical `commit_sha` stays verification-only. It cannot reverse database migrations. [PR #211](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/211) added the database gate and persistent logs, then [PR #214](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/214) added automatic forward staging migrations.
+
+A migration can remain applied when a later deploy fails. The workflow is safer, but it is not an atomic release or a database rollback system.
+
+### Local service-binding tests need honest boundaries
+
+Our local workerd test calls the real named entrypoint through a service binding. It shows that forged private context on the public handler stays public, missing private context fails, and valid local context reaches normal application routing.
+
+It has no remote account, database, R2 binding, or production credential. A database-free 404 proves routing, not request-body streaming. The test gives us a useful local boundary without pretending to prove Cloudflare edge provenance or the complete deployed cookie lifecycle. It was added in [PR #213](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/213).
+
+### Deployment policy can create its own failure modes
+
+A temporary hosted-mutation hold blocked deployments and migrations during this work. We removed it while retaining main-only execution, same-repository checks, environment scoping, release capture, resource validation, and deployment ordering.
+
+Review then found that a delayed successful CI event could select an old main ancestor. We tightened automatic and implicit releases to the current main commit while preserving explicit historical rollback selection. [PR #206](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/206) removed the hold, and [PR #208](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/208) fixed stale release selection.
+
+GitHub Environment reviewers and administrator bypass rules live in repository settings. Naming an environment in workflow YAML does not create those protections.
+
+## What we learned about the security boundary
+
+A later review found two application problems.
+
+First, rejecting a CORS response did not stop an unsafe cross-origin request from reaching a route. We moved trusted-origin checks in front of cookie-authenticated mutations.
+
+Second, a thrown Cloudflare rate-limiter error had been treated as allowed. Configured limiter failures now return 503 instead of silently removing a protection layer.
+
+The harder question was visitor identity. A same-zone Worker could influence the downstream connecting IP through `x-real-ip`. A temporary edge diagnostic reproduced that behavior with our production selector. Normal browsers also carried legitimate `x-real-ip`, so rejecting that header would have blocked real traffic.
+
+We instead reject requests marked with `CF-Worker` at both public entry points and preserve that marker through server-side request reconstruction. The named private entrypoint remains separate. [Security and verification](/docs/systems/accounts-and-authentication/security-and-verification) explains the finding, fix, diagnostic, and remaining evidence limits.
+
+The origin and limiter fixes landed in [PR #217](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/217). Worker-origin rejection and the diagnostic landed in [PR #219](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/219), baseline `6e40eee5be877ff9b30b0a437211e2b2cbf2a927`.
+
+All four hosted jobs for that revision eventually passed. Coordinated staging release [36840296341](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/actions/runs/36840296341) later passed release capture, database checks, API deployment and Hyperdrive proof, and web deployment.
+
+That tells us the release completed and its automated checks passed. It does not prove every cookie transition, mobile path, or provider flow. We keep those limits visible rather than turning a green deployment into a broader claim.
