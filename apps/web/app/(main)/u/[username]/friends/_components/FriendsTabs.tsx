@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { FriendCard, FriendRequest } from "@/lib/api/friends";
+import { Skeleton } from "@/components/ui/core/Skeleton";
 
 type Page<T> = { items: T[]; nextCursor: string | null; hasMore: boolean };
 
@@ -113,5 +114,7 @@ function Action({ label, disabled, onClick, muted = false }: { label: string; di
   return <button type="button" disabled={disabled} onClick={onClick} className={`rounded-xl px-3 py-2 font-sans text-sm font-medium disabled:opacity-50 ${muted ? "border border-foreground/15 text-foreground-secondary" : "bg-background-accent text-foreground-accent"}`}>{label}</button>;
 }
 
-function Loading() { return <p className="py-10 text-center font-sans text-sm text-foreground-tertiary">Loading your circle...</p>; }
+function Loading() {
+  return <div role="status" aria-label="Loading friends" className="space-y-3 py-3">{Array.from({ length: 3 }, (_, index) => <div key={index} className="flex items-center gap-3 rounded-xl border border-foreground/8 bg-background/95 p-3 shadow-card"><Skeleton className="h-10 w-10 shrink-0 rounded-full" /><div className="min-w-0 flex-1 space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-20" /></div><Skeleton className="h-8 w-16 rounded-lg" /></div>)}</div>;
+}
 function More({ visible, onClick }: { visible: boolean; onClick: () => void }) { return visible ? <button type="button" onClick={onClick} className="mt-5 font-sans text-sm font-medium text-foreground-secondary underline underline-offset-4 hover:text-foreground">load more</button> : null; }
