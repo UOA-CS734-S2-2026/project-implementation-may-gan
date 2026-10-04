@@ -5,7 +5,7 @@ description: How Dayli keeps past reflections, ratings, prompts, edits, and priv
 
 A daily reflection is useful after its posting window closes. Someone may want to revisit what they wrote, see the prompt that shaped it, correct a mistake, or understand which version a friend can read. That makes history more than a list of old posts. It also needs stable prompts, privacy checks, and clear rules for edits and deletion.
 
-Dayli's current history experience is built around profile posts and post detail. It does not yet have calendars, mood charts, recaps, search across reflections, or a screen for tomorrow notes. Those ideas appear in older project plans, but they are not live features in the checked-in web or mobile apps.
+Dayli's current history experience is built around profile posts, post detail, and a mood history chart on profiles. It does not yet have calendars, recaps, search across reflections, or a screen for tomorrow notes. Those ideas appear in older project plans, but they are not live features in the checked-in web or mobile apps.
 
 ```mermaid
 flowchart LR
@@ -24,7 +24,7 @@ An accepted post stores its Auckland date, the exact prompt ID, reflective answe
 
 Keeping the prompt with the post matters because today's prompt may later change. Prompt rows are immutable. A replacement prompt gets a new version and effective date, while an old post continues to point to the prompt it actually answered.
 
-The rating is saved and returned by profile and detail APIs. Current profile cards focus on the prompt and answer, while post detail shows the rating. Dayli does not currently aggregate ratings into mood history, charts, or summaries.
+The rating is saved and returned by profile and detail APIs. Current profile cards focus on the prompt and answer, while post detail shows the rating. Ratings are also aggregated into the profile's [mood history](#mood-history-on-profiles).
 
 Drafts are not part of account history. Flutter keeps one unfinished per-account draft in protected device storage, including its rating, prompt, audience, tomorrow note, retry key, and upload state. A missed draft stays readable on that device but cannot be backdated. The web form keeps unsent work only in React memory, so a reload or navigation loses it. [Daily posts and release timing](/docs/systems/daily-posts-and-release-timing) covers the posting deadline, retries, and these client differences.
 
@@ -66,7 +66,22 @@ The interaction API is wired into the normal runtime. A signed-in owner or activ
 
 Interactions deliberately use the friend preview policy rather than the wider public detail policy. A stranger may read a released post on a public profile, but cannot see its likers or comments and cannot add either. Moving a post to Trash, changing its audience, ending the friendship, or blocking removes interaction access with the post. Counts leave out deleted comments and blocked people.
 
-The post detail projection already returns `likeCount`, `viewerHasLiked`, and `commentCount`, but the checked-in web and Flutter interfaces do not render the interaction lists or perform the writes. Their current buttons preserve a signed-out return intent and then report that the action is unavailable. This is working API support with an unfinished client experience.
+Web and Flutter post detail show the like button, like count, likers, and the comment thread with replies, edits, and deletes. Feed and profile cards show like and comment counts, and the profile stats include **Loved**: likes on the owner's posts that are not in Trash. A signed-out reader instead sees **like** and **comment** buttons that lead to sign-in. After returning, a comment intent focuses the comment box and a like intent only reopens the post: the action is never submitted on the reader's behalf. The repository guide at `docs/dayli/likes-and-comments.md` has the full rules.
+
+## Mood history on profiles
+
+`GET /api/v1/profiles/{username}/mood?range=30d|90d|1y` returns one person's daily ratings for the range, ending today in Auckland, with a summary of that range and the one before it. It reaches the same people as the posts, but no further: the owner sees every post including `solo` ones, an active friend sees released `friends` posts, and anyone else gets `403`, even on a public profile. Days with a post the reader cannot see are returned as `hiddenDays`, so they are neither rated nor counted as missed. Days before the account's first Auckland day are not tracked.
+
+Web and Flutter show it as a **Mood** card on the profile with **30 days**, **90 days**, and **Year**. The line joins consecutive days only, so a missed day leaves a gap rather than an invented value. The card describes what was posted and does not label moods. The repository guide at `docs/dayli/mood-history.md` has the response fields and summary rules.
+
+## On This Day and future-self notes are API-only
+
+Two reflection features have working, owner-only APIs and no client screens yet:
+
+- `GET /api/v1/me/memories/on-this-day` returns the caller's own released posts from today's Auckland month and day in earlier years, newest first. The server decides the date, and a 29 February post appears only on later leap days. See `docs/dayli/on-this-day.md`.
+- `/api/v1/future-self-notes` lets the owner create, list, edit, and delete a note to read on a chosen Auckland date. The text is never returned before that date, even to its author: the read returns `403` with `NOTE_NOT_YET_AVAILABLE`. A scheduled job marks notes delivered on their date but sends no push notification. See `docs/dayli/future-self-notes.md`.
+
+Neither feature appears in the web or Flutter apps yet. They should not be described as available to users until those screens exist.
 
 ## Editing without erasing the earlier version
 
@@ -127,13 +142,15 @@ The implemented reflection and history experience currently includes:
 - owner editing with conflict detection;
 - permission-filtered revision history;
 - signed-out web and Flutter journeys for released posts on public profiles;
-- API support for owner-and-friend likes, comments, and one-level replies.
+- owner-and-friend likes, comments, and one-level replies in both clients;
+- mood history for the owner and active friends;
+- owner-only On This Day and future-self note APIs, without client screens.
 
-It does not currently include reflection search, calendar browsing, mood analytics, recaps, a tomorrow-note reader, an enabled Trash and restore journey, an enabled self-service export, or client interfaces for likes and comments. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
+It does not currently include reflection search, calendar browsing, recaps, a tomorrow-note reader, On This Day or future-self note screens, an enabled Trash and restore journey, or an enabled self-service export. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
 
 ## Code and verification
 
-Post history, detail, editing, revisions, and Trash routes are under `apps/api/src/features/posts`. Shared read policy is in `apps/api/src/features/permissions/drizzle.ts`, and the post, revision, and tomorrow-note tables are in `packages/db/src/schema/index.ts`. Export classification and sources are under `packages/db/src/export` and `apps/api/src/features/data-export`.
+Post history, detail, editing, revisions, mood history, On This Day, and Trash routes are under `apps/api/src/features/posts`. Likes and comments are under `apps/api/src/features/interactions`, and future-self notes under `apps/api/src/features/future-self-notes`. Shared read policy is in `apps/api/src/features/permissions/drizzle.ts`, and the post, revision, and tomorrow-note tables are in `packages/db/src/schema/index.ts`. Export classification and sources are under `packages/db/src/export` and `apps/api/src/features/data-export`.
 
 Web history code is under `apps/web/features/posts` and the `/u` routes. Flutter uses `apps/mobile/lib/profile`, `friends`, `posts`, and `drafts`.
 
