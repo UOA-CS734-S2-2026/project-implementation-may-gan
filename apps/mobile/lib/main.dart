@@ -62,7 +62,10 @@ Future<void> main() async {
     preferences: Future.value(prefs),
     secureStorage: secureStorage,
   );
-  final biometric = BiometricService(prefs, LocalAuthentication());
+  final biometric = BiometricService(
+    SharedPreferencesBiometricStore(prefs),
+    LocalAuthentication(),
+  );
 
   final tokenStore = ProtectedSessionTokenStore(storage: secureStorage);
   final drafts = ProtectedDraftStore(storage: secureStorage);
