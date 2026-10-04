@@ -11,7 +11,7 @@ Staging is the shared development environment. Its data can change while the tea
 
 ## What you need
 
-- Flutter 3.44 or newer. CI uses 3.47.2.
+- Flutter 3.47 or newer, which the locked dependencies require. CI uses 3.47.2.
 - Android Studio with an Android emulator, or an Android phone with USB debugging on.
 - JDK 17.
 
