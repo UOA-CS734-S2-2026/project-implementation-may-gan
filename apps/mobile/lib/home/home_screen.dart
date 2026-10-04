@@ -139,18 +139,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       color: colors.foregroundAccent,
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
           Text(
             _greeting(now),
             style: DayliText.serif(
               context,
-              fontSize: 30,
-              weight: FontWeight.w600,
-              tracking: DayliTracking.tighter,
+              fontSize: 34,
+              weight: FontWeight.w400,
+              tracking: -0.06,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           _TodayCard(day: _day, onCompose: _compose, onRetry: _load),
           const SizedBox(height: 36),
           Text(
@@ -201,15 +201,6 @@ class _TodayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final label = Text(
-      "today's prompt",
-      style: DayliText.sans(
-        context,
-        size: DayliTextSize.sm,
-        weight: FontWeight.w500,
-        color: colors.foregroundTertiary,
-      ),
-    );
 
     final Widget content = switch (day) {
       null => const SizedBox(
@@ -219,8 +210,6 @@ class _TodayCard extends StatelessWidget {
       ApiError(:final failure) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          label,
-          const SizedBox(height: 8),
           Text(
             failure is NetworkUnavailable
                 ? "You're offline, so today's prompt couldn't load."
@@ -262,7 +251,14 @@ class _TodayCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              label,
+              Text(
+                "today's prompt",
+                style: DayliText.serif(
+                  context,
+                  size: DayliTextSize.base,
+                  color: colors.foregroundTertiary,
+                ),
+              ),
               const Spacer(),
               if (!today.hasPosted)
                 DeadlineCountdown(
@@ -292,10 +288,7 @@ class _TodayCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: colors.foregroundAccent,
-                  ),
+                  Icon(Icons.check_circle_rounded, color: colors.success),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -304,7 +297,7 @@ class _TodayCard extends StatelessWidget {
                         context,
                         size: DayliTextSize.sm,
                         weight: FontWeight.w500,
-                        color: colors.foregroundAccent,
+                        color: colors.foreground,
                       ),
                     ),
                   ),
@@ -316,9 +309,9 @@ class _TodayCard extends StatelessWidget {
               key: const Key('today.compose'),
               label: 'Post your dayli',
               weight: ButtonWeight.primary,
-              size: ButtonSize.lg,
+              size: ButtonSize.md,
               fullWidth: true,
-              height: 52,
+              height: 44,
               arrow: true,
               onPressed: onCompose,
             ),
@@ -327,7 +320,7 @@ class _TodayCard extends StatelessWidget {
     };
 
     return DayliCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       radius: 20,
       child: content,
     );
@@ -391,11 +384,6 @@ class _FeedSection extends StatelessWidget {
       return Column(
         children: [
           const SizedBox(height: 20),
-          Opacity(
-            opacity: 0.5,
-            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
-          ),
-          const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
@@ -404,13 +392,22 @@ class _FeedSection extends StatelessWidget {
               textAlign: TextAlign.center,
               style: DayliText.serif(
                 context,
-                size: DayliTextSize.lg,
-                weight: FontWeight.w500,
-                tracking: DayliTracking.tight,
+                size: DayliTextSize.base,
+                weight: FontWeight.w400,
                 color: colors.foregroundSecondary,
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          SvgPicture.string(
+            '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>''',
+            height: 42,
+            colorFilter: ColorFilter.mode(
+              colors.foregroundSecondary.withValues(alpha: 0.35),
+              BlendMode.srcIn,
+            ),
+          ),
+          const SizedBox(height: 12),
         ],
       );
     }

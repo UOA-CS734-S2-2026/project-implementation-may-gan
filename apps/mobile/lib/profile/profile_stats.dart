@@ -141,6 +141,8 @@ class ProfileStatsTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.backgroundSecondary,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.05)),
+        boxShadow: DayliShadows.md,
       ),
       child: Column(
         children: [

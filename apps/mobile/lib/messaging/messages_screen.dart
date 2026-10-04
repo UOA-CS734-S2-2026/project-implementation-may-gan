@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
@@ -52,32 +53,39 @@ class _MessagesScreenState extends State<MessagesScreen> {
             key: const Key('messages.inbox'),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
             children: [
-              Text(
-                'messages',
-                textAlign: TextAlign.center,
-                style: DayliText.serif(
-                  context,
-                  fontSize: 36,
-                  weight: FontWeight.w600,
-                  tracking: DayliTracking.tighter,
-                ),
-              ),
-              Center(
-                child: TextButton(
-                  key: const Key('messages.new'),
-                  onPressed: _startConversation,
-                  child: Text(
-                    'New message',
-                    style: DayliText.sans(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
+                children: [
+                  Text(
+                    'messages',
+                    textAlign: TextAlign.left,
+                    style: DayliText.serif(
                       context,
-                      size: DayliTextSize.sm,
-                      weight: FontWeight.w600,
-                      color: colors.foregroundSecondary,
+                      fontSize: 34,
+                      weight: FontWeight.w400,
+                      tracking: -0.06,
                     ),
                   ),
-                ),
+                  FilledButton.icon(
+                    key: const Key('messages.new'),
+                    onPressed: _startConversation,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.foregroundAccent,
+                      foregroundColor: colors.background,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text(
+                      'New message',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 13),
+              const SizedBox(height: 28),
               _MessageTabs(
                 selected: _folder,
                 inboxUnread: messaging.inboxUnread,
@@ -129,29 +137,40 @@ class _MessageTabs extends StatelessWidget {
   final ValueChanged<_MessageFolder> onChanged;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: Row(
-      children: [
-        Expanded(
-          child: _MessageTab(
-            label: 'Messages',
-            count: inboxUnread,
-            selected: selected == _MessageFolder.messages,
-            onTap: () => onChanged(_MessageFolder.messages),
-          ),
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            Expanded(
+              child: _MessageTab(
+                label: 'Messages',
+                count: inboxUnread,
+                selected: selected == _MessageFolder.messages,
+                onTap: () => onChanged(_MessageFolder.messages),
+              ),
+            ),
+            Expanded(
+              child: _MessageTab(
+                label: 'Requests',
+                count: requestUnread,
+                selected: selected == _MessageFolder.requests,
+                onTap: () => onChanged(_MessageFolder.requests),
+              ),
+            ),
+          ],
         ),
-        Expanded(
-          child: _MessageTab(
-            label: 'Requests',
-            count: requestUnread,
-            selected: selected == _MessageFolder.requests,
-            onTap: () => onChanged(_MessageFolder.requests),
-          ),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _MessageTab extends StatelessWidget {
@@ -177,58 +196,58 @@ class _MessageTab extends StatelessWidget {
       child: InkWell(
         key: Key('messages.tab.${label.toLowerCase()}'),
         onTap: onTap,
-        child: Container(
-          height: 50,
-          alignment: Alignment.center,
+        borderRadius: BorderRadius.circular(26),
+        child: Ink(
+          height: 40,
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? colors.accent : colors.foreground,
-                width: selected ? 4 : 2,
-              ),
-            ),
+            color: selected ? const Color(0xFFEADDFF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.xl,
-                    weight: FontWeight.w500,
-                    color: selected
-                        ? colors.foreground
-                        : colors.foregroundSecondary,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.base,
+                      weight: FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF4F378B)
+                          : colors.foregroundSecondary,
+                    ),
                   ),
-                ),
-                if (count > 0) ...[
-                  const SizedBox(width: 7),
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 20),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.foregroundAccent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.center,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
+                  if (count > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF4F378B)
+                            : colors.foregroundAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        textAlign: TextAlign.center,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.xs,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -651,13 +670,35 @@ class _EmptyInbox extends StatelessWidget {
   final bool requests;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 72),
-    child: Center(
-      child: Text(
-        requests ? 'No message requests.' : 'No conversations yet.',
-        style: DayliText.serif(context, size: DayliTextSize.xl),
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 72),
+      child: Center(
+        child: Column(
+          children: [
+            Text(
+              requests ? 'No message requests.' : 'No conversations yet.',
+              textAlign: TextAlign.center,
+              style: DayliText.serif(
+                context,
+                size: DayliTextSize.base,
+                weight: FontWeight.w400,
+                color: colors.foregroundSecondary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SvgPicture.string(
+              '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>''',
+              height: 42,
+              colorFilter: ColorFilter.mode(
+                colors.foregroundSecondary.withValues(alpha: 0.35),
+                BlendMode.srcIn,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

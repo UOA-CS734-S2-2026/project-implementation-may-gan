@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
@@ -61,15 +62,53 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
-            Text(
-              'friends',
-              textAlign: TextAlign.center,
-              style: DayliText.serif(
-                context,
-                fontSize: 36,
-                weight: FontWeight.w600,
-                tracking: DayliTracking.tighter,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (GoRouter.maybeOf(context)?.canPop() ?? false)
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  )
+                else
+                  const SizedBox(width: 4),
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      Text(
+                        'friends',
+                        textAlign: TextAlign.left,
+                        style: DayliText.serif(
+                          context,
+                          fontSize: 34,
+                          weight: FontWeight.w400,
+                          tracking: -0.06,
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () => _showDiscovery(context, controller),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: DayliColors.of(
+                            context,
+                          ).foregroundAccent,
+                          foregroundColor: DayliColors.of(context).background,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        icon: const Icon(Icons.add_rounded, size: 20),
+                        label: const Text(
+                          'Add friend',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 28),
             _FolderTabs(
@@ -127,11 +166,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
   Future<void> _showDiscovery(
     BuildContext context,
     FriendsController controller,
-  ) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) => _DiscoverySheet(controller: controller),
-  );
+  ) {
+    final colors = DayliColors.of(context);
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        side: BorderSide(
+          color: colors.foreground.withValues(alpha: 0.1),
+          width: 1,
+        ),
+      ),
+      builder: (sheetContext) => _DiscoverySheet(controller: controller),
+    );
+  }
 }
 
 enum _FriendsFolder { friends, requests }
@@ -148,28 +199,39 @@ class _FolderTabs extends StatelessWidget {
   final ValueChanged<_FriendsFolder> onChanged;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.transparent,
-    child: Row(
-      children: [
-        Expanded(
-          child: _FolderTab(
-            label: 'Friends',
-            selected: selected == _FriendsFolder.friends,
-            onTap: () => onChanged(_FriendsFolder.friends),
-          ),
+  Widget build(BuildContext context) {
+    final colors = DayliColors.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        border: Border.all(color: colors.foreground.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            Expanded(
+              child: _FolderTab(
+                label: 'Friends',
+                selected: selected == _FriendsFolder.friends,
+                onTap: () => onChanged(_FriendsFolder.friends),
+              ),
+            ),
+            Expanded(
+              child: _FolderTab(
+                label: 'Requests',
+                count: incomingCount,
+                selected: selected == _FriendsFolder.requests,
+                onTap: () => onChanged(_FriendsFolder.requests),
+              ),
+            ),
+          ],
         ),
-        Expanded(
-          child: _FolderTab(
-            label: 'Requests',
-            count: incomingCount,
-            selected: selected == _FriendsFolder.requests,
-            onTap: () => onChanged(_FriendsFolder.requests),
-          ),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _FolderTab extends StatelessWidget {
@@ -195,58 +257,58 @@ class _FolderTab extends StatelessWidget {
       child: InkWell(
         key: Key('friends.tab.${label.toLowerCase()}'),
         onTap: onTap,
-        child: Container(
-          height: 50,
-          alignment: Alignment.center,
+        borderRadius: BorderRadius.circular(26),
+        child: Ink(
+          height: 40,
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? colors.accent : colors.foreground,
-                width: selected ? 4 : 2,
-              ),
-            ),
+            color: selected ? const Color(0xFFEADDFF) : Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.xl,
-                    weight: FontWeight.w500,
-                    color: selected
-                        ? colors.foreground
-                        : colors.foregroundSecondary,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.base,
+                      weight: FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF4F378B)
+                          : colors.foregroundSecondary,
+                    ),
                   ),
-                ),
-                if (count > 0) ...[
-                  const SizedBox(width: 7),
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 20),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.foregroundAccent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.center,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
+                  if (count > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF4F378B)
+                            : colors.foregroundAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        textAlign: TextAlign.center,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.xs,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -327,17 +389,34 @@ class _FriendsList extends StatelessWidget {
         else if (friends.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 42),
-            child: Text(
-              filter.trim().isEmpty
-                  ? 'No friends yet'
-                  : hasMore
-                  ? 'No matches in loaded friends. Load more to keep searching.'
-                  : 'No friends found',
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.sm,
-                color: colors.foregroundTertiary,
-              ),
+            child: Column(
+              children: [
+                Text(
+                  filter.trim().isEmpty
+                      ? 'No friends yet'
+                      : hasMore
+                      ? 'No matches in loaded friends. Load more to keep searching.'
+                      : 'No friends found',
+                  textAlign: TextAlign.center,
+                  style: DayliText.serif(
+                    context,
+                    size: DayliTextSize.base,
+                    weight: FontWeight.w400,
+                    color: colors.foregroundSecondary,
+                  ),
+                ),
+                if (filter.trim().isEmpty) ...[
+                  const SizedBox(height: 24),
+                  SvgPicture.string(
+                    '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M2 20s4-8 10-8 10 8 10 8"/><circle cx="18" cy="6" r="3"/><path d="M2 20s3-5 8-5 6 5 6 5"/></svg>''',
+                    height: 42,
+                    colorFilter: ColorFilter.mode(
+                      colors.foregroundSecondary.withValues(alpha: 0.35),
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ],
+              ],
             ),
           )
         else
@@ -395,10 +474,11 @@ class _RequestsList extends StatelessWidget {
         child: Center(
           child: Text(
             'No pending requests',
-            style: DayliText.sans(
+            style: DayliText.serif(
               context,
-              size: DayliTextSize.sm,
-              color: DayliColors.of(context).foregroundTertiary,
+              size: DayliTextSize.base,
+              weight: FontWeight.w400,
+              color: DayliColors.of(context).foregroundSecondary,
             ),
           ),
         ),

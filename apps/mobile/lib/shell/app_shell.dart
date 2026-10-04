@@ -139,13 +139,7 @@ class _BottomBar extends StatelessWidget {
         border: Border(
           top: BorderSide(color: colors.foreground.withValues(alpha: 0.06)),
         ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 16,
-            offset: Offset(0, -4),
-          ),
-        ],
+        boxShadow: DayliShadows.nav,
       ),
       child: SafeArea(
         top: false,
@@ -227,10 +221,10 @@ class _Tab extends StatelessWidget {
             Text(
               label,
               maxLines: 1,
-              style: DayliText.serif(
+              style: DayliText.sans(
                 context,
-                fontSize: 13,
-                weight: active ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 12,
+                weight: active ? FontWeight.w600 : FontWeight.w500,
                 color: color,
               ),
             ),

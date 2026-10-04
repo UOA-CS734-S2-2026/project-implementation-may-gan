@@ -103,7 +103,7 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                     color: colors.foregroundSecondary,
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 32),
                 DayliFormInput(
                   label: 'Username',
                   fieldKey: const Key('setup.username'),
@@ -119,35 +119,49 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   controller: _publicName,
                   autofillHints: const [AutofillHints.name],
                   textInputAction: TextInputAction.done,
+                  helper:
+                      'Leave this blank to appear as your username. We do not publish your Google name.',
                   onSubmitted: (_) => _busy ? null : _submit(),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Leave this blank to appear as your username. We do not publish your Google name.',
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    color: colors.foregroundTertiary,
-                  ),
-                ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 32),
                 DayliButton(
                   label: _busy ? 'Saving…' : 'Continue',
                   weight: ButtonWeight.primary,
                   size: ButtonSize.lg,
                   fullWidth: true,
+                  arrow: !_busy,
                   onPressed: _busy ? null : _submit,
                 ),
                 if (AppScope.of(context).accountExports != null)
                   TextButton(
                     onPressed: () => context.push('/account/export'),
-                    child: const Text('Your data export'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.foregroundAccent,
+                    ),
+                    child: Text(
+                      'Your data export',
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.sm,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 TextButton(
                   onPressed: _busy
                       ? null
                       : () => AppScope.of(context).session.signOut(),
-                  child: const Text('Sign out'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.foregroundSecondary,
+                  ),
+                  child: Text(
+                    'Sign out',
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      weight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ),

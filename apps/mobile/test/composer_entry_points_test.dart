@@ -70,8 +70,32 @@ Future<void> settleDraft(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-void expectUnrated(WidgetTester tester) {
+/// Scrolls the composer until the rating slider is built. The composer list is
+/// lazy, so rows below the fold do not exist until scrolled to.
+Future<void> scrollToRating(WidgetTester tester) async {
+  final list = find
+      .descendant(
+        of: find.byType(ComposerScreen),
+        matching: find.byType(Scrollable),
+      )
+      .first;
+  await tester.scrollUntilVisible(
+    find.byKey(const Key('composer.rating')),
+    100,
+    scrollable: list,
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> expectRating(WidgetTester tester, int rating) async {
   expect(find.byType(ComposerScreen), findsOneWidget);
+  await scrollToRating(tester);
+  expect(find.text('$rating/10', skipOffstage: false), findsOneWidget);
+}
+
+Future<void> expectUnrated(WidgetTester tester) async {
+  expect(find.byType(ComposerScreen), findsOneWidget);
+  await scrollToRating(tester);
   expect(
     find.text('Slide to rate your day', skipOffstage: false),
     findsOneWidget,
@@ -89,8 +113,7 @@ void main() {
         await openLink(tester, 'dayli://app/post?rating=7');
         await settleDraft(tester);
 
-        expect(find.byType(ComposerScreen), findsOneWidget);
-        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        await expectRating(tester, 7);
         expect(harness.drafts.drafts['user-1']?.rating, 7);
         // The link only fills the slider. No audience is chosen and nothing
         // is sent until the author taps Post.
@@ -114,7 +137,7 @@ void main() {
         await openLink(tester, link);
         await settleDraft(tester);
 
-        expectUnrated(tester);
+        await expectUnrated(tester);
         expect(harness.drafts.drafts['user-1']?.rating, isNull);
         // No notice about the ignored rating.
         expect(
@@ -134,7 +157,7 @@ void main() {
       );
       await settleDraft(tester);
 
-      expect(find.text('4/10', skipOffstage: false), findsOneWidget);
+      await expectRating(tester, 4);
       final draft = harness.drafts.drafts['user-1']!;
       expect(draft.audience, isNull);
       expect(draft.reflectiveAnswer, isEmpty);
@@ -173,7 +196,7 @@ void main() {
 
         await openLink(tester, 'dayli://app/post?rating=7');
         await settleDraft(tester);
-        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        await expectRating(tester, 7);
 
         // Move the slider away from the linked rating.
         final slider = find.byType(Slider, skipOffstage: false);
@@ -187,7 +210,7 @@ void main() {
         await settleDraft(tester);
 
         expect(harness.drafts.drafts['user-1']?.rating, 7);
-        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        await expectRating(tester, 7);
         expect(harness.submitter.submitted, isEmpty);
       },
     );
@@ -205,7 +228,7 @@ void main() {
         await tester.tap(find.text('Try again'));
         await settleDraft(tester);
 
-        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        await expectRating(tester, 7);
         expect(harness.drafts.drafts['user-1']?.rating, 7);
 
         // Applied once: a later slider move stays.
@@ -243,8 +266,7 @@ void main() {
       await tester.pumpAndSettle();
       await settleDraft(tester);
 
-      expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('6/10', skipOffstage: false), findsOneWidget);
+      await expectRating(tester, 6);
       expect(harness.submitter.submitted, isEmpty);
     });
   });
@@ -271,8 +293,7 @@ void main() {
       await signIn(tester);
       await settleDraft(tester);
 
-      expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+      await expectRating(tester, 7);
       expect(harness.submitter.submitted, isEmpty);
     });
 
@@ -285,7 +306,7 @@ void main() {
       await signIn(tester);
       await settleDraft(tester);
 
-      expectUnrated(tester);
+      await expectUnrated(tester);
     });
 
     testWidgets('finishes username setup before opening the composer', (
@@ -309,8 +330,7 @@ void main() {
       await tester.pumpAndSettle();
       await settleDraft(tester);
 
-      expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('5/10', skipOffstage: false), findsOneWidget);
+      await expectRating(tester, 5);
       expect(harness.submitter.submitted, isEmpty);
     });
 

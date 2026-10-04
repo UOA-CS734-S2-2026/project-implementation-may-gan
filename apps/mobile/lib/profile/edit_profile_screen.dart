@@ -210,15 +210,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       context.canPop() ? context.pop() : context.go('/me'),
                   icon: const Icon(Icons.arrow_back_rounded),
                 ),
-                Text(
-                  'edit profile',
-                  style: DayliText.serif(
-                    context,
-                    size: DayliTextSize.xl,
-                    weight: FontWeight.w600,
-                    tracking: DayliTracking.tight,
+                Expanded(
+                  child: Text(
+                    'edit profile',
+                    textAlign: TextAlign.center,
+                    style: DayliText.serif(
+                      context,
+                      size: DayliTextSize.xxl,
+                      weight: FontWeight.w600,
+                      tracking: DayliTracking.tight,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 48),
               ],
             ),
             Padding(
@@ -267,7 +271,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           controller: _name,
           placeholder: profile.username,
           helper: 'Leave blank to show your username.',
-          textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 16),

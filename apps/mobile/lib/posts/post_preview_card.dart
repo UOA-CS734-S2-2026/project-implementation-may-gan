@@ -110,31 +110,40 @@ class PostPreviewCard extends StatelessWidget {
           ),
           if (post.media.firstOrNull case final media?) ...[
             const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: media.isVideo
-                    // Videos play on the post itself, never in the feed.
-                    ? Semantics(
-                        key: Key('$keyPrefix.video.${post.id}'),
-                        label: 'Video',
-                        excludeSemantics: true,
-                        child: ColoredBox(
-                          color: colors.foreground,
-                          child: const Icon(
-                            Icons.play_circle_outline_rounded,
-                            size: 48,
-                            color: Colors.white,
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colors.foreground.withValues(alpha: 0.1),
+                ),
+                boxShadow: DayliShadows.md,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: media.isVideo
+                      // Videos play on the post itself, never in the feed.
+                      ? Semantics(
+                          key: Key('$keyPrefix.video.${post.id}'),
+                          label: 'Video',
+                          excludeSemantics: true,
+                          child: ColoredBox(
+                            color: colors.foreground,
+                            child: const Icon(
+                              Icons.play_circle_outline_rounded,
+                              size: 48,
+                              color: Colors.white,
+                            ),
                           ),
+                        )
+                      : PrivateImage(
+                          key: Key('$keyPrefix.photo.${post.id}'),
+                          postId: post.id,
+                          media: media,
+                          semanticLabel: "${post.displayName}'s photo",
                         ),
-                      )
-                    : PrivateImage(
-                        key: Key('$keyPrefix.photo.${post.id}'),
-                        postId: post.id,
-                        media: media,
-                        semanticLabel: "${post.displayName}'s photo",
-                      ),
+                ),
               ),
             ),
           ],

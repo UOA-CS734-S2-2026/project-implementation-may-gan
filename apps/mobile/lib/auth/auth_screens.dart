@@ -252,14 +252,7 @@ class _AuthScreenState extends State<AuthScreen> {
               : "Sign in to post today's dayli.",
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
-        const SizedBox(height: 8),
-        LegalLinks(
-          center: true,
-          compact: true,
-          draftMarker: _terms == null,
-          notice: false,
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 28),
         GoogleSignInButton(
           onPressed: _busy || (_signUp && (!_termsLoaded || _termsUnavailable))
               ? null
@@ -285,17 +278,16 @@ class _AuthScreenState extends State<AuthScreen> {
             textInputAction: TextInputAction.next,
             error: _fieldErrors['username'],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           DayliFormInput(
             label: 'Public name (optional)',
             fieldKey: const Key('auth.name'),
             controller: _name,
             autofillHints: const [AutofillHints.name],
             textInputAction: TextInputAction.next,
-            textCapitalization: TextCapitalization.words,
             helper: 'Leave blank to appear as your username.',
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
         ],
         DayliFormInput(
           label: 'Email',
@@ -338,11 +330,17 @@ class _AuthScreenState extends State<AuthScreen> {
             child: CheckboxListTile(
               key: const Key('auth.legalAction'),
               value: _accepted,
+              activeColor: colors.foregroundAccent,
               onChanged: _busy
                   ? null
                   : (value) => setState(() => _accepted = value ?? false),
-              title: const Text(
+              title: Text(
                 'I agree to the Terms of Service, acknowledge the Privacy Policy, and confirm I am 16 or older.',
+                style: DayliText.sans(
+                  context,
+                  size: DayliTextSize.sm,
+                  color: colors.foregroundSecondary,
+                ),
               ),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
@@ -367,32 +365,75 @@ class _AuthScreenState extends State<AuthScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_googleNeedsLink) ...[
-                  Text(
-                    'Sign in with your password first',
-                    style: DayliText.sans(
-                      context,
-                      size: DayliTextSize.sm,
-                      weight: FontWeight.w600,
-                      color: colors.foregroundAccent,
-                    ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: colors.foregroundAccent,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Sign in with your password first',
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            weight: FontWeight.w600,
+                            color: colors.foregroundAccent,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
-                ],
-                Text(
-                  _error!,
-                  key: const Key('auth.error'),
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.sm,
-                    color: _googleNeedsLink
-                        ? colors.foregroundAccent
-                        : colors.danger,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(width: 28),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          key: const Key('auth.error'),
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: colors.foregroundAccent,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ] else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.error_outline, color: colors.danger, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          key: const Key('auth.error'),
+                          style: DayliText.sans(
+                            context,
+                            size: DayliTextSize.sm,
+                            color: colors.danger,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ],
+        LegalLinks(
+          center: true,
+          compact: true,
+          draftMarker: _terms == null,
+          notice: false,
+        ),
         const SizedBox(height: 28),
         DayliButton(
           key: const Key('auth.submit'),

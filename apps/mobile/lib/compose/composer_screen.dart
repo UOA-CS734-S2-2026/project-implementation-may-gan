@@ -9,6 +9,7 @@ import '../drafts/daily_post_draft.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/post_inputs.dart';
+import '../ui/surfaces.dart';
 import '../weather/weather_lookup.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
@@ -645,26 +646,59 @@ class _ComposerScreenState extends State<ComposerScreen>
           const _Notice(
             "A saved draft couldn't be unlocked on this device and was removed.",
           ),
+        const SizedBox(height: 12),
         Text(
-          "today's prompt",
-          style: DayliText.sans(
-            context,
-            size: DayliTextSize.sm,
-            weight: FontWeight.w500,
-            color: colors.foregroundTertiary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          draft.promptText,
+          "Let's write your Dayli.",
           style: DayliText.serif(
             context,
-            fontSize: 28,
-            weight: FontWeight.w600,
-            tracking: DayliTracking.tighter,
-          ).copyWith(height: 1.2),
+            fontSize: 34,
+            weight: FontWeight.w400,
+            tracking: -0.06,
+          ),
         ),
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
+        DayliCard(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "daily prompt",
+                style: DayliText.serif(
+                  context,
+                  size: DayliTextSize.base,
+                  color: colors.foregroundTertiary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                draft.promptText,
+                style: DayliText.serif(
+                  context,
+                  fontSize: 26,
+                  weight: FontWeight.w600,
+                  tracking: DayliTracking.tighter,
+                ).copyWith(height: 1.25),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+        DayliFormInput(
+          label: 'Your answer to the prompt!',
+          fieldKey: const Key('composer.reflectiveAnswer'),
+          readOnly: locked,
+          controller: _answer,
+          placeholder: 'Write a few words…',
+          minLines: 3,
+          maxLines: 8,
+          textCapitalization: TextCapitalization.sentences,
+          error: errors.reflectiveAnswer,
+          onChanged: (value) => controller.update(reflectiveAnswer: value),
+        ),
+        const SizedBox(height: 32),
         const _SectionLabel('your day in pictures'),
         _Lockable(
           locked: locked,
@@ -714,19 +748,6 @@ class _ComposerScreenState extends State<ComposerScreen>
         const _SectionLabel('the weather'),
         _Lockable(locked: locked, child: _weatherSection(controller, draft)),
         const SizedBox(height: 28),
-        DayliFormInput(
-          label: 'Your answer',
-          fieldKey: const Key('composer.reflectiveAnswer'),
-          readOnly: locked,
-          controller: _answer,
-          placeholder: 'Write a few words…',
-          minLines: 3,
-          maxLines: 8,
-          textCapitalization: TextCapitalization.sentences,
-          error: errors.reflectiveAnswer,
-          onChanged: (value) => controller.update(reflectiveAnswer: value),
-        ),
-        const SizedBox(height: 20),
         DayliFormInput(
           label: 'Word dump',
           fieldKey: const Key('composer.caption'),

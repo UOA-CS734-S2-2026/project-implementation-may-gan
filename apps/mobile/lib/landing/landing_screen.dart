@@ -41,6 +41,13 @@ class LandingScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 SvgPicture.asset('assets/wdcc/squiggle02.svg', width: 140),
                 const Spacer(flex: 4),
+                const LegalLinks(
+                  center: true,
+                  compact: true,
+                  draftMarker: true,
+                  notice: false,
+                ),
+                const SizedBox(height: 24),
                 DayliButton(
                   key: const Key('landing.sign-up'),
                   label: 'Create an account',
@@ -61,14 +68,7 @@ class LandingScreen extends StatelessWidget {
                   height: 52,
                   onPressed: () => context.push('/sign-in'),
                 ),
-                const SizedBox(height: 8),
-                const LegalLinks(
-                  center: true,
-                  compact: true,
-                  draftMarker: true,
-                  notice: false,
-                ),
-                const SizedBox(height: 8),
+
                 Text(
                   'one post, every day.',
                   style: DayliText.serif(

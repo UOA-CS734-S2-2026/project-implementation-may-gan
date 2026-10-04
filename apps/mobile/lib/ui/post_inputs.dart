@@ -35,14 +35,13 @@ class RatingSlider extends StatelessWidget {
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 6,
-            activeTrackColor: rated
-                ? colors.foregroundAccent
-                : colors.backgroundTertiary,
+            trackShape: _GradientSliderTrackShape(rated: rated),
+            activeTrackColor: colors.backgroundTertiary,
             inactiveTrackColor: colors.backgroundTertiary,
             thumbColor: rated
-                ? colors.foregroundAccent
+                ? const Color(0xFF4F378B)
                 : colors.foregroundTertiary,
-            overlayColor: colors.foregroundAccent.withValues(alpha: 0.12),
+            overlayColor: const Color(0xFF4F378B).withValues(alpha: 0.12),
             activeTickMarkColor: Colors.white.withValues(alpha: 0.6),
             inactiveTickMarkColor: colors.foregroundTertiary.withValues(
               alpha: 0.5,
@@ -116,6 +115,14 @@ class AudiencePicker extends StatelessWidget {
       String body,
     ) {
       final selected = value == audience;
+      final isFriends = audience == PostAudience.friends;
+      final activeBgColor = isFriends
+          ? const Color(0xFFEADDFF)
+          : const Color(0xFFFFDBCF);
+      final activeFgColor = isFriends
+          ? const Color(0xFF4F378B)
+          : const Color(0xFF492500);
+
       return Expanded(
         child: Semantics(
           button: true,
@@ -124,9 +131,7 @@ class AudiencePicker extends StatelessWidget {
           label: '$title. $body',
           excludeSemantics: true,
           child: Material(
-            color: selected
-                ? colors.foregroundAccent
-                : colors.backgroundSecondary,
+            color: selected ? activeBgColor : colors.backgroundSecondary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(
@@ -147,7 +152,7 @@ class AudiencePicker extends StatelessWidget {
                       Icon(
                         icon,
                         size: 22,
-                        color: selected ? Colors.white : colors.foreground,
+                        color: selected ? activeFgColor : colors.foreground,
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -156,7 +161,7 @@ class AudiencePicker extends StatelessWidget {
                           context,
                           size: DayliTextSize.lg,
                           weight: FontWeight.w600,
-                          color: selected ? Colors.white : colors.foreground,
+                          color: selected ? activeFgColor : colors.foreground,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -166,7 +171,7 @@ class AudiencePicker extends StatelessWidget {
                           context,
                           size: DayliTextSize.sm,
                           color: selected
-                              ? Colors.white.withValues(alpha: 0.85)
+                              ? activeFgColor.withValues(alpha: 0.85)
                               : colors.foregroundSecondary,
                         ),
                       ),
@@ -200,6 +205,99 @@ class AudiencePicker extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
+  const _GradientSliderTrackShape({required this.rated});
+  final bool rated;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final ltr = textDirection == TextDirection.ltr;
+    final activeTrackRect = ltr
+        ? Rect.fromLTRB(
+            trackRect.left,
+            trackRect.top,
+            thumbCenter.dx,
+            trackRect.bottom,
+          )
+        : Rect.fromLTRB(
+            thumbCenter.dx,
+            trackRect.top,
+            trackRect.right,
+            trackRect.bottom,
+          );
+    final inactiveTrackRect = ltr
+        ? Rect.fromLTRB(
+            thumbCenter.dx,
+            trackRect.top,
+            trackRect.right,
+            trackRect.bottom,
+          )
+        : Rect.fromLTRB(
+            trackRect.left,
+            trackRect.top,
+            thumbCenter.dx,
+            trackRect.bottom,
+          );
+
+    final Paint activePaint = Paint();
+    if (rated) {
+      activePaint.shader = LinearGradient(
+        begin: ltr ? Alignment.centerLeft : Alignment.centerRight,
+        end: ltr ? Alignment.centerRight : Alignment.centerLeft,
+        colors: const [Color(0xFFD0BCFF), Color(0xFF4F378B)],
+      ).createShader(trackRect);
+    } else {
+      activePaint.color = sliderTheme.activeTrackColor!;
+    }
+
+    final Paint inactivePaint = Paint()
+      ..color = sliderTheme.inactiveTrackColor!;
+
+    final Radius trackRadius = Radius.circular(trackRect.height / 2);
+
+    context.canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        activeTrackRect,
+        topLeft: ltr ? trackRadius : Radius.zero,
+        bottomLeft: ltr ? trackRadius : Radius.zero,
+        topRight: ltr ? Radius.zero : trackRadius,
+        bottomRight: ltr ? Radius.zero : trackRadius,
+      ),
+      activePaint,
+    );
+
+    context.canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        inactiveTrackRect,
+        topLeft: ltr ? Radius.zero : trackRadius,
+        bottomLeft: ltr ? Radius.zero : trackRadius,
+        topRight: ltr ? trackRadius : Radius.zero,
+        bottomRight: ltr ? trackRadius : Radius.zero,
+      ),
+      inactivePaint,
     );
   }
 }
