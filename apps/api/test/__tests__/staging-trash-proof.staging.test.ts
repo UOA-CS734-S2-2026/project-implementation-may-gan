@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { awaitRpcDeployment } from "../rpc-deployment-readiness";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -13,7 +14,10 @@ declare global {
 
 describe("private staging Trash attestation", () => {
   it("matches the exact deployed revision", async () => {
-    const proof = await env.STAGING_API.proveStagingRevision();
+    const proof = await awaitRpcDeployment(
+      "proveStagingRevision",
+      () => env.STAGING_API.proveStagingRevision(),
+    );
     expect(proof).toEqual({
       revision: env.EXPECTED_STAGING_RELEASE_SHA,
       storageDigest: env.EXPECTED_STAGING_STORAGE_DIGEST,
@@ -21,7 +25,10 @@ describe("private staging Trash attestation", () => {
   });
 
   it("proves aggregate access only through lifecycle_worker", async () => {
-    const proof = await env.STAGING_API.provePostTrashWorkerFence();
+    const proof = await awaitRpcDeployment(
+      "provePostTrashWorkerFence",
+      () => env.STAGING_API.provePostTrashWorkerFence(),
+    );
     expect(proof).toMatchObject({
       appRoleDenied: true,
       lifecycleWorkerRole: true,
