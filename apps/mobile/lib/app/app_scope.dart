@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/feed_client.dart';
 import '../api/friends_client.dart';
+import '../api/interactions_client.dart';
 import '../api/media_upload_client.dart';
 import '../api/post_client.dart';
 import '../api/posting_day_client.dart';
@@ -31,6 +32,7 @@ class AppServices {
     required this.submitter,
     MessagingController? messaging,
     this.profiles = const UnavailableProfileClient(),
+    this.interactions = const UnavailableInteractionsClient(),
     this.notifications,
     this.accountExports,
     this.google,
@@ -54,6 +56,7 @@ class AppServices {
   final DailyPostSubmitter submitter;
   final MessagingController messaging;
   final ProfileClient profiles;
+  final InteractionsClient interactions;
   final FirebasePushLifecycle? notifications;
 
   /// Null until export provider proof and an explicit release decision.
