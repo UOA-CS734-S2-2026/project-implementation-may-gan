@@ -7,7 +7,12 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   const password = "e2e-password-123";
 
   await page.goto("/");
-  await page.getByRole("link", { name: /sign up/i }).click();
+  const signUpLink = page.getByRole("link", { name: /sign up/i });
+  await expect(signUpLink).toHaveAttribute("href", "/sign-up");
+  await Promise.all([
+    page.waitForURL(/\/sign-up$/, { waitUntil: "domcontentloaded" }),
+    signUpLink.click(),
+  ]);
   await expect(page).toHaveURL(/\/sign-up$/);
 
   await page.getByLabel("Username").fill(username);
