@@ -6,7 +6,7 @@ import {
   type PostComment,
   type PostCommentsPage,
 } from "@/features/interactions/shared/interactions.api";
-import type { PostDetail } from "@/features/posts/shared/posts.api";
+import { postsApi, type PostDetail } from "@/features/posts/shared/posts.api";
 import { postKeys } from "@/features/posts/shared/posts.keys";
 import { useSession } from "@/lib/session/hooks";
 
@@ -59,6 +59,9 @@ export function useCreatedComments(postId: string) {
   }).data;
 }
 
+/** The newest count read per post detail key, so an older answer can't overwrite a newer one. */
+const countReads = new Map<string, number>();
+
 /** Keeps the loaded comment pages, comments posted here, and the post's comment count in step after a change. */
 function useCommentCache(postId: string) {
   const { user } = useSession();
@@ -83,8 +86,24 @@ function useCommentCache(postId: string) {
     },
     adjustCount: (delta: number) =>
       client.setQueryData<PostDetail>(detailKey, (post) => post && { ...post, commentCount: Math.max(0, post.commentCount + delta) }),
-    /** The server's count also covers comments on pages that aren't loaded. */
-    refreshCount: () => client.invalidateQueries({ queryKey: detailKey }),
+    /**
+     * The server's count also covers comments on pages that aren't loaded.
+     * Only the count is taken from the read: refetching the whole post could
+     * land after a like and put back a stale like state. A 404 reloads the
+     * post so the screen shows that it is gone.
+     */
+    refreshCount: async () => {
+      const readKey = JSON.stringify(detailKey);
+      const read = (countReads.get(readKey) ?? 0) + 1;
+      countReads.set(readKey, read);
+      const result = await postsApi.get(postId);
+      if (countReads.get(readKey) !== read) return;
+      if (result.ok) {
+        client.setQueryData<PostDetail>(detailKey, (post) => post && { ...post, commentCount: result.value.commentCount });
+      } else if (result.failure === "notFound") {
+        await client.invalidateQueries({ queryKey: detailKey });
+      }
+    },
   };
 }
 

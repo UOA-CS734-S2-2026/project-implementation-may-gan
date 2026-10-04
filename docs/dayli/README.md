@@ -35,6 +35,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Likes and comments](likes-and-comments.md): liking, threaded comments, moderation, and who sees which.
 - [On This Day](on-this-day.md): `GET /api/v1/me/memories/on-this-day`, the owner's own earlier posts from today's Auckland date, and leap-day handling.
 - [Mood history](mood-history.md): `GET /api/v1/profiles/{username}/mood`, a profile's ratings over 30 days, 90 days or a year, for the owner and their friends.
+- [Future-self notes](future-self-notes.md): owner-only notes scheduled for an Auckland date, early-access rules, and the delivery job.
 
 ## Fixed rules
 

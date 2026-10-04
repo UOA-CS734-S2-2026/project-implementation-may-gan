@@ -44,6 +44,7 @@ import {
   termsAcceptances,
 } from "./legal";
 import { user, usernameReservations } from "./users";
+import { futureSelfNoteDeliveries, futureSelfNoteIdempotencyKeys, futureSelfNotes } from "./future-self-notes";
 import { accountGoogleReauthenticationIntents } from "./google-reauth";
 import {
   accountNotificationPreferences,
@@ -462,6 +463,14 @@ export {
 } from "./notifications";
 
 export {
+  futureSelfNoteDeliveries,
+  futureSelfNoteDeliveryStatus,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNoteStatus,
+  futureSelfNotes,
+} from "./future-self-notes";
+
+export {
   accountLifecycleState,
   accountLifecycles,
   accountManagementGrantAction,
@@ -505,6 +514,9 @@ export const schema = {
   dailyPrompts,
   friendRequests,
   friendships,
+  futureSelfNoteDeliveries,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNotes,
   legalDocumentVersions,
   legacyCloudinaryMedia,
   mediaReservation,

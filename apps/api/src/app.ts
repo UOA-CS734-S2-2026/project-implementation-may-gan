@@ -77,6 +77,9 @@ import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media"
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
 import { createHyperdriveDailyPostStore } from "./features/posts/create-post/create-post.repository";
+import { registerFutureSelfNotesRoutes, type FutureSelfNotesRouteDependencies } from "./features/future-self-notes/future-self-notes.routes";
+import { createFutureSelfNoteService } from "./features/future-self-notes/shared/future-self-note.service";
+import { createHyperdriveFutureSelfNoteStore } from "./features/future-self-notes/shared/future-self-note.repository";
 import { registerSystemRoutes } from "./features/system/system.routes";
 import { createPresignedDownloadUrl, createR2MediaObjectStore, readR2RuntimeConfiguration } from "./infrastructure/media/r2";
 import { registerApplicationCors } from "./http/middleware/cors";
@@ -188,7 +191,7 @@ import { createHyperdriveAccountPolicyResolver } from "./features/account-policy
 import { registerAccountPolicyRoutes, type AccountPolicyRouteDependencies } from "./features/account-policy/account-policy.routes";
 import { registerDeletionRoutes, type DeletionRouteDependencies } from "./features/account-lifecycle/deletion/deletion.route";
 import { registerExportRoutes, type ExportRouteDependencies } from "./features/data-export/data-export.routes";
-import { exportExecutionEnabled, readStagingExportProof } from "./features/data-export/shared/export-activation";
+import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEnabled } from "./features/data-export/shared/export-activation";
 import { createExportOwnerRepository } from "./features/data-export/shared/export-owner.repository";
 import { authorizeExportDownload } from "./features/data-export/shared/export-download.repository";
 import { prepareExportDownload } from "./features/data-export/shared/export-download";
@@ -226,6 +229,7 @@ export interface AppDependencies {
   postVoiceMemoContent?: GetPostVoiceMemoContentRouteDependencies;
   profilePosts?: ListProfilePostsRouteDependencies;
   onThisDay?: ListOnThisDayRouteDependencies;
+  futureSelfNotes?: FutureSelfNotesRouteDependencies;
   postUpdate?: UpdatePostRouteDependencies;
   postRevisions?: ListPostRevisionsRouteDependencies;
   /** Likes and comments; any route left out is unavailable. */
@@ -271,6 +275,7 @@ export function createApp({
   postVoiceMemoContent,
   profilePosts,
   onThisDay,
+  futureSelfNotes,
   postUpdate,
   postRevisions,
   interactions = {},
@@ -380,6 +385,7 @@ export function createApp({
     updateComment: interaction(interactions.updateComment),
     deleteComment: interaction(interactions.deleteComment),
   });
+  registerFutureSelfNotesRoutes(api, { ...(futureSelfNotes ?? { resolveSession: async () => null }), rateLimiter });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
     ...messaging,
@@ -490,6 +496,15 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdriveOnThisDayRepository(configuration.hyperdrive),
     signMediaDownload,
   } satisfies ListOnThisDayRouteDependencies : undefined;
+  const futureSelfNotes = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    hasUsername,
+    service: createFutureSelfNoteService({
+      store: createHyperdriveFutureSelfNoteStore(configuration.hyperdrive),
+      clock: { now: () => new Date() },
+      dayService: createAucklandDayService({ now: () => new Date() }),
+    }),
+  } satisfies FutureSelfNotesRouteDependencies : undefined;
   const messaging = configuration ? createMessagingDependencies(configuration, env, hasUsername!) : undefined;
   const realtime = configuration && env.USER_REALTIME ? createRealtimeDependencies(configuration, env, hasUsername!) : undefined;
   const pushDevices = configuration ? createPushDeviceDependencies(configuration, env, hasUsername!) : undefined;
@@ -510,7 +525,8 @@ export function createAppForEnv(env: ApiEnv) {
     // Request execution stays unregistered until the synthetic-staging gate is reviewed.
     requestEnabled: false,
   } satisfies DeletionRouteDependencies : undefined;
-  const stagingExportProof = readStagingExportProof(env);
+  const allStagingExports = stagingExportAllUsersEnabled(env);
+  const stagingExportProof = allStagingExports ? null : readStagingExportProof(env);
   const exportService = configuration ? {
     resolveSession: createSessionResolver(configuration),
     status: (userId: string, sessionId: string) => withHyperdriveDatabase(configuration.hyperdrive,
@@ -522,9 +538,9 @@ export function createAppForEnv(env: ApiEnv) {
         (database) => authorizeExportDownload(database, { userId, sessionId, requestId })),
       objects: createExportArchiveStore(r2Runtime),
     }) : undefined,
-    // Production is inert. Staging admits only the time-bounded synthetic owner.
+    // Production stays inert. Full staging admission requires an explicit mode.
     allowedUserId: stagingExportProof?.userId,
-    enabled: (exportExecutionEnabled || stagingExportProof?.buildEnabled === true) &&
+    enabled: (exportExecutionEnabled || allStagingExports || stagingExportProof?.buildEnabled === true) &&
       !!env.EXPORT_WORKER_HYPERDRIVE && !!r2Runtime,
   } satisfies ExportRouteDependencies : undefined;
   const passwordReauthentication = configuration ? {
@@ -636,6 +652,7 @@ export function createAppForEnv(env: ApiEnv) {
     postVoiceMemoContent,
     profilePosts,
     onThisDay,
+    futureSelfNotes,
     postUpdate,
     postRevisions,
     interactions,
