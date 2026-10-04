@@ -320,12 +320,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               key: const Key('settings.notifications'),
                               title: const Text('Mobile notifications'),
                               subtitle: Text(
-                                consent.failure == null
-                                    ? 'Messages, friend requests, and daily reminders.'
-                                    : 'Could not update notifications. Try again.',
+                                consent.failure != null
+                                    ? 'Could not update notifications. Try again.'
+                                    : !consent.deviceSupported
+                                    ? consent.enabled
+                                          ? 'Enabled for your account on supported devices. You can turn it off here.'
+                                          : 'This build cannot receive notifications.'
+                                    : 'Messages, friend requests, and daily reminders.',
                               ),
                               value: consent.enabled,
-                              onChanged: consent.loading
+                              onChanged:
+                                  consent.loading ||
+                                      (!consent.deviceSupported &&
+                                          !consent.enabled)
                                   ? null
                                   : (value) async {
                                       final enabled = await consent.setEnabled(
