@@ -144,9 +144,13 @@ describe("durable daily publication and fresh eligibility", () => {
     const result = await resolver.resolve(job!);
     expect(result).toMatchObject({ title: "Dayli", body: "Your friends' posts are ready.", targetId: window.localDate });
     expect(JSON.stringify(result)).not.toContain("Private post");
-    await database.db.update(schema.friendships).set({ state: "ended" }).where(and(eq(schema.friendships.userId, users[18]!), eq(schema.friendships.friendId, users[17]!)));
+    const pair = or(
+      and(eq(schema.friendships.userId, users[18]!), eq(schema.friendships.friendId, users[17]!)),
+      and(eq(schema.friendships.userId, users[17]!), eq(schema.friendships.friendId, users[18]!)),
+    );
+    await database.db.update(schema.friendships).set({ state: "ended" }).where(pair);
     expect(await resolver.resolve(job!)).toBeNull();
-    await database.db.update(schema.friendships).set({ state: "active" }).where(and(eq(schema.friendships.userId, users[18]!), eq(schema.friendships.friendId, users[17]!)));
+    await database.db.update(schema.friendships).set({ state: "active" }).where(pair);
     const trashedAt = new Date();
     await database.db.update(schema.posts).set({ trashedAt, restoreUntil: new Date(trashedAt.getTime() + 168 * 3_600_000), trashPurgeDueAt: new Date(trashedAt.getTime() + 336 * 3_600_000) }).where(eq(schema.posts.id, releasedPost));
     expect(await resolver.resolve(job!)).toBeNull();
