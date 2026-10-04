@@ -92,6 +92,13 @@ class _ComposerScreenState extends State<ComposerScreen>
         permission: services.voiceMemos.permission,
         files: services.voiceMemos.files,
         clock: services.voiceMemos.clock,
+        // The memo shares the post's 25 MB with its photos or video.
+        otherBytes: () => [
+          for (final attachment in visualAttachments(
+            _controller?.draft?.attachments ?? const [],
+          ))
+            ?attachment.byteSize,
+        ],
         onRecorded: _setVoiceMemo,
       );
       _uploads = MediaUploadController(

@@ -33,8 +33,10 @@ void main() {
   /// Runs [body] with a controller whose clock is the fake one, so seconds of
   /// recording take no real time.
   void withController(
-    void Function(FakeAsync async, VoiceMemoRecorderController controller) body,
-  ) {
+    void Function(FakeAsync async, VoiceMemoRecorderController controller)
+    body, {
+    Iterable<int> Function()? otherBytes,
+  }) {
     fakeAsync((async) {
       final origin = DateTime.utc(2026, 9, 25, 3);
       final controller = VoiceMemoRecorderController(
@@ -44,6 +46,7 @@ void main() {
         files: files,
         onRecorded: recorded.add,
         clock: () => origin.add(async.elapsed),
+        otherBytes: otherBytes ?? () => const [],
       );
       body(async, controller);
       controller.dispose();
@@ -351,6 +354,75 @@ void main() {
         expect(recorder.disposed, isTrue);
         expect(recorded, isEmpty);
       });
+    });
+  });
+
+  group('the 25 MB limit shared with the photos', () {
+    const postBytes = 25 * 1024 * 1024;
+
+    test('refuses a memo that would take the post over, and explains', () {
+      // Three photos of 8.7 MB each, 26.1 MB, plus a 400 KB memo.
+      withController((async, controller) {
+        tapRecord(async, controller);
+        async.elapse(const Duration(seconds: 10));
+        tapStop(async, controller);
+
+        expect(recorded, isEmpty);
+        expect(files.deleted, ['/memos/0.m4a']);
+        expect(controller.notice, contains('over 25 MB'));
+        expect(controller.notice, contains('Remove a photo'));
+        expect(controller.phase, RecordingPhase.idle);
+      }, otherBytes: () => [8700000, 8700000, 8700000]);
+    });
+
+    test('accepts a memo that brings the post to exactly the limit', () {
+      withController((async, controller) {
+        tapRecord(async, controller);
+        async.elapse(const Duration(seconds: 10));
+        tapStop(async, controller);
+
+        expect(recorded, hasLength(1));
+        expect(files.deleted, isEmpty);
+        expect(controller.notice, isNull);
+      }, otherBytes: () => [postBytes - files.defaultSize]);
+    });
+
+    test('refuses a memo one byte over the limit', () {
+      withController((async, controller) {
+        tapRecord(async, controller);
+        async.elapse(const Duration(seconds: 10));
+        tapStop(async, controller);
+
+        expect(recorded, isEmpty);
+        expect(controller.notice, contains('over 25 MB'));
+      }, otherBytes: () => [postBytes - files.defaultSize + 1]);
+    });
+
+    test('counts the photos as they are when the take stops', () {
+      final photos = <int>[];
+      withController((async, controller) {
+        // Nothing in the draft when recording starts...
+        tapRecord(async, controller);
+        async.elapse(const Duration(seconds: 5));
+        // ...then photos finish compressing while the author is talking.
+        photos.addAll([9000000, 9000000, 9000000]);
+        async.elapse(const Duration(seconds: 5));
+        tapStop(async, controller);
+
+        expect(recorded, isEmpty);
+        expect(controller.notice, contains('over 25 MB'));
+      }, otherBytes: () => photos);
+    });
+
+    test('keeps a memo that fits comfortably beside photos', () {
+      withController((async, controller) {
+        tapRecord(async, controller);
+        async.elapse(const Duration(seconds: 10));
+        tapStop(async, controller);
+
+        expect(recorded, hasLength(1));
+        expect(controller.notice, isNull);
+      }, otherBytes: () => [6000000, 6000000]);
     });
   });
 

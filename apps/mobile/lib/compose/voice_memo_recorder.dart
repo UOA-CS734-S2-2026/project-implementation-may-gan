@@ -35,7 +35,10 @@ class VoiceMemoRecorderController extends ChangeNotifier {
     this.limit = DailyPostLimits.voiceMemoRecordingMax,
     this.minimum = const Duration(seconds: 1),
     this.tick = const Duration(milliseconds: 100),
+    this.otherBytes = _noOtherBytes,
   }) : _clock = clock ?? DateTime.now;
+
+  static Iterable<int> _noOtherBytes() => const [];
 
   /// How many bars the saved loudness picture has.
   static const waveformBuckets = 48;
@@ -55,6 +58,12 @@ class VoiceMemoRecorderController extends ChangeNotifier {
   /// Shorter takes are discarded, so a stray tap doesn't make a memo.
   final Duration minimum;
   final Duration tick;
+
+  /// The sizes, in bytes, of the photos or video already in the draft. The
+  /// memo counts toward the same 25 MB post total, so this is read when a take
+  /// stops (photos can change while recording) and the take is refused if it
+  /// would put the post over.
+  final Iterable<int> Function() otherBytes;
 
   /// Called with the finished memo, ready to reserve and upload.
   final void Function(DraftAttachment memo) onRecorded;
@@ -212,6 +221,7 @@ class VoiceMemoRecorderController extends ChangeNotifier {
         : checkAttachmentLimits(
             mediaType: DraftAttachment.voiceMemoMediaType,
             byteSize: size,
+            otherBytes: otherBytes(),
             videoDuration: _elapsed,
           );
     if (tooShort || violation != null || _disposed) {
@@ -219,7 +229,13 @@ class VoiceMemoRecorderController extends ChangeNotifier {
       return _finish(
         notice: tooShort
             ? 'That was too short. Tap record and say a little more.'
-            : violation?.message,
+            : switch (violation) {
+                // The generic message is about photos, which isn't the fix here.
+                MediaLimitViolation.postTooLarge =>
+                  'This voice memo would take your dayli over 25 MB. Remove '
+                      'a photo or record a shorter one.',
+                _ => violation?.message,
+              },
       );
     }
 

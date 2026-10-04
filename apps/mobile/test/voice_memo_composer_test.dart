@@ -511,6 +511,93 @@ void main() {
     });
   });
 
+  group('beside near-limit photos', () {
+    DraftAttachment photo(int index) => DraftAttachment(
+      localPath: '/photos/$index.jpg',
+      mediaType: 'image',
+      compressedPath: '/compressed/$index.jpg',
+      contentType: 'image/jpeg',
+      // Three of these are 26.1 MB, over the 25 MB post limit once a memo
+      // is added.
+      byteSize: 8700000,
+      reservationId: 'reservation-photo-$index',
+      status: AttachmentUploadStatus.validated,
+    );
+
+    DailyPostDraft draftWith(List<DraftAttachment> attachments) =>
+        DailyPostDraft(
+          userId: 'user-1',
+          localDate: '2026-09-25',
+          promptId: 'prompt-09-25',
+          promptText: 'What made you smile today?',
+          idempotencyKey: 'saved-key',
+          updatedAt: DateTime.utc(2026, 9, 25),
+          attachments: attachments,
+        );
+
+    testWidgets('refuses a memo that would take the post over 25 MB', (
+      tester,
+    ) async {
+      final harness = TestHarness();
+      harness.drafts.drafts['user-1'] = draftWith([
+        photo(0),
+        photo(1),
+        photo(2),
+      ]);
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+      await _tapRecord(tester);
+      await _record_(tester, 6);
+      await _tapStop(tester);
+
+      // Nothing was kept or uploaded, and the author is told what to do.
+      final attachments = await _saved(tester, harness);
+      expect(voiceMemoOf(attachments), isNull);
+      expect(visualAttachments(attachments), hasLength(3));
+      expect(harness.voiceFiles.deleted, ['/memos/0.m4a']);
+      expect(harness.mediaUploads.completed, isEmpty);
+      await _scrollTo(tester, const Key('composer.voiceMemo.message'));
+      expect(find.textContaining('over 25 MB'), findsOneWidget);
+      // The button is back for a shorter or lighter try.
+      expect(find.byKey(_record), findsOneWidget);
+    });
+
+    testWidgets('accepts the memo once a photo is removed', (tester) async {
+      final harness = TestHarness();
+      harness.drafts.drafts['user-1'] = draftWith([
+        photo(0),
+        photo(1),
+        photo(2),
+      ]);
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle();
+      await _tapRecord(tester);
+      await _record_(tester, 6);
+      await _tapStop(tester);
+      expect(voiceMemoOf(await _saved(tester, harness)), isNull);
+
+      // Drop one photo, so two photos (17.4 MB) and the memo fit.
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('composer.media.0')),
+        -150,
+        scrollable: _list(),
+      );
+      final removePhoto = find.byKey(const Key('composer.media.remove')).first;
+      await tester.ensureVisible(removePhoto);
+      await tester.pump();
+      await tester.tap(removePhoto);
+      await tester.pumpAndSettle();
+      await _tapRecord(tester);
+      await _record_(tester, 6);
+      await _tapStop(tester);
+      await tester.pumpAndSettle();
+
+      final attachments = await _saved(tester, harness);
+      expect(visualAttachments(attachments), hasLength(2));
+      expect(voiceMemoOf(attachments), isNotNull);
+    });
+  });
+
   group('across restarts', () {
     testWidgets(
       'a saved memo is back, and playable, when the composer reopens',
