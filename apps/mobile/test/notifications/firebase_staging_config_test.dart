@@ -170,6 +170,11 @@ void main() {
       expect(releaseInfo, contains(setting));
       expect(debugInfo, contains(setting));
     }
+    for (final description in RegExp(
+      r'<key>[^<]*UsageDescription</key>\s*<string>[^<]*</string>',
+    ).allMatches(releaseInfo)) {
+      expect(debugInfo, contains(description.group(0)!));
+    }
     expect(
       RegExp(r'<key>CFBundleURLSchemes</key>').allMatches(releaseInfo),
       hasLength(2),
