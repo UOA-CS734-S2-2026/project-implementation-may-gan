@@ -1,0 +1,137 @@
+---
+title: Setup and verification
+description: Configure private R2 media storage and understand what local and staging checks prove.
+---
+
+Media routes are always present in the API contract, but they need all four R2 settings before they can issue URLs or read objects. If a setting is absent or blank, the runtime leaves media storage unavailable and the routes return `503` instead of exposing a partly configured path.
+
+## Cloudflare setup
+
+Use a separate bucket for each environment. The documented staging setup uses a bucket-scoped S3-compatible token with **Object Read & Write** permission. This token is separate from the Cloudflare account token used to deploy Workers.
+
+The Worker needs:
+
+| Setting | Purpose |
+| --- | --- |
+| `R2_ACCOUNT_ID` | Builds the R2 S3 endpoint. In staging this is the deployment account ID. |
+| `R2_BUCKET_NAME` | Selects the environment's private media bucket. |
+| `R2_ACCESS_KEY_ID` | Signs upload, download, read, and delete requests. Store it as a Worker secret. |
+| `R2_SECRET_ACCESS_KEY` | Completes the signing credential. Store it as a Worker secret. |
+
+Do not make the bucket public. Signed authenticated downloads and parent-authorized API routes both depend on storage remaining private.
+
+### Bucket CORS
+
+A browser uploads directly to R2, so its `PUT` crosses origins. Allow the exact web origin and these request headers:
+
+- `content-type`
+- `content-length`
+- `if-none-match`
+
+The browser controls `Content-Length`, so web code does not set that header itself. R2 still receives it and checks it against the signature. `If-None-Match` must be allowed because it prevents a later upload from replacing the first object.
+
+Flutter is not governed by browser CORS, but it sends the same signed headers except for the client-managed content length behavior.
+
+## Staging configuration
+
+The protected staging release reads `STAGING_R2_BUCKET_NAME` from GitHub Environment variables and `R2_ACCESS_KEY_ID` plus `R2_SECRET_ACCESS_KEY` from Environment secrets. The deployment script derives `R2_ACCOUNT_ID` from `CLOUDFLARE_ACCOUNT_ID`, writes only public values to generated Wrangler configuration, and synchronizes the two R2 keys as Worker secrets.
+
+R2 configuration is all or nothing. The release checks that the bucket variable and both key secrets appear together. It also lists the configured bucket with those credentials before deployment. A wrong bucket name, invalid key, or key scoped to another bucket stops the deployment rather than producing upload URLs that will fail later.
+
+The token needs delete permission as well as read and write permission. Reservation cleanup and post lifecycle cleanup remove objects through the same R2 adapter.
+
+## Local development
+
+Real R2 credentials are not required for ordinary local API tests. Reservation, completion, format inspection, authorization, and cleanup tests inject in-memory or stubbed storage adapters. Running Wrangler without `R2_*` values is also a useful fail-closed check: media routes should return `503`, not `500`.
+
+The focused API suite is:
+
+```bash
+pnpm --filter @dayli/api test
+```
+
+The tests cover more than a happy upload. They include ownership, pending quota, expiry races, signed URL shape, mismatched bytes and formats, malformed containers, video and audio duration checks, terminal completion, retryable storage failures, authorized reads, cleanup leases, and deletion retries.
+
+These fixtures verify the parser rules with bounded synthetic byte layouts. They do not decode each image or media stream. If decoder-level confidence is needed, use small reviewed binary fixtures produced by real encoders rather than hand-built compressed image data.
+
+## What needs a real R2 endpoint
+
+A fake object store cannot prove Cloudflare's S3 compatibility, browser preflight behavior, or provider response headers. Keep those checks separate from local tests and use synthetic media in an isolated staging bucket.
+
+The media design record reports that the following checks passed against staging on September 30, 2026:
+
+1. A signed `PUT` with the reserved headers returned `200`, and `/complete` returned `validated`.
+2. Changing the signed content length or content type made R2 return `403`.
+3. Random bytes in a JPEG reservation produced `format_mismatch` at completion.
+4. A second `PUT` to the same object returned `412` instead of replacing it.
+5. Completing before upload left the reservation pending and retryable.
+
+That proof used `curl`. It did not send a browser CORS preflight. It also predates the documented staging checks for authenticated downloads and scheduled cleanup. Treat those as open verification work unless newer evidence is recorded elsewhere.
+
+## Browser upload check
+
+Web post attachments are not uploaded today, but web profile avatar upload already uses direct R2 transfer. A staging browser check should therefore use a synthetic avatar and confirm:
+
+1. Reservation succeeds while signed in through the web application.
+2. The browser's CORS preflight permits the exact origin, method, and signed headers.
+3. R2 accepts the `PUT`.
+4. `/complete` validates the object.
+5. Setting the avatar succeeds and the profile can read it.
+6. A disallowed origin or missing signed header fails.
+
+Do not use `curl` as evidence for step 2. It does not exercise browser CORS.
+
+## Download checks
+
+For an authenticated post, use a synthetic photo and two approved test accounts:
+
+1. Read the post as its author or an allowed friend and confirm the response contains a signed media URL with an expiry.
+2. Fetch the URL, then request `GET /api/v1/posts/{postId}/media/{mediaId}` and confirm it returns a fresh URL while access remains allowed.
+3. Remove the friendship, block the account, change the audience, or move the post to Trash. Confirm the refresh endpoint now returns the same `404` used for absent media.
+4. Confirm an already issued URL still works only within its remaining five minute window and fails after expiry.
+5. Change the object path in the signed URL and confirm R2 rejects it.
+
+For a released post on a public profile, test without a session. The post should return the Dayli `/content` route rather than an R2 hostname. Fetching it should recheck the current parent state, support a bounded range request, and return private no-store caching headers. Making the profile private or making the post unreadable should make the next request return `404`.
+
+A download test cannot prove recall. Once a viewer has downloaded bytes, Dayli cannot remove their copy.
+
+## Cleanup checks
+
+The current orphan grace period is seven days after reservation expiry. In a controlled staging database, a migrator can backdate synthetic reservations instead of waiting. Verify these cases:
+
+1. An unlinked reservation loses its R2 object and database row after the scheduled job claims it.
+2. A reservation linked to `post_media` remains untouched.
+3. A reservation linked to `profile_avatars` remains untouched.
+4. A pending reservation with no object can still have its row removed.
+5. An R2 delete failure leaves the reservation claimed and schedules a retry rather than making it attachable again.
+6. Missing R2 bindings skip cleanup without claiming rows.
+
+The cleanup run is bounded to 25 objects and about 20 seconds. It uses a 60 second lease, a 10 second delete timeout, backoff with jitter, and at most eight attempts. Logs contain counts, not object keys, owners, URLs, or provider errors.
+
+Post Trash cleanup is separate. Its runtime defaults to `disabled`, with `report_only` and `execute` as explicit modes. Do not treat orphan cleanup evidence as proof that Trash purge is active.
+
+## Failure guide
+
+| Symptom | First place to check |
+| --- | --- |
+| Reservation route returns `503` | Confirm all four R2 settings are present and nonblank. |
+| Browser preflight fails | Check the exact origin and all three allowed headers in bucket CORS. |
+| R2 `PUT` returns `403` | Compare the method, type, size, headers, and URL expiry with the reservation response. |
+| R2 `PUT` returns `412` | An earlier request created the object. Continue to `/complete`. |
+| Completion stays pending | Confirm the object exists at the reserved key and the upload request finished. |
+| Completion returns `503` | Treat storage or network failure as retryable. Do not mark the file invalid. |
+| Post returns `MEDIA_NOT_READY` | Wait for every reservation to validate before submitting again. |
+| Post returns `MEDIA_UNAVAILABLE` | Reserve and upload the retained compressed copy again. |
+| Media load fails after a few minutes | Ask the authorized refresh endpoint for one new URL. |
+| Public media exposes an R2 URL | The response took the wrong delivery path. Public-only access should use the Dayli content route. |
+
+## Evidence boundaries
+
+Keep local, staging, and production claims separate.
+
+- Local tests prove application rules with fake or stubbed storage.
+- The recorded September 30 staging check proves a narrow set of real R2 upload behaviors for the deployed version tested that day.
+- Browser CORS, current signed downloads, parent-authorized streaming, and cleanup still need their own dated staging evidence.
+- The repository documentation does not record a production media deployment.
+
+When signing, validation, CORS, token scope, or cleanup code changes, repeat the matching staging checks. Record the tested commit and sanitized result without storing credentials, signed URLs, object keys, or personal media.

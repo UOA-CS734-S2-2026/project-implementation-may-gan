@@ -7,7 +7,12 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   const password = "e2e-password-123";
 
   await page.goto("/");
-  await page.getByRole("link", { name: /sign up/i }).click();
+  const signUpLink = page.getByRole("link", { name: /sign up/i });
+  await expect(signUpLink).toHaveAttribute("href", "/sign-up");
+  await Promise.all([
+    page.waitForURL(/\/sign-up$/, { waitUntil: "domcontentloaded" }),
+    signUpLink.click(),
+  ]);
   await expect(page).toHaveURL(/\/sign-up$/);
 
   await page.getByLabel("Username").fill(username);
@@ -33,6 +38,18 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   // Settings has no navigation link yet, so enter its URL without bypassing auth.
   await page.goto("/settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+
+  let exportApiCalls = 0;
+  page.on("request", (request) => {
+    if (/\/api\/v1\/account\/export(?:\/|\?|$)/.test(request.url())) exportApiCalls++;
+  });
+  await page.goto("/account/export");
+  await expect(page.getByText("Account exports are not available yet.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request export" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /download/i })).toHaveCount(0);
+  expect(exportApiCalls).toBe(0);
+
+  await page.goto("/settings");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).not.toHaveURL(/\/settings$/);
   await page.goto("/settings");

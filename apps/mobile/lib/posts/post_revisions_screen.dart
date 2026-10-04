@@ -4,6 +4,7 @@ import '../api/api_failure.dart';
 import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -30,24 +31,90 @@ class _PostRevisionsScreenState extends State<PostRevisionsScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   ApiFailure? _failure;
+  SessionController? _session;
+  ModalRoute<dynamic>? _overlayRoute;
+  (SessionStatus, String?, int)? _openingIdentity;
+  int _requestGeneration = 0;
+  bool _started = false;
+  bool _dismissed = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_loading && _revisions.isEmpty && _failure == null) _load();
+    _overlayRoute ??= ModalRoute.of(context);
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+      _openingIdentity ??= _currentIdentity();
+    }
+    _onSessionChanged();
+    if (!_dismissed && !_started) {
+      _started = true;
+      _load();
+    }
+  }
+
+  (SessionStatus, String?, int) _currentIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentRequest(
+    int requestGeneration,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      !_dismissed &&
+      requestGeneration == _requestGeneration &&
+      identity == _openingIdentity &&
+      identity == _currentIdentity();
+
+  void _onSessionChanged() {
+    if (!mounted || _dismissed || _openingIdentity == _currentIdentity()) {
+      return;
+    }
+    _dismissed = true;
+    _requestGeneration++;
+    _revisions.clear();
+    _nextCursor = null;
+    _failure = null;
+    _closeOverlay();
+  }
+
+  void _closeOverlay() {
+    final route = _overlayRoute;
+    final navigator = Navigator.of(context);
+    if (route == null) {
+      navigator.pop();
+      return;
+    }
+    navigator.popUntil((candidate) => candidate == route);
+    if (route.isCurrent) navigator.pop();
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    _requestGeneration++;
+    _revisions.clear();
+    super.dispose();
   }
 
   Future<void> _load({String? cursor}) async {
     final services = AppScope.of(context);
+    final identity = _currentIdentity();
+    final requestGeneration = ++_requestGeneration;
     final result = await services.posts.revisions(
       widget.postId,
       cursor: cursor,
     );
-    if (!mounted) return;
+    if (!_isCurrentRequest(requestGeneration, identity)) return;
     if (result case ApiError(failure: Unauthenticated())) {
       await services.session.sessionExpired();
       return;
     }
+    if (!_isCurrentRequest(requestGeneration, identity)) return;
     setState(() {
       _loading = false;
       _loadingMore = false;

@@ -34,6 +34,23 @@ Collections are defined with the [Macro API](https://fumadocs.dev/docs/mdx/macro
 
 Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
 
+## Mermaid diagrams
+
+Use fenced `mermaid` blocks in documentation files to draw architecture and system flows:
+
+````md
+```mermaid
+flowchart LR
+  Web[Web app] --> API[Shared Dayli API]
+  Mobile[Mobile app] --> API
+  API --> Database[(PostgreSQL)]
+```
+````
+
+Use flowcharts for architecture, sequence diagrams for request flows, and state diagrams for lifecycles. Put the diagram in the page that explains the system, with a short explanation of what it shows.
+
+`lib/source.ts` converts these blocks into the `Mermaid` component registered in `components/mdx.tsx`. The renderer loads in the browser, follows the site's light or dark theme, and uses Mermaid's strict security mode. If a diagram has invalid syntax, the page shows its source instead of failing.
+
 ## Cloudflare deployment
 
 From the repository root, run `pnpm --filter docs preview:cloudflare` to check the built Worker locally. `pnpm --filter docs deploy:cloudflare` deploys the `dayli-docs` Worker from your machine. The public docs live at `/docs`, not `/`.

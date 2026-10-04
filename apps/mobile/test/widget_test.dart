@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fakes.dart';
+import 'support/compose_actions.dart';
 
 class SocialFriendsClient extends FakeFriendsClient {
   SocialFriendsClient({required this.pages, this.discovered});
@@ -835,7 +836,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await addFromLibrary(tester, 0);
     await tester.pumpAndSettle();
     expect(find.textContaining('1/3 added'), findsOneWidget);
     await tester.scrollUntilVisible(
@@ -1059,7 +1060,7 @@ void main() {
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await addFromLibrary(tester, 0);
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel("Photo, couldn't be uploaded"), findsOne);
     expect(
@@ -1103,7 +1104,7 @@ void main() {
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await addFromLibrary(tester, 0);
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('landing.sign-in')), findsOneWidget);
@@ -1134,7 +1135,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await addFromLibrary(tester, 0);
     await tester.pumpAndSettle();
     expect(harness.mediaCompressor.owners, ['user-1']);
 
@@ -1180,7 +1181,7 @@ void main() {
     await tester.tap(find.byKey(const Key('shell.newDayli')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const Key('composer.media.0')));
+    await addFromLibrary(tester, 0);
     await tester.pumpAndSettle();
 
     // Nothing is compressed or sent to storage that a post couldn't link.

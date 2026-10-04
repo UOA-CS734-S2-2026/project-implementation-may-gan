@@ -62,6 +62,10 @@ class ReportingPostClient implements PostClient {
       _inner.media(postId, mediaId);
 
   @override
+  Future<ApiResult<PostVoiceMemo>> voiceMemo(String postId) =>
+      _inner.voiceMemo(postId);
+
+  @override
   Future<ApiResult<PostDetail>> update(String postId, PostEdit edit) =>
       _inner.update(postId, edit);
 

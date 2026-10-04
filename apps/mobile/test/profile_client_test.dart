@@ -72,6 +72,56 @@ void main() {
     expect(profile.streak?.postedToday, isTrue);
   });
 
+  test('reads the anonymous public projection without a bearer', () async {
+    final result = await client(
+      (_) => http.Response(
+        jsonEncode({
+          'kind': 'public',
+          'username': 'ada',
+          'displayName': 'Ada',
+          'bio': 'Public bio.',
+          'avatarUrl': 'https://api.example.test/api/v1/profiles/ada/avatar',
+          'streak': {
+            'current': 2,
+            'longest': 4,
+            'lastPostDate': '2026-09-30',
+            'postedToday': true,
+            'asOf': '2026-09-30',
+          },
+        }),
+        200,
+      ),
+      token: null,
+    ).details('ada');
+
+    final profile = (result as ApiSuccess<ProfileDetails>).value;
+    expect(requests.single.headers['authorization'], isNull);
+    expect(profile.projection, ProfileProjection.public);
+    expect(profile.id, isNull);
+    expect(profile.displayName, 'Ada');
+  });
+
+  test('keeps only the username from a restricted projection', () async {
+    final result = await client(
+      (_) => http.Response(
+        jsonEncode({
+          'kind': 'restricted',
+          'username': 'private_one',
+          'id': 'must-not-enter-client-state',
+          'displayName': 'Must not render',
+        }),
+        200,
+      ),
+      token: null,
+    ).details('private_one');
+
+    final profile = (result as ApiSuccess<ProfileDetails>).value;
+    expect(profile.projection, ProfileProjection.restricted);
+    expect(profile.id, isNull);
+    expect(profile.displayName, isNull);
+    expect(profile.bio, isNull);
+  });
+
   test('sends only the fields being changed', () async {
     await client(
       (_) => http.Response(

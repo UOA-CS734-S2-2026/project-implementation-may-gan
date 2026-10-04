@@ -2,13 +2,16 @@
   "title": "Development",
   "defaultOpen": true,
   "pages": [
+    "tech-stack",
     "local-setup",
+    "environments",
     "repository-structure",
     "backend-architecture",
     "web-app",
     "mobile-app",
     "database",
     "api-contracts-and-generated-clients",
-    "testing-and-contributing"
+    "testing",
+    "contributing"
   ]
 }

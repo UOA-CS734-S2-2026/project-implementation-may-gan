@@ -53,3 +53,46 @@ class PostMedia {
   @override
   String toString() => 'PostMedia($id, $contentType)';
 }
+
+/// A post's voice memo with a private download URL, like [PostMedia]: the URL
+/// works for anyone who has it until [expiresAt], so never log or store it.
+class PostVoiceMemo {
+  const PostVoiceMemo({
+    required this.id,
+    required this.contentType,
+    required this.url,
+    required this.expiresAt,
+  });
+
+  final String id;
+  final String contentType;
+
+  /// Null when media storage is unavailable.
+  final Uri? url;
+
+  /// Null for a URL that checks access on every request instead of expiring.
+  final DateTime? expiresAt;
+
+  static PostVoiceMemo? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final id = json['id'];
+    final contentType = json['contentType'];
+    final url = json['url'];
+    if (id is! String ||
+        contentType is! String ||
+        (url != null && url is! String)) {
+      return null;
+    }
+    final uri = url is String ? Uri.tryParse(url) : null;
+    return PostVoiceMemo(
+      id: id,
+      contentType: contentType,
+      // Only HTTPS is ever signed; anything else is treated as unavailable.
+      url: uri != null && uri.isScheme('https') ? uri : null,
+      expiresAt: DateTime.tryParse('${json['expiresAt']}'),
+    );
+  }
+
+  @override
+  String toString() => 'PostVoiceMemo($id, $contentType)';
+}

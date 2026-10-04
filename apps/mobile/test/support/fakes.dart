@@ -17,6 +17,8 @@ import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/compose/media_compressor.dart';
 import 'package:dayli_mobile/compose/media_picker.dart';
+import 'package:dayli_mobile/compose/pending_capture.dart';
+import 'package:dayli_mobile/compose/voice_recorder.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/drafts/draft_store.dart';
 import 'package:dayli_mobile/posts/post_activity.dart';
@@ -25,9 +27,13 @@ import 'package:dayli_mobile/settings/account_export_client.dart';
 import 'package:dayli_mobile/profile/streak_cache.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
+
+import 'voice_fakes.dart';
 
 class FakeFriendsClient implements FriendsClient {
   static const emptyFriends = FriendPage(
@@ -118,6 +124,19 @@ class MemoryUserCache implements SessionUserCache {
   Future<void> write(SessionUser user) async => value = user;
 }
 
+class MemoryPendingCaptureStore implements PendingCaptureStore {
+  PendingCapture? value;
+
+  @override
+  Future<void> clear() async => value = null;
+
+  @override
+  Future<PendingCapture?> read() async => value;
+
+  @override
+  Future<void> write(PendingCapture capture) async => value = capture;
+}
+
 class MemoryDraftStore implements DraftStore {
   final drafts = <String, DailyPostDraft>{};
   int writes = 0;
@@ -138,12 +157,66 @@ class MemoryDraftStore implements DraftStore {
 
 class FakeMediaPicker implements MediaPicker {
   var picks = 0;
+  var captures = 0;
+  var settingsOpened = 0;
+
+  /// Queue outcomes to script the camera; otherwise each capture succeeds.
+  final captureOutcomes = <CaptureOutcome>[];
+
+  /// What [recoverLostCapture] returns once.
+  DraftAttachment? lostCapture;
+
+  /// Runs while the camera or library is open, so a test can see what the app
+  /// recorded about the pick before the result came back.
+  void Function()? whileOpen;
 
   @override
-  Future<DraftAttachment?> pickPhoto() async => _next();
+  Future<DraftAttachment?> pickPhoto() async {
+    whileOpen?.call();
+    return _next();
+  }
 
   @override
-  Future<DraftAttachment?> pickPhotoOrVideo() async => _next();
+  Future<DraftAttachment?> pickPhotoOrVideo() async {
+    whileOpen?.call();
+    return _next();
+  }
+
+  @override
+  Future<CaptureOutcome> capturePhoto() async {
+    whileOpen?.call();
+    return _capture('image', 'jpg');
+  }
+
+  @override
+  Future<CaptureOutcome> captureVideo() async {
+    whileOpen?.call();
+    return _capture('video', 'mp4');
+  }
+
+  @override
+  Future<DraftAttachment?> recoverLostCapture() async {
+    final lost = lostCapture;
+    lostCapture = null;
+    return lost;
+  }
+
+  @override
+  Future<bool> openSettings() async {
+    settingsOpened++;
+    return true;
+  }
+
+  CaptureOutcome _capture(String mediaType, String extension) {
+    final number = captures++;
+    if (captureOutcomes.isNotEmpty) return captureOutcomes.removeAt(0);
+    return Captured(
+      DraftAttachment(
+        localPath: '/camera/$number.$extension',
+        mediaType: mediaType,
+      ),
+    );
+  }
 
   DraftAttachment _next() =>
       DraftAttachment(localPath: '/photos/${picks++}.jpg', mediaType: 'image');
@@ -335,6 +408,18 @@ class FakePostClient implements PostClient {
         : mediaResults.removeAt(0);
   }
 
+  /// Voice memo refresh results in order; refused once they run out.
+  final voiceMemoResults = <ApiResult<PostVoiceMemo>>[];
+  final refreshedVoiceMemos = <String>[];
+
+  @override
+  Future<ApiResult<PostVoiceMemo>> voiceMemo(String postId) async {
+    refreshedVoiceMemos.add(postId);
+    return voiceMemoResults.isEmpty
+        ? const ApiError(NotFound())
+        : voiceMemoResults.removeAt(0);
+  }
+
   /// Edit results in order; the last repeats.
   final updateResults = <ApiResult<PostDetail>>[
     const ApiError(ServiceUnavailable()),
@@ -368,12 +453,16 @@ class FakePostClient implements PostClient {
   ];
   final revisionRequests = <(String, String?)>[];
 
+  /// Completes revision reads when set, so tests can switch session mid-load.
+  Completer<void>? holdRevisions;
+
   @override
   Future<ApiResult<PostPage<PostRevision>>> revisions(
     String postId, {
     String? cursor,
   }) async {
     revisionRequests.add((postId, cursor));
+    await holdRevisions?.future;
     return revisionResults.length > 1
         ? revisionResults.removeAt(0)
         : revisionResults.single;
@@ -417,6 +506,7 @@ PostDetail postDetail(
   int revisionCount = 0,
   int rating = 8,
   List<PostMedia> media = const [],
+  PostVoiceMemo? voiceMemo,
 }) => PostDetail(
   id: id,
   authorId: 'author-$id',
@@ -433,6 +523,18 @@ PostDetail postDetail(
   viewerIsAuthor: viewerIsAuthor,
   revisionCount: revisionCount,
   media: media,
+  voiceMemo: voiceMemo,
+);
+
+/// A signed voice memo for widget tests.
+PostVoiceMemo voiceMemoOfPost({
+  String id = 'vm-1',
+  String url = 'https://storage.example.test/vm-1?sig=1',
+}) => PostVoiceMemo(
+  id: id,
+  contentType: 'audio/mp4',
+  url: Uri.parse(url),
+  expiresAt: DateTime.utc(2026, 9, 30, 3, 5),
 );
 
 class FakePostingDayClient implements PostingDayClient {
@@ -493,6 +595,7 @@ class TestHarness {
     this.accountExports,
     FakeProfileClient? profiles,
     FakeInteractionsClient? interactions,
+    this.google,
   }) : friends = friends ?? FakeFriendsClient(),
        interactions = interactions ?? FakeInteractionsClient(),
        profiles = profiles ?? FakeProfileClient(),
@@ -551,6 +654,13 @@ class TestHarness {
           _ => http.Response('{}', 200, headers: {'set-auth-token': 'token-1'}),
         };
       }
+      if (path.endsWith('/sign-in/social')) {
+        return http.Response(
+          '{}',
+          200,
+          headers: {'set-auth-token': 'google-token'},
+        );
+      }
       if (path.endsWith('/sign-in/email')) {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         if (body['email'] == 'busy@example.test') {
@@ -561,6 +671,20 @@ class TestHarness {
             : http.Response('{}', 401);
       }
       if (path.endsWith('/get-session')) {
+        if (request.headers['authorization'] == 'Bearer google-token') {
+          return http.Response(
+            jsonEncode({
+              'user': {
+                'id': 'google-user',
+                'name': 'Provider Name',
+                'email': 'google@example.test',
+                'username': null,
+              },
+              'session': {'id': 'google-session'},
+            }),
+            200,
+          );
+        }
         return request.headers['authorization'] == 'Bearer token-1'
             ? http.Response(
                 jsonEncode({
@@ -575,6 +699,9 @@ class TestHarness {
                 200,
               )
             : http.Response('null', 200);
+      }
+      if (path.endsWith('/api/v1/profile/username')) {
+        return http.Response('{}', 200);
       }
       if (path.endsWith('/sign-out')) return http.Response('{}', 200);
       return http.Response('{}', 404);
@@ -606,6 +733,22 @@ class TestHarness {
   final FriendsClient friends;
   final FakeSubmitter submitter;
   final mediaPicker = FakeMediaPicker();
+  final pendingStore = MemoryPendingCaptureStore();
+
+  /// The voice memo recorder, its microphone permission, and its files.
+  final voiceRecorder = FakeVoiceRecorder();
+  final microphone = FakeMicrophonePermission(
+    current: PermissionStatus.granted,
+  );
+  final voiceFiles = FakeVoiceMemoFiles();
+
+  /// Files the app removed because no one could claim them.
+  final deletedFiles = <String>[];
+  late final pendingCaptures = PendingCaptures(
+    store: pendingStore,
+    deleteFile: (path) async => deletedFiles.add(path),
+    clock: () => DateTime.utc(2026, 9, 25, 3),
+  );
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
 
@@ -613,6 +756,7 @@ class TestHarness {
   final bool uploadMedia;
   final bool effectiveTerms;
   final AccountExportClient? accountExports;
+  final GoogleIdTokenProvider? google;
   int legalProofRequests = 0;
   List<String?>? signupProofHeaders;
   late final SessionController session;
@@ -629,10 +773,19 @@ class TestHarness {
     drafts: drafts,
     submitter: submitter,
     mediaPicker: mediaPicker,
+    pendingCaptures: pendingCaptures,
+    voiceMemos: VoiceMemoServices(
+      createRecorder: () => voiceRecorder,
+      permission: microphone,
+      files: voiceFiles,
+      // Widget tests move fake time, not the wall clock.
+      clock: () => TestWidgetsFlutterBinding.ensureInitialized().clock.now(),
+    ),
     mediaCompressor: mediaCompressor,
     mediaUploads: uploadMedia ? mediaUploads : null,
     streakCache: streakCache,
     postActivity: postActivity,
+    google: google,
     clock: () => DateTime.utc(2026, 9, 25, 3),
   );
 }
@@ -643,6 +796,13 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
   final sources = <String?>[];
   final calls = <String>[];
   var failures = 0;
+
+  /// How long every new player reports its media to be.
+  var mediaDuration = const Duration(seconds: 10);
+
+  /// What [getPosition] answers, which the player polls while playing.
+  var position = Duration.zero;
+  final seeks = <Duration>[];
   var _nextId = 0;
   final _events = <int, StreamController<VideoEvent>>{};
 
@@ -663,7 +823,7 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
       events.add(
         VideoEvent(
           eventType: VideoEventType.initialized,
-          duration: const Duration(seconds: 10),
+          duration: mediaDuration,
           size: const Size(1080, 1920),
         ),
       );
@@ -692,10 +852,17 @@ class FakeVideoPlatform extends VideoPlayerPlatform {
   Future<void> setPlaybackSpeed(int playerId, double speed) async {}
 
   @override
-  Future<void> seekTo(int playerId, Duration position) async {}
+  Future<void> seekTo(int playerId, Duration position) async {
+    seeks.add(position);
+    this.position = position;
+  }
 
   @override
-  Future<Duration> getPosition(int playerId) async => Duration.zero;
+  Future<Duration> getPosition(int playerId) async => position;
+
+  /// Tells the player the media played to its end.
+  void finish(int playerId) =>
+      _events[playerId]?.add(VideoEvent(eventType: VideoEventType.completed));
 
   @override
   Future<void> setMixWithOthers(bool mixWithOthers) async {}

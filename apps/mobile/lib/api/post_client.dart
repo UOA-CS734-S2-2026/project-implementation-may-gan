@@ -31,6 +31,7 @@ class PostDetail {
     this.viewerHasLiked = false,
     this.commentCount = 0,
     this.media = const [],
+    this.voiceMemo,
   });
 
   final String id;
@@ -66,6 +67,10 @@ class PostDetail {
   /// Attached photos or video in display order.
   final List<PostMedia> media;
 
+  /// The post's voice memo, or null. Only post detail carries it: feeds and
+  /// profile lists do not, so their cards never play audio.
+  final PostVoiceMemo? voiceMemo;
+
   /// This post with new interaction counts.
   PostDetail copyWith({
     int? likeCount,
@@ -90,6 +95,7 @@ class PostDetail {
     viewerHasLiked: viewerHasLiked ?? this.viewerHasLiked,
     commentCount: commentCount ?? this.commentCount,
     media: media,
+    voiceMemo: voiceMemo,
   );
 
   static PostDetail? tryParse(Object? json) {
@@ -143,6 +149,7 @@ class PostDetail {
       viewerHasLiked: json['viewerHasLiked'] == true,
       commentCount: _count(json['commentCount']),
       media: PostMedia.parseList(json['media']),
+      voiceMemo: PostVoiceMemo.tryParse(json['voiceMemo']),
     );
   }
 }
@@ -291,6 +298,10 @@ abstract interface class PostClient {
   /// A fresh download URL for one attachment whose earlier URL expired.
   Future<ApiResult<PostMedia>> media(String postId, String mediaId);
 
+  /// A fresh download URL for a post's voice memo whose earlier URL expired.
+  /// [NotFound] when the post has none or may not be read.
+  Future<ApiResult<PostVoiceMemo>> voiceMemo(String postId);
+
   /// Saves the author's edit and returns the post as it is now. [Conflict]
   /// means another edit was saved after [PostEdit.expectedRevisionCount].
   Future<ApiResult<PostDetail>> update(String postId, PostEdit edit);
@@ -323,9 +334,9 @@ class GeneratedPostClient implements PostClient {
   @override
   Future<ApiResult<PostDetail>> get(String postId) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -369,9 +380,9 @@ class GeneratedPostClient implements PostClient {
     String? cursor,
   }) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -414,9 +425,9 @@ class GeneratedPostClient implements PostClient {
   @override
   Future<ApiResult<PostMedia>> media(String postId, String mediaId) async {
     final token = await _bearerToken();
-    if (token == null) return const ApiError(Unauthenticated());
-
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -453,6 +464,50 @@ class GeneratedPostClient implements PostClient {
     return media == null || media.url == null
         ? const ApiError(ServiceUnavailable())
         : ApiSuccess(media);
+  }
+
+  @override
+  Future<ApiResult<PostVoiceMemo>> voiceMemo(String postId) async {
+    final token = await _bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final client = generated.ApiClient(
+      basePath: _baseUrl,
+      authentication: auth,
+    );
+    if (_httpClient != null) client.client = _httpClient;
+
+    final http.Response response;
+    try {
+      response = await generated.PostsApi(
+        client,
+      ).postsGetVoiceMemoWithHttpInfo(postId);
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+
+    final status = response.statusCode;
+    // A missing, detached, or unreadable voice memo is always 404.
+    if (status == HttpStatus.notFound ||
+        status == HttpStatus.unprocessableEntity) {
+      return const ApiError(NotFound());
+    }
+    if (status != HttpStatus.ok) {
+      return ApiError(failureForStatus(status, null));
+    }
+    final Object? json;
+    try {
+      json = jsonDecode(response.body);
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    }
+    final memo = PostVoiceMemo.tryParse(json);
+    return memo == null || memo.url == null
+        ? const ApiError(ServiceUnavailable())
+        : ApiSuccess(memo);
   }
 
   @override

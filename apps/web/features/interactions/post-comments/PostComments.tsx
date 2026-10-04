@@ -94,6 +94,7 @@ function CommentComposer({
           }}
           rows={2}
           placeholder={label}
+          data-composer={parentCommentId ? undefined : "post-comment"}
           className={field}
         />
       </label>

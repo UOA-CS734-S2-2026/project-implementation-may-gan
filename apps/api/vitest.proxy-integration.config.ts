@@ -48,6 +48,6 @@ export default defineConfig({
   })],
   test: {
     name: "proxy-integration",
-    include: ["test/browser-proxy.workerd.test.ts"],
+    include: ["test/__tests__/browser-proxy.workerd.test.ts"],
   },
 });

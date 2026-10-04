@@ -148,4 +148,172 @@ void main() {
     final restored = (await ProtectedDraftStore().read('user-1')).draft!;
     expect(restored.attachments.single.toJson(), validated.toJson());
   });
+
+  group('a voice memo', () {
+    const memo = DraftAttachment(
+      localPath: '/support/dayli-media/user-1/memo.m4a',
+      mediaType: 'audio',
+      compressedPath: '/support/dayli-media/user-1/memo.m4a',
+      contentType: 'audio/mp4',
+      byteSize: 400000,
+      durationMs: 21000,
+      waveform: [10, 90, 200, 40],
+      reservationId: 'reservation-1',
+      status: AttachmentUploadStatus.validated,
+    );
+
+    test('is told apart from photos and video', () {
+      expect(memo.isVoiceMemo, isTrue);
+      expect(picked.isVoiceMemo, isFalse);
+      expect(DraftAttachment.voiceMemoMediaType, 'audio');
+    });
+
+    test('keeps its length and waveform through storage', () {
+      final restored = DraftAttachment.fromJson(
+        jsonDecode(jsonEncode(memo.toJson())),
+      );
+
+      expect(restored, memo);
+      expect(restored!.durationMs, 21000);
+      expect(restored.waveform, [10, 90, 200, 40]);
+      expect(restored.status, AttachmentUploadStatus.validated);
+    });
+
+    test(
+      'writes neither field for a photo, so older readers see no change',
+      () {
+        final json = validated.toJson();
+
+        expect(json.containsKey('durationMs'), isFalse);
+        expect(json.containsKey('waveform'), isFalse);
+      },
+    );
+
+    test('loads a draft saved before voice memos existed', () {
+      final restored = DraftAttachment.fromJson(validated.toJson());
+
+      expect(restored!.durationMs, isNull);
+      expect(restored.waveform, isNull);
+      expect(restored, validated);
+    });
+
+    test('drops a malformed length or waveform without losing the memo', () {
+      for (final bad in [
+        {'durationMs': 0},
+        {'durationMs': -5},
+        {'durationMs': '21000'},
+        {
+          'waveform': [10, 300],
+        },
+        {
+          'waveform': [10, -1],
+        },
+        {
+          'waveform': [10, 'loud'],
+        },
+        {
+          'waveform': [10.5, 20],
+        },
+        {'waveform': 'loud'},
+      ]) {
+        final restored = DraftAttachment.fromJson({...memo.toJson(), ...bad})!;
+
+        expect(restored.localPath, memo.localPath, reason: '$bad');
+        expect(restored.reservationId, 'reservation-1', reason: '$bad');
+        expect(
+          restored.status,
+          AttachmentUploadStatus.validated,
+          reason: '$bad',
+        );
+        if (bad.containsKey('durationMs')) {
+          expect(restored.durationMs, isNull, reason: '$bad');
+          expect(restored.waveform, [10, 90, 200, 40], reason: '$bad');
+        } else {
+          expect(restored.waveform, isNull, reason: '$bad');
+          expect(restored.durationMs, 21000, reason: '$bad');
+        }
+      }
+    });
+
+    test('compares by value, including the waveform', () {
+      final same = DraftAttachment.fromJson(memo.toJson())!;
+      final other = DraftAttachment.fromJson({
+        ...memo.toJson(),
+        'waveform': [10, 90, 200, 41],
+      })!;
+
+      expect(same, memo);
+      expect(same.hashCode, memo.hashCode);
+      expect(other, isNot(memo));
+    });
+
+    test('copying keeps its length and waveform', () {
+      final copy = memo.copyWith(status: AttachmentUploadStatus.failed);
+
+      expect(copy.durationMs, 21000);
+      expect(copy.waveform, [10, 90, 200, 40]);
+    });
+
+    group('forgetting its reservation', () {
+      test('resets the upload state and keeps everything else', () {
+        final again = memo.withoutReservation();
+
+        expect(again.reservationId, isNull);
+        expect(again.status, AttachmentUploadStatus.pending);
+        expect(again.failureReason, isNull);
+        expect(again.localPath, memo.localPath);
+        expect(again.compressedPath, memo.compressedPath);
+        expect(again.contentType, 'audio/mp4');
+        expect(again.byteSize, 400000);
+        expect(again.durationMs, 21000);
+        expect(again.waveform, [10, 90, 200, 40]);
+      });
+
+      test('clears a rejection too, so the next try is clean', () {
+        final failed = memo.copyWith(
+          status: AttachmentUploadStatus.failed,
+          failureReason: () => 'malformed_container',
+        );
+
+        final again = failed.withoutReservation();
+
+        expect(again.status, AttachmentUploadStatus.pending);
+        expect(again.failureReason, isNull);
+        expect(again.durationMs, 21000);
+        expect(again.waveform, [10, 90, 200, 40]);
+      });
+
+      test('does the same for a photo', () {
+        final again = validated.withoutReservation();
+
+        expect(again.reservationId, isNull);
+        expect(again.status, AttachmentUploadStatus.pending);
+        expect(again.compressedPath, validated.compressedPath);
+        expect(again.byteSize, validated.byteSize);
+      });
+    });
+
+    group('restarting', () {
+      test('keeps the recording, which is never recompressed', () {
+        final again = memo.restarted();
+
+        expect(again.compressedPath, memo.compressedPath);
+        expect(again.contentType, 'audio/mp4');
+        expect(again.byteSize, 400000);
+        expect(again.durationMs, 21000);
+        expect(again.waveform, [10, 90, 200, 40]);
+        expect(again.reservationId, isNull);
+        expect(again.status, AttachmentUploadStatus.pending);
+      });
+
+      test('still starts a photo over from compression', () {
+        final again = validated.restarted();
+
+        expect(again.compressedPath, isNull);
+        expect(again.contentType, isNull);
+        expect(again.byteSize, isNull);
+        expect(again.reservationId, isNull);
+      });
+    });
+  });
 }

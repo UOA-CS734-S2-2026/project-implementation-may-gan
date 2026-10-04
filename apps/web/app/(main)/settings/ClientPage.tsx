@@ -27,6 +27,7 @@ export default function SettingsPage() {
     void getUsernameProfile().then((profile) => setUsername(profile.username ?? undefined));
   }, [user]);
   const profile = useProfileDetailsQuery(username);
+  const authorizedProfile = profile.data?.kind === "authorized" ? profile.data : undefined;
 
   if (isPending || !user) return null;
 
@@ -46,13 +47,13 @@ export default function SettingsPage() {
           {/* <Row label="Role" value={user.role ?? "user"} /> */}
         </div>
 
-        {profile.data?.owner ? (
+        {authorizedProfile?.owner ? (
           <>
             {/* Keyed so the forms start from the saved values after each change. */}
-            <AvatarForm profile={profile.data} />
-            <EditProfileForm key={[profile.data.displayName, profile.data.bio, profile.data.mbti, profile.data.whatIDo, profile.data.listeningTo].join("|")} profile={profile.data} />
-            <ChangeUsernameForm key={profile.data.username} profile={profile.data} />
-            <ProfileVisibilityToggle visibility={profile.data.owner.profileVisibility} />
+            <AvatarForm profile={authorizedProfile} />
+            <EditProfileForm key={[authorizedProfile.displayName, authorizedProfile.bio, authorizedProfile.mbti, authorizedProfile.whatIDo, authorizedProfile.listeningTo].join("|")} profile={authorizedProfile} />
+            <ChangeUsernameForm key={authorizedProfile.username} profile={authorizedProfile} />
+            <ProfileVisibilityToggle visibility={authorizedProfile.owner.profileVisibility} />
           </>
         ) : (
           <p className="text-sm text-foreground/60">{profile.isError ? "Your profile couldn't be loaded." : "Loading your profile…"}</p>
