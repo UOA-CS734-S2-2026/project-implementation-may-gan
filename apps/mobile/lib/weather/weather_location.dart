@@ -33,7 +33,11 @@ abstract interface class LocationAccess {
   /// Whether location is switched on for the whole device.
   Future<bool> servicesEnabled();
 
+  /// Opens this app's page in Settings, where location can be turned back on.
   Future<void> openSettings();
+
+  /// Opens the device's location switch, for when location is off everywhere.
+  Future<void> openLocationSettings();
 
   /// One approximate position. Throws a `WeatherException` when the phone
   /// cannot supply it. It never keeps listening.
@@ -68,6 +72,11 @@ class DeviceLocationAccess implements LocationAccess {
   @override
   Future<void> openSettings() async {
     await Geolocator.openAppSettings();
+  }
+
+  @override
+  Future<void> openLocationSettings() async {
+    await Geolocator.openLocationSettings();
   }
 
   @override

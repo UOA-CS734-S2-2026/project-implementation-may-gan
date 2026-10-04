@@ -9,6 +9,7 @@ import '../drafts/daily_post_draft.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
 import '../ui/post_inputs.dart';
+import '../weather/weather_lookup.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
@@ -16,6 +17,8 @@ import 'media_picker.dart';
 import 'media_upload_controller.dart';
 import 'voice_memo_input.dart';
 import 'voice_memo_recorder.dart';
+import 'weather_input.dart';
+import 'weather_input_controller.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
 /// rating, the words, a note to tomorrow, and who can see it, with the Post
@@ -48,6 +51,9 @@ class _ComposerScreenState extends State<ComposerScreen>
   /// Records the voice memo. Null when this build doesn't upload media, since
   /// a memo can't be posted without uploading it.
   VoiceMemoRecorderController? _voice;
+
+  /// Adds the weather. Nothing in it runs until the author taps.
+  WeatherInputController? _weather;
   final _answer = TextEditingController();
   final _caption = TextEditingController();
   final _tomorrowNote = TextEditingController();
@@ -98,6 +104,14 @@ class _ComposerScreenState extends State<ComposerScreen>
           ..addListener(_syncText)
           ..addListener(_applyLinkedRating);
     _pendingRating = widget.initialRating;
+    _weather = WeatherInputController(
+      lookup: WeatherLookup(
+        provider: services.weather.createProvider(),
+        location: services.weather.location,
+        placeNamer: services.weather.placeNamer,
+      ),
+      onWeather: (weather) => _controller?.update(weather: () => weather),
+    );
     final uploads = services.mediaUploads;
     if (uploads != null) {
       _voice = VoiceMemoRecorderController(
@@ -174,6 +188,7 @@ class _ComposerScreenState extends State<ComposerScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _voice?.dispose();
+    _weather?.dispose();
     _uploads?.dispose();
     _controller
       ?..removeListener(_syncText)
@@ -394,6 +409,45 @@ class _ComposerScreenState extends State<ComposerScreen>
       ),
     );
     return agreed ?? false;
+  }
+
+  /// Explains first, then does what the author picks. The system's location
+  /// prompt can only follow "Use my location" in that explanation.
+  Future<void> _addWeather() async {
+    final weather = _weather;
+    if (weather == null) return;
+    weather.dismissFailure();
+    final choice = await showWeatherChoiceSheet(context);
+    if (!mounted) return;
+    switch (choice) {
+      case WeatherChoice.location:
+        await weather.useCurrentLocation();
+      case WeatherChoice.place:
+        await _chooseWeatherPlace();
+      case null:
+        break;
+    }
+  }
+
+  Future<void> _chooseWeatherPlace() async {
+    final weather = _weather;
+    if (weather == null) return;
+    final place = await showPlaceSearchSheet(
+      context,
+      search: weather.searchPlaces,
+    );
+    if (place == null || !mounted) return;
+    await weather.usePlace(place);
+  }
+
+  Widget _weatherSection(ComposerController controller, DailyPostDraft draft) {
+    return WeatherInput(
+      controller: _weather!,
+      weather: draft.weather,
+      onAdd: () => unawaited(_addWeather()),
+      onRemove: () => controller.update(weather: () => null),
+      onChoosePlace: () => unawaited(_chooseWeatherPlace()),
+    );
   }
 
   Widget _voiceMemo(
@@ -629,6 +683,9 @@ class _ComposerScreenState extends State<ComposerScreen>
             ),
           ),
         ],
+        const SizedBox(height: 28),
+        const _SectionLabel('the weather'),
+        _Lockable(locked: locked, child: _weatherSection(controller, draft)),
         const SizedBox(height: 28),
         _SectionLabel(
           'rate your day',

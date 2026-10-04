@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dayli_mobile/weather/coordinates.dart';
 import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:dayli_mobile/weather/weather_failure.dart';
@@ -24,9 +26,13 @@ class FakeWeatherProvider implements WeatherProvider {
   final List<Coordinates> readings = [];
   final List<String> searches = [];
 
+  /// When set, a reading waits for this before it answers.
+  Completer<void>? hold;
+
   @override
   Future<WeatherReading> currentWeather(Coordinates coordinates) async {
     readings.add(coordinates);
+    await hold?.future;
     if (failure != null) throw WeatherException(failure!);
     return reading;
   }
@@ -61,6 +67,7 @@ class FakeLocationAccess implements LocationAccess {
   int requests = 0;
   int positions = 0;
   int settingsOpened = 0;
+  int locationSettingsOpened = 0;
 
   @override
   Future<LocationPermissionStatus> status() async => permission;
@@ -77,6 +84,9 @@ class FakeLocationAccess implements LocationAccess {
 
   @override
   Future<void> openSettings() async => settingsOpened++;
+
+  @override
+  Future<void> openLocationSettings() async => locationSettingsOpened++;
 
   @override
   Future<Coordinates> currentPosition() async {

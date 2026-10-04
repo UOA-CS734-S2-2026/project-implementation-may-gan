@@ -19,8 +19,9 @@ import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
 import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
-import '../settings/account_export_client.dart';
 import '../profile/streak_cache.dart';
+import '../settings/account_export_client.dart';
+import '../weather/weather_lookup.dart';
 
 /// Application-wide services, provided once above the router.
 class AppServices {
@@ -41,6 +42,7 @@ class AppServices {
     this.mediaPicker = const DeviceMediaPicker(),
     PendingCaptures? pendingCaptures,
     this.voiceMemos = const VoiceMemoServices(),
+    this.weather = const WeatherServices(),
     this.mediaUploads,
     MediaCompressor? mediaCompressor,
     StreakCache? streakCache,
@@ -88,6 +90,10 @@ class AppServices {
   /// Recording a voice memo: the microphone, its permission, and where the
   /// recording is written.
   final VoiceMemoServices voiceMemos;
+
+  /// Adding weather to a post: the weather provider, the phone's location, and
+  /// its place lookup.
+  final WeatherServices weather;
 
   /// Null keeps picked media on the device without uploading it.
   final MediaUploadClient? mediaUploads;
