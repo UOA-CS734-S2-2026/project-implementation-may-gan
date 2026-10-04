@@ -31,18 +31,20 @@ The composer asks for:
 
 Dayli stores tomorrow notes, but there is no screen for reading them yet. Reading a note from the next day is planned.
 
-## Add photos or video on mobile
+## Add media on mobile
 
 On mobile, use **your day in pictures** to add either:
 
 - up to 3 photos, or
 - 1 video no longer than 15 seconds.
 
-Each file can be up to 10 MB, and all media together can be up to 25 MB. Uploads work only in app builds and environments where media upload has been configured. Wait for uploads to finish before you tap **Post**.
+You can also add one recording under **your voice**. Tap once to start and again to stop. Dayli asks for microphone access only when you start recording, and you can listen before keeping the memo. A voice memo can be up to 60 seconds and 2 MB.
+
+Each photo or video can be up to 10 MB. Photos, video, and the voice memo share a 25 MB limit for the post. Uploads work only in app builds and environments where media upload has been configured. Wait for uploads to finish before you tap **Post**.
 
 > **Screenshot placeholder `UD-CDP-02`:** Mobile new dayli composer with safe sample media selected and the audience section visible.
 
-The web composer also has a media picker, but selected files currently stay on your device and are not included in the post. The page tells you this below the picker. If the media matters to your post, use a mobile build with uploads configured.
+The web composer also has a media picker, but selected files currently stay on your device and are not included in the post. The web composer does not record voice memos. If the media matters to your post, use a mobile build with uploads configured.
 
 ## Drafts and the deadline
 
@@ -58,7 +60,7 @@ In every case, a post counts only after the server accepts it. Starting before m
 
 Check your answer, rating, and audience. On the web or mobile, choose **Post**. Keep the composer open while mobile media is uploading.
 
-After posting, find your own dayli under **my days** or on your profile. Before a Friends post is released, it is marked **Not released yet**. A Solo post is marked **Only you**.
+After posting, find your own dayli under **my days** or on your profile. Before a Friends post is released, it is marked **Not released yet**. A Solo post is marked **Only you**. Open a post in the mobile app to play its voice memo. Playback starts only when you tap it; feed and profile cards do not play audio.
 
 ## Make a change after posting
 

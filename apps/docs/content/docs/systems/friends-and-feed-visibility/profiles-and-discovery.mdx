@@ -55,14 +55,16 @@ Web can upload and remove an avatar from Settings. Flutter currently displays pr
 
 [Media uploads and storage](/docs/systems/media-uploads-and-storage) explains reservation validation and R2 configuration.
 
-## Client and API gaps
+## Signed-out profile journeys
 
-The API supports optional-session public and restricted profile results. The current web profile routes still require the signed-in app journey, and Flutter's profile client uses a bearer session. A complete anonymous client journey is therefore not implemented even though the API policy exists.
+Web and Flutter now call the profile, archive, post-detail, avatar, and public media routes without requiring a session. A public profile shows its public projection and released `friends` posts. A private profile shows a restricted state with the username and an invitation to sign in and request access.
 
-Some older client copy still says that all daylies are friend-only. Current API policy is more specific: a public profile exposes released `friends` posts, while `solo` and unreleased posts remain owner-only. Authorization follows the server response, not that stale sentence.
+The public pages offer friend, message, like, and comment actions, but each write still requires authentication. The clients preserve the intended route and action through sign-in, bind it to the resulting account, and fetch the authenticated state again. Friend and message actions then ask the person to continue. Like and comment actions explain that their client interface is not available yet. The clients never replay a public-page write automatically.
+
+A signed-in block in either direction still wins over the public grant. Current API policy is also more specific than older friend-only copy: a public profile exposes released `friends` posts, while `solo` and unreleased posts remain owner-only.
 
 ## Code and verification
 
 Profile actions are under `apps/api/src/features/profiles`, relationship discovery is under `apps/api/src/features/relationships`, and streak calculation is in `packages/domain/src/posting-streak.ts`. The archive query is under `apps/api/src/features/posts/list-profile-posts`.
 
-PostgreSQL integration tests cover profile projections, block concealment, literal username matching, streaks, avatar ownership, username reservations, and the 30-day wait. Route and client tests cover validation, partial updates, stale account state, and profile rendering. These checks establish local behavior against their fixtures, not an anonymous deployed browser journey or a production R2 configuration.
+PostgreSQL integration tests cover profile projections, block concealment, literal username matching, streaks, avatar ownership, username reservations, and the 30-day wait. Route and client tests cover validation, partial updates, stale account state, signed-out rendering, public media, and identity changes during navigation. Browser and emulator records also cover synthetic public journeys. They are not proof of public production availability or a production R2 configuration.
