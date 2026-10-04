@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
-import '../legal/legal_links.dart';
 
 /// Account settings show the established username. Signing out also removes the unsent draft.
 class SettingsScreen extends StatefulWidget {
@@ -209,7 +208,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       style: DayliText.sans(
                                         context,
                                         size: DayliTextSize.sm,
-                                        color: colors.foregroundAccent.withValues(alpha: 0.8),
+                                        color: colors.foregroundAccent
+                                            .withValues(alpha: 0.8),
                                       ),
                                     ),
                                   ],
@@ -339,10 +339,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         key: const Key('settings.legal.privacy'),
                         onTap: () => context.push('/privacy'),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
                           child: Row(
                             children: [
-                              Text('Privacy Policy', style: DayliText.sans(context, weight: FontWeight.w500)),
+                              Text(
+                                'Privacy Policy',
+                                style: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -351,15 +360,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         key: const Key('settings.legal.terms'),
                         onTap: () => context.push('/terms'),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
                           child: Row(
                             children: [
-                              Text('Terms of Service', style: DayliText.sans(context, weight: FontWeight.w500)),
+                              Text(
+                                'Terms of Service',
+                                style: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Draft documents for review. They are not approved terms or privacy notices.',
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.xs,
+                      color: colors.foregroundTertiary,
+                    ),
                   ),
                 ],
               ),

@@ -288,10 +288,7 @@ class _TodayCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: colors.success,
-                  ),
+                  Icon(Icons.check_circle_rounded, color: colors.success),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

@@ -190,11 +190,7 @@ abstract final class DayliShadows {
   ];
 
   static const nav = [
-    BoxShadow(
-      color: Color(0x0A000000),
-      blurRadius: 16,
-      offset: Offset(0, -4),
-    ),
+    BoxShadow(color: Color(0x0A000000), blurRadius: 16, offset: Offset(0, -4)),
   ];
 }
 

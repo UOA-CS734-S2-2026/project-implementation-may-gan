@@ -602,7 +602,7 @@ class _PostMedia extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: DayliColors.of(context).foreground.withOpacity(0.1),
+            color: DayliColors.of(context).foreground.withValues(alpha: 0.1),
           ),
           boxShadow: DayliShadows.md,
         ),
@@ -627,7 +627,9 @@ class _PostMedia extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: DayliColors.of(context).foreground.withOpacity(0.1),
+                color: DayliColors.of(
+                  context,
+                ).foreground.withValues(alpha: 0.1),
               ),
               boxShadow: DayliShadows.md,
             ),

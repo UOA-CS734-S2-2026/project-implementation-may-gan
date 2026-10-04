@@ -76,7 +76,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
                     icon: const Icon(Icons.add_rounded, size: 20),
-                    label: const Text('New message', style: TextStyle(fontWeight: FontWeight.w600)),
+                    label: const Text(
+                      'New message',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ],
               ),
@@ -141,25 +144,28 @@ class _MessageTabs extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
       ),
       padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _MessageTab(
-              label: 'Messages',
-              count: inboxUnread,
-              selected: selected == _MessageFolder.messages,
-              onTap: () => onChanged(_MessageFolder.messages),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            Expanded(
+              child: _MessageTab(
+                label: 'Messages',
+                count: inboxUnread,
+                selected: selected == _MessageFolder.messages,
+                onTap: () => onChanged(_MessageFolder.messages),
+              ),
             ),
-          ),
-          Expanded(
-            child: _MessageTab(
-              label: 'Requests',
-              count: requestUnread,
-              selected: selected == _MessageFolder.requests,
-              onTap: () => onChanged(_MessageFolder.requests),
+            Expanded(
+              child: _MessageTab(
+                label: 'Requests',
+                count: requestUnread,
+                selected: selected == _MessageFolder.requests,
+                onTap: () => onChanged(_MessageFolder.requests),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -189,54 +195,57 @@ class _MessageTab extends StatelessWidget {
         key: Key('messages.tab.${label.toLowerCase()}'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(26),
-        child: Container(
+        child: Ink(
           height: 40,
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFEADDFF) : Colors.transparent,
             borderRadius: BorderRadius.circular(26),
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.base,
-                    weight: FontWeight.w500,
-                    color: selected
-                        ? const Color(0xFF4F378B)
-                        : colors.foregroundSecondary,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.base,
+                      weight: FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF4F378B)
+                          : colors.foregroundSecondary,
+                    ),
                   ),
-                ),
-                if (count > 0) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 18),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected ? const Color(0xFF4F378B) : colors.foregroundAccent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.center,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
+                  if (count > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF4F378B)
+                            : colors.foregroundAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        textAlign: TextAlign.center,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.xs,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

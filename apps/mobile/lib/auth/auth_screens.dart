@@ -252,8 +252,7 @@ class _AuthScreenState extends State<AuthScreen> {
               : "Sign in to post today's dayli.",
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
-        const SizedBox(height: 12),
-        const SizedBox(height: 20),
+        const SizedBox(height: 28),
         GoogleSignInButton(
           onPressed: _busy || (_signUp && (!_termsLoaded || _termsUnavailable))
               ? null
@@ -368,7 +367,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 if (_googleNeedsLink) ...[
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: colors.foregroundAccent, size: 20),
+                      Icon(
+                        Icons.info_outline,
+                        color: colors.foregroundAccent,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(

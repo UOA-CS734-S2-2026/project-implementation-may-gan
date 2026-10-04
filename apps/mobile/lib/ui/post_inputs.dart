@@ -59,6 +59,9 @@ class RatingSlider extends StatelessWidget {
             semanticFormatterCallback: (rating) =>
                 rated ? '${rating.round()} out of 10' : 'Not rated yet',
             onChanged: (rating) => onChanged(rating.round()),
+            // Slider skips onChanged when the new value equals the one it was
+            // built with. Unset, that is 1, so a tap on 1 would otherwise be
+            // lost; onChangeEnd always reports where the interaction ended.
             onChangeEnd: (rating) => onChanged(rating.round()),
           ),
         ),
@@ -113,8 +116,12 @@ class AudiencePicker extends StatelessWidget {
     ) {
       final selected = value == audience;
       final isFriends = audience == PostAudience.friends;
-      final activeBgColor = isFriends ? const Color(0xFFEADDFF) : const Color(0xFFFFDBCF);
-      final activeFgColor = isFriends ? const Color(0xFF4F378B) : const Color(0xFF492500);
+      final activeBgColor = isFriends
+          ? const Color(0xFFEADDFF)
+          : const Color(0xFFFFDBCF);
+      final activeFgColor = isFriends
+          ? const Color(0xFF4F378B)
+          : const Color(0xFF492500);
 
       return Expanded(
         child: Semantics(
@@ -124,9 +131,7 @@ class AudiencePicker extends StatelessWidget {
           label: '$title. $body',
           excludeSemantics: true,
           child: Material(
-            color: selected
-                ? activeBgColor
-                : colors.backgroundSecondary,
+            color: selected ? activeBgColor : colors.backgroundSecondary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
               side: BorderSide(
@@ -229,27 +234,57 @@ class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
       isEnabled: isEnabled,
       isDiscrete: isDiscrete,
     );
-    final activeTrackRect = Rect.fromLTRB(trackRect.left, trackRect.top, thumbCenter.dx, trackRect.bottom);
-    final inactiveTrackRect = Rect.fromLTRB(thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
+    final ltr = textDirection == TextDirection.ltr;
+    final activeTrackRect = ltr
+        ? Rect.fromLTRB(
+            trackRect.left,
+            trackRect.top,
+            thumbCenter.dx,
+            trackRect.bottom,
+          )
+        : Rect.fromLTRB(
+            thumbCenter.dx,
+            trackRect.top,
+            trackRect.right,
+            trackRect.bottom,
+          );
+    final inactiveTrackRect = ltr
+        ? Rect.fromLTRB(
+            thumbCenter.dx,
+            trackRect.top,
+            trackRect.right,
+            trackRect.bottom,
+          )
+        : Rect.fromLTRB(
+            trackRect.left,
+            trackRect.top,
+            thumbCenter.dx,
+            trackRect.bottom,
+          );
 
     final Paint activePaint = Paint();
     if (rated) {
-      activePaint.shader = const LinearGradient(
-        colors: [Color(0xFFD0BCFF), Color(0xFF4F378B)],
+      activePaint.shader = LinearGradient(
+        begin: ltr ? Alignment.centerLeft : Alignment.centerRight,
+        end: ltr ? Alignment.centerRight : Alignment.centerLeft,
+        colors: const [Color(0xFFD0BCFF), Color(0xFF4F378B)],
       ).createShader(trackRect);
     } else {
       activePaint.color = sliderTheme.activeTrackColor!;
     }
-    
-    final Paint inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor!;
+
+    final Paint inactivePaint = Paint()
+      ..color = sliderTheme.inactiveTrackColor!;
 
     final Radius trackRadius = Radius.circular(trackRect.height / 2);
-    
+
     context.canvas.drawRRect(
       RRect.fromRectAndCorners(
         activeTrackRect,
-        topLeft: trackRadius,
-        bottomLeft: trackRadius,
+        topLeft: ltr ? trackRadius : Radius.zero,
+        bottomLeft: ltr ? trackRadius : Radius.zero,
+        topRight: ltr ? Radius.zero : trackRadius,
+        bottomRight: ltr ? Radius.zero : trackRadius,
       ),
       activePaint,
     );
@@ -257,8 +292,10 @@ class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
     context.canvas.drawRRect(
       RRect.fromRectAndCorners(
         inactiveTrackRect,
-        topRight: trackRadius,
-        bottomRight: trackRadius,
+        topLeft: ltr ? Radius.zero : trackRadius,
+        bottomLeft: ltr ? Radius.zero : trackRadius,
+        topRight: ltr ? trackRadius : Radius.zero,
+        bottomRight: ltr ? trackRadius : Radius.zero,
       ),
       inactivePaint,
     );

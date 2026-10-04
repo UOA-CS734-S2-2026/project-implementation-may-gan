@@ -41,11 +41,7 @@ Finder _list() => find
     .first;
 
 Future<void> _openSheet(WidgetTester tester, int slot) async {
-  await tester.scrollUntilVisible(
-    find.byKey(Key('composer.media.$slot')),
-    -200,
-    scrollable: _list(),
-  );
+  await showMediaTile(tester, slot);
   await tester.tap(find.byKey(Key('composer.media.$slot')));
   await tester.pumpAndSettle();
 }

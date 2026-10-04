@@ -373,7 +373,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
             children: [
-              if (context.canPop() || !signedIn)
+              if ((GoRouter.maybeOf(context)?.canPop() ?? false) || !signedIn)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(

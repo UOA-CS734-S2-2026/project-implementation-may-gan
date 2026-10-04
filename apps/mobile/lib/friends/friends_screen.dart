@@ -64,7 +64,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           children: [
             Row(
               children: [
-                if (context.canPop())
+                if (GoRouter.maybeOf(context)?.canPop() ?? false)
                   IconButton(
                     tooltip: 'Back',
                     onPressed: () => context.pop(),
@@ -92,7 +92,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                   ),
                   icon: const Icon(Icons.add_rounded, size: 20),
-                  label: const Text('Add friend', style: TextStyle(fontWeight: FontWeight.w600)),
+                  label: const Text(
+                    'Add friend',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             ),
@@ -161,7 +164,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        side: BorderSide(color: colors.foreground.withValues(alpha: 0.1), width: 1),
+        side: BorderSide(
+          color: colors.foreground.withValues(alpha: 0.1),
+          width: 1,
+        ),
       ),
       builder: (sheetContext) => _DiscoverySheet(controller: controller),
     );
@@ -191,24 +197,27 @@ class _FolderTabs extends StatelessWidget {
         borderRadius: BorderRadius.circular(30),
       ),
       padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          Expanded(
-            child: _FolderTab(
-              label: 'Friends',
-              selected: selected == _FriendsFolder.friends,
-              onTap: () => onChanged(_FriendsFolder.friends),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            Expanded(
+              child: _FolderTab(
+                label: 'Friends',
+                selected: selected == _FriendsFolder.friends,
+                onTap: () => onChanged(_FriendsFolder.friends),
+              ),
             ),
-          ),
-          Expanded(
-            child: _FolderTab(
-              label: 'Requests',
-              count: incomingCount,
-              selected: selected == _FriendsFolder.requests,
-              onTap: () => onChanged(_FriendsFolder.requests),
+            Expanded(
+              child: _FolderTab(
+                label: 'Requests',
+                count: incomingCount,
+                selected: selected == _FriendsFolder.requests,
+                onTap: () => onChanged(_FriendsFolder.requests),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -238,54 +247,57 @@ class _FolderTab extends StatelessWidget {
         key: Key('friends.tab.${label.toLowerCase()}'),
         onTap: onTap,
         borderRadius: BorderRadius.circular(26),
-        child: Container(
+        child: Ink(
           height: 40,
-          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? const Color(0xFFEADDFF) : Colors.transparent,
             borderRadius: BorderRadius.circular(26),
           ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: DayliText.sans(
-                    context,
-                    size: DayliTextSize.base,
-                    weight: FontWeight.w500,
-                    color: selected
-                        ? const Color(0xFF4F378B)
-                        : colors.foregroundSecondary,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.base,
+                      weight: FontWeight.w500,
+                      color: selected
+                          ? const Color(0xFF4F378B)
+                          : colors.foregroundSecondary,
+                    ),
                   ),
-                ),
-                if (count > 0) ...[
-                  const SizedBox(width: 6),
-                  Container(
-                    constraints: const BoxConstraints(minWidth: 18),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: selected ? const Color(0xFF4F378B) : colors.foregroundAccent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$count',
-                      textAlign: TextAlign.center,
-                      style: DayliText.sans(
-                        context,
-                        size: DayliTextSize.xs,
-                        weight: FontWeight.w600,
-                        color: Colors.white,
+                  if (count > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF4F378B)
+                            : colors.foregroundAccent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '$count',
+                        textAlign: TextAlign.center,
+                        style: DayliText.sans(
+                          context,
+                          size: DayliTextSize.xs,
+                          weight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

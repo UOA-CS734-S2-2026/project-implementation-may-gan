@@ -114,7 +114,7 @@ class PostPreviewCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: colors.foreground.withOpacity(0.1),
+                  color: colors.foreground.withValues(alpha: 0.1),
                 ),
                 boxShadow: DayliShadows.md,
               ),

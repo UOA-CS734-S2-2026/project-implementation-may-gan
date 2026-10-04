@@ -116,7 +116,8 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   controller: _publicName,
                   autofillHints: const [AutofillHints.name],
                   textInputAction: TextInputAction.done,
-                  helper: 'Leave this blank to appear as your username. We do not publish your Google name.',
+                  helper:
+                      'Leave this blank to appear as your username. We do not publish your Google name.',
                   onSubmitted: (_) => _busy ? null : _submit(),
                 ),
                 const SizedBox(height: 32),
@@ -136,7 +137,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                     ),
                     child: Text(
                       'Your data export',
-                      style: DayliText.sans(context, size: DayliTextSize.sm, weight: FontWeight.w600),
+                      style: DayliText.sans(
+                        context,
+                        size: DayliTextSize.sm,
+                        weight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 TextButton(
@@ -148,7 +153,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   ),
                   child: Text(
                     'Sign out',
-                    style: DayliText.sans(context, size: DayliTextSize.sm, weight: FontWeight.w600),
+                    style: DayliText.sans(
+                      context,
+                      size: DayliTextSize.sm,
+                      weight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
