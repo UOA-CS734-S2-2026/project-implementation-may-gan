@@ -9,6 +9,7 @@
     "backend-architecture",
     "web-app",
     "mobile-app",
+    "mobile-on-staging",
     "database",
     "api-contracts-and-generated-clients",
     "testing",
