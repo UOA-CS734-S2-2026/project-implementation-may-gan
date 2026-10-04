@@ -93,7 +93,9 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       FilledButton.icon(
                         onPressed: () => _showDiscovery(context, controller),
                         style: FilledButton.styleFrom(
-                          backgroundColor: DayliColors.of(context).foregroundAccent,
+                          backgroundColor: DayliColors.of(
+                            context,
+                          ).foregroundAccent,
                           foregroundColor: DayliColors.of(context).background,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                         ),
