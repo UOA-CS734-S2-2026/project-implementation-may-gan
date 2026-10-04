@@ -54,7 +54,12 @@ export const messageQuotaErrorResponse = {
 
 export const messageCreationRateLimitErrorResponse = {
   description: "A native request limit or the persistent sender-wide message quota was reached.",
-  headers: messageQuotaErrorResponse.headers,
+  headers: {
+    "Retry-After": {
+      description: "Wait in seconds before retrying.",
+      schema: { type: "integer", minimum: 1 },
+    },
+  },
   content: {
     "application/json": {
       schema: z.union([apiErrorSchema, messageQuotaErrorSchema]).openapi("MessageCreationRateLimitError"),
