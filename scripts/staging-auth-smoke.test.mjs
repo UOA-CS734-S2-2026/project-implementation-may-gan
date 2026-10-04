@@ -317,7 +317,7 @@ test("a session created before failed sign-in navigation is cleaned up once", as
   assert.equal(result.fake.state.session, false);
   assert.equal(result.fake.state.signInAttempts, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
-  assert.match(result.output, /category=login_navigation_timeout/);
+  assert.match(result.output, /category=login_cookie_created_navigation_timeout/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
@@ -330,7 +330,7 @@ test("failed sign-in reports only a fixed network or cookie category", async () 
     [{ signInHttpStatus: 429 }, "login_http_429"],
     [{ signInHttpStatus: 503 }, "login_http_error"],
     [{ sessionMissingAfterFailedLogin: true }, "login_cookie_missing"],
-    [{ loginNavigationFails: true }, "login_navigation_timeout"],
+    [{ loginNavigationFails: true }, "login_cookie_created_navigation_timeout"],
   ];
   for (const [options, expected] of cases) {
     const result = await runDefault({ ...options, loginNavigationFails: true,
