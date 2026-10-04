@@ -1,6 +1,9 @@
 # MN-002 implementation and merge approval
 
-Status: approved and queued after the current staging Firebase mobile configuration task finishes. Implementation has not started.
+Status: invocation started after the staging Firebase mobile configuration task completed.
+Started: 2026-10-04T05:28:32Z.
+Fixed deadline: 2026-10-04T13:28:32Z. Retries do not extend it.
+Preflight merged main: 545ed25ea8f591b0b42823bf1cf9d79fb7a12878.
 Repository: UOA-CS734-S2-2026/project-implementation-may-gan.
 Ticket: MN-002, GitHub #260 only.
 Branch: 260/shared-notification-dispatch. Target: main.
