@@ -61,15 +61,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
-            Text(
-              'friends',
-              textAlign: TextAlign.center,
-              style: DayliText.serif(
-                context,
-                fontSize: 36,
-                weight: FontWeight.w600,
-                tracking: DayliTracking.tighter,
-              ),
+            Row(
+              children: [
+                if (context.canPop())
+                  IconButton(
+                    tooltip: 'Back',
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  )
+                else
+                  const SizedBox(width: 48),
+                Expanded(
+                  child: Text(
+                    'friends',
+                    textAlign: TextAlign.center,
+                    style: DayliText.serif(
+                      context,
+                      fontSize: 36,
+                      weight: FontWeight.w600,
+                      tracking: DayliTracking.tighter,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 48),
+              ],
             ),
             const SizedBox(height: 28),
             _FolderTabs(

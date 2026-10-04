@@ -312,27 +312,33 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     final url = info.avatarUrl;
     return FutureBuilder<String?>(
       future: _session?.bearerToken(),
-      builder: (context, token) => CircleAvatar(
-        key: const Key('profile.avatar'),
-        radius: 56,
-        backgroundColor: DayliColors.of(context).backgroundAccent,
-        foregroundImage: url == null
-            ? null
-            : NetworkImage(
-                url,
-                headers: token.data == null
-                    ? null
-                    : {'authorization': 'Bearer ${token.data}'},
-              ),
-        onForegroundImageError: url == null ? null : (_, _) {},
-        child: Text(
-          displayName.isEmpty
-              ? '?'
-              : displayName.characters.first.toUpperCase(),
-          style: DayliText.serif(
-            context,
-            size: DayliTextSize.xxxxl,
-            color: DayliColors.of(context).foregroundAccent,
+      builder: (context, token) => Container(
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: DayliShadows.md,
+        ),
+        child: CircleAvatar(
+          key: const Key('profile.avatar'),
+          radius: 56,
+          backgroundColor: DayliColors.of(context).backgroundAccent,
+          foregroundImage: url == null
+              ? null
+              : NetworkImage(
+                  url,
+                  headers: token.data == null
+                      ? null
+                      : {'authorization': 'Bearer ${token.data}'},
+                ),
+          onForegroundImageError: url == null ? null : (_, _) {},
+          child: Text(
+            displayName.isEmpty
+                ? '?'
+                : displayName.characters.first.toUpperCase(),
+            style: DayliText.serif(
+              context,
+              size: DayliTextSize.xxxxl,
+              color: DayliColors.of(context).foregroundAccent,
+            ),
           ),
         ),
       ),
@@ -367,7 +373,7 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
             children: [
-              if (!signedIn)
+              if (context.canPop() || !signedIn)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: IconButton(

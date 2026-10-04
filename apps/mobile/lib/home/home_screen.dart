@@ -150,7 +150,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               tracking: DayliTracking.tighter,
             ),
           ),
-          const SizedBox(height: 20),
+          Text(
+            "today's prompt",
+            style: DayliText.serif(
+              context,
+              size: DayliTextSize.xl,
+              weight: FontWeight.w600,
+              tracking: DayliTracking.tight,
+            ),
+          ),
+          const SizedBox(height: 12),
           _TodayCard(day: _day, onCompose: _compose, onRetry: _load),
           const SizedBox(height: 36),
           Text(
@@ -201,15 +210,6 @@ class _TodayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final label = Text(
-      "today's prompt",
-      style: DayliText.sans(
-        context,
-        size: DayliTextSize.sm,
-        weight: FontWeight.w500,
-        color: colors.foregroundTertiary,
-      ),
-    );
 
     final Widget content = switch (day) {
       null => const SizedBox(
@@ -219,8 +219,6 @@ class _TodayCard extends StatelessWidget {
       ApiError(:final failure) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          label,
-          const SizedBox(height: 8),
           Text(
             failure is NetworkUnavailable
                 ? "You're offline, so today's prompt couldn't load."
@@ -262,7 +260,6 @@ class _TodayCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              label,
               const Spacer(),
               if (!today.hasPosted)
                 DeadlineCountdown(
@@ -272,7 +269,8 @@ class _TodayCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 12),
+          if (today.hasPosted || today.deadlineAt != null)
+            const SizedBox(height: 12),
           Text(
             today.promptText,
             style: DayliText.serif(
@@ -294,7 +292,7 @@ class _TodayCard extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.check_circle_rounded,
-                    color: colors.foregroundAccent,
+                    color: colors.success,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -304,7 +302,7 @@ class _TodayCard extends StatelessWidget {
                         context,
                         size: DayliTextSize.sm,
                         weight: FontWeight.w500,
-                        color: colors.foregroundAccent,
+                        color: colors.foreground,
                       ),
                     ),
                   ),
