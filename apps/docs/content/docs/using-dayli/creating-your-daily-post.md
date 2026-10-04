@@ -46,6 +46,24 @@ Each photo or video can be up to 10 MB. Photos, video, and the voice memo share 
 
 The web composer also has a media picker, but selected files currently stay on your device and are not included in the post. The web composer does not record voice memos. If the media matters to your post, use a mobile build with uploads configured.
 
+## Add the weather on mobile
+
+On mobile, **the weather** section can add what it was like outside, such as **Rain · 11°C · Auckland**. It is optional and appears only on your post's detail screen, not in the feed.
+
+Tap **Add the weather**. Dayli explains what it does first, and nothing happens until you choose:
+
+- **Use my location** asks your phone for your approximate location once, only to find the weather. Your phone may ask for permission here. The location is not stored and is not sent to Dayli. Only the weather, the temperature, and the name of the place go on your post.
+- **Choose a place instead** lets you search for a city or town by name. It needs no location permission.
+- **Not now** closes the box without changing anything. You can add the weather another time.
+
+You see exactly what will be on your post before you post, and you can tap the close button to remove it. You cannot add or change the weather after you post.
+
+If you say no to location, or location is switched off, Dayli tells you and offers **Choose a place** instead. If you refused permission and your phone will not ask again, **Open Settings** takes you to where you can change it. Posting never needs the weather.
+
+The weather comes from Open-Meteo.com, and your phone looks up the name of the place. The web composer does not have a weather section yet.
+
+> **Screenshot placeholder `UD-CDP-03`:** Mobile weather section showing the explanation before the location prompt, using a simulator location and no real place.
+
 ## Drafts and the deadline
 
 Mobile saves your writing to protected storage on that device as you type. If the app closes, reopen **new dayli** on the same device to continue. A draft does not reserve the day, and writing offline does not bypass the deadline.
