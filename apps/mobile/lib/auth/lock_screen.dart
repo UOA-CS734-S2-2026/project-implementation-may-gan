@@ -391,26 +391,3 @@ class _FaceIdBadge extends StatelessWidget {
   }
 }
 
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    super.key,
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-  });
-
-  final VoidCallback? onPressed;
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => FilledButton.icon(
-    onPressed: onPressed,
-    icon: Icon(icon),
-    label: Text(label),
-    style: FilledButton.styleFrom(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-      textStyle: DayliText.sans(context, weight: FontWeight.w600),
-    ),
-  );
-}
