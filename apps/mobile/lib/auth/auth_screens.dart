@@ -286,7 +286,6 @@ class _AuthScreenState extends State<AuthScreen> {
             controller: _name,
             autofillHints: const [AutofillHints.name],
             textInputAction: TextInputAction.next,
-            textCapitalization: TextCapitalization.words,
             helper: 'Leave blank to appear as your username.',
           ),
           const SizedBox(height: 24),

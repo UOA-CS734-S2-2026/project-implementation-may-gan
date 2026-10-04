@@ -271,7 +271,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           controller: _name,
           placeholder: profile.username,
           helper: 'Leave blank to show your username.',
-          textCapitalization: TextCapitalization.words,
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 16),
