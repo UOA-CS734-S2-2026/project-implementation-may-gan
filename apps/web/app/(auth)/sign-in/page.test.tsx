@@ -44,12 +44,12 @@ beforeEach(() => {
 });
 
 describe("email sign-in return destination", () => {
-  it("shows compact draft legal links without a consent notice", () => {
+  it("shows approved legal links without a consent notice", () => {
     render(<SignInPage />);
 
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
-    expect(screen.getByText("(draft)")).toBeInTheDocument();
+    expect(screen.queryByText("(draft)")).not.toBeInTheDocument();
     expect(screen.queryByText(/Review Dayli's draft legal documents/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/not approved terms or privacy notices/i)).not.toBeInTheDocument();
   });

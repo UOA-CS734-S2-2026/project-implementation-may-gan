@@ -25,6 +25,7 @@ export function LegalDraftMarker() {
 }
 
 export function LegalDraftNotice() {
+  if (privacyDocument.status === "approved" && termsDocument.status === "approved") return null;
   return (
     <p className="text-xs leading-5 text-foreground-secondary">
       The linked documents are drafts for review. They are not approved terms or privacy notices.

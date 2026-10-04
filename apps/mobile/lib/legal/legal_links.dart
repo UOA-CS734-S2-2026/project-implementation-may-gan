@@ -6,7 +6,7 @@ import '../app/theme.dart';
 class LegalLinks extends StatelessWidget {
   const LegalLinks({
     super.key,
-    this.notice = true,
+    this.notice = false,
     this.draftMarker = false,
     this.compact = false,
     this.center = false,

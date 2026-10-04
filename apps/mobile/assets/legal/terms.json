@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "id": "terms",
   "title": "Terms of Service",
-  "status": "draft",
-  "version": "draft-2",
-  "effectiveDate": null,
-  "summary": "Draft for owner review. Public registration is not approved until final Terms, the 16+ declaration, and the effective version are verified.",
+  "status": "approved",
+  "version": "1",
+  "effectiveDate": "2026-10-04",
+  "summary": "These Terms explain the rules for using Dayli, the 16+ age requirement, and how to contact the operator.",
   "sections": [
     {
-      "id": "draft-status",
-      "title": "Draft status",
+      "id": "terms-and-acceptance",
+      "title": "Terms and acceptance",
       "blocks": [
         {
           "type": "paragraph",
-          "text": "These are draft Terms of Service. They have not been approved, have no effective date, and do not create a final contract. A static link to this draft does not record acceptance. Dayli must not present these terms as final until the responsible operator, final legal wording, governing-law decision, and acceptance process have been approved."
+          "text": "These Terms of Service are effective from 4 October 2026. Reading or following a link to them does not record acceptance. When registration becomes available, Dayli requires an explicit, initially unchecked action accepting the effective Terms, acknowledging the Privacy Policy, and declaring that the person is at least 16. We record the version and server time of that action."
         }
       ]
     },
@@ -23,7 +23,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. Contact the operator at agroupforcoders@gmail.com. The planned public service is available worldwide to people aged 16 or older. Public registration must require an explicit 16+ declaration and acceptance of the effective Terms; the current draft does not authorize registration for real users."
+          "text": "Dayli is operated by agroupforcoders, an informal group based in New Zealand, not a registered company. Contact the operator at agroupforcoders@gmail.com. Dayli is intended for people worldwide who are at least 16 years old. Registration requires an explicit 16+ declaration and acceptance of the effective Terms."
         }
       ]
     },
@@ -33,7 +33,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli currently supports email and password accounts. Google sign-in may be available when configured. Keep your sign-in credentials private and give accurate account information. Google accounts are not connected to an existing Dayli account only because the emails match. The final terms should explain when Dayli may restrict an account for abuse, security, or legal reasons."
+          "text": "Dayli supports email and password accounts. Google sign-in may be available when configured. Keep your sign-in credentials private and give accurate account information. Google accounts are not connected to an existing Dayli account only because the emails match. The operator may review and restrict access for abuse, security, or legal reasons. When safe, we notify affected users without including private content, and they may appeal by email."
         }
       ]
     },
@@ -43,11 +43,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "You keep ownership of the posts, notes, messages, and other content you submit. The proposed final terms would give Dayli the limited permission needed to host, process, show, and handle provider backup or recovery copies of that content where such copies exist. The actual provider recovery arrangements and retention periods remain unverified. Dayli does not use personal content for research or AI training."
+          "text": "You keep ownership of the posts, notes, messages, and other content you submit. You give Dayli the limited permission needed to host, process, show, and handle provider backup or recovery copies of that content where such copies exist. The actual provider recovery arrangements and retention periods remain unverified. Dayli does not use personal content for research or AI training."
         },
         {
           "type": "paragraph",
-          "text": "Solo and unreleased posts are for their author. A released friends-audience post on a public profile is available to anyone, including visitors without an account. On a private profile, active friends can read released friends-audience posts. Direct messages are available to the people in the conversation under the current access rules. Editing a released post can retain an earlier revision. Do not rely on a block, edit, or unsend action to remove material another person has already seen or saved."
+          "text": "Solo and unreleased posts are for their author. A released friends-audience post on a public profile is available to anyone, including visitors without an account. On a private profile, active friends can read released friends-audience posts. Direct messages are available to the people in the conversation under the current access rules. When a recipient enables push, message text and sender name may be sent through Firebase and appear on their device. Editing a released post can retain an earlier revision. Do not rely on a block, edit, or unsend action to remove material another person has already seen or saved."
         }
       ]
     },
@@ -57,7 +57,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The proposed final terms would not allow you to use Dayli unlawfully, impersonate someone else, attempt to access another person's account or content, interfere with the service, send abusive or harmful material, or upload material that Dayli cannot lawfully host. The operator must approve a reporting and enforcement process before relying on it as a final rule."
+          "text": "Do not use Dayli unlawfully, impersonate someone else, attempt to access another person's account or content, interfere with the service, send abusive or harmful material, or upload material that Dayli cannot lawfully host. Report concerns to agroupforcoders@gmail.com. The operator reviews reports individually, may restrict access where warranted, and accepts appeals through the same inbox. A report does not automatically suspend an account."
         }
       ]
     },
@@ -67,11 +67,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Dayli uses Neon PostgreSQL and Cloudflare services to operate the app. Google sign-in, Firebase push delivery, and Resend authentication email may be enabled depending on the deployment. The optional mobile weather lookup uses Open-Meteo and the phone's geocoder; choosing location shares the approximate location with those services, not Dayli's API. Processing locations, provider recovery copies, analytics, and log retention have not been verified. This draft makes no regional-storage or recovery guarantee."
+          "text": "Dayli uses Neon PostgreSQL and Cloudflare services to operate the app. Google sign-in, Firebase push delivery, and Resend authentication email may be enabled depending on the deployment. The optional mobile weather lookup uses Open-Meteo and the phone's geocoder; choosing location shares the approximate location with those services, not Dayli's API. Processing locations, provider recovery copies, analytics, and log retention have not been verified. We do not guarantee a particular storage region or recovery schedule."
         },
         {
           "type": "paragraph",
-          "text": "Dayli does not promise uninterrupted or error-free service in this draft. The operator has not approved final availability commitments, suspension rules, or service-level terms."
+          "text": "We do not promise uninterrupted or error-free service or a specific restoration time. If access is restricted after a report or security concern, contact the operator by email for review. This does not limit rights that cannot lawfully be excluded."
         }
       ]
     },
@@ -81,7 +81,7 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "Signed-in users of the current staging deployment can request a single versioned ZIP export from their account page. A ready archive is available through an authenticated download for 24 hours, subject to account access and service availability. Dayli does not yet have a verified account-deletion or physical-purge process. Personal content may remain indefinitely while that process is unavailable. Contact agroupforcoders@gmail.com with access, correction, deletion, or other account requests. Email is not an automated deletion workflow, and these draft Terms make no promise that removal can currently be completed."
+          "text": "Signed-in users of the current Dayli deployment can request a versioned ZIP export from their account page. A ready archive is available through an authenticated download for 24 hours, subject to account access and service availability. Dayli does not yet have a verified account-deletion or physical-purge process. Personal content may remain indefinitely while that process is unavailable. Contact agroupforcoders@gmail.com with access, correction, deletion, or other account requests. Email is not an automated deletion workflow, and we cannot promise that removal can currently be completed. We will assess requests under applicable law."
         }
       ]
     },
@@ -91,11 +91,11 @@
       "blocks": [
         {
           "type": "paragraph",
-          "text": "The operator proposes New Zealand law for the final Terms, without limiting mandatory rights that apply where a user lives. No arbitration term or special dispute venue has been approved. No warranty exclusion or liability limit is claimed in this draft. Material changes would normally receive 30 days of notice; an urgent shorter period needs a recorded reason communicated to users. The final wording requires the owner's review before publication."
+          "text": "New Zealand law governs these Terms, subject to mandatory rights that apply where a user lives. These Terms do not impose arbitration, a special dispute venue, or a liability cap. We normally give 30 days of notice before a material change. If an urgent change needs a shorter period, we record the reason and explain it to users. Updated versions show their effective date."
         },
         {
           "type": "link",
-          "label": "Read the draft Privacy Policy",
+          "label": "Read the Privacy Policy",
           "href": "/privacy"
         }
       ]

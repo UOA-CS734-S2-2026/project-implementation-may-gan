@@ -23,13 +23,13 @@ vi.mock("@/lib/legal/registration", () => ({
 import SignUpPage from "./page";
 
 describe("sign-up legal links", () => {
-  it("shows compact draft links without recording consent", async () => {
+  it("shows approved links but does not record consent without an effective database version", async () => {
     mocks.current.mockResolvedValue({ status: "unavailable" });
     render(<SignUpPage />);
 
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
-    expect(screen.getByText("(draft)")).toBeInTheDocument();
+    expect(screen.queryByText("(draft)")).not.toBeInTheDocument();
     expect(screen.queryByText(/Review Dayli's draft legal documents/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/not approved terms or privacy notices/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
