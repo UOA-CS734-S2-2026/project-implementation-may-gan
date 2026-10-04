@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../api/api_failure.dart';
@@ -365,17 +366,34 @@ class _FriendsList extends StatelessWidget {
         else if (friends.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 42),
-            child: Text(
-              filter.trim().isEmpty
-                  ? 'No friends yet'
-                  : hasMore
-                  ? 'No matches in loaded friends. Load more to keep searching.'
-                  : 'No friends found',
-              style: DayliText.sans(
-                context,
-                size: DayliTextSize.sm,
-                color: colors.foregroundTertiary,
-              ),
+            child: Column(
+              children: [
+                Text(
+                  filter.trim().isEmpty
+                      ? 'No friends yet'
+                      : hasMore
+                      ? 'No matches in loaded friends. Load more to keep searching.'
+                      : 'No friends found',
+                  textAlign: TextAlign.center,
+                  style: DayliText.serif(
+                    context,
+                    size: DayliTextSize.base,
+                    weight: FontWeight.w400,
+                    color: colors.foregroundSecondary,
+                  ),
+                ),
+                if (filter.trim().isEmpty) ...[
+                  const SizedBox(height: 24),
+                  SvgPicture.string(
+                    '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20"/><path d="M2 20s4-8 10-8 10 8 10 8"/><circle cx="18" cy="6" r="3"/><path d="M2 20s3-5 8-5 6 5 6 5"/></svg>''',
+                    height: 42,
+                    colorFilter: ColorFilter.mode(
+                      colors.foregroundSecondary.withValues(alpha: 0.35),
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ],
+              ],
             ),
           )
         else
@@ -433,10 +451,11 @@ class _RequestsList extends StatelessWidget {
         child: Center(
           child: Text(
             'No pending requests',
-            style: DayliText.sans(
+            style: DayliText.serif(
               context,
-              size: DayliTextSize.sm,
-              color: DayliColors.of(context).foregroundTertiary,
+              size: DayliTextSize.base,
+              weight: FontWeight.w400,
+              color: DayliColors.of(context).foregroundSecondary,
             ),
           ),
         ),
