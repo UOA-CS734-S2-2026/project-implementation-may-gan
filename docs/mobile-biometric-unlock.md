@@ -5,6 +5,8 @@ Status: Device authentication (Face ID, Touch ID, device passcode) is implemente
 ## Decisions
 
 - Use the `local_auth` Flutter package for device authentication capabilities.
+  - Note that, while the intended use of this feature is for biometric unlock, native security implentations allow for the use of any standard device-level unlock method (e.g. iris scan, fingerprint, and so on).
+  - iOS provides a native app lock as an OS feature using Face ID, which is independent of any app and is not impacted by this functionality. Both this feature and the OS app lock serve similar purposes, though setting this up through the iOS feature is limited to versions after iOS 18.
 - Integrate with the app lifecycle to obscure content when inactive and lock the app when backgrounded.
 - Fall back to an account sign-out if the user is locked out of device authentication.
 - Delegate window security (`FLAG_SECURE` on Android) to native code via a custom `MethodChannel` to prevent background screenshots of locked content.
