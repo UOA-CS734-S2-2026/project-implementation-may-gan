@@ -141,6 +141,44 @@ void main() {
       expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
     });
 
+    testWidgets('drops a like answered after the account changed', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..holdLike = Completer<void>()
+        ..likeResults.add(
+          const ApiSuccess(LikeSummary(likeCount: 5, viewerHasLiked: true)),
+        );
+      final harness = await openPost(
+        tester,
+        interactions: interactions,
+        posts: FakePostClient([
+          withComments(0),
+          ApiSuccess(postDetail('1').copyWith(likeCount: 7)),
+        ]),
+      );
+
+      await tester.ensureVisible(find.byKey(const Key('post.like')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('post.like')));
+      await tester.pump();
+      expect(find.text('3 likes'), findsOneWidget);
+
+      harness.testUserId = 'user-2';
+      await harness.session.signIn(
+        email: 'user-2@example.test',
+        password: 'correct-password',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('7 likes'), findsOneWidget);
+
+      interactions.holdLike!.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('7 likes'), findsOneWidget);
+      expect(find.text('5 likes'), findsNothing);
+      expect(find.byIcon(Icons.favorite_border_rounded), findsOneWidget);
+    });
+
     testWidgets('opens who liked the post', (tester) async {
       final interactions = FakeInteractionsClient()
         ..likesResult = ApiSuccess(
@@ -314,6 +352,37 @@ void main() {
         expect(find.byKey(const Key('comments.postedOutOfView')), findsNothing);
       },
     );
+
+    testWidgets('clears everything and stops posting when access is revoked', (
+      tester,
+    ) async {
+      final interactions = FakeInteractionsClient()
+        ..createResults.add(ApiSuccess(postComment('c-9', text: 'Lovely.')));
+      await openPost(
+        tester,
+        commentCount: 30,
+        comments: [postComment('c-1')],
+        nextCursor: 'next',
+        interactions: interactions,
+      );
+      await sendComment(tester, 'Lovely.');
+      await tapVisible(tester, find.byKey(const Key('comment.c-1.reply')));
+      expect(find.byKey(const Key('comment.c-9')), findsOneWidget);
+      interactions.commentResults
+        ..clear()
+        ..add(const ApiError(NotFound()));
+
+      await tapVisible(tester, find.byKey(const Key('comments.more')));
+
+      expect(find.text("Comments aren't available."), findsOneWidget);
+      expect(find.byKey(const Key('comment.c-1')), findsNothing);
+      expect(find.byKey(const Key('comment.c-9')), findsNothing);
+      expect(find.byKey(const Key('comments.more')), findsNothing);
+      expect(find.byKey(const Key('comments.replyingTo')), findsNothing);
+      expect(find.byKey(const Key('comments.postedOutOfView')), findsNothing);
+      expect(find.byKey(const Key('comments.input')), findsNothing);
+      expect(find.byKey(const Key('comments.send')), findsNothing);
+    });
 
     testWidgets('counts characters the way the API does', (tester) async {
       final interactions = FakeInteractionsClient();

@@ -64,6 +64,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   /// shown and an older answer can't overwrite a newer comment's count.
   int _countsVersion = 0;
 
+  /// Changes whenever the screen is reset for another post or account, so a
+  /// like or count read started before then can't write into the new state.
+  int _interactionGeneration = 0;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -89,6 +93,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       _loadedPostId = widget.postId;
       _post = null;
       _result = null;
+      _liking = false;
+      _interactionGeneration++;
       _consumedIntent =
           widget.intent != null &&
               _session?.status == SessionStatus.signedIn &&
@@ -160,10 +166,24 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     });
   }
 
+  /// Whether an interaction started for [postId] by [identity] in
+  /// [generation] still belongs to what the screen shows.
+  bool _isCurrentInteraction(
+    int generation,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      generation == _interactionGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
   /// Shows the like at once, then keeps the server's count, or puts it back.
   Future<void> _toggleLike(PostDetail post) async {
     final liked = !post.viewerHasLiked;
     final messenger = ScaffoldMessenger.of(context);
+    final generation = _interactionGeneration;
+    final identity = _currentSessionIdentity();
     setState(() {
       _liking = true;
       _likeVersion++;
@@ -175,7 +195,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final result = await AppScope.of(
       context,
     ).interactions.setLike(post.id, liked: liked);
-    if (!mounted) return;
+    if (!_isCurrentInteraction(generation, post.id, identity)) return;
     setState(() {
       _liking = false;
       final current = _post;
@@ -213,10 +233,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final services = AppScope.of(context);
     final likeVersion = _likeVersion;
     final version = ++_countsVersion;
-    final result = await services.posts.get(widget.postId);
+    final generation = _interactionGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
     // A newer read started after this one, so its answer, including a 404,
     // is the one that counts.
-    if (!mounted || version != _countsVersion) return;
+    if (!_isCurrentInteraction(generation, postId, identity) ||
+        version != _countsVersion) {
+      return;
+    }
     switch (result) {
       case ApiSuccess(:final value):
         final post = _post;

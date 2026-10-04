@@ -104,9 +104,23 @@ class _PostCommentsState extends State<PostComments> {
           _loadFailure = null;
         case ApiError(:final failure):
           _loadFailure = failure;
-          if (failure is NotFound) _comments.clear();
+          if (failure is NotFound) _clearForRevokedAccess();
       }
     });
+  }
+
+  /// The server no longer lets this viewer read the comments, so nothing
+  /// loaded or posted earlier stays on screen, and nothing more can be sent.
+  bool get _unavailable => _loadFailure is NotFound;
+
+  void _clearForRevokedAccess() {
+    _comments.clear();
+    _created.clear();
+    _nextCursor = null;
+    _loadingMore = false;
+    _replyingTo = null;
+    _sendFailure = null;
+    _postedOutOfView = false;
   }
 
   Future<void> _send() async {
@@ -292,6 +306,20 @@ class _PostCommentsState extends State<PostComments> {
         ),
     ];
 
+    if (_unavailable && !_loading) {
+      return Column(
+        key: const Key('comments'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            "Comments aren't available.",
+            key: const Key('comments.loadError'),
+            style: muted,
+          ),
+        ],
+      );
+    }
+
     return Column(
       key: const Key('comments'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -303,25 +331,21 @@ class _PostCommentsState extends State<PostComments> {
           )
         else if (_loadFailure != null && _comments.isEmpty) ...[
           Text(
-            _loadFailure is NotFound
-                ? "Comments aren't available."
-                : "Comments couldn't be loaded.",
+            "Comments couldn't be loaded.",
             key: const Key('comments.loadError'),
             style: muted,
           ),
-          if (_loadFailure is! NotFound) ...[
-            const SizedBox(height: 8),
-            DayliButton(
-              key: const Key('comments.retryLoad'),
-              label: 'Try again',
-              color: ButtonColor.foreground,
-              height: 40,
-              onPressed: () {
-                setState(() => _loading = true);
-                _load();
-              },
-            ),
-          ],
+          const SizedBox(height: 8),
+          DayliButton(
+            key: const Key('comments.retryLoad'),
+            label: 'Try again',
+            color: ButtonColor.foreground,
+            height: 40,
+            onPressed: () {
+              setState(() => _loading = true);
+              _load();
+            },
+          ),
         ] else
           for (final comment in _comments.where(
             (c) => c.parentCommentId == null,
