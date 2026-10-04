@@ -35,14 +35,13 @@ class RatingSlider extends StatelessWidget {
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 6,
-            activeTrackColor: rated
-                ? colors.foregroundAccent
-                : colors.backgroundTertiary,
+            trackShape: _GradientSliderTrackShape(rated: rated),
+            activeTrackColor: colors.backgroundTertiary,
             inactiveTrackColor: colors.backgroundTertiary,
             thumbColor: rated
-                ? colors.foregroundAccent
+                ? const Color(0xFF4F378B)
                 : colors.foregroundTertiary,
-            overlayColor: colors.foregroundAccent.withValues(alpha: 0.12),
+            overlayColor: const Color(0xFF4F378B).withValues(alpha: 0.12),
             activeTickMarkColor: Colors.white.withValues(alpha: 0.6),
             inactiveTickMarkColor: colors.foregroundTertiary.withValues(
               alpha: 0.5,
@@ -60,9 +59,6 @@ class RatingSlider extends StatelessWidget {
             semanticFormatterCallback: (rating) =>
                 rated ? '${rating.round()} out of 10' : 'Not rated yet',
             onChanged: (rating) => onChanged(rating.round()),
-            // Slider skips onChanged when the new value equals the one it was
-            // built with. Unset, that is 1, so a tap on 1 would otherwise be
-            // lost; onChangeEnd always reports where the interaction ended.
             onChangeEnd: (rating) => onChanged(rating.round()),
           ),
         ),
@@ -116,6 +112,10 @@ class AudiencePicker extends StatelessWidget {
       String body,
     ) {
       final selected = value == audience;
+      final isFriends = audience == PostAudience.friends;
+      final activeBgColor = isFriends ? const Color(0xFFEADDFF) : const Color(0xFFFFDBCF);
+      final activeFgColor = isFriends ? const Color(0xFF4F378B) : const Color(0xFF492500);
+
       return Expanded(
         child: Semantics(
           button: true,
@@ -125,7 +125,7 @@ class AudiencePicker extends StatelessWidget {
           excludeSemantics: true,
           child: Material(
             color: selected
-                ? colors.foregroundAccent
+                ? activeBgColor
                 : colors.backgroundSecondary,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -147,7 +147,7 @@ class AudiencePicker extends StatelessWidget {
                       Icon(
                         icon,
                         size: 22,
-                        color: selected ? Colors.white : colors.foreground,
+                        color: selected ? activeFgColor : colors.foreground,
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -156,7 +156,7 @@ class AudiencePicker extends StatelessWidget {
                           context,
                           size: DayliTextSize.lg,
                           weight: FontWeight.w600,
-                          color: selected ? Colors.white : colors.foreground,
+                          color: selected ? activeFgColor : colors.foreground,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -166,7 +166,7 @@ class AudiencePicker extends StatelessWidget {
                           context,
                           size: DayliTextSize.sm,
                           color: selected
-                              ? Colors.white.withValues(alpha: 0.85)
+                              ? activeFgColor.withValues(alpha: 0.85)
                               : colors.foregroundSecondary,
                         ),
                       ),
@@ -200,6 +200,67 @@ class AudiencePicker extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
+  const _GradientSliderTrackShape({required this.rated});
+  final bool rated;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final activeTrackRect = Rect.fromLTRB(trackRect.left, trackRect.top, thumbCenter.dx, trackRect.bottom);
+    final inactiveTrackRect = Rect.fromLTRB(thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
+
+    final Paint activePaint = Paint();
+    if (rated) {
+      activePaint.shader = const LinearGradient(
+        colors: [Color(0xFFD0BCFF), Color(0xFF4F378B)],
+      ).createShader(trackRect);
+    } else {
+      activePaint.color = sliderTheme.activeTrackColor!;
+    }
+    
+    final Paint inactivePaint = Paint()..color = sliderTheme.inactiveTrackColor!;
+
+    final Radius trackRadius = Radius.circular(trackRect.height / 2);
+    
+    context.canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        activeTrackRect,
+        topLeft: trackRadius,
+        bottomLeft: trackRadius,
+      ),
+      activePaint,
+    );
+
+    context.canvas.drawRRect(
+      RRect.fromRectAndCorners(
+        inactiveTrackRect,
+        topRight: trackRadius,
+        bottomRight: trackRadius,
+      ),
+      inactivePaint,
     );
   }
 }
