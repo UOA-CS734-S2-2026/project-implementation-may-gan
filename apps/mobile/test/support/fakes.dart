@@ -767,6 +767,8 @@ class TestHarness {
   );
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
+  final biometric = FakeBiometricService();
+  final biometric = FakeBiometricService();
 
   /// The weather provider, phone location and place lookup the composer uses.
   final weatherProvider = FakeWeatherProvider();
@@ -816,6 +818,7 @@ class TestHarness {
     postActivity: postActivity,
     google: google,
     clock: () => DateTime.utc(2026, 9, 25, 3),
+    biometric: biometric,
   );
 }
 
@@ -1130,4 +1133,21 @@ class FakeInteractionsClient implements InteractionsClient {
     deletedComments.add(commentId);
     return deleteResult;
   }
+}
+
+class FakeBiometricService extends ChangeNotifier implements BiometricService {
+  @override
+  bool get isEnabled => false;
+  
+  @override
+  bool get isLocked => false;
+
+  @override
+  void lock() {}
+
+  @override
+  Future<bool> setEnabled(bool enabled) async => false;
+
+  @override
+  Future<bool> authenticate({String reason = 'Unlock Dayli'}) async => false;
 }

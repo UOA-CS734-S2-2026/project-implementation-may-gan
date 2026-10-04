@@ -30,7 +30,7 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final lilac = const Color(0xFFDCC8E6).withOpacity(0.5); // Faint pastel lilac
+    final lilac = const Color(0xFFDCC8E6).withValues(alpha: 0.5); // Faint pastel lilac
     
     return PopScope(
       canPop: false,
@@ -99,7 +99,7 @@ class _LockScreenState extends State<LockScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: lilac.withOpacity(0.2),
+                            color: lilac.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 8,
                           ),

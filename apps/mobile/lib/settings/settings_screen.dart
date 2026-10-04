@@ -308,13 +308,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 24,
                             colorFilter: ColorFilter.mode(
                               AppScope.of(context).biometric.isEnabled
-                                  ? colors.primary
+                                  ? colors.foregroundAccent
                                   : colors.foregroundSecondary,
                               BlendMode.srcIn,
                             ),
                           ),
                           value: AppScope.of(context).biometric.isEnabled,
-                          activeColor: colors.primary,
                           onChanged: (value) async {
                             final messenger = ScaffoldMessenger.of(context);
                             final biometric = AppScope.of(context).biometric;
