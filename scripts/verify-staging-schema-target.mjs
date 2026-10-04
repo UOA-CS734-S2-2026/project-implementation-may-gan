@@ -55,7 +55,7 @@ export function readDirectMigratorTarget(connectionString) {
   return { host, database, port };
 }
 
-export function readHyperdriveTarget(hyperdrive) {
+export function readHyperdriveTarget(hyperdrive, expectedRole = expectedRuntimeRole) {
   const origin = hyperdrive?.result?.origin;
   if (!origin || typeof origin !== "object") {
     fail("the configured Hyperdrive does not expose a public database origin.");
@@ -63,8 +63,8 @@ export function readHyperdriveTarget(hyperdrive) {
   if (!['postgres', 'postgresql'].includes(origin.scheme)) {
     fail("the configured Hyperdrive must use PostgreSQL.");
   }
-  if (origin.user !== expectedRuntimeRole) {
-    fail("the configured Hyperdrive must use the restricted app role.");
+  if (origin.user !== expectedRole) {
+    fail(`the configured Hyperdrive must use the restricted ${expectedRole} role.`);
   }
   if (typeof origin.database !== "string" || origin.database.length === 0) {
     fail("the Hyperdrive origin database is unavailable.");

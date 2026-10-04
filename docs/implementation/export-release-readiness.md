@@ -10,6 +10,10 @@ Status: **not approved for activation**. The API worker, scheduled execution, na
 - On a local disposable database and API, the new Playwright check passed on desktop and mobile Chromium. A signed-in synthetic owner could reach `/account/export`, saw the disabled message, and made no export API request. It does not prove a ready archive download in a deployed browser.
 - On an Android emulator, the new isolated test used a synthetic empty ZIP and a fake export client without network access. The real Android share chooser appeared, the 22-byte synthetic ZIP existed in app cache while it was open, and the app removed the temporary file after the chooser was dismissed. The owner accepted emulator-only sharing evidence for this gate. This does not establish physical-device or iOS behavior, or a real account download. Reproduce with `bash scripts/test-export-emulator-share.sh <emulator-id>`.
 
+## Staging-only preflight
+
+The owner approved a disposable, synthetic-account staging export test and reported creating a separate `lifecycle_worker` Hyperdrive configuration. Its ID is held only in the `staging` GitHub environment. The manual `Verify staging export worker connection` workflow checks the app and worker Hyperdrive identities against the same direct staging database, refuses the ordinary app and migrator roles for worker use, and requires caching to be disabled. It has no Worker binding or database mutation. A passing control-plane check will not prove that the database password works or that the worker can execute its restricted procedures. Do not enable routes or scheduled execution from this preflight alone.
+
 ## Rollout review and remaining gates
 
 1. Leave `exportExecutionEnabled`, `nativeExportEnabled`, and the web `ExportPanel` flag false until an explicit owner activation decision. A successful deployment alone must not turn any of them on.
