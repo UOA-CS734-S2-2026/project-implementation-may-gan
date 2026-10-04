@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
+import '../firebase_options.dart';
 import 'push_service.dart';
 
-/// Firebase-backed token source. Call [initializeFirebasePush] only after the
-/// platform Firebase configuration has been supplied by the mobile owner.
+/// Firebase-backed token source. Call [initializeFirebasePushIfConfigured]
+/// before constructing it.
 class FirebasePushTokenSource implements PushTokenSource {
   FirebasePushTokenSource([FirebaseMessaging? messaging])
     : _messaging = messaging ?? FirebaseMessaging.instance;
@@ -82,17 +84,52 @@ class FirebasePushLifecycle {
   }
 }
 
+typedef FirebaseAppInitializer = Future<void> Function(FirebaseOptions options);
+typedef BackgroundMessageRegistrar =
+    void Function(BackgroundMessageHandler handler);
+
+Future<void> _initializeFirebaseApp(FirebaseOptions options) async {
+  await Firebase.initializeApp(options: options);
+}
+
+/// Initializes the registered staging app from explicit client metadata.
+///
+/// Both foreground startup and the background isolate use this function so
+/// they cannot select different Firebase projects.
+Future<void> initializeStagingFirebaseApp({
+  TargetPlatform? platform,
+  bool debugMode = kDebugMode,
+  FirebaseAppInitializer initializer = _initializeFirebaseApp,
+}) => initializer(
+  stagingFirebaseOptions(platform: platform, debugMode: debugMode),
+);
+
 /// Must remain a top-level VM entrypoint. It intentionally does no navigation
 /// and does not display or persist message content.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage _) async {
-  await Firebase.initializeApp();
+  await initializeStagingFirebaseApp();
 }
 
-/// The mobile composition root calls this after Firebase platform files and
-/// project ownership are configured. It is not called by default in builds
-/// without those files.
-Future<void> initializeFirebasePush() async {
-  await Firebase.initializeApp();
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+/// Initializes push only when the build has explicitly opted in.
+///
+/// The switch defaults to false. An enabled release or profile build fails
+/// closed because [stagingFirebaseOptions] rejects non-debug builds.
+Future<bool> initializeFirebasePushIfConfigured(
+  bool configured, {
+  TargetPlatform? platform,
+  bool debugMode = kDebugMode,
+  FirebaseAppInitializer initializer = _initializeFirebaseApp,
+  BackgroundMessageRegistrar registerBackgroundHandler =
+      FirebaseMessaging.onBackgroundMessage,
+}) async {
+  if (!configured) return false;
+
+  await initializeStagingFirebaseApp(
+    platform: platform,
+    debugMode: debugMode,
+    initializer: initializer,
+  );
+  registerBackgroundHandler(firebaseMessagingBackgroundHandler);
+  return true;
 }

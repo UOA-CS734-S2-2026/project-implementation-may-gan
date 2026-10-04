@@ -17,7 +17,8 @@ class AppConfig {
   final String googleWebClientId;
   final String googleIosClientId;
 
-  /// Set only in builds that include owner-provided Firebase platform files.
+  /// Enables the checked-in staging Firebase options in a debug build.
+  /// Release and profile builds reject this setting.
   final bool firebaseConfigured;
 
   /// Explicit for staging tester builds. Production API origins cannot open it.

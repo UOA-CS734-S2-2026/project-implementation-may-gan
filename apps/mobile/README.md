@@ -43,6 +43,26 @@ flutter run \
 
 Without the Dart IDs the button explains that Google sign-in isn't set up for the build. Without the Xcode setting, iOS cannot return from Google sign-in.
 
+## Staging Firebase push configuration
+
+The registered Android and iOS staging client metadata is checked in as typed `FirebaseOptions` in `lib/firebase_options.dart`. Firebase client options identify an app and project. They are public mobile configuration, not a service-account key, APNs key, server credential, or signing credential.
+
+Firebase remains off unless a debug build sets `DAYLI_FIREBASE_CONFIGURED=true`:
+
+```bash
+flutter run --debug \
+  --dart-define=DAYLI_API_BASE_URL=https://api.example.test \
+  --dart-define=DAYLI_FIREBASE_CONFIGURED=true
+```
+
+Android debug builds use the registered `nz.ac.auckland.dayli.dayli_mobile.staging` application ID. iOS debug builds use `nz.ac.auckland.dayli.dayliMobile`, the same bundle ID currently used by every Xcode configuration. The iOS push entitlement and remote-notification background mode exist only in the Debug configuration. Release and profile builds contain no native Firebase resource, and setting the Dart flag in either mode stops startup instead of selecting the staging project.
+
+Do not run `flutterfire configure` or copy either downloaded Firebase file into a global Android or iOS resource directory. That would make native auto-configuration available to build variants that have no registered staging app. Update the explicit options only from owner-provided mobile client files, then check that the project ID, app IDs, Android package, and iOS bundle ID still match the registrations.
+
+The remaining Apple steps require the owner. Enable Push Notifications and Background Modes for the Apple App ID, select Remote notifications, configure development signing and provisioning for the Debug entitlement, and upload an APNs authentication key to Firebase through the provider account. Then check APNs token availability and FCM registration on a signed physical-device build. The checked-in metadata and host tests do not prove live Firebase or APNs delivery.
+
+This setup is only for Firebase Cloud Messaging. Dayli authentication remains on Better Auth and application data remains in PostgreSQL. Do not enable Firebase Authentication or Firestore for this client, and do not put service-account files, APNs `.p8` files, or other provider credentials in the repository or Dart defines. Web push is outside this mobile configuration.
+
 ## Connecting Google to a password account
 
 Dayli never connects identities merely because their emails match. After signing in with email and password, open **Settings**, choose **Connect Google**, enter the current Dayli password, and choose the Google account with the same verified email. The Worker verifies the password against the authenticated bearer session in the link request, then verifies the Google token. The app does not accept a client-only confirmation and does not replace the stored bearer token during linking.
