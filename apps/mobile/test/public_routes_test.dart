@@ -6,7 +6,6 @@ import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/public_return_intent.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';

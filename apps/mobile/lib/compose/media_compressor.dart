@@ -130,8 +130,9 @@ class DeviceMediaCompressor implements MediaCompressor {
     required String ownerId,
   }) async {
     try {
-      final directory = await (await _ownerDirectory(ownerId))
-          .create(recursive: true);
+      final directory = await (await _ownerDirectory(
+        ownerId,
+      )).create(recursive: true);
       return attachment.mediaType == 'video'
           ? await _compressVideo(attachment.localPath, directory)
           : await _compressPhoto(attachment.localPath, directory);

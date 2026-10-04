@@ -140,8 +140,9 @@ void main() {
   test('survives the protected store with its upload state', () async {
     FlutterSecureStorage.setMockInitialValues({});
     final store = ProtectedDraftStore();
-    final draft = DailyPostDraft.fromJson(draftJson([]))!
-        .copyWith(attachments: const [validated]);
+    final draft = DailyPostDraft.fromJson(
+      draftJson([]),
+    )!.copyWith(attachments: const [validated]);
     await store.write(draft);
 
     final restored = (await ProtectedDraftStore().read('user-1')).draft!;

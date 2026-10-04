@@ -480,8 +480,9 @@ void main() {
       isTrue,
     );
     expect(
-      validateDraft(base.copyWith(reflectiveAnswer: '😀' * 4001))
-          .reflectiveAnswer,
+      validateDraft(
+        base.copyWith(reflectiveAnswer: '😀' * 4001),
+      ).reflectiveAnswer,
       isNotNull,
     );
   });

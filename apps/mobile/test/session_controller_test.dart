@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:dayli_mobile/app/fresh_install.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
-
 import 'dart:convert';
 
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';

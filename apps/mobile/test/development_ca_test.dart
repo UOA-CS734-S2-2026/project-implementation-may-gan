@@ -30,8 +30,9 @@ void main() {
   });
 
   test('accepts wrapped base64 output', () {
-    final wrapped = encode(testCaPem)
-        .replaceAllMapped(RegExp('.{76}'), (match) => '${match[0]}\n');
+    final wrapped = encode(
+      testCaPem,
+    ).replaceAllMapped(RegExp('.{76}'), (match) => '${match[0]}\n');
 
     expect(
       developmentCaBytes(wrapped, debugMode: true),

@@ -101,8 +101,9 @@ void main() {
         503: ServiceUnavailable,
       };
       for (final MapEntry(key: status, value: type) in cases.entries) {
-        final result = await client((_) => http.Response('{}', status))
-            .reserve(contentType: 'image/jpeg', byteSize: 4);
+        final result = await client(
+          (_) => http.Response('{}', status),
+        ).reserve(contentType: 'image/jpeg', byteSize: 4);
         expect(
           (result as ApiError).failure.runtimeType,
           type,
@@ -119,8 +120,9 @@ void main() {
       expect((signedOut as ApiError).failure, isA<Unauthenticated>());
       expect(requests, isEmpty);
 
-      final unsupported = await client((_) => http.Response('{}', 201))
-          .reserve(contentType: 'image/gif', byteSize: 4);
+      final unsupported = await client(
+        (_) => http.Response('{}', 201),
+      ).reserve(contentType: 'image/gif', byteSize: 4);
       expect((unsupported as ApiError).failure, isA<InvalidRequest>());
       expect(requests, isEmpty);
     });
@@ -131,8 +133,9 @@ void main() {
         reservation(url: 'http://insecure.test/upload'),
         reservation(headers: {'content-type': 4}),
       ]) {
-        final result = await client((_) => http.Response(jsonEncode(body), 201))
-            .reserve(contentType: 'image/jpeg', byteSize: 4);
+        final result = await client(
+          (_) => http.Response(jsonEncode(body), 201),
+        ).reserve(contentType: 'image/jpeg', byteSize: 4);
         expect((result as ApiError).failure, isA<ServiceUnavailable>());
       }
     });
@@ -147,8 +150,9 @@ void main() {
     test(
       'PUTs the bytes with exactly the signed headers and no session',
       () async {
-        final result = await client((_) => http.Response('', 200))
-            .upload(ticket, photo);
+        final result = await client(
+          (_) => http.Response('', 200),
+        ).upload(ticket, photo);
 
         expect(result, isA<ApiSuccess<void>>());
         final request = requests.single;
@@ -163,18 +167,21 @@ void main() {
     );
 
     test('treats an upload already in storage as done', () async {
-      final result = await client((_) => http.Response('', 412))
-          .upload(ticket, photo);
+      final result = await client(
+        (_) => http.Response('', 412),
+      ).upload(ticket, photo);
       expect(result, isA<ApiSuccess<void>>());
     });
 
     test('maps storage refusals and network errors', () async {
-      final expired = await client((_) => http.Response('', 403))
-          .upload(ticket, photo);
+      final expired = await client(
+        (_) => http.Response('', 403),
+      ).upload(ticket, photo);
       expect((expired as ApiError).failure, isA<Expired>());
 
-      final broken = await client((_) => http.Response('', 500))
-          .upload(ticket, photo);
+      final broken = await client(
+        (_) => http.Response('', 500),
+      ).upload(ticket, photo);
       expect((broken as ApiError).failure, isA<ServiceUnavailable>());
 
       final offline = await client(
@@ -184,13 +191,15 @@ void main() {
     });
 
     test('refuses a missing or changed file without sending', () async {
-      final missing = await client((_) => http.Response('', 200))
-          .upload(ticket, '${temp.path}/gone.jpg');
+      final missing = await client(
+        (_) => http.Response('', 200),
+      ).upload(ticket, '${temp.path}/gone.jpg');
       expect((missing as ApiError).failure, isA<InvalidRequest>());
 
       await File(photo).writeAsBytes([1, 2, 3, 4, 5]);
-      final changed = await client((_) => http.Response('', 200))
-          .upload(ticket, photo);
+      final changed = await client(
+        (_) => http.Response('', 200),
+      ).upload(ticket, photo);
       expect((changed as ApiError).failure, isA<InvalidRequest>());
       expect(requests, isEmpty);
     });
@@ -241,9 +250,9 @@ void main() {
         isA<Expired>(),
       );
       expect(
-        ((await complete(
-          http.Response(jsonEncode({'status': 'expired'}), 200),
-        )) as ApiError).failure,
+        ((await complete(http.Response(jsonEncode({'status': 'expired'}), 200)))
+                as ApiError)
+            .failure,
         isA<Expired>(),
       );
       expect(

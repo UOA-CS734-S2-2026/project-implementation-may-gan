@@ -169,8 +169,9 @@ class _NewMessageScreenState extends State<NewMessageScreen> {
                         onPressed: () {
                           if (accountAtLookup != _session?.user?.id) return;
                           setState(() {
-                            _existing = AppScope.of(context).messaging
-                                .findDirect(person.id);
+                            _existing = AppScope.of(
+                              context,
+                            ).messaging.findDirect(person.id);
                           });
                         },
                         child: const Text('Retry lookup'),
