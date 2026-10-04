@@ -139,27 +139,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       color: colors.foregroundAccent,
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
           Text(
             _greeting(now),
             style: DayliText.serif(
               context,
-              fontSize: 30,
-              weight: FontWeight.w600,
-              tracking: DayliTracking.tighter,
+              fontSize: 34,
+              weight: FontWeight.w400,
+              tracking: -0.06,
             ),
           ),
-          Text(
-            "today's prompt",
-            style: DayliText.serif(
-              context,
-              size: DayliTextSize.xl,
-              weight: FontWeight.w600,
-              tracking: DayliTracking.tight,
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
           _TodayCard(day: _day, onCompose: _compose, onRetry: _load),
           const SizedBox(height: 36),
           Text(
@@ -260,6 +251,14 @@ class _TodayCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              Text(
+                "today's prompt",
+                style: DayliText.serif(
+                  context,
+                  size: DayliTextSize.base,
+                  color: colors.foregroundTertiary,
+                ),
+              ),
               const Spacer(),
               if (!today.hasPosted)
                 DeadlineCountdown(
@@ -269,8 +268,7 @@ class _TodayCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (today.hasPosted || today.deadlineAt != null)
-            const SizedBox(height: 12),
+          const SizedBox(height: 12),
           Text(
             today.promptText,
             style: DayliText.serif(
@@ -314,9 +312,9 @@ class _TodayCard extends StatelessWidget {
               key: const Key('today.compose'),
               label: 'Post your dayli',
               weight: ButtonWeight.primary,
-              size: ButtonSize.lg,
+              size: ButtonSize.md,
               fullWidth: true,
-              height: 52,
+              height: 44,
               arrow: true,
               onPressed: onCompose,
             ),
@@ -325,7 +323,7 @@ class _TodayCard extends StatelessWidget {
     };
 
     return DayliCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       radius: 20,
       child: content,
     );
@@ -389,11 +387,6 @@ class _FeedSection extends StatelessWidget {
       return Column(
         children: [
           const SizedBox(height: 20),
-          Opacity(
-            opacity: 0.5,
-            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
-          ),
-          const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
@@ -406,8 +399,13 @@ class _FeedSection extends StatelessWidget {
                 weight: FontWeight.w500,
                 tracking: DayliTracking.tight,
                 color: colors.foregroundSecondary,
-              ),
+              ).copyWith(height: 1.1),
             ),
+          ),
+          const SizedBox(height: 20),
+          Opacity(
+            opacity: 0.5,
+            child: SvgPicture.asset('assets/wdcc/squiggle02.svg', height: 28),
           ),
         ],
       );
