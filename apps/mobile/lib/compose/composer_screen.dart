@@ -688,9 +688,6 @@ class _ComposerScreenState extends State<ComposerScreen>
           ),
         ],
         const SizedBox(height: 28),
-        const _SectionLabel('the weather'),
-        _Lockable(locked: locked, child: _weatherSection(controller, draft)),
-        const SizedBox(height: 28),
         _SectionLabel(
           'rate your day',
           trailing: draft.rating == null ? null : '${draft.rating}/10',
@@ -713,6 +710,9 @@ class _ComposerScreenState extends State<ComposerScreen>
             ),
           ),
         ],
+        const SizedBox(height: 28),
+        const _SectionLabel('the weather'),
+        _Lockable(locked: locked, child: _weatherSection(controller, draft)),
         const SizedBox(height: 28),
         DayliFormInput(
           label: 'Your answer',
