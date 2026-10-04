@@ -8461,7 +8461,7 @@
             "description": "A native request limit or the persistent sender-wide message quota was reached.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Wait in seconds before retrying.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
@@ -9540,7 +9540,7 @@
             "description": "A native request limit or the persistent sender-wide message quota was reached.",
             "headers": {
               "Retry-After": {
-                "description": "Wait in seconds before the oldest counted message expires.",
+                "description": "Wait in seconds before retrying.",
                 "schema": {
                   "type": "integer",
                   "minimum": 1
