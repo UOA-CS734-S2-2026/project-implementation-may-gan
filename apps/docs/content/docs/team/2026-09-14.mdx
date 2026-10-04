@@ -1,0 +1,40 @@
+---
+title: Week of 2026-09-14
+description: Database migrations and transaction verification
+---
+
+Period: 14 to 20 September 2026 (Pacific/Auckland).
+
+Reconstructed weekly progress log. Meeting date and attendance were not recorded.
+
+Jos added the migration workflow in [PR #60](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/60) and PostgreSQL transaction checks in [PR #61](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/61). Anton opened the Better Auth compatibility PR during this week; it merged the following week.
+
+## Work recorded
+
+- Additive database migrations landed in [PR #60](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/60) for [#8](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/8).
+- Hyperdrive transaction checks landed in [PR #61](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/61) for [#9](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/9).
+- Anton continued the Workers and Flutter authentication proof in [PR #71](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/71) for [#10](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/10).
+- The backlog expanded with audio, export, privacy, profile, streak, and post-interaction tasks.
+
+## Work carried forward
+
+Complete the authentication foundation, then connect posting and media work to the shared API. The authentication PR's merge is recorded in the next week.
+
+## Source record
+
+<details>
+<summary>Merged pull requests for this week</summary>
+
+| PR | Author | Merged (Auckland) | Change |
+| --- | --- | --- | --- |
+| [PR #60](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/60) | jebadenas | 2026-09-14 | feat: establish additive database migrations |
+| [PR #61](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/61) | jebadenas | 2026-09-18 | test: prove Hyperdrive PostgreSQL transactions |
+
+</details>
+
+Main-branch commit references:
+
+- [5d00709f](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/5d00709ffc8882cc2109dfd77b5204ab6f0862ef): Merge pull request #60 from UOA-CS734-S2-2026/issue-8-establish-additive-database-migrations (Jos Badenas, 2026-09-14).
+- [19edba66](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/19edba66e9b5639685dc91e0c089b02598622154): feat(auth): add Google sign-in and Resend email delivery (Anton Garay, 2026-09-19).
+
+[All weekly records](/docs/team) · [Task breakdown](/docs/team/task-breakdown)
