@@ -188,6 +188,14 @@ abstract final class DayliShadows {
       spreadRadius: -2,
     ),
   ];
+
+  static const nav = [
+    BoxShadow(
+      color: Color(0x0A000000),
+      blurRadius: 16,
+      offset: Offset(0, -4),
+    ),
+  ];
 }
 
 /// Builds the app theme. Tests pass [useGoogleFonts] false so no font is
