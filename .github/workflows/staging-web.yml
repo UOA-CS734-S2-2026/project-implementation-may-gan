@@ -141,4 +141,5 @@ jobs:
             echo 'The staging environment must provide CLOUDFLARE_API_TOKEN.' >&2
             exit 1
           fi
-          pnpm --dir apps/web exec wrangler deploy --config dist/server/wrangler.json
+          pnpm --dir apps/web exec wrangler deploy --config dist/server/wrangler.json \
+            --tag "${{ inputs.commit_sha }}" --message "staging-release:${{ inputs.commit_sha }}"
