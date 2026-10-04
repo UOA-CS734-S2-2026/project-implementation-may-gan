@@ -43,9 +43,8 @@ void main() {
   test(
     'reads a post with the bearer session, including a null caption',
     () async {
-      final result = await client(
-        (_) => http.Response(jsonEncode(body()), 200),
-      ).get('post-1');
+      final result = await client((_) => http.Response(jsonEncode(body()), 200))
+          .get('post-1');
 
       expect(requests.single.url.path, '/api/v1/posts/post-1');
       expect(requests.single.headers['authorization'], 'Bearer token-1');
@@ -66,13 +65,13 @@ void main() {
     expect((invalid as ApiError).failure, isA<NotFound>());
   });
 
-  test('maps other failures and never calls without a session', () async {
+  test('reads anonymously and maps credential or service failures', () async {
     final signedOut = await client(
-      (_) => http.Response('{}', 200),
+      (_) => http.Response(jsonEncode(body(audience: 'friends')), 200),
       token: null,
     ).get('post-1');
-    expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-    expect(requests, isEmpty);
+    expect(signedOut, isA<ApiSuccess<PostDetail>>());
+    expect(requests.single.headers['authorization'], isNull);
 
     final expired = await client((_) => http.Response('{}', 401)).get('post-1');
     final down = await client((_) => http.Response('{}', 503)).get('post-1');
@@ -126,11 +125,93 @@ void main() {
       );
     });
 
-    test('maps refusals and never calls without a session', () async {
+    Map<String, Object?> voiceMemoJson({
+      String? url = 'https://storage.example.test/v?sig=1',
+    }) => {
+      'id': 'vm-1',
+      'contentType': 'audio/mp4',
+      'url': url,
+      'expiresAt': '2026-09-26T03:05:00.000Z',
+    };
+
+    test('reads the post\'s voice memo, or none', () async {
+      final withMemo = await client(
+        (_) => http.Response(
+          jsonEncode({...body(), 'voiceMemo': voiceMemoJson()}),
+          200,
+        ),
+      ).get('post-1');
+      final memo = (withMemo as ApiSuccess<PostDetail>).value.voiceMemo;
+      expect(memo?.id, 'vm-1');
+      expect(memo?.contentType, 'audio/mp4');
+      expect(memo?.url, Uri.parse('https://storage.example.test/v?sig=1'));
+
+      // A post without one sends null, and an older server sends nothing.
+      for (final extra in [
+        {'voiceMemo': null},
+        <String, Object?>{},
+      ]) {
+        final without = await client(
+          (_) => http.Response(jsonEncode({...body(), ...extra}), 200),
+        ).get('post-1');
+        expect((without as ApiSuccess<PostDetail>).value.voiceMemo, isNull);
+      }
+    });
+
+    test('treats a voice memo with a plain-HTTP URL as unavailable', () async {
+      final result = await client(
+        (_) => http.Response(
+          jsonEncode({
+            ...body(),
+            'voiceMemo': voiceMemoJson(url: 'http://storage.example.test/v'),
+          }),
+          200,
+        ),
+      ).get('post-1');
+
+      expect((result as ApiSuccess<PostDetail>).value.voiceMemo?.url, isNull);
+    });
+
+    test('gets a fresh URL for the voice memo', () async {
+      final result = await client(
+        (_) => http.Response(jsonEncode(voiceMemoJson()), 200),
+      ).voiceMemo('post-1');
+
+      expect(requests.single.url.path, '/api/v1/posts/post-1/voice-memo');
+      expect(requests.single.headers['authorization'], 'Bearer token-1');
+      expect(
+        (result as ApiSuccess<PostVoiceMemo>).value.url,
+        Uri.parse('https://storage.example.test/v?sig=1'),
+      );
+    });
+
+    test(
+      'maps voice memo refusals and never calls without a session',
+      () async {
+        for (final status in [404, 422]) {
+          final result = await client((_) => http.Response('{}', status))
+              .voiceMemo('post-1');
+          expect((result as ApiError).failure, isA<NotFound>());
+        }
+        final noUrl = await client(
+          (_) => http.Response(jsonEncode(voiceMemoJson(url: null)), 200),
+        ).voiceMemo('post-1');
+        expect((noUrl as ApiError).failure, isA<ServiceUnavailable>());
+
+        requests.clear();
+        final signedOut = await client(
+          (_) => http.Response('{}', 200),
+          token: null,
+        ).voiceMemo('post-1');
+        expect((signedOut as ApiError).failure, isA<Unauthenticated>());
+        expect(requests, isEmpty);
+      },
+    );
+
+    test('maps refusals and permits anonymous media reads', () async {
       for (final status in [404, 422]) {
-        final result = await client(
-          (_) => http.Response('{}', status),
-        ).media('post-1', 'm-1');
+        final result = await client((_) => http.Response('{}', status))
+            .media('post-1', 'm-1');
         expect((result as ApiError).failure, isA<NotFound>());
       }
       final noUrl = await client(
@@ -139,11 +220,11 @@ void main() {
       expect((noUrl as ApiError).failure, isA<ServiceUnavailable>());
 
       final signedOut = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(jsonEncode(mediaJson('m-1', 0)), 200),
         token: null,
       ).media('post-1', 'm-1');
-      expect((signedOut as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(signedOut, isA<ApiSuccess<PostMedia>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
   });
 
@@ -182,22 +263,29 @@ void main() {
     );
 
     test('treats an unknown or blocked profile as not found', () async {
-      final result = await client(
-        (_) => http.Response('{}', 404),
-      ).profilePage('nobody');
+      final result = await client((_) => http.Response('{}', 404))
+          .profilePage('nobody');
 
       expect(result, isA<ApiError<ProfilePostsPage>>());
       expect((result as ApiError).failure, isA<NotFound>());
     });
 
-    test('does not call the API without a session', () async {
+    test('reads a public profile archive without a session', () async {
       final result = await client(
-        (_) => http.Response('{}', 200),
+        (_) => http.Response(
+          jsonEncode({
+            'kind': 'archive',
+            'items': [profilePost()..['audience'] = 'friends'],
+            'nextCursor': null,
+            'hasMore': false,
+          }),
+          200,
+        ),
         token: null,
       ).profilePage('ana_walks');
 
-      expect((result as ApiError).failure, isA<Unauthenticated>());
-      expect(requests, isEmpty);
+      expect(result, isA<ApiSuccess<ProfilePostsPage>>());
+      expect(requests.single.headers['authorization'], isNull);
     });
   });
 
@@ -229,17 +317,15 @@ void main() {
     });
 
     test('reports a stale revision count as a conflict', () async {
-      final result = await client(
-        (_) => http.Response('{}', 409),
-      ).update('post-1', edit);
+      final result = await client((_) => http.Response('{}', 409))
+          .update('post-1', edit);
 
       expect((result as ApiError).failure, isA<Conflict>());
     });
 
     test('treats someone else\'s or a deleted post as not found', () async {
-      final result = await client(
-        (_) => http.Response('{}', 404),
-      ).update('post-1', edit);
+      final result = await client((_) => http.Response('{}', 404))
+          .update('post-1', edit);
 
       expect((result as ApiError).failure, isA<NotFound>());
     });
@@ -253,14 +339,12 @@ void main() {
     expect(requests.single.url.path, '/api/v1/posts/post-1/trash');
     expect(deleted, isA<ApiSuccess<void>>());
 
-    final missing = await client(
-      (_) => http.Response('{}', 404),
-    ).delete('post-1');
+    final missing = await client((_) => http.Response('{}', 404))
+        .delete('post-1');
     expect((missing as ApiError).failure, isA<NotFound>());
 
-    final refused = await client(
-      (_) => http.Response('{}', 409),
-    ).delete('post-1');
+    final refused = await client((_) => http.Response('{}', 409))
+        .delete('post-1');
     expect((refused as ApiError).failure, isA<Conflict>());
 
     // Trash is switched off until it's enabled for the environment.
@@ -296,9 +380,8 @@ void main() {
     expect(page.items.single.replacedAt, DateTime.utc(2026, 9, 29, 8));
     expect(page.nextCursor, 'next');
 
-    final hidden = await client(
-      (_) => http.Response('{}', 404),
-    ).revisions('post-1');
+    final hidden = await client((_) => http.Response('{}', 404))
+        .revisions('post-1');
     expect((hidden as ApiError).failure, isA<NotFound>());
   });
 }

@@ -75,9 +75,8 @@ void main() {
   test('fails when the photo encoder writes nothing or throws', () async {
     final photo = await pick('a.jpg', 'image');
     expect(
-      await compressor(
-        encodePhoto: (_, _) async => false,
-      ).compress(photo, ownerId: 'user-1'),
+      await compressor(encodePhoto: (_, _) async => false)
+          .compress(photo, ownerId: 'user-1'),
       isA<CompressionFailed>(),
     );
     expect(
@@ -125,15 +124,13 @@ void main() {
   test('fails when a video cannot be probed or encoded', () async {
     final video = await pick('clip.mov', 'video');
     expect(
-      await compressor(
-        probeVideo: (_) async => null,
-      ).compress(video, ownerId: 'user-1'),
+      await compressor(probeVideo: (_) async => null)
+          .compress(video, ownerId: 'user-1'),
       isA<CompressionFailed>(),
     );
     expect(
-      await compressor(
-        encodeVideo: (_) async => null,
-      ).compress(video, ownerId: 'user-1'),
+      await compressor(encodeVideo: (_) async => null)
+          .compress(video, ownerId: 'user-1'),
       isA<CompressionFailed>(),
     );
   });
@@ -141,12 +138,14 @@ void main() {
   test('gives each compressed copy its own name', () async {
     final photo = await pick('a.jpg', 'image');
     final subject = compressor();
-    final first =
-        await subject.compress(photo, ownerId: 'user-1')
-            as CompressionSucceeded;
-    final second =
-        await subject.compress(photo, ownerId: 'user-1')
-            as CompressionSucceeded;
+    final first = await subject.compress(
+      photo,
+      ownerId: 'user-1',
+    ) as CompressionSucceeded;
+    final second = await subject.compress(
+      photo,
+      ownerId: 'user-1',
+    ) as CompressionSucceeded;
     expect(first.media.path, isNot(second.media.path));
     expect(File(first.media.path).existsSync(), isTrue);
   });
@@ -154,10 +153,10 @@ void main() {
   test('discards only its own compressed copies', () async {
     final photo = await pick('a.jpg', 'image');
     final subject = compressor();
-    final media =
-        (await subject.compress(photo, ownerId: 'user-1')
-                as CompressionSucceeded)
-            .media;
+    final media = (await subject.compress(
+      photo,
+      ownerId: 'user-1',
+    ) as CompressionSucceeded).media;
 
     await subject.discard(photo.localPath);
     expect(File(photo.localPath).existsSync(), isTrue);
@@ -174,14 +173,14 @@ void main() {
     () async {
       final photo = await pick('a.jpg', 'image');
       final subject = compressor();
-      final mine =
-          (await subject.compress(photo, ownerId: 'user-1')
-                  as CompressionSucceeded)
-              .media;
-      final theirs =
-          (await subject.compress(photo, ownerId: 'user-2')
-                  as CompressionSucceeded)
-              .media;
+      final mine = (await subject.compress(
+        photo,
+        ownerId: 'user-1',
+      ) as CompressionSucceeded).media;
+      final theirs = (await subject.compress(
+        photo,
+        ownerId: 'user-2',
+      ) as CompressionSucceeded).media;
       // A copy a crash left behind, which no draft refers to.
       final leftover = File('${mediaDir()}/orphan.jpg');
       await leftover.writeAsBytes([1]);
@@ -200,10 +199,10 @@ void main() {
 
   test('keeps an unusual user ID inside its own folder', () async {
     final photo = await pick('a.jpg', 'image');
-    final media =
-        (await compressor().compress(photo, ownerId: '../escape')
-                as CompressionSucceeded)
-            .media;
+    final media = (await compressor().compress(
+      photo,
+      ownerId: '../escape',
+    ) as CompressionSucceeded).media;
     expect(File(media.path).parent.parent.path, '${root.path}/dayli-media');
 
     // Dot segments survive URI encoding, so they need their own guard.

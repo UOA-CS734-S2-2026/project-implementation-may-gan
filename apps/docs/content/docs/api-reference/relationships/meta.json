@@ -1,0 +1,17 @@
+{
+  "title": "Relationships",
+  "pages": [
+    "relationships.listPendingRequests",
+    "relationships.sendRequest",
+    "relationships.listFriends",
+    "relationships.searchUsers",
+    "relationships.getProfileByUsername",
+    "relationships.getStatus",
+    "relationships.acceptRequest",
+    "relationships.declineRequest",
+    "relationships.cancelRequest",
+    "relationships.removeFriendship",
+    "relationships.block",
+    "relationships.unblock"
+  ]
+}

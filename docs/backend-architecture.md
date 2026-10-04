@@ -1,6 +1,6 @@
 # Backend architecture
 
-Status: backend action boundaries are implemented. See the [boundary inventory](implementation/backend-action-boundaries-inventory.md) for the route baseline and the [messaging handoff](implementation/messaging-implementation-handoff.md) for messaging behavior and deployment gates.
+Status: backend action boundaries are implemented. See the [boundary inventory](implementation/backend-action-boundaries-inventory.md) for the route baseline and the [messaging system guide](../apps/docs/content/docs/systems/messaging/index.mdx) for messaging behavior and deployment gates.
 
 ## Decisions
 
@@ -224,7 +224,7 @@ Do not build RBAC or subscription gates solely because a nullable role column ex
 | Flutter state/widgets | Existing `flutter_test`, fake transports and clocks |
 | FCM/APNs delivery | Mock HTTP provider tests plus physical-device release evidence |
 
-Place action tests in `<subfeature>/<action>/__tests__/`. Use `<action>.route.test.ts`, `<action>.service.test.ts`, and `<action>.repository.integration.test.ts` where those modules exist. Test pure policy helpers beside the shared policy. Put reusable API fixtures in `apps/api/test/support/` and boundary-only virtual-path fixtures in `apps/api/test/boundaries/`. Name tests after the action and behavior, never ambiguous `test.ts`.
+Place API tests in an owner `__tests__/` directory: action tests in `<subfeature>/<action>/__tests__/`, shared tests beside their shared owner, and HTTP, infrastructure, or entrypoint tests beside their module. Put standalone runtime, workerd, and staging tests in `apps/api/test/__tests__/`. Use `<action>.route.test.ts`, `<action>.service.test.ts`, and `<action>.repository.integration.test.ts` where those modules exist. Test pure policy helpers beside the shared policy. Put reusable API fixtures in `apps/api/test/support/` and boundary-only virtual-path fixtures in `apps/api/test/boundaries/`. Name tests after the action and behavior, never ambiguous `test.ts`.
 
 Do not mock Drizzle's chained query builder. Unit tests prove rules; real-Postgres tests prove SQL, locks and rollback. Test boundary wiring with focused integration cases rather than repeating every policy permutation in every layer. Update discovery/configuration before renaming tests so the new integration suffix never silently stops running or runs without its database gate.
 
@@ -238,4 +238,4 @@ REST owns commands and authorized state. Postgres owns history, read state, chan
 
 The web implementation uses a user-remounted QueryClient and user-ID keys, with action-owned TanStack hooks under `apps/web/features/messaging`. The provider cancels and clears private cache state on account changes. It applies canonical projections to every loaded history page before advancing a durable change cursor, then invalidates dependent conversation, inbox, and unread projections. Push targets eligible peer devices through FCM/APNs and requires owner configuration and device proof. Images remain blocked on R2 integration; groups remain blocked on policy.
 
-For endpoint contracts and messaging-specific data rules, use the [messaging handoff](implementation/messaging-implementation-handoff.md). This architecture document governs organization and boundaries, not changes to those approved product rules.
+For endpoint contracts, use the generated API reference. For messaging-specific data rules, use the [messaging system guide](../apps/docs/content/docs/systems/messaging/index.mdx). This architecture document governs organization and boundaries, not changes to those approved product rules.

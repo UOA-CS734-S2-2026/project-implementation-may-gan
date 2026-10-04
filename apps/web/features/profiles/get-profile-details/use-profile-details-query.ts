@@ -6,11 +6,11 @@ import { useSession } from "@/lib/session/hooks";
 
 /** One profile's details, keyed by account so a switch never shows another user's view. */
 export function useProfileDetailsQuery(username: string | undefined) {
-  const { user } = useSession();
+  const { user, isPending } = useSession();
   const userId = user?.id ?? "anonymous";
   return useQuery({
     queryKey: profileKeys.details(userId, username ?? ""),
-    enabled: Boolean(user?.id && username),
+    enabled: Boolean(!isPending && username),
     queryFn: async () => unwrapProfileResult(await profilesApi.details(username!)),
     retry: false,
   });

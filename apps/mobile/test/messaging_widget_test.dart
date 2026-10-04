@@ -221,23 +221,20 @@ void main() {
     },
   );
 
-  test(
-    'formats a latest-message date with the local calendar day at a timezone boundary',
-    () {
-      final conversation = namedConversation(
-        'timezone',
-        'Timezone',
-        createdAt: DateTime.utc(2026, 1, 1, 0, 30),
-      );
-      expect(
-        conversationListDate(
-          conversation,
-          toLocal: (date) => date.toUtc().subtract(const Duration(hours: 2)),
-        ),
-        '31/12/2025',
-      );
-    },
-  );
+  test('formats a latest-message date with the local calendar day at a timezone boundary', () {
+    final conversation = namedConversation(
+      'timezone',
+      'Timezone',
+      createdAt: DateTime.utc(2026, 1, 1, 0, 30),
+    );
+    expect(
+      conversationListDate(
+        conversation,
+        toLocal: (date) => date.toUtc().subtract(const Duration(hours: 2)),
+      ),
+      '31/12/2025',
+    );
+  });
 
   testWidgets(
     'clears an old inbox before a delayed replacement-account refresh resolves',

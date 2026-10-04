@@ -5,9 +5,12 @@ import '../api/api_failure.dart';
 import '../api/post_client.dart';
 import '../app/app_scope.dart';
 import '../app/theme.dart';
+import '../auth/public_return_intent.dart';
+import '../auth/session_controller.dart';
 import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
+import '../ui/voice_player.dart';
 
 import 'edit_post_screen.dart';
 import 'post_revisions_screen.dart';
@@ -17,9 +20,16 @@ import 'private_media.dart';
 /// again, so a post that was deleted or whose access was revoked is replaced
 /// by the unavailable state rather than shown from memory.
 class PostDetailScreen extends StatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({
+    super.key,
+    required this.postId,
+    this.intent,
+    this.intentActorId,
+  });
 
   final String postId;
+  final PublicActionIntent? intent;
+  final String? intentActorId;
 
   @override
   State<PostDetailScreen> createState() => _PostDetailScreenState();
@@ -28,6 +38,11 @@ class PostDetailScreen extends StatefulWidget {
 class _PostDetailScreenState extends State<PostDetailScreen> {
   ApiResult<PostDetail>? _result;
   PostDetail? _post;
+  SessionController? _session;
+  (SessionStatus, String?, int)? _sessionIdentity;
+  String? _loadedPostId;
+  int _requestGeneration = 0;
+  String? _intentNotice;
 
   /// True once the post was edited or deleted here. It is returned to the
   /// list that opened the post, so that list can refresh.
@@ -36,17 +51,79 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_result == null) _load();
+    final session = AppScope.of(context).session;
+    if (_session != session) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session..addListener(_onSessionChanged);
+    }
+    _syncActor();
+  }
+
+  void _onSessionChanged() {
+    if (!mounted) return;
+    _syncActor();
+  }
+
+  void _syncActor({bool force = false}) {
+    final identity = _currentSessionIdentity();
+    if (force ||
+        identity != _sessionIdentity ||
+        _loadedPostId != widget.postId) {
+      _sessionIdentity = identity;
+      _loadedPostId = widget.postId;
+      _post = null;
+      _result = null;
+      _intentNotice = null;
+      _load();
+      if (mounted) setState(() {});
+    }
+  }
+
+  (SessionStatus, String?, int) _currentSessionIdentity() {
+    final session = _session!;
+    return (session.status, session.user?.id, session.generation);
+  }
+
+  bool _isCurrentLoad(
+    int requestGeneration,
+    String postId,
+    (SessionStatus, String?, int) identity,
+  ) =>
+      mounted &&
+      requestGeneration == _requestGeneration &&
+      postId == widget.postId &&
+      identity == _currentSessionIdentity();
+
+  @override
+  void didUpdateWidget(covariant PostDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.postId != widget.postId ||
+        oldWidget.intent != widget.intent ||
+        oldWidget.intentActorId != widget.intentActorId) {
+      _syncActor(force: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
     final services = AppScope.of(context);
-    final result = await services.posts.get(widget.postId);
-    if (!mounted) return;
+    final requestGeneration = ++_requestGeneration;
+    final postId = widget.postId;
+    final identity = _currentSessionIdentity();
+    final result = await services.posts.get(postId);
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     if (result case ApiError(failure: Unauthenticated())) {
-      await services.session.sessionExpired();
+      if (identity.$1 == SessionStatus.signedIn) {
+        await services.session.sessionExpired();
+      }
       return;
     }
+    if (!_isCurrentLoad(requestGeneration, postId, identity)) return;
     setState(() {
       _result = result;
       switch (result) {
@@ -62,10 +139,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   Future<void> _edit(PostDetail post) async {
+    final identity = _currentSessionIdentity();
+    final postId = widget.postId;
     final saved = await Navigator.of(context).push<PostDetail>(
       MaterialPageRoute(builder: (_) => EditPostScreen(post: post)),
     );
-    if (saved == null || !mounted) return;
+    if (saved == null ||
+        !mounted ||
+        identity != _currentSessionIdentity() ||
+        postId != widget.postId ||
+        saved.id != postId) {
+      return;
+    }
     setState(() {
       _changed = true;
       _post = saved;
@@ -142,6 +227,15 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   }
 
   void _leave() => context.canPop() ? context.pop(_changed) : context.go('/me');
+
+  /// A new URL for the post's voice memo, or null when it can't be read now.
+  Future<Uri?> _freshVoiceMemoUrl(String postId) async {
+    final result = await AppScope.of(context).posts.voiceMemo(postId);
+    return switch (result) {
+      ApiSuccess(value: final memo) => memo.url,
+      ApiError() => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -379,6 +473,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 16),
                 _PostMedia(post: post),
               ],
+              if (post.voiceMemo?.url case final url?) ...[
+                const SizedBox(height: 16),
+                // Starts only when played. A URL that has expired is replaced
+                // once, by asking the server again.
+                VoicePlayerPill.network(
+                  key: ValueKey('post.voiceMemo.${post.id}'),
+                  url: url,
+                  label: post.viewerIsAuthor
+                      ? 'Your voice memo'
+                      : "${post.displayName}'s voice memo",
+                  onRefreshUrl: () => _freshVoiceMemoUrl(post.id),
+                ),
+              ],
               const SizedBox(height: 18),
               Text(
                 post.promptText,
@@ -413,11 +520,71 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 const SizedBox(height: 6),
                 Text(caption, style: DayliText.sans(context)),
               ],
+              const SizedBox(height: 20),
+              if (widget.intent != null &&
+                  _session?.status == SessionStatus.signedIn &&
+                  widget.intentActorId == _session?.user?.id)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    widget.intent == PublicActionIntent.like
+                        ? 'Your like intent was retained. Likes are not available in this app version yet.'
+                        : widget.intent == PublicActionIntent.comment
+                        ? 'Your comment intent was retained. Comments are not available in this app version yet.'
+                        : 'Continue from the author profile.',
+                    key: const Key('post.intent'),
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.like'),
+                      label: 'like',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.like),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: DayliButton(
+                      key: const Key('post.comment'),
+                      label: 'comment',
+                      color: ButtonColor.background,
+                      onPressed: () => _interaction(PublicActionIntent.comment),
+                    ),
+                  ),
+                ],
+              ),
+              if (_intentNotice != null) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _intentNotice!,
+                  key: const Key('post.interactionUnavailable'),
+                  style: muted,
+                ),
+              ],
             ],
           ),
         ),
       ],
     );
+  }
+
+  void _interaction(PublicActionIntent action) {
+    if (_session?.status != SessionStatus.signedIn) {
+      final intent = _session?.issuePublicReturnIntent(
+        '/posts/${widget.postId}',
+        action,
+      );
+      context.go(intent?.authLocation() ?? '/sign-in');
+      return;
+    }
+    setState(() {
+      _intentNotice = action == PublicActionIntent.like
+          ? 'Likes are not available in this app version yet.'
+          : 'Comments are not available in this app version yet.';
+    });
   }
 }
 

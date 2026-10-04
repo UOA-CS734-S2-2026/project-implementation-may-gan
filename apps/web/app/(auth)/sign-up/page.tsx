@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Button } from "@/components/ui/core/Button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,6 +13,7 @@ import { LiveClock } from "@/components/ui/LiveClock";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { LegalDraftMarker, LegalLinks } from "@/components/legal/LegalLinks";
 import { issueRegistrationProof, readCurrentRegistrationTerms, registrationHeaders, type CurrentRegistrationTerms } from "@/lib/legal/registration";
+import { safeAuthenticationReturnPath } from "@/lib/routing/public-return-intent";
 
 const signUpSchema = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9][a-z0-9_]{2,29}$/, "Use 3-30 lowercase letters, numbers, or underscores."),
@@ -23,8 +24,9 @@ const signUpSchema = z.object({
 
 type SignUpValues = z.infer<typeof signUpSchema>;
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter();
+  const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
   const [terms, setTerms] = useState<CurrentRegistrationTerms | null>(null);
   const [termsError, setTermsError] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -71,7 +73,7 @@ export default function SignUpPage() {
         fetchOptions: { headers: registrationHeaders(proof) },
       } as Parameters<typeof authClient.signUp.email>[0]);
       if (error) throw new Error(error.message ?? "Registration failed.");
-      router.push("/home");
+      router.push(returnTo);
     } catch (error) {
       setError("root", { message: error instanceof Error ? error.message : "Registration failed." });
     }
@@ -93,6 +95,7 @@ export default function SignUpPage() {
           <LegalDraftMarker />
         </div>
         <GoogleSignInButton
+          returnTo={returnTo}
           disabled={!terms || termsError}
           prepareRegistration={() => prepareRegistration("google_browser")}
           onRegistrationError={(message) => setError("root", { message })}
@@ -169,7 +172,7 @@ export default function SignUpPage() {
             {isSubmitting ? "Creating…" : "Let's go"}
           </Button>
           <Button
-            href="/sign-in"
+            href={`/sign-in?next=${encodeURIComponent(returnTo)}`}
             variant={{ weight: "secondary", size: "sm", color: "foreground" }}
           >
             I have an account
@@ -181,4 +184,8 @@ export default function SignUpPage() {
       </div>
     </form>
   );
+}
+
+export default function SignUpPage() {
+  return <Suspense fallback={null}><SignUpForm /></Suspense>;
 }

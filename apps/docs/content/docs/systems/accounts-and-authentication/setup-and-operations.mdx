@@ -1,0 +1,294 @@
+---
+title: Authentication setup and operations
+description: Configure local authentication, Google, Resend, staging proxy mode, releases, and recovery without mixing credentials or cookie origins.
+---
+
+We use the same authentication code in every environment, but each environment gets its own origins, credentials, provider clients, database roles, and Worker bindings. If a provider is only half configured, authentication stays unmounted. That is much easier to spot than a partly working login flow.
+
+This guide covers the authentication-specific setup. The repository runbooks at `docs/dayli/environments.md`, `docs/implementation/staging-deployment.md`, and `docs/dayli/database-migrations.md` cover the rest of the environment and database work.
+
+## What must stay separate
+
+Use distinct, exact HTTPS web and API origins under the same schemeful site. The origins must have the same registrable domain and scheme for direct-mode `SameSite=Lax` cookies, but they remain different origins and require an exact trusted-origin list.
+
+Do not use paths, trailing slashes, wildcards, `localhost`, `workers.dev`, or a production origin in staging configuration.
+
+The main authentication values are:
+
+| Value | Purpose |
+| --- | --- |
+| `BETTER_AUTH_BASE_URL` | Browser-facing Better Auth origin, API in direct mode and web in proxy mode |
+| `PUBLIC_API_BASE_URL` | Direct API origin retained for mobile and realtime ticket URLs |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Exact allowed API and web origins |
+| `NEXT_PUBLIC_API_BASE_URL` | Direct API origin compiled into the web build |
+| `NEXT_PUBLIC_WEB_API_BASE_URL` | Web origin compiled into the web build |
+| `NEXT_PUBLIC_WEB_API_PROXY_ENABLED` | Build-time browser proxy selection |
+| `API_BROWSER_PROXY` | Web Worker service binding to the API's `BrowserProxyEntrypoint` |
+
+The proxy flag is a release and recovery control, not a user preference. Browser variables are compiled into the web build. Changing a runtime variable after deployment does not rewrite an existing client bundle.
+
+Moving between direct and proxy mode changes the cookie hostname. Existing host-only cookies do not move with it, so browser users may need to sign in again after activation or rollback. Native bearer sessions should remain valid.
+
+## Local email and password setup
+
+The supported local origins are:
+
+| Service | Origin |
+| --- | --- |
+| Web | `https://localhost:3000` |
+| API | `https://localhost:8787` |
+| PostgreSQL | `localhost:5434/dayli_dev` |
+
+Install Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and [mkcert](https://github.com/FiloSottile/mkcert). Trust the local CA yourself:
+
+```bash
+mkcert -install
+```
+
+Then run:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm local:auth:setup
+pnpm db:dev:up
+pnpm db:dev:migrate
+pnpm db:dev:verify
+```
+
+Start the API and web app in separate terminals:
+
+```bash
+pnpm dev:api:https
+pnpm dev:web:https
+```
+
+Open `https://localhost:3000/sign-up`. Local email/password auth does not require Google or Resend, and local email delivery is intentionally absent.
+
+The setup helper stores its stable Better Auth secret and local certificate material in ignored files. The API runtime receives only the restricted `app` database role through a local Hyperdrive override. Migration commands use the direct `migrator` role. Do not place a database owner or migrator connection in the Worker runtime.
+
+The persistent development database is separate from the disposable PostgreSQL fixture used by `pnpm verify:local`. Do not use the verification suite as a development-database reset.
+
+For Android and iOS certificate setup, follow `docs/dayli/environments.md`. Mobile calls the API directly and does not use the browser proxy.
+
+## Better Auth and provider binding rules
+
+Auth routes mount only when these core values validate:
+
+- `HYPERDRIVE`
+- `BETTER_AUTH_SECRET`, at least 32 characters
+- `BETTER_AUTH_BASE_URL`, an exact HTTPS origin
+- `BETTER_AUTH_TRUSTED_ORIGINS`, a comma-separated list of exact HTTPS origins that includes the base URL
+
+Google may be disabled by leaving every Google value blank. Resend may be disabled by leaving every Resend value blank. A provider is valid only as a complete tuple:
+
+- Google requires the web, iOS, and Android client IDs plus the Worker-only client secret.
+- Resend requires its API key and sender.
+
+One secret with missing public bindings is not a partial activation. It is invalid configuration, and authentication stays unmounted.
+
+The API allows credentialed CORS only for trusted origins, only `GET`, `POST`, and `OPTIONS`, and only the `content-type` and `authorization` request headers. It exposes `set-auth-token` for native clients. There is no wildcard origin.
+
+## Google Cloud setup
+
+Use separate Google Cloud projects for staging and production. For staging, set the Google Auth Platform audience to External and Testing, then add the staging testers as test users. Branding and publication state apply to the project, not to one client.
+
+Never reuse a production client ID or secret in staging.
+
+### Web client
+
+Create a Web application client. Its Authorized JavaScript origin is the exact staging web origin.
+
+Keep both callback URIs registered while proxy mode can be changed:
+
+```text
+https://api.staging.dayli.agroupforcoders.com/api/auth/callback/google
+https://staging.dayli.agroupforcoders.com/api/auth/callback/google
+```
+
+Direct mode uses the API callback. Proxy mode uses the web callback. Register the web callback before enabling proxy mode or deploying either half of an enabled release. Neither URI has a trailing slash, and both origins belong in `BETTER_AUTH_TRUSTED_ORIGINS`.
+
+Better Auth uses the web client ID first for the browser authorization-code flow. It accepts the configured web, iOS, and Android IDs as ID-token audiences. The Google request is limited to `openid`, `email`, and `profile`, with online access and no incremental or offline Google API grant.
+
+### Android client
+
+Create the staging debug client for:
+
+```text
+nz.ac.auckland.dayli.dayli_mobile.staging
+```
+
+From `apps/mobile/android`, use `./gradlew signingReport` to find the current debug SHA-1 and register it in the staging Google project. Do not delete or reuse an unknown existing client.
+
+Release builds use `nz.ac.auckland.dayli.dayli_mobile` and need their own reviewed client and signing certificate. A build distributed through Google Play needs the Play App Signing certificate.
+
+### iOS client
+
+Create the staging iOS client for:
+
+```text
+nz.ac.auckland.dayli.dayliMobile
+```
+
+Copy `apps/mobile/ios/Flutter/GoogleSignIn.xcconfig.example` to the ignored `GoogleSignIn.xcconfig`, then set `GOOGLE_REVERSED_CLIENT_ID` to the client's `REVERSED_CLIENT_ID`. Pass the iOS client ID to Flutter as `DAYLI_GOOGLE_IOS_CLIENT_ID`.
+
+Dart defines do not set Xcode build settings. Do not put an iOS client secret in Flutter. Native clients do not use one.
+
+The mobile app uses `google_sign_in` 7.2.0 and requires Flutter 3.44 or later. `FlutterGoogleIdTokenProvider` receives the web client ID as `serverClientId` and the iOS ID as `clientId`. Android obtains its platform setup from its Google client. The app sends the short-lived Google ID token to `POST /api/auth/sign-in/social`, then stores Better Auth's signed `set-auth-token` result.
+
+The same native session helper handles email/password sign-in. It stores only the signed `set-auth-token` value through `flutter_secure_storage`, then sends it as `Authorization: Bearer` for session and sign-out calls. Android disables automatic backup so encrypted storage is not restored without its KeyStore key, and its minimum SDK is 29. iOS Keychain storage uses `unlocked_this_device` accessibility. The generated OpenAPI client does not own these routes because Better Auth's `/api/auth/*` contract is separate from `/api/v1`.
+
+## Explicit Google account linking
+
+`disableImplicitLinking: true` prevents a matching email from silently merging a new Google identity into an existing password account.
+
+A signed-in password-account holder can choose **Connect Google** in settings. The request must include the current password in the same authenticated `/api/auth/link-social` call. The Worker verifies the current session and password, removes the password before passing the request onward, and accepts only a verified Google email equal to the Dayli account email. One Google subject cannot belong to two users.
+
+If normal Google sign-in says the account is not linked:
+
+1. Sign in with the Dayli password.
+2. Open Settings and choose **Connect Google**.
+3. Use a Google account with the exact same email.
+4. Enter the current Dayli password.
+
+If the password is unavailable, reset it first. Do not create a second account as a workaround. A Google account already linked elsewhere needs support rather than an implicit merge.
+
+## Resend setup
+
+Use a team-owned Resend account and separate staging and production sending domains or subdomains.
+
+1. Verify the sending domain in Resend.
+2. Publish every DNS record Resend provides, usually SPF and DKIM.
+3. Add a DMARC record appropriate to the team's mail policy. SPF alone is insufficient.
+4. Wait for Resend to report the domain as verified.
+5. Send one non-production message from the Resend dashboard when the team is ready to test delivery.
+6. Check the account's current quota, recipient restrictions, and production-access requirements before inviting external users.
+
+The integration sends mail only after a direct recovery or verification request. Database migrations do not send mail.
+
+Password-reset links expire after 15 minutes and are consumed once. A successful reset revokes existing sessions. Better Auth 1.7.5 verification links also expire after 15 minutes, but their signed verification JWT is not consumed on use. Requiring single-use verification links would need a custom flow. Verification remains optional, and there is no verification-request screen recorded in the source baseline.
+
+## Secret handling
+
+Keep credentials in the project's secret stores. Never place secrets in `wrangler.jsonc`, GitHub workflow output, command transcripts, shell history, or Git.
+
+A read-only name check is safe:
+
+```bash
+wrangler secret list --config wrangler.staging.jsonc
+```
+
+Confirm names only. The always-required auth secret is `BETTER_AUTH_SECRET`. Google adds `GOOGLE_CLIENT_SECRET`; Resend adds `RESEND_API_KEY`. Do not print, export, or copy their values to verify them.
+
+Do not enable a provider by adding one secret to the live Worker while its public bindings are absent. For a first activation, prepare an ignored candidate configuration containing every current binding and the provider's complete public tuple. Put only the matching new provider secrets in the ignored secrets file, then upload an inactive version:
+
+```bash
+wrangler versions upload \
+  --config wrangler.staging.jsonc \
+  --secrets-file <ignored-secrets-file> \
+  --keep-vars \
+  --tag auth-provider-candidate
+```
+
+`--keep-vars` preserves existing variables omitted by the candidate config. It does not replace a review of every non-variable binding. Once the candidate configuration has been checked, activate that exact version:
+
+```bash
+wrangler versions deploy \
+  --name dayli-api-staging \
+  --version-tag auth-provider-candidate \
+  --yes
+```
+
+Never put the secrets-file path or values in Git, logs, or a shared command transcript. Routine staging releases now synchronize complete provider tuples through the protected staging workflow. Check the current workflow before using these commands because the release process has changed since the first activation.
+
+## Staging configuration
+
+The staging binding contract is:
+
+```text
+Web Worker: dayli-web-staging
+Binding: API_BROWSER_PROXY
+API Worker: dayli-api-staging
+Entrypoint: BrowserProxyEntrypoint
+```
+
+Both Workers must belong to the same Cloudflare account.
+
+The protected GitHub `staging` environment supplies these authentication-related variables:
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `STAGING_API_SERVICE_NAME`, exactly `dayli-api-staging`
+- `STAGING_HYPERDRIVE_NAME`
+- `STAGING_AUTH_SITE_HOST`
+- `STAGING_AUTH_API_ORIGIN`
+- `STAGING_AUTH_WEB_ORIGIN`
+- `STAGING_BROWSER_PROXY_ENABLED`, exactly `true` or `false`
+- all three `STAGING_GOOGLE_*_CLIENT_ID` values together, or all blank
+- `STAGING_RESEND_FROM` only when Resend is enabled
+
+Authentication-related environment secrets are:
+
+- `DATABASE_URL`, the direct unpooled staging `migrator` URL used by the release gate, never by the Worker
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_STAGING_HYPERDRIVE_ID`
+- `BETTER_AUTH_SECRET`
+- `GOOGLE_CLIENT_SECRET` when Google is enabled
+- `RESEND_API_KEY` when Resend is enabled
+
+We have only deployed this auth-proxy work to staging. A future production setup needs its own protected environment, token, Worker, database, Hyperdrive, Better Auth secret, Google project and clients, Resend domain, and origins.
+
+## Coordinated staging release
+
+`.github/workflows/staging-release.yml` is the only staging deployment entry point. It runs after successful main CI or by manual dispatch from main. The API and web reusable workflows do not have independent triggers.
+
+A normal forward release follows this order:
+
+```text
+Capture commit and proxy mode
+  -> verify migrator and Hyperdrive database identity
+  -> check and plan migration history
+  -> apply a reviewed pending suffix when needed
+  -> verify exact ordered migration hashes
+  -> synchronize reviewed secrets
+  -> deploy and prove API
+  -> deploy web with the same commit and mode
+```
+
+A failed API stage stops the web stage. A failed web stage can leave the new API active, so the release is not transactional.
+
+GitHub Environment protection is configured in repository settings. The workflow cannot prove that required reviewers, stale-approval dismissal, branch restrictions, or administrator bypass rules are enabled. Check those settings rather than inferring them from YAML.
+
+Before enabling proxy mode:
+
+1. Register the exact web Google callback if Google is configured. Keep the API callback too.
+2. Confirm the binding points to the intended same-account API Worker and named entrypoint.
+3. Complete the source-identity and cookie checks in [Security and verification](/docs/systems/accounts-and-authentication/security-and-verification).
+4. Set `STAGING_BROWSER_PROXY_ENABLED=true` in the reviewed staging environment.
+5. Run the coordinated release so API and web use one captured mode and commit.
+6. Use a new test-browser sign-in. Do not expect an API-host cookie to move to the web host.
+
+Do not disable ingress protection to make a deployment proof pass.
+
+## Rollback and recovery
+
+To restore a prior coherent release:
+
+1. Set `STAGING_BROWSER_PROXY_ENABLED` back to the prior mode.
+2. Dispatch the coordinated workflow from main with the exact reviewed 40-character commit SHA.
+3. Let the workflow verify that staging has the same ordered migration hashes as that checkout.
+4. Retest browser sign-in. A cookie-origin change can require another sign-in.
+
+Do not deploy the web Worker alone during a mode transition. Do not rotate Better Auth secrets or destroy session storage merely to switch transport modes.
+
+An explicit `commit_sha` uses rollback verification-only mode. It does not apply migrations and cannot downgrade the database. If staging has newer migration history than the old release, use a reviewed forward fix or another release with matching history. Never bypass the gate or restore the database just to force old Worker code onto a newer schema.
+
+A failed secret synchronization can leave some Worker values updated before code deployment. Stop and compare the expected source values with the secret names on the Worker without printing either secret. Rerun only after the team understands which values changed. Secret updates and Worker deployment are not atomic.
+
+## Checks after a provider or proxy change
+
+For Google web authentication, confirm that the browser starts at the configured web origin, returns to the callback for the active mode, receives a Secure HttpOnly cookie, and returns only to a trusted origin. Confirm an unlisted origin is rejected.
+
+For native Google authentication, test Android debug, Android release, and iOS with their matching clients. Confirm the ID-token audience is one of the three configured IDs and that malformed or other-client tokens fail. Check bearer session persistence, logout, expiry, and reset revocation separately.
+
+For Resend, request recovery for one real staging address and one unknown address. The browser response should be indistinguishable. Confirm only the real account receives mail, and never copy its link into an issue, log, or analytics system.
+
+Our earlier staging checks covered only part of this list. [Security and verification](/docs/systems/accounts-and-authentication/security-and-verification) says exactly which paths have evidence.

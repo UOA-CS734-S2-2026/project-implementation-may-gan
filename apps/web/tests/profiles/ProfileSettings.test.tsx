@@ -18,7 +18,8 @@ const removeAvatar = profilesApi.removeAvatar as unknown as ReturnType<typeof vi
 
 function render(ui: Parameters<typeof rtlRender>[0]) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  const view = rtlRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return { ...view, client };
 }
 
 function me(overrides: Partial<ProfileDetails> = {}): ProfileDetails {
@@ -48,7 +49,7 @@ describe("EditProfileForm", () => {
   it("saves the trimmed public name and bio, sending blanks to clear them", async () => {
     const actor = userEvent.setup();
     update.mockResolvedValue({ ok: true, value: me({ displayName: "jos", bio: undefined }) });
-    render(<EditProfileForm profile={me()} />);
+    const { client } = render(<EditProfileForm profile={me()} />);
 
     await actor.clear(screen.getByLabelText("Public name"));
     await actor.clear(screen.getByLabelText(/Bio/));
@@ -57,6 +58,7 @@ describe("EditProfileForm", () => {
 
     expect(update).toHaveBeenCalledWith({ publicName: "", bio: "Bakes too.", mbti: null, whatIDo: "", listeningTo: "" });
     expect(await screen.findByRole("status")).toHaveTextContent("Saved.");
+    expect(client.getQueryData(["profiles", "me", "details", "jos"])).toEqual(expect.objectContaining({ kind: "authorized", id: "me" }));
   });
 
   it("leaves the name blank when it is only the username", () => {

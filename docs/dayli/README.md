@@ -12,14 +12,14 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [MVP](mvp.md): features and build order.
 - [Existing code](existing-implementation.md): reuse and known gaps.
 - [Tech stack](tech-stack.md): tools and deployment.
-- [Architecture](architecture.md): current components and request flows.
+- [Architecture overview](../../apps/docs/content/docs/systems/architecture-overview.mdx): current components and request flows.
 - [Backend architecture](../backend-architecture.md): agreed action slices, file naming, layers, authentication middleware, and testing boundaries.
 - [Backend refactor implementation](../implementation/backend-refactor.md): behavior-preserving migration sequence and acceptance checks.
-- [Messaging implementation handoff](../implementation/messaging-implementation-handoff.md): proposed Hono APIs, database design, WebSockets, mobile push, file responsibilities, and validation. Not implemented yet.
-- [Messaging ticket map](../implementation/messaging-ticket-map.md): existing issue updates, new pieces, dependencies, and blocked group/media follow-ups.
+- [Messaging](../../apps/docs/content/docs/systems/messaging/index.mdx): current REST, WebSocket, outbox, and push behavior.
+- [Messaging design history](../../apps/docs/content/docs/systems/messaging/design-history-and-lessons.mdx): alternatives, lessons, source issues, and deferred boundaries.
 - [Scalability](scalability.md): capacity, costs, and upgrade triggers.
 - [Security](security.md): privacy and permissions.
-- [Authentication compatibility](authentication-compatibility.md): Better Auth Worker and Flutter proof, plus deployment prerequisites.
+- [Authentication security and verification](../../apps/docs/content/docs/systems/accounts-and-authentication/security-and-verification.mdx): Better Auth Worker and Flutter proof, plus deployment prerequisites.
 - [Continuous integration](continuous-integration.md): automatic pull request checks, branch protection, and deployment boundary.
 - [Testing and delivery](testing-and-delivery.md): release checks and team workflow.
 - [Database migrations](database-migrations.md): Neon PostgreSQL roles, additive migration commands, and release runbook.
@@ -27,13 +27,12 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Product decisions](product-decisions.md): agreed permissions, limits, retention, and reuse rules.
 - [API conventions](api-conventions.md): versioning, JSON, errors, pagination, authentication, and OpenAPI.
 - [API client generation](client-generation.md): regenerate and verify the TypeScript and Dart clients.
-- [Media reservations](media-reservations.md): R2 presigned upload reservations, one-time bucket setup, and quota/expiry defaults.
-- [Daily post creation](daily-posts.md): the idempotent `POST /api/v1/posts` contract, deadline checks, and conflict reasons.
-- [Friends feed](friends-feed.md): who can see which posts in `GET /api/v1/feed`, and its pagination.
-- [Post detail](post-detail.md): `GET /api/v1/posts/{postId}`, who can read one post, and 404 concealment.
-- [Editing and deleting posts](post-editing.md): `PATCH /api/v1/posts/{postId}`, revision history, and deleting through post Trash.
-- [Profiles](profiles.md): profile details, who sees the bio, editing, and username changes.
-- [Profile archive](profile-archive.md): `GET /api/v1/profiles/{username}/posts`, who sees which posts on a profile.
+- [Media uploads and storage](../../apps/docs/content/docs/systems/media-uploads-and-storage/index.mdx): private R2 reservations, validation, reads, and cleanup.
+- [Daily posts and release timing](../../apps/docs/content/docs/systems/daily-posts-and-release-timing/index.mdx): server-owned Auckland days, idempotent acceptance, and release.
+- [Friends and feed visibility](../../apps/docs/content/docs/systems/friends-and-feed-visibility/index.mdx): relationships, profile visibility, and the one-day feed.
+- [Profiles and discovery](../../apps/docs/content/docs/systems/friends-and-feed-visibility/profiles-and-discovery.mdx): profile projections, streaks, usernames, and avatars.
+- [Reflection and history](../../apps/docs/content/docs/systems/reflection-and-history/index.mdx): profile archives, post detail, edits, revisions, tomorrow notes, and Trash limits.
+- [Likes and comments](likes-and-comments.md): liking, threaded comments, moderation, and who sees which.
 - [Mood history](mood-history.md): `GET /api/v1/profiles/{username}/mood`, a profile's ratings over 30 days, 90 days or a year, for the owner and their friends.
 
 ## Fixed rules

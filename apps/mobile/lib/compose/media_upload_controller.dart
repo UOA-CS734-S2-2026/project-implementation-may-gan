@@ -337,18 +337,10 @@ class MediaUploadController extends ChangeNotifier {
     }
   }
 
-  /// Keeps the compressed copy but forgets the reservation.
+  /// Keeps the compressed copy, and everything else known about the attachment,
+  /// but forgets the reservation.
   void _reserveAgain(DraftAttachment attachment) {
-    _composer.replaceAttachment(
-      attachment,
-      DraftAttachment(
-        localPath: attachment.localPath,
-        mediaType: attachment.mediaType,
-        compressedPath: attachment.compressedPath,
-        contentType: attachment.contentType,
-        byteSize: attachment.byteSize,
-      ),
-    );
+    _composer.replaceAttachment(attachment, attachment.withoutReservation());
   }
 
   _Outcome _drop(DraftAttachment attachment, String notice) {

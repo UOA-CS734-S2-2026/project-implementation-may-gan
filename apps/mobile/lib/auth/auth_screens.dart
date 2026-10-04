@@ -51,9 +51,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _loadTerms() async {
     try {
-      final terms = await AppScope.of(
-        context,
-      ).session.currentRegistrationTerms();
+      final terms = await AppScope.of(context).session
+          .currentRegistrationTerms();
       if (mounted) {
         setState(() {
           _terms = terms;
@@ -75,9 +74,8 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!_termsLoaded || _termsUnavailable || (_terms != null && !_accepted)) {
       throw const AuthenticationFailure('registration-terms', 409);
     }
-    return AppScope.of(
-      context,
-    ).session.issueRegistrationProof(flow: flow, terms: _terms);
+    return AppScope.of(context).session
+        .issueRegistrationProof(flow: flow, terms: _terms);
   }
 
   @override
@@ -93,9 +91,8 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _validate() {
     final errors = <String, String>{};
     if (_signUp) {
-      if (!RegExp(
-        r'^[a-z0-9][a-z0-9_]{2,29}$',
-      ).hasMatch(_username.text.trim().toLowerCase())) {
+      if (!RegExp(r'^[a-z0-9][a-z0-9_]{2,29}$')
+          .hasMatch(_username.text.trim().toLowerCase())) {
         errors['username'] =
             'Use 3-30 lowercase letters, numbers, or underscores.';
       }
@@ -200,8 +197,7 @@ class _AuthScreenState extends State<AuthScreen> {
           setState(() {
             _accepted = false;
             _termsLoaded = false;
-            _error =
-                'Registration terms changed. Check the documents and try again.';
+            _error = 'Registration terms changed. Check the documents and try again.';
           });
         }
         await _loadTerms();
@@ -428,8 +424,14 @@ class _AuthScreenState extends State<AuthScreen> {
                 foregroundColor: colors.foregroundAccent,
                 minimumSize: const Size(48, 48),
               ),
-              onPressed: () =>
-                  context.pushReplacement(_signUp ? '/sign-in' : '/sign-up'),
+              onPressed: () {
+                final intent = AppScope.of(context).session
+                    .resolvePublicReturnIntent(GoRouterState.of(context).uri);
+                final path = _signUp ? '/sign-in' : '/sign-up';
+                context.pushReplacement(
+                  intent == null ? path : intent.authLocation(path),
+                );
+              },
               child: Text(
                 _signUp ? 'Sign in' : 'Create an account',
                 style: DayliText.sans(

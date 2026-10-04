@@ -52,13 +52,17 @@ class ProfileStats {
   }
 }
 
-/// A profile's name and, when the viewer may see them, its bio and streak.
+enum ProfileProjection { authorized, public, restricted }
+
+/// A server-selected profile projection. Restricted profiles retain only the
+/// username, so clients cannot accidentally render or cache hidden fields.
 class ProfileDetails {
   const ProfileDetails({
     required this.id,
     required this.username,
     required this.displayName,
     required this.detailsVisible,
+    this.projection = ProfileProjection.authorized,
     required this.bio,
     required this.isOwner,
     this.mbti,
@@ -71,12 +75,16 @@ class ProfileDetails {
     this.usernameChangeAvailableAt,
   });
 
-  final String id;
+  final String? id;
 
   /// The current handle, which differs from the one asked for when the owner
   /// has since changed it.
   final String username;
-  final String displayName;
+  final String? displayName;
+  final ProfileProjection projection;
+
+  bool get isRestricted => projection == ProfileProjection.restricted;
+  bool get isPublic => projection == ProfileProjection.public;
 
   /// False when the account is private and the viewer is not a friend.
   final bool detailsVisible;
@@ -106,17 +114,43 @@ class ProfileDetails {
 
   static ProfileDetails? tryParse(Object? json) {
     if (json is! Map<String, Object?>) return null;
-    final id = json['id'];
+    final kind = json['kind'];
     final username = json['username'];
+    if (username is! String) return null;
+    if (kind == 'restricted') {
+      return ProfileDetails(
+        id: null,
+        username: username,
+        displayName: null,
+        detailsVisible: false,
+        projection: ProfileProjection.restricted,
+        bio: null,
+        isOwner: false,
+      );
+    }
     final displayName = json['displayName'];
-    final detailsVisible = json['detailsVisible'];
     final bio = json['bio'];
+    if (displayName is! String || (bio != null && bio is! String)) return null;
+    if (kind == 'public') {
+      return ProfileDetails(
+        id: null,
+        username: username,
+        displayName: displayName,
+        detailsVisible: true,
+        projection: ProfileProjection.public,
+        bio: bio as String?,
+        isOwner: false,
+        avatarUrl: json['avatarUrl'] is String
+            ? json['avatarUrl']! as String
+            : null,
+        streak: PostingStreak.tryParse(json['streak']),
+      );
+    }
+    final id = json['id'];
+    final detailsVisible = json['detailsVisible'];
     final owner = json['owner'];
     if (id is! String ||
-        username is! String ||
-        displayName is! String ||
         detailsVisible is! bool ||
-        (bio != null && bio is! String) ||
         (owner != null && owner is! Map<String, Object?>)) {
       return null;
     }
@@ -127,6 +161,7 @@ class ProfileDetails {
       username: username,
       displayName: displayName,
       detailsVisible: detailsVisible,
+      projection: ProfileProjection.authorized,
       bio: bio as String?,
       isOwner: settings != null,
       mbti: json['mbti'] is String ? json['mbti']! as String : null,
@@ -353,10 +388,11 @@ class GeneratedProfileClient implements ProfileClient {
   final Future<String?> Function() _bearerToken;
   final http.Client? _httpClient;
 
-  Future<generated.ApiClient?> _client() async {
+  Future<generated.ApiClient> _client() async {
     final token = await _bearerToken();
-    if (token == null) return null;
-    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final auth = token == null
+        ? null
+        : (generated.HttpBearerAuth()..accessToken = token);
     final client = generated.ApiClient(
       basePath: _baseUrl,
       authentication: auth,
@@ -370,7 +406,6 @@ class GeneratedProfileClient implements ProfileClient {
     T? Function(Object? json) parse,
   ) async {
     final client = await _client();
-    if (client == null) return const ApiError(Unauthenticated());
 
     final http.Response response;
     try {
@@ -475,9 +510,9 @@ class GeneratedProfileClient implements ProfileClient {
     String username,
     MoodRange range,
   ) => _send(
-    (client) => generated.PostsApi(
-      client,
-    ).postsGetProfileMoodWithHttpInfo(username, range: range.wire),
+    (client) =>
+        generated.PostsApi(client)
+            .postsGetProfileMoodWithHttpInfo(username, range: range.wire),
     MoodHistory.tryParse,
   );
 }

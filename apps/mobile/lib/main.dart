@@ -20,6 +20,7 @@ import 'app/session_integrations.dart';
 import 'auth/native_session.dart';
 import 'auth/session_controller.dart';
 import 'compose/media_compressor.dart';
+import 'compose/pending_capture.dart';
 import 'drafts/draft_store.dart';
 import 'messaging/messaging_client.dart';
 import 'messaging/messaging_controller.dart';
@@ -64,6 +65,9 @@ Future<void> main() async {
   final drafts = ProtectedDraftStore(storage: secureStorage);
   // Shared so sign-out deletes the compressed media the composer saved.
   final mediaCompressor = DeviceMediaCompressor();
+  final pendingCaptures = PendingCaptures(
+    store: ProtectedPendingCaptureStore(storage: secureStorage),
+  );
   final nativeSession = BetterAuthNativeSession(
     baseUrl: config.apiBaseUrl,
     tokenStore: tokenStore,
@@ -108,7 +112,10 @@ Future<void> main() async {
     tokenStore: tokenStore,
     userCache: ProtectedSessionUserCache(secureStorage),
     drafts: drafts,
-    clearUserMedia: mediaCompressor.discardAll,
+    clearUserMedia: (userId) async {
+      await mediaCompressor.discardAll(userId);
+      await pendingCaptures.discardFor(userId);
+    },
     onSignedIn: integrations.start,
     // Must run before Better Auth stores a replacement token. [clear] always
     // stops and clears messaging, then rethrows any unsafe push cleanup error.
@@ -160,6 +167,7 @@ Future<void> main() async {
           bearerToken: nativeSession.bearerToken,
         ),
         mediaCompressor: mediaCompressor,
+        pendingCaptures: pendingCaptures,
         mediaUploads: GeneratedMediaUploadClient(
           baseUrl: config.apiBaseUrl,
           bearerToken: nativeSession.bearerToken,

@@ -1,0 +1,14 @@
+{
+  "title": "Testing",
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "unit-and-component-tests",
+    "integration-tests",
+    "worker-runtime-tests",
+    "contracts-and-generated-clients",
+    "end-to-end-tests",
+    "staging-and-manual-checks",
+    "synthetic-testing"
+  ]
+}

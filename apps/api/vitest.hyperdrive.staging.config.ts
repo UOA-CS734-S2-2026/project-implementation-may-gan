@@ -7,7 +7,7 @@ export default defineConfig({
     wrangler: { configPath: "./wrangler.hyperdrive-test.jsonc" },
   })],
   test: {
-    include: ["test/**/*.staging.test.ts"],
+    include: ["test/__tests__/**/*.staging.test.ts"],
     testTimeout: 60_000,
   },
 });

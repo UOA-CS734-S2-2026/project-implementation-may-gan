@@ -11,20 +11,20 @@ import { withHyperdriveDatabase } from "../database/hyperdrive";
 import { readR2RuntimeConfiguration } from "../media/r2";
 
 /** Construction alone has no side effects. No scheduled handler invokes this yet. */
-export function createExportRuntimeForEnv(env: Partial<ApiEnv>) {
+export function createExportRuntimeForEnv(env: Partial<ApiEnv>, proofOwnerId?: string) {
   const r2 = readR2RuntimeConfiguration(env);
   const workerBinding: HyperdriveBinding | undefined = env.EXPORT_WORKER_HYPERDRIVE;
   if (!r2 || !workerBinding) return undefined;
   const objects = createExportArchiveStore(r2);
   return {
     runBuildOnce: () => withHyperdriveDatabase(workerBinding, (database) => createExportWorker({
-      store: createExportBuildStore(database),
+      store: createExportBuildStore(database, proofOwnerId),
       records: createRestrictedExportRecordSource(database),
       files: createRestrictedExportFileSource(database, createExportR2RangeReader(r2)),
       objects,
     }).runOnce()),
     runCleanupOnce: () => withHyperdriveDatabase(workerBinding, (database) => createExportCleanupDispatcher({
-      store: createExportCleanupStore(database), objects,
+      store: createExportCleanupStore(database, proofOwnerId), objects,
     }).runOnce()),
   };
 }
