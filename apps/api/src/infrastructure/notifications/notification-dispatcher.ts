@@ -75,10 +75,19 @@ export function createNotificationDispatcher(input: {
       if (!job) { summary.fenced += 1; continue; }
 
       const resolution = await resolveWithinDeadline(input.resolver, job, deadline, now);
-      if (resolution.timedOut || now().getTime() >= deadline) {
+      if (resolution.state === "timed_out" || now().getTime() >= deadline) {
         if (await input.store.releaseLease(job, now())) summary.released += 1;
         else summary.fenced += 1;
         break;
+      }
+      if (resolution.state === "failed") {
+        const terminal = job.attempts >= maxAttempts;
+        const availableAt = new Date(now().getTime() + retryDelayMs(job.attempts, random));
+        if (await input.store.reschedule(job, { availableAt, failureCategory: "unknown", terminal })) {
+          if (terminal) summary.failed += 1;
+          else summary.rescheduled += 1;
+        } else summary.fenced += 1;
+        continue;
       }
       if (!resolution.notification) {
         if (await input.store.markSuppressed(job, "ineligible")) summary.suppressed += 1;
@@ -123,26 +132,38 @@ export function createNotificationDispatcher(input: {
   };
 }
 
+type ResolutionOutcome =
+  | { state: "resolved"; notification: Awaited<ReturnType<DirectMessageNotificationResolver["resolve"]>> }
+  | { state: "failed" }
+  | { state: "timed_out" };
+
 async function resolveWithinDeadline(
   resolver: DirectMessageNotificationResolver,
   job: Parameters<DirectMessageNotificationResolver["resolve"]>[0],
   deadline: number,
   now: () => Date,
-): Promise<{
-  notification: Awaited<ReturnType<DirectMessageNotificationResolver["resolve"]>>;
-  timedOut: boolean;
-}> {
+): Promise<ResolutionOutcome> {
   const controller = new AbortController();
   const remaining = Math.max(0, deadline - now().getTime());
-  if (remaining === 0) return { notification: null, timedOut: true };
-  const timer = setTimeout(() => controller.abort(), remaining);
+  if (remaining === 0) return { state: "timed_out" };
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const operation = Promise.resolve().then(() => resolver.resolve(job, { signal: controller.signal }));
+  const settled: Promise<ResolutionOutcome> = operation.then(
+    (notification) => ({ state: "resolved", notification }),
+    () => ({ state: "failed" }),
+  );
+  const timeout = new Promise<ResolutionOutcome>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({ state: "timed_out" });
+      controller.abort();
+    }, remaining);
+  });
+
   try {
-    const notification = await resolver.resolve(job, { signal: controller.signal });
-    return { notification, timedOut: controller.signal.aborted };
-  } catch {
-    return { notification: null, timedOut: controller.signal.aborted };
+    return await Promise.race([settled, timeout]);
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -153,8 +174,7 @@ async function sendWithTimeout(
 ): Promise<DeliveryResult> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let timedOut = false;
-  const operation = sender.send({
+  const operation = Promise.resolve().then(() => sender.send({
     token: notification.token,
     eventId: notification.eventId,
     targetId: notification.targetId,
@@ -162,20 +182,19 @@ async function sendWithTimeout(
     body: notification.body,
     type: "direct_message",
     targetType: "conversation",
-  }, { signal: controller.signal });
+  }, { signal: controller.signal }));
+  const settled: Promise<DeliveryResult> = operation.then(
+    (result) => result,
+    () => ({ ok: false, retryable: true, category: "unknown" }),
+  );
   try {
     const timeout = new Promise<DeliveryResult>((resolve) => {
       timer = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
         resolve({ ok: false, retryable: true, category: "transient" });
+        controller.abort();
       }, timeoutMs);
     });
-    const result = await Promise.race([operation, timeout]);
-    if (timedOut) await operation.catch(() => undefined);
-    return result;
-  } catch {
-    return { ok: false, retryable: true, category: "unknown" };
+    return await Promise.race([settled, timeout]);
   } finally {
     if (timer) clearTimeout(timer);
   }

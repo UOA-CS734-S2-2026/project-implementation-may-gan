@@ -41,6 +41,32 @@ describe("generic notification dispatcher", () => {
     expect(sender.send).not.toHaveBeenCalled();
   });
 
+  it("retries a resolver failure without suppressing or exposing its error", async () => {
+    const storage = store();
+    const sender = { send: vi.fn() };
+    const dispatcher = createNotificationDispatcher({
+      store: storage,
+      resolver: {
+        resolve: vi.fn(async () => {
+          throw new Error("private-token sql-parameter private-message");
+        }),
+        invalidate: vi.fn(),
+      },
+      sender,
+      now: () => now,
+      random: () => 0,
+    });
+
+    await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({
+      claimed: 1, rescheduled: 1, suppressed: 0,
+    });
+    expect(storage.markSuppressed).not.toHaveBeenCalled();
+    expect(storage.reschedule).toHaveBeenCalledWith(expect.objectContaining({ id: "delivery" }), {
+      availableAt: new Date(now.getTime() + 750), failureCategory: "unknown", terminal: false,
+    });
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
   it("resolves current copy before provider IO and sends the versioned envelope", async () => {
     const order: string[] = [];
     const storage = store({
@@ -117,6 +143,59 @@ describe("generic notification dispatcher", () => {
     expect(sender.send).not.toHaveBeenCalled();
   });
 
+  it.each(["resolve", "reject"] as const)(
+    "returns within budget when resolution ignores abort, then safely ignores a late %s",
+    async (lateSettlement) => {
+      vi.useFakeTimers();
+      try {
+        const storage = store();
+        const sender = { send: vi.fn() };
+        let resolveOperation: ((value: typeof resolved) => void) | undefined;
+        let rejectOperation: ((reason: unknown) => void) | undefined;
+        let resolutionSignal: AbortSignal | undefined;
+        const operation = new Promise<typeof resolved>((resolve, reject) => {
+          resolveOperation = resolve;
+          rejectOperation = reject;
+        });
+        const resolver = {
+          resolve: vi.fn((_job: unknown, options?: { signal: AbortSignal }) => {
+            resolutionSignal = options?.signal;
+            return operation;
+          }),
+          invalidate: vi.fn(),
+        };
+        const dispatcher = createNotificationDispatcher({
+          store: storage,
+          resolver,
+          sender,
+          now: () => now,
+          immediateBudgetMs: 1_500,
+        });
+
+        const pending = dispatcher.dispatchImmediately();
+        await vi.advanceTimersByTimeAsync(1_500);
+        await expect(pending).resolves.toMatchObject({ claimed: 1, released: 1 });
+        expect(resolutionSignal?.aborted).toBe(true);
+        expect(sender.send).not.toHaveBeenCalled();
+
+        const releaseCalls = vi.mocked(storage.releaseLease).mock.calls.length;
+        if (lateSettlement === "resolve") resolveOperation?.(resolved);
+        else rejectOperation?.(new Error("private-token sql-parameter private-message"));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(sender.send).not.toHaveBeenCalled();
+        expect(storage.markDelivered).not.toHaveBeenCalled();
+        expect(storage.markSuppressed).not.toHaveBeenCalled();
+        expect(storage.reschedule).not.toHaveBeenCalled();
+        expect(storage.releaseLease).toHaveBeenCalledTimes(releaseCalls);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("limits provider work to the remaining budget and waits for abort cleanup", async () => {
     vi.useFakeTimers();
     try {
@@ -153,6 +232,39 @@ describe("generic notification dispatcher", () => {
       await expect(pending).resolves.toMatchObject({ rescheduled: 1 });
       expect(cleanedUp).toBe(true);
       expect(storage.reschedule).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns within budget when provider work ignores abort", async () => {
+    vi.useFakeTimers();
+    try {
+      const storage = store();
+      let providerSignal: AbortSignal | undefined;
+      const sender = {
+        send: vi.fn((_payload: unknown, options?: { signal: AbortSignal }) => {
+          providerSignal = options?.signal;
+          return new Promise<never>(() => undefined);
+        }),
+      };
+      const dispatcher = createNotificationDispatcher({
+        store: storage,
+        resolver: { resolve: vi.fn(async () => resolved), invalidate: vi.fn() },
+        sender,
+        now: () => now,
+        immediateBudgetMs: 1_500,
+        deliveryTimeoutMs: 20_000,
+      });
+
+      const pending = dispatcher.dispatchImmediately();
+      await vi.advanceTimersByTimeAsync(1_500);
+      await expect(pending).resolves.toMatchObject({ claimed: 1, rescheduled: 1 });
+      expect(providerSignal?.aborted).toBe(true);
+      expect(storage.reschedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        failureCategory: "transient", terminal: false,
+      }));
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }
