@@ -130,6 +130,12 @@ A tomorrow note is stored in `tomorrow_notes`, not in the post or its revision h
 
 Post creation returns only the availability date. Feed, profile archive, post detail, media, and revision projections never return the note text. The current API contains the storage and visibility helper, but no user-facing route or client screen for reading the note was found in the checked-in implementation. The privacy rule is implemented at the data and permission layers, while the retrieval experience is still missing.
 
+## Opening the composer from Siri and shortcuts
+
+Flutter can open today's composer from outside the app. On iOS, an App Intent adds Siri and Shortcuts phrases such as "Open today's dayli in Dayli". On Android, long-pressing the app icon offers a **New dayli** launcher shortcut. Both open the link `dayli://app/post`, optionally with `?rating=7`.
+
+`rating` is the only parameter read, and only a whole number from 1 to 10 is used. It fills the slider and nothing else: no audience is chosen and nothing is posted until the author taps **Post**. Opening the same link again restores its rating even after the slider moved. A signed-out link waits until sign-in and username setup finish, and a `dayli://` link to any other path opens home. The repository guide at `docs/dayli/native-composer-entry-points.md` lists the manual device checks, which have not yet been run on a physical device.
+
 ## What the implementation taught us
 
 - Calendar boundaries should be calculated as Auckland midnights, not as elapsed 24-hour periods.
