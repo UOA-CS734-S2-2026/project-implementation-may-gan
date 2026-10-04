@@ -14,10 +14,13 @@ class _Preference implements NotificationPreferenceClient {
   final updates = <bool>[];
 
   @override
-  Future<bool> get() async => value;
+  Future<bool> get(NotificationPreferenceOperation operation) async => value;
 
   @override
-  Future<bool> update(bool enabled) async {
+  Future<bool> update(
+    bool enabled,
+    NotificationPreferenceOperation operation,
+  ) async {
     updates.add(enabled);
     value = enabled;
     return value;
