@@ -16,10 +16,13 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
 
-# Serialize this direct database mutation with the coordinated API deployment
-# and the manual migration workflow. Production has no path through this file.
+# This serializes current workflows that use this group. It cannot serialize a
+# historical workflow rerun whose old definition did not join the group; the
+# publish job therefore freezes the staging release entry points below. This
+# file has only the staging target.
 concurrency:
   group: staging-database-state-staging
   cancel-in-progress: false
@@ -81,9 +84,55 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
         run: node scripts/verify-staging-deployed-shas.mjs
-      # Keep this final check adjacent to the mutation. The shared
-      # database-state lock also prevents a web deployment from changing the
-      # active revision between this proof and the transaction.
+      - name: Freeze staging release entry points and cancel historical reruns
+        # A rerun uses the workflow definition from its historical commit, so
+        # its concurrency group may not be this workflow's group. Disable the
+        # coordinated caller and reusable deploy workflows, then wait for every
+        # existing run to stop. This is intentionally fail-closed; operators
+        # must re-enable these workflows and run a fresh release after this
+        # activation or rollback completes.
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflows = ["staging-release.yml", "staging-hyperdrive.yml", "staging-web.yml"];
+            const activeStates = ["queued", "in_progress", "pending", "requested", "waiting"];
+            const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+            for (const workflow_id of workflows) {
+              await github.rest.actions.disableWorkflow({ owner, repo, workflow_id });
+            }
+            let drained = false;
+            for (let attempt = 0; attempt < 30; attempt++) {
+              const active = [];
+              for (const workflow_id of workflows) {
+                for (const status of activeStates) {
+                  const { data } = await github.rest.actions.listWorkflowRuns({
+                    owner, repo, workflow_id, status, per_page: 100,
+                  });
+                  active.push(...data.workflow_runs);
+                }
+              }
+              const unique = [...new Map(active.map((run) => [run.id, run])).values()];
+              if (unique.length === 0) {
+                drained = true;
+                break;
+              }
+              await Promise.all(unique.map((run) => github.rest.actions.cancelWorkflowRun({
+                owner, repo, run_id: run.id,
+              }).catch((error) => {
+                if (error.status !== 409) throw error;
+              })));
+              await pause(2000);
+            }
+            if (!drained) throw new Error("Staging release activity did not stop before activation.");
+            for (const workflow_id of workflows) {
+              const { data } = await github.rest.actions.getWorkflow({ owner, repo, workflow_id });
+              if (data.state !== "disabled_manually") {
+                core.setFailed(`Staging deployment workflow ${workflow_id} was not disabled.`);
+              }
+            }
+      # Keep this final active-version check adjacent to the mutation. It runs
+      # only after the historical deployment paths are frozen above.
       - name: Recheck current main and deployed Worker revisions immediately before mutation
         env:
           DISPATCH_SHA: ${{ github.sha }}

@@ -117,6 +117,9 @@ class SessionController extends ChangeNotifier {
 
   SessionStatus _status = SessionStatus.unknown;
   SessionUser? _user;
+  // The identity being authenticated before it becomes the visible session.
+  // It lets the initial policy check use the same identity fence as refreshes.
+  String? _pendingPolicyUserId;
   String? _startedSessionUserId;
   int _sessionGeneration = 0;
   Future<void>? _policyRefresh;
@@ -230,7 +233,16 @@ class SessionController extends ChangeNotifier {
     }
     final active = _policyRefresh;
     if (active != null) return active;
-    final refresh = _applyAccountPolicy(user, persistUser: false);
+    // A foreground refresh belongs to this exact authenticated identity. A
+    // sign-out or replacement invalidates both parts of this fence before the
+    // request can resolve.
+    final generation = _sessionGeneration;
+    final refresh = _applyAccountPolicy(
+      user,
+      persistUser: false,
+      generation: generation,
+      userId: user.id,
+    );
     _policyRefresh = refresh;
     return refresh.whenComplete(() {
       if (identical(_policyRefresh, refresh)) _policyRefresh = null;
@@ -441,8 +453,12 @@ class SessionController extends ChangeNotifier {
     bool persistUser = true,
     bool verifyPolicy = true,
   }) async {
+    // Mark the identity before its policy request starts, so the
+    // generation-and-user fence also protects initial sign-in and restore
+    // without transiently changing the visible session state.
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
+    _pendingPolicyUserId = user.id;
     if (persistUser) await _userCache.write(user);
     if (verifyPolicy) {
       await _applyAccountPolicy(user, persistUser: false);
@@ -457,30 +473,62 @@ class SessionController extends ChangeNotifier {
   Future<void> _applyAccountPolicy(
     SessionUser user, {
     required bool persistUser,
+    int? generation,
+    String? userId,
   }) async {
-    if (persistUser) await _userCache.write(user);
+    // Every policy result, including an authentication failure, must still
+    // belong to the session that requested it. This prevents an old account's
+    // late response from signing out or restricting a replacement account.
+    final requestGeneration = generation ?? _sessionGeneration;
+    final requestUserId = userId ?? user.id;
+    bool current() => _isCurrentPolicyRequest(requestGeneration, requestUserId);
+
+    if (!current()) return;
+    if (persistUser) {
+      await _userCache.write(user);
+      if (!current()) return;
+    }
     AccountPolicyStatus policy;
     try {
       policy = await _session.accountPolicy();
     } on AuthenticationFailure catch (error) {
+      if (!current()) return;
       if (error.statusCode == 401) {
+        _finishPolicyRequest(requestUserId);
         await _signedOutLocally();
         return;
       }
+      _finishPolicyRequest(requestUserId);
       _set(SessionStatus.legalStatusUnavailable, user);
       return;
     } on Exception {
+      if (!current()) return;
+      _finishPolicyRequest(requestUserId);
       _set(SessionStatus.legalStatusUnavailable, user);
       return;
     }
+    if (!current()) return;
     if (policy.requiresLegalAcceptance) {
+      _finishPolicyRequest(requestUserId);
       _set(SessionStatus.legalAcceptanceRequired, user);
       return;
     }
-    await _activateUser(user);
+    await _activateUser(
+      user,
+      generation: requestGeneration,
+      userId: requestUserId,
+    );
   }
 
-  Future<void> _activateUser(SessionUser user) async {
+  Future<void> _activateUser(
+    SessionUser user, {
+    int? generation,
+    String? userId,
+  }) async {
+    final requestGeneration = generation ?? _sessionGeneration;
+    final requestUserId = userId ?? user.id;
+    if (!_isCurrentPolicyRequest(requestGeneration, requestUserId)) return;
+    _finishPolicyRequest(requestUserId);
     _set(
       user.username == null
           ? SessionStatus.needsUsernameSetup
@@ -489,11 +537,11 @@ class SessionController extends ChangeNotifier {
     );
     if (user.username == null || _startedSessionUserId == user.id) return;
     _startedSessionUserId = user.id;
-    final generation = _sessionGeneration;
+    final startupGeneration = _sessionGeneration;
     final startup = SessionStartup._(
       user,
-      generation,
-      () => _sessionGeneration == generation && _user?.id == user.id,
+      startupGeneration,
+      () => _sessionGeneration == startupGeneration && _user?.id == user.id,
     );
     try {
       await onSignedIn?.call(startup);
@@ -502,7 +550,7 @@ class SessionController extends ChangeNotifier {
     }
     // A sign-out while startup was awaiting must not mark a later account as
     // started. Its own successful authentication will run its own hook.
-    if (generation != _sessionGeneration) return;
+    if (startupGeneration != _sessionGeneration) return;
   }
 
   Future<void> _signedOutLocally({
@@ -526,9 +574,21 @@ class SessionController extends ChangeNotifier {
     _set(SessionStatus.signedOut, null);
   }
 
+  bool _isCurrentPolicyRequest(int generation, String userId) =>
+      _sessionGeneration == generation &&
+      (_user?.id == userId || _pendingPolicyUserId == userId);
+
+  void _finishPolicyRequest(String userId) {
+    if (_pendingPolicyUserId == userId) _pendingPolicyUserId = null;
+  }
+
   void _invalidateSessionStartup() {
     _sessionGeneration++;
+    _pendingPolicyUserId = null;
     _startedSessionUserId = null;
+    // Do not coalesce a new identity's refresh with an orphaned request.
+    // Its completion is fenced by generation and user ID above.
+    _policyRefresh = null;
   }
 
   void _set(SessionStatus status, SessionUser? user) {

@@ -624,6 +624,125 @@ void main() {
   });
 
   test(
+    'a deferred Alice policy refresh cannot restrict state after sign-out',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'alice-token';
+      final delayedPolicy = Completer<http.Response>();
+      var policyCalls = 0;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) {
+              return http.Response(
+                jsonEncode({
+                  'user': {
+                    'id': 'alice',
+                    'name': 'Alice',
+                    'email': 'alice@example.test',
+                    'username': 'alice',
+                  },
+                }),
+                200,
+              );
+            }
+            if (request.url.path.endsWith('/api/v1/account/status')) {
+              policyCalls++;
+              if (policyCalls == 2) return delayedPolicy.future;
+              return http.Response('{"restriction":"active"}', 200);
+            }
+            if (request.url.path.endsWith('/sign-out')) {
+              return http.Response('{}', 200);
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: MemoryUserCache(),
+        drafts: MemoryDraftStore(),
+      );
+      await session.restore();
+      final refresh = session.refreshAccountPolicy();
+      await Future<void>.delayed(Duration.zero);
+
+      await session.signOut();
+      delayedPolicy.complete(
+        http.Response('{"restriction":"terms_blocked"}', 200),
+      );
+      await refresh;
+
+      expect(session.status, SessionStatus.signedOut);
+      expect(session.user, isNull);
+    },
+  );
+
+  test(
+    'a deferred Alice policy refresh cannot restrict Bob after replacement',
+    () async {
+      final tokens = MemoryTokenStore()..value = 'alice-token';
+      final delayedAlicePolicy = Completer<http.Response>();
+      var policyCalls = 0;
+      final session = SessionController(
+        session: BetterAuthNativeSession(
+          baseUrl: 'https://api.example.test',
+          tokenStore: tokens,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/get-session')) {
+              final id = await tokens.read() == 'bob-token' ? 'bob' : 'alice';
+              return http.Response(
+                jsonEncode({
+                  'user': {
+                    'id': id,
+                    'name': id == 'bob' ? 'Bob' : 'Alice',
+                    'email': '$id@example.test',
+                    'username': id,
+                  },
+                }),
+                200,
+              );
+            }
+            if (request.url.path.endsWith('/api/v1/account/status')) {
+              policyCalls++;
+              if (policyCalls == 2) return delayedAlicePolicy.future;
+              return http.Response('{"restriction":"active"}', 200);
+            }
+            if (request.url.path.endsWith('/sign-out')) {
+              return http.Response('{}', 200);
+            }
+            if (request.url.path.endsWith('/sign-in/email')) {
+              return http.Response(
+                '{}',
+                200,
+                headers: {'set-auth-token': 'bob-token'},
+              );
+            }
+            return http.Response('{}', 404);
+          }),
+        ),
+        tokenStore: tokens,
+        userCache: MemoryUserCache(),
+        drafts: MemoryDraftStore(),
+      );
+      await session.restore();
+      final aliceRefresh = session.refreshAccountPolicy();
+      await Future<void>.delayed(Duration.zero);
+
+      await session.signIn(
+        email: 'bob@example.test',
+        password: 'correct-password',
+      );
+      delayedAlicePolicy.complete(
+        http.Response('{"restriction":"terms_blocked"}', 200),
+      );
+      await aliceRefresh;
+
+      expect(session.status, SessionStatus.signedIn);
+      expect(session.user?.id, 'bob');
+    },
+  );
+
+  test(
     'logout racing session startup cannot restore signed-in state',
     () async {
       final tokens = MemoryTokenStore()..value = 'cached-token';

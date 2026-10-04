@@ -102,6 +102,13 @@ test("manual publisher is main-only, staging-only, and verifies both deployed Wo
   assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /environment: staging/);
   assert.match(workflow, /group: staging-database-state-staging/);
+  assert.match(workflow, /actions: write/);
+  assert.match(workflow, /Freeze staging release entry points and cancel historical reruns/);
+  assert.match(workflow, /disableWorkflow/);
+  assert.match(workflow, /cancelWorkflowRun/);
+  assert.match(workflow, /staging-release\.yml/);
+  assert.match(workflow, /staging-hyperdrive\.yml/);
+  assert.match(workflow, /staging-web\.yml/);
   assert.match(workflow, /STAGING_SIGNUP_ACTIVATION_APPROVED/);
   assert.match(workflow, /ACTIVATE STAGING SIGNUP/);
   assert.match(workflow, /ROLLBACK STAGING SIGNUP/);
@@ -110,8 +117,9 @@ test("manual publisher is main-only, staging-only, and verifies both deployed Wo
   const mutate = workflow.indexOf("Publish legal activation with existing-account acceptance checks");
   assert.ok(verify >= 0 && mutate > verify);
   assert.match(workflow.slice(verify, mutate), /verify-staging-deployed-shas\.mjs/);
+  const freeze = workflow.indexOf("Freeze staging release entry points and cancel historical reruns");
   const finalRecheck = workflow.indexOf("Recheck current main and deployed Worker revisions immediately before mutation");
-  assert.ok(finalRecheck > verify && mutate > finalRecheck);
+  assert.ok(freeze > verify && finalRecheck > freeze && mutate > finalRecheck);
   assert.match(workflow.slice(finalRecheck, mutate), /git ls-remote origin refs\/heads\/main/);
   assert.match(workflow.slice(finalRecheck, mutate), /verify-staging-deployed-shas\.mjs/);
   assert.match(workflow.slice(mutate), /STAGING_SIGNUP_ACTIVATION_TARGET: staging/);
