@@ -1,5 +1,5 @@
+import { createHash } from "node:crypto";
 import rateLimitBindings from "../apps/api/rate-limit-bindings.json" with { type: "json" };
-import { createStagingTrashProofProbe } from "./create-staging-trash-proof-probe.mjs";
 
 const sharedWorkerConfig = {
   $schema: "node_modules/wrangler/config-schema.json",
@@ -18,6 +18,22 @@ export function readStagingBrowserProxyMode(value) {
   if (value === undefined || value === "" || value === "false") return false;
   if (value === "true") return true;
   throw new Error("STAGING_BROWSER_PROXY_ENABLED must be true or false.");
+}
+
+export function createStagingAttestationExpectations({ releaseSha, mediaVars }) {
+  if (typeof releaseSha !== "string" || !/^[a-f0-9]{40}$/.test(releaseSha)) {
+    throw new Error("Refusing invalid staging release attribution.");
+  }
+  const accountId = mediaVars?.R2_ACCOUNT_ID;
+  const bucketName = mediaVars?.R2_BUCKET_NAME;
+  if (!/^[a-f0-9]{32}$/.test(accountId ?? "") ||
+      !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucketName ?? "")) {
+    throw new Error("Staging attestation storage metadata must be complete.");
+  }
+  return {
+    EXPECTED_STAGING_RELEASE_SHA: releaseSha,
+    EXPECTED_STAGING_STORAGE_DIGEST: createHash("sha256").update(`${accountId}\n${bucketName}`).digest("hex"),
+  };
 }
 
 const durableObjectConfig = {
@@ -78,9 +94,10 @@ export function createStagingWorkerConfigs({
        typeof mediaVars.R2_BUCKET_NAME !== "string" || !mediaVars.R2_BUCKET_NAME)) {
     throw new Error("Staging export execution and cleanup require complete R2 bindings.");
   }
-  if (typeof releaseSha !== "string" || !/^[a-f0-9]{40}$/.test(releaseSha)) {
-    throw new Error("Refusing invalid staging release attribution.");
-  }
+  const hasAttestationStorage = mediaVars.R2_ACCOUNT_ID !== undefined || mediaVars.R2_BUCKET_NAME !== undefined;
+  const attestationVars = hasAttestationStorage
+    ? createStagingAttestationExpectations({ releaseSha, mediaVars })
+    : undefined;
   if (typeof authApiOrigin !== "string" || typeof authWebOrigin !== "string") {
     throw new Error("Staging origins are required.");
   }
@@ -121,16 +138,8 @@ export function createStagingWorkerConfigs({
     main: "src/features/system/hyperdrive/test-worker.ts",
     name: "dayli-api-hyperdrive-integration-test",
     workers_dev: false,
-    // The staging suite also attests the deployed revision and R2 target.
-    // Bind only its public expectations, never API vars or credentials.
-    ...(mediaVars.R2_ACCOUNT_ID !== undefined || mediaVars.R2_BUCKET_NAME !== undefined ? {
-      vars: createStagingTrashProofProbe({
-        targetSha: releaseSha,
-        serviceName: workerName,
-        storageAccountId: mediaVars.R2_ACCOUNT_ID,
-        storageBucketName: mediaVars.R2_BUCKET_NAME,
-      }).vars,
-    } : {}),
+    // Bind only public expectations. Never copy API vars or credentials.
+    ...(attestationVars ? { vars: attestationVars } : {}),
     services: [{
       binding: "STAGING_API",
       service: workerName,

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { validateMarker, validateProofTarget } from "../packages/db/scripts/staging-trash-lifecycle-proof";
 import { createStagingTrashProofProbe } from "./create-staging-trash-proof-probe.mjs";
+import { createStagingWorkerConfigs } from "./staging-worker-config.mjs";
 import { verifyStagingTrashProofStorage } from "./verify-staging-trash-proof-storage.mjs";
 import { verifyStagingTrashProofTarget } from "./verify-staging-trash-proof-target.mjs";
 
@@ -116,6 +117,23 @@ test("logs and evidence remain sanitized and failures preserve exact fixtures", 
   assert.match(proof, /markerDigest/);
   assert.doesNotMatch(proof, /JSON\.stringify\(evidence[^\n]*(owner|post|reservation|email|token|object)/i);
   assert.match(workflow, /if: always\(\)/);
+});
+
+test("release and manual proof consumers receive identical strict attestation expectations", () => {
+  const storageAccountId = "b".repeat(32);
+  const storageBucketName = "staging-media";
+  const manual = createStagingTrashProofProbe({ targetSha: sha, serviceName: "dayli-api-staging",
+    storageAccountId, storageBucketName });
+  const { probe: release } = createStagingWorkerConfigs({
+    workerName: "dayli-api-staging", hyperdriveId: "c".repeat(32), releaseSha: sha,
+    authApiOrigin: "https://api.staging.example.test", authWebOrigin: "https://web.staging.example.test",
+    mediaVars: { R2_ACCOUNT_ID: storageAccountId, R2_BUCKET_NAME: storageBucketName },
+  });
+  assert.deepEqual(release.vars, manual.vars);
+  assert.deepEqual(release.vars, {
+    EXPECTED_STAGING_RELEASE_SHA: sha,
+    EXPECTED_STAGING_STORAGE_DIGEST: manual.vars.EXPECTED_STAGING_STORAGE_DIGEST,
+  });
 });
 
 test("private probe has no public route, cron, database binding, or mutable mode", () => {

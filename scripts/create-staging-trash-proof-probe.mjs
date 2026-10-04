@@ -1,16 +1,12 @@
-import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
-
-const shaPattern = /^[a-f0-9]{40}$/;
+import { createStagingAttestationExpectations } from "./staging-worker-config.mjs";
 
 export function createStagingTrashProofProbe({ targetSha, serviceName, storageAccountId, storageBucketName }) {
-  if (!shaPattern.test(targetSha ?? "")) throw new Error("The staging Trash proof target must be an exact commit SHA.");
   if (serviceName !== "dayli-api-staging") throw new Error("Refusing an unexpected staging API service.");
-  if (!/^[a-f0-9]{32}$/.test(storageAccountId ?? "") ||
-      !/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(storageBucketName ?? "")) {
-    throw new Error("Refusing invalid staging proof storage metadata.");
-  }
-  const storageDigest = createHash("sha256").update(`${storageAccountId}\n${storageBucketName}`).digest("hex");
+  const attestationVars = createStagingAttestationExpectations({
+    releaseSha: targetSha,
+    mediaVars: { R2_ACCOUNT_ID: storageAccountId, R2_BUCKET_NAME: storageBucketName },
+  });
   return {
     $schema: "node_modules/wrangler/config-schema.json",
     main: "src/features/system/hyperdrive/test-worker.ts",
@@ -18,7 +14,7 @@ export function createStagingTrashProofProbe({ targetSha, serviceName, storageAc
     compatibility_flags: ["nodejs_compat"],
     name: "dayli-api-staging-trash-proof",
     workers_dev: false,
-    vars: { EXPECTED_STAGING_RELEASE_SHA: targetSha, EXPECTED_STAGING_STORAGE_DIGEST: storageDigest },
+    vars: attestationVars,
     services: [{
       binding: "STAGING_API",
       service: serviceName,
