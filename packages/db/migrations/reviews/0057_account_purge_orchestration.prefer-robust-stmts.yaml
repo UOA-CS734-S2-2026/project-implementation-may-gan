@@ -1,0 +1,6 @@
+reason: The protected migration runner applies this forward-only procedure and private task table atomically. Guards would conceal an interrupted or partially installed physical-purge authority.
+affected_data_and_clients: Adds empty private account_purge_object_cleanup_tasks state and SECURITY DEFINER procedures. Existing user data is not changed until a separately activated worker claims an eligible lifecycle row.
+rollout_sequence: Apply through the protected manual migration workflow, verify the report-only procedure with synthetic staging data, then require a separate reviewed activation before any executor exists.
+backup_checkpoint: Confirm the required provider and PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on any migration failure, inspect without exposing object keys or account data, and add a reviewed forward migration rather than editing this file.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.

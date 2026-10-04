@@ -1,0 +1,6 @@
+reason: The referenced and referencing rows are empty at creation, so the brief migration transaction lock does not scan or rewrite existing account data.
+affected_data_and_clients: Adds cleanup-task ownership and optional export-cleanup linkage. No existing table is altered.
+rollout_sequence: Apply only through the protected manual migration workflow before report-only staging verification.
+backup_checkpoint: Confirm the required provider and PostgreSQL restore checkpoint before protected-environment execution.
+forward_fix_plan: Stop on migration failure and use a reviewed forward migration. Never remove ownership fencing to recover quickly.
+reviewer: Required database CODEOWNER review and privacy-owner approval before protected migration execution.

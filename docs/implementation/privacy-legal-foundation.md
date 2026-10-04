@@ -10,9 +10,15 @@ The schema stores lifecycle deadlines as `TIMESTAMPTZ`. Its checks require exact
 
 The owner bootstrap reserves `lifecycle_worker`. It has no runtime credential, Worker binding, direct table grant, or physical-delete permission. The app role cannot delete `user`, read purge receipts or operator cases, or access export cleanup tasks. Reapplying migrator bootstrap preserves these denials.
 
+## Staged account purge orchestration
+
+Migration `0057_account_purge_orchestration` adds an unscheduled, fenced physical-purge path. It cannot claim an account before `purge_due_at`, then leases one owned R2 object at a time. Export cleanup aborts known and discovered multipart uploads, then checks final-object absence after a second abort/list/delete pass. Because a provider completion can still arrive later, finalization retains the export cleanup record for the established delayed reconciliation pass. It retries storage failures with a durable minimum delay and refuses legacy or shared media as an operator-visible terminal `unsupported_media` failure. Finalization locks shared messaging participants in deterministic order, removes restrictive immutable post history in dependency order, retains a content-free receipt for 720 hours, and exposes a bounded worker procedure to remove expired receipts.
+
+Only the `lifecycle_worker` role can execute the fenced claim, completion, retry, report, and receipt-expiry procedures. It has no direct table or user-delete privileges. A non-final object completion releases the lifecycle lease so the next object receives a new fence. Report-only output exposes due, retryable-failure, terminal-failure, and leased counts without object keys or account IDs.
+
 ## Explicitly not included
 
-This change does not add hosted activation, migrations against a hosted database, secret configuration, an API route, a scheduled handler, an export builder, an object-store operation, a physical purge procedure, client UI, or provider verification.
+This change does not add hosted activation, migrations against a hosted database, secret configuration, an API route, a scheduled handler, an export builder, client UI, provider retention verification, or a live object-store operation.
 
 Issue #199 remains the default-deny control. Lifecycle execution defaults to `disabled`; `report_only` and `execute` are contract vocabulary only. Do not enable either switch without a separately reviewed implementation, credentials, runtime binding, and local verification.
 

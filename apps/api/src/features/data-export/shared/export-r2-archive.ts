@@ -15,10 +15,10 @@ export interface ExportArchiveStore {
   begin(key: string): Promise<string>;
   uploadPart(key: string, uploadId: string, partNumber: number, bytes: Uint8Array): Promise<string>;
   complete(key: string, uploadId: string, parts: readonly MultipartPart[]): Promise<void>;
-  abort(key: string, uploadId: string): Promise<void>;
-  listUploads(key: string): Promise<string[]>;
-  remove(key: string): Promise<void>;
-  exists(key: string): Promise<boolean>;
+  abort(key: string, uploadId: string, signal?: AbortSignal): Promise<void>;
+  listUploads(key: string, signal?: AbortSignal): Promise<string[]>;
+  remove(key: string, signal?: AbortSignal): Promise<void>;
+  exists(key: string, signal?: AbortSignal): Promise<boolean>;
   head(key: string): Promise<{ size: number; etag: string }>;
   readRange(key: string, start: number, end: number, size: number, etag: string): Promise<Uint8Array>;
 }
@@ -92,9 +92,11 @@ export function createExportArchiveStore(config: R2RuntimeConfiguration, transpo
   const client = transport ?? new AwsClient({
     accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey, service: "s3", region: "auto",
   });
-  async function request(url: string | URL, init: RequestInit): Promise<Response> {
-    try { return await client.fetch(url, { ...init, signal: AbortSignal.timeout(15_000) }); }
-    catch { throw new ExportStorageError("R2 export request failed."); }
+  async function request(url: string | URL, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+    try {
+      const timeout = AbortSignal.timeout(15_000);
+      return await client.fetch(url, { ...init, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    } catch { throw new ExportStorageError("R2 export request failed."); }
   }
   return {
     async begin(key) {
@@ -129,13 +131,13 @@ export function createExportArchiveStore(config: R2RuntimeConfiguration, transpo
       if (!response.ok) throw new ExportStorageError("R2 multipart completion failed.");
       xmlNode(await smallResponse(response), "CompleteMultipartUploadResult");
     },
-    async abort(key, id) {
+    async abort(key, id, signal) {
       checkKey(key); checkUploadId(id);
       const url = new URL(urlFor(config, key)); url.searchParams.set("uploadId", id);
-      const response = await request(url, { method: "DELETE" });
+      const response = await request(url, { method: "DELETE" }, signal);
       if (!response.ok && response.status !== 404) throw new ExportStorageError("R2 multipart abort failed.");
     },
-    async listUploads(key) {
+    async listUploads(key, signal) {
       checkKey(key);
       const ids = new Set<string>();
       let previous = "";
@@ -146,7 +148,7 @@ export function createExportArchiveStore(config: R2RuntimeConfiguration, transpo
         url.searchParams.set("uploads", ""); url.searchParams.set("prefix", key);
         if (keyMarker) url.searchParams.set("key-marker", keyMarker);
         if (uploadMarker) url.searchParams.set("upload-id-marker", uploadMarker);
-        const response = await request(url, { method: "GET" });
+        const response = await request(url, { method: "GET" }, signal);
         if (!response.ok) throw new ExportStorageError("R2 multipart listing failed.");
         const xml = xmlNode(await smallResponse(response), "ListMultipartUploadsResult");
         for (const upload of xml.children.filter((node) => node.name === "Upload")) {
@@ -167,14 +169,14 @@ export function createExportArchiveStore(config: R2RuntimeConfiguration, transpo
       }
       throw new ExportStorageError("R2 multipart listing exceeds its page limit.");
     },
-    async remove(key) {
+    async remove(key, signal) {
       checkKey(key);
-      const response = await request(urlFor(config, key), { method: "DELETE" });
+      const response = await request(urlFor(config, key), { method: "DELETE" }, signal);
       if (!response.ok && response.status !== 404) throw new ExportStorageError("R2 archive removal failed.");
     },
-    async exists(key) {
+    async exists(key, signal) {
       checkKey(key);
-      const response = await request(urlFor(config, key), { method: "HEAD" });
+      const response = await request(urlFor(config, key), { method: "HEAD" }, signal);
       if (response.status === 404) return false;
       if (!response.ok) throw new ExportStorageError("R2 archive existence check failed.");
       return true;
