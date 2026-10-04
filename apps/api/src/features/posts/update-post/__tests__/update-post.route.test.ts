@@ -25,6 +25,7 @@ const detail: PostDetailRecord = {
   viewerIsAuthor: true,
   media: [],
   voiceMemo: null,
+  weather: null,
   publicMediaDelivery: false,
 };
 
@@ -115,6 +116,10 @@ describe("PATCH /api/v1/posts/{postId}", () => {
     ["a rating out of range", { ...edit, rating: 11 }],
     ["an unknown audience", { ...edit, audience: "public" }],
     ["a field that can't be edited", { ...edit, localDate: "2026-09-24" }],
+    ["a weather snapshot, which can't be added or changed after posting", {
+      ...edit,
+      weather: { condition: "rain", temperatureC: 11, placeName: "Auckland" },
+    }],
   ])("rejects %s", async (_, body) => {
     const repo = repository("updated");
     const response = await patch({ repository: repo, detail: detailRepository() }, body);

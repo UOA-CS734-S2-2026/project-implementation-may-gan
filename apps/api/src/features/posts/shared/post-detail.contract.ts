@@ -7,6 +7,7 @@ import {
 import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import { nullablePostVoiceMemoSchema, postMediaSchema } from "../shared/post-media.contract";
+import { nullablePostWeatherSchema } from "../shared/post-weather.contract";
 
 export const postIdParamsSchema = z.object({
   postId: opaqueIdSchema.openapi({ param: { name: "postId", in: "path" }, example: "post-1" }),
@@ -47,6 +48,10 @@ export const postDetailSchema = z
     voiceMemo: nullablePostVoiceMemoSchema.openapi({
       description: "The post's voice memo with a private download URL that expires after 5 minutes, "
         + "or null when the post has none. Only post detail carries it; feeds and profile lists do not.",
+    }),
+    weather: nullablePostWeatherSchema.openapi({
+      description: "The weather snapshot the author added, or null when the post has none. "
+        + "It is the author's own snapshot, not verified. Only post detail carries it; feeds and profile lists do not.",
     }),
   })
   .openapi("PostDetail", {

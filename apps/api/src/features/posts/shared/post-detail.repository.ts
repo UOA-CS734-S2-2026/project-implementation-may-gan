@@ -11,6 +11,7 @@ import {
 } from "./post-media";
 import { visibleRevisions } from "./post-revisions";
 import type { PostDetail } from "./post-detail.contract";
+import { readStoredWeather } from "./post-weather";
 
 /** The post with its media not yet signed; the route signs it for the response. */
 export type PostDetailRecord = Omit<PostDetail, "media" | "voiceMemo"> & {
@@ -50,6 +51,9 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
           audience: posts.audience,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
+          weatherCondition: posts.weatherCondition,
+          weatherTemperatureC: posts.weatherTemperatureC,
+          weatherPlaceName: posts.weatherPlaceName,
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))
@@ -95,6 +99,7 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         viewerIsAuthor,
         media,
         voiceMemo,
+        weather: readStoredWeather(row),
         publicMediaDelivery,
       };
     },
