@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DIRECT_MESSAGE_SEND_LIMIT, parseDirectMessageSendLimit } from "./new-message-quota";
+import { DEFAULT_DIRECT_MESSAGE_SEND_LIMIT, parseDirectMessageSendLimit } from "../new-message-quota";
 
 describe("direct-message send quota configuration", () => {
   it("uses the default for missing and malformed values", () => {
