@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPostgresDirectMessageNotificationResolver } from "../../../../infrastructure/notifications/direct-message-resolver";
 import { createPostgresNotificationStore } from "../../../../infrastructure/notifications/notification-store";
+import { createPostgresPushDestinationResolver } from "../../../../infrastructure/push/push-destination.repository";
 import { appendConversationChange } from "../append-conversation-change";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
@@ -298,6 +299,40 @@ suite("conversation change builders", () => {
       .where(eq(schema.messages.id, messageId));
     await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({ body: "edited preview" });
 
+    const legacyResolver = createPostgresPushDestinationResolver(database.db, {
+      encrypt: async () => ({ ciphertext: "unused", keyVersion: "unused" }),
+      decrypt: async () => "fake-legacy-token",
+    });
+    const legacyJob = {
+      id: crypto.randomUUID(),
+      eventId: crypto.randomUUID(),
+      recipientId: users[1]!,
+      conversationId,
+      changeSequence: "9007199254740991",
+      channel: "push" as const,
+      deviceRegistrationId: validDeviceId,
+      attempts: 1,
+      leaseToken: "legacy-lease",
+      leaseExpiresAt: new Date(Date.now() + 30_000),
+    };
+    await expect(legacyResolver.resolve(legacyJob)).resolves.toMatchObject({ token: "fake-legacy-token" });
+    const lifecycleRequestedAt = new Date();
+    await database.db.insert(schema.accountLifecycles).values({
+      userId: users[0]!,
+      state: "pending_deletion",
+      requestId: crypto.randomUUID(),
+      idempotencyKeyDigest: "9".repeat(64),
+      generation: 1,
+      requestedAt: lifecycleRequestedAt,
+      cancelUntil: new Date(lifecycleRequestedAt.getTime() + 7 * 24 * 60 * 60 * 1_000),
+      purgeDueAt: new Date(lifecycleRequestedAt.getTime() + 14 * 24 * 60 * 60 * 1_000),
+    });
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await expect(legacyResolver.resolve(legacyJob)).resolves.toBeNull();
+    await database.db.delete(schema.accountLifecycles)
+      .where(eq(schema.accountLifecycles.userId, users[0]!));
+    await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({ body: "edited preview" });
+
     await database.db.update(schema.accountNotificationPreferences).set({ enabled: false })
       .where(eq(schema.accountNotificationPreferences.userId, users[1]!));
     await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
@@ -324,6 +359,37 @@ suite("conversation change builders", () => {
       eq(schema.relationshipBlocks.blockerId, users[0]!),
       eq(schema.relationshipBlocks.blockedId, users[1]!),
     ));
+
+    const staleGeneration = await resolver.resolve(deliveryJob);
+    expect(staleGeneration).not.toBeNull();
+    await database.db.update(schema.pushDevices).set({
+      token: "token-capable-refreshed",
+      tokenCiphertext: "cipher-capable-refreshed",
+      tokenHash: "9".repeat(64),
+    }).where(eq(schema.pushDevices.id, capableDeviceId));
+    await resolver.invalidate(deliveryJob, staleGeneration!.registrationGeneration);
+    const [afterStaleRejection] = await database.db.select({
+      invalidatedAt: schema.pushDevices.invalidatedAt,
+      optedIn: schema.pushDevices.optedIn,
+    }).from(schema.pushDevices).where(eq(schema.pushDevices.id, capableDeviceId));
+    expect(afterStaleRejection).toEqual({ invalidatedAt: null, optedIn: true });
+
+    const currentGeneration = await resolver.resolve(deliveryJob);
+    expect(currentGeneration?.registrationGeneration.tokenHash).toBe("9".repeat(64));
+    await resolver.invalidate(deliveryJob, currentGeneration!.registrationGeneration);
+    const [afterCurrentRejection] = await database.db.select({
+      invalidatedAt: schema.pushDevices.invalidatedAt,
+      optedIn: schema.pushDevices.optedIn,
+    }).from(schema.pushDevices).where(eq(schema.pushDevices.id, capableDeviceId));
+    expect(afterCurrentRejection?.invalidatedAt).toBeInstanceOf(Date);
+    expect(afterCurrentRejection?.optedIn).toBe(false);
+    const [otherRegistration] = await database.db.select({
+      invalidatedAt: schema.pushDevices.invalidatedAt,
+      optedIn: schema.pushDevices.optedIn,
+    }).from(schema.pushDevices).where(eq(schema.pushDevices.id, validDeviceId));
+    expect(otherRegistration).toEqual({ invalidatedAt: null, optedIn: true });
+    await database.db.update(schema.pushDevices).set({ invalidatedAt: null, optedIn: true })
+      .where(eq(schema.pushDevices.id, capableDeviceId));
 
     await database.db.update(schema.messages).set({ body: null, unsentAt: new Date() })
       .where(eq(schema.messages.id, messageId));

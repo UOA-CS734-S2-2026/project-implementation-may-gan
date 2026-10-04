@@ -12,6 +12,7 @@ function store(overrides: Partial<NotificationStore> = {}): NotificationStore {
   return {
     claimDue: vi.fn().mockResolvedValueOnce([job]).mockResolvedValue([]),
     renewLease: vi.fn(async (claimed) => ({ ...job, ...claimed })),
+    releaseLease: vi.fn(async () => true),
     markDelivered: vi.fn(async () => true),
     markSuppressed: vi.fn(async () => true),
     reschedule: vi.fn(async () => true),
@@ -22,6 +23,7 @@ function store(overrides: Partial<NotificationStore> = {}): NotificationStore {
 const resolved = {
   token: "private-token", eventId: "event", targetId: "conversation",
   title: "Private sender", body: "Private current body",
+  registrationGeneration: { sessionId: "session", tokenHash: "generation" },
 };
 
 describe("generic notification dispatcher", () => {
@@ -51,7 +53,13 @@ describe("generic notification dispatcher", () => {
     await expect(dispatcher.dispatchScheduled()).resolves.toMatchObject({ delivered: 1 });
     expect(order).toEqual(["lease", "resolve", "lease", "provider", "delivered"]);
     expect(sender.send).toHaveBeenCalledWith({
-      ...resolved, type: "direct_message", targetType: "conversation",
+      token: resolved.token,
+      eventId: resolved.eventId,
+      targetId: resolved.targetId,
+      title: resolved.title,
+      body: resolved.body,
+      type: "direct_message",
+      targetType: "conversation",
     }, { signal: expect.any(AbortSignal) });
   });
 
@@ -80,10 +88,74 @@ describe("generic notification dispatcher", () => {
     await expect(permanent.dispatchScheduled()).resolves.toMatchObject({ failed: 1 });
     expect(invalidate).toHaveBeenCalledWith(expect.objectContaining({
       deviceRegistrationId: "device", recipientId: "recipient",
-    }));
+    }), resolved.registrationGeneration);
     expect(permanentStore.reschedule).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       failureCategory: "provider_rejected", terminal: true,
     }));
+  });
+
+  it("releases claimed work without provider IO when resolution exhausts the immediate budget", async () => {
+    const clock = { value: now };
+    const storage = store();
+    const sender = { send: vi.fn() };
+    const resolver = {
+      resolve: vi.fn(async () => {
+        clock.value = new Date(now.getTime() + 1_500);
+        return resolved;
+      }),
+      invalidate: vi.fn(),
+    };
+    const dispatcher = createNotificationDispatcher({
+      store: storage,
+      resolver,
+      sender,
+      now: () => clock.value,
+      immediateBudgetMs: 1_500,
+    });
+    await expect(dispatcher.dispatchImmediately()).resolves.toMatchObject({ claimed: 1, released: 1 });
+    expect(storage.releaseLease).toHaveBeenCalledWith(expect.objectContaining({ id: "delivery" }), clock.value);
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it("limits provider work to the remaining budget and waits for abort cleanup", async () => {
+    vi.useFakeTimers();
+    try {
+      const clock = { value: now };
+      const storage = store();
+      let cleanedUp = false;
+      const sender = { send: vi.fn((_payload: unknown, options?: { signal: AbortSignal }) => new Promise<{
+        ok: false;
+        retryable: true;
+        category: "transient";
+      }>((resolve) => {
+        options?.signal.addEventListener("abort", () => {
+          cleanedUp = true;
+          resolve({ ok: false, retryable: true, category: "transient" });
+        }, { once: true });
+      })) };
+      const resolver = {
+        resolve: vi.fn(async () => {
+          clock.value = new Date(now.getTime() + 1_400);
+          return resolved;
+        }),
+        invalidate: vi.fn(),
+      };
+      const dispatcher = createNotificationDispatcher({
+        store: storage,
+        resolver,
+        sender,
+        now: () => clock.value,
+        immediateBudgetMs: 1_500,
+        deliveryTimeoutMs: 20_000,
+      });
+      const pending = dispatcher.dispatchImmediately();
+      await vi.advanceTimersByTimeAsync(100);
+      await expect(pending).resolves.toMatchObject({ rescheduled: 1 });
+      expect(cleanedUp).toBe(true);
+      expect(storage.reschedule).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not call the provider after losing the lease fence", async () => {

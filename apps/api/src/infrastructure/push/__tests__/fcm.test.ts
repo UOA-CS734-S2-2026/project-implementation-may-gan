@@ -60,9 +60,12 @@ describe("FCM HTTP v1 adapter", () => {
   it("invalidates a permanently rejected registration and treats stale policy as suppression", async () => {
     const invalidate = vi.fn(async () => undefined);
     const sender = { send: vi.fn(async () => ({ ok: false as const, retryable: false, category: "provider_rejected" as const })) };
-    const handler = createPushOutboxHandler({ destinations: { resolve: async () => ({ token: "private", valid: true }), invalidate }, sender });
+    const registrationGeneration = { sessionId: "session", tokenHash: "generation" };
+    const handler = createPushOutboxHandler({ destinations: {
+      resolve: async () => ({ token: "private", valid: true, registrationGeneration }), invalidate,
+    }, sender });
     await expect(handler(job)).resolves.toMatchObject({ ok: false, category: "provider_rejected" });
-    expect(invalidate).toHaveBeenCalledWith("device");
+    expect(invalidate).toHaveBeenCalledWith(job, registrationGeneration);
     const suppressed = createPushOutboxHandler({ destinations: { resolve: async () => null, invalidate }, sender });
     await expect(suppressed(job)).resolves.toEqual({ ok: true });
   });

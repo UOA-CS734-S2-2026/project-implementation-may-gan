@@ -15,6 +15,7 @@ export interface NotificationJob {
 export interface NotificationStore {
   claimDue(input: { now: Date; limit: number; leaseForMs: number; maxAttempts: number; leaseToken: () => string }): Promise<NotificationJob[]>;
   renewLease(job: Pick<NotificationJob, "id" | "leaseToken">, input: { now: Date; leaseForMs: number }): Promise<NotificationJob | null>;
+  releaseLease(job: Pick<NotificationJob, "id" | "leaseToken">, availableAt: Date): Promise<boolean>;
   markDelivered(job: Pick<NotificationJob, "id" | "leaseToken">, deliveredAt: Date): Promise<boolean>;
   markSuppressed(job: Pick<NotificationJob, "id" | "leaseToken">, category: string): Promise<boolean>;
   reschedule(job: Pick<NotificationJob, "id" | "leaseToken" | "attempts">, input: { availableAt: Date; failureCategory: FailureCategory; terminal: boolean }): Promise<boolean>;
@@ -89,6 +90,16 @@ export function createPostgresNotificationStore(database: DayliDatabase): Notifi
         .returning(fields);
       return row ? toJob(row) : null;
     },
+    async releaseLease(job, availableAt) {
+      const rows = await database.update(schema.notificationDeliveries)
+        .set({ status: "pending", availableAt, leaseToken: null, leaseExpiresAt: null })
+        .where(and(
+          eq(schema.notificationDeliveries.id, job.id),
+          eq(schema.notificationDeliveries.status, "leased"),
+          eq(schema.notificationDeliveries.leaseToken, job.leaseToken),
+        )).returning({ id: schema.notificationDeliveries.id });
+      return rows.length === 1;
+    },
     async markDelivered(job, deliveredAt) {
       const rows = await database.update(schema.notificationDeliveries)
         .set({ status: "delivered", deliveredAt, leaseToken: null, leaseExpiresAt: null, failureCategory: null })
@@ -138,6 +149,7 @@ export function createHyperdriveNotificationStore(hyperdrive: HyperdriveBinding)
   return {
     claimDue: (input) => run((store) => store.claimDue(input)),
     renewLease: (job, input) => run((store) => store.renewLease(job, input)),
+    releaseLease: (job, at) => run((store) => store.releaseLease(job, at)),
     markDelivered: (job, at) => run((store) => store.markDelivered(job, at)),
     markSuppressed: (job, category) => run((store) => store.markSuppressed(job, category)),
     reschedule: (job, input) => run((store) => store.reschedule(job, input)),

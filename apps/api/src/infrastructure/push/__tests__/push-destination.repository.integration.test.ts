@@ -175,7 +175,10 @@ suite("Postgres push destination authorization", () => {
     await database.db.delete(schema.legalDocumentVersions).where(eq(schema.legalDocumentVersions.id, effectiveTermsId));
     effectiveTermsId = undefined;
 
-    await resolver.invalidate(ids.bobDevice);
+    const rejectedJob = job(ids.bob, ids.bobDevice);
+    const rejectedDestination = await resolver.resolve(rejectedJob);
+    expect(rejectedDestination).not.toBeNull();
+    await resolver.invalidate(rejectedJob, rejectedDestination!.registrationGeneration);
     await expect(resolver.resolve(job(ids.bob, ids.bobDevice))).resolves.toBeNull();
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledTimes(3);
