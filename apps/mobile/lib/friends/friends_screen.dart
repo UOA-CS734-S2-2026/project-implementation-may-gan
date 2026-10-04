@@ -63,6 +63,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (GoRouter.maybeOf(context)?.canPop() ?? false)
                   IconButton(
@@ -73,28 +74,36 @@ class _FriendsScreenState extends State<FriendsScreen> {
                 else
                   const SizedBox(width: 4),
                 Expanded(
-                  child: Text(
-                    'friends',
-                    textAlign: TextAlign.left,
-                    style: DayliText.serif(
-                      context,
-                      fontSize: 34,
-                      weight: FontWeight.w400,
-                      tracking: -0.06,
-                    ),
-                  ),
-                ),
-                FilledButton.icon(
-                  onPressed: () => _showDiscovery(context, controller),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: DayliColors.of(context).foregroundAccent,
-                    foregroundColor: DayliColors.of(context).background,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  icon: const Icon(Icons.add_rounded, size: 20),
-                  label: const Text(
-                    'Add friend',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      Text(
+                        'friends',
+                        textAlign: TextAlign.left,
+                        style: DayliText.serif(
+                          context,
+                          fontSize: 34,
+                          weight: FontWeight.w400,
+                          tracking: -0.06,
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: () => _showDiscovery(context, controller),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: DayliColors.of(context).foregroundAccent,
+                          foregroundColor: DayliColors.of(context).background,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        icon: const Icon(Icons.add_rounded, size: 20),
+                        label: const Text(
+                          'Add friend',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

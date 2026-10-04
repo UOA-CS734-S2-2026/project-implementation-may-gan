@@ -53,18 +53,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
             key: const Key('messages.inbox'),
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
             children: [
-              Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 16,
+                runSpacing: 12,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'messages',
-                      textAlign: TextAlign.left,
-                      style: DayliText.serif(
-                        context,
-                        fontSize: 34,
-                        weight: FontWeight.w400,
-                        tracking: -0.06,
-                      ),
+                  Text(
+                    'messages',
+                    textAlign: TextAlign.left,
+                    style: DayliText.serif(
+                      context,
+                      fontSize: 34,
+                      weight: FontWeight.w400,
+                      tracking: -0.06,
                     ),
                   ),
                   FilledButton.icon(
