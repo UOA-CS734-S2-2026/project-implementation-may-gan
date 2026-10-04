@@ -49,6 +49,9 @@ if (proofValues.some(Boolean) && !proofValues.every(Boolean)) {
 }
 const exportProofVars = proofValues.every(Boolean)
   ? Object.fromEntries(proofKeys.map((key, index) => [key, proofValues[index]])) : {};
+for (const key of ["STAGING_EXPORT_ALL_USERS_APPROVED", "STAGING_EXPORT_CLEANUP_ONLY_APPROVED"]) {
+  if (process.env[key]) exportProofVars[key] = process.env[key];
+}
 if (exportWorkerHyperdriveId) await verifyStagingExportWorkerTarget({});
 if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");
 if (required("STAGING_API_SERVICE_NAME") !== expectedWorkerName) throw new Error("STAGING_API_SERVICE_NAME must be dayli-api-staging.");
@@ -62,6 +65,10 @@ const { apiOrigin, webOrigin } = validateStagingOrigins({
 const browserProxyEnabled = readStagingBrowserProxyMode(process.env.STAGING_BROWSER_PROXY_ENABLED);
 const authBindings = readStagingAuthBindings(process.env);
 const mediaBindings = readStagingMediaBindings(process.env, accountId);
+if (Object.keys(exportProofVars).length > 0 &&
+    (!mediaBindings.vars.R2_BUCKET_NAME || mediaBindings.requiredSecrets.length !== 2)) {
+  throw new Error("Staging export execution and cleanup require complete R2 bindings.");
+}
 const requiredSecretNames = [...authBindings.requiredSecrets, ...mediaBindings.requiredSecrets];
 // Read every source secret before any Cloudflare mutation.
 const secretSource = readStagingWorkerSecretSource(process.env, requiredSecretNames);

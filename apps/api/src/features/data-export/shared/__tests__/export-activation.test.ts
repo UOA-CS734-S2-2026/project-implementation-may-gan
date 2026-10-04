@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { exportExecutionEnabled, readStagingExportProof } from "../export-activation";
+import { exportExecutionEnabled, readStagingExportProof, stagingExportAllUsersEnabled,
+  stagingExportCleanupOnlyEnabled } from "../export-activation";
 
 const now = Date.parse("2026-10-04T00:00:00.000Z");
 const binding = { connectionString: "postgres://synthetic.test" };
@@ -13,6 +14,17 @@ const proof = {
 };
 
 describe("staging-only synthetic export gate", () => {
+  it("admits all staging accounts only with a separate binding and exact owner approval", () => {
+    const active = { API_RATE_LIMIT_SCOPE: "staging", EXPORT_WORKER_HYPERDRIVE: binding,
+      STAGING_EXPORT_ALL_USERS_APPROVED: "all-staging-accounts" };
+    expect(stagingExportAllUsersEnabled(active)).toBe(true);
+    expect(stagingExportAllUsersEnabled({ ...active, API_RATE_LIMIT_SCOPE: "production" })).toBe(false);
+    expect(stagingExportAllUsersEnabled({ ...active, EXPORT_WORKER_HYPERDRIVE: undefined })).toBe(false);
+    expect(stagingExportAllUsersEnabled({ ...active, STAGING_EXPORT_ALL_USERS_APPROVED: "true" })).toBe(false);
+    expect(stagingExportCleanupOnlyEnabled({ ...active, STAGING_EXPORT_CLEANUP_ONLY_APPROVED: "continue-existing-cleanup" })).toBe(true);
+    expect(stagingExportCleanupOnlyEnabled({ ...active, API_RATE_LIMIT_SCOPE: "production",
+      STAGING_EXPORT_CLEANUP_ONLY_APPROVED: "continue-existing-cleanup" })).toBe(false);
+  });
   it("never enables normal or production execution", () => {
     expect(exportExecutionEnabled).toBe(false);
     expect(readStagingExportProof({ ...proof, API_RATE_LIMIT_SCOPE: "production" }, now)).toBeNull();

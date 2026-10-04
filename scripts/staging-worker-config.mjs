@@ -56,11 +56,23 @@ export function createStagingWorkerConfigs({
   }
   const proofKeys = ["STAGING_EXPORT_PROOF_APPROVED", "STAGING_EXPORT_PROOF_USER_ID",
     "STAGING_EXPORT_PROOF_BUILD_UNTIL", "STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER"];
-  if (Object.keys(exportProofVars).some((key) => !proofKeys.includes(key)) ||
-      (proofKeys.some((key) => exportProofVars[key] !== undefined) &&
-        (proofKeys.some((key) => typeof exportProofVars[key] !== "string" || !exportProofVars[key]) ||
-          exportProofVars.STAGING_EXPORT_PROOF_APPROVED !== "synthetic-only" || !exportWorkerHyperdriveId))) {
-    throw new Error("Staging export proof settings are incomplete.");
+  const activationKeys = ["STAGING_EXPORT_ALL_USERS_APPROVED", "STAGING_EXPORT_CLEANUP_ONLY_APPROVED"];
+  const proofConfigured = proofKeys.some((key) => exportProofVars[key] !== undefined);
+  if (Object.keys(exportProofVars).some((key) => ![...proofKeys, ...activationKeys].includes(key)) ||
+      (Object.keys(exportProofVars).length > 0 && !exportWorkerHyperdriveId) ||
+      (proofConfigured && (proofKeys.some((key) => typeof exportProofVars[key] !== "string" || !exportProofVars[key]) ||
+        exportProofVars.STAGING_EXPORT_PROOF_APPROVED !== "synthetic-only" ||
+        activationKeys.some((key) => exportProofVars[key] !== undefined))) ||
+      (exportProofVars.STAGING_EXPORT_ALL_USERS_APPROVED !== undefined &&
+        exportProofVars.STAGING_EXPORT_ALL_USERS_APPROVED !== "all-staging-accounts") ||
+      (exportProofVars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED !== undefined &&
+        exportProofVars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED !== "continue-existing-cleanup")) {
+    throw new Error("Staging export settings are invalid or incomplete.");
+  }
+  if (Object.keys(exportProofVars).length > 0 &&
+      (!/^[a-f0-9]{32}$/.test(mediaVars.R2_ACCOUNT_ID ?? "") ||
+       typeof mediaVars.R2_BUCKET_NAME !== "string" || !mediaVars.R2_BUCKET_NAME)) {
+    throw new Error("Staging export execution and cleanup require complete R2 bindings.");
   }
   if (typeof authApiOrigin !== "string" || typeof authWebOrigin !== "string") {
     throw new Error("Staging origins are required.");

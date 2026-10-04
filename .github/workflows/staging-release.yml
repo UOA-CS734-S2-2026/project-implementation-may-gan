@@ -43,6 +43,8 @@ jobs:
       browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ steps.release.outputs.tooling_sha }}
       push_readiness: ${{ steps.release.outputs.push_readiness }}
+      export_approval: ${{ steps.release.outputs.export_approval }}
+      export_cleanup_only: ${{ steps.release.outputs.export_cleanup_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,6 +58,8 @@ jobs:
           TOOLING_SHA: ${{ github.workflow_sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
           PUSH_READINESS: ${{ github.event_name == 'workflow_dispatch' && inputs.push_readiness || 'false' }}
+          STAGING_EXPORT_ALL_USERS_APPROVED: ${{ vars.STAGING_EXPORT_ALL_USERS_APPROVED }}
+          STAGING_EXPORT_CLEANUP_ONLY_APPROVED: ${{ vars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED }}
         run: node scripts/capture-staging-release.mjs
       - name: Capture non-sensitive deployed release attribution
         env:
@@ -81,6 +85,8 @@ jobs:
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
       push_readiness: ${{ needs.capture.outputs.push_readiness }}
+      export_approval: ${{ needs.capture.outputs.export_approval }}
+      export_cleanup_only: ${{ needs.capture.outputs.export_cleanup_only }}
     secrets: inherit
 
   web:
@@ -90,4 +96,6 @@ jobs:
       commit_sha: ${{ needs.capture.outputs.commit_sha }}
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
+      export_approval: ${{ needs.capture.outputs.export_approval }}
+      export_cleanup_only: ${{ needs.capture.outputs.export_cleanup_only }}
     secrets: inherit

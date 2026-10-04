@@ -20,6 +20,12 @@ on:
       push_readiness:
         required: true
         type: string
+      export_approval:
+        required: true
+        type: string
+      export_cleanup_only:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -41,6 +47,8 @@ jobs:
           CAPTURED_MIGRATION_MODE: ${{ inputs.migration_mode }}
           CAPTURED_BROWSER_PROXY_ENABLED: ${{ inputs.browser_proxy_enabled }}
           CAPTURED_PUSH_READINESS: ${{ inputs.push_readiness }}
+          CAPTURED_EXPORT_APPROVAL: ${{ inputs.export_approval }}
+          CAPTURED_EXPORT_CLEANUP_ONLY: ${{ inputs.export_cleanup_only }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
         run: |
           if [[ "$CAPTURED_MIGRATION_MODE" != "forward" && "$CAPTURED_MIGRATION_MODE" != "rollback-verify-only" ]]; then
@@ -57,6 +65,11 @@ jobs:
           fi
           if [[ "$CAPTURED_PUSH_READINESS" != "true" && "$CAPTURED_PUSH_READINESS" != "false" ]]; then
             echo 'Captured push readiness mode must be true or false.' >&2
+            exit 1
+          fi
+          if [[ ( "$CAPTURED_EXPORT_APPROVAL" != 'none' && "$CAPTURED_EXPORT_APPROVAL" != 'all-staging-accounts' ) ||
+                ( "$CAPTURED_EXPORT_CLEANUP_ONLY" != 'none' && "$CAPTURED_EXPORT_CLEANUP_ONLY" != 'continue-existing-cleanup' ) ]]; then
+            echo 'Captured export mode is invalid.' >&2
             exit 1
           fi
       - uses: actions/checkout@v4
@@ -143,6 +156,8 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID }}
+          STAGING_EXPORT_ALL_USERS_APPROVED: ${{ inputs.export_approval == 'all-staging-accounts' && inputs.export_approval || '' }}
+          STAGING_EXPORT_CLEANUP_ONLY_APPROVED: ${{ inputs.export_cleanup_only == 'continue-existing-cleanup' && inputs.export_cleanup_only || '' }}
           STAGING_EXPORT_PROOF_APPROVED: ${{ vars.STAGING_EXPORT_PROOF_APPROVED }}
           STAGING_EXPORT_PROOF_USER_ID: ${{ vars.STAGING_EXPORT_PROOF_USER_ID }}
           STAGING_EXPORT_PROOF_BUILD_UNTIL: ${{ vars.STAGING_EXPORT_PROOF_BUILD_UNTIL }}
