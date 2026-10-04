@@ -280,6 +280,8 @@ class ApiClient {
           return FeedPostPrompt.fromJson(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GetNotificationPreference200Response':
+          return GetNotificationPreference200Response.fromJson(value);
         case 'GoogleReauthenticationIntent':
           return GoogleReauthenticationIntent.fromJson(value);
         case 'GoogleReauthenticationRequest':
@@ -330,6 +332,12 @@ class ApiClient {
           return MoodHistory.fromJson(value);
         case 'MoodPeriodSummary':
           return MoodPeriodSummary.fromJson(value);
+        case 'OnThisDayMemories':
+          return OnThisDayMemories.fromJson(value);
+        case 'OnThisDayMemory':
+          return OnThisDayMemory.fromJson(value);
+        case 'OnThisDayMemoryPrompt':
+          return OnThisDayMemoryPrompt.fromJson(value);
         case 'PasswordReauthenticationGrant':
           return PasswordReauthenticationGrant.fromJson(value);
         case 'PasswordReauthenticationRequest':
@@ -428,6 +436,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdateNotificationPreferenceRequest':
+          return UpdateNotificationPreferenceRequest.fromJson(value);
         case 'UpdatePostCommentRequest':
           return UpdatePostCommentRequest.fromJson(value);
         case 'UpdatePostRequest':

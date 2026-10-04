@@ -59,6 +59,27 @@ void main() {
 
     expect(api.apiClient.basePath, baseUrl);
   });
+
+  test('omits an absent notification capability from legacy registration', () {
+    final request = RegisterPushDeviceRequest(
+      token: 'opaque-token',
+      platform: RegisterPushDeviceRequestPlatformEnum.ios,
+      optedIn: true,
+    );
+
+    expect(request.toJson(), isNot(contains('notificationSchemaVersion')));
+  });
+
+  test('serializes the supported notification capability version', () {
+    final request = RegisterPushDeviceRequest(
+      token: 'opaque-token',
+      platform: RegisterPushDeviceRequestPlatformEnum.android,
+      optedIn: true,
+      notificationSchemaVersion: 1,
+    );
+
+    expect(request.toJson()['notificationSchemaVersion'], 1);
+  });
 }
 `;
 
@@ -101,6 +122,20 @@ async function normalizeDartDateOnlyModel(path: string, ...fields: string[]): Pr
     source = normalized;
   }
   await writeFile(path, source);
+}
+
+async function omitNullableDartJsonField(path: string, field: string): Promise<void> {
+  const source = await readFile(path, "utf8");
+  const generated = `    if (this.${field} != null) {\n      json[r'${field}'] = this.${field};\n    } else {\n      json[r'${field}'] = null;\n    }`;
+  const normalized = source.replace(
+    generated,
+    `    if (this.${field} != null) {\n      json[r'${field}'] = this.${field};\n    }`,
+  );
+
+  if (normalized === source) {
+    throw new Error(`Could not omit nullable Dart JSON field ${field} in ${path}`);
+  }
+  await writeFile(path, normalized);
 }
 
 async function finalizeGeneratedClients() {
@@ -156,6 +191,14 @@ async function finalizeGeneratedClients() {
       "feedDate",
     ),
     normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/on_this_day_memories.dart",
+      "date",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/on_this_day_memory.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
       "packages/api-client-dart/lib/model/post_detail.dart",
       "localDate",
     ),
@@ -188,6 +231,10 @@ async function finalizeGeneratedClients() {
       "packages/api-client-dart/lib/model/mood_period_summary.dart",
       "from",
       "to",
+    ),
+    omitNullableDartJsonField(
+      "packages/api-client-dart/lib/model/register_push_device_request.dart",
+      "notificationSchemaVersion",
     ),
   ]);
 

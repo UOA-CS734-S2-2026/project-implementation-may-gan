@@ -33,6 +33,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Profiles and discovery](../../apps/docs/content/docs/systems/friends-and-feed-visibility/profiles-and-discovery.mdx): profile projections, streaks, usernames, and avatars.
 - [Reflection and history](../../apps/docs/content/docs/systems/reflection-and-history/index.mdx): profile archives, post detail, edits, revisions, tomorrow notes, and Trash limits.
 - [Likes and comments](likes-and-comments.md): liking, threaded comments, moderation, and who sees which.
+- [On This Day](on-this-day.md): `GET /api/v1/me/memories/on-this-day`, the owner's own earlier posts from today's Auckland date, and leap-day handling.
 - [Mood history](mood-history.md): `GET /api/v1/profiles/{username}/mood`, a profile's ratings over 30 days, 90 days or a year, for the owner and their friends.
 
 ## Fixed rules

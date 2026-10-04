@@ -31,6 +31,10 @@ export interface RegisterPushDeviceRequest {
      *
      */
     optedIn: boolean;
+    /**
+     *
+     */
+    notificationSchemaVersion?: number;
 }
 
 
@@ -67,6 +71,7 @@ export function RegisterPushDeviceRequestFromJSONTyped(json: any, ignoreDiscrimi
         'token': json['token'],
         'platform': json['platform'],
         'optedIn': json['optedIn'],
+        'notificationSchemaVersion': json['notificationSchemaVersion'] == null ? undefined : json['notificationSchemaVersion'],
     };
 }
 
@@ -84,5 +89,6 @@ export function RegisterPushDeviceRequestToJSONTyped(value?: RegisterPushDeviceR
         'token': value['token'],
         'platform': value['platform'],
         'optedIn': value['optedIn'],
+        'notificationSchemaVersion': value['notificationSchemaVersion'],
     };
 }

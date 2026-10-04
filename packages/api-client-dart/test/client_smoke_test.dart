@@ -9,4 +9,25 @@ void main() {
 
     expect(api.apiClient.basePath, baseUrl);
   });
+
+  test('omits an absent notification capability from legacy registration', () {
+    final request = RegisterPushDeviceRequest(
+      token: 'opaque-token',
+      platform: RegisterPushDeviceRequestPlatformEnum.ios,
+      optedIn: true,
+    );
+
+    expect(request.toJson(), isNot(contains('notificationSchemaVersion')));
+  });
+
+  test('serializes the supported notification capability version', () {
+    final request = RegisterPushDeviceRequest(
+      token: 'opaque-token',
+      platform: RegisterPushDeviceRequestPlatformEnum.android,
+      optedIn: true,
+      notificationSchemaVersion: 1,
+    );
+
+    expect(request.toJson()['notificationSchemaVersion'], 1);
+  });
 }

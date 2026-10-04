@@ -1,0 +1,6 @@
+reason: The generated foreign-key name preserves the notification delivery device-registration relationship. PostgreSQL truncation remains unique among this migration's constraints and Drizzle records the generated identity consistently.
+affected_data_and_clients: Constraint names are database metadata and do not alter API or delivery behavior.
+rollout_sequence: Apply with the notification schema and verify the device foreign key by its recorded PostgreSQL name.
+backup_checkpoint: Confirm the approved target recovery checkpoint before any hosted migration.
+forward_fix_plan: Retain the name in forward migrations unless a reviewed rename is required.
+reviewer: Database and notification reviewers required.

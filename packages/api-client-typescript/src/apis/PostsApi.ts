@@ -39,6 +39,11 @@ import {
     MoodHistoryToJSON,
 } from '../models/MoodHistory';
 import {
+    type OnThisDayMemories,
+    OnThisDayMemoriesFromJSON,
+    OnThisDayMemoriesToJSON,
+} from '../models/OnThisDayMemories';
+import {
     type PostDetail,
     PostDetailFromJSON,
     PostDetailToJSON,
@@ -690,6 +695,53 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsListFeed(requestParameters: PostsListFeedRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<FeedPage> {
         const response = await this.postsListFeedRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListOnThisDay without sending the request
+     */
+    async postsListOnThisDayRequestOpts(): Promise<runtime.RequestOpts> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/me/memories/on-this-day`;
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns the caller\'s own posts from today\'s Auckland month and day in earlier years, newest year first, at most one per year. Only the caller\'s posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server\'s current Auckland date and cannot be supplied by the client.
+     * List the caller\'s On This Day memories
+     */
+    async postsListOnThisDayRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<OnThisDayMemories>> {
+        const requestOptions = await this.postsListOnThisDayRequestOpts();
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => OnThisDayMemoriesFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns the caller\'s own posts from today\'s Auckland month and day in earlier years, newest year first, at most one per year. Only the caller\'s posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server\'s current Auckland date and cannot be supplied by the client.
+     * List the caller\'s On This Day memories
+     */
+    async postsListOnThisDay(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<OnThisDayMemories> {
+        const response = await this.postsListOnThisDayRaw(initOverrides);
         return await response.value();
     }
 
