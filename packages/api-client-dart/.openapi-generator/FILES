@@ -6,6 +6,7 @@ analysis_options.yaml
 git_push.sh
 lib/api.dart
 lib/api/account_api.dart
+lib/api/interactions_api.dart
 lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
@@ -41,6 +42,7 @@ lib/model/create_direct_conversation200_response_conversation_peer.dart
 lib/model/create_direct_conversation_request.dart
 lib/model/create_media_reservation_request.dart
 lib/model/create_media_reservation_response.dart
+lib/model/create_post_comment_request.dart
 lib/model/create_realtime_ticket201_response.dart
 lib/model/current_legal_registration_terms.dart
 lib/model/current_posting_day_response.dart
@@ -61,6 +63,7 @@ lib/model/get_messaging_unread200_response.dart
 lib/model/google_reauthentication_intent.dart
 lib/model/google_reauthentication_request.dart
 lib/model/health_response.dart
+lib/model/interaction_person.dart
 lib/model/legal_acceptance_request.dart
 lib/model/legal_acceptance_response.dart
 lib/model/list_conversation_changes200_response.dart
@@ -87,9 +90,14 @@ lib/model/password_reauthentication_request.dart
 lib/model/pending_relationship_request.dart
 lib/model/pending_request_page.dart
 lib/model/post_audience.dart
+lib/model/post_comment.dart
+lib/model/post_comments_page.dart
 lib/model/post_detail.dart
 lib/model/post_detail_author.dart
 lib/model/post_detail_prompt.dart
+lib/model/post_like.dart
+lib/model/post_like_summary.dart
+lib/model/post_likes_page.dart
 lib/model/post_media.dart
 lib/model/post_media_content_type.dart
 lib/model/post_revision.dart
@@ -126,6 +134,7 @@ lib/model/set_avatar_request.dart
 lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
+lib/model/update_post_comment_request.dart
 lib/model/update_post_request.dart
 lib/model/update_profile_request.dart
 lib/model/username_profile.dart

@@ -64,6 +64,13 @@ import type { UpdatePostRouteDependencies } from "./features/posts/update-post/u
 import { createHyperdriveUpdatePostRepository } from "./features/posts/update-post/update-post.repository";
 import type { ListPostRevisionsRouteDependencies } from "./features/posts/list-post-revisions/list-post-revisions.route";
 import { createHyperdrivePostRevisionsRepository } from "./features/posts/list-post-revisions/list-post-revisions.repository";
+import { registerInteractionsRoutes, type InteractionsRouteDependencies } from "./features/interactions/interactions.routes";
+import { createHyperdrivePostLikeRepository } from "./features/interactions/shared/post-like.repository";
+import { createHyperdrivePostLikesRepository } from "./features/interactions/list-post-likes/list-post-likes.repository";
+import { createHyperdrivePostCommentsRepository } from "./features/interactions/list-post-comments/list-post-comments.repository";
+import { createHyperdriveCreatePostCommentRepository } from "./features/interactions/create-post-comment/create-post-comment.repository";
+import { createHyperdriveUpdatePostCommentRepository } from "./features/interactions/update-post-comment/update-post-comment.repository";
+import { createHyperdriveDeletePostCommentRepository } from "./features/interactions/delete-post-comment/delete-post-comment.repository";
 import { createR2MediaDownloadSigner } from "./features/posts/shared/post-media";
 import { registerPostsRoutes } from "./features/posts/posts.routes";
 import { createDailyPostService } from "./features/posts/create-post/create-post.service";
@@ -216,6 +223,8 @@ export interface AppDependencies {
   onThisDay?: ListOnThisDayRouteDependencies;
   postUpdate?: UpdatePostRouteDependencies;
   postRevisions?: ListPostRevisionsRouteDependencies;
+  /** Likes and comments; any route left out is unavailable. */
+  interactions?: Partial<InteractionsRouteDependencies>;
   relationships?: RelationshipsRouteDependencies;
   messaging?: MessagingRouteDependencies;
   realtimeTicket?: RealtimeTicketRouteDependencies;
@@ -257,6 +266,7 @@ export function createApp({
   onThisDay,
   postUpdate,
   postRevisions,
+  interactions = {},
   relationships = unavailableRelationships,
   messaging = unavailableMessaging,
   realtimeTicket = unavailableRealtimeTicket,
@@ -345,6 +355,19 @@ export function createApp({
     onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
     revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
+  });
+  const interaction = <T extends object>(dependencies: T | undefined) => ({
+    ...(dependencies ?? { resolveSession: async () => null }),
+    rateLimiter,
+  });
+  registerInteractionsRoutes(api, {
+    like: interaction(interactions.like),
+    unlike: interaction(interactions.unlike),
+    likes: interaction(interactions.likes),
+    comments: interaction(interactions.comments),
+    createComment: interaction(interactions.createComment),
+    updateComment: interaction(interactions.updateComment),
+    deleteComment: interaction(interactions.deleteComment),
   });
   registerRelationshipsRoutes(api, { ...relationships, rateLimiter });
   registerMessagingRoutes(api, {
@@ -435,6 +458,20 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdrivePostRevisionsRepository(configuration.hyperdrive),
   } satisfies ListPostRevisionsRouteDependencies : undefined;
+  const interactions: Partial<InteractionsRouteDependencies> = configuration ? (() => {
+    const resolveSession = createSessionResolver(configuration);
+    const hasUsername = createUsernameChecker(configuration);
+    const likeRepository = createHyperdrivePostLikeRepository(configuration.hyperdrive);
+    return {
+      like: { resolveSession, hasUsername, repository: likeRepository },
+      unlike: { resolveSession, hasUsername, repository: likeRepository },
+      likes: { resolveSession, hasUsername, repository: createHyperdrivePostLikesRepository(configuration.hyperdrive) },
+      comments: { resolveSession, hasUsername, repository: createHyperdrivePostCommentsRepository(configuration.hyperdrive) },
+      createComment: { resolveSession, hasUsername, repository: createHyperdriveCreatePostCommentRepository(configuration.hyperdrive) },
+      updateComment: { resolveSession, hasUsername, repository: createHyperdriveUpdatePostCommentRepository(configuration.hyperdrive) },
+      deleteComment: { resolveSession, hasUsername, repository: createHyperdriveDeletePostCommentRepository(configuration.hyperdrive) },
+    };
+  })() : {};
   const hasUsername = configuration ? createUsernameChecker(configuration) : undefined;
   const onThisDay = configuration ? {
     resolveSession: createSessionResolver(configuration),
@@ -571,7 +608,8 @@ export function createAppForEnv(env: ApiEnv) {
     profilePosts,
     onThisDay,
     postUpdate,
-      postRevisions,
+    postRevisions,
+    interactions,
     media,
     relationships,
     messaging,

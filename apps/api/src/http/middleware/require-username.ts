@@ -22,7 +22,7 @@ export async function usernameSetupStatus(
 /** Blocks product features until a user has selected their public handle. */
 export function createRequireUsername(
   hasUsername: HasUsername | undefined,
-  missingMessage = "Choose a username before using messaging.",
+  message = "Choose a username before using messaging.",
 ): MiddlewareHandler<AuthenticatedApiEnv> {
   return async (context, next) => {
     const status = await usernameSetupStatus(hasUsername, context.get("actor").userId);
@@ -30,7 +30,7 @@ export function createRequireUsername(
       return apiErrorResponse(context, 503, "SERVICE_UNAVAILABLE", "Username setup is temporarily unavailable.");
     }
     if (status === "missing") {
-      return apiErrorResponse(context, 403, "FORBIDDEN", missingMessage);
+      return apiErrorResponse(context, 403, "FORBIDDEN", message);
     }
     await next();
   };

@@ -93,6 +93,8 @@ function requireLocalTestUrl(value: string): string {
 
   afterAll(async () => {
     try {
+      await migrator.db.delete(schema.postLikes).where(eq(schema.postLikes.postId, id("released")));
+      await migrator.db.delete(schema.postComments).where(eq(schema.postComments.postId, id("released")));
       await migrator.db.delete(schema.postRevisions).where(inArray(
         schema.postRevisions.postId,
         migrator.db.select({ id: schema.posts.id }).from(schema.posts).where(inArray(schema.posts.authorId, userIds)),
@@ -120,6 +122,9 @@ function requireLocalTestUrl(value: string): string {
       releasedAt: "2026-09-24T12:00:00.000Z",
       edited: true,
       revisionCount: 1,
+      likeCount: 0,
+      viewerHasLiked: false,
+      commentCount: 0,
       viewerIsAuthor: false,
       media: [],
       voiceMemo: null,
@@ -183,6 +188,32 @@ function requireLocalTestUrl(value: string): string {
     ["a friend reading a deleted post", "friend", "deleted"],
   ] as const)("conceals the post from %s", async (_, viewer, post) => {
     await expect(repo().findPost(users[viewer], id(post), now)).resolves.toBeNull();
+  });
+
+  it("counts likes and the comments the viewer can see", async () => {
+    await migrator.db.insert(schema.postLikes).values([
+      { postId: id("released"), userId: users.friend },
+      { postId: id("released"), userId: users.author },
+    ]);
+    const comment = (key: string, authorId: string, deleted = false) => ({
+      id: id(key),
+      postId: id("released"),
+      authorId,
+      clientCommentId: id(key),
+      body: key,
+      deletedAt: deleted ? now : null,
+      deletedBy: deleted ? authorId : null,
+    });
+    await migrator.db.insert(schema.postComments).values([
+      comment("comment-1", users.friend),
+      comment("comment-2", users.author),
+      comment("comment-gone", users.friend, true),
+    ]);
+
+    await expect(repo().findPost(users.friend, id("released"), now))
+      .resolves.toMatchObject({ likeCount: 2, viewerHasLiked: true, commentCount: 2 });
+    await expect(repo().findPost(users.author, id("solo"), now))
+      .resolves.toMatchObject({ likeCount: 0, viewerHasLiked: false, commentCount: 0 });
   });
 
   it("opens an unreleased post to friends at release time", async () => {

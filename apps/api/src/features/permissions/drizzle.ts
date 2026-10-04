@@ -1,4 +1,5 @@
-import { and, desc, eq, exists, isNull, lte, ne, not, notExists, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, desc, eq, exists, isNotNull, isNull, lte, ne, not, notExists, or, sql, type AnyColumn, type SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DayliDatabase } from "@dayli/db";
 import { schema } from "@dayli/db";
 import type { PermissionAction, Viewer } from "./policy";
@@ -268,6 +269,67 @@ export function findPrivatelyVisiblePostMedia(
   input: Omit<DrizzlePostVisibilityInput, "action" | "mediaId">,
 ) {
   return findPostMediaForAction(database, postId, mediaId, input, "private-media");
+}
+
+/**
+ * True when neither the viewer nor `userColumn`'s person has blocked the other.
+ * Lists of likes and comments hide people across a block in either direction.
+ */
+export function notBlockedWith(database: Queryable, viewerId: string | null, userColumn: AnyColumn) {
+  const { relationshipBlocks } = schema;
+  if (viewerId === null) return sql`true`;
+  return notExists(
+    database
+      .select({ blockerId: relationshipBlocks.blockerId })
+      .from(relationshipBlocks)
+      .where(and(
+        isNull(relationshipBlocks.unblockedAt),
+        or(
+          and(eq(relationshipBlocks.blockerId, viewerId), eq(relationshipBlocks.blockedId, userColumn)),
+          and(eq(relationshipBlocks.blockerId, userColumn), eq(relationshipBlocks.blockedId, viewerId)),
+        ),
+      )),
+  );
+}
+
+/**
+ * Comments the viewer sees on a post they can read: not deleted, written by
+ * someone with a username who isn't across a block, and, for a reply, under a
+ * top-level comment that is itself visible. Lists and counts share this rule.
+ * Callers check the post first.
+ */
+export function buildDrizzleCommentVisibilityFilter(database: Queryable, viewerId: string | null) {
+  const { postComments } = schema;
+  const parent = alias(postComments, "parent_comment");
+  return and(
+    isNull(postComments.deletedAt),
+    hasUsername(database, postComments.authorId),
+    notBlockedWith(database, viewerId, postComments.authorId),
+    or(
+      isNull(postComments.parentCommentId),
+      exists(
+        database
+          .select({ id: parent.id })
+          .from(parent)
+          .where(and(
+            eq(parent.id, postComments.parentCommentId),
+            isNull(parent.deletedAt),
+            hasUsername(database, parent.authorId),
+            notBlockedWith(database, viewerId, parent.authorId),
+          )),
+      ),
+    ),
+  );
+}
+
+/** Comments show a public username, so an author without one can't be shown. */
+function hasUsername(database: Queryable, userColumn: AnyColumn) {
+  return exists(
+    database
+      .select({ id: schema.user.id })
+      .from(schema.user)
+      .where(and(eq(schema.user.id, userColumn), isNotNull(schema.user.username))),
+  );
 }
 
 /** Tomorrow notes are private and become readable only on the next Auckland day. */
