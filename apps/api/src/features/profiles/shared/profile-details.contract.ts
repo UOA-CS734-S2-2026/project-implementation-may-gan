@@ -15,7 +15,7 @@ export const usernameSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9][a
 export const PUBLIC_NAME_MAX_LENGTH = 80;
 
 export const profileVisibilitySchema = z.enum(["public", "private"]).openapi("ProfileVisibility", {
-  description: "`private` shows the bio and streak to active friends only. Posts are always friends only.",
+  description: "`private` shows the bio, streak, and released `friends` posts to active friends only. `public` also shows them to other readers, including signed-out ones. `solo` and unreleased posts stay owner-only either way.",
 });
 
 export const profileDetailsSchema = z
