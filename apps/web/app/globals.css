@@ -122,7 +122,9 @@
   pointer-events: none;
 }
 
+.skeleton,
 .message-skeleton {
+  display: block;
   border-radius: 1rem;
   background: linear-gradient(100deg, var(--color-background-secondary) 35%, var(--color-background-tertiary) 50%, var(--color-background-secondary) 65%);
   background-size: 200% 100%;
@@ -165,6 +167,7 @@
   .message-popover,
   .message-reaction-badge,
   .message-heart-pop,
+  .skeleton,
   .message-skeleton {
     animation: none;
   }
