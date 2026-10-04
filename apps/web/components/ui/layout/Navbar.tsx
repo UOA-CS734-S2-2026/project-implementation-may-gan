@@ -131,11 +131,11 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Lower section (profile) */}
+      {/* Lower section (account settings, matching the mobile app's account button) */}
       {user && handle && (
         <div className="flex flex-col gap-4">
           <Link
-            href={`/u/${encodeURIComponent(handle)}`}
+            href="/settings"
             className="group transition hover:text-foreground/80 text-muted-foreground flex gap-4 items-center duration-400 hover:duration-200 hover:-translate-y-1"
           >
             {user.image ? (
