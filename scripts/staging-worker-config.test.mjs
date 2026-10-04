@@ -8,6 +8,7 @@ const input = {
   workerName: "dayli-api-staging",
   hyperdriveId: "a".repeat(32),
   releaseSha: "c".repeat(40),
+  mediaVars: { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" },
   authApiOrigin: "https://api.staging.example.test",
   authWebOrigin: "https://staging.example.test",
   authVars: { GOOGLE_WEB_CLIENT_ID: "public-client-id" },
@@ -65,12 +66,14 @@ test("keeps native rate-limit mappings and environment scopes aligned", () => {
   }
 });
 
-test("keeps the remote service probe free of cron and shared Durable Object bindings", () => {
+test("keeps the remote service probe private and binds exact attestation expectations", () => {
   const { probe } = createStagingWorkerConfigs(input);
   assert.equal(probe.main, "src/features/system/hyperdrive/test-worker.ts");
   assert.equal(probe.triggers, undefined);
   assert.equal(probe.durable_objects, undefined);
   assert.equal(probe.migrations, undefined);
+  assert.equal(probe.vars.EXPECTED_STAGING_RELEASE_SHA, input.releaseSha);
+  assert.match(probe.vars.EXPECTED_STAGING_STORAGE_DIGEST, /^[a-f0-9]{64}$/);
   assert.deepEqual(probe.services, [{
     binding: "STAGING_API",
     service: "dayli-api-staging",
@@ -92,7 +95,7 @@ test("adds R2 media vars to the API Worker only", () => {
   assert.equal(probe.vars.R2_ACCOUNT_ID, undefined);
   assert.equal(probe.vars.R2_BUCKET_NAME, undefined);
   assert.equal(probe.vars.GOOGLE_WEB_CLIENT_ID, undefined);
-  assert.equal(createStagingWorkerConfigs(input).api.vars.R2_BUCKET_NAME, undefined);
+  assert.equal(createStagingWorkerConfigs(input).api.vars.R2_BUCKET_NAME, "dayli-media-staging");
 });
 
 test("binds the separate worker only on staging and requires complete synthetic proof settings", () => {
@@ -104,6 +107,8 @@ test("binds the separate worker only on staging and requires complete synthetic 
   ]);
   assert.equal(gated.api.vars.STAGING_EXPORT_PROOF_APPROVED, undefined);
   assert.equal(gated.probe.hyperdrive, undefined);
+  assert.equal(gated.probe.vars.EXPECTED_STAGING_RELEASE_SHA, input.releaseSha);
+  assert.match(gated.probe.vars.EXPECTED_STAGING_STORAGE_DIGEST, /^[a-f0-9]{64}$/);
 
   const mediaVars = { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" };
   const proofVars = {
@@ -144,9 +149,9 @@ test("explicit all-staging and cleanup-only modes require the separate worker an
   });
   assert.equal(createStagingWorkerConfigs({ ...activated,
     exportProofVars: cleanup }).api.vars.STAGING_EXPORT_ALL_USERS_APPROVED, undefined);
-  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+  assert.throws(() => createStagingWorkerConfigs({ ...input, mediaVars: {}, exportWorkerHyperdriveId: workerId,
     exportProofVars: cleanup }), /complete R2 bindings/);
-  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+  assert.throws(() => createStagingWorkerConfigs({ ...input, mediaVars: {}, exportWorkerHyperdriveId: workerId,
     exportProofVars: approval }), /complete R2 bindings/);
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: approval }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: cleanup }));
@@ -175,4 +180,5 @@ test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
   assert.throws(() => createStagingWorkerConfigs({ ...input, workerName: "production-api" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, hyperdriveId: "not-an-id" }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, releaseSha: "main" }));
+  assert.equal(createStagingWorkerConfigs({ ...input, mediaVars: {} }).probe.vars, undefined);
 });
