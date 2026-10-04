@@ -40,7 +40,7 @@ adb install build/app/outputs/flutter-apk/app-debug.apk
 
 ## Google sign-in is optional
 
-Email and password covers every feature. **Continue with Google** only appears when the build also passes the staging web client ID:
+Email and password covers every feature. **Continue with Google** is always shown, but without the staging web client ID it reports "Google sign-in isn't set up for this build yet." To enable it, also pass the client ID:
 
 ```bash
 flutter run \
