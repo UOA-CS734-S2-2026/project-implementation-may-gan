@@ -44,7 +44,7 @@ function GoogleSignInError() {
 function SignInForm() {
   const router = useRouter();
   const returnTo = safeAuthenticationReturnPath(useSearchParams().get("next"), "/home");
-  const { user } = useSession();
+  const { user, refresh } = useSession();
   const signInInFlight = useRef(false);
   const [expectedUserId, setExpectedUserId] = useState<string | null>(null);
 
@@ -85,6 +85,10 @@ function SignInForm() {
         return;
       }
 
+      // The auth client signals its session store while handling the sign-in
+      // response. Refresh after that response has installed its cookie so the
+      // identity fence observes the session this form just created.
+      await refresh();
       setExpectedUserId(data.user.id);
     } finally {
       signInInFlight.current = false;

@@ -148,7 +148,9 @@ async function loginFailureCategory(context, observation) {
   if (observation.status === 429) return "login_http_429";
   if (observation.status < 200 || observation.status >= 300) return "login_http_error";
   const cookies = await context.cookies(STAGING_ORIGIN);
-  return cookies.some(({ name }) => name === SESSION_COOKIE) ? "login_navigation_timeout" : "login_cookie_missing";
+  // This category records only that the allowlisted cookie name exists. It
+  // deliberately omits the cookie value and every response detail.
+  return cookies.some(({ name }) => name === SESSION_COOKIE) ? "login_cookie_created_navigation_timeout" : "login_cookie_missing";
 }
 
 async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {

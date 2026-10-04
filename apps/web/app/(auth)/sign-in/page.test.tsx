@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   email: vi.fn(),
   setError: vi.fn(),
   getUsernameProfile: vi.fn(),
+  refresh: vi.fn(),
   user: { id: "actor" } as { id: string } | null,
 }));
 vi.mock("next/navigation", () => ({
@@ -14,7 +15,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 vi.mock("@/lib/auth/client", () => ({ authClient: { signIn: { email: mocks.email } } }));
-vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: mocks.user }) }));
+vi.mock("@/lib/session/hooks", () => ({ useSession: () => ({ user: mocks.user, refresh: mocks.refresh }) }));
 vi.mock("@/lib/profile/username", () => ({ getUsernameProfile: mocks.getUsernameProfile }));
 vi.mock("react-hook-form", () => ({
   useForm: () => ({
@@ -37,6 +38,8 @@ beforeEach(() => {
   mocks.setError.mockReset();
   mocks.getUsernameProfile.mockReset();
   mocks.getUsernameProfile.mockResolvedValue({ username: "actor", publicName: null, needsUsernameSetup: false });
+  mocks.refresh.mockReset();
+  mocks.refresh.mockResolvedValue(undefined);
   mocks.user = { id: "actor" };
 });
 
@@ -69,6 +72,20 @@ describe("email sign-in return destination", () => {
 
     mocks.user = { id: "new-user" };
     rerender(<SignInPage />);
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/settings"));
+  });
+
+  it("refreshes the shared session after sign-in before releasing navigation", async () => {
+    let finishRefresh!: () => void;
+    mocks.refresh.mockReturnValue(new Promise<void>((resolve) => { finishRefresh = resolve; }));
+    mocks.search = "next=%2Fsettings";
+    const { container } = render(<SignInPage />);
+
+    fireEvent.submit(container.querySelector("form")!);
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalledTimes(1));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    await act(async () => finishRefresh());
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/settings"));
   });
 
