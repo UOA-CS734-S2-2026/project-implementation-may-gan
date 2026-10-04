@@ -15,7 +15,9 @@ import {
   registerGetPostVoiceMemoContentRoute,
   type GetPostVoiceMemoContentRouteDependencies,
 } from "./get-post-voice-memo/get-post-voice-memo-content.route";
+import { registerGetProfileMoodRoute, type GetProfileMoodRouteDependencies } from "./get-profile-mood/get-profile-mood.route";
 import { registerListFeedRoute, type ListFeedRouteDependencies } from "./list-feed/list-feed.route";
+import { registerListOnThisDayRoute, type ListOnThisDayRouteDependencies } from "./list-on-this-day/list-on-this-day.route";
 import { registerListPostRevisionsRoute, type ListPostRevisionsRouteDependencies } from "./list-post-revisions/list-post-revisions.route";
 import { registerListProfilePostsRoute, type ListProfilePostsRouteDependencies } from "./list-profile-posts/list-profile-posts.route";
 import { registerPostTrashRoutes, type PostTrashRouteDependencies } from "./trash-post/trash-post.route";
@@ -31,8 +33,10 @@ export interface PostsRouteDependencies {
   voiceMemoContent: GetPostVoiceMemoContentRouteDependencies;
   profilePosts: ListProfilePostsRouteDependencies;
   trash: PostTrashRouteDependencies;
+  onThisDay: ListOnThisDayRouteDependencies;
   update: UpdatePostRouteDependencies;
   revisions: ListPostRevisionsRouteDependencies;
+  profileMood: GetProfileMoodRouteDependencies;
 }
 
 /** Register post actions without embedding post policy in the composition root. */
@@ -49,6 +53,8 @@ export function registerPostsRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, depen
   app.route("/", publicPostReads);
   registerGetPostMediaRoute(app, dependencies.media);
   registerGetPostVoiceMemoRoute(app, dependencies.voiceMemo);
+  registerListOnThisDayRoute(app, dependencies.onThisDay);
+  registerGetProfileMoodRoute(app, dependencies.profileMood);
   registerUpdatePostRoute(app, dependencies.update);
   registerListPostRevisionsRoute(app, dependencies.revisions);
 }

@@ -1,0 +1,6 @@
+reason: Notification table constraints validate empty tables. The push capability check accepts every existing row because the new column is nullable, so validation does not process nonnull legacy values. Lock and statement timeouts bound the operation.
+affected_data_and_clients: Existing registrations stay valid and legacy. Writes may wait briefly for the bounded push_devices constraint lock.
+rollout_sequence: Apply as the disabled expand step, inspect convalidated, and keep all publishers disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running.
+forward_fix_plan: Stop on timeout and use a separately reviewed NOT VALID and validation migration rather than changing applied SQL.
+reviewer: Database and availability reviewers required.

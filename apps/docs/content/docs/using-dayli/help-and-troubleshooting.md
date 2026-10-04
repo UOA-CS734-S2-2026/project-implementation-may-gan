@@ -55,6 +55,14 @@ Media upload also has to be configured for the app build and environment. If it 
 
 On the web, the picker does not upload media. Selected files stay on your device, and the post is submitted without them.
 
+## A voice memo will not record or play
+
+Voice recording is available in the mobile composer when media uploads are configured. If microphone access was refused, try recording again and accept the permission request. If the phone reports that permission is permanently disabled, use **Open Settings** from the explanation and allow microphone access there. You can still post text and other supported media without a voice memo.
+
+A memo can be up to 60 seconds and 2 MB, and it shares the post's 25 MB total with photos or video. Remove it or record a shorter memo if the composer reports a size or duration problem.
+
+Voice playback is on mobile post detail, not on feed or profile cards. If an expired media address cannot be refreshed, Dayli shows **Voice memo unavailable**. Refresh the post after checking your connection and current access. The web app does not record or play voice memos yet.
+
 ## A dayli is missing from the feed
 
 The feed shows yesterday's released Friends posts from current friends. Check these points:

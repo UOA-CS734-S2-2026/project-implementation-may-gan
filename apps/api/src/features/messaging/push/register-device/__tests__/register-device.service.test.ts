@@ -47,4 +47,23 @@ describe("register device service", () => {
     })).rejects.toThrow("Invalid push token.");
     expect(writes).toBe(0);
   });
+
+  it("rejects unsupported notification schema versions before encryption", async () => {
+    let encryptions = 0;
+    const service = createRegisterDeviceService({
+      store: { register: async () => undefined },
+      protector: { encrypt: async () => {
+        encryptions += 1;
+        return { ciphertext: "ciphertext", keyVersion: "v1" };
+      } },
+    });
+    await expect(service.register({ userId: "alice", sessionId: "session" }, {
+      installationId: "install",
+      platform: "ios",
+      token: "very-long-provider-token",
+      optedIn: true,
+      notificationSchemaVersion: 2,
+    })).rejects.toThrow("Unsupported notification schema version.");
+    expect(encryptions).toBe(0);
+  });
 });

@@ -72,8 +72,8 @@ suite("Postgres push destination authorization", () => {
       { conversationId: ids.conversation, userId: ids.alice, participantId: ids.aliceParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
       { conversationId: ids.conversation, userId: ids.bob, participantId: ids.bobParticipant, lastReadSequence: 0, receiptSequence: 0, createdAt: now, updatedAt: now },
     ]);
-    await devices.register({ id: ids.aliceDevice, userId: ids.alice, sessionId: ids.aliceSession, installationId: "alice-installation", platform: "ios", tokenCiphertext: "alice-token", tokenKeyVersion: "test", tokenHash: tokenHash("a"), optedIn: true, now: new Date() });
-    await devices.register({ id: ids.bobDevice, userId: ids.bob, sessionId: ids.bobSession, installationId: "bob-installation", platform: "android", tokenCiphertext: "bob-token", tokenKeyVersion: "test", tokenHash: tokenHash("b"), optedIn: true, now: new Date() });
+    await devices.register({ id: ids.aliceDevice, userId: ids.alice, sessionId: ids.aliceSession, installationId: "alice-installation", platform: "ios", tokenCiphertext: "alice-token", tokenKeyVersion: "test", tokenHash: tokenHash("a"), optedIn: true, notificationSchemaVersion: undefined, now: new Date() });
+    await devices.register({ id: ids.bobDevice, userId: ids.bob, sessionId: ids.bobSession, installationId: "bob-installation", platform: "android", tokenCiphertext: "bob-token", tokenKeyVersion: "test", tokenHash: tokenHash("b"), optedIn: true, notificationSchemaVersion: undefined, now: new Date() });
   });
 
   afterAll(async () => {
@@ -163,7 +163,7 @@ suite("Postgres push destination authorization", () => {
     expect(sender.send).toHaveBeenCalledTimes(3);
 
     await database.db.delete(schema.session).where(eq(schema.session.id, ids.aliceSession));
-    await expect(devices.register({ id: `late-${crypto.randomUUID()}`, userId: ids.alice, sessionId: ids.aliceSession, installationId: "late-installation", platform: "ios", tokenCiphertext: "late-token", tokenKeyVersion: "test", tokenHash: tokenHash("c"), optedIn: true, now: new Date() })).rejects.toBeInstanceOf(PushSessionInactiveError);
+    await expect(devices.register({ id: `late-${crypto.randomUUID()}`, userId: ids.alice, sessionId: ids.aliceSession, installationId: "late-installation", platform: "ios", tokenCiphertext: "late-token", tokenKeyVersion: "test", tokenHash: tokenHash("c"), optedIn: true, notificationSchemaVersion: undefined, now: new Date() })).rejects.toBeInstanceOf(PushSessionInactiveError);
     await expect(deliver(job(ids.alice, ids.aliceDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledTimes(3);
 

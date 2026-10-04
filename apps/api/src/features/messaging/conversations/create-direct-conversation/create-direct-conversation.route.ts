@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
 import type { AuthenticatedApiEnv } from "../../../../http/authenticated-actor";
 import { directConversationBodySchema, directConversationResponseSchema, messagingReadErrors } from "../../shared/conversation.contract";
+import { messageCreationRateLimitErrorResponse } from "../../shared/message.contract";
 import { MessagingError } from "../../shared/messaging-error";
 import { messagingFailure, messagingUnavailable } from "../../shared/messaging-route";
 import { scheduleImmediateDispatch, type ImmediateDispatchDependencies } from "../../shared/immediate-dispatch";
@@ -22,6 +23,7 @@ const route = createRoute({
     201: { description: "Created direct conversation and initial message.", content: { "application/json": { schema: directConversationResponseSchema } } },
     200: { description: "Identical replay.", content: { "application/json": { schema: directConversationResponseSchema } } },
     ...messagingReadErrors,
+    429: messageCreationRateLimitErrorResponse,
   },
 });
 

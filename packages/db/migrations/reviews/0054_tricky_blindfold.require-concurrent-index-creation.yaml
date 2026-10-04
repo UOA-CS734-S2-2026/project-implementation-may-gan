@@ -1,0 +1,12 @@
+reason: >-
+  The migration runner wraps each migration in one transaction, and PostgreSQL does not permit CREATE INDEX CONCURRENTLY in that transaction. The quota needs this index before application code is enabled.
+affected_data_and_clients: >-
+  The messages table remains readable, but message inserts, updates, and deletes can wait while PostgreSQL builds the index. Existing message rows and API response shapes do not change.
+rollout_sequence: >-
+  Apply this additive migration before deploying code with a positive DIRECT_MESSAGE_SEND_LIMIT. The migration uses a five-second lock timeout and a five-minute statement timeout so it fails instead of waiting without a bound. Retry through the reviewed migration workflow during a quieter period if the lock timeout fires.
+backup_checkpoint: >-
+  This migration changes no row data. Confirm the normal database recovery point and migration ledger are current before applying it.
+forward_fix_plan: >-
+  If index creation cannot complete within the bounded transaction, leave the quota code undeployed or set DIRECT_MESSAGE_SEND_LIMIT to 0, then ship a reviewed nontransactional migration-runner capability before using CREATE INDEX CONCURRENTLY. Do not delete message history.
+reviewer: >-
+  Schema owner approval required before merge because this regular index can briefly block message writes.

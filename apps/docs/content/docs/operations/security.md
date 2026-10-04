@@ -39,7 +39,9 @@ Older records describe all profile posts as friend-only. Current server policy i
 - A known block in either direction returns `404` before a public-profile grant.
 - Private profiles can still appear in narrow authenticated username search results so a request can be sent, but that result does not reveal the profile or archive.
 
-The current clients do not provide a complete anonymous profile journey even though the API supports public projections. Do not use stale interface copy as the authorization specification. The shared database predicate in `apps/api/src/features/permissions` is the implemented policy.
+Web and Flutter now provide signed-out public profile and post journeys. They refetch when session identity changes and return a person to the same route after sign-in without automatically replaying a friend, message, like, or comment action. Do not use interface copy as the authorization specification. The shared database predicates in `apps/api/src/features/permissions` remain authoritative.
+
+Likes and comments keep the owner-and-friend boundary even on a public profile. Their routes require a signed-in account with a username, and each action checks that the post is still visible through the friend preview policy. Public post access does not grant interaction access.
 
 Messages are not end-to-end encrypted. Dayli's authorized backend can read stored text to deliver and manage a conversation. Unsend clears current stored content and leaves a tombstone, but it cannot recall text a recipient or operating system already displayed or saved.
 

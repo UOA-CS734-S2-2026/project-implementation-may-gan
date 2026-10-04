@@ -36,7 +36,7 @@ The split pays off in tests. A controller test can hold one request open and pro
 
 ## Startup and dependency injection
 
-`lib/main.dart` is the composition root. A composition root is the one place that constructs long-lived concrete dependencies and connects them together. Dayli creates protected storage, the native Better Auth session, generated-client wrappers, messaging, optional notification services, draft support, and media support there.
+`lib/main.dart` is the composition root. A composition root is the one place that constructs long-lived concrete dependencies and connects them together. Dayli creates protected storage, the native Better Auth session, generated-client wrappers, messaging, optional notification services, draft support, media uploads, and voice recording there. The export client is present in code but stays absent from `AppServices` while `nativeExportEnabled` is false.
 
 Those objects are collected in `AppServices` from `lib/app/app_scope.dart`. `DayliApp` places them above `MaterialApp.router` with `AppScope`, an `InheritedWidget`. A screen reads them with:
 
@@ -54,12 +54,12 @@ Keep construction in `main.dart` and behavior behind the narrow interface owned 
 
 The router listens to `SessionController` through `refreshListenable`. Its redirect handles four states:
 
-- `unknown` goes to `/splash` while stored session restoration runs.
-- `signedOut` may use public routes and otherwise goes to `/welcome`.
+- `unknown` may render `/u/:username` and `/posts/:id` while stored session restoration runs; other app routes go to `/splash`.
+- `signedOut` may use welcome, authentication, legal, and public content routes. Other routes go to `/welcome`.
 - `needsUsernameSetup` stays in setup, with the current account export exception.
-- `signedIn` leaves public, splash, and setup routes for the home route.
+- `signedIn` leaves welcome, splash, and setup routes for the home route, while public content routes remain valid.
 
-Legal routes remain public in every session state.
+A public action can pass through sign-in and return to the same profile or post. `PublicReturnIntent` binds that action to the resulting account, and the destination screen asks for another tap rather than submitting automatically.
 
 ![Dayli mobile home screen with profile button and bottom navigation](/images/using-dayli/getting-started-mobile-navigation.webp)
 
@@ -168,7 +168,7 @@ The development CA define is a special debug-only input used to trust the local 
 
 ## Screens, theme, and shared UI
 
-Feature screens live in directories such as `home`, `friends`, `profile`, `compose`, and `messaging`. Keep a widget with its feature when it knows that feature's models or actions. Shared controls that do not own product behavior live in `lib/ui`, while `lib/shell` owns the signed-in navigation frame.
+Feature screens live in directories such as `home`, `friends`, `profile`, `compose`, and `messaging`. Keep a widget with its feature when it knows that feature's models or actions. Shared controls that do not own product behavior live in `lib/ui`, while `lib/shell` owns the signed-in navigation frame. Public profile and post routes sit outside that shell when signed out, then reuse the same screens with optional-session API reads.
 
 `lib/app/theme.dart` owns the app theme, Dayli color extension, typography helpers, tracking values, and shared shadows. Reuse those helpers and the established controls such as `DayliButton`, `FormInput`, and the surfaces in `lib/ui/surfaces.dart`. Do not move a post card or composer input into `lib/ui` merely because it looks reusable. Shared ownership should come before a shared directory.
 
@@ -185,7 +185,7 @@ Mobile network state changes often, so a useful screen distinguishes these cases
 
 `ApiResult<T>` makes success and failure explicit. Pattern matching on `ApiSuccess` and `ApiError` keeps every branch visible. A controller can then retain valid state when a request fails instead of replacing the whole screen with an error.
 
-The composer goes further because losing words is expensive. It has phases for loading, editing, accepted, missed deadline, an already posted day, and unavailable data. It saves before submission, reuses an idempotency key for retries, and clears the draft only after acceptance. This is feature behavior, not a pattern every simple read screen needs to copy.
+The composer goes further because losing words is expensive. It has phases for loading, editing, accepted, missed deadline, an already posted day, and unavailable data. It saves before submission, reuses an idempotency key for retries, and clears the draft only after acceptance. Voice recording has its own controller for permission, duration, local playback, file cleanup, and upload retries. This is feature behavior, not a pattern every simple read screen needs to copy.
 
 ## Add a feature and its tests
 

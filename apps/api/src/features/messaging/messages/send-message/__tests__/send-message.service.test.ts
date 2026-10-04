@@ -15,6 +15,29 @@ describe("send message service", () => {
     await expect(service.send("alice", "conversation-1", { clientMessageId: "client-2", text: "changed" })).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REUSED" });
   });
 
+  it("checks quota after replay and reply validation, immediately before insertion", async () => {
+    const state = sendMessageMemory();
+    const calls: string[] = [];
+    state.transaction.claimNewMessageSlot = async () => {
+      calls.push("quota");
+      throw Object.assign(new Error("limited"), { code: "RATE_LIMITED" });
+    };
+    const originalInsert = state.transaction.insertMessage;
+    state.transaction.insertMessage = async (input) => {
+      calls.push("insert");
+      return originalInsert(input);
+    };
+    const service = createSendMessageService({ store: state.store, messageSendLimit: 1 });
+    await expect(service.send("alice", "conversation-1", { clientMessageId: "fresh", text: "hello" }))
+      .rejects.toMatchObject({ code: "RATE_LIMITED" });
+    expect(calls).toEqual(["quota"]);
+
+    calls.length = 0;
+    await expect(service.send("alice", "conversation-1", { clientMessageId: "reply", text: "hello", replyToMessageId: "missing" }))
+      .rejects.toMatchObject({ code: "REPLY_NOT_FOUND" });
+    expect(calls).toEqual([]);
+  });
+
   it("does not write to an unavailable participant", async () => {
     const state = sendMessageMemory();
     state.transaction.getAccess = async () => ({
