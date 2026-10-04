@@ -1,0 +1,42 @@
+name: Accelerate synthetic staging export cleanup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-database-state-staging
+  cancel-in-progress: false
+
+jobs:
+  accelerate:
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify direct staging target against app Hyperdrive
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_STAGING_HYPERDRIVE_ID: ${{ secrets.CLOUDFLARE_STAGING_HYPERDRIVE_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/verify-staging-schema-target.mjs
+      - name: Prove both synthetic cleanup passes in one run
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STAGING_EXPORT_TEST_OWNER_ID: ${{ vars.STAGING_EXPORT_TEST_OWNER_ID }}
+          STAGING_EXPORT_TEST_REQUEST_ID: ${{ vars.STAGING_EXPORT_TEST_REQUEST_ID }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+        run: pnpm --dir packages/db exec tsx scripts/staging-export-accelerate.ts
