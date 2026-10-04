@@ -13,6 +13,7 @@ export const inventoryTestRegistry = {
   postsIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records approved journals notes and Trash fields" },
   messagesIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records authored readable messages without reply previews" },
   ownedMediaIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records media metadata while withholding raw object keys" },
+  commentsIncluded: { file: "packages/db/src/export/inventory.test.ts", name: "records authored comments without reply pointers or moderators" },
   jsonValidFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "accepts valid fixtures for every transformed JSON family" },
   jsonUnknownKeyFixture: { file: "packages/db/src/export/inventory.integration.test.ts", name: "rejects extra keys for every transformed JSON family" },
 } as const;
@@ -138,6 +139,7 @@ const owned = (input: Omit<ExportTableDecision, "tests">, sourceTest: InventoryT
   const exclusions: Record<string, InventoryTestId> = {
     profileIncluded: "authSecretsExcluded", postsIncluded: "lifecycleOperationsExcluded",
     messagesIncluded: "recipientDataExcluded", ownedMediaIncluded: "unprovenMediaExcluded",
+    commentsIncluded: "recipientDataExcluded",
   };
   return { ...input, tests: input.excluded.length > 0
     ? [sourceTest, exclusions[sourceTest] ?? "lifecycleOperationsExcluded"] : [sourceTest] };
@@ -182,7 +184,15 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   messaging_outbox: excluded("id,event_id,recipient_id,conversation_id,change_sequence,channel,device_registration_id,status,attempts,available_at,lease_token,lease_expires_at,failure_category,created_at,delivered_at", "recipient_id", "private_delivery_operations"),
   messaging_participants: { ...excluded("id,user_id,state,created_at", "user_id_or_deleted_account", "recipient_safe_identity_projection"), retainedForOthers: "deleted_account_label" },
   operator_cases: excluded("id,subject_user_id,type,status,decision,reason_category,operator_reference,review_due_at,reviewed_at,resolved_at,created_at,updated_at", "subject_user_id", "private_incident_record"),
+  post_comments: owned({
+    owner: "author_id_and_current_readable_post", retention: "while_parent_post_exists",
+    deletion: "purge_with_post", access: "author_and_readable_post_procedure",
+    retainedForOthers: "shown_to_post_readers_until_deleted_or_post_purged", trashRestore: "include_only_while_restorable",
+    included: fields("id,post_id,body,created_at,edited_at,deleted_at"),
+    excluded: fields("author_id,parent_comment_id,client_comment_id,deleted_by"),
+  }, "commentsIncluded"),
   post_idempotency_keys: excluded("author_id,idempotency_key,request_fingerprint,post_id,created_at", "author_id", "submission_integrity_state"),
+  post_likes: { ...excluded("post_id,user_id,created_at", "user_id_and_post_id", "other_participant_identity_and_reactions_deferred"), retention: "while_parent_post_exists", deletion: "remove_on_unlike_or_purge_with_post", retainedForOthers: "shown_to_post_readers_until_unliked_or_post_purged" },
   post_media: owned({
     owner: "post_id_to_author_id", retention: "while_owned_or_restorable", deletion: "reference_checked_cleanup",
     access: "owner_scoped_file_procedure", retainedForOthers: "not_applicable", trashRestore: "include_only_while_restorable",

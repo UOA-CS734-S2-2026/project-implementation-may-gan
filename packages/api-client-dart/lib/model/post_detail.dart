@@ -25,6 +25,9 @@ class PostDetail {
     required this.releasedAt,
     required this.edited,
     required this.revisionCount,
+    required this.likeCount,
+    required this.viewerHasLiked,
+    required this.commentCount,
     required this.viewerIsAuthor,
     this.media = const [],
     required this.voiceMemo,
@@ -58,6 +61,16 @@ class PostDetail {
   /// Minimum value: 0
   final int revisionCount;
 
+  /// Minimum value: 0
+  final int likeCount;
+
+  final bool viewerHasLiked;
+
+  /// Comments and replies the caller can see, leaving out deleted ones and people across a block.
+  ///
+  /// Minimum value: 0
+  final int commentCount;
+
   final bool viewerIsAuthor;
 
   /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
@@ -82,6 +95,9 @@ class PostDetail {
           other.releasedAt == releasedAt &&
           other.edited == edited &&
           other.revisionCount == revisionCount &&
+          other.likeCount == likeCount &&
+          other.viewerHasLiked == viewerHasLiked &&
+          other.commentCount == commentCount &&
           other.viewerIsAuthor == viewerIsAuthor &&
           _deepEquality.equals(other.media, media) &&
           other.voiceMemo == voiceMemo;
@@ -101,13 +117,16 @@ class PostDetail {
       (releasedAt.hashCode) +
       (edited.hashCode) +
       (revisionCount.hashCode) +
+      (likeCount.hashCode) +
+      (viewerHasLiked.hashCode) +
+      (commentCount.hashCode) +
       (viewerIsAuthor.hashCode) +
       (media.hashCode) +
       (voiceMemo == null ? 0 : voiceMemo!.hashCode);
 
   @override
   String toString() =>
-      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, revisionCount=$revisionCount, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
+      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, revisionCount=$revisionCount, likeCount=$likeCount, viewerHasLiked=$viewerHasLiked, commentCount=$commentCount, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -127,6 +146,9 @@ class PostDetail {
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'edited'] = this.edited;
     json[r'revisionCount'] = this.revisionCount;
+    json[r'likeCount'] = this.likeCount;
+    json[r'viewerHasLiked'] = this.viewerHasLiked;
+    json[r'commentCount'] = this.commentCount;
     json[r'viewerIsAuthor'] = this.viewerIsAuthor;
     json[r'media'] = this.media;
     if (this.voiceMemo != null) {
@@ -153,6 +175,9 @@ class PostDetail {
     DateTime? releasedAt,
     bool? edited,
     int? revisionCount,
+    int? likeCount,
+    bool? viewerHasLiked,
+    int? commentCount,
     bool? viewerIsAuthor,
     List<PostMedia>? media,
     PostVoiceMemo? voiceMemo,
@@ -171,6 +196,9 @@ class PostDetail {
         releasedAt: releasedAt ?? this.releasedAt,
         edited: edited ?? this.edited,
         revisionCount: revisionCount ?? this.revisionCount,
+        likeCount: likeCount ?? this.likeCount,
+        viewerHasLiked: viewerHasLiked ?? this.viewerHasLiked,
+        commentCount: commentCount ?? this.commentCount,
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
         voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
@@ -233,6 +261,18 @@ class PostDetail {
             'Required key "PostDetail[revisionCount]" is missing from JSON.');
         assert(json[r'revisionCount'] != null,
             'Required key "PostDetail[revisionCount]" has a null value in JSON.');
+        assert(json.containsKey(r'likeCount'),
+            'Required key "PostDetail[likeCount]" is missing from JSON.');
+        assert(json[r'likeCount'] != null,
+            'Required key "PostDetail[likeCount]" has a null value in JSON.');
+        assert(json.containsKey(r'viewerHasLiked'),
+            'Required key "PostDetail[viewerHasLiked]" is missing from JSON.');
+        assert(json[r'viewerHasLiked'] != null,
+            'Required key "PostDetail[viewerHasLiked]" has a null value in JSON.');
+        assert(json.containsKey(r'commentCount'),
+            'Required key "PostDetail[commentCount]" is missing from JSON.');
+        assert(json[r'commentCount'] != null,
+            'Required key "PostDetail[commentCount]" has a null value in JSON.');
         assert(json.containsKey(r'viewerIsAuthor'),
             'Required key "PostDetail[viewerIsAuthor]" is missing from JSON.');
         assert(json[r'viewerIsAuthor'] != null,
@@ -259,6 +299,9 @@ class PostDetail {
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         edited: mapValueOfType<bool>(json, r'edited')!,
         revisionCount: mapValueOfType<int>(json, r'revisionCount')!,
+        likeCount: mapValueOfType<int>(json, r'likeCount')!,
+        viewerHasLiked: mapValueOfType<bool>(json, r'viewerHasLiked')!,
+        commentCount: mapValueOfType<int>(json, r'commentCount')!,
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
         voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo']),
@@ -330,6 +373,9 @@ class PostDetail {
     'releasedAt',
     'edited',
     'revisionCount',
+    'likeCount',
+    'viewerHasLiked',
+    'commentCount',
     'viewerIsAuthor',
     'media',
     'voiceMemo',
