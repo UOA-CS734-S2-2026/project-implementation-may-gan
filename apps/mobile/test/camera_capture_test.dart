@@ -66,18 +66,21 @@ Future<void> _post(WidgetTester tester) async {
   await tester.pump();
   await tester.scrollUntilVisible(
     find.byKey(const Key('composer.reflectiveAnswer')),
-    100,
+    -100,
     scrollable: list,
   );
   await tester.enterText(
     find.byKey(const Key('composer.reflectiveAnswer')),
     'Coffee by the harbour',
   );
+  await tester.pumpAndSettle();
   await tester.scrollUntilVisible(
     find.byKey(const Key('composer.audience.solo')),
     100,
     scrollable: list,
   );
+  await tester.ensureVisible(find.byKey(const Key('composer.audience.solo')));
+  await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('composer.audience.solo')));
   await tester.pump(const Duration(milliseconds: 500));
   await tester.ensureVisible(find.byKey(const Key('composer.submit')));

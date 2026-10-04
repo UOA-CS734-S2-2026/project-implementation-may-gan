@@ -856,7 +856,7 @@ void main() {
     expect(find.text('Slide to rate your day'), findsNothing);
     await tester.scrollUntilVisible(
       find.byKey(const Key('composer.reflectiveAnswer')),
-      100,
+      -100,
       scrollable: list,
     );
     await tester.ensureVisible(
@@ -951,7 +951,7 @@ void main() {
     );
     await tester.scrollUntilVisible(
       find.byKey(const Key('composer.reflectiveAnswer')),
-      100,
+      -100,
       scrollable: list,
     );
     await tester.enterText(
@@ -1227,7 +1227,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(slider, const Offset(300, 0));
     final answer = find.byKey(const Key('composer.reflectiveAnswer'));
-    await tester.scrollUntilVisible(answer, 100, scrollable: list);
+    await tester.scrollUntilVisible(answer, -100, scrollable: list);
     await tester.enterText(answer, 'Sent as typed');
     final friends = find.byKey(const Key('composer.audience.friends'));
     await tester.scrollUntilVisible(friends, 100, scrollable: list);
