@@ -43,3 +43,11 @@ Publish planning artifacts in a clean PR before relying on their repository link
 | spec.md | 3e2d81592eef00d9c28879e9c9e8b481ade18fb78d630ac6d5f50a260566d16f |
 | plan.md | 3fdeedebedb075131944a1669138776a9a02eeabfbdec7ffb85a76ec3ea94d6c |
 | tickets/GH-255.md | 3d57470696e3cb38e29422fbac4c4ae27e66a4bbd99ee4bd689ad080e05b1c1a |
+
+## Five-PR follow-up
+
+The user subsequently requested continued implementation toward merging the five discussed PRs. See [the bounded merge follow-up](../messaging-merge-follow-up-approval.md). Original batch deadlines are not extended, downstream tickets are not restarted, and approved input digests remain unchanged.
+
+## Latest owner authorization amendment
+
+The subsequent user instruction explicitly authorizes admin bypass of the GitHub approving-review requirement for the five discussed PRs, subject to exact-head passing hosted CI, local verification, clean independent review and migration integration. See [the recorded merge amendment](../messaging-admin-merge-approval.md) and [scoped automatic staging operation approval](../messaging-staging-operation-approval.md). This latest amendment supersedes only the conflicting earlier approving-review and automatic-staging restrictions for those PRs. It does not change any approved spec/plan/ticket SHA-256 entry, authorize unrelated PRs or live push acceptance, or assert that a human personally performed a review.

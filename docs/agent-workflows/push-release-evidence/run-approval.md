@@ -56,3 +56,11 @@ Use isolated clean worktrees, preserve the dirty original tree and unrelated act
 | tickets/GH-141.md | fe453dd531315c646971a593cbba85b7c8ae00defc75a4c8e021980618b08ba4 |
 | tickets/GH-130.md | 2f1ac0f966de75618c3fb84a8f3df441ef0c02602d1e6d726486bfe43894ccdd |
 | tickets/GH-131.md | 5c1086dfd02f74c754bed4c4dff51e6826e4ac6e56e54848032a725b43775468 |
+
+## Five-PR follow-up
+
+The user subsequently requested continued implementation toward merging the five discussed PRs. See [the bounded merge follow-up](../messaging-merge-follow-up-approval.md). Original batch deadlines are not extended, downstream tickets are not restarted, and approved input digests remain unchanged.
+
+## Latest owner authorization amendment
+
+The subsequent user instruction explicitly authorizes admin bypass of the GitHub approving-review requirement for the five discussed PRs, subject to exact-head passing hosted CI, local verification, clean independent review and migration integration. See [the recorded merge amendment](../messaging-admin-merge-approval.md) and [scoped automatic staging operation approval](../messaging-staging-operation-approval.md). This latest amendment supersedes only the conflicting earlier approving-review and automatic-staging restrictions for those PRs. It does not change any approved spec/plan/ticket SHA-256 entry, authorize unrelated PRs or live push acceptance, or assert that a human personally performed a review.

@@ -62,3 +62,11 @@ Ticket/spec/plan changes invalidate this approval for affected entries and their
 | tickets/MN-004.md | cc8744d5cd8fa80b56d9f1b4a6c767f96c5916ab3dd2daf8913bea0607c55be8 |
 | tickets/GH-034.md | 5de9d4961bc404b6073b88980137221f05af9b4917c5bdd95820b2f29713257a |
 | tickets/MN-005.md | 93cd818efacefcc927c18d3cf61c237d014d311adc761220a9ff7df1854ed720 |
+
+## Five-PR follow-up
+
+The user subsequently requested continued implementation toward merging the five discussed PRs. See [the bounded merge follow-up](../messaging-merge-follow-up-approval.md). Original batch deadlines are not extended, downstream tickets are not restarted, and approved input digests remain unchanged.
+
+## Latest owner authorization amendment
+
+The subsequent user instruction explicitly authorizes admin bypass of the GitHub approving-review requirement for the five discussed PRs, subject to exact-head passing hosted CI, local verification, clean independent review and migration integration. See [the recorded merge amendment](../messaging-admin-merge-approval.md) and [scoped automatic staging operation approval](../messaging-staging-operation-approval.md). This latest amendment supersedes only the conflicting earlier approving-review and automatic-staging restrictions for those PRs. It does not change any approved spec/plan/ticket SHA-256 entry, authorize unrelated PRs or live push acceptance, or assert that a human personally performed a review.
