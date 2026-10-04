@@ -380,13 +380,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 24,
                               colorFilter: ColorFilter.mode(
                                 enabled
-                                    ? colors.primary
+                                    ? colors.foregroundAccent
                                     : colors.foregroundSecondary,
                                 BlendMode.srcIn,
                               ),
                             ),
                             value: enabled,
-                            activeColor: colors.primary,
                             onChanged: _setBiometricUnlock,
                           );
                         },

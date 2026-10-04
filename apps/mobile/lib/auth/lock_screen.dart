@@ -91,7 +91,8 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-<<<<<<< HEAD
+    final lilac = const Color(0xFFDCC8E6).withValues(alpha: 0.5); // Faint pastel lilac
+    
     final unavailable = _result == BiometricResult.unavailable;
     final lockedOut = _result == BiometricResult.lockedOut;
     final busy = _authenticating || _recovering;
@@ -104,216 +105,176 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
       _ => 'Unlock Dayli to continue',
     };
 
-    // Its own messenger keeps the app's snackbars off the lock screen.
     return PopScope(
       canPop: false,
       child: ScaffoldMessenger(
         child: Scaffold(
           backgroundColor: colors.background,
-          body: LockBackdrop(
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const _FaceIdBadge(),
-                      const SizedBox(height: 32),
-                      Text(
-                        'App Locked',
-                        style: DayliText.serif(
-                          context,
-                          size: DayliTextSize.xl,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: DayliText.sans(
-                          context,
-                          color: colors.foregroundSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 48),
-                      if (unavailable)
-                        _PrimaryButton(
-                          key: const Key('lock.recover'),
-                          onPressed: busy ? null : _recover,
-                          icon: Icons.login_rounded,
-                          label: 'Sign in again',
-                        )
-                      else
-                        _PrimaryButton(
-                          key: const Key('lock.unlock'),
-                          onPressed: busy ? null : _unlock,
-                          icon: Icons.fingerprint_rounded,
-                          label: 'Unlock',
-                        ),
-                      if (lockedOut) ...[
-                        const SizedBox(height: 8),
-                        TextButton(
-                          key: const Key('lock.recoverInstead'),
-                          onPressed: busy ? null : _recover,
-                          child: const Text('Sign in with your account instead'),
-                        ),
-                      ],
-                      if (unavailable || lockedOut) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          "You'll sign in to your Dayli account again and "
-                          'Biometric Unlock will turn off. Your draft stays '
-                          'on this device.',
-                          textAlign: TextAlign.center,
-                          style: DayliText.sans(
-                            context,
-                            size: DayliTextSize.sm,
-                            color: colors.foregroundTertiary,
-                          ),
-                        ),
-                      ],
-                      if (_recoveryFailed) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          "Couldn't sign out. Try again.",
-                          textAlign: TextAlign.center,
-                          style: DayliText.sans(
-                            context,
-                            size: DayliTextSize.sm,
-                            color: colors.danger,
-                          ),
-                        ),
-                      ],
-                    ],
+          body: Stack(
+            children: [
+              // Scrapbook dot grid background
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.03, // Very faint
+                  child: Image.asset(
+                    'assets/wdcc/dotgridbg.jpg',
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
-            ),
-          ),
-=======
-    final lilac = const Color(0xFFDCC8E6).withOpacity(0.5); // Faint pastel lilac
-    
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        backgroundColor: colors.background,
-        body: Stack(
-          children: [
-            // Scrapbook dot grid background
-            Positioned.fill(
-              child: Opacity(
-                opacity: 0.03, // Very faint
-                child: Image.asset(
-                  'assets/wdcc/dotgridbg.jpg',
-                  fit: BoxFit.cover,
+              // Decorative pastel squiggles
+              Positioned(
+                top: 100,
+                left: -30,
+                child: SvgPicture.asset(
+                  'assets/wdcc/squiggle01.svg',
+                  width: 140,
+                  colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
                 ),
               ),
-            ),
-            // Decorative pastel squiggles
-            Positioned(
-              top: 100,
-              left: -30,
-              child: SvgPicture.asset(
-                'assets/wdcc/squiggle01.svg',
-                width: 140,
-                colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+              Positioned(
+                bottom: 120,
+                right: -40,
+                child: SvgPicture.asset(
+                  'assets/wdcc/squiggle02.svg',
+                  width: 180,
+                  colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+                ),
               ),
-            ),
-            Positioned(
-              bottom: 120,
-              right: -40,
-              child: SvgPicture.asset(
-                'assets/wdcc/squiggle02.svg',
-                width: 180,
-                colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+              Positioned(
+                top: MediaQuery.of(context).size.height * 0.25,
+                right: 30,
+                child: SvgPicture.asset(
+                  'assets/wdcc/squiggle03.svg',
+                  width: 90,
+                  colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+                ),
               ),
-            ),
-            Positioned(
-              top: MediaQuery.of(context).size.height * 0.25,
-              right: 30,
-              child: SvgPicture.asset(
-                'assets/wdcc/squiggle03.svg',
-                width: 90,
-                colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+              Positioned(
+                bottom: MediaQuery.of(context).size.height * 0.15,
+                left: 20,
+                child: SvgPicture.asset(
+                  'assets/wdcc/squiggle01.svg',
+                  width: 100,
+                  colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
+                ),
               ),
-            ),
-            Positioned(
-              bottom: MediaQuery.of(context).size.height * 0.15,
-              left: 20,
-              child: SvgPicture.asset(
-                'assets/wdcc/squiggle01.svg',
-                width: 100,
-                colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
-              ),
-            ),
-            
-            // Main Content
-            Positioned.fill(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: colors.background,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: lilac.withOpacity(0.2),
-                            blurRadius: 32,
-                            spreadRadius: 8,
+              
+              // Main Content
+              Positioned.fill(
+                child: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: lilac.withValues(alpha: 0.2),
+                                  blurRadius: 32,
+                                  spreadRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: SvgPicture.asset(
+                              'assets/wdcc/face_id.svg',
+                              width: 64,
+                              height: 64,
+                              colorFilter: ColorFilter.mode(
+                                colors.foregroundAccent,
+                                BlendMode.srcIn,
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 32),
+                          Text(
+                            'App Locked',
+                            style: DayliText.serif(
+                              context,
+                              size: DayliTextSize.xl,
+                              weight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            message,
+                            textAlign: TextAlign.center,
+                            style: DayliText.sans(
+                              context,
+                              color: colors.foregroundSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 48),
+                          if (unavailable)
+                            FilledButton.icon(
+                              key: const Key('lock.recover'),
+                              onPressed: busy ? null : _recover,
+                              icon: const Icon(Icons.login_rounded),
+                              label: const Text('Sign in again'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                textStyle: DayliText.sans(context, weight: FontWeight.w600),
+                              ),
+                            )
+                          else
+                            FilledButton.icon(
+                              key: const Key('lock.unlock'),
+                              onPressed: busy ? null : _unlock,
+                              icon: const Icon(Icons.fingerprint_rounded),
+                              label: const Text('Unlock'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                textStyle: DayliText.sans(context, weight: FontWeight.w600),
+                              ),
+                            ),
+                          if (lockedOut) ...[
+                            const SizedBox(height: 8),
+                            TextButton(
+                              key: const Key('lock.recoverInstead'),
+                              onPressed: busy ? null : _recover,
+                              child: const Text('Sign in with your account instead'),
+                            ),
+                          ],
+                          if (unavailable || lockedOut) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              "You'll sign in to your Dayli account again and "
+                              'Biometric Unlock will turn off. Your draft stays '
+                              'on this device.',
+                              textAlign: TextAlign.center,
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.sm,
+                                color: colors.foregroundTertiary,
+                              ),
+                            ),
+                          ],
+                          if (_recoveryFailed) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              "Couldn't sign out. Try again.",
+                              textAlign: TextAlign.center,
+                              style: DayliText.sans(
+                                context,
+                                size: DayliTextSize.sm,
+                                color: colors.danger,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                      child: SvgPicture.asset(
-                        'assets/wdcc/face_id.svg',
-                        width: 64,
-                        height: 64,
-                        colorFilter: ColorFilter.mode(
-                          colors.foregroundAccent,
-                          BlendMode.srcIn,
-                        ),
-                      ),
                     ),
-                    const SizedBox(height: 32),
-                    Text(
-                      'App Locked',
-                      style: DayliText.serif(
-                        context,
-                        size: DayliTextSize.xl,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Unlock Dayli to continue',
-                      style: DayliText.sans(
-                        context,
-                        color: colors.foregroundSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    FilledButton.icon(
-                      onPressed: _authenticate,
-                      icon: const Icon(Icons.fingerprint_rounded),
-                      label: const Text('Unlock'),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                        textStyle: DayliText.sans(
-                          context,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
->>>>>>> 83f685c2 (feat: lock screen visuals)
+            ],
+          ),
         ),
       ),
     );
