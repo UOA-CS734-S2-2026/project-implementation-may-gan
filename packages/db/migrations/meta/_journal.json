@@ -379,6 +379,13 @@
       "when": 1791078168391,
       "tag": "0053_purple_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791082161349,
+      "tag": "0054_tricky_blindfold",
+      "breakpoints": true
     }
   ]
 }
