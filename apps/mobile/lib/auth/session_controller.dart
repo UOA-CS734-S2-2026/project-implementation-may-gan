@@ -10,7 +10,14 @@ import '../drafts/draft_store.dart';
 import 'native_session.dart';
 import 'public_return_intent.dart';
 
-enum SessionStatus { unknown, signedOut, needsUsernameSetup, signedIn }
+enum SessionStatus {
+  unknown,
+  signedOut,
+  legalAcceptanceRequired,
+  legalStatusUnavailable,
+  needsUsernameSetup,
+  signedIn,
+}
 
 /// A capability passed to async startup work. It becomes invalid before old
 /// credentials are replaced or cleared, so late startup cannot affect a new
@@ -181,7 +188,7 @@ class SessionController extends ChangeNotifier {
       } else {
         // A cached authenticated identity still needs the foreground socket.
         // Its ticket request will reconnect with backoff when the network returns.
-        await _signedIn(cached, persistUser: false);
+        await _signedIn(cached, persistUser: false, verifyPolicy: false);
       }
       return;
     }
@@ -205,6 +212,18 @@ class SessionController extends ChangeNotifier {
     required String flow,
     required RegistrationTerms? terms,
   }) => _session.issueRegistrationProof(flow: flow, terms: terms);
+
+  Future<void> acceptCurrentLegalTerms(RegistrationTerms terms) async {
+    await _session.recordLegalAcceptance(terms);
+    await refreshAccountPolicy();
+  }
+
+  /// Rechecks the server-owned policy after acceptance or a temporary outage.
+  Future<void> refreshAccountPolicy() async {
+    final user = _user;
+    if (user == null) throw const AuthenticationFailure('account-policy', 401);
+    await _applyAccountPolicy(user, persistUser: false);
+  }
 
   Future<void> signUp({
     required String name,
@@ -385,10 +404,51 @@ class SessionController extends ChangeNotifier {
     await _signedIn(user);
   }
 
-  Future<void> _signedIn(SessionUser user, {bool persistUser = true}) async {
+  Future<void> _signedIn(
+    SessionUser user, {
+    bool persistUser = true,
+    bool verifyPolicy = true,
+  }) async {
     // Interactive account replacement already completed its private cleanup
     // under the old bearer in _beforeCredentialReplacement.
     if (persistUser) await _userCache.write(user);
+    if (verifyPolicy) {
+      await _applyAccountPolicy(user, persistUser: false);
+    } else {
+      // Offline restoration cannot obtain a server policy decision. It keeps
+      // local drafts usable; the server still rejects ordinary API actions
+      // until connectivity returns and a later authenticated restore checks it.
+      await _activateUser(user);
+    }
+  }
+
+  Future<void> _applyAccountPolicy(
+    SessionUser user, {
+    required bool persistUser,
+  }) async {
+    if (persistUser) await _userCache.write(user);
+    AccountPolicyStatus policy;
+    try {
+      policy = await _session.accountPolicy();
+    } on AuthenticationFailure catch (error) {
+      if (error.statusCode == 401) {
+        await _signedOutLocally();
+        return;
+      }
+      _set(SessionStatus.legalStatusUnavailable, user);
+      return;
+    } on Exception {
+      _set(SessionStatus.legalStatusUnavailable, user);
+      return;
+    }
+    if (policy.requiresLegalAcceptance) {
+      _set(SessionStatus.legalAcceptanceRequired, user);
+      return;
+    }
+    await _activateUser(user);
+  }
+
+  Future<void> _activateUser(SessionUser user) async {
     _set(
       user.username == null
           ? SessionStatus.needsUsernameSetup

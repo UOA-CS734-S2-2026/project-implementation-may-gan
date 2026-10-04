@@ -602,6 +602,7 @@ class TestHarness {
     FakePostClient? posts,
     this.uploadMedia = true,
     this.effectiveTerms = false,
+    this.accountRestriction = 'active',
     this.accountExports,
     this.notificationConsent,
     FakeProfileClient? profiles,
@@ -713,6 +714,21 @@ class TestHarness {
               )
             : http.Response('null', 200);
       }
+      if (path.endsWith('/api/v1/account/status')) {
+        return http.Response(
+          jsonEncode({'restriction': accountRestriction, 'allowed': []}),
+          200,
+        );
+      }
+      if (path.endsWith('/api/v1/legal/acceptance')) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        if (body['termsVersionId'] != 'test-terms' ||
+            body['acceptedTermsAndDeclaredAge16'] != true) {
+          return http.Response('{}', 409);
+        }
+        accountRestriction = 'active';
+        return http.Response(jsonEncode({'termsVersionId': 'test-terms'}), 200);
+      }
       if (path.endsWith('/api/v1/profile/username')) {
         return http.Response('{}', 200);
       }
@@ -794,6 +810,7 @@ class TestHarness {
   /// False gives the app no upload client, so picked media stays on the device.
   final bool uploadMedia;
   final bool effectiveTerms;
+  String accountRestriction;
   final AccountExportClient? accountExports;
   final NotificationConsentController? notificationConsent;
   final GoogleIdTokenProvider? google;

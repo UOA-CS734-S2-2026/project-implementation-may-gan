@@ -11,6 +11,7 @@ import '../friends/friends_screen.dart';
 import '../friends/social_profile_screen.dart';
 import '../home/home_screen.dart';
 import '../landing/landing_screen.dart';
+import '../legal/legal_acceptance_screen.dart';
 import '../legal/legal_document_screen.dart';
 import '../messaging/conversation_screen.dart';
 import '../messaging/messages_screen.dart';
@@ -89,6 +90,16 @@ GoRouter buildRouter(
         return '/';
       }
       if (_legalLocations.contains(location)) return null;
+      if (location == '/legal/acceptance') {
+        return switch (session.status) {
+          SessionStatus.unknown => '/splash',
+          SessionStatus.signedOut => '/welcome',
+          SessionStatus.legalAcceptanceRequired ||
+          SessionStatus.legalStatusUnavailable => null,
+          SessionStatus.needsUsernameSetup => '/setup-username',
+          SessionStatus.signedIn => '/',
+        };
+      }
       final public = _publicLocations.contains(location);
       final publicContent = _isPublicContent(location);
       final returnIntent =
@@ -104,6 +115,10 @@ GoRouter buildRouter(
           return publicContent || location == '/splash' ? null : '/splash';
         case SessionStatus.signedOut:
           return public || publicContent ? null : '/welcome';
+        case SessionStatus.legalAcceptanceRequired:
+        case SessionStatus.legalStatusUnavailable:
+          if (location == '/account/export') return null;
+          return '/legal/acceptance';
         case SessionStatus.needsUsernameSetup:
           if (location == '/account/export') return null;
           if (location == '/setup-username') return null;
@@ -142,6 +157,10 @@ GoRouter buildRouter(
       GoRoute(
         path: '/setup-username',
         builder: (_, _) => const UsernameSetupScreen(),
+      ),
+      GoRoute(
+        path: '/legal/acceptance',
+        builder: (_, _) => const LegalAcceptanceScreen(),
       ),
       // Full-screen pages above the tabs.
       GoRoute(
