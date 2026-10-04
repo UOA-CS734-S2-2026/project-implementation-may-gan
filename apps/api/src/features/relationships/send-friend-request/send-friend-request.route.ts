@@ -20,7 +20,18 @@ export function registerSendFriendRequestRoute(app: RelationshipRouteApp, depend
   app.openapi(route, async (context) => {
     const { recipientId } = context.req.valid("json");
     try {
-      return context.json(await dependencies.service.sendRequest(context.get("actor").userId, recipientId), 201);
+      const result = await dependencies.service.sendRequest(context.get("actor").userId, recipientId);
+      // The service has committed before any invocation-owned provider work starts.
+      if (dependencies.dispatchImmediately) {
+        try {
+          context.executionCtx.waitUntil(dependencies.dispatchImmediately().catch(() => {
+            console.error("notification immediate dispatch failed");
+          }));
+        } catch {
+          // Non-Worker callers leave durable work for scheduled repair.
+        }
+      }
+      return context.json(result, 201);
     } catch (error) {
       return relationshipServiceError(context, error);
     }

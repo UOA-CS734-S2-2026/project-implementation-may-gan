@@ -627,7 +627,8 @@ export function createAppForEnv(env: ApiEnv) {
     repository: createHyperdriveProfileMoodRepository(configuration.hyperdrive),
   } satisfies GetProfileMoodRouteDependencies : undefined;
   const relationships = configuration ? {
-    service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
+    service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive, { notificationPublishersEnabled: notificationPublishersEnabled(env) })),
+    dispatchImmediately: async () => (await createNotificationDeliveryDispatcher(env)).dispatchImmediately(),
     hasUsername,
     resolveSession: (request: Request) => withHyperdriveDatabase(configuration.hyperdrive, async (database) => {
       const auth = createPostgresBetterAuth({

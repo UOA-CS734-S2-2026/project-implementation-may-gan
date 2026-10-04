@@ -24,8 +24,8 @@ export interface FcmNotificationInput {
 export interface GenericFcmNotificationInput {
   token: string;
   eventId: string;
-  type: "direct_message";
-  targetType: "conversation";
+  type: "direct_message" | "friend_request" | "final_hour_reminder" | "friends_post_release";
+  targetType: "conversation" | "friend_request" | "posting_day" | "friends_feed";
   targetId: string;
   title: string;
   body: string;
@@ -159,6 +159,7 @@ export function buildFcmPayload(notification: FcmNotificationInput) {
 }
 
 export function buildGenericFcmPayload(notification: GenericFcmNotificationInput) {
+  const collapseId = notification.type === "direct_message" ? notification.targetId : notification.eventId;
   return { message: {
     token: notification.token,
     notification: { title: notification.title, body: notification.body },
@@ -169,7 +170,7 @@ export function buildGenericFcmPayload(notification: GenericFcmNotificationInput
       targetType: notification.targetType,
       targetId: notification.targetId,
     },
-    android: { collapse_key: notification.targetId },
-    apns: { headers: { "apns-collapse-id": notification.targetId } },
+    android: { collapse_key: collapseId },
+    apns: { headers: { "apns-collapse-id": collapseId } },
   } };
 }
