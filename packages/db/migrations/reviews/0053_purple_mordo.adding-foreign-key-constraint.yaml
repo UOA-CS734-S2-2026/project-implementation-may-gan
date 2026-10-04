@@ -1,0 +1,6 @@
+reason: All foreign keys except the push capability check belong to tables created empty in this migration. Five-second lock acquisition and five-minute statement limits bound locks on referenced user and push device tables.
+affected_data_and_clients: A brief write delay is possible while referenced-table locks are acquired. No existing row is scanned in a newly created notification table.
+rollout_sequence: Apply before notification publishers are deployed, then inspect every foreign key and keep publishers disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running.
+forward_fix_plan: Stop on a lock timeout. Use a separately reviewed nonblocking migration if target-table write traffic cannot tolerate the bounded lock.
+reviewer: Database and availability reviewers required.
