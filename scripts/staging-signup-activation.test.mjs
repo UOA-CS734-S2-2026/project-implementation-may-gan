@@ -110,6 +110,10 @@ test("manual publisher is main-only, staging-only, and verifies both deployed Wo
   const mutate = workflow.indexOf("Publish legal activation with existing-account acceptance checks");
   assert.ok(verify >= 0 && mutate > verify);
   assert.match(workflow.slice(verify, mutate), /verify-staging-deployed-shas\.mjs/);
+  const finalRecheck = workflow.indexOf("Recheck current main and deployed Worker revisions immediately before mutation");
+  assert.ok(finalRecheck > verify && mutate > finalRecheck);
+  assert.match(workflow.slice(finalRecheck, mutate), /git ls-remote origin refs\/heads\/main/);
+  assert.match(workflow.slice(finalRecheck, mutate), /verify-staging-deployed-shas\.mjs/);
   assert.match(workflow.slice(mutate), /STAGING_SIGNUP_ACTIVATION_TARGET: staging/);
   assert.doesNotMatch(workflow, /production/);
 

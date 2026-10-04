@@ -81,10 +81,14 @@ abstract interface class FriendsClient {
 }
 
 class GeneratedFriendsClient implements FriendsClient {
-  GeneratedFriendsClient({required String baseUrl, required this._bearerToken})
-    : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
+  GeneratedFriendsClient({
+    required String baseUrl,
+    required this._bearerToken,
+    this.onForbidden,
+  }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
   final String _baseUrl;
   final Future<String?> Function() _bearerToken;
+  final void Function()? onForbidden;
   Future<generated.RelationshipsApi?> _api() async {
     final token = await _bearerToken();
     if (token == null) return null;
@@ -183,7 +187,13 @@ class GeneratedFriendsClient implements FriendsClient {
     try {
       return ApiSuccess(await operation(api));
     } on generated.ApiException catch (error) {
-      return ApiError(failureForStatus(error.code, error.innerException));
+      return ApiError(
+        failureForStatus(
+          error.code,
+          error.innerException,
+          onForbidden: onForbidden,
+        ),
+      );
     } on IOException {
       return const ApiError(NetworkUnavailable());
     }

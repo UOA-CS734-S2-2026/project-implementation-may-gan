@@ -44,8 +44,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
     requireMatch(workflow, /ref: \$\{\{ inputs\.commit_sha \}\}/, `${name} must check out the captured SHA`);
     requireMatch(workflow, /CAPTURED_BROWSER_PROXY_ENABLED: \$\{\{ inputs\.browser_proxy_enabled \}\}/, `${name} must use the captured proxy mode`);
     requireMatch(workflow, /CAPTURED_BROWSER_PROXY_ENABLED" != "\$STAGING_BROWSER_PROXY_ENABLED/, `${name} must reject a changed proxy mode`);
-    const concurrencyGroup = name === "API" ? "staging-database-state-staging" : "staging-web";
-    requireMatch(workflow, new RegExp(`group: ${concurrencyGroup}\\n  cancel-in-progress: false`), `${name} concurrency must not cancel an active deployment`);
+    requireMatch(workflow, /group: staging-database-state-staging\n[ ]{2}cancel-in-progress: false/, `${name} must share the staging database-state lock without cancelling an active deployment`);
   }
 
   const targetGate = "Verify direct migrator target matches configured Hyperdrive";

@@ -391,11 +391,15 @@ class UnavailableMessagingClient implements MessagingClient {
 /// fields until the generator fix in #195, so this adapter decodes the same
 /// generated OpenAPI operations from JSON without changing generated source.
 class HttpMessagingClient implements MessagingClient {
-  HttpMessagingClient({required String baseUrl, required this.bearerToken})
-    : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
+  HttpMessagingClient({
+    required String baseUrl,
+    required this.bearerToken,
+    this.onForbidden,
+  }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
 
   final String _baseUrl;
   final Future<String?> Function() bearerToken;
+  final void Function()? onForbidden;
 
   @override
   Future<ApiResult<List<MessagingConversation>>> inbox({
@@ -650,15 +654,17 @@ class HttpMessagingClient implements MessagingClient {
     }
   }
 
-  static ApiFailure _failure(int status) {
+  ApiFailure _failure(int status) {
     if (status == 401) {
       return const Unauthenticated();
     }
-    if (status == 400 ||
-        status == 403 ||
-        status == 404 ||
-        status == 409 ||
-        status == 422) {
+    if (status == 403) {
+      try {
+        onForbidden?.call();
+      } catch (_) {}
+      return const ServiceUnavailable();
+    }
+    if (status == 400 || status == 404 || status == 409 || status == 422) {
       return const InvalidRequest(
         'This action is no longer available. Refresh and try again.',
       );

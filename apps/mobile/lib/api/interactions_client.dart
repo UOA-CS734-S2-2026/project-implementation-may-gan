@@ -206,11 +206,13 @@ class GeneratedInteractionsClient implements InteractionsClient {
     required String baseUrl,
     required this._bearerToken,
     this._httpClient,
+    this.onForbidden,
   }) : _baseUrl = baseUrl.replaceFirst(RegExp(r'/$'), '');
 
   final String _baseUrl;
   final Future<String?> Function() _bearerToken;
   final http.Client? _httpClient;
+  final void Function()? onForbidden;
 
   @override
   Future<ApiResult<LikeSummary>> setLike(
@@ -300,7 +302,13 @@ class GeneratedInteractionsClient implements InteractionsClient {
     try {
       response = await send(generated.InteractionsApi(client));
     } on generated.ApiException catch (error) {
-      return ApiError(failureForStatus(error.code, error.innerException));
+      return ApiError(
+        failureForStatus(
+          error.code,
+          error.innerException,
+          onForbidden: onForbidden,
+        ),
+      );
     } on IOException {
       return const ApiError(NetworkUnavailable());
     }
@@ -328,7 +336,9 @@ class GeneratedInteractionsClient implements InteractionsClient {
       case HttpStatus.tooManyRequests:
         return const ApiError(RateLimited());
       case final status:
-        return ApiError(failureForStatus(status, null));
+        return ApiError(
+          failureForStatus(status, null, onForbidden: onForbidden),
+        );
     }
   }
 }

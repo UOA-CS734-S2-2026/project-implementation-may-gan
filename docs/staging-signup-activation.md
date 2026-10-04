@@ -16,7 +16,6 @@ The `rollback` operation is intentionally staging-only and destructive. It does 
 
 This workflow is a staging safety control, not a compliance determination.
 
-- A real staging activation still requires a protected environment approval, an up-to-date coordinated release with both Worker tags, and a manual end-to-end check of email and Google signup plus the existing-account acceptance flow.
-- Existing accounts are blocked by policy, but neither web nor mobile currently exposes an existing-account legal-acceptance screen. The API endpoint exists, yet that user-request flow must be built and tested before relying on it for users.
+- A real staging activation still requires a protected environment approval, an up-to-date coordinated release with both Worker tags, and manual end-to-end validation of email and Google signup plus the web and mobile existing-account acceptance flows. Validate an offline mobile session recovering without restart and an active mobile app when Terms become effective.
 - The account deletion request route is deliberately disabled in `apps/api/src/app.ts`, and the web and mobile clients do not expose an account deletion flow. The Terms and Privacy Policy accurately state that deletion and physical purge are not verified. Worldwide registration should not be represented as satisfying deletion, retention, provider recovery, processing-location, or local legal requirements without separate review.
 - Provider terms, processor agreements, jurisdiction-specific legal requirements, support coverage, incident response, and the operational ability to process access, correction, and deletion requests remain external review items.

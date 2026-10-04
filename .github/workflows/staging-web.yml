@@ -24,8 +24,12 @@ on:
 permissions:
   contents: read
 
+# Share the database-state lock with activation. This reusable workflow is
+# called after the API job; it does not acquire the caller's release lock, so
+# sequential API and web jobs cannot deadlock while an activation cannot slip
+# between their immutable-SHA proof and its database mutation.
 concurrency:
-  group: staging-web
+  group: staging-database-state-staging
   cancel-in-progress: false
 
 jobs:

@@ -81,6 +81,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
         run: node scripts/verify-staging-deployed-shas.mjs
+      # Keep this final check adjacent to the mutation. The shared
+      # database-state lock also prevents a web deployment from changing the
+      # active revision between this proof and the transaction.
+      - name: Recheck current main and deployed Worker revisions immediately before mutation
+        env:
+          DISPATCH_SHA: ${{ github.sha }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          current_main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          if [[ ! "$current_main_sha" =~ ^[a-f0-9]{40}$ || "$current_main_sha" != "$DISPATCH_SHA" ]]; then
+            echo 'Signup activation requires current main immediately before mutation.' >&2
+            exit 1
+          fi
+          node scripts/verify-staging-deployed-shas.mjs
       - name: Publish legal activation with existing-account acceptance checks
         env:
           STAGING_SIGNUP_ACTIVATION_TARGET: staging
