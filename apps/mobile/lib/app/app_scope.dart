@@ -17,8 +17,10 @@ import '../drafts/draft_store.dart';
 import '../messaging/messaging_client.dart';
 import '../messaging/messaging_controller.dart';
 import '../notifications/firebase_push_source.dart';
+import '../posts/post_activity.dart';
 import '../posts/post_submitter.dart';
 import '../settings/account_export_client.dart';
+import '../profile/streak_cache.dart';
 
 /// Application-wide services, provided once above the router.
 class AppServices {
@@ -26,10 +28,10 @@ class AppServices {
     required this.session,
     required this.postingDays,
     required this.feed,
-    required this.posts,
+    required this._posts,
     required this.friends,
     required this.drafts,
-    required this.submitter,
+    required this._submitter,
     MessagingController? messaging,
     this.profiles = const UnavailableProfileClient(),
     this.interactions = const UnavailableInteractionsClient(),
@@ -41,8 +43,12 @@ class AppServices {
     this.voiceMemos = const VoiceMemoServices(),
     this.mediaUploads,
     MediaCompressor? mediaCompressor,
+    StreakCache? streakCache,
+    PostActivity? postActivity,
     this.clock = DateTime.now,
-  }) : messaging =
+  }) : streakCache = streakCache ?? MemoryStreakCache(),
+       postActivity = postActivity ?? PostActivity(),
+       messaging =
            messaging ?? MessagingController(const UnavailableMessagingClient()),
        mediaCompressor = mediaCompressor ?? DeviceMediaCompressor(),
        pendingCaptures = pendingCaptures ?? PendingCaptures();
@@ -50,10 +56,19 @@ class AppServices {
   final SessionController session;
   final PostingDayClient postingDays;
   final FeedClient feed;
-  final PostClient posts;
+  final PostClient _posts;
+
+  /// Reports confirmed deletes to [postActivity].
+  late final PostClient posts = ReportingPostClient(_posts, postActivity);
   final FriendsClient friends;
   final DraftStore drafts;
-  final DailyPostSubmitter submitter;
+  final DailyPostSubmitter _submitter;
+
+  /// Reports accepted posts to [postActivity].
+  late final DailyPostSubmitter submitter = ReportingPostSubmitter(
+    _submitter,
+    postActivity,
+  );
   final MessagingController messaging;
   final ProfileClient profiles;
   final InteractionsClient interactions;
@@ -77,6 +92,12 @@ class AppServices {
   /// Null keeps picked media on the device without uploading it.
   final MediaUploadClient? mediaUploads;
   final MediaCompressor mediaCompressor;
+
+  /// The owner's last confirmed streak, for showing offline.
+  final StreakCache streakCache;
+
+  /// Fires when the server accepts or deletes one of the user's posts.
+  final PostActivity postActivity;
   final DateTime Function() clock;
 }
 

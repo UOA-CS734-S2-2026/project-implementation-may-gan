@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,10 +10,12 @@ import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../auth/public_return_intent.dart';
 import '../auth/session_controller.dart';
+import '../posts/post_activity.dart';
 import '../profile/mood_history_card.dart';
 import '../profile/profile_about.dart';
 import '../profile/profile_posts.dart';
 import '../profile/profile_stats.dart';
+import '../profile/streak_cache.dart';
 import '../ui/dayli_button.dart';
 import '../ui/surfaces.dart';
 
@@ -35,7 +39,13 @@ class SocialProfileScreen extends StatefulWidget {
 
 typedef _LoadedProfile = ({ProfileDetails info, FriendCard? person});
 
-class _SocialProfileScreenState extends State<SocialProfileScreen> {
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec',
+];
+
+class _SocialProfileScreenState extends State<SocialProfileScreen>
+    with WidgetsBindingObserver {
   Future<ApiResult<_LoadedProfile>>? _profile;
   SessionController? _session;
   (SessionStatus, String?, int)? _sessionIdentity;
@@ -46,6 +56,19 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
   String? _authorizedProfileId;
   ProfilePostsController? _posts;
   ((SessionStatus, String?, int), String)? _postsFor;
+  PostActivity? _activity;
+
+  /// Your own profile as the server last returned it for this account, and
+  /// when. A reload that fails offline keeps showing it, marked as stale.
+  /// Other profiles never fall back, since access to them can change.
+  _LoadedProfile? _last;
+  DateTime? _lastConfirmedAt;
+
+  /// When the profile on screen was last confirmed, if a reload since failed.
+  DateTime? _staleSince;
+
+  /// Your own streak from the device, when your profile can't load offline.
+  CachedStreak? _offlineStreak;
 
   (SessionStatus, String?, int) _currentSessionIdentity() {
     final session = _session!;
@@ -64,8 +87,69 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
 
   Future<ApiResult<_LoadedProfile>> _startLoad() {
     final requestGeneration = ++_requestGeneration;
-    return _load(requestGeneration, widget.username, _currentSessionIdentity());
+    return _loadWithFallback(
+      requestGeneration,
+      widget.username,
+      _currentSessionIdentity(),
+    );
   }
+
+  /// Loads the profile, then keeps your own streak for offline use. Offline,
+  /// your own profile falls back to the last one confirmed here, or to just
+  /// the streak this device last had confirmed.
+  Future<ApiResult<_LoadedProfile>> _loadWithFallback(
+    int requestGeneration,
+    String username,
+    (SessionStatus, String?, int) identity,
+  ) async {
+    final services = AppScope.of(context);
+    final accountId = identity.$2;
+    // Taken before the request, so a cache cleared meanwhile, such as by
+    // signing out, refuses this load's write.
+    final cacheEpoch = services.streakCache.epoch;
+    bool current() => _isCurrentLoad(requestGeneration, username, identity);
+
+    final result = await _load(requestGeneration, username, identity);
+    // A newer load, another account or another profile has taken over.
+    if (!current()) return result;
+    switch (result) {
+      case ApiSuccess(value: final loaded) when loaded.info.isOwner:
+        final now = services.clock();
+        _last = loaded;
+        _lastConfirmedAt = now;
+        _staleSince = null;
+        _offlineStreak = null;
+        if ((loaded.info.streak, accountId) case (final streak?, final id?)) {
+          unawaited(
+            services.streakCache.write(
+              id,
+              CachedStreak(streak, now),
+              epoch: cacheEpoch,
+            ),
+          );
+        }
+      case ApiSuccess():
+        _last = null;
+        _lastConfirmedAt = null;
+        _staleSince = null;
+        _offlineStreak = null;
+      case ApiError(failure: NetworkUnavailable()):
+        if (_last case final last?) {
+          _staleSince = _lastConfirmedAt;
+          return ApiSuccess(last);
+        }
+        if (accountId != null && _isOwnHandle(username)) {
+          final cached = await services.streakCache.read(accountId);
+          if (current()) _offlineStreak = cached;
+        }
+      case ApiError():
+        break;
+    }
+    return result;
+  }
+
+  bool _isOwnHandle(String username) =>
+      _session?.user?.username?.toLowerCase() == username.toLowerCase();
 
   Future<ApiResult<_LoadedProfile>> _load(
     int requestGeneration,
@@ -116,7 +200,40 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
       _session?.removeListener(_onSessionChanged);
       _session = session..addListener(_onSessionChanged);
     }
+    final activity = AppScope.of(context).postActivity;
+    if (_activity != activity) {
+      _activity?.removeListener(_onPostActivity);
+      _activity = activity..addListener(_onPostActivity);
+    }
     _syncActor();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// The streak and today's mark move with the date, so check again when the
+  /// app returns to the foreground.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reload();
+  }
+
+  /// Your own post was accepted or deleted, which can change your streak.
+  void _onPostActivity() {
+    if (_last?.info.isOwner == true || _isOwnHandle(widget.username)) {
+      _reload();
+    }
+  }
+
+  void _reload() {
+    if (!mounted) return;
+    setState(() {
+      _profile = _startLoad();
+    });
+    unawaited(_posts?.refresh());
   }
 
   @override
@@ -145,6 +262,10 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
       _loadedUsername = widget.username;
       _notice = null;
       _authorizedProfileId = null;
+      _last = null;
+      _lastConfirmedAt = null;
+      _staleSince = null;
+      _offlineStreak = null;
       _clearPosts();
       _profile = _startLoad();
     }
@@ -161,7 +282,9 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session?.removeListener(_onSessionChanged);
+    _activity?.removeListener(_onPostActivity);
     _posts?.dispose();
     super.dispose();
   }
@@ -294,6 +417,12 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
           _followRename(loaded.info);
           return _profilePage(context, loaded.info, loaded.person);
         }
+        if ((snapshot.data, _offlineStreak) case (
+          ApiError(failure: NetworkUnavailable()),
+          final cached?,
+        )) {
+          return _offlineCard(context, cached);
+        }
         return Scaffold(
           body: Center(
             child: DayliCard(
@@ -306,6 +435,57 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  String _confirmedNote(DateTime at) {
+    final local = at.toLocal();
+    final now = AppScope.of(context).clock().toLocal();
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+      final minute = local.minute.toString().padLeft(2, '0');
+      return 'Last confirmed at $hour:$minute ${local.hour < 12 ? 'am' : 'pm'}';
+    }
+    return 'Last confirmed ${local.day} ${_months[local.month - 1]}';
+  }
+
+  /// Your own profile when it can't load offline: only the streak this
+  /// device last had confirmed, clearly marked. Pull to try again.
+  Widget _offlineCard(BuildContext context, CachedStreak cached) {
+    return Scaffold(
+      backgroundColor: DayliColors.of(context).background,
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(20, 36, 20, 32),
+            children: [
+              DayliCard(
+                key: const Key('profile.offline'),
+                padding: const EdgeInsets.all(24),
+                radius: 22,
+                child: Column(
+                  children: [
+                    Text(
+                      "You're offline, so your profile couldn't be loaded.",
+                      textAlign: TextAlign.center,
+                      style: DayliText.serif(context),
+                    ),
+                    ProfileStatsTile(
+                      stats: null,
+                      streak: cached.streak,
+                      staleNote: _confirmedNote(cached.confirmedAt),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -442,6 +622,10 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                         stats: stats,
                         streak: streak,
                         onFriends: isMe ? () => context.go('/friends') : null,
+                        showToday: isMe,
+                        staleNote: _staleSince == null
+                            ? null
+                            : _confirmedNote(_staleSince!),
                       )
                     else if (info.streak case final streak?)
                       Padding(
