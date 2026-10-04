@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
+import 'package:dayli_mobile/api/interactions_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
+import 'package:dayli_mobile/api/post_page.dart';
 import 'package:dayli_mobile/api/profile_client.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
@@ -23,6 +25,8 @@ const _publicUsername = String.fromEnvironment('DPP004_PUBLIC_USERNAME');
 const _privateUsername = String.fromEnvironment('DPP004_PRIVATE_USERNAME');
 const _publicPostId = String.fromEnvironment('DPP004_PUBLIC_POST_ID');
 const _privatePostId = String.fromEnvironment('DPP004_PRIVATE_POST_ID');
+const _soloPostId = String.fromEnvironment('DPP005_SOLO_POST_ID');
+const _unreleasedPostId = String.fromEnvironment('DPP005_UNRELEASED_POST_ID');
 const _authorToken = String.fromEnvironment('DPP004_AUTHOR_TOKEN');
 const _viewerEmail = String.fromEnvironment('DPP004_VIEWER_EMAIL');
 const _viewerPassword = String.fromEnvironment('DPP004_VIEWER_PASSWORD');
@@ -36,6 +40,8 @@ const _fixtureReady =
     _privateUsername != '' &&
     _publicPostId != '' &&
     _privatePostId != '' &&
+    _soloPostId != '' &&
+    _unreleasedPostId != '' &&
     _authorToken != '' &&
     _viewerEmail != '' &&
     _viewerPassword != '' &&
@@ -75,6 +81,10 @@ void trustFixtureCertificate() {
         bearerToken: session.bearerToken,
       ),
       profiles: GeneratedProfileClient(
+        baseUrl: _apiBaseUrl,
+        bearerToken: session.bearerToken,
+      ),
+      interactions: GeneratedInteractionsClient(
         baseUrl: _apiBaseUrl,
         bearerToken: session.bearerToken,
       ),
@@ -125,6 +135,12 @@ void main() {
       expect(find.byKey(const Key('post.unavailable')), findsNothing);
       expect(find.text('Synthetic released dayli.'), findsOneWidget);
       expect(find.byKey(const Key('post.like')), findsOneWidget);
+      for (final concealedId in [_soloPostId, _unreleasedPostId]) {
+        expect(
+          await services.posts.get(concealedId),
+          isA<ApiError<PostDetail>>(),
+        );
+      }
 
       final detailResult = await services.posts.get(_publicPostId);
       expect(detailResult, isA<ApiSuccess<PostDetail>>());
@@ -148,10 +164,11 @@ void main() {
   );
 
   testWidgets(
-    'password sign-in returns to a refetched finite intent without replay',
+    'verified sign-in returns to a refetched finite intent without replay',
     (tester) async {
       trustFixtureCertificate();
-      final services = realReadServices().services;
+      final harness = realReadServices();
+      final services = harness.services;
       await tester.pumpWidget(
         DayliApp(
           services: services,
@@ -162,18 +179,43 @@ void main() {
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       await tester.tap(find.byKey(const Key('post.like')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(const Key('auth.email')), _viewerEmail);
-      await tester.enterText(
-        find.byKey(const Key('auth.password')),
-        _viewerPassword,
-      );
-      await tester.tap(find.byKey(const Key('auth.submit')));
+      harness.tokens.value = _viewerToken;
+      await services.session.restore();
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
 
-      expect(find.byKey(const Key('post.intent')), findsOneWidget);
+      expect(services.session.status, SessionStatus.signedIn);
       expect(
         find.byKey(const Key('post.interactionUnavailable')),
         findsNothing,
+      );
+      final before = await services.posts.get(_publicPostId);
+      expect(before, isA<ApiSuccess<PostDetail>>());
+      expect((before as ApiSuccess<PostDetail>).value.likeCount, 0);
+      expect(before.value.commentCount, 0);
+
+      final liked = await services.interactions.setLike(
+        _publicPostId,
+        liked: true,
+      );
+      expect(liked, isA<ApiSuccess<LikeSummary>>());
+      final commented = await services.interactions.createComment(
+        _publicPostId,
+        clientCommentId: '11111111-1111-4111-8111-111111111111',
+        text: 'Explicit native comment.',
+      );
+      expect(commented, isA<ApiSuccess<PostComment>>());
+
+      final after = await services.posts.get(_publicPostId);
+      expect(after, isA<ApiSuccess<PostDetail>>());
+      expect((after as ApiSuccess<PostDetail>).value.likeCount, 1);
+      expect(after.value.commentCount, 1);
+      final comments = await services.interactions.comments(_publicPostId);
+      expect(comments, isA<ApiSuccess<PostPage<PostComment>>>());
+      expect(
+        (comments as ApiSuccess<PostPage<PostComment>>).value.items.where(
+          (comment) => comment.text == 'Explicit native comment.',
+        ),
+        hasLength(1),
       );
     },
     skip: !_fixtureReady,
@@ -203,8 +245,7 @@ void main() {
         'intentionally-wrong-password',
       );
       await tester.tap(find.byKey(const Key('auth.submit')));
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pumpAndSettle();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(find.byKey(const Key('auth.error')), findsOneWidget);
       expect(services.session.status, SessionStatus.signedOut);
 
@@ -281,7 +322,66 @@ void main() {
   );
 
   testWidgets(
-    'blocked access, account replacement, and expiry refetch safely',
+    'a known viewer loses loaded public post and media access after a real block',
+    (tester) async {
+      trustFixtureCertificate();
+      final viewer = realReadServices(token: _viewerToken);
+      await viewer.services.session.restore();
+      final viewerId = viewer.services.session.user!.id;
+      final loaded = await viewer.services.posts.get(_publicPostId);
+      expect(loaded, isA<ApiSuccess<PostDetail>>());
+      final mediaId = (loaded as ApiSuccess<PostDetail>).value.media.single.id;
+      final mediaUrl = Uri.parse(
+        '$_apiBaseUrl/api/v1/posts/$_publicPostId/media/$mediaId/content',
+      );
+
+      final blockClient = HttpClient();
+      addTearDown(() => blockClient.close(force: true));
+      final request = await blockClient.postUrl(
+        Uri.parse('$_apiBaseUrl/api/v1/relationships/$viewerId/block'),
+      );
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $_authorToken',
+      );
+      final response = await request.close();
+      await response.drain<void>();
+      expect(response.statusCode, HttpStatus.ok);
+
+      expect(
+        await viewer.services.posts.get(_publicPostId),
+        isA<ApiError<PostDetail>>(),
+      );
+      expect(
+        await viewer.services.posts.profilePage(_publicUsername),
+        isA<ApiError<ProfilePostsPage>>(),
+      );
+      expect(
+        await viewer.services.posts.revisions(_publicPostId),
+        isA<ApiError<PostPage<PostRevision>>>(),
+      );
+      expect(
+        await viewer.services.interactions.comments(_publicPostId),
+        isA<ApiError<PostPage<PostComment>>>(),
+      );
+      expect(
+        await viewer.services.interactions.likes(_publicPostId),
+        isA<ApiError<PostPage<PostLike>>>(),
+      );
+      final mediaRequest = await blockClient.getUrl(mediaUrl);
+      mediaRequest.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $_viewerToken',
+      );
+      final mediaResponse = await mediaRequest.close();
+      await mediaResponse.drain<void>();
+      expect(mediaResponse.statusCode, HttpStatus.notFound);
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'blocked access, friend eligibility, account replacement, and expiry refetch safely',
     (tester) async {
       trustFixtureCertificate();
       final harness = realReadServices(token: _viewerToken);
@@ -302,12 +402,52 @@ void main() {
       await services.session.restore();
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(services.session.user!.id, isNot(firstViewer));
-      expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+      expect(find.byKey(const Key('post.unavailable')), findsNothing);
+      expect(find.text('Blocked private dayli.'), findsOneWidget);
 
       await services.session.sessionExpired();
       await tester.pumpAndSettle(const Duration(milliseconds: 100));
       expect(services.session.status, SessionStatus.signedOut);
       expect(find.byKey(const Key('post.unavailable')), findsOneWidget);
+    },
+    skip: !_fixtureReady,
+  );
+
+  testWidgets(
+    'public to private transition withdraws anonymous detail, archive, and media',
+    (tester) async {
+      trustFixtureCertificate();
+      final anonymous = realReadServices();
+      final before = await anonymous.services.posts.get(_publicPostId);
+      expect(before, isA<ApiSuccess<PostDetail>>());
+      final mediaUrl =
+          (before as ApiSuccess<PostDetail>).value.media.single.url!;
+
+      final author = realReadServices(token: _authorToken);
+      await author.services.session.restore();
+      final changed = await author.services.profiles.update(isPrivate: true);
+      expect(changed, isA<ApiSuccess<ProfileDetails>>());
+
+      expect(
+        await anonymous.services.posts.get(_publicPostId),
+        isA<ApiError<PostDetail>>(),
+      );
+      final mediaClient = HttpClient();
+      final archiveRequest = await mediaClient.getUrl(
+        Uri.parse('$_apiBaseUrl/api/v1/profiles/$_publicUsername/posts'),
+      );
+      final archiveResponse = await archiveRequest.close();
+      final archiveBody = await archiveResponse.transform(utf8.decoder).join();
+      expect(archiveResponse.statusCode, HttpStatus.ok);
+      expect(jsonDecode(archiveBody), {
+        'kind': 'restricted',
+        'username': _publicUsername,
+      });
+      addTearDown(() => mediaClient.close(force: true));
+      final request = await mediaClient.getUrl(mediaUrl);
+      final response = await request.close();
+      await response.drain<void>();
+      expect(response.statusCode, HttpStatus.notFound);
     },
     skip: !_fixtureReady,
   );

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 
-# Runs DPP-004 native journeys against a disposable Worker and PostgreSQL.
+# Runs the DPP-005 native matrix against a disposable Worker and PostgreSQL.
 # It requires an already-running Android emulator and never uses staging data.
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 compose_file="$repo_root/packages/db/docker-compose.yml"
-compose_project="dayli-mobile-dpp004-${$}-${RANDOM}"
-temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-mobile-dpp004.XXXXXX")"
+compose_project="${DPP005_COMPOSE_PROJECT:-dpp005}"
+temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-mobile-dpp005.XXXXXX")"
 api_log="$temporary_dir/api.log"
 media_log="$temporary_dir/media.log"
 api_pid=""
@@ -17,7 +17,7 @@ find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
 }
 
-postgres_port="$(find_free_port)"
+postgres_port="${DPP005_POSTGRES_PORT:-55442}"
 api_port="$(find_free_port)"
 media_port="$(find_free_port)"
 host_api_origin="https://localhost:${api_port}"
@@ -38,6 +38,10 @@ fixture_password="$(openssl rand -hex 18)"
 public_post_id="dpp-post-${suffix}"
 public_media_id="dpp-media-${suffix}"
 private_post_id="dpp-private-post-${suffix}"
+solo_post_id="dpp-solo-post-${suffix}"
+unreleased_post_id="dpp-unreleased-post-${suffix}"
+conflict_post_id="dpp-conflict-post-${suffix}"
+replacement_post_id="dpp-replacement-post-${suffix}"
 certificate="$temporary_dir/fixture.pem"
 key="$temporary_dir/fixture-key.pem"
 defines="$temporary_dir/flutter-defines.json"
@@ -75,7 +79,7 @@ trap cleanup EXIT INT TERM
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    echo "DPP-004 integration requires $1." >&2
+    echo "DPP-005 integration requires $1." >&2
     exit 1
   fi
 }
@@ -180,7 +184,7 @@ if ! curl --fail --silent "http://127.0.0.1:${media_port}/health" >/dev/null; th
 fi
 
 cd "$repo_root"
-echo 'Starting disposable DPP-004 PostgreSQL fixture'
+echo 'Starting disposable DPP-005 PostgreSQL fixture'
 docker compose -p "$compose_project" -f "$compose_file" up -d --wait
 
 echo 'Applying migrations to the disposable fixture'
@@ -237,7 +241,9 @@ private_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec 
   psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${private_email}'")"
 viewer_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
   psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${viewer_email}'")"
-if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" ]]; then
+second_viewer_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+  psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${second_viewer_email}'")"
+if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" || -z "$second_viewer_user_id" ]]; then
   echo 'Synthetic accounts were not persisted.' >&2
   exit 1
 fi
@@ -256,14 +262,29 @@ docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
     -v media_id="$public_media_id" -v media_key="$public_media_key" \
     -v media_size="$public_media_size" \
     -v private_author_id="$private_user_id" -v private_post_id="$private_post_id" \
-    -v blocked_id="$viewer_user_id" >/dev/null <<'SQL'
+    -v solo_post_id="$solo_post_id" -v unreleased_post_id="$unreleased_post_id" \
+    -v conflict_post_id="$conflict_post_id" -v replacement_post_id="$replacement_post_id" \
+    -v blocked_id="$viewer_user_id" -v friend_id="$second_viewer_user_id" >/dev/null <<'SQL'
 INSERT INTO public.posts
   (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at)
 VALUES
   (:'post_id', :'author_id', '2026-09-29', 'prompt-09-29', 'Synthetic released dayli.', 8,
    'friends', '2026-09-29T03:00:00Z', '2026-09-29T11:00:00Z'),
   (:'private_post_id', :'private_author_id', '2026-09-28', 'prompt-09-28', 'Blocked private dayli.', 6,
-   'friends', '2026-09-28T03:00:00Z', '2026-09-28T11:00:00Z');
+   'friends', '2026-09-28T03:00:00Z', '2026-09-28T11:00:00Z'),
+  (:'solo_post_id', :'author_id', '2026-09-27', 'prompt-09-27', 'Concealed solo dayli.', 5,
+   'solo', '2026-09-27T03:00:00Z', '2026-09-27T11:00:00Z'),
+  (:'unreleased_post_id', :'author_id', '2026-09-26', 'prompt-09-26', 'Concealed unreleased dayli.', 5,
+   'friends', '2026-09-26T03:00:00Z', '2090-09-26T11:00:00Z');
+INSERT INTO public.posts
+  (id, author_id, local_date, prompt_id, reflective_answer, rating, audience, accepted_at, released_at,
+   trashed_at, restore_until, trash_purge_due_at, trash_generation)
+VALUES
+  (:'conflict_post_id', :'author_id', '2026-09-20', 'prompt-09-20', 'Trashed original.', 5,
+   'friends', '2026-09-20T03:00:00Z', '2026-09-20T11:00:00Z', now(), now() + interval '7 days',
+   now() + interval '14 days', 1),
+  (:'replacement_post_id', :'author_id', '2026-09-20', 'prompt-09-20', 'Active replacement.', 7,
+   'friends', '2026-09-20T04:00:00Z', '2026-09-20T11:00:00Z', null, null, null, 0);
 INSERT INTO public.media_reservation
   (id, owner_id, object_key, content_type, byte_size, status, validated_at, expires_at)
 VALUES
@@ -272,6 +293,11 @@ INSERT INTO public.post_media (id, post_id, attachment_order, reservation_id)
 VALUES (:'media_id', :'post_id', 0, :'media_id');
 INSERT INTO public.relationship_blocks (blocker_id, blocked_id, blocked_at)
 VALUES (:'private_author_id', :'blocked_id', now());
+INSERT INTO public.friendships (user_id, friend_id, state, state_changed_at)
+VALUES (:'private_author_id', :'friend_id', 'active', now()),
+       (:'friend_id', :'private_author_id', 'active', now()),
+       (:'author_id', :'blocked_id', 'active', now()),
+       (:'blocked_id', :'author_id', 'active', now());
 DELETE FROM public.session WHERE user_id = :'author_id';
 SQL
 
@@ -286,6 +312,8 @@ export DPP004_PUBLIC_USERNAME="$public_username"
 export DPP004_PRIVATE_USERNAME="$private_username"
 export DPP004_PUBLIC_POST_ID="$public_post_id"
 export DPP004_PRIVATE_POST_ID="$private_post_id"
+export DPP005_SOLO_POST_ID="$solo_post_id"
+export DPP005_UNRELEASED_POST_ID="$unreleased_post_id"
 export DPP004_AUTHOR_TOKEN="$author_token"
 export DPP004_VIEWER_EMAIL="$viewer_email"
 export DPP004_VIEWER_PASSWORD="$viewer_password"
@@ -293,6 +321,7 @@ export DPP004_VIEWER_TOKEN="$viewer_token"
 export DPP004_EXPIRED_TOKEN="$public_token"
 export DPP004_SECOND_VIEWER_TOKEN="$second_viewer_token"
 export DPP004_CA_PEM_B64="$(base64 < "$certificate" | tr -d '\n')"
+export DPP005_CONFLICT_POST_ID="$conflict_post_id"
 node >"$defines" <<'NODE'
 const fs = require('node:fs');
 const keys = [
@@ -301,6 +330,8 @@ const keys = [
   'DPP004_PRIVATE_USERNAME',
   'DPP004_PUBLIC_POST_ID',
   'DPP004_PRIVATE_POST_ID',
+  'DPP005_SOLO_POST_ID',
+  'DPP005_UNRELEASED_POST_ID',
   'DPP004_AUTHOR_TOKEN',
   'DPP004_VIEWER_EMAIL',
   'DPP004_VIEWER_PASSWORD',
@@ -308,13 +339,18 @@ const keys = [
   'DPP004_EXPIRED_TOKEN',
   'DPP004_SECOND_VIEWER_TOKEN',
   'DPP004_CA_PEM_B64',
+  'DPP005_CONFLICT_POST_ID',
 ];
 fs.writeFileSync(1, JSON.stringify(Object.fromEntries(keys.map(key => [key, process.env[key]]))));
 NODE
 
-echo 'Running DPP-004 journeys on the Android emulator'
+echo 'Running DPP-005 public-profile journeys on the Android emulator'
 cd "$repo_root/apps/mobile"
 flutter test integration_test/public_profiles_real_test.dart \
   -d "$device_id" --dart-define-from-file="$defines"
 
-echo 'DPP-004 disposable native integration passed and fixture cleanup will now run.'
+echo 'Cold restarting the Android app for the real Trash journey'
+flutter test integration_test/trash_restore_real_test.dart \
+  -d "$device_id" --dart-define-from-file="$defines"
+
+echo 'DPP-005 disposable native integration passed and fixture cleanup will now run.'
