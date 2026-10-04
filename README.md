@@ -18,7 +18,7 @@ Dayli gives people a small place to pause at the end of the day. Write a reflect
 
 - [Staging](https://staging.dayli.agroupforcoders.com) is the shared development app. Its content and availability can change while the team is working.
 - The [Dayli docs](https://dayli-docs.agroupforcoders.com/docs) explain how to use, build, operate, and review the project.
-- [Team records](https://dayli-docs.agroupforcoders.com/docs/team) contain reconstructed weekly progress logs, the task breakdown and assignments, and a template for future meeting minutes. The [source](apps/docs/content/docs/team/index.mdx) explains the limits of the reconstruction.
+- [Team records](https://dayli-docs.agroupforcoders.com/docs/team) contain weekly progress records and a team contribution summary. Read the [source](apps/docs/content/docs/team/index.mdx) for the version in this repository.
 - The deployed docs can lag the current pull request. Read the [docs source](apps/docs/content/docs/index.mdx) for the version in this repository.
 
 ## Developing Dayli
