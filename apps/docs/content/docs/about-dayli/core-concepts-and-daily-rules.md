@@ -21,7 +21,7 @@ If you miss a day, you can't go back and submit a post for it. You can still wri
 
 Before posting, you choose who the post is for.
 
-- **Friends** means your friends can see it once it is released.
+- **Friends** means your friends can see it once it is released. If your profile is public, other visitors can see the released post too.
 - **Solo** means the post stays private to you.
 
 You don't have to share every day with other people. Sometimes you might just want to write things down for yourself.

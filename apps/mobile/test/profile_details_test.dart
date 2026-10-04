@@ -243,7 +243,7 @@ void main() {
       isPrivate: true,
     ));
     expect(
-      find.text('Only your friends can see your bio and streak.'),
+      find.text('Only friends can see your bio, streak, and released Friends posts.'),
       findsOneWidget,
     );
   });

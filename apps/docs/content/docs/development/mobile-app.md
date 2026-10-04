@@ -50,12 +50,12 @@ Keep construction in `main.dart` and behavior behind the narrow interface owned 
 
 ## Navigation and the session gate
 
-`lib/app/router.dart` defines navigation with `go_router`. Public welcome and authentication routes sit outside the signed-in shell. A `ShellRoute` provides the tab interface for home, friends, the current profile, and messages. Full-screen routes such as `/post`, `/settings`, and `/posts/:id` sit above that shell.
+`lib/app/router.dart` defines navigation with `go_router`. Public welcome and authentication routes sit outside the signed-in shell. Public profile (`/u/:username`) and post detail (`/posts/:id`) routes also open while signed out. A `ShellRoute` provides the tab interface for home, friends, the current profile, and messages. Private full-screen routes such as `/post` and `/settings` sit above that shell.
 
 The router listens to `SessionController` through `refreshListenable`. Its redirect handles four states:
 
-- `unknown` goes to `/splash` while stored session restoration runs.
-- `signedOut` may use public routes and otherwise goes to `/welcome`.
+- `unknown` goes to `/splash` while stored session restoration runs, except for public profile and post routes.
+- `signedOut` may use public routes, including profile and post detail, and otherwise goes to `/welcome`.
 - `needsUsernameSetup` stays in setup, with the current account export exception.
 - `signedIn` leaves public, splash, and setup routes for the home route.
 

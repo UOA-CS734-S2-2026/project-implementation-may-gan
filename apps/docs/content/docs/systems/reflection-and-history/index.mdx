@@ -48,13 +48,13 @@ The web profile route is `/u/{username}`. It renders profile cards that open `/u
 
 ![Dayli web profile history with an unreleased synthetic reflection](/images/product/web-profile-history.webp)
 
-There is an API and interface gap here. Profile and post-detail reads accept an optional session so the backend can return public-profile posts anonymously. The current web profile pages still sit behind username and session guards, and Flutter's profile-post client requires a bearer token. The generated web client also maps the API's private-profile `restricted` response to its unavailable state instead of rendering a dedicated restricted-profile archive. Public read policy is implemented in the API, but a complete signed-out public browsing journey is not.
+Profile and post-detail reads accept an optional session. Web and Flutter now use that path to show a public profile's released Friends posts to signed-out visitors. A private profile shows its username and a restricted state without an archive. Each client scopes cached posts to the current viewer, including an anonymous viewer, so changing accounts cannot reuse an earlier reader's projection.
 
 ## Post detail is the full reflection view
 
 `GET /api/v1/posts/{postId}` returns the post, stored prompt, answer, caption, rating, audience, timestamps, media, and edit metadata. The response never includes a tomorrow note. It also returns `likeCount`, `viewerHasLiked`, and `commentCount` from the post interaction projections. The remaining repository guide at `docs/dayli/likes-and-comments.md` explains those interactions. The author can open an active `solo` or unreleased post. Other readers need a released `friends` post that the current visibility policy allows.
 
-Like profile history, detail supports anonymous reads for a released `friends` post on a public profile. An unreadable post and an unknown ID both return `404`. The web uses `/u/{username}/{postId}` and replaces a stale username in the URL with the author's current one. Flutter uses `/posts/{id}`. Both current interfaces require a signed-in app journey even though the API's public read is optional-auth.
+Like profile history, detail supports anonymous reads for a released `friends` post on a public profile. An unreadable post and an unknown ID both return `404`. The web uses `/u/{username}/{postId}` and replaces a stale username in the URL with the author's current one. Flutter uses `/posts/{id}`. Both routes can open without a session; actions such as editing, liking, and commenting require one.
 
 Both clients fetch detail again when opening it. Flutter also reloads on pull-to-refresh. If a post moved to Trash or access ended, the clients show one unavailable state rather than explaining whether deletion, audience, friendship, or blocking caused it.
 
@@ -112,9 +112,9 @@ The implemented reflection and history experience currently includes:
 - full post detail with the stored prompt and rating;
 - owner editing with conflict detection;
 - permission-filtered revision history;
-- API-level public reads for released posts on public profiles.
+- signed-out public profile and post reads on web and Flutter for released posts on public profiles.
 
-It does not currently include reflection search, calendar browsing, mood analytics, recaps, a tomorrow-note reader, an anonymous client journey, an enabled Trash and restore journey, or an enabled self-service export. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
+It does not currently include reflection search, calendar browsing, mood analytics, recaps, a tomorrow-note reader, an enabled Trash and restore journey, or an enabled self-service export. Streaks and post counts exist on profiles, but they are not a reflection analytics system.
 
 ## Code and verification
 

@@ -85,7 +85,7 @@ Profile visibility controls what non-friends can read:
 
 `solo` and unreleased posts remain owner-only even when the profile is public.
 
-This table describes API policy. The current web profile route still uses signed-in username guards, and Flutter's profile client requires a bearer session. The API can return public-profile posts without a session, but the checked-in clients do not yet provide a complete anonymous browsing journey. Web also maps the API's generic restricted-profile archive response to an unavailable state instead of a dedicated private-profile view.
+Web and Flutter now allow signed-out visitors to open public profiles and released Friends posts. The web uses `/u/{username}` and `/u/{username}/{postId}`; Flutter accepts `/u/{username}` and `/posts/{id}` outside the signed-in shell. Both clients show a restricted private-profile view instead of loading its archive. Friend requests, messages, likes, and comments still require sign-in.
 
 ## The authoritative post predicate
 

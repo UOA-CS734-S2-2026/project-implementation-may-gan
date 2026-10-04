@@ -39,7 +39,7 @@ This separation matters most when something goes wrong. A component should be ab
 Next.js routes live under `apps/web/app`. A folder such as `(main)` is a route group. It chooses a shared layout but does not add text to the URL. For example:
 
 - `app/(main)/home/page.tsx` owns `/home`.
-- `app/(main)/u/[username]/page.tsx` owns a profile URL with a dynamic username.
+- `app/(public)/u/[username]/page.tsx` owns a profile URL with a dynamic username. Its route group also allows signed-out visitors to open public profiles and posts.
 - `app/(auth)/sign-in/page.tsx` owns `/sign-in` inside the authentication layout.
 - `app/api/[...path]/route.ts` is an optional browser API proxy route, not a product screen.
 
@@ -97,7 +97,7 @@ Dayli protects private query data in two ways:
 1. `MessagingProvider` keys its query scope by `user.id`. An account change unmounts the old `QueryProvider`, which cancels requests and clears its `QueryClient`.
 2. Feature keys include the current user ID. The feed uses `["feed", userId]`, while post and profile key factories put `userId` before the resource identifier.
 
-Queries are disabled until a real session user exists. The string `"anonymous"` only gives hooks a stable key shape while disabled. When you add private server state, include identity in its query and mutation keys even when it already sits inside the private provider. The provider handles the account lifetime; the key prevents records from different viewers colliding within that lifetime.
+Private queries, such as the feed, wait for a real session user. Public profile and post queries can run after session resolution without a signed-in user; their keys use `"anonymous"` for that projection. When you add private server state, include identity in its query and mutation keys even when it already sits inside the private provider. The provider handles the account lifetime; the key prevents records from different viewers colliding within that lifetime.
 
 Invalidate through the feature key factory where one exists. Broad string keys are present in older code, but a new feature should not invent a second key shape for the same records.
 
