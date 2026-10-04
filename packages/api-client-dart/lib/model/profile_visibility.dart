@@ -10,7 +10,7 @@
 
 part of openapi.api;
 
-/// `private` shows the bio and streak to active friends only. Posts are always friends only.
+/// `private` shows the bio, streak, and released `friends` posts to active friends only. `public` also shows them to other readers, including signed-out ones. `solo` and unreleased posts stay owner-only either way.
 enum ProfileVisibility {
   public._(r'public'),
   private._(r'private'),

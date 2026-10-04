@@ -1,6 +1,6 @@
 # Export release readiness review
 
-Status: **not approved for activation**. The API worker, scheduled execution, native client, and web entry remain disabled. This review records evidence and outstanding decisions; it does not change any runtime flag or authorize a production migration.
+Status: **production activation remains on hold**. The owner approved a separately reviewed staging-only activation for all staging accounts on October 4, 2026, accepting that the real 24-hour expiry and second cleanup pass cannot be observed tonight. A staging deployment and tester build must still pass review and checks. This decision does not authorize a production migration or production export execution.
 
 ## Evidence checked
 
@@ -22,11 +22,17 @@ After the reviewed inactive deployment, provision only a synthetic account, set 
 
 No staging export has run yet. The request and cleanup windows, credentials, permissions, archive bytes, and provider behavior remain unverified until the staged test actually passes. Neither this staging authorization nor its evidence permits production activation.
 
+## Reviewed staging activation plan
+
+The owner explicitly authorized exports for all staging accounts, the staging web entry, and a new Android staging tester build before live delayed cleanup evidence completes. The synthetic-only gate remains available, but the broader gate requires the exact staging scope, separate `lifecycle_worker` binding, and `STAGING_EXPORT_ALL_USERS_APPROVED=all-staging-accounts`. API routes and scheduled build work open only when that staging variable is present. The web page also requires the approved staging variable, browser API proxy, and exact staging web origin. Android export is compiled only into a tester build with the exact staging API origin and `DAYLI_STAGING_EXPORT_APPROVED=true`. Existing installed builds and production entry points remain unchanged.
+
+Before enabling the variable, verify the staging release and test the existing synthetic account where possible. The owner accepted the remaining 48-hour live expiry and second-pass gap for staging only. Do not claim an accelerated database-clock test proves real late provider completion. To stop new staging exports, keep `STAGING_EXPORT_CLEANUP_ONLY_APPROVED=continue-existing-cleanup`, remove `STAGING_EXPORT_ALL_USERS_APPROVED`, and redeploy API and web together. The release captures both approval values once and deploys API and web with that same captured mode. GitHub Actions does not treat later environment-variable edits as immediate revocation. If a release is running when the owner removes approval, wait for it to finish, dispatch a fresh coordinated rollback release, and verify both deployments reflect the new mode. Do not consider a variable edit alone a rollback. This retains unscoped durable cleanup for archives already accepted. Android tester APKs cannot be remotely disabled, but their API requests then return 503; testers should uninstall them. Do not remove cleanup-only approval until database and R2 evidence confirms existing tasks and multipart uploads are resolved. An operator must investigate unresolved incidents rather than delete them to declare success.
+
 ## Rollout review and remaining gates
 
-1. Leave `exportExecutionEnabled`, `nativeExportEnabled`, and the web `ExportPanel` flag false until an explicit owner activation decision. A successful deployment alone must not turn any of them on.
+1. Keep the production `exportExecutionEnabled` constant false and the ordinary production web and mobile builds off. Stage-only flags are separate from a production activation decision.
 2. Before production execution, verify the production database schema and the restricted worker and app roles, the intended R2 bucket, scoped provider credentials, object namespace, multipart behavior, and cleanup permissions against the actual deployment. The dedicated proof bucket and generic staging Hyperdrive check cannot substitute for these checks. Do not use real account data for provider proof.
 3. Demonstrate a complete authenticated request, build, publication, bounded download, expiry, and cleanup journey against a reviewed isolated deployment, including a late provider completion after an earlier successful cleanup pass. The current local fault injection covers the cleanup logic, but no live delayed-completion or deployed end-to-end export has been demonstrated.
-4. Obtain a separate owner approval for the precise environment and staged activation sequence. Production migrations, legal publication, export activation, and real-user-data tests are not authorized by this evidence. Keep a rollback path that disables all three entry points and continues durable cleanup of already owned synthetic archives.
+4. Obtain a separate owner approval for production configuration and activation. The staging authorization does not authorize production migrations, legal publication, or real-user-data testing in production. Keep rollback controls for staging and production that stop new requests but retain durable cleanup for archives already owned.
 
 The release decision remains **hold** until the deployment-specific and end-to-end checks are satisfied and the owner explicitly approves activation. The emulator-only decision changes the device evidence requirement, not the other gates.

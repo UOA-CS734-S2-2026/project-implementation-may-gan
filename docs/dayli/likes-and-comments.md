@@ -20,9 +20,24 @@ Likes and comments show a public username, so every interaction route also uses 
 - `PATCH /api/v1/posts/{postId}/comments/{commentId}` lets the commenter change the text. The comment gets an `editedAt` time; saving the same text again changes nothing.
 - `DELETE /api/v1/posts/{postId}/comments/{commentId}` lets the commenter or the post's author delete a comment, which sets `deleted_at` and `deleted_by`. Deleting a top-level comment hides its replies. Deleting again returns `204`.
 
-## Post detail
+## Counts
 
-`GET /api/v1/posts/{postId}` adds `likeCount`, `viewerHasLiked`, and `commentCount`. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. The feed and profile cards don't show counts yet.
+Post detail, the feed, and profile posts carry `likeCount`, `viewerHasLiked`, and `commentCount`. `readInteractionCounts` in `posts/shared` reads them for a whole page in three grouped queries. `commentCount` uses the same rule as the comment list (`buildDrizzleCommentVisibilityFilter` in `permissions`), so it matches what the viewer can open. Both clients show the counts on feed and profile cards. Profile stats carry `loved`, the likes on the person's posts that aren't in Trash. On Flutter, liking, unliking, commenting, or deleting a comment on post detail tells the list that opened the post to reload when you go back; a profile reloads its details too, so Loved stays current.
+
+## Clients
+
+Web (`apps/web/features/interactions`) and Flutter (`lib/posts/post_comments.dart`, `post_likers_screen.dart`) show the heart, like count, and comments below the post on post detail.
+
+- Liking shows the change at once, then keeps the server's count. A refused like is put back with a message.
+- The like count opens who liked the post.
+- Comments are grouped into threads as pages arrive, with **Show more comments** for the next page. Replies are offered on top-level comments only.
+- A comment box keeps one `clientCommentId` for its draft until the comment is posted. A failed or offline send keeps the text, and sending again reuses the ID, so nothing is posted twice. Changing the text after a failure starts a new ID.
+- Edit is offered only when `viewerCanEdit` is true, and delete only when `viewerCanDelete` is true. Deleting asks first, and deleting a top-level comment removes its replies from view.
+- Comments posted on the screen are kept apart from the loaded pages until paging reaches them, so the pages keep the API's order and nothing appears twice. A new reply shows under its comment, with replies sorted by when they were written. A new top-level comment shows after **Show more comments**, and the client says it went after the comments that haven't loaded.
+- Comment length is counted in Unicode code points, as the API counts it, so emoji joined into one symbol count once per code point. An edit over the limit shows the limit and can't be saved.
+- If the count refresh after a comment change finds the post gone, Flutter shows the post as unavailable. The refresh never replaces a like that is still saving, or one made after it started.
+- After a comment is added or deleted, both clients read the post's count from the server, because deleting a top-level comment also hides replies on pages that aren't loaded. Web keeps comments in a TanStack Query cache keyed by account. Flutter reloads them with the post on every open and refresh.
+- Changing the reply target after a failed send starts a new `clientCommentId`, because the failed send may have reached the server with the old target.
 
 ## Deletion and retention
 
@@ -30,4 +45,4 @@ Moving a post to Trash hides its likes and comments, because every route checks 
 
 ## Tests
 
-Route tests sit beside each action. The `*.repository.integration.test.ts` files run through the restricted `app` role with the fixture in `apps/api/test/support/interactions/interaction-fixtures.ts`. They cover idempotent and concurrent likes, refusals for strangers, blocks, solo, unreleased, and deleted posts, liker and comment ordering and paging, block filtering in both directions, deleted threads, retries, reused and racing client IDs, one-level replies, edits by the commenter only, and moderation by the post's author.
+Route tests sit beside each action. The `*.repository.integration.test.ts` files run through the restricted `app` role with the fixture in `apps/api/test/support/interactions/interaction-fixtures.ts`. They cover idempotent and concurrent likes, refusals for strangers, blocks, solo, unreleased, and deleted posts, liker and comment ordering and paging, block filtering in both directions, deleted threads, retries, reused and racing client IDs, one-level replies, edits by the commenter only, and moderation by the post's author. Web coverage is `apps/web/tests/interactions/PostInteractions.test.tsx`. Flutter coverage is `interactions_client_test.dart` and `post_interactions_test.dart`.

@@ -38,17 +38,31 @@ class PostingStreak {
 
 /// Counts shown on a profile.
 class ProfileStats {
-  const ProfileStats({required this.posts, required this.friends});
+  const ProfileStats({
+    required this.posts,
+    required this.friends,
+    this.loved = 0,
+  });
 
   final int posts;
   final int friends;
+
+  /// Likes on this person's posts that haven't been deleted.
+  final int loved;
 
   static ProfileStats? tryParse(Object? json) {
     if (json is! Map<String, Object?>) return null;
     final posts = json['posts'];
     final friends = json['friends'];
     if (posts is! int || friends is! int) return null;
-    return ProfileStats(posts: posts, friends: friends);
+    return ProfileStats(
+      posts: posts,
+      friends: friends,
+      loved: switch (json['loved']) {
+        final int loved when loved >= 0 => loved,
+        _ => 0,
+      },
+    );
   }
 }
 

@@ -86,24 +86,52 @@ test("binds the separate worker only on staging and requires complete synthetic 
   assert.equal(gated.api.vars.STAGING_EXPORT_PROOF_APPROVED, undefined);
   assert.equal(gated.probe.hyperdrive, undefined);
 
+  const mediaVars = { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" };
   const proofVars = {
     STAGING_EXPORT_PROOF_APPROVED: "synthetic-only",
     STAGING_EXPORT_PROOF_USER_ID: "synthetic-owner-123",
     STAGING_EXPORT_PROOF_BUILD_UNTIL: "2026-10-04T00:30:00.000Z",
     STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER: "2026-10-06T01:00:00.000Z",
   };
-  assert.deepEqual(createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
+  assert.deepEqual(createStagingWorkerConfigs({ ...input, mediaVars, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
     { API_RATE_LIMIT_SCOPE: "staging", BETTER_AUTH_BASE_URL: input.authApiOrigin,
       NOTIFICATION_PUBLISHERS_ENABLED: "false", DIRECT_MESSAGE_SEND_LIMIT: "30",
       PUBLIC_API_BASE_URL: input.authApiOrigin,
       BETTER_AUTH_TRUSTED_ORIGINS: `${input.authApiOrigin},${input.authWebOrigin}`,
-      ...input.authVars, ...proofVars });
+      ...input.authVars, ...mediaVars, ...proofVars });
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: proofVars }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: input.hyperdriveId }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
     exportProofVars: { STAGING_EXPORT_PROOF_USER_ID: proofVars.STAGING_EXPORT_PROOF_USER_ID } }));
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
     exportProofVars: { ...proofVars, STAGING_EXPORT_PROOF_APPROVED: "all-accounts" } }));
+});
+
+test("explicit all-staging and cleanup-only modes require the separate worker and R2 bindings", () => {
+  const workerId = "d".repeat(32);
+  const mediaVars = { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" };
+  const activated = { ...input, exportWorkerHyperdriveId: workerId, mediaVars };
+  const approval = { STAGING_EXPORT_ALL_USERS_APPROVED: "all-staging-accounts" };
+  const cleanup = { STAGING_EXPORT_CLEANUP_ONLY_APPROVED: "continue-existing-cleanup" };
+  const all = createStagingWorkerConfigs({ ...activated,
+    exportProofVars: { ...approval, ...cleanup } });
+  assert.equal(all.api.vars.STAGING_EXPORT_ALL_USERS_APPROVED, "all-staging-accounts");
+  assert.equal(all.api.vars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED, "continue-existing-cleanup");
+  assert.equal(all.probe.vars, undefined);
+  assert.equal(createStagingWorkerConfigs({ ...activated,
+    exportProofVars: cleanup }).api.vars.STAGING_EXPORT_ALL_USERS_APPROVED, undefined);
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+    exportProofVars: cleanup }), /complete R2 bindings/);
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
+    exportProofVars: approval }), /complete R2 bindings/);
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: approval }));
+  assert.throws(() => createStagingWorkerConfigs({ ...input, exportProofVars: cleanup }));
+  assert.throws(() => createStagingWorkerConfigs({ ...activated,
+    exportProofVars: { STAGING_EXPORT_ALL_USERS_APPROVED: "true" } }));
+  assert.throws(() => createStagingWorkerConfigs({ ...activated,
+    exportProofVars: { STAGING_EXPORT_CLEANUP_ONLY_APPROVED: "wrong" } }));
+  assert.throws(() => createStagingWorkerConfigs({ ...activated,
+    exportProofVars: { ...approval, STAGING_EXPORT_PROOF_USER_ID: "synthetic-owner-123" } }));
 });
 
 test("rejects an unreviewed Worker target or Hyperdrive ID", () => {

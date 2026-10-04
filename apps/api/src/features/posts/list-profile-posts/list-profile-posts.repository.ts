@@ -4,6 +4,7 @@ import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdr
 import { buildDrizzleActiveAccountFilter, buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { postEdited } from "../shared/post-edited";
 import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
+import { readInteractionCounts } from "../shared/post-interaction-counts";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
 import type { ProfilePost, ProfilePostsPage, RestrictedProfilePosts } from "./list-profile-posts.contract";
 
@@ -122,6 +123,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
       const page = rows.slice(0, limit);
       const last = page.at(-1);
       const media = await readAttachedMedia(database, page.map((row) => row.id));
+      const interactions = await readInteractionCounts(database, viewerId, page.map((row) => row.id));
       return {
         accessTier: authorized ? "authorized" : "public",
         items: page.map((row): ProfilePostRecord => ({
@@ -137,6 +139,7 @@ export function createPostgresProfilePostsRepository(database: DayliDatabase): P
           releasedAt: row.releasedAt.toISOString(),
           released: row.releasedAt <= now,
           edited: row.edited,
+          ...interactions(row.id),
           media: media.get(row.id) ?? [],
         })),
         hasMore,

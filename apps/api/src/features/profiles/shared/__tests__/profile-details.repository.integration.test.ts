@@ -90,6 +90,7 @@ function requireLocalTestUrl(value: string): string {
 
   afterAll(async () => {
     try {
+      await migrator.client`delete from public.post_likes where user_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.posts where author_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.profile_avatars where user_id = any(${userIds}::text[])`;
       await migrator.client`delete from public.media_reservation where owner_id = any(${userIds}::text[])`;
@@ -115,7 +116,7 @@ function requireLocalTestUrl(value: string): string {
         listeningTo: null,
         avatarUrl: null,
         streak: { current: 2, longest: 2, lastPostDate: "2026-09-29", postedToday: false, asOf: "2026-09-30" },
-        stats: { posts: 3, friends: 1 },
+        stats: { posts: 3, friends: 1, loved: 0 },
         owner: { profileVisibility: "private", usernameChangeAvailableAt: null },
       });
     });
@@ -134,6 +135,18 @@ function requireLocalTestUrl(value: string): string {
         .resolves.toMatchObject({ streak: { current: 2, longest: 2 } });
       await expect(findProfileDetails(app.db, users.stranger, handle("privateOwner"), now))
         .resolves.toMatchObject({ detailsVisible: false, bio: null, mbti: null, whatIDo: null, streak: null, stats: null, owner: null });
+    });
+
+    it("counts likes on posts that aren't in Trash as loved", async () => {
+      await migrator.client`
+        insert into public.post_likes (post_id, user_id)
+        values (${id("post-2026-09-29")}, ${users.friend}), (${id("post-2026-09-28")}, ${users.privateOwner}),
+          (${id("post-deleted")}, ${users.friend})
+      `;
+
+      await expect(findProfileDetails(app.db, users.friend, handle("privateOwner"), now))
+        .resolves.toMatchObject({ stats: { posts: 3, loved: 2 } });
+      await migrator.client`delete from public.post_likes where user_id = any(${userIds}::text[])`;
     });
 
     it("hides the profile across a block, in both directions", async () => {

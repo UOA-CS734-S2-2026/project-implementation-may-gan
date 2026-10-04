@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/core/Button";
 import { Skeleton } from "@/components/ui/core/Skeleton";
+import { PostLikeBar } from "@/features/interactions/like-post/PostLikeBar";
+import { PostComments } from "@/features/interactions/post-comments/PostComments";
 import { DeletePostDialog } from "@/features/posts/delete-post/DeletePostDialog";
 import { useDeletePostMutation } from "@/features/posts/delete-post/use-delete-post-mutation";
 import { PostRevisions } from "@/features/posts/list-post-revisions/PostRevisions";
@@ -136,6 +138,14 @@ export function PostDetailView({ username, postId }: { username: string; postId:
     // Refetch once after the initial authenticated response settles. The action itself always needs another click.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent, query.isSuccess, user?.id]);
+  // The tapped action is never replayed. A comment intent puts the cursor in the
+  // comment box; a like intent just lands on the post. Either way the link is cleaned up.
+  const readyForIntent = Boolean(user && intent && post);
+  useEffect(() => {
+    if (!readyForIntent) return;
+    if (intent === "comment") document.querySelector<HTMLTextAreaElement>("textarea[data-composer='post-comment']")?.focus();
+    router.replace(pathname);
+  }, [intent, pathname, readyForIntent, router]);
 
   // Keep one address per post: a link with a stale or differently cased
   // username is replaced with the author's current one.
@@ -249,6 +259,13 @@ export function PostDetailView({ username, postId }: { username: string; postId:
 
       {showingHistory && post.edited && <PostRevisions key={post.id} postId={post.id} viewerIsAuthor={post.viewerIsAuthor} />}
 
+      {user && (
+        <>
+          <PostLikeBar post={post} />
+          <PostComments postId={post.id} commentCount={post.commentCount} />
+        </>
+      )}
+
       <DeletePostDialog
         open={confirmingDelete}
         isPending={remove.isPending}
@@ -260,27 +277,29 @@ export function PostDetailView({ username, postId }: { username: string; postId:
         })}
       />
 
-      {user && intent && (
-        <p role="status" className="rounded-xl bg-background-accent px-4 py-3 text-sm text-foreground-accent">
-          You are signed in. {intent === "like" ? "Likes" : "Comments"} are not available in this version yet. Nothing was submitted.
-        </p>
+      {!user && (
+        <div className="space-y-3 border-t border-foreground/10 pt-5">
+          <p className="text-sm text-foreground-secondary">
+            {post.likeCount === 1 ? "1 like" : `${post.likeCount} likes`} · {post.commentCount === 1 ? "1 comment" : `${post.commentCount} comments`}
+          </p>
+          <div className="flex flex-wrap gap-2" aria-label="Post actions">
+            <Button
+              href={signInForPublicAction(pathname, "like")}
+              onClick={() => rememberPostIntent(pathname, "like")}
+              variant={{ color: "accent", size: "sm", weight: "secondary" }}
+            >
+              like
+            </Button>
+            <Button
+              href={signInForPublicAction(pathname, "comment")}
+              onClick={() => rememberPostIntent(pathname, "comment")}
+              variant={{ color: "background", size: "sm", weight: "secondary" }}
+            >
+              comment
+            </Button>
+          </div>
+        </div>
       )}
-      <div className="flex flex-wrap gap-2 border-t border-foreground/10 pt-5" aria-label="Post actions">
-        <Button
-          href={user ? undefined : signInForPublicAction(pathname, "like")}
-          onClick={user ? () => { rememberPostIntent(pathname, "like"); router.replace(`${pathname}?intent=like`); } : () => rememberPostIntent(pathname, "like")}
-          variant={{ color: "accent", size: "sm", weight: "secondary" }}
-        >
-          like
-        </Button>
-        <Button
-          href={user ? undefined : signInForPublicAction(pathname, "comment")}
-          onClick={user ? () => { rememberPostIntent(pathname, "comment"); router.replace(`${pathname}?intent=comment`); } : () => rememberPostIntent(pathname, "comment")}
-          variant={{ color: "background", size: "sm", weight: "secondary" }}
-        >
-          comment
-        </Button>
-      </div>
     </article>
   );
 }

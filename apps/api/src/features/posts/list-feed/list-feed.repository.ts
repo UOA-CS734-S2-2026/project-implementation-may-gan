@@ -4,6 +4,7 @@ import { getAucklandDay } from "@dayli/domain";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
 import { postEdited } from "../shared/post-edited";
+import { readInteractionCounts } from "../shared/post-interaction-counts";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
 import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
 import type { FeedPage, FeedPost } from "./list-feed.contract";
@@ -87,6 +88,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
       const last = page.at(-1);
       // One query for the whole page, only for posts the filter allowed.
       const media = await readAttachedMedia(database, page.map((row) => row.id));
+      const interactions = await readInteractionCounts(database, viewerId, page.map((row) => row.id));
       return {
         items: page.map((row): FeedPostRecord => ({
           id: row.id,
@@ -100,6 +102,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           acceptedAt: row.acceptedAt.toISOString(),
           releasedAt: row.releasedAt.toISOString(),
           edited: row.edited,
+          ...interactions(row.id),
           media: media.get(row.id) ?? [],
         })),
         feedDate: yesterday,

@@ -243,7 +243,9 @@ void main() {
       isPrivate: true,
     ));
     expect(
-      find.text('Only your friends can see your bio and streak.'),
+      find.text(
+        'Only friends can see your bio, streak, and released Friends posts.',
+      ),
       findsOneWidget,
     );
   });
@@ -283,7 +285,7 @@ void main() {
             longest: 5,
             postedToday: true,
           ),
-          stats: const ProfileStats(posts: 4, friends: 13),
+          stats: const ProfileStats(posts: 4, friends: 13, loved: 27),
         ),
       }),
     );
@@ -291,6 +293,7 @@ void main() {
 
     expect(find.bySemanticsLabel('4 Posts'), findsOneWidget);
     expect(find.bySemanticsLabel('13 Friends'), findsOneWidget);
+    expect(find.bySemanticsLabel('27 Loved'), findsOneWidget);
     expect(find.bySemanticsLabel('3 Day streak'), findsOneWidget);
     semantics.dispose();
   });
