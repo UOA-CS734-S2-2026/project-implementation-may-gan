@@ -252,13 +252,7 @@ class _AuthScreenState extends State<AuthScreen> {
               : "Sign in to post today's dayli.",
           style: DayliText.sans(context, color: colors.foregroundSecondary),
         ),
-        const SizedBox(height: 8),
-        LegalLinks(
-          center: true,
-          compact: true,
-          draftMarker: _terms == null,
-          notice: false,
-        ),
+        const SizedBox(height: 12),
         const SizedBox(height: 20),
         GoogleSignInButton(
           onPressed: _busy || (_signUp && (!_termsLoaded || _termsUnavailable))
@@ -432,6 +426,12 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
           ),
         ],
+        LegalLinks(
+          center: true,
+          compact: true,
+          draftMarker: _terms == null,
+          notice: false,
+        ),
         const SizedBox(height: 28),
         DayliButton(
           key: const Key('auth.submit'),
