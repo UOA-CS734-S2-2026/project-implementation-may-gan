@@ -129,9 +129,9 @@ See [Messaging setup and verification](/docs/systems/messaging/setup-and-verific
 
 ## Synthetic smoke failures
 
-The staging authentication smoke reports an allowlisted category such as `credentials_missing`, `return_path_lost`, `login_failed`, `session_cookie_missing`, `session_cookie_attributes`, `logout_failed`, `unexpected_host`, or `cleanup_failed`.
+The staging authentication smoke reports fixed categories. On a failed sign-in, `login_no_request` means the browser did not submit the expected POST, and `login_no_response` means it submitted without receiving a response before navigation timed out. `login_http_401`, `login_http_429`, and `login_http_error` identify response classes without exposing the body. `login_cookie_missing` means a successful response did not leave the expected secure session cookie. `login_navigation_timeout` means the cookie exists but the browser did not reach the protected page. A failure to inspect cookies reports `login_observation_failed`. Other phases can report `credentials_missing`, `return_path_lost`, `session_cookie_missing`, `session_cookie_attributes`, `logout_failed`, `unexpected_host`, or `cleanup_failed`.
 
-Use the category to choose the layer. A manual dispatch reports no triggering release revision, while a post-release run can report the captured release and automation revisions. Neither proves which revision was still deployed when the browser started.
+Use the category to choose the layer. A failed sign-in can leave the browser on `/sign-in?next=...`. Cleanup accepts that trusted pathname, then verifies the expected `next` value instead of rejecting its query string. A manual dispatch reports no triggering release revision, while a post-release run can report the captured release and automation revisions. Neither proves which revision was still deployed when the browser started.
 
 Reproduce runner logic locally with:
 

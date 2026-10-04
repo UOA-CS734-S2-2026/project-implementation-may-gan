@@ -56,6 +56,9 @@ lib/model/daily_post_tomorrow_note.dart
 lib/model/daily_post_voice_memo.dart
 lib/model/daily_prompt_response.dart
 lib/model/deletion_grant_request.dart
+lib/model/direct_message_send_quota_error.dart
+lib/model/direct_message_send_quota_error_error.dart
+lib/model/direct_message_send_quota_error_error_details.dart
 lib/model/direct_pair_lookup.dart
 lib/model/edit_message_request.dart
 lib/model/feed_page.dart
@@ -87,9 +90,13 @@ lib/model/media_reservation_status.dart
 lib/model/media_reservation_upload.dart
 lib/model/media_validation_failure_reason.dart
 lib/model/message.dart
+lib/model/message_creation_rate_limit_error.dart
 lib/model/message_reactions_inner.dart
 lib/model/message_reactions_inner_reactors_inner.dart
 lib/model/message_reply_preview.dart
+lib/model/mood_day.dart
+lib/model/mood_history.dart
+lib/model/mood_period_summary.dart
 lib/model/on_this_day_memories.dart
 lib/model/on_this_day_memory.dart
 lib/model/on_this_day_memory_prompt.dart

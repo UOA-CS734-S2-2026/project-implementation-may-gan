@@ -30,10 +30,10 @@ function isTrustedUrl(value) {
   }
 }
 
-function isPath(page, pathname, search = "") {
+function isPath(page, pathname, search) {
   try {
     const url = new URL(page.url());
-    return url.origin === STAGING_ORIGIN && url.pathname === pathname && url.search === search;
+    return url.origin === STAGING_ORIGIN && url.pathname === pathname && (search === undefined || url.search === search);
   } catch {
     return false;
   }
@@ -122,6 +122,35 @@ async function verifySignInDestination(page, unexpectedHost, phaseBaseline) {
   }
 }
 
+function isTrustedSignInRequest(request) {
+  try {
+    const url = new URL(request.url());
+    return url.origin === STAGING_ORIGIN && url.pathname === "/api/auth/sign-in/email"
+      && url.search === "" && request.method() === "POST";
+  } catch { return false; }
+}
+
+function observeSignIn(page) {
+  const observation = { requested: false, status: null };
+  page.on("request", (request) => {
+    if (isTrustedSignInRequest(request)) observation.requested = true;
+  });
+  page.on("response", (response) => {
+    if (isTrustedSignInRequest(response.request())) observation.status = response.status();
+  });
+  return observation;
+}
+
+async function loginFailureCategory(context, observation) {
+  if (!observation.requested) return "login_no_request";
+  if (observation.status === null) return "login_no_response";
+  if (observation.status === 401) return "login_http_401";
+  if (observation.status === 429) return "login_http_429";
+  if (observation.status < 200 || observation.status >= 300) return "login_http_error";
+  const cookies = await context.cookies(STAGING_ORIGIN);
+  return cookies.some(({ name }) => name === SESSION_COOKIE) ? "login_navigation_timeout" : "login_cookie_missing";
+}
+
 async function verifySessionCookie(context, unexpectedHost, phaseBaseline) {
   const cookie = (await context.cookies(STAGING_ORIGIN)).find(({ name }) => name === SESSION_COOKIE);
   checkPhase(unexpectedHost, phaseBaseline);
@@ -148,6 +177,7 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
   checkPhase(unexpectedHost, journeyBaseline);
   // The server can establish a cookie before this navigation becomes visible.
   // Cleanup must therefore assume a session exists from submission onward.
+  const signIn = observeSignIn(page);
   markSessionPossible();
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   checkPhase(unexpectedHost, journeyBaseline);
@@ -155,7 +185,11 @@ async function defaultJourney({ context, page, unexpectedHost, journeyBaseline, 
     await page.waitForURL((url) => url.origin === STAGING_ORIGIN && url.pathname === "/settings" && url.search === "?smoke=auth", { timeout: STEP_TIMEOUT_MS });
     checkPhase(unexpectedHost, journeyBaseline);
   } catch {
-    throw failure(unexpectedHost.count > 0 ? "unexpected_host" : "login_failed");
+    if (unexpectedHost.count > journeyBaseline) throw failure("unexpected_host");
+    let category;
+    try { category = await loginFailureCategory(context, signIn); }
+    catch { throw failure("login_observation_failed"); }
+    throw failure(category);
   }
   await verifySettings(page, unexpectedHost, journeyBaseline);
 

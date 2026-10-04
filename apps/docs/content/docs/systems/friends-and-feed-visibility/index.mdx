@@ -85,7 +85,7 @@ Profile visibility controls what non-friends can read:
 
 `solo` and unreleased posts remain owner-only even when the profile is public.
 
-This table describes API policy. The current web profile route still uses signed-in username guards, and Flutter's profile client requires a bearer session. The API can return public-profile posts without a session, but the checked-in clients do not yet provide a complete anonymous browsing journey. Web also maps the API's generic restricted-profile archive response to an unavailable state instead of a dedicated private-profile view.
+Web and Flutter now expose this policy through signed-out profile and post routes. They render public details and released `friends` posts without a session, and render the API's restricted result as a private-profile state. If the reader chooses **add friend**, **message**, **like**, or **comment**, the app sends them through sign-in and back to the same public route. It does not perform the write automatically after sign-in.
 
 ## The authoritative post predicate
 
@@ -97,6 +97,7 @@ For normal reads it first excludes posts in Trash and authors whose account life
 - another reader needs a released `friends` post;
 - feed and private signed-download actions require an active reciprocal friendship;
 - detail, profile, and parent-authorized media routes also allow a public-profile read;
+- likes and comments use the narrower preview action, so only the owner or an active friend can interact;
 - export is owner-only;
 - media must still have a current, attached `post_media` row.
 
@@ -148,6 +149,12 @@ Public-profile readers receive a Dayli content route instead of an anonymous bea
 
 The storage, refresh, and public streaming paths are covered in [Media uploads and storage](/docs/systems/media-uploads-and-storage).
 
+## Interactions do not become public
+
+The likes and comments routes begin with the same current-post checks, but intentionally stop at the friend boundary. They require a signed-in account with a username. The post owner and active friends can like, list likers, read comments, add top-level comments or one-level replies, and perform the edits or deletions they own. The post owner may also remove a comment from their post.
+
+An anonymous or signed-in stranger may read a released post through a public profile, but receives no interaction access. The post detail response still gives that reader safe count fields, while list and write routes return the same concealed not-found result used for unreadable posts. Current web and Flutter post pages do not connect their visible interaction buttons to these routes yet.
+
 ## Edits, deletion, and account lifecycle
 
 Visibility is evaluated against the post's current audience. An author can change `friends` to `solo`, which removes the current post from other readers on their next request. Revisions keep older content, but a non-author can read only revisions that were themselves shared with friends. A solo-era version does not become visible merely because the current post later changes to `friends`.
@@ -158,7 +165,7 @@ The authentication system supplies the verified actor for all signed-in reads an
 
 ## Profiles and discovery
 
-Profile detail has a wider job than the feed. It combines viewer-specific biography fields, activity summaries, username changes, profile photos, and a narrow username-search exception for finding private accounts. [Profiles and discovery](/docs/systems/friends-and-feed-visibility/profiles-and-discovery) covers those rules and the current client gaps.
+Profile detail has a wider job than the feed. It combines viewer-specific biography fields, activity summaries, username changes, profile photos, and a narrow username-search exception for finding private accounts. [Profiles and discovery](/docs/systems/friends-and-feed-visibility/profiles-and-discovery) covers those rules and the signed-out client journey.
 
 ## What changed from the older records
 
@@ -176,6 +183,6 @@ The first feed and profile records described profile posts as friend-only and re
 
 ## Code and verification
 
-Relationship actions are under `apps/api/src/features/relationships`; post permissions are under `apps/api/src/features/permissions`; feed, detail, revision, and profile archive actions are under `apps/api/src/features/posts`. The schema is in `packages/db/src/schema/relationships.ts` and `packages/db/src/schema/index.ts`. Web friend and feed screens live under `apps/web/app/(main)` and `apps/web/features/feed`. Flutter uses `apps/mobile/lib/friends`, `home`, `profile`, and `posts`.
+Relationship actions are under `apps/api/src/features/relationships`; post permissions are under `apps/api/src/features/permissions`; feed, detail, revision, and profile archive actions are under `apps/api/src/features/posts`; likes and comments are under `apps/api/src/features/interactions`. The schema is in `packages/db/src/schema/relationships.ts` and `packages/db/src/schema/index.ts`. Web signed-out profiles live under `apps/web/app/(public)`, while friend and feed screens use `apps/web/app/(main)` and `apps/web/features/feed`. Flutter uses `apps/mobile/lib/friends`, `home`, `profile`, and `posts`.
 
-Route tests cover authentication, validation, storage failure concealment, and cursor errors. PostgreSQL integration tests cover reciprocal friendships, request races and throttles, block direction, lifecycle filtering, public and private profiles, release at midnight, hidden posts, stable pagination, and stale feed days. Web and Flutter tests cover account-keyed state, refresh races, pagination, and hidden-post removal. These local suites prove checked-in behavior against their fixtures, not Cloudflare, Neon, or R2 deployment state.
+Route tests cover authentication, validation, storage failure concealment, cursor errors, and interaction ownership. PostgreSQL integration tests cover reciprocal friendships, request races and throttles, block direction, lifecycle filtering, public and private profiles, interaction visibility, release at midnight, hidden posts, stable pagination, and stale feed days. Web and Flutter tests cover account-keyed state, signed-out public routes, refresh races, pagination, and hidden-post removal. These local suites prove checked-in behavior against their fixtures, not Cloudflare, Neon, or R2 deployment state.

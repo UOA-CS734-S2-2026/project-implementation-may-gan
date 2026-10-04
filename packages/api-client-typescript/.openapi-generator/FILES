@@ -48,6 +48,9 @@ src/models/DailyPostTomorrowNote.ts
 src/models/DailyPostVoiceMemo.ts
 src/models/DailyPromptResponse.ts
 src/models/DeletionGrantRequest.ts
+src/models/DirectMessageSendQuotaError.ts
+src/models/DirectMessageSendQuotaErrorError.ts
+src/models/DirectMessageSendQuotaErrorErrorDetails.ts
 src/models/DirectPairLookup.ts
 src/models/EditMessageRequest.ts
 src/models/FeedPage.ts
@@ -79,9 +82,13 @@ src/models/MediaReservationStatus.ts
 src/models/MediaReservationUpload.ts
 src/models/MediaValidationFailureReason.ts
 src/models/Message.ts
+src/models/MessageCreationRateLimitError.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/MoodDay.ts
+src/models/MoodHistory.ts
+src/models/MoodPeriodSummary.ts
 src/models/OnThisDayMemories.ts
 src/models/OnThisDayMemory.ts
 src/models/OnThisDayMemoryPrompt.ts

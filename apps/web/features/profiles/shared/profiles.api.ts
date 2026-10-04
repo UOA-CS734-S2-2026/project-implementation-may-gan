@@ -1,6 +1,7 @@
 import {
   FetchError,
   MediaApi,
+  PostsApi,
   ProfileApi,
   ResponseError,
   instanceOfProfileDetails,
@@ -8,6 +9,7 @@ import {
   instanceOfRestrictedProfile,
   type Mbti,
   type ChangeUsernameResponse,
+  type MoodHistory,
   type ProfileDetails,
   type PublicProfile,
   type RestrictedProfile,
@@ -15,11 +17,12 @@ import {
 } from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { ChangeUsernameResponse, Mbti, ProfileDetails, ProfileVisibility, PublicProfile, RestrictedProfile };
+export type { ChangeUsernameResponse, Mbti, MoodHistory, ProfileDetails, ProfileVisibility, PublicProfile, RestrictedProfile };
 export type ReadableProfile =
   | ({ kind: "authorized" } & ProfileDetails)
   | PublicProfile
   | RestrictedProfile;
+export type MoodRange = "30d" | "90d" | "1y";
 
 export type ProfileFailure =
   | { kind: "unauthenticated" | "notFound" | "network" | "unavailable" | "invalid" }
@@ -59,11 +62,11 @@ async function toFailure(error: unknown): Promise<ProfileFailure> {
   return { kind: "unavailable" };
 }
 
-async function call<T>(operation: (api: ProfileApi) => Promise<T>): Promise<ProfileResult<T>> {
+async function call<T>(operation: (api: ProfileApi, posts: PostsApi) => Promise<T>): Promise<ProfileResult<T>> {
   const configuration = apiConfiguration();
   if (!configuration) return { ok: false, failure: { kind: "unavailable" } };
   try {
-    return { ok: true, value: await operation(new ProfileApi(configuration)) };
+    return { ok: true, value: await operation(new ProfileApi(configuration), new PostsApi(configuration)) };
   } catch (error) {
     return { ok: false, failure: await toFailure(error) };
   }
@@ -87,6 +90,8 @@ export const profilesApi = {
   update: (changes: ProfileUpdate) => call((api) => api.profileUpdate({ updateProfileRequest: changes })),
   changeUsername: (username: string) => call((api) => api.profileChangeUsername({ changeUsernameRequest: { username } })),
   removeAvatar: () => call((api) => api.profileRemoveAvatar()),
+  /** Ratings with the same reach as the profile's posts: the owner and active friends. */
+  moodHistory: (username: string, range: MoodRange) => call((_, posts) => posts.postsGetProfileMood({ username, range })),
 
   /**
    * Reserves an upload, sends the bytes straight to storage with the signed

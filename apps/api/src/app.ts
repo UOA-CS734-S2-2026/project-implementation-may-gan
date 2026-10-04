@@ -52,6 +52,8 @@ import type { ListProfilePostsRouteDependencies } from "./features/posts/list-pr
 import type { ListOnThisDayRouteDependencies } from "./features/posts/list-on-this-day/list-on-this-day.route";
 import { createHyperdriveOnThisDayRepository } from "./features/posts/list-on-this-day/list-on-this-day.repository";
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
+import type { GetProfileMoodRouteDependencies } from "./features/posts/get-profile-mood/get-profile-mood.route";
+import { createHyperdriveProfileMoodRepository } from "./features/posts/get-profile-mood/get-profile-mood.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
 import type { GetPostMediaContentRouteDependencies } from "./features/posts/get-post-media/get-post-media-content.route";
@@ -208,6 +210,7 @@ import { approvedTermsDigest } from "./features/legal/shared/legal-publication";
 import type { ResolveSession } from "./http/middleware/require-session";
 import { registerNotificationRoutes, type NotificationRouteDependencies } from "./features/notifications/notifications.routes";
 import { createPostgresNotificationPreferenceStore } from "./features/notifications/preference/notification-preference.repository";
+import { parseDirectMessageSendLimit } from "./features/messaging/shared/new-message-quota";
 
 type PushDeviceDependencies = RegisterDeviceRouteDependencies & UnregisterDeviceRouteDependencies;
 type AccountPolicyDependencies = AccountPolicyRouteDependencies & { resolveSession: ResolveSession };
@@ -243,6 +246,7 @@ export interface AppDependencies {
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
+  profileMood?: GetProfileMoodRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   deletion?: DeletionRouteDependencies;
   exportService?: ExportRouteDependencies;
@@ -287,6 +291,7 @@ export function createApp({
   usernameChange,
   avatarSet,
   avatarRemove,
+  profileMood,
   accountPolicy,
   deletion,
   exportService,
@@ -365,6 +370,7 @@ export function createApp({
     onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
     revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
+    profileMood: { ...(profileMood ?? { resolveSession: async () => null }), rateLimiter },
   });
   const interaction = <T extends object>(dependencies: T | undefined) => ({
     ...(dependencies ?? { resolveSession: async () => null }),
@@ -614,6 +620,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveChangeUsernameRepository(configuration.hyperdrive),
   } satisfies ChangeUsernameRouteDependencies : undefined;
+  const profileMood = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveProfileMoodRepository(configuration.hyperdrive),
+  } satisfies GetProfileMoodRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -666,6 +676,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameChange,
     avatarSet,
     avatarRemove,
+    profileMood,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,
@@ -752,10 +763,11 @@ function createPostingDayDependencies(
   };
 }
 
-export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date } = {}) {
+export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date; messageSendLimit?: number } = {}) {
   const store = createPostgresMessageWriteStore(database);
+  const messageSendLimit = options.messageSendLimit ?? 30;
   return {
-    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now }),
+    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now, messageSendLimit }),
     resolveMessageRequest: createPostgresResolveMessageRequestRepository(database),
     markConversationRead: createPostgresMarkConversationReadRepository(database),
     getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
@@ -765,7 +777,7 @@ export function createMessagingPersistenceServices(database: DayliDatabase, opti
     findDirectConversation: createPostgresGetDirectConversationRepository(database),
     getMessage: createPostgresGetMessageRepository(database),
     listMessages: createPostgresListMessagesRepository(database),
-    send: createSendMessageService({ store, now: options.now }),
+    send: createSendMessageService({ store, now: options.now, messageSendLimit }),
     edit: createEditMessageService({ store: createPostgresEditMessageStore(database), now: options.now }),
     unsend: createUnsendMessageService({ store: createPostgresUnsendMessageStore(database), now: options.now }),
     set: createSetReactionService({ store: createPostgresSetReactionStore(database) }),
@@ -847,15 +859,16 @@ function createMessagingDependencies(
 ): MessagingRouteDependencies {
   const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
   const userRealtime = env.USER_REALTIME;
+  const messageSendLimit = parseDirectMessageSendLimit(env.DIRECT_MESSAGE_SEND_LIMIT);
   return {
     resolveSession: createSessionResolver(configuration),
     hasUsername,
-    service: createSendMessageService({ store }),
+    service: createSendMessageService({ store, messageSendLimit }),
     edit: createEditMessageService({ store: createHyperdriveEditMessageStore(configuration.hyperdrive) }),
     unsend: createUnsendMessageService({ store: createHyperdriveUnsendMessageStore(configuration.hyperdrive) }),
     setReaction: createSetReactionService({ store: createHyperdriveSetReactionStore(configuration.hyperdrive) }),
     removeReaction: createRemoveReactionService({ store: createHyperdriveRemoveReactionStore(configuration.hyperdrive) }),
-    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive) }),
+    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive), messageSendLimit }),
     resolveMessageRequest: createHyperdriveResolveMessageRequestRepository(configuration.hyperdrive),
     markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
     getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),

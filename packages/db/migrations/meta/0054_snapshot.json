@@ -1,5 +1,5 @@
 {
-  "id": "9e2f7e7a-7c8f-4ce6-a1e4-17687ba8e09f",
+  "id": "e33a352a-c1a0-4bbe-acf8-756e36447188",
   "prevId": "87a50e53-3ed7-4305-a201-e8e3e4127c68",
   "version": "7",
   "dialect": "postgresql",
@@ -2305,389 +2305,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.future_self_note_deliveries": {
-      "name": "future_self_note_deliveries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "note_id": {
-          "name": "note_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "schedule_version": {
-          "name": "schedule_version",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deliver_on": {
-          "name": "deliver_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "future_self_note_delivery_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'claimed'"
-        },
-        "lease_token": {
-          "name": "lease_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lease_expires_at": {
-          "name": "lease_expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "claimed_at": {
-          "name": "claimed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "delivered_at": {
-          "name": "delivered_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "future_self_note_deliveries_lease_idx": {
-          "name": "future_self_note_deliveries_lease_idx",
-          "columns": [
-            {
-              "expression": "lease_expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"future_self_note_deliveries\".\"status\" = 'claimed'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_note_deliveries_note_id_future_self_notes_id_fk": {
-          "name": "future_self_note_deliveries_note_id_future_self_notes_id_fk",
-          "tableFrom": "future_self_note_deliveries",
-          "tableTo": "future_self_notes",
-          "columnsFrom": [
-            "note_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "future_self_note_deliveries_note_version_unique": {
-          "name": "future_self_note_deliveries_note_version_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "note_id",
-            "schedule_version"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "future_self_note_deliveries_schedule_version_check": {
-          "name": "future_self_note_deliveries_schedule_version_check",
-          "value": "\"future_self_note_deliveries\".\"schedule_version\" between 1 and 9007199254740991"
-        },
-        "future_self_note_deliveries_attempts_check": {
-          "name": "future_self_note_deliveries_attempts_check",
-          "value": "\"future_self_note_deliveries\".\"attempts\" between 1 and 9007199254740991"
-        },
-        "future_self_note_deliveries_state_check": {
-          "name": "future_self_note_deliveries_state_check",
-          "value": "(\"future_self_note_deliveries\".\"status\" = 'claimed' and \"future_self_note_deliveries\".\"lease_token\" is not null and \"future_self_note_deliveries\".\"lease_expires_at\" is not null and \"future_self_note_deliveries\".\"delivered_at\" is null)\n      or (\"future_self_note_deliveries\".\"status\" = 'delivered' and \"future_self_note_deliveries\".\"lease_token\" is null and \"future_self_note_deliveries\".\"lease_expires_at\" is null and \"future_self_note_deliveries\".\"delivered_at\" is not null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.future_self_note_idempotency_keys": {
-      "name": "future_self_note_idempotency_keys",
-      "schema": "",
-      "columns": {
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "request_fingerprint": {
-          "name": "request_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note_id": {
-          "name": "note_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "future_self_note_idempotency_keys_note_id_idx": {
-          "name": "future_self_note_idempotency_keys_note_id_idx",
-          "columns": [
-            {
-              "expression": "note_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_note_idempotency_keys_owner_id_user_id_fk": {
-          "name": "future_self_note_idempotency_keys_owner_id_user_id_fk",
-          "tableFrom": "future_self_note_idempotency_keys",
-          "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "future_self_note_keys_note_id_fk": {
-          "name": "future_self_note_keys_note_id_fk",
-          "tableFrom": "future_self_note_idempotency_keys",
-          "tableTo": "future_self_notes",
-          "columnsFrom": [
-            "note_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "future_self_note_idempotency_keys_pk": {
-          "name": "future_self_note_idempotency_keys_pk",
-          "columns": [
-            "owner_id",
-            "idempotency_key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "future_self_note_idempotency_keys_key_check": {
-          "name": "future_self_note_idempotency_keys_key_check",
-          "value": "char_length(\"future_self_note_idempotency_keys\".\"idempotency_key\") between 1 and 255"
-        },
-        "future_self_note_idempotency_keys_fingerprint_check": {
-          "name": "future_self_note_idempotency_keys_fingerprint_check",
-          "value": "\"future_self_note_idempotency_keys\".\"request_fingerprint\" ~ '^[0-9a-f]{64}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.future_self_notes": {
-      "name": "future_self_notes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deliver_on": {
-          "name": "deliver_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "future_self_note_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'scheduled'"
-        },
-        "schedule_version": {
-          "name": "schedule_version",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "delivered_at": {
-          "name": "delivered_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "future_self_notes_owner_deliver_on_idx": {
-          "name": "future_self_notes_owner_deliver_on_idx",
-          "columns": [
-            {
-              "expression": "owner_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deliver_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "future_self_notes_due_idx": {
-          "name": "future_self_notes_due_idx",
-          "columns": [
-            {
-              "expression": "deliver_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"future_self_notes\".\"status\" = 'scheduled'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_notes_owner_id_user_id_fk": {
-          "name": "future_self_notes_owner_id_user_id_fk",
-          "tableFrom": "future_self_notes",
-          "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "future_self_notes_body_length_check": {
-          "name": "future_self_notes_body_length_check",
-          "value": "char_length(\"future_self_notes\".\"body\") between 1 and 1000 and \"future_self_notes\".\"body\" = btrim(\"future_self_notes\".\"body\")"
-        },
-        "future_self_notes_schedule_version_check": {
-          "name": "future_self_notes_schedule_version_check",
-          "value": "\"future_self_notes\".\"schedule_version\" between 1 and 9007199254740991"
-        },
-        "future_self_notes_delivery_state_check": {
-          "name": "future_self_notes_delivery_state_check",
-          "value": "(\"future_self_notes\".\"status\" = 'scheduled' and \"future_self_notes\".\"delivered_at\" is null)\n      or (\"future_self_notes\".\"status\" = 'delivered' and \"future_self_notes\".\"delivered_at\" is not null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.legacy_cloudinary_media": {
       "name": "legacy_cloudinary_media",
       "schema": "",
@@ -3273,6 +2890,27 @@
             },
             {
               "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "messages_sender_created_at_idx": {
+          "name": "messages_sender_created_at_idx",
+          "columns": [
+            {
+              "expression": "sender_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -6502,22 +6140,6 @@
       "values": [
         "active",
         "ended"
-      ]
-    },
-    "public.future_self_note_delivery_status": {
-      "name": "future_self_note_delivery_status",
-      "schema": "public",
-      "values": [
-        "claimed",
-        "delivered"
-      ]
-    },
-    "public.future_self_note_status": {
-      "name": "future_self_note_status",
-      "schema": "public",
-      "values": [
-        "scheduled",
-        "delivered"
       ]
     },
     "public.legal_document_kind": {

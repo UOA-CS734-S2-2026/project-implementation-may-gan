@@ -5,6 +5,7 @@
     "profile.claimInitialUsername",
     "profile.changeUsername",
     "profile.getDetails",
+    "profile.getAvatar",
     "profile.update",
     "profile.removeAvatar",
     "profile.setAvatar"

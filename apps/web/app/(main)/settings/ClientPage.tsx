@@ -12,6 +12,7 @@ import { EditProfileForm } from "@/features/profiles/update-profile/EditProfileF
 import { AvatarForm } from "@/features/profiles/update-profile/AvatarForm";
 import { ChangeUsernameForm } from "@/features/profiles/change-username/ChangeUsernameForm";
 import { LegalDraftNotice, LegalLinks } from "@/components/legal/LegalLinks";
+import { Skeleton } from "@/components/ui/core/Skeleton";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -55,8 +56,10 @@ export default function SettingsPage() {
             <ChangeUsernameForm key={authorizedProfile.username} profile={authorizedProfile} />
             <ProfileVisibilityToggle visibility={authorizedProfile.owner.profileVisibility} />
           </>
+        ) : profile.isError ? (
+          <p className="text-sm text-foreground/60">Your profile couldn&apos;t be loaded.</p>
         ) : (
-          <p className="text-sm text-foreground/60">{profile.isError ? "Your profile couldn't be loaded." : "Loading your profile…"}</p>
+          <ProfileSkeleton />
         )}
 
         <section className="space-y-2">
@@ -78,6 +81,10 @@ export default function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function ProfileSkeleton() {
+  return <div role="status" aria-label="Loading profile" className="space-y-4 rounded-2xl bg-background p-5 shadow-card"><div className="flex items-center gap-3"><Skeleton className="h-16 w-16 rounded-full" /><div className="space-y-2"><Skeleton className="h-5 w-32" /><Skeleton className="h-3 w-24" /></div></div><Skeleton className="h-20 w-full" /><Skeleton className="h-10 w-full rounded-lg" /></div>;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
