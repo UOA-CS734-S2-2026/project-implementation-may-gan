@@ -396,8 +396,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           subtitle: Text(
             profile.isPrivate
-                ? 'Only your friends can see your bio and streak.'
-                : 'Anyone signed in can see your bio and streak. Your daylies are always friends only.',
+                ? 'Only friends can see your bio, streak, and released Friends posts.'
+                : 'Anyone, including signed-out visitors, can see your bio, streak, and released Friends posts. Solo and unreleased posts stay private.',
             style: muted,
           ),
         ),

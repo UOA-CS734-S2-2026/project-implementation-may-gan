@@ -32,7 +32,7 @@ Open **friends**, then choose **Requests**.
 - Under **Sent**, choose **Cancel** if you no longer want to send the request.
 - In your friends list, choose **Remove friend** to end an existing friendship.
 
-Only an active friendship gives someone access to your Friends posts.
+An active friendship gives someone access to your released Friends posts and puts yesterday's released posts in their feed. Released Friends posts are also readable by other visitors when your profile is public. See [Privacy and sharing](./privacy-and-sharing) before changing profile visibility.
 
 ## What appears in daylies
 

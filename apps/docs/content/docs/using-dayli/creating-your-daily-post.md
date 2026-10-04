@@ -27,7 +27,7 @@ The composer asks for:
 - **Note to tomorrow's you:** Add a private note of up to 1,000 characters. This is optional and is stored with your post.
 - **Who can see this:** Choose **Friends** or **Solo**. Dayli does not choose for you.
 
-**Friends** posts become visible to your active friends after the next Auckland midnight. **Solo** posts remain visible only to you.
+**Friends** posts become visible to active friends after the next Auckland midnight. If your profile is public, other visitors can read those released posts too, including while signed out. **Solo** posts remain visible only to you. See [Privacy and sharing](./privacy-and-sharing) for the full rule.
 
 Dayli stores tomorrow notes, but there is no screen for reading them yet. Reading a note from the next day is planned.
 

@@ -158,6 +158,29 @@ describe("comments", () => {
     expect(within(replies).getByText("Thanks!")).toBeTruthy();
   });
 
+  it("takes only the comment count after a comment, so a pending like isn't undone", async () => {
+    const actor = userEvent.setup();
+    let saveLike: (value: unknown) => void = () => {};
+    let readCount: (value: unknown) => void = () => {};
+    api.setLike.mockReturnValue(new Promise((resolve) => { saveLike = resolve; }));
+    api.createComment.mockResolvedValue({ ok: true, value: comment({ id: "comment-9", author: { id: "me", username: "me", displayName: "Me" }, text: "Lovely." }) });
+    render();
+
+    await actor.click(await screen.findByRole("button", { name: "Like" }));
+    // The count is read before the like is saved, so it still says not liked.
+    get.mockReturnValueOnce(new Promise((resolve) => { readCount = resolve; }));
+    await actor.type(screen.getByPlaceholderText("Add a comment"), "Lovely.");
+    await actor.click(screen.getByRole("button", { name: "Post" }));
+    await screen.findByText("Lovely.");
+
+    await act(async () => saveLike({ ok: true, value: { likeCount: 3, viewerHasLiked: true } }));
+    await act(async () => readCount({ ok: true, value: detail({ likeCount: 2, viewerHasLiked: false, commentCount: 4 }) }));
+
+    expect(await screen.findByRole("heading", { name: "4 comments" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Unlike" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "3 likes" })).toBeTruthy();
+  });
+
   it("posts a comment and keeps its ID for a retry after a failure", async () => {
     const actor = userEvent.setup();
     get.mockResolvedValueOnce({ ok: true, value: detail() }).mockResolvedValue({ ok: true, value: detail({ commentCount: 1 }) });
