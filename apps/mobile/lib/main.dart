@@ -122,14 +122,10 @@ Future<void> main() async {
     onSignedIn: integrations.start,
     // Must run before Better Auth stores a replacement token. [clear] always
     // stops and clears messaging, then rethrows any unsafe push cleanup error.
-    onBeforeSessionReplacement: () async {
-      await streakCache.clear();
-      await integrations.clear();
-    },
-    onPrivateDataClear: () async {
-      await streakCache.clear();
-      await integrations.clear();
-    },
+    onBeforeSessionReplacement: () =>
+        _clearEach([streakCache.clear, integrations.clear]),
+    onPrivateDataClear: () =>
+        _clearEach([streakCache.clear, integrations.clear]),
   );
 
   runApp(
@@ -189,4 +185,20 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+/// Runs every cleanup step even when an earlier one fails, then rethrows the
+/// first failure so the session doesn't treat private data as removed.
+Future<void> _clearEach(List<Future<void> Function()> steps) async {
+  (Object, StackTrace)? failure;
+  for (final step in steps) {
+    try {
+      await step();
+    } catch (error, stackTrace) {
+      failure ??= (error, stackTrace);
+    }
+  }
+  if (failure case (final error, final stackTrace)) {
+    Error.throwWithStackTrace(error, stackTrace);
+  }
 }

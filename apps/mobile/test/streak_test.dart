@@ -404,6 +404,29 @@ void main() {
     expect((await cache.read('user-1'))?.streak.current, 2);
   });
 
+  test(
+    'the protected cache reports a failed clear and keeps working',
+    () async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final storage = FailingDeleteStorage();
+      final cache = ProtectedStreakCache(storage);
+      final value = CachedStreak(
+        const PostingStreak(current: 2, longest: 3, postedToday: false),
+        DateTime.utc(2026, 9, 25),
+      );
+      await cache.write('user-1', value, epoch: cache.epoch);
+
+      await expectLater(cache.clear(), throwsA(isA<StateError>()));
+
+      // The queue still runs what comes after the failure.
+      storage.failDelete = false;
+      await cache.clear();
+      expect(await cache.read('user-1'), isNull);
+      await cache.write('user-1', value, epoch: cache.epoch);
+      expect((await cache.read('user-1'))?.streak.current, 2);
+    },
+  );
+
   group('post activity from the request layer', () {
     test('reports an accepted post only', () async {
       final activity = PostActivity();
@@ -481,5 +504,25 @@ class _GatedProfiles extends FakeProfileClient {
       return held.future;
     }
     return super.details(username);
+  }
+}
+
+class FailingDeleteStorage extends FlutterSecureStorage {
+  FailingDeleteStorage();
+
+  bool failDelete = true;
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) {
+    if (failDelete) throw StateError('Keychain unavailable.');
+    return super.delete(key: key);
   }
 }

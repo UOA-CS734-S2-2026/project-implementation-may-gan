@@ -24,7 +24,8 @@ abstract interface class StreakCache {
   /// Ignored unless [epoch] is still current.
   Future<void> write(String userId, CachedStreak value, {required int epoch});
 
-  /// Finishes any write already started, then removes the value.
+  /// Finishes any write already started, then removes the value. Completes
+  /// with an error if the value couldn't be removed.
   Future<void> clear();
 }
 
@@ -38,11 +39,17 @@ class ProtectedStreakCache implements StreakCache {
 
   int _epoch = 0;
 
-  /// Writes and clears, in the order they were asked for.
+  /// Writes and clears, in the order they were asked for. A failed task
+  /// doesn't stop the ones after it.
   Future<void> _queue = Future.value();
 
-  Future<void> _enqueue(Future<void> Function() task) =>
-      _queue = _queue.then((_) => task()).catchError((Object _) {});
+  /// Runs [task] after the ones before it and returns its own result,
+  /// errors included.
+  Future<void> _enqueue(Future<void> Function() task) {
+    final result = _queue.then((_) => task());
+    _queue = result.catchError((Object _) {});
+    return result;
+  }
 
   @override
   int get epoch => _epoch;
@@ -63,7 +70,9 @@ class ProtectedStreakCache implements StreakCache {
       if (streak == null || at == null) return null;
       return CachedStreak(streak, at);
     } catch (_) {
-      await clear();
+      // Unreadable data is never shown. Removing it is best effort here; the
+      // next sign-out clears it again.
+      await clear().catchError((Object _) {});
       return null;
     }
   }
@@ -74,19 +83,21 @@ class ProtectedStreakCache implements StreakCache {
         // Checked when the write runs, after any clear queued before it.
         if (epoch != _epoch) return;
         // Offline display is a convenience; a failed write must not break the
-        // profile, so errors are dropped by the queue.
-        await _storage.write(
-          key: _key,
-          value: jsonEncode({
-            'userId': userId,
-            'streak': {
-              'current': value.streak.current,
-              'longest': value.streak.longest,
-              'postedToday': value.streak.postedToday,
-            },
-            'confirmedAt': value.confirmedAt.toUtc().toIso8601String(),
-          }),
-        );
+        // profile, so its error is dropped.
+        await _storage
+            .write(
+              key: _key,
+              value: jsonEncode({
+                'userId': userId,
+                'streak': {
+                  'current': value.streak.current,
+                  'longest': value.streak.longest,
+                  'postedToday': value.streak.postedToday,
+                },
+                'confirmedAt': value.confirmedAt.toUtc().toIso8601String(),
+              }),
+            )
+            .catchError((Object _) {});
       });
 
   @override
