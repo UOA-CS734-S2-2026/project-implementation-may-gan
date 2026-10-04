@@ -525,15 +525,23 @@ class _MoodPainter extends CustomPainter {
 
     final dot = Paint()..color = colors.foregroundAccent;
     final ring = Paint()..color = colors.card;
+    // Days can sit only a few pixels apart on a phone, so dots shrink to leave
+    // the line between neighbours visible, and only the selected dot gets a
+    // halo: halos on every dot would paint over the line between them.
+    final step = width / span;
+    final small = (step * 0.3).clamp(2.0, 4.0);
     for (var index = 0; index < points.length; index++) {
       final point = points[index];
       final lone =
           !posted.contains(point.day - 1) && !posted.contains(point.day + 1);
       if (dense && !lone && index != active) continue;
-      final radius = index == active ? 6.0 : 4.0;
       final centre = Offset(x(point.day), y(point.rating));
-      canvas.drawCircle(centre, radius + 2, ring);
-      canvas.drawCircle(centre, radius, dot);
+      if (index == active) {
+        canvas.drawCircle(centre, 8, ring);
+        canvas.drawCircle(centre, 6, dot);
+      } else {
+        canvas.drawCircle(centre, small, dot);
+      }
     }
   }
 
