@@ -1,7 +1,7 @@
 import { createDayliDatabase } from "@dayli/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createApp } from "../../../app";
-import { createPostgresOnThisDayRepository } from "./list-on-this-day.repository";
+import { createApp } from "../../../../app";
+import { createPostgresOnThisDayRepository } from "../list-on-this-day.repository";
 
 const migratorUrl = process.env.TEST_DATABASE_URL;
 const appUrl = process.env.TEST_APP_DATABASE_URL;

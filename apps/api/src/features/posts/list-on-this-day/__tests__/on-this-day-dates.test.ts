@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EARLIEST_MEMORY_YEAR, onThisDayCandidates } from "./on-this-day-dates";
+import { EARLIEST_MEMORY_YEAR, onThisDayCandidates } from "../on-this-day-dates";
 
 describe("onThisDayCandidates", () => {
   it("lists the same month and day in earlier years, newest first, without the current year", () => {

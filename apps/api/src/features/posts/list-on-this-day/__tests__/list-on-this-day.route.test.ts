@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "../../../app";
-import type { OnThisDayMemoryRecord, OnThisDayRepository } from "./list-on-this-day.repository";
-import type { ListOnThisDayRouteDependencies } from "./list-on-this-day.route";
+import { createApp } from "../../../../app";
+import type { OnThisDayMemoryRecord, OnThisDayRepository } from "../list-on-this-day.repository";
+import type { ListOnThisDayRouteDependencies } from "../list-on-this-day.route";
 
 // 12:00 UTC on 26 September is 00:00 on 27 September in Auckland (UTC+13).
 const fixedNow = new Date("2027-09-26T12:00:00.000Z");
