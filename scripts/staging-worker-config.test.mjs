@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { createStagingWorkerConfigs, rateLimitConfig, readStagingBrowserProxyMode, serializeWranglerConfig } from "./staging-worker-config.mjs";
@@ -84,7 +85,13 @@ test("adds R2 media vars to the API Worker only", () => {
   assert.equal(api.vars.R2_ACCOUNT_ID, "b".repeat(32));
   assert.equal(api.vars.R2_BUCKET_NAME, "dayli-media-staging");
   assert.equal(api.vars.GOOGLE_WEB_CLIENT_ID, "public-client-id");
-  assert.equal(probe.vars, undefined);
+  assert.deepEqual(probe.vars, {
+    EXPECTED_STAGING_RELEASE_SHA: input.releaseSha,
+    EXPECTED_STAGING_STORAGE_DIGEST: createHash("sha256").update(`${mediaVars.R2_ACCOUNT_ID}\n${mediaVars.R2_BUCKET_NAME}`).digest("hex"),
+  });
+  assert.equal(probe.vars.R2_ACCOUNT_ID, undefined);
+  assert.equal(probe.vars.R2_BUCKET_NAME, undefined);
+  assert.equal(probe.vars.GOOGLE_WEB_CLIENT_ID, undefined);
   assert.equal(createStagingWorkerConfigs(input).api.vars.R2_BUCKET_NAME, undefined);
 });
 
@@ -131,7 +138,10 @@ test("explicit all-staging and cleanup-only modes require the separate worker an
     exportProofVars: { ...approval, ...cleanup } });
   assert.equal(all.api.vars.STAGING_EXPORT_ALL_USERS_APPROVED, "all-staging-accounts");
   assert.equal(all.api.vars.STAGING_EXPORT_CLEANUP_ONLY_APPROVED, "continue-existing-cleanup");
-  assert.equal(all.probe.vars, undefined);
+  assert.deepEqual(all.probe.vars, {
+    EXPECTED_STAGING_RELEASE_SHA: input.releaseSha,
+    EXPECTED_STAGING_STORAGE_DIGEST: createHash("sha256").update(`${mediaVars.R2_ACCOUNT_ID}\n${mediaVars.R2_BUCKET_NAME}`).digest("hex"),
+  });
   assert.equal(createStagingWorkerConfigs({ ...activated,
     exportProofVars: cleanup }).api.vars.STAGING_EXPORT_ALL_USERS_APPROVED, undefined);
   assert.throws(() => createStagingWorkerConfigs({ ...input, exportWorkerHyperdriveId: workerId,
@@ -146,6 +156,19 @@ test("explicit all-staging and cleanup-only modes require the separate worker an
     exportProofVars: { STAGING_EXPORT_CLEANUP_ONLY_APPROVED: "wrong" } }));
   assert.throws(() => createStagingWorkerConfigs({ ...activated,
     exportProofVars: { ...approval, STAGING_EXPORT_PROOF_USER_ID: "synthetic-owner-123" } }));
+});
+
+test("binds the exact attestation target without copying API-only settings", () => {
+  const mediaVars = { R2_ACCOUNT_ID: "b".repeat(32), R2_BUCKET_NAME: "dayli-media-staging" };
+  const original = createStagingWorkerConfigs({ ...input, mediaVars }).probe;
+  const changedSha = createStagingWorkerConfigs({ ...input, releaseSha: "d".repeat(40), mediaVars }).probe;
+  const changedBucket = createStagingWorkerConfigs({ ...input, mediaVars: { ...mediaVars, R2_BUCKET_NAME: "dayli-other-staging" } }).probe;
+  assert.equal(changedSha.vars.EXPECTED_STAGING_RELEASE_SHA, "d".repeat(40));
+  assert.equal(changedSha.vars.EXPECTED_STAGING_STORAGE_DIGEST, original.vars.EXPECTED_STAGING_STORAGE_DIGEST);
+  assert.notEqual(changedBucket.vars.EXPECTED_STAGING_STORAGE_DIGEST, original.vars.EXPECTED_STAGING_STORAGE_DIGEST);
+  assert.deepEqual(Object.keys(original.vars).sort(), ["EXPECTED_STAGING_RELEASE_SHA", "EXPECTED_STAGING_STORAGE_DIGEST"]);
+  assert.throws(() => createStagingWorkerConfigs({ ...input, mediaVars: { R2_BUCKET_NAME: mediaVars.R2_BUCKET_NAME } }), /storage metadata/);
+  assert.throws(() => createStagingWorkerConfigs({ ...input, mediaVars: { R2_ACCOUNT_ID: mediaVars.R2_ACCOUNT_ID } }), /storage metadata/);
 });
 
 test("rejects an unreviewed Worker target or Hyperdrive ID", () => {
