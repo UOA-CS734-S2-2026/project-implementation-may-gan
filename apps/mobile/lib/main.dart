@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api/feed_client.dart';
@@ -61,7 +62,7 @@ Future<void> main() async {
     preferences: Future.value(prefs),
     secureStorage: secureStorage,
   );
-  final biometric = BiometricService(prefs);
+  final biometric = BiometricService(prefs, LocalAuthentication());
 
   final tokenStore = ProtectedSessionTokenStore(storage: secureStorage);
   final drafts = ProtectedDraftStore(storage: secureStorage);
