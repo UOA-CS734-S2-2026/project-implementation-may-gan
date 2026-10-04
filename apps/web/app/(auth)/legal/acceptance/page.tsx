@@ -38,6 +38,14 @@ export default function LegalAcceptancePage() {
     if (!isPending && !user) router.replace("/sign-in?next=%2Flegal%2Facceptance");
   }, [isPending, router, user]);
 
+  const signOut = async () => {
+    await authClient.signOut();
+    // Better Auth does not synchronously clear every mounted useSession store.
+    // Refresh before leaving this page so its stale identity cannot linger.
+    await refresh();
+    router.replace("/");
+  };
+
   const submit = async () => {
     if (!terms || terms.status !== "effective" || !accepted || busy) return;
     setBusy(true);
@@ -88,7 +96,7 @@ export default function LegalAcceptancePage() {
     <div className="flex flex-wrap gap-4 text-sm">
       <button type="button" className="underline" onClick={() => void load()} disabled={loading || busy}>Retry</button>
       <Link className="underline" href="/account/export">Your data export</Link>
-      <button type="button" className="underline" onClick={() => void authClient.signOut()}>Sign out</button>
+      <button type="button" className="underline" onClick={() => void signOut()}>Sign out</button>
     </div>
   </main>;
 }

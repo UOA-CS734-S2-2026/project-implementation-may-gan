@@ -38,4 +38,25 @@ describe("existing-account legal acceptance", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
     expect(mocks.refresh).toHaveBeenCalled();
   });
+
+  it("awaits sign-out, refreshes the mounted session, then leaves for a public route", async () => {
+    mocks.signOut.mockReset();
+    mocks.refresh.mockReset();
+    mocks.replace.mockReset();
+    let finishSignOut!: () => void;
+    mocks.signOut.mockImplementation(() => new Promise<void>((resolve) => { finishSignOut = resolve; }));
+    mocks.refresh.mockResolvedValue(undefined);
+    render(<LegalAcceptancePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(mocks.signOut).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    finishSignOut();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.signOut.mock.invocationCallOrder[0]).toBeLessThan(mocks.refresh.mock.invocationCallOrder[0]);
+    expect(mocks.refresh.mock.invocationCallOrder[0]).toBeLessThan(mocks.replace.mock.invocationCallOrder[0]);
+  });
 });

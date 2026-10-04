@@ -84,53 +84,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_RELEASE_SHA: ${{ github.sha }}
         run: node scripts/verify-staging-deployed-shas.mjs
-      - name: Freeze staging release entry points and cancel historical reruns
+      - name: Freeze staging release entry points and drain historical reruns
         # A rerun uses the workflow definition from its historical commit, so
-        # its concurrency group may not be this workflow's group. Disable the
-        # coordinated caller and reusable deploy workflows, then wait for every
-        # existing run to stop. This is intentionally fail-closed; operators
-        # must re-enable these workflows and run a fresh release after this
-        # activation or rollback completes.
+        # its concurrency group may not be this workflow's group. Freeze new
+        # release entry points, cancel only runs that have not started, then
+        # let started work finish. A timeout leaves releases frozen and fails
+        # closed for operator recovery.
         uses: actions/github-script@v7
         with:
           script: |
+            const { freezeStagingReleaseEntryPoints } = await import(`${process.env.GITHUB_WORKSPACE}/scripts/freeze-staging-release-entry-points.mjs`);
             const { owner, repo } = context.repo;
-            const workflows = ["staging-release.yml", "staging-hyperdrive.yml", "staging-web.yml"];
-            const activeStates = ["queued", "in_progress", "pending", "requested", "waiting"];
-            const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-            for (const workflow_id of workflows) {
-              await github.rest.actions.disableWorkflow({ owner, repo, workflow_id });
-            }
-            let drained = false;
-            for (let attempt = 0; attempt < 30; attempt++) {
-              const active = [];
-              for (const workflow_id of workflows) {
-                for (const status of activeStates) {
-                  const { data } = await github.rest.actions.listWorkflowRuns({
-                    owner, repo, workflow_id, status, per_page: 100,
-                  });
-                  active.push(...data.workflow_runs);
-                }
-              }
-              const unique = [...new Map(active.map((run) => [run.id, run])).values()];
-              if (unique.length === 0) {
-                drained = true;
-                break;
-              }
-              await Promise.all(unique.map((run) => github.rest.actions.cancelWorkflowRun({
-                owner, repo, run_id: run.id,
-              }).catch((error) => {
-                if (error.status !== 409) throw error;
-              })));
-              await pause(2000);
-            }
-            if (!drained) throw new Error("Staging release activity did not stop before activation.");
-            for (const workflow_id of workflows) {
-              const { data } = await github.rest.actions.getWorkflow({ owner, repo, workflow_id });
-              if (data.state !== "disabled_manually") {
-                core.setFailed(`Staging deployment workflow ${workflow_id} was not disabled.`);
-              }
-            }
+            await freezeStagingReleaseEntryPoints({ github, owner, repo });
       # Keep this final active-version check adjacent to the mutation. It runs
       # only after the historical deployment paths are frozen above.
       - name: Recheck current main and deployed Worker revisions immediately before mutation
