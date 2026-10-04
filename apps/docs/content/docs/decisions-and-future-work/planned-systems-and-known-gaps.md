@@ -39,19 +39,12 @@ Before calling it supported, check sign-in, session restoration, authenticated A
 
 #### Context
 
-Mobile can add a weather snapshot (condition, temperature, and place name) to a post, shown on post detail only. The phone fetches it from Open-Meteo and the API validates its shape and range. See [Daily posts and release timing](/docs/systems/daily-posts-and-release-timing#a-weather-snapshot-rides-along).
+Mobile can add a weather snapshot (condition, temperature, and place name) to a post, shown on post detail only. The phone fetches it from Open-Meteo and the API validates its shape and range. See [Daily posts and release timing](/docs/systems/location-and-weather-contexts).
 
 #### Problem
 
 - Open-Meteo's free tier is for non-commercial use and asks for attribution. A commercial launch needs a paid plan or a different provider.
-- The server cannot verify a snapshot, because it never sees the provider's answer. It is the author's own report.
-- The feature has been checked only by automated tests and an Android debug build. It has not been run on an emulator or on any physical device, and the iOS build and the real iOS permission prompt have not been checked at all.
-- A snapshot cannot be added, changed, or removed after posting, and the web composer has no weather section.
-- The place name comes from the phone's geocoder, so its language and detail can differ between devices, and a device without a geocoder always falls back to choosing a place.
-- Music context, the other half of the original ticket, is not built. Android needs notification-listener access to read other apps' playback, iOS exposes only Apple Music, and Spotify needs OAuth credentials an administrator would provision.
 
 #### Future work
 
-Decide the weather provider before any commercial release, and record the decision in the product decisions. Check the iOS prompt, the Settings recovery path, and reduced-accuracy location on a physical iPhone, and a physical Android phone with location off.
-
-Decide whether an author may remove a snapshot after posting. Adding or changing one would need revision handling, because the revision history does not yet cover it. Plan music separately, with manual title and artist entry as the dependable path and Apple Music as an optional iOS source.
+Decide the weather provider before any commercial release, and record the decision in the product decisions. 
