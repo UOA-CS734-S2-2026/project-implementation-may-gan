@@ -8,6 +8,7 @@ import 'package:dayli_mobile/api/profile_client.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
+import 'package:dayli_mobile/auth/biometric_service.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
 import 'package:flutter/material.dart';
@@ -80,6 +81,10 @@ void trustFixtureCertificate() {
       drafts: drafts,
       submitter: FakeSubmitter(
         const SubmissionAccepted(postId: 'unused', replayed: false),
+      ),
+      biometric: BiometricService(
+        MemoryBiometricPreferenceStore(),
+        FakeLocalAuthentication(),
       ),
     ),
     tokens: tokens,
