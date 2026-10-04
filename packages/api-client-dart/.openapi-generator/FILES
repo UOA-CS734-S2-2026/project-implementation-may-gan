@@ -88,6 +88,9 @@ lib/model/message_creation_rate_limit_error.dart
 lib/model/message_reactions_inner.dart
 lib/model/message_reactions_inner_reactors_inner.dart
 lib/model/message_reply_preview.dart
+lib/model/mood_day.dart
+lib/model/mood_history.dart
+lib/model/mood_period_summary.dart
 lib/model/on_this_day_memories.dart
 lib/model/on_this_day_memory.dart
 lib/model/on_this_day_memory_prompt.dart

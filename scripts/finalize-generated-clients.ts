@@ -219,6 +219,19 @@ async function finalizeGeneratedClients() {
       "packages/api-client-dart/lib/model/trashed_post_status.dart",
       "localDate",
     ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/mood_day.dart",
+      "localDate",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/mood_history.dart",
+      "trackedFrom",
+    ),
+    normalizeDartDateOnlyModel(
+      "packages/api-client-dart/lib/model/mood_period_summary.dart",
+      "from",
+      "to",
+    ),
     omitNullableDartJsonField(
       "packages/api-client-dart/lib/model/register_push_device_request.dart",
       "notificationSchemaVersion",

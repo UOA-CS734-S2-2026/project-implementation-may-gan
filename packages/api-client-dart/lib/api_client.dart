@@ -334,6 +334,12 @@ class ApiClient {
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'MoodDay':
+          return MoodDay.fromJson(value);
+        case 'MoodHistory':
+          return MoodHistory.fromJson(value);
+        case 'MoodPeriodSummary':
+          return MoodPeriodSummary.fromJson(value);
         case 'OnThisDayMemories':
           return OnThisDayMemories.fromJson(value);
         case 'OnThisDayMemory':

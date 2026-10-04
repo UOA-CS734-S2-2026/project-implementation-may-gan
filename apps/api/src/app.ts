@@ -52,6 +52,8 @@ import type { ListProfilePostsRouteDependencies } from "./features/posts/list-pr
 import type { ListOnThisDayRouteDependencies } from "./features/posts/list-on-this-day/list-on-this-day.route";
 import { createHyperdriveOnThisDayRepository } from "./features/posts/list-on-this-day/list-on-this-day.repository";
 import { createHyperdriveProfilePostsRepository } from "./features/posts/list-profile-posts/list-profile-posts.repository";
+import type { GetProfileMoodRouteDependencies } from "./features/posts/get-profile-mood/get-profile-mood.route";
+import { createHyperdriveProfileMoodRepository } from "./features/posts/get-profile-mood/get-profile-mood.repository";
 import type { GetPostRouteDependencies } from "./features/posts/get-post/get-post.route";
 import type { GetPostMediaRouteDependencies } from "./features/posts/get-post-media/get-post-media.route";
 import type { GetPostMediaContentRouteDependencies } from "./features/posts/get-post-media/get-post-media-content.route";
@@ -240,6 +242,7 @@ export interface AppDependencies {
   usernameChange?: ChangeUsernameRouteDependencies;
   avatarSet?: SetAvatarRouteDependencies;
   avatarRemove?: RemoveAvatarRouteDependencies;
+  profileMood?: GetProfileMoodRouteDependencies;
   accountPolicy?: AccountPolicyDependencies;
   deletion?: DeletionRouteDependencies;
   exportService?: ExportRouteDependencies;
@@ -283,6 +286,7 @@ export function createApp({
   usernameChange,
   avatarSet,
   avatarRemove,
+  profileMood,
   accountPolicy,
   deletion,
   exportService,
@@ -361,6 +365,7 @@ export function createApp({
     onThisDay: { ...(onThisDay ?? { resolveSession: async () => null }), rateLimiter },
     update: { ...(postUpdate ?? { resolveSession: async () => null }), rateLimiter },
     revisions: { ...(postRevisions ?? { resolveSession: async () => null }), rateLimiter },
+    profileMood: { ...(profileMood ?? { resolveSession: async () => null }), rateLimiter },
   });
   const interaction = <T extends object>(dependencies: T | undefined) => ({
     ...(dependencies ?? { resolveSession: async () => null }),
@@ -600,6 +605,10 @@ export function createAppForEnv(env: ApiEnv) {
     resolveSession: createSessionResolver(configuration),
     repository: createHyperdriveChangeUsernameRepository(configuration.hyperdrive),
   } satisfies ChangeUsernameRouteDependencies : undefined;
+  const profileMood = configuration ? {
+    resolveSession: createSessionResolver(configuration),
+    repository: createHyperdriveProfileMoodRepository(configuration.hyperdrive),
+  } satisfies GetProfileMoodRouteDependencies : undefined;
   const relationships = configuration ? {
     service: createRelationshipsService(createHyperdriveRelationshipsStore(configuration.hyperdrive)),
     hasUsername,
@@ -651,6 +660,7 @@ export function createAppForEnv(env: ApiEnv) {
     usernameChange,
     avatarSet,
     avatarRemove,
+    profileMood,
     trustedOrigins: configuration?.trustedOrigins,
     rateLimiting: {
       environmentScope: env.API_RATE_LIMIT_SCOPE,

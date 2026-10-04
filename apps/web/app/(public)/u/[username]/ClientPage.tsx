@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { acceptFriendRequest, cancelFriendRequest, getRelationship, loadSocialProfile, removeFriend, sendFriendRequest, type FriendsResult } from "@/lib/api/friends";
 import { ProfilePosts } from "@/features/posts/list-profile-posts/ProfilePosts";
+import { MoodHistory } from "@/features/profiles/get-mood-history/MoodHistory";
 import { postKeys } from "@/features/posts/shared/posts.keys";
 import { useProfileDetailsQuery } from "@/features/profiles/get-profile-details/use-profile-details-query";
 import { ProfileStats } from "@/features/profiles/get-profile-details/ProfileStats";
@@ -149,6 +150,10 @@ export function Profile({ username: requested }: { username: string }) {
           {friendAction.error instanceof Error && <p role="alert" className="text-sm text-danger">{friendAction.error.message}</p>}
         </div>
       </section>
+      {/* Mood history reaches the owner and active friends only, even on a public account. */}
+      {user && (isMe || social.data?.relationship === "friends") && (
+        <MoodHistory username={info.username} displayName={displayName} isMe={isMe} />
+      )}
       <section aria-label={isMe ? "your daylies" : `${displayName}'s daylies`} className="mt-12">
         <ProfilePosts username={info.username} displayName={displayName} isMe={isMe} />
       </section>

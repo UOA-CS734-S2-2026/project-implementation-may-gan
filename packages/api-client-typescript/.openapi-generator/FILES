@@ -80,6 +80,9 @@ src/models/MessageCreationRateLimitError.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/MoodDay.ts
+src/models/MoodHistory.ts
+src/models/MoodPeriodSummary.ts
 src/models/OnThisDayMemories.ts
 src/models/OnThisDayMemory.ts
 src/models/OnThisDayMemoryPrompt.ts
