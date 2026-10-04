@@ -1136,18 +1136,51 @@ class FakeInteractionsClient implements InteractionsClient {
 }
 
 class FakeBiometricService extends ChangeNotifier implements BiometricService {
-  @override
-  bool get isEnabled => false;
+  bool _isEnabled = false;
+  bool _isLocked = false;
+  bool _isAuthenticating = false;
   
   @override
-  bool get isLocked => false;
+  bool get isEnabled => _isEnabled;
+  
+  @override
+  bool get isLocked => _isLocked;
+
+  set enabled(bool value) {
+    _isEnabled = value;
+    notifyListeners();
+  }
+
+  set locked(bool value) {
+    _isLocked = value;
+    notifyListeners();
+  }
+
+  set isAuthenticating(bool value) {
+    _isAuthenticating = value;
+  }
 
   @override
-  void lock() {}
+  void lock() {
+    if (_isEnabled && !_isLocked && !_isAuthenticating) {
+      _isLocked = true;
+      notifyListeners();
+    }
+  }
 
   @override
-  Future<bool> setEnabled(bool enabled) async => false;
+  Future<bool> setEnabled(bool enabled) async {
+    _isEnabled = enabled;
+    notifyListeners();
+    return true;
+  }
 
   @override
-  Future<bool> authenticate({String reason = 'Unlock Dayli'}) async => false;
+  Future<bool> authenticate({String reason = 'Unlock Dayli'}) async {
+    if (_isLocked) {
+      _isLocked = false;
+      notifyListeners();
+    }
+    return true;
+  }
 }
