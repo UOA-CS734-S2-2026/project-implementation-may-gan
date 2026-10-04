@@ -74,8 +74,9 @@ void main() {
   });
 
   test('sends a trimmed text-only body with the draft key', () async {
-    final result = await submitter((_) async => http.Response(post(), 201))
-        .submit(draft());
+    final result = await submitter(
+      (_) async => http.Response(post(), 201),
+    ).submit(draft());
 
     expect(result, isA<SubmissionAccepted>());
     expect((result as SubmissionAccepted).postId, 'post-1');
@@ -220,16 +221,18 @@ void main() {
 
   test('does not send without a stored session', () async {
     token = null;
-    final result = await submitter((_) async => http.Response(post(), 201))
-        .submit(draft());
+    final result = await submitter(
+      (_) async => http.Response(post(), 201),
+    ).submit(draft());
 
     expect((result as SubmissionFailed).failure, isA<Unauthenticated>());
     expect(requests, isEmpty);
   });
 
   test('does not send a draft without a chosen audience', () async {
-    final result = await submitter((_) async => http.Response(post(), 201))
-        .submit(draft(audience: null));
+    final result = await submitter(
+      (_) async => http.Response(post(), 201),
+    ).submit(draft(audience: null));
 
     expect((result as SubmissionFailed).failure, isA<InvalidRequest>());
     expect(requests, isEmpty);

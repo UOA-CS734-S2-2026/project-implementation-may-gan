@@ -510,9 +510,9 @@ class GeneratedProfileClient implements ProfileClient {
     String username,
     MoodRange range,
   ) => _send(
-    (client) =>
-        generated.PostsApi(client)
-            .postsGetProfileMoodWithHttpInfo(username, range: range.wire),
+    (client) => generated.PostsApi(
+      client,
+    ).postsGetProfileMoodWithHttpInfo(username, range: range.wire),
     MoodHistory.tryParse,
   );
 }

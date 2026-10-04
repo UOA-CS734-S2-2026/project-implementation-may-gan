@@ -3,9 +3,8 @@ import 'package:flutter/foundation.dart';
 import '../api/api_failure.dart';
 import '../api/post_page.dart';
 
-typedef FetchPostPage<T> = Future<ApiResult<PostPage<T>>> Function({
-  String? cursor,
-});
+typedef FetchPostPage<T> =
+    Future<ApiResult<PostPage<T>>> Function({String? cursor});
 
 /// A list of posts: the first page on refresh, then further pages on demand.
 ///

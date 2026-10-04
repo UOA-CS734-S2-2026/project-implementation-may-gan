@@ -51,8 +51,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _loadTerms() async {
     try {
-      final terms = await AppScope.of(context).session
-          .currentRegistrationTerms();
+      final terms = await AppScope.of(
+        context,
+      ).session.currentRegistrationTerms();
       if (mounted) {
         setState(() {
           _terms = terms;
@@ -74,8 +75,9 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!_termsLoaded || _termsUnavailable || (_terms != null && !_accepted)) {
       throw const AuthenticationFailure('registration-terms', 409);
     }
-    return AppScope.of(context).session
-        .issueRegistrationProof(flow: flow, terms: _terms);
+    return AppScope.of(
+      context,
+    ).session.issueRegistrationProof(flow: flow, terms: _terms);
   }
 
   @override
@@ -91,8 +93,9 @@ class _AuthScreenState extends State<AuthScreen> {
   Map<String, String> _validate() {
     final errors = <String, String>{};
     if (_signUp) {
-      if (!RegExp(r'^[a-z0-9][a-z0-9_]{2,29}$')
-          .hasMatch(_username.text.trim().toLowerCase())) {
+      if (!RegExp(
+        r'^[a-z0-9][a-z0-9_]{2,29}$',
+      ).hasMatch(_username.text.trim().toLowerCase())) {
         errors['username'] =
             'Use 3-30 lowercase letters, numbers, or underscores.';
       }
@@ -197,7 +200,8 @@ class _AuthScreenState extends State<AuthScreen> {
           setState(() {
             _accepted = false;
             _termsLoaded = false;
-            _error = 'Registration terms changed. Check the documents and try again.';
+            _error =
+                'Registration terms changed. Check the documents and try again.';
           });
         }
         await _loadTerms();
