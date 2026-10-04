@@ -35,7 +35,7 @@ Hibernation keeps idle sockets connected without duration charges while eligible
 
 ## Messaging transport decision
 
-Use hibernating WebSockets in the existing API Worker for foreground notifications, with REST for sending and authorized data retrieval. Attempt outbox dispatch immediately after commit; scheduled retries repair failures rather than provide the normal delivery cadence. FCM/APNs handles suspended mobile apps. The [messaging handoff](../implementation/messaging-implementation-handoff.md) records alternatives and implementation boundaries.
+Use hibernating WebSockets in the existing API Worker for foreground notifications, with REST for sending and authorized data retrieval. Attempt outbox dispatch immediately after commit; scheduled retries repair failures rather than provide the normal delivery cadence. FCM/APNs handles suspended mobile apps. The [messaging design history](../../apps/docs/content/docs/systems/messaging/design-history-and-lessons.mdx) records alternatives and implementation boundaries.
 
 This is a stack-fit decision, not proof of the lowest bill. Compare concurrent devices, event frequency, group fan-out if introduced later, query cost, reconnect bursts, and maintenance effort. SSE can carry one-way notifications but should not be assumed to have WebSocket hibernation economics. Managed realtime trades provider charges for less operations work. A dedicated socket service and broker can suit sustained load but add capacity and failover responsibilities. MQTT and database-sync infrastructure are not required for this release.
 

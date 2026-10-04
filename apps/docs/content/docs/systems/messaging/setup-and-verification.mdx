@@ -151,9 +151,9 @@ Repository integration tests under `apps/api/src/features/messaging/**/__tests__
 
 ## Historical evidence and its limits
 
-`docs/implementation/messaging-verification.md` records a combined local run from the messaging implementation branch. It reports that `pnpm verify:local` and the realtime Worker suite passed, including 180 ordinary API tests, 52 API PostgreSQL integration tests, 23 web rendered or query tests, 67 Flutter tests, and one Worker realtime runtime test.
+Commit [`c66160cf`](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/c66160cf) records a combined local run from the messaging implementation branch. It reports that `pnpm verify:local` and the realtime Worker suite passed, including 180 ordinary API tests, 52 API PostgreSQL integration tests, 23 web rendered or query tests, 67 Flutter tests, and one Worker realtime runtime test.
 
-Those counts belong to that dated run and branch state. They show that the described local suites passed then. They do not prove the current checkout, a hosted deployment, a browser against staging, Firebase credentials, APNs routing, or physical-device delivery.
+Those counts belong to that recorded branch state. They show that the described local suites passed then. They do not prove the current checkout, a hosted deployment, a browser against staging, Firebase credentials, APNs routing, or physical-device delivery.
 
 The same record says the default run did not build the debug APK and did not perform a remote deployment. No production messaging deployment is established by that document.
 

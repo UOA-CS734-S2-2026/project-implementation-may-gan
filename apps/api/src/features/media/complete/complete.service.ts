@@ -43,7 +43,7 @@ function isVideo(contentType: string): boolean {
 
 /**
  * Runs every R2-backed check for one reservation, entirely outside any database
- * transaction (docs/dayli/architecture.md: never hold a lock during R2 I/O).
+ * transaction. The media system guide explains why R2 I/O never holds a database lock.
  * Returns undefined when the object hasn't been uploaded yet — a transient,
  * retryable condition, not a failure — nothing should be persisted for it.
  */

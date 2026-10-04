@@ -1,53 +1,57 @@
-# CS734 project - Team May Gan
+<p align="center">
+  <img src="docs/assets/dayli-icon.png" width="128" alt="Dayli logo" />
+</p>
 
-Welcome to the project for COMPSCI 734 - Mobile, Web & Enterprise Computing. We look forward to seeing the amazing things you create this semester! This is your team's repository.
+<h1 align="center">Dayli</h1>
 
-## Dayli proposal
+<p align="center">A daily reflection app made by a COMPSCI 734 student team.</p>
 
-Start with the [Dayli developer guide](docs/dayli/README.md) for the current code, MVP decisions, and known gaps. Use [Environments](docs/dayli/environments.md) for local auth and staging or production boundaries.
+<p align="center">
+  <a href="https://staging.dayli.agroupforcoders.com">Try the staging app</a>
+  ·
+  <a href="https://dayli-docs.agroupforcoders.com/docs">Read the docs</a>
+</p>
 
-Your team members are:
-- Andrew Qiu (aqiu604)
-- Anton Garay (agar830)
-- Jos Badenas (jbad180)
-- JooHui Lee (eejl391)
+Dayli gives people a small place to pause at the end of the day. Write a reflection, rate the day, then choose whether to keep it private or share it with friends. The project includes web and mobile clients, one API, and the documentation that explains how the pieces fit together.
 
-You have complete control over how you run this repo. All your members will have admin access. The only thing setup by default is branch protections on `main`, requiring a PR with at least one code reviewer to modify `main` rather than direct pushes.
+## Start here
 
-Please use good version control practices, such as feature branching, both to make it easier for markers to see your group's history and to lower the chances of you tripping over each other during development
+- [Staging](https://staging.dayli.agroupforcoders.com) is the shared development app. Its content and availability can change while the team is working.
+- The [Dayli docs](https://dayli-docs.agroupforcoders.com/docs) explain how to use, build, operate, and review the project.
+- The deployed docs can lag the current pull request. Read the [docs source](apps/docs/content/docs/index.mdx) for the version in this repository.
 
-![Team image](./team-image.png)
+## Developing Dayli
+
+New to the project? Start with the [local setup guide](https://dayli-docs.agroupforcoders.com/docs/development/local-setup). It explains the prerequisites and local HTTPS setup before you run the apps. Install the locked dependencies from the repository root with:
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+Then follow the docs for [repository structure](https://dayli-docs.agroupforcoders.com/docs/development/repository-structure), [testing](https://dayli-docs.agroupforcoders.com/docs/development/testing), and [contributing](https://dayli-docs.agroupforcoders.com/docs/development/contributing). The root [CONTRIBUTING.md](CONTRIBUTING.md) records the repository's pull request and verification policy.
 
 ## Repository layout
 
-- `apps/api`: Hono API deployed to Cloudflare Workers
-- `apps/web`: Next.js web client
-- `apps/mobile`: Flutter mobile client
-- `packages/domain`: transport-independent business rules
-- `packages/db`: Drizzle schema and PostgreSQL migrations
-- `packages/contracts`: REST/OpenAPI contracts and generated TypeScript models
+- `apps/web`: Next.js browser app
+- `apps/mobile`: Flutter mobile app
+- `apps/api`: Hono API on Cloudflare Workers
+- `apps/docs`: Next.js and Fumadocs documentation site
+- `packages/`: shared domain rules, database code, contracts, generated clients, and legal content
 
-## Local setup
+## Contributors
 
-Install Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and mkcert. Trust the local mkcert CA yourself, then run:
+### Current COMPSCI 734 team
 
-```bash
-mkcert -install
-pnpm install --frozen-lockfile
-pnpm local:auth:setup
-pnpm db:dev:up
-pnpm db:dev:migrate
-pnpm db:dev:verify
-```
+- Andrew Qiu (`aqiu604`)
+- Anton Garay (`agar830`)
+- Jos Badenas (`jbad180`)
+- JooHui Lee (`eejl391`)
 
-Start `pnpm dev:api:https` and `pnpm dev:web:https` in separate terminals. Sign up at `https://localhost:3000/sign-up`. See [Environments](docs/dayli/environments.md) before installing a development CA on a device.
+### Original contributors
 
-GitHub Actions verifies every pull request and every push to `main`. Run the local verification suite before requesting review when you need the same broad checks on your machine:
+- Kimberley Zhu
+- Grace Xu
 
-```bash
-pnpm verify:local
-```
+## Team image
 
-Use `pnpm verify:local:full` when the debug Android APK build is required. See [Continuous integration](docs/dayli/continuous-integration.md) for required checks, the read-only pull request boundary, and the manual deployment boundary. See [Testing and delivery](docs/dayli/testing-and-delivery.md) for evidence recording.
-
-For Android emulator or USB development, install the local CA on the device, then run `adb reverse tcp:8787 tcp:8787` before Flutter. For iOS Simulator, use a Mac with full Xcode and follow the certificate instructions in [Environments](docs/dayli/environments.md). In either case pass `--dart-define=DAYLI_API_BASE_URL=https://localhost:8787` to `flutter run`. [Environments](docs/dayli/environments.md) also covers the separate staging and production boundaries.
+![Dayli contributors](./team-image.png)

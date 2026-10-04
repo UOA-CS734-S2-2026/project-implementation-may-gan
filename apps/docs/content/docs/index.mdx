@@ -1,59 +1,76 @@
 ---
-title: Hello World
-description: Your first document
+title: Welcome to the Dayli docs
+description: Find the right starting point for using, building, understanding, operating, or reviewing Dayli.
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+Dayli is a daily reflection app made by a university student team. Each day, someone can answer a prompt, rate their day, and choose whether to share the post with friends or keep it private. Dayli uses the Auckland calendar day, so posting and release times follow Auckland midnight.
 
-## What is Next?
+These docs explain how to use Dayli and how the project works behind the screens. They also record the setup, tests, current status, and known gaps for people working on or reviewing the project.
 
-   Home
-   ├── About Dayli
-   │   ├── What Dayli is
-   │   ├── Core concepts and daily rules
-   │   └── Project status
-   ├── Using Dayli
-   │   ├── Getting started
-   │   ├── Creating your daily post
-   │   ├── Friends and the feed
-   │   ├── Privacy and sharing
-   │   └── Help and troubleshooting
-   ├── Systems
-   │   ├── Architecture overview
-   │   ├── Accounts and authentication
-   │   │   ├── Overview
-   │   │   ├── Web sessions
-   │   │   ├── Mobile sessions
-   │   │   └── Auth-specific rate limits
-   │   ├── Daily posts and release timing
-   │   ├── Friends and feed visibility
-   │   ├── Media uploads and storage
-   │   ├── Messaging
-   │   └── Reflection and history
-   ├── Development
-   │   ├── Local setup
-   │   ├── Repository structure
-   │   ├── Backend architecture
-   │   ├── Web app
-   │   ├── Mobile app
-   │   ├── Database
-   │   ├── API contracts and generated clients
-   │   ├── Testing
-   │   │   ├── Overview and test commands
-   │   │   ├── Repository tests
-   │   │   ├── Integration tests
-   │   │   ├── End-to-end tests
-   │   │   └── Synthetic tests (planned)
-   │   └── Contributing
-   ├── Operations
-   │   ├── Environments and deployment
-   │   ├── Database migrations
-   │   ├── Security
-   │   │   └── Rate limiting and abuse controls
-   │   └── Troubleshooting
-   ├── API reference
-   │   └── Generated from the OpenAPI spec
-   └── Decisions and future work
-       ├── Product decisions
-       ├── Technical decisions
-       └── Planned systems and known gaps
+Pick the route that matches what you are here to do. You can always use the sidebar when curiosity wins.
+
+<Cards>
+  <Card title="Use Dayli" href="#i-want-to-use-dayli">
+    Create an account, make a daily post, and understand sharing.
+  </Card>
+  <Card title="Contribute a change" href="#i-want-to-contribute">
+    Run Dayli locally, find the right code, and prepare a reviewable change.
+  </Card>
+  <Card title="Explore the architecture" href="#i-want-to-understand-the-architecture">
+    Follow the web app, mobile app, API, database, and generated contracts.
+  </Card>
+  <Card title="Operate an environment" href="#i-need-to-operate-dayli">
+    Configure an environment and check the systems that need external services.
+  </Card>
+  <Card title="Review the project" href="#i-am-reviewing-the-project">
+    Check the project's status, design, test evidence, and known gaps.
+  </Card>
+</Cards>
+
+## I want to use Dayli
+
+Start here if you want to create an account and post a reflection. The user guides explain the visible behaviour on web and mobile, including details that are easy to miss, such as the Auckland midnight deadline and the difference between a friends post and a solo post.
+
+1. **Start:** [Getting started](/docs/using-dayli/getting-started)
+2. **Next:** [Create your daily post](/docs/using-dayli/creating-your-daily-post)
+3. **Then:** [Find friends and read the feed](/docs/using-dayli/friends-and-the-feed)
+4. **Finally:** [Choose what you share](/docs/using-dayli/privacy-and-sharing)
+
+## I want to contribute
+
+Start here if you are joining the codebase or preparing a change. This route gets a local copy running first, then shows where work belongs and how to test and submit it without trampling someone else's branch.
+
+1. **Start:** [Set up Dayli locally](/docs/development/local-setup)
+2. **Next:** [Learn the repository structure](/docs/development/repository-structure)
+3. **Then:** [Follow the contribution process](/docs/development/contributing)
+4. **Before review:** [Choose and run the right tests](/docs/development/testing)
+
+## I want to understand the architecture
+
+Start here for the big picture before reading individual implementation details. Dayli has separate Next.js and Flutter clients, but both use one Hono API and generated clients based on the same HTTP contract.
+
+1. **Start:** [See the architecture overview](/docs/systems/architecture-overview)
+2. **Next:** [Follow a backend feature](/docs/development/backend-architecture)
+3. **Then:** [Understand API contracts and generated clients](/docs/development/api-contracts-and-generated-clients)
+4. **Check the boundaries:** [Read the testing guide](/docs/development/testing)
+
+## I need to operate Dayli
+
+Start here if you maintain a shared Dayli environment. These pages separate local setup from staging configuration and explain which checks use real external services. Dayli has no documented production environment, so do not treat staging instructions or test results as production proof.
+
+1. **Start:** [Configure an environment](/docs/operations/environment-configuration)
+2. **Next:** [Set up and operate authentication](/docs/systems/accounts-and-authentication/setup-and-operations)
+3. **Then:** [Set up and verify private media storage](/docs/systems/media-uploads-and-storage/setup-and-verification)
+
+Use protected credentials only through the reviewed staging workflows described in those guides. Do not copy secrets into commands, documentation, or test output.
+
+## I am reviewing the project
+
+Start here if you are marking the course project or assessing its technical work. This route distinguishes the team's current status from architectural intent, repeatable test evidence, and work that is still planned. A passing local check does not prove a deployed service works, and a planned page does not claim the feature exists.
+
+1. **Start:** [Read the project status](/docs/about-dayli/project-status)
+2. **Next:** [Review the architecture](/docs/systems/architecture-overview)
+3. **Then:** [See what each test layer proves](/docs/development/testing)
+4. **Check what remains:** [Read the planned systems and known gaps](/docs/decisions-and-future-work/planned-systems-and-known-gaps)
+
+For endpoint-level detail, use the [generated API reference](/docs/api-reference). For a feature's reasoning and limitations, follow the relevant system page and its links to source or implementation records.

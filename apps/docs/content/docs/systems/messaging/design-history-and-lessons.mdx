@@ -3,9 +3,9 @@ title: Design history and lessons
 description: Why Dayli separates durable messaging state from live delivery, and what changed between the early plan and the current code.
 ---
 
-Messaging began with a broad requirement: direct text chat on web and mobile should feel live without making a dropped connection responsible for the message itself. The early implementation handoff in `docs/implementation/messaging-implementation-handoff.md` turned that into a storage, authorization, delivery, and client-recovery design.
+Messaging began with a broad requirement: direct text chat on web and mobile should feel live without making a dropped connection responsible for the message itself. Issues [#26 through #33](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/26), [#47](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/47), and [#127 through #133](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/issues/127) split that requirement into storage, authorization, delivery, client recovery, and deferred work.
 
-That document mixed confirmed requirements with proposed defaults and a proposed file tree. It was a plan, not proof that the feature worked. The current implementation follows most of its architecture, but code, tests, and deployed evidence remain different kinds of evidence.
+The early plans mixed confirmed requirements with proposed defaults and a proposed file tree. They were not proof that the feature worked. The current implementation follows most of their architecture, but code, tests, and deployed evidence remain different kinds of evidence.
 
 ## The main design problem
 
@@ -112,15 +112,8 @@ It also deferred attachments until the private R2 upload design could define mes
 
 Typing, presence, delivered-to-device receipts, browser push, offline message persistence, and end-to-end encryption were not added as accidental side effects of realtime. TLS protects transport, but this system is not E2EE.
 
-## Reading the older records
+## Source history
 
-The repository records are still useful when their status is clear:
+The issue series above preserves the original scope and dependency discussion. Backend action ownership was reviewed in [PR #150](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/150), building on the backend refactor in [PR #134](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/134) and the friends work in [PR #137](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/pull/137). Commit [`c66160cf`](https://github.com/UOA-CS734-S2-2026/project-implementation-may-gan/commit/c66160cf) records the final combined local messaging verification update.
 
-- `docs/implementation/messaging-implementation-handoff.md` contains the original requirements, alternatives, proposed schema, API, file tree, and acceptance matrix.
-- `docs/implementation/messaging-delivery-integration.md` records the post-commit integration and the push-token storage correction that later migrations addressed.
-- `docs/implementation/messaging-action-ownership.md` explains why the API was split into action directories rather than one large repository.
-- `docs/implementation/messaging-ticket-map.md` preserves the original dependency plan.
-- `docs/implementation/messaging-verification.md` records a historical combined local run and its external release gates.
-- `docs/implementation/privacy-messaging-identities.md` records the later durable participant migration sequence.
-
-Use the current code for present behavior, the API reference for the current REST shape, and dated verification records for claims about a particular run or environment.
+The later durable participant migration remains documented in `docs/implementation/privacy-messaging-identities.md` because it is part of the active privacy and account-lifecycle work. Use the current code for present behavior, the API reference for the current REST shape, and dated verification evidence for claims about a particular run or environment.

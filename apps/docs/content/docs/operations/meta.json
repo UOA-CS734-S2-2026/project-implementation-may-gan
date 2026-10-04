@@ -3,6 +3,7 @@
   "defaultOpen": true,
   "pages": [
     "environments-and-deployment",
+    "environment-configuration",
     "database-migrations",
     "security",
     "troubleshooting"

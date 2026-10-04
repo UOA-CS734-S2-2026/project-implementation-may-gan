@@ -34,7 +34,7 @@ The messaging planning conversation selected text direct messaging on web and Fl
 
 Foreground updates use hibernating WebSockets with small change notifications and authorized REST fetches, not periodic polling. Mobile push through FCM/APNs is in scope, with configuration and physical-device verification as release gates. Image/video attachments remain blocked on the separate R2 upload owner. Group chats are deferred until group membership and blocking rules are agreed.
 
-The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented.
+The [messaging system guide](../../apps/docs/content/docs/systems/messaging/index.mdx) records the implemented request states, reaction limits, and generic push presentation. Provider and physical-device checks remain release gates.
 
 ## Profiles
 

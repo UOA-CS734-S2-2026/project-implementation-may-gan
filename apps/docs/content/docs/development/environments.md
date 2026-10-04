@@ -106,7 +106,7 @@ Use the deployed staging web app to test staging in a browser, or keep the local
 
 Staging deployment is separate from accessing staging. Its workflow generates Worker configuration and web build settings from the protected GitHub environment. `STAGING_AUTH_API_ORIGIN` and `STAGING_AUTH_WEB_ORIGIN` identify the deployed origins, and `STAGING_BROWSER_PROXY_ENABLED` controls the approved browser auth mode. Don't change that mode as part of local setup.
 
-The checked-in `apps/api/wrangler.staging.example.jsonc` is a configuration reference, not a ready-to-deploy file. Follow `docs/implementation/staging-deployment.md` for the complete deployment inputs and approval requirements.
+The checked-in `apps/api/wrangler.staging.example.jsonc` is a configuration reference, not a ready-to-deploy file. [Environment configuration](/docs/operations/environment-configuration) maps each staging setting to its workflow and runtime destination. Follow `docs/implementation/staging-deployment.md` for the deployment approvals.
 
 There is no production environment to connect to yet.
 

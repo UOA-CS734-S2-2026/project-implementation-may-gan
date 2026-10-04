@@ -58,4 +58,12 @@ Check your answer, rating, and audience. On the web or mobile, choose **Post**. 
 
 After posting, find your own dayli under **my days** or on your profile. Before a Friends post is released, it is marked **Not released yet**. A Solo post is marked **Only you**.
 
-Dayli editing is not available yet. Editing posts with revisions is planned, but message editing is a separate feature and does not edit a dayli.
+## Make a change after posting
+
+Open your own dayli from **my days** or your profile. On web, choose **Edit** on the post detail page. On mobile, choose **Edit** from the post menu.
+
+You can change your answer, word dump, rating, and audience, even after the post is released. The date, prompt, attached media, and tomorrow note stay as they were.
+
+Dayli keeps earlier versions when you save a change. Text from a Solo version stays private, even if you later change the post to Friends. If another device saved an edit first, Dayli asks you to load the latest version rather than overwrite it silently.
+
+For the details, see [Reflection and history](/docs/systems/reflection-and-history).

@@ -1,6 +1,6 @@
 # Backend architecture
 
-Status: backend action boundaries are implemented. See the [boundary inventory](implementation/backend-action-boundaries-inventory.md) for the route baseline and the [messaging handoff](implementation/messaging-implementation-handoff.md) for messaging behavior and deployment gates.
+Status: backend action boundaries are implemented. See the [boundary inventory](implementation/backend-action-boundaries-inventory.md) for the route baseline and the [messaging system guide](../apps/docs/content/docs/systems/messaging/index.mdx) for messaging behavior and deployment gates.
 
 ## Decisions
 
@@ -238,4 +238,4 @@ REST owns commands and authorized state. Postgres owns history, read state, chan
 
 The web implementation uses a user-remounted QueryClient and user-ID keys, with action-owned TanStack hooks under `apps/web/features/messaging`. The provider cancels and clears private cache state on account changes. It applies canonical projections to every loaded history page before advancing a durable change cursor, then invalidates dependent conversation, inbox, and unread projections. Push targets eligible peer devices through FCM/APNs and requires owner configuration and device proof. Images remain blocked on R2 integration; groups remain blocked on policy.
 
-For endpoint contracts and messaging-specific data rules, use the [messaging handoff](implementation/messaging-implementation-handoff.md). This architecture document governs organization and boundaries, not changes to those approved product rules.
+For endpoint contracts, use the generated API reference. For messaging-specific data rules, use the [messaging system guide](../apps/docs/content/docs/systems/messaging/index.mdx). This architecture document governs organization and boundaries, not changes to those approved product rules.

@@ -9,7 +9,7 @@ Backend code gets difficult to change when one feature is spread across a folder
 
 Dayli organises API implementation code by feature and action instead. The HTTP contract, route, operation logic, and database work for an action stay close together. This is called feature-based organisation and colocation. The goal is practical: a developer can understand an operation without reconstructing it from unrelated folders.
 
-Our target convention is to put every API test suite in an `__tests__` directory under its owner. This keeps implementation files easy to scan while keeping tests close to the feature they check. Messaging already follows this pattern; migrating the remaining API tests is pending. Shared helpers and architecture fixtures keep their dedicated folders.
+API test suites live in `__tests__` directories under their owners. This keeps implementation files easy to scan while keeping tests close to the feature they check. Standalone runtime suites live in `apps/api/test/__tests__`. Shared helpers and architecture fixtures keep their dedicated folders.
 
 Colocation does not mean putting every concern in one giant file. The layers still have different jobs. They simply live beside the action they implement.
 
@@ -24,13 +24,13 @@ route
   -> PostgreSQL or another runtime provider
 ```
 
-A contract defines the request and response shape alongside that flow. The target layout puts the action's tests in its `__tests__` directory. Until the migration is complete, some tests still sit directly beside implementation files.
+A contract defines the request and response shape alongside that flow. The action's tests live in its `__tests__` directory.
 
 Use only the layers the action needs. A route may call a repository directly for a simple authorized read. An operation with business decisions or several coordinated steps earns a service. Adding a pass-through service to make the folders look symmetrical gives us more files, not more architecture.
 
 ## A real Dayli feature
 
-Creating a daily post is a useful representative action because it has validation, authentication, time rules, several writes, and concurrency protection. The tree below shows its intended layout after the test-folder migration, not the current placement of every test.
+Creating a daily post is a useful representative action because it has validation, authentication, time rules, several writes, and concurrency protection. The tree below shows its layout after the merged test-folder refactor.
 
 ```text
 apps/api/src/features/posts/
@@ -133,7 +133,7 @@ Use the test that matches the responsibility:
 - repository integration tests cover real SQL, constraints, transactions, locks, and rollback with PostgreSQL
 - pure shared policy tests check the policy's decisions
 
-The target API test layout is:
+The API test layout is:
 
 | Tests or support | Location relative to `apps/api` |
 | --- | --- |
@@ -146,7 +146,7 @@ The target API test layout is:
 | Shared API test helpers | `test/support/`, unchanged |
 | Import-boundary fixtures | `test/boundaries/`, unchanged |
 
-This standardisation is pending. Existing post tests still sit beside their implementation, and standalone runtime and staging tests still sit directly under `test`. Current test commands remain documented in [Testing](./testing) until the files and runner configuration move together.
+The test-folder refactor is merged into `main`. If your checkout still has the older paths, update your branch before using the commands in [Testing](./testing).
 
 The convention applies to API test suites, not to every helper or fixture, and it does not reorganise web, mobile, or shared-package tests. A separate test folder doesn't change which feature owns the behaviour it checks.
 

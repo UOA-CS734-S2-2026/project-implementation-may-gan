@@ -132,6 +132,16 @@ The two post composers are not at the same stage.
 
 Both clients can display authorized post media. Their feed cards show the first photo and a non-playing video tile. Post detail shows all photos or the single looping video. Voice memo API support exists, but the documented mobile recording work is separate from the storage flow.
 
+### Mobile capture and recovery
+
+Flutter asks for camera permission only after the author chooses **Take a photo** or **Record a video**. Refusal leaves text posts and library selection available. A permanent refusal offers the platform Settings screen, while a restricted or missing camera reports the limitation without pretending Settings can fix it. Recording video on iOS can also trigger the system microphone request.
+
+The compressor writes per-account copies under application support storage. Photos become orientation-corrected JPEG files with a longest edge of 2048 pixels, quality 80, and EXIF removed. Videos become 720p H.264 and AAC MP4 files at about 2.5 Mbps with location metadata removed. The app checks the compressed file before reserving it and keeps the copy until the attachment is removed, the post succeeds, or the draft is discarded.
+
+Android can terminate the app while the system camera or picker is open. Before opening it, Flutter records the account and draft that started the request in protected storage. A recovered file can return only to that same account and draft. A file associated with another account is held for its owner rather than added to the current draft, and an unowned recovery is deleted. The handoff expires after 24 hours, and sign-out clears that account's draft, media directory, and pending picker record.
+
+Uploads pause while the composer is closed. A crash during compression can leave a copy until sign-out, and video tiles still use a placeholder instead of a generated thumbnail. These are client limits, not guarantees provided by the reservation API.
+
 ## Cleanup and deletion
 
 A reservation can be abandoned after a crash, a rejected file, or a draft that is never posted. The scheduled media cleanup job handles reservations that expired at least seven days earlier and are linked to neither `post_media` nor `profile_avatars`. The seven day value in current code supersedes the older 24 hour value in the original media document.
