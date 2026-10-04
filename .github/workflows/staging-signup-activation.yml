@@ -87,9 +87,9 @@ jobs:
       - name: Freeze staging release entry points and drain historical reruns
         # A rerun uses the workflow definition from its historical commit, so
         # its concurrency group may not be this workflow's group. Freeze new
-        # release entry points, cancel only runs that have not started, then
-        # let started work finish. A timeout leaves releases frozen and fails
-        # closed for operator recovery.
+        # release entry points and wait for queued and started runs to finish.
+        # Never cancel them: a queued run may start between checking and canceling.
+        # Timeout leaves releases frozen and fails closed for operator recovery.
         uses: actions/github-script@v7
         with:
           script: |

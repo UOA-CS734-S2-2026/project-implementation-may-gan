@@ -107,12 +107,12 @@ test("manual publisher is main-only, staging-only, and verifies both deployed Wo
   assert.match(workflow, /freezeStagingReleaseEntryPoints/);
   const freeze = readFileSync(resolve(root, "scripts/freeze-staging-release-entry-points.mjs"), "utf8");
   assert.match(freeze, /disableWorkflow/);
-  assert.match(freeze, /cancelWorkflowRun/);
+  assert.doesNotMatch(freeze, /cancelWorkflowRun/);
   assert.match(freeze, /staging-release\.yml/);
   assert.match(freeze, /staging-hyperdrive\.yml/);
   assert.match(freeze, /staging-web\.yml/);
   assert.match(freeze, /workflow_call/);
-  assert.match(freeze, /NOT_STARTED_STATUSES/);
+  assert.match(freeze, /ACTIVE_STATUSES/);
   assert.match(workflow, /STAGING_SIGNUP_ACTIVATION_APPROVED/);
   assert.match(workflow, /ACTIVATE STAGING SIGNUP/);
   assert.match(workflow, /ROLLBACK STAGING SIGNUP/);

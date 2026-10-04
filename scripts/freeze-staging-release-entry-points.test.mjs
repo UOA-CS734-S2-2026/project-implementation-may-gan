@@ -2,9 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { freezeStagingReleaseEntryPoints, STAGING_RELEASE_WORKFLOWS } from "./freeze-staging-release-entry-points.mjs";
 
-function githubFor(runs, { completeInProgressOnPause = true, queuedBecomesInProgress = false } = {}) {
+function githubFor(runs, { completeAllOnPause = true } = {}) {
   const disabled = new Set();
-  const cancelled = [];
   const disableCalls = [];
   const listWorkflowRuns = async ({ workflow_id, status }) => ({
     data: { workflow_runs: runs.filter((run) => run.workflow_id === workflow_id && run.status === status) },
@@ -26,31 +25,19 @@ function githubFor(runs, { completeInProgressOnPause = true, queuedBecomesInProg
           data: { state: disabled.has(workflow_id) ? "disabled_manually" : "active" },
         }),
         listWorkflowRuns,
-        getWorkflowRun: async ({ run_id }) => {
-          const run = runs.find((candidate) => candidate.id === run_id);
-          if (queuedBecomesInProgress && run.status === "queued") run.status = "in_progress";
-          return { data: { ...run } };
-        },
-        cancelWorkflowRun: async ({ run_id }) => {
-          const run = runs.find((candidate) => candidate.id === run_id);
-          if (run.status === "in_progress") throw Object.assign(new Error("Run has started."), { status: 409 });
-          cancelled.push(run_id);
-          run.status = "completed";
-        },
       } },
     },
     disabled,
-    cancelled,
     disableCalls,
     pause: async () => {
-      if (completeInProgressOnPause) {
-        for (const run of runs) if (run.status === "in_progress" || run.status === "pending") run.status = "completed";
+      if (completeAllOnPause) {
+        for (const run of runs) run.status = "completed";
       }
     },
   };
 }
 
-test("freezes all release paths, tolerates reusable workflow_call restrictions, and never cancels started work", async () => {
+test("freezes release paths and waits for queued and started work without cancellation", async () => {
   const fixture = githubFor([
     { id: 1, workflow_id: "staging-release.yml", status: "queued" },
     { id: 2, workflow_id: "staging-hyperdrive.yml", status: "in_progress" },
@@ -63,25 +50,13 @@ test("freezes all release paths, tolerates reusable workflow_call restrictions, 
 
   assert.deepEqual(fixture.disableCalls, STAGING_RELEASE_WORKFLOWS);
   assert.deepEqual([...fixture.disabled], ["staging-release.yml"]);
-  assert.deepEqual(fixture.cancelled, [1]);
 });
 
-test("does not cancel a run that starts while it is being checked", async () => {
+test("times out closed while preserving pending work for operator recovery", async () => {
   const fixture = githubFor([
     { id: 1, workflow_id: "staging-release.yml", status: "queued" },
-  ], { queuedBecomesInProgress: true });
-
-  await freezeStagingReleaseEntryPoints({
-    github: fixture.github, owner: "owner", repo: "repo", pause: fixture.pause,
-  });
-
-  assert.deepEqual(fixture.cancelled, []);
-});
-
-test("times out closed while preserving in-progress work for operator recovery", async () => {
-  const fixture = githubFor([
-    { id: 1, workflow_id: "staging-release.yml", status: "in_progress" },
-  ], { completeInProgressOnPause: false });
+    { id: 2, workflow_id: "staging-web.yml", status: "in_progress" },
+  ], { completeAllOnPause: false });
 
   await assert.rejects(
     freezeStagingReleaseEntryPoints({
@@ -89,6 +64,5 @@ test("times out closed while preserving in-progress work for operator recovery",
     }),
     /remain frozen; an operator must recover them/,
   );
-  assert.deepEqual(fixture.cancelled, []);
   assert.deepEqual([...fixture.disabled], ["staging-release.yml"]);
 });

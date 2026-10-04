@@ -4,17 +4,12 @@ export const STAGING_RELEASE_WORKFLOWS = [
   "staging-web.yml",
 ];
 
-const NOT_STARTED_STATUSES = new Set(["queued", "waiting", "requested"]);
-const ACTIVE_STATUSES = [...NOT_STARTED_STATUSES, "pending", "in_progress"];
+const ACTIVE_STATUSES = ["queued", "waiting", "requested", "pending", "in_progress"];
 const REUSABLE_WORKFLOWS = new Set(["staging-hyperdrive.yml", "staging-web.yml"]);
 
 function isWorkflowCallDisableRestriction(error) {
   const detail = JSON.stringify(error?.response?.data?.errors ?? "");
   return error?.status === 422 && /workflow[_ ]call|reusable workflow/i.test(`${error.message ?? ""} ${detail}`);
-}
-
-function isNoLongerCancellable(error) {
-  return error?.status === 409;
 }
 
 async function activeWorkflowRuns({ github, owner, repo, workflows }) {
@@ -33,25 +28,9 @@ async function activeWorkflowRuns({ github, owner, repo, workflows }) {
   return [...runs.values()];
 }
 
-async function cancelOnlyRunsThatHaveNotStarted({ github, owner, repo, runs }) {
-  await Promise.all(runs.filter((run) => NOT_STARTED_STATUSES.has(run.status)).map(async (run) => {
-    // A run can leave its queued state between the list request and the cancel
-    // request. Read it again so an already-started deployment is left alone.
-    const { data: latest } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: run.id });
-    if (!NOT_STARTED_STATUSES.has(latest.status)) return;
-    try {
-      await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id: run.id });
-    } catch (error) {
-      // A concurrent scheduler transition makes cancellation unsafe; polling
-      // will then wait for the run instead of interrupting it.
-      if (!isNoLongerCancellable(error)) throw error;
-    }
-  }));
-}
-
 /**
- * Freeze new staging releases, remove only runs that have not started, and let
- * started release work complete before a legal-record mutation is permitted.
+ * Freeze new staging releases and let all pending and started work finish.
+ * Never cancel a queued run: it could start between inspection and cancellation.
  */
 export async function freezeStagingReleaseEntryPoints({
   github,
@@ -84,7 +63,6 @@ export async function freezeStagingReleaseEntryPoints({
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const active = await activeWorkflowRuns({ github, owner, repo, workflows });
     if (active.length === 0) return;
-    await cancelOnlyRunsThatHaveNotStarted({ github, owner, repo, runs: active });
     await pause(2_000);
   }
 
