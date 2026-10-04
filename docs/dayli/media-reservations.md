@@ -123,7 +123,7 @@ A post can carry one voice memo, recorded in the mobile app. It goes through the
 
 None of this uses genuinely real, fully decodable JPEG/PNG/HEIC files — authoring byte-perfect DEFLATE-compressed or DCT-coded scan data by hand isn't something to get subtly wrong silently, and there's no decoder available in this environment to verify it. The fixtures instead use correct, spec-verifiable *markers* at the right offsets (real signature bytes, correct box layouts, consistent declared sizes) — which is what `checkEssentialStructure`/`extractIsoBmffDurationSeconds` actually check. If genuinely real sample files are wanted for stronger test-suite confidence, check in small real binary fixtures rather than hand-encoding them.
 
-What local testing cannot prove is whether Cloudflare's real R2 S3-compatible endpoint actually accepts the SigV4 construction and enforces it as expected, and whether a wrong-type real upload gets rejected by `/complete` end-to-end. Those are covered by a separate deployed check, the same way [authentication compatibility](authentication-compatibility.md) treats a deployed staging check as separate from unit coverage.
+What local testing cannot prove is whether Cloudflare's real R2 S3-compatible endpoint actually accepts the SigV4 construction and enforces it as expected, and whether a wrong-type real upload gets rejected by `/complete` end-to-end. Those are covered by a separate deployed check, the same way [authentication security and verification](../../apps/docs/content/docs/systems/accounts-and-authentication/security-and-verification.mdx) treats a deployed staging check as separate from unit coverage.
 
 ## Staging verification
 

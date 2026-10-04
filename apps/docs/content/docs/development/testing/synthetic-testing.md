@@ -21,7 +21,7 @@ The implementation has three main sources:
 - `apps/web/scripts/staging-auth-smoke.mjs` contains the fixed-origin Playwright journey and allowlisted reporting.
 - `scripts/staging-auth-smoke.test.mjs` checks the journey, privacy behavior, cleanup, origin restrictions, and workflow contract with local fixtures.
 
-The design and validation record is `docs/implementation/staging-auth-smoke-tests.md`. Release attribution comes from `.github/workflows/staging-release.yml` and is validated by `scripts/validate-staging-auth-attribution.mjs` before a post-release smoke receives staging credentials.
+The historical design and validation record is now preserved in [Authentication security and verification](/docs/systems/accounts-and-authentication/security-and-verification#staging-authentication-smoke-journey). Release attribution comes from `.github/workflows/staging-release.yml` and is validated by `scripts/validate-staging-auth-attribution.mjs` before a post-release smoke receives staging credentials.
 
 ## What the journey checks
 

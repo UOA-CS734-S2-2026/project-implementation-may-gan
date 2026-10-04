@@ -124,7 +124,11 @@ expect(response.status).toBe(401);
 
 A mock saying that session lookup ran would be weaker. The status is what an API caller receives.
 
-Keep API tests near the feature they cover. Existing features use both `feature/file.test.ts` and `feature/__tests__/file.test.ts`; follow the convention in that feature. Use `.repository.integration.test.ts` for a test that requires PostgreSQL, and do not disguise one as a unit test by connecting to a developer database.
+Our target API convention is to put test suites in an `__tests__` directory under the code's owner. Messaging already follows it, while moving the remaining API tests is pending. Until that refactor updates the files and runner configurations, the commands and example paths on this page refer to the current locations.
+
+For the full target layout, see [Backend architecture](../backend-architecture). Shared test helpers stay in `apps/api/test/support`, and architecture fixtures stay in `apps/api/test/boundaries`; they are not test suites. Web, mobile, and shared-package layouts are unchanged.
+
+Use `.repository.integration.test.ts` for a test that requires PostgreSQL, and do not disguise one as a unit test by connecting to a developer database.
 
 The ordinary API test command uses the Cloudflare Vitest plugin but mocks network and storage dependencies in focused tests. Never use a production or staging URL in one of these tests. Inject a fake client, mock `fetch`, or use a local in-memory store.
 

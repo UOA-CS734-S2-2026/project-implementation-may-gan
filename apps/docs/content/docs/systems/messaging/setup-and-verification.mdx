@@ -1,0 +1,216 @@
+---
+title: Setup and verification
+description: Configure messaging delivery, run local checks, and separate local evidence from staging and physical-device proof.
+---
+
+Text messaging needs PostgreSQL and the ordinary authenticated API. Live foreground updates additionally need the `USER_REALTIME` Durable Object binding and its class migration. Background mobile alerts need push-token encryption, an FCM service account, Firebase app files, APNs configuration for iOS, and a real device.
+
+Missing push configuration must not prevent realtime delivery. The runtime treats the realtime and push channels independently.
+
+## Local text and realtime setup
+
+Install the repository prerequisites listed in `CONTRIBUTING.md`: Node.js 24, pnpm 10, JDK 17, Docker with Compose, Flutter, and Dart. Local browser authentication also uses mkcert.
+
+From the repository root:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm local:auth:setup
+pnpm db:dev:up
+pnpm db:dev:migrate
+pnpm db:dev:verify
+```
+
+Start the API and web app in separate terminals:
+
+```bash
+pnpm dev:api:https
+pnpm dev:web:https
+```
+
+The local API Wrangler example declares:
+
+- the `USER_REALTIME` Durable Object binding;
+- a SQLite Durable Object class migration for `UserRealtime`;
+- the every-minute scheduled trigger that repairs due outbox work;
+- rate-limit bindings for messaging and direct push registration.
+
+The API also needs its normal Hyperdrive and Better Auth settings. Messaging routes require an authenticated account with username setup complete. Follow [Authentication setup and operations](/docs/systems/accounts-and-authentication/setup-and-operations) for those values.
+
+Run migrations with the migrator role. The Worker uses the restricted application role through Hyperdrive. The messaging foundation, encrypted push-token fields, and later durable participant migrations are part of the repository's ordered migration history. Do not apply an isolated messaging SQL file or edit an already applied migration.
+
+The full database procedure remains in `docs/dayli/database-migrations.md`.
+
+## Worker bindings and delivery
+
+The API Worker exports `UserRealtime`. `USER_REALTIME` must point to that class in each environment where foreground live delivery is enabled. The API's scheduled handler runs outbox repair once per minute.
+
+A normal message write inserts outbox rows in its database transaction. After the response is ready, the route gives immediate dispatch to `ExecutionContext.waitUntil`. This attempt has a small time and batch budget. It is an optimization, not the durability mechanism. The cron later claims anything still due.
+
+The dispatcher currently defaults to:
+
+| Setting | Current code default |
+| --- | --- |
+| Immediate budget | 1.5 seconds |
+| Immediate batch | 10 jobs |
+| Scheduled batch | 100 jobs |
+| Lease | 30 seconds |
+| Provider timeout | 20 seconds, bounded below lease expiry |
+| Maximum attempts | 12 |
+| Reconnect cap in clients | 30 seconds, with jitter |
+| Sockets per user object | 5 |
+| Maximum inbound socket frame | 4 KiB, then close |
+
+These are implementation defaults, not service guarantees. The socket protocol accepts no client application frames.
+
+For deployed setup, verify the binding, Durable Object migration, exact trusted browser origins, public WebSocket URL, Hyperdrive target, and scheduled trigger separately. A successful PostgreSQL migration does not prove a Durable Object binding or cron exists.
+
+The broader staging process lives in `docs/implementation/staging-deployment.md` and `docs/dayli/environments.md`.
+
+## Push configuration
+
+Push registration stores an encrypted FCM token. The Worker uses these secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `PUSH_TOKEN_ENCRYPTION_KEY` | Base64-encoded 256-bit AES key for device tokens |
+| `FCM_SERVICE_ACCOUNT_JSON` | Service account used to mint short-lived OAuth tokens for FCM HTTP v1 |
+
+Do not put either value in Wrangler variables, committed files, logs, command output, or issue text. `PUSH_TOKEN_ENCRYPTION_KEY` needs a recovery and rotation procedure because losing it makes existing device registrations unreadable. The staging release process treats it as Cloudflare-only rather than a routine source-secret synchronization value.
+
+If the encryption key is absent, push registration remains unavailable. If FCM configuration is absent, the delivery runtime suppresses push work without blocking realtime jobs. This fail-closed behavior is useful for local development, but it is not evidence that background alerts work.
+
+Firebase also needs environment-specific Android and iOS application configuration. iOS delivery through FCM requires APNs setup. Flutter's Firebase initialization is intentionally not called by default in builds that lack those platform files.
+
+A push payload contains a generic notification plus `eventId` and `conversationId`. It must never contain sender name, message text, reaction text, a socket ticket, or an authentication credential.
+
+## Focused local checks
+
+The ordinary API suite covers route and service behavior with injected dependencies:
+
+```bash
+pnpm --filter @dayli/api test
+```
+
+The Worker runtime suite exercises the Durable Object using the local Cloudflare runtime:
+
+```bash
+pnpm --filter @dayli/api test:realtime
+```
+
+For real PostgreSQL repository and migration checks, use the disposable fixture rather than a development, staging, or production database:
+
+```bash
+pnpm db:test:up
+pnpm db:test
+pnpm db:test:down
+```
+
+The complete required local suite is:
+
+```bash
+pnpm verify:local
+```
+
+Use the full mode when a debug Android APK is also required:
+
+```bash
+pnpm verify:local:full
+```
+
+The full suite needs the prerequisites from `CONTRIBUTING.md`. A missing tool, skipped database suite, or absent device is unverified work, not a pass.
+
+Client-focused checks can also be run from their packages:
+
+```bash
+pnpm --filter @dayli/web test
+(cd apps/mobile && flutter analyze && flutter test)
+```
+
+Check the package scripts before relying on a focused command because test entry points may change. Generated clients must continue to match the registered Hono routes:
+
+```bash
+pnpm generate:clients:check
+```
+
+## What the local tests cover
+
+The checked-in tests cover more than a successful send. Relevant cases include:
+
+- one direct thread for a pair, pending request limits, acceptance, decline, and blocking races;
+- authorization for history, changes, message actions, socket tickets, and push registration;
+- idempotent send retries, conflicting retry IDs, sequence allocation, and transaction rollback;
+- incoming-only unread counts, monotonic private reads, and receipt suppression;
+- edit deadlines and versions, tombstones, reactions, and reply-preview cleanup;
+- outbox claims, lease fencing, retry categories, duplicate delivery, and channel isolation;
+- ticket replay, expiry, origin checks, session revocation, hibernation alarms, and socket limits;
+- web query reconciliation and account-scoped cache cleanup;
+- Flutter reconnect recovery, foreground refresh, session generation fencing, and push registration cleanup.
+
+Repository integration tests under `apps/api/src/features/messaging/**/__tests__/*.repository.integration.test.ts` use real PostgreSQL when the dedicated test environment is enabled. Ordinary unit-test output that reports database-gated skips is not a replacement for that phase.
+
+## Historical evidence and its limits
+
+`docs/implementation/messaging-verification.md` records a combined local run from the messaging implementation branch. It reports that `pnpm verify:local` and the realtime Worker suite passed, including 180 ordinary API tests, 52 API PostgreSQL integration tests, 23 web rendered or query tests, 67 Flutter tests, and one Worker realtime runtime test.
+
+Those counts belong to that dated run and branch state. They show that the described local suites passed then. They do not prove the current checkout, a hosted deployment, a browser against staging, Firebase credentials, APNs routing, or physical-device delivery.
+
+The same record says the default run did not build the debug APK and did not perform a remote deployment. No production messaging deployment is established by that document.
+
+## Staging checks still needed
+
+A deployed two-account check should use synthetic text and approved test accounts. At minimum:
+
+1. Create a request from a non-friend and confirm the sender cannot send a second message.
+2. Accept it as the recipient, then send messages in both directions.
+3. Keep a second sender session open and confirm actor-side invalidation updates it.
+4. Disconnect one client, make an edit, reaction, unsend, and read change, then reconnect and confirm change-feed recovery.
+5. Block in each direction and confirm new peer-visible actions stop while existing history follows the current policy.
+6. Revoke a session and confirm its socket closes and its registered device is no longer eligible.
+7. Observe outbox age and failed jobs without logging message text, tokens, ticket query values, or provider response bodies.
+8. Record commit-to-visible latency under a stated workload. Do not infer a production target from a local unit test.
+
+Use an actual browser for browser-origin and WebSocket behavior. A jsdom component test cannot prove upgrade routing, Cloudflare bindings, or a deployed origin list.
+
+## Physical-device push checks
+
+Use environment-specific Firebase projects and synthetic conversations. Test both iOS and Android devices where supported:
+
+1. Grant and deny notification permission.
+2. Register, rotate, and invalidate a provider token.
+3. Receive a generic notification while the app is backgrounded and terminated.
+4. Tap it from a cold and warm start. Confirm the app resolves authentication and fetches the authorized conversation before rendering.
+5. Keep the app in the foreground and confirm it refreshes state without a duplicate operating-system banner.
+6. Sign out and switch accounts on the same installation. Confirm the earlier account receives no later alert.
+7. Block or delete an account before a delayed push job runs and confirm dispatch suppresses it.
+8. Return a permanent provider rejection and confirm the registration becomes invalid.
+
+Mock FCM responses prove request construction and retry classification. Only these device checks can establish Firebase and APNs delivery.
+
+## Failure guide
+
+| Symptom | First place to check |
+| --- | --- |
+| REST messaging returns `401` | Confirm the Better Auth cookie or bearer session is current. |
+| REST messaging returns `403` before any thread action | Confirm username setup, account state, and conversation policy. |
+| REST messaging returns `503` | Confirm Hyperdrive and feature dependencies are available. |
+| Messages save but do not update live | Check `USER_REALTIME`, the class migration, socket URL and origin, ticket issuance, and outbox age. |
+| Reconnect repeats old changes | Confirm the client applies projections before advancing its change cursor and deduplicates event IDs. |
+| Push registration is unavailable | Confirm the token encryption key is valid and present. |
+| Realtime works but push does not | Check FCM service-account configuration, Firebase app setup, registration session, opt-in state, and provider response category. |
+| Push opens an empty or forbidden thread | Treat the conversation ID as untrusted and inspect the authenticated REST result. |
+| Unread totals include your own messages | The query must count non-unsent messages from the other participant, not subtract sequence numbers. |
+| An edit is rejected after the interface allowed it | Server time and expected version are authoritative; fetch the current message. |
+
+## Evidence boundaries
+
+Keep these claims separate:
+
+- Unit and component tests prove isolated application behavior with fakes or local runtimes.
+- PostgreSQL integration tests prove transaction and query behavior in a disposable database.
+- Worker runtime tests prove local Durable Object behavior, not deployed bindings.
+- A staging browser journey proves the deployed REST and realtime path for the tested commit.
+- Physical-device checks prove provider and operating-system notification behavior.
+- None of these alone proves production capacity, cost, or exactly-once delivery.
+
+Record the tested commit, environment, command or journey, and sanitized result. Never record message content, credentials, device tokens, signed tickets, or private conversation IDs as evidence.
