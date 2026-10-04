@@ -49,7 +49,9 @@ test("an owner moves a post to Trash, sees concealment, and restores it", async 
   await expect(page.getByText(new RegExp(`Dayli from`))).toBeVisible();
   await expect(page.getByText(/Permanent cleanup is due/)).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("owner-trash.png"), fullPage: true });
+  const restoreResponse = page.waitForResponse((response) => response.url().endsWith(`/api/v1/posts/${postId}/restore`) && response.request().method() === "POST");
   await page.getByRole("button", { name: "Restore" }).click();
+  expect((await restoreResponse).status()).toBe(200);
   await expect(page.getByText("Trash is empty.")).toBeVisible();
 
   const restored = await page.evaluate(async ({ api, id }) => {

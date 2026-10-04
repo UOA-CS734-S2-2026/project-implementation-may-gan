@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,18 +29,19 @@ const post = {
   failureCategory: null,
 };
 
-function subject() {
+function subject({ strict = false }: { strict?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(<QueryClientProvider client={client}><TrashPanel actorId="owner" /></QueryClientProvider>);
+  const panel = <QueryClientProvider client={client}><TrashPanel actorId="owner" /></QueryClientProvider>;
+  return render(strict ? <StrictMode>{panel}</StrictMode> : panel);
 }
 
 describe("TrashPanel", () => {
   beforeEach(() => { api.trash.mockReset(); api.restore.mockReset(); replace.mockReset(); signOut.mockClear(); });
 
   it("shows the restore and permanent cleanup deadlines, then removes a restored post", async () => {
-    api.trash.mockResolvedValueOnce({ ok: true, value: [post] }).mockResolvedValue({ ok: true, value: [] });
+    api.trash.mockResolvedValue({ ok: true, value: [post] });
     api.restore.mockResolvedValue({ ok: true, value: undefined });
-    subject();
+    subject({ strict: true });
     expect(await screen.findByText("Dayli from 2026-10-04")).toBeInTheDocument();
     expect(screen.getByText(/Restore by/)).toHaveTextContent("Permanent cleanup is due");
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));

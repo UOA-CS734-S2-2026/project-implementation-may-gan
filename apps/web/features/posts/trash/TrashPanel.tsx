@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { feedKeys } from "@/features/feed/shared/feed.keys";
 import { interactionKeys } from "@/features/interactions/shared/interactions.api";
 import { profileKeys } from "@/features/profiles/shared/profiles.keys";
-import { postsApi, type PostRestoreFailure } from "@/features/posts/shared/posts.api";
+import { postsApi, type PostRestoreFailure, type TrashedPostStatus } from "@/features/posts/shared/posts.api";
 import { postKeys } from "@/features/posts/shared/posts.keys";
 import { Button } from "@/components/ui/core/Button";
 import { authClient } from "@/lib/auth/client";
@@ -23,7 +23,11 @@ export function TrashPanel({ actorId }: { actorId: string }) {
   const mounted = useRef(true);
   const [deadlineNow, setDeadlineNow] = useState(0);
   const [sessionRevoked, setSessionRevoked] = useState(false);
-  useEffect(() => () => { mounted.current = false; }, []);
+  const [restoredIds, setRestoredIds] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const expireSession = async () => {
     if (!mounted.current) return;
     setSessionRevoked(true);
@@ -66,6 +70,11 @@ export function TrashPanel({ actorId }: { actorId: string }) {
     },
     onSuccess: async (postId) => {
       if (!mounted.current) return;
+      setRestoredIds((current) => new Set([...current, postId]));
+      client.setQueryData<TrashedPostStatus[]>(
+        trashKey(actorId),
+        (current) => current?.filter((post) => post.id !== postId),
+      );
       client.removeQueries({ queryKey: postKeys.detail(actorId, postId) });
       client.removeQueries({ queryKey: postKeys.revisions(actorId, postId) });
       client.removeQueries({ queryKey: interactionKeys.comments(actorId, postId) });
@@ -83,6 +92,7 @@ export function TrashPanel({ actorId }: { actorId: string }) {
   });
 
   if (sessionRevoked) return null;
+  const visiblePosts = query.data?.filter((post) => !restoredIds.has(post.id));
 
   return (
     <section className="space-y-3 rounded-lg border border-foreground/10 p-4" aria-labelledby="trash-heading">
@@ -92,9 +102,9 @@ export function TrashPanel({ actorId }: { actorId: string }) {
       </div>
       {query.isPending ? <p className="text-sm text-foreground/60">Loading Trash...</p> : query.isError ? (
         <p role="alert" className="text-sm text-red-600">Trash could not be loaded. Your posts have not been changed.</p>
-      ) : query.data.length === 0 ? <p className="text-sm text-foreground/60">Trash is empty.</p> : (
+      ) : visiblePosts?.length === 0 ? <p className="text-sm text-foreground/60">Trash is empty.</p> : (
         <ul className="space-y-3">
-          {query.data.map((post) => {
+          {visiblePosts?.map((post) => {
             const restorable = post.restoreUntil.getTime() >= Math.max(deadlineNow, query.dataUpdatedAt) && !post.pendingCleanup;
             const failed = restore.error instanceof TrashFailure && restore.variables === post.id ? restore.error.failure : undefined;
             const failureMessage = failed === "dayOccupied"
