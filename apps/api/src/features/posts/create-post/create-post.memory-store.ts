@@ -37,6 +37,7 @@ export function createMemoryDailyPostStore(prompts: Record<string, string> = {})
     acceptedAt: post.acceptedAt,
     releasedAt: post.releasedAt,
     tomorrowNoteAvailableOn: post.tomorrowNote?.availableOn ?? null,
+    weather: post.weather,
     media: post.media.map((media) => ({
       id: media.id,
       contentType: reservations.find((reservation) => reservation.id === media.reservationId)?.contentType ?? "",

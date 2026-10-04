@@ -7,6 +7,7 @@ import {
   type DayliDatabase,
   type HyperdriveBinding,
 } from "@dayli/db";
+import { readStoredWeather } from "../shared/post-weather";
 import { createDailyPromptRepository } from "../../../infrastructure/database/posting-day.repository";
 import {
   CreateDailyPostError,
@@ -37,6 +38,9 @@ function toStoredPost(media: StoredPostMedia[], row: {
   acceptedAt: Date;
   releasedAt: Date;
   tomorrowNoteAvailableOn: string | null;
+  weatherCondition: string | null;
+  weatherTemperatureC: number | null;
+  weatherPlaceName: string | null;
 }): StoredDailyPost {
   return {
     id: row.id,
@@ -51,6 +55,7 @@ function toStoredPost(media: StoredPostMedia[], row: {
     releasedAt: row.releasedAt,
     tomorrowNoteAvailableOn: row.tomorrowNoteAvailableOn,
     media,
+    weather: readStoredWeather(row),
   };
 }
 
@@ -83,6 +88,9 @@ async function readPost(queryable: Queryable, postId: string): Promise<StoredDai
       acceptedAt: schema.posts.acceptedAt,
       releasedAt: schema.posts.releasedAt,
       tomorrowNoteAvailableOn: schema.tomorrowNotes.availableOn,
+      weatherCondition: schema.posts.weatherCondition,
+      weatherTemperatureC: schema.posts.weatherTemperatureC,
+      weatherPlaceName: schema.posts.weatherPlaceName,
     })
     .from(schema.posts)
     .innerJoin(schema.dailyPrompts, eq(schema.dailyPrompts.id, schema.posts.promptId))
@@ -182,6 +190,9 @@ function createTransaction(queryable: Queryable): DailyPostTransaction {
           audience: post.audience,
           acceptedAt: post.acceptedAt,
           releasedAt: post.releasedAt,
+          weatherCondition: post.weather?.condition ?? null,
+          weatherTemperatureC: post.weather?.temperatureC ?? null,
+          weatherPlaceName: post.weather?.placeName ?? null,
         });
       } catch (error) {
         if (classifyPostgresConstraintError(error) === "unique") throw new CreateDailyPostError("ALREADY_POSTED");

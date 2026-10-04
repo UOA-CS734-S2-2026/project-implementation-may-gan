@@ -128,8 +128,33 @@ function requireLocalTestUrl(value: string): string {
       viewerIsAuthor: false,
       media: [],
       voiceMemo: null,
+      weather: null,
       publicMediaDelivery: false,
     });
+  });
+
+  it("returns the weather snapshot to a reader of the post and nothing to someone who can't read it", async () => {
+    await migrator.db.update(schema.posts)
+      .set({ weatherCondition: "snow", weatherTemperatureC: -3, weatherPlaceName: "Queenstown" })
+      .where(eq(schema.posts.id, id("released")));
+    try {
+      await expect(repo().findPost(users.friend, id("released"), now)).resolves.toMatchObject({
+        weather: { condition: "snow", temperatureC: -3, placeName: "Queenstown" },
+      });
+      await expect(repo().findPost(users.author, id("released"), now)).resolves.toMatchObject({
+        weather: { condition: "snow", temperatureC: -3, placeName: "Queenstown" },
+      });
+      // A reader who can't see the post gets no record at all, so no weather.
+      await expect(repo().findPost(users.blocked, id("released"), now)).resolves.toBeNull();
+      await migrator.db.update(schema.user).set({ profileVisibility: "private" }).where(eq(schema.user.id, users.author));
+      await expect(repo().findPost(users.stranger, id("released"), now)).resolves.toBeNull();
+      await expect(repo().findPost(null, id("released"), now)).resolves.toBeNull();
+    } finally {
+      await migrator.db.update(schema.user).set({ profileVisibility: "public" }).where(eq(schema.user.id, users.author));
+      await migrator.db.update(schema.posts)
+        .set({ weatherCondition: null, weatherTemperatureC: null, weatherPlaceName: null })
+        .where(eq(schema.posts.id, id("released")));
+    }
   });
 
   it("doesn't count a version written while the post was solo for friends", async () => {

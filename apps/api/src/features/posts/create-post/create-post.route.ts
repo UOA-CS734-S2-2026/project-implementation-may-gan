@@ -77,6 +77,7 @@ function toResponse(post: StoredDailyPost): DailyPostResponse {
     voiceMemo: voiceMemo
       ? { id: voiceMemo.id, contentType: voiceMemo.contentType as "audio/mp4" }
       : null,
+    weather: post.weather,
   };
 }
 
