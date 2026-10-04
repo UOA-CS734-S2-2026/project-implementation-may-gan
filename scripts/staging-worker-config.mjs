@@ -81,6 +81,7 @@ export function createStagingWorkerConfigs({
   const vars = {
     API_RATE_LIMIT_SCOPE: "staging",
     NOTIFICATION_PUBLISHERS_ENABLED: "false",
+    NOTIFICATION_DELIVERY_ENABLED: "false",
     DIRECT_MESSAGE_SEND_LIMIT: "30",
     // The web workflow must use the same reviewed mode. Direct API remains the
     // public origin even when Better Auth moves to the web origin.

@@ -34,6 +34,8 @@ export interface ApiEnv {
   USER_REALTIME?: DurableObjectNamespace;
   /** Exact string "true" enables generic notification publishers. All other values disable them. */
   NOTIFICATION_PUBLISHERS_ENABLED?: string;
+  /** Exact string "true" enables both legacy and generic provider delivery. */
+  NOTIFICATION_DELIVERY_ENABLED?: string;
   /** Worker secret containing a Firebase service-account JSON document. */
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit key used to envelope-encrypt mobile push tokens. */

@@ -5,6 +5,7 @@ import { requireSafeSequenceBigInt } from "../../shared/safe-sequence";
 import type { ConversationAccess, ConversationPeerChange, StoredMessage } from "../../shared/messaging-types";
 import { participantIdForUser } from "../../shared/participant-identity";
 import { activeUserIdForParticipant, conversationPairBlocked, conversationParticipantsAvailable } from "../../shared/conversation-participants";
+import { publishDirectMessageNotification } from "../../shared/direct-message-notification";
 
 export type MessageWriteQueryable = Pick<DayliDatabase, "delete" | "insert" | "select" | "update">;
 
@@ -67,7 +68,11 @@ export async function findMessage(queryable: MessageWriteQueryable, actorId: str
   return stored;
 }
 
-export async function appendPeerChange(queryable: MessageWriteQueryable, input: ConversationPeerChange): Promise<void> {
+export async function appendPeerChange(
+  queryable: MessageWriteQueryable,
+  input: ConversationPeerChange,
+  options: { notificationPublishersEnabled?: boolean } = {},
+): Promise<void> {
   const createdAt = new Date();
   const [change] = await queryable
     .update(schema.conversations)
@@ -124,7 +129,7 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     })));
   }
 
-  if (input.kind !== "message.created" || !input.messageId) return;
+  if (input.kind !== "message.created" || !input.messageId || !options.notificationPublishersEnabled) return;
 
   const [message] = await queryable
     .select({ senderParticipantId: schema.messages.senderParticipantId })
@@ -135,6 +140,17 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     ? change.participantHighId
     : change.participantLowId;
   if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
+  const [recipient] = await queryable
+    .select({ id: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      eq(schema.messagingParticipants.id, peerParticipantId),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ))
+    .limit(1);
+  if (!recipient?.id) return;
+
   const devices = await queryable
     .select({ id: schema.pushDevices.id, recipientId: schema.user.id })
     .from(schema.pushDevices)
@@ -144,6 +160,10 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
       eq(schema.messagingParticipants.state, "active"),
     ))
     .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
+    .innerJoin(schema.accountNotificationPreferences, and(
+      eq(schema.accountNotificationPreferences.userId, schema.pushDevices.userId),
+      eq(schema.accountNotificationPreferences.enabled, true),
+    ))
     .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.pushDevices.userId))
     .innerJoin(schema.session, and(
       eq(schema.session.id, schema.pushDevices.sessionId),
@@ -152,11 +172,19 @@ export async function appendPeerChange(queryable: MessageWriteQueryable, input: 
     ))
     .where(and(
       eq(schema.pushDevices.optedIn, true),
+      isNull(schema.pushDevices.notificationSchemaVersion),
       or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
       isNotNull(schema.pushDevices.tokenKeyVersion),
     ));
+  await publishDirectMessageNotification(queryable, {
+    messageId: input.messageId,
+    conversationId: input.conversationId,
+    recipientId: recipient.id,
+    createdAt,
+  });
+
   for (const device of devices) {
     await queryable.insert(schema.messagingOutbox).values({
       id: crypto.randomUUID(),

@@ -10,7 +10,7 @@ import {
   type BetterAuthCompatibilitySlice,
 } from "./features/auth/better-auth";
 import { withHyperdriveDatabase } from "./infrastructure/database/hyperdrive";
-import type { ApiEnv } from "./env";
+import { notificationPublishersEnabled, type ApiEnv } from "./env";
 import {
   createHyperdriveMediaReservationRuntime,
   registerMediaReservationRoutes,
@@ -169,6 +169,7 @@ import type { UnregisterDeviceRouteDependencies } from "./features/messaging/pus
 import { createPostgresUnregisterDeviceRepository } from "./features/messaging/push/unregister-device/unregister-device.repository";
 import { createDeferredWorkerPushTokenProtector, hasWorkerPushTokenProtection } from "./infrastructure/push/token-encryption";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
+import { createNotificationDeliveryDispatcher } from "./infrastructure/notifications/notification-runtime";
 import { createDurableObjectRealtimePublisher } from "./infrastructure/realtime/publisher";
 import type { UsernameProfileRouteDependencies } from "./features/profiles/username/username.route";
 import { registerProfilesRoutes } from "./features/profiles/profiles.routes";
@@ -764,11 +765,16 @@ function createPostingDayDependencies(
   };
 }
 
-export function createMessagingPersistenceServices(database: DayliDatabase, options: { now?: () => Date; messageSendLimit?: number } = {}) {
-  const store = createPostgresMessageWriteStore(database);
+export function createMessagingPersistenceServices(database: DayliDatabase, options: {
+  now?: () => Date;
+  messageSendLimit?: number;
+  notificationPublishersEnabled?: boolean;
+} = {}) {
+  const publisherOptions = { notificationPublishersEnabled: options.notificationPublishersEnabled === true };
+  const store = createPostgresMessageWriteStore(database, publisherOptions);
   const messageSendLimit = options.messageSendLimit ?? 30;
   return {
-    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database), now: options.now, messageSendLimit }),
+    direct: createCreateDirectConversationService({ store: createPostgresDirectConversationStore(database, publisherOptions), now: options.now, messageSendLimit }),
     resolveMessageRequest: createPostgresResolveMessageRequestRepository(database),
     markConversationRead: createPostgresMarkConversationReadRepository(database),
     getMessagingUnread: createPostgresGetMessagingUnreadRepository(database),
@@ -858,7 +864,8 @@ function createMessagingDependencies(
   env: ApiEnv,
   hasUsername: NonNullable<ReturnType<typeof createUsernameChecker>>,
 ): MessagingRouteDependencies {
-  const store = createHyperdriveMessageWriteStore(configuration.hyperdrive);
+  const publisherOptions = { notificationPublishersEnabled: notificationPublishersEnabled(env) };
+  const store = createHyperdriveMessageWriteStore(configuration.hyperdrive, publisherOptions);
   const userRealtime = env.USER_REALTIME;
   const messageSendLimit = parseDirectMessageSendLimit(env.DIRECT_MESSAGE_SEND_LIMIT);
   return {
@@ -869,7 +876,7 @@ function createMessagingDependencies(
     unsend: createUnsendMessageService({ store: createHyperdriveUnsendMessageStore(configuration.hyperdrive) }),
     setReaction: createSetReactionService({ store: createHyperdriveSetReactionStore(configuration.hyperdrive) }),
     removeReaction: createRemoveReactionService({ store: createHyperdriveRemoveReactionStore(configuration.hyperdrive) }),
-    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive), messageSendLimit }),
+    direct: createCreateDirectConversationService({ store: createHyperdriveDirectConversationStore(configuration.hyperdrive, publisherOptions), messageSendLimit }),
     resolveMessageRequest: createHyperdriveResolveMessageRequestRepository(configuration.hyperdrive),
     markConversationRead: createHyperdriveMarkConversationReadRepository(configuration.hyperdrive),
     getMessagingUnread: createHyperdriveGetMessagingUnreadRepository(configuration.hyperdrive),
@@ -879,7 +886,11 @@ function createMessagingDependencies(
     findDirectConversation: createHyperdriveGetDirectConversationRepository(configuration.hyperdrive),
     getMessage: createHyperdriveGetMessageRepository(configuration.hyperdrive),
     listMessages: createHyperdriveListMessagesRepository(configuration.hyperdrive),
-    dispatchImmediately: userRealtime ? () => createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime }).dispatchImmediately() : undefined,
+    dispatchImmediately: userRealtime ? async () => {
+      const legacy = createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: userRealtime });
+      const notifications = await createNotificationDeliveryDispatcher(env);
+      await Promise.all([legacy.dispatchImmediately(), notifications.dispatchImmediately()]);
+    } : undefined,
   };
 }
 

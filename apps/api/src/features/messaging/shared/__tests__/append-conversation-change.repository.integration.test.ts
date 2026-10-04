@@ -1,6 +1,8 @@
 import { createDayliDatabase, schema, sql } from "@dayli/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPostgresDirectMessageNotificationResolver } from "../../../../infrastructure/notifications/direct-message-resolver";
+import { createPostgresNotificationStore } from "../../../../infrastructure/notifications/notification-store";
 import { appendConversationChange } from "../append-conversation-change";
 
 const connectionString = process.env.MESSAGING_TEST_DATABASE_URL;
@@ -51,6 +53,26 @@ suite("conversation change builders", () => {
       createdAt: now,
       updatedAt: now,
     });
+    await database.db.insert(schema.conversationMembers).values([
+      {
+        conversationId,
+        userId: users[0]!,
+        participantId: users[0]!,
+        lastReadSequence: 0,
+        receiptSequence: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        conversationId,
+        userId: users[1]!,
+        participantId: users[1]!,
+        lastReadSequence: 0,
+        receiptSequence: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
     await database.db.insert(schema.messages).values({
       id: messageId,
       conversationId,
@@ -65,10 +87,12 @@ suite("conversation change builders", () => {
     return { conversationId, messageId, now };
   }
 
-  it("rolls back every append write when its caller rolls back", async () => {
-    const { conversationId } = await createConversation();
+  it("rolls back the source change, realtime jobs, and notification intent together", async () => {
+    const { conversationId, messageId } = await createConversation();
     await expect(database.db.transaction(async (transaction) => {
-      await appendConversationChange(transaction, conversationId, "read.updated", null, users[0]!, new Date());
+      await appendConversationChange(transaction, conversationId, "message.created", messageId, null, new Date(), {
+        notificationPublishersEnabled: true,
+      });
       transaction.rollback();
     })).rejects.toBeDefined();
 
@@ -81,9 +105,13 @@ suite("conversation change builders", () => {
     const [outbox] = await database.db.select({ count: sql<number>`count(*)::int` })
       .from(schema.messagingOutbox)
       .where(eq(schema.messagingOutbox.conversationId, conversationId));
+    const [notifications] = await database.db.select({ count: sql<number>`count(*)::int` })
+      .from(schema.notificationEvents)
+      .where(eq(schema.notificationEvents.sourceId, messageId));
     expect(String(conversation?.lastChangeSequence)).toBe("0");
     expect(changes?.count).toBe(0);
     expect(outbox?.count).toBe(0);
+    expect(notifications?.count).toBe(0);
   });
 
   it("preserves safe change sequences and sends only eligible peer devices", async () => {
@@ -99,8 +127,10 @@ suite("conversation change builders", () => {
       updatedAt: now,
       userId: users[1]!,
     });
+    await database.db.insert(schema.accountNotificationPreferences).values({ userId: users[1]!, enabled: true });
     const validDeviceId = crypto.randomUUID();
     const secondValidDeviceId = crypto.randomUUID();
+    const capableDeviceId = crypto.randomUUID();
     await database.db.insert(schema.pushDevices).values([
       {
         id: validDeviceId,
@@ -127,6 +157,21 @@ suite("conversation change builders", () => {
         tokenKeyVersion: "v1",
         tokenHash: "b".repeat(64),
         optedIn: true,
+        registeredAt: now,
+        invalidatedAt: null,
+      },
+      {
+        id: capableDeviceId,
+        userId: users[1]!,
+        sessionId,
+        installationId: crypto.randomUUID(),
+        platform: "ios",
+        token: "token-capable",
+        tokenCiphertext: "cipher-capable",
+        tokenKeyVersion: "v1",
+        tokenHash: "f".repeat(64),
+        optedIn: true,
+        notificationSchemaVersion: 1,
         registeredAt: now,
         invalidatedAt: null,
       },
@@ -178,7 +223,9 @@ suite("conversation change builders", () => {
       .where(eq(schema.conversations.id, conversationId));
 
     await database.db.transaction((transaction) =>
-      appendConversationChange(transaction, conversationId, "message.created", messageId, null, now));
+      appendConversationChange(transaction, conversationId, "message.created", messageId, null, now, {
+        notificationPublishersEnabled: true,
+      }));
 
     const [change] = await database.db.select({ changeSequence: schema.conversationChanges.changeSequence })
       .from(schema.conversationChanges)
@@ -217,6 +264,88 @@ suite("conversation change builders", () => {
     expect(new Set(push.map((row) => row.event_id)).size).toBe(2);
     expect(push.map((row) => new Date(String(row.available_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
     expect(push.map((row) => new Date(String(row.created_at)).toISOString())).toEqual([now.toISOString(), now.toISOString()]);
+
+    const events = await database.db.select().from(schema.notificationEvents)
+      .where(eq(schema.notificationEvents.sourceId, messageId));
+    const deliveries = await database.db.select().from(schema.notificationDeliveries)
+      .where(eq(schema.notificationDeliveries.eventId, events[0]!.id));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      kind: "direct_message", recipientId: users[1], sourceType: "message", sourceId: messageId,
+      targetType: "conversation", targetId: conversationId,
+    });
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toMatchObject({ recipientId: users[1], deviceRegistrationId: capableDeviceId });
+
+    const resolver = createPostgresDirectMessageNotificationResolver(database.db, {
+      encrypt: async () => ({ ciphertext: "unused", keyVersion: "unused" }),
+      decrypt: async () => "fake-provider-token",
+    });
+    const deliveryJob = {
+      id: deliveries[0]!.id,
+      eventId: events[0]!.id,
+      recipientId: users[1]!,
+      deviceRegistrationId: capableDeviceId,
+      attempts: 1,
+      leaseToken: "test-lease",
+      leaseExpiresAt: new Date(Date.now() + 30_000),
+    };
+    await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({
+      token: "fake-provider-token", title: users[0], body: "message", targetId: conversationId,
+    });
+
+    await database.db.update(schema.messages).set({ body: "edited preview", editedAt: new Date() })
+      .where(eq(schema.messages.id, messageId));
+    await expect(resolver.resolve(deliveryJob)).resolves.toMatchObject({ body: "edited preview" });
+
+    await database.db.update(schema.accountNotificationPreferences).set({ enabled: false })
+      .where(eq(schema.accountNotificationPreferences.userId, users[1]!));
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await database.db.update(schema.accountNotificationPreferences).set({ enabled: true })
+      .where(eq(schema.accountNotificationPreferences.userId, users[1]!));
+
+    await database.db.update(schema.pushDevices).set({ notificationSchemaVersion: null })
+      .where(eq(schema.pushDevices.id, capableDeviceId));
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await database.db.update(schema.pushDevices).set({ notificationSchemaVersion: 1 })
+      .where(eq(schema.pushDevices.id, capableDeviceId));
+
+    await database.db.update(schema.session).set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(schema.session.id, sessionId));
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await database.db.update(schema.session).set({ expiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(schema.session.id, sessionId));
+
+    await database.db.insert(schema.relationshipBlocks).values({
+      blockerId: users[0]!, blockedId: users[1]!, blockedAt: new Date(),
+    });
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+    await database.db.delete(schema.relationshipBlocks).where(and(
+      eq(schema.relationshipBlocks.blockerId, users[0]!),
+      eq(schema.relationshipBlocks.blockedId, users[1]!),
+    ));
+
+    await database.db.update(schema.messages).set({ body: null, unsentAt: new Date() })
+      .where(eq(schema.messages.id, messageId));
+    await expect(resolver.resolve(deliveryJob)).resolves.toBeNull();
+
+    const store = createPostgresNotificationStore(database.db);
+    const claimAt = new Date();
+    const claims = await Promise.all([
+      store.claimDue({ now: claimAt, limit: 1, leaseForMs: 30_000, maxAttempts: 12, leaseToken: () => "lease-a" }),
+      store.claimDue({ now: claimAt, limit: 1, leaseForMs: 30_000, maxAttempts: 12, leaseToken: () => "lease-b" }),
+    ]);
+    expect(claims.flat()).toHaveLength(1);
+    const staleClaim = claims.flat()[0]!;
+    await database.db.update(schema.notificationDeliveries)
+      .set({ leaseExpiresAt: new Date(claimAt.getTime() - 1) })
+      .where(eq(schema.notificationDeliveries.id, staleClaim.id));
+    const [reclaimed] = await store.claimDue({
+      now: claimAt, limit: 1, leaseForMs: 30_000, maxAttempts: 12, leaseToken: () => "lease-reclaimed",
+    });
+    expect(reclaimed).toMatchObject({ id: staleClaim.id, leaseToken: "lease-reclaimed", attempts: 2 });
+    await expect(store.markDelivered(staleClaim, claimAt)).resolves.toBe(false);
+    await expect(store.markSuppressed(reclaimed!, "ineligible")).resolves.toBe(true);
   });
 
   it("rejects an unsafe increment and rolls back every caller write", async () => {

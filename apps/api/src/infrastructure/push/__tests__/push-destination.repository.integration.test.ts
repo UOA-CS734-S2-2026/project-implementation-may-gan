@@ -60,6 +60,10 @@ suite("Postgres push destination authorization", () => {
       .where(eq(schema.messagingParticipants.userId, ids.alice));
     await database.db.update(schema.messagingParticipants).set({ id: ids.bobParticipant })
       .where(eq(schema.messagingParticipants.userId, ids.bob));
+    await database.db.insert(schema.accountNotificationPreferences).values([
+      { userId: ids.alice, enabled: true },
+      { userId: ids.bob, enabled: true },
+    ]);
     await database.db.insert(schema.session).values([
       { id: ids.aliceSession, expiresAt, token: `token-${ids.alice}`, createdAt: now, updatedAt: now, userId: ids.alice },
       { id: ids.bobSession, expiresAt, token: `token-${ids.bob}`, createdAt: now, updatedAt: now, userId: ids.bob },
@@ -102,6 +106,20 @@ suite("Postgres push destination authorization", () => {
     await database.db.update(schema.user).set({ banned: true, banExpires: sql`now() + interval '5 minutes'` }).where(eq(schema.user.id, ids.bob));
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
     expect(sender.send).toHaveBeenCalledTimes(3);
+
+    await database.db.update(schema.pushDevices).set({ notificationSchemaVersion: 1 })
+      .where(eq(schema.pushDevices.id, ids.bobDevice));
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(3);
+    await database.db.update(schema.pushDevices).set({ notificationSchemaVersion: null })
+      .where(eq(schema.pushDevices.id, ids.bobDevice));
+
+    await database.db.update(schema.accountNotificationPreferences).set({ enabled: false })
+      .where(eq(schema.accountNotificationPreferences.userId, ids.bob));
+    await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });
+    expect(sender.send).toHaveBeenCalledTimes(3);
+    await database.db.update(schema.accountNotificationPreferences).set({ enabled: true })
+      .where(eq(schema.accountNotificationPreferences.userId, ids.bob));
 
     await database.db.update(schema.user).set({ banned: true, banExpires: null }).where(eq(schema.user.id, ids.bob));
     await expect(deliver(job(ids.bob, ids.bobDevice))).resolves.toEqual({ ok: true });

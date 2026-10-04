@@ -10,6 +10,8 @@ import { createHyperdriveOutboxStore } from "./outbox-store";
 export interface MessagingDeliveryBindings {
   HYPERDRIVE: HyperdriveBinding;
   USER_REALTIME: DurableObjectNamespace;
+  /** Exact string "true" enables legacy provider delivery. */
+  NOTIFICATION_DELIVERY_ENABLED?: string;
   /** JSON service account stored only in a Worker secret. */
   FCM_SERVICE_ACCOUNT_JSON?: string;
   /** Base64 256-bit AES key stored only as a Worker secret. */
@@ -31,7 +33,9 @@ export function createMessagingDeliveryDispatcher(env: MessagingDeliveryBindings
 
 async function configuredPushHandlerOnce(env: MessagingDeliveryBindings) {
   const protector = await createWorkerPushTokenProtector(env.PUSH_TOKEN_ENCRYPTION_KEY);
-  if (!protector || !env.FCM_SERVICE_ACCOUNT_JSON) return async () => ({ ok: true as const });
+  if (env.NOTIFICATION_DELIVERY_ENABLED !== "true" || !protector || !env.FCM_SERVICE_ACCOUNT_JSON) {
+    return async () => ({ ok: true as const });
+  }
   return configuredPushHandler(env, protector);
 }
 
