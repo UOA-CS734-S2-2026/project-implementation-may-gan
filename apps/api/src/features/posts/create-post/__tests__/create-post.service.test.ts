@@ -47,6 +47,18 @@ describe("daily post creation service", () => {
     expect(memory.posts[0]?.tomorrowNote).toEqual({ id: "id-2", note: "Bring the camera.", availableOn: "2026-09-26" });
   });
 
+  it("stores the weather snapshot with the post and leaves it null otherwise", async () => {
+    const { service, memory } = serviceAt("2026-09-25T03:00:00.000Z");
+    const weather = { condition: "partly_cloudy", temperatureC: 18, placeName: "Auckland" } as const;
+    const withWeather = await service.createDailyPost("author-1", "key-1", { ...input, weather });
+    const without = await service.createDailyPost("author-2", "key-2", input);
+
+    expect(withWeather.post.weather).toEqual(weather);
+    expect(memory.posts[0]?.weather).toEqual(weather);
+    expect(without.post.weather).toBeNull();
+    expect(memory.posts[1]?.weather).toBeNull();
+  });
+
   it("replays an identical retry, even after the deadline has passed", async () => {
     let now = new Date("2026-09-25T11:59:59.000Z");
     const { service, memory } = serviceAt(() => now);
@@ -163,6 +175,32 @@ describe("request fingerprint compatibility", () => {
     const v1 = "c46cf96599d1e90ba33b8a0b948f1092f9dbbe70bc55c9666d0468f8d53e0474";
     expect(await fingerprintDailyPostRequest(input)).toBe(v1);
     expect(await fingerprintDailyPostRequest({ ...input, attachments: [] })).toBe(v1);
+  });
+
+  it("keeps the version 2 fingerprint for a post with attachments and no weather", async () => {
+    // Computed with the fingerprint code before weather existed, so a retry
+    // that spans the deploy still matches its stored outcome.
+    const v2 = "3b05632487a353c84fe41ef63f7fc923b946dfa45bd7e0b58025c6562f71a04a";
+    expect(await fingerprintDailyPostRequest({ ...input, attachments: ["r-a", "r-b"] })).toBe(v2);
+  });
+
+  it("includes the weather snapshot, every field of it, and where it sits among the attachments", async () => {
+    const weather = { condition: "rain", temperatureC: 11, placeName: "Auckland" } as const;
+    const base = await fingerprintDailyPostRequest(input);
+    const withWeather = await fingerprintDailyPostRequest({ ...input, weather });
+    expect(withWeather).toMatch(/^[0-9a-f]{64}$/);
+    expect(withWeather).not.toBe(base);
+    expect(await fingerprintDailyPostRequest({ ...input, weather: { ...weather } })).toBe(withWeather);
+    for (const change of [
+      { condition: "snow" as const },
+      { temperatureC: 12 },
+      { placeName: "Wellington" },
+    ]) {
+      expect(await fingerprintDailyPostRequest({ ...input, weather: { ...weather, ...change } })).not.toBe(withWeather);
+    }
+    const withAttachments = await fingerprintDailyPostRequest({ ...input, weather, attachments: ["r-a"] });
+    expect(withAttachments).not.toBe(withWeather);
+    expect(withAttachments).not.toBe(await fingerprintDailyPostRequest({ ...input, attachments: ["r-a"] }));
   });
 
   it("includes attachments and their order", async () => {

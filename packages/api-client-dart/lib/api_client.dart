@@ -240,6 +240,8 @@ class ApiClient {
               value);
         case 'CreateDirectConversationRequest':
           return CreateDirectConversationRequest.fromJson(value);
+        case 'CreateFutureSelfNoteRequest':
+          return CreateFutureSelfNoteRequest.fromJson(value);
         case 'CreateMediaReservationRequest':
           return CreateMediaReservationRequest.fromJson(value);
         case 'CreateMediaReservationResponse':
@@ -284,6 +286,14 @@ class ApiClient {
           return FeedPostAuthor.fromJson(value);
         case 'FeedPostPrompt':
           return FeedPostPrompt.fromJson(value);
+        case 'FutureSelfNote':
+          return FutureSelfNote.fromJson(value);
+        case 'FutureSelfNoteDetail':
+          return FutureSelfNoteDetail.fromJson(value);
+        case 'FutureSelfNotePage':
+          return FutureSelfNotePage.fromJson(value);
+        case 'FutureSelfNoteStatus':
+          return FutureSelfNoteStatusTypeTransformer().decode(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
         case 'GetNotificationPreference200Response':
@@ -334,6 +344,12 @@ class ApiClient {
           return MessageReactionsInnerReactorsInner.fromJson(value);
         case 'MessageReplyPreview':
           return MessageReplyPreview.fromJson(value);
+        case 'MoodDay':
+          return MoodDay.fromJson(value);
+        case 'MoodHistory':
+          return MoodHistory.fromJson(value);
+        case 'MoodPeriodSummary':
+          return MoodPeriodSummary.fromJson(value);
         case 'OnThisDayMemories':
           return OnThisDayMemories.fromJson(value);
         case 'OnThisDayMemory':
@@ -376,6 +392,10 @@ class ApiClient {
           return PostRevisionsPage.fromJson(value);
         case 'PostVoiceMemo':
           return PostVoiceMemo.fromJson(value);
+        case 'PostWeather':
+          return PostWeather.fromJson(value);
+        case 'PostWeatherCondition':
+          return PostWeatherConditionTypeTransformer().decode(value);
         case 'PostingStreak':
           return PostingStreak.fromJson(value);
         case 'PostsListTrash200Response':
@@ -438,6 +458,8 @@ class ApiClient {
           return TestResponse.fromJson(value);
         case 'TrashedPostStatus':
           return TrashedPostStatus.fromJson(value);
+        case 'UpdateFutureSelfNoteRequest':
+          return UpdateFutureSelfNoteRequest.fromJson(value);
         case 'UpdateNotificationPreferenceRequest':
           return UpdateNotificationPreferenceRequest.fromJson(value);
         case 'UpdatePostCommentRequest':

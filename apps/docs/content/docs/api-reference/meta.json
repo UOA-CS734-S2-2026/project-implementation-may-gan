@@ -3,9 +3,12 @@
   "defaultOpen": true,
   "pages": [
     "system",
+    "account",
+    "legal",
     "media",
     "posting-days",
     "posts",
+    "interactions",
     "relationships",
     "messaging",
     "profile"

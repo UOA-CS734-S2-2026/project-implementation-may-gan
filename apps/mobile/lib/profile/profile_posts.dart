@@ -30,11 +30,16 @@ class ProfilePostsSection extends StatelessWidget {
     required this.posts,
     required this.displayName,
     required this.isMe,
+    this.onChanged,
   });
 
   final ProfilePostsController posts;
   final String displayName;
   final bool isMe;
+
+  /// Runs after an opened post changed. Defaults to reloading this list; a
+  /// profile passes its full refresh so totals like Loved update too.
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +128,7 @@ class ProfilePostsSection extends StatelessWidget {
             keyPrefix: 'profile.posts',
             label: _labelFor(post),
             linkAuthor: false,
-            onChanged: () => posts.refresh(),
+            onChanged: onChanged ?? () => posts.refresh(),
           ),
           const SizedBox(height: 16),
         ],

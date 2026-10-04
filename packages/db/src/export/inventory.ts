@@ -63,6 +63,7 @@ const excludedRetention: Readonly<Record<string, string>> = {
   temporary_realtime_credential: "until_ticket_expiry_or_consumption",
   temporary_username_claim: "until_reservation_expiry_or_account_cleanup",
   one_time_authentication_proof: "until_verification_expiry_or_consumption",
+  note_submission_integrity_state: "until_parent_note_removal",
 };
 const excludedDeletion: Readonly<Record<string, string>> = {
   authentication_credentials: "purge_with_account_or_credential_rotation",
@@ -90,6 +91,7 @@ const excludedDeletion: Readonly<Record<string, string>> = {
   temporary_realtime_credential: "expire_or_consume",
   temporary_username_claim: "expire_or_purge_with_account",
   one_time_authentication_proof: "expire_or_consume",
+  note_submission_integrity_state: "purge_with_note_before_account",
 };
 const exclusionTestByReason: Readonly<Record<string, InventoryTestId>> = {
   authentication_credentials: "authSecretsExcluded",
@@ -117,6 +119,7 @@ const exclusionTestByReason: Readonly<Record<string, InventoryTestId>> = {
   temporary_realtime_credential: "authSecretsExcluded",
   temporary_username_claim: "catalogExcluded",
   one_time_authentication_proof: "authSecretsExcluded",
+  note_submission_integrity_state: "lifecycleOperationsExcluded",
 };
 const excluded = (columns: string, owner: string, reason: string): ExportTableDecision => {
   const retention = excludedRetention[reason];
@@ -170,6 +173,16 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   data_export_requests: excluded("id,user_id,lifecycle_generation,status,requested_at,snapshot_cutoff_at,archive_object_key,ready_at,expires_at,archive_cleanup_task_id,lease_token,lease_expires_at,failure_category,created_at,updated_at", "user_id", "private_export_operations"),
   friend_requests: { ...excluded("id,sender_id,recipient_id,status,created_at,resolved_at", "sender_and_recipient", "relationship_privacy_deferred"), retention: "while_both_accounts_exist_for_throttling", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
   friendships: { ...excluded("user_id,friend_id,state,state_changed_at", "user_id_and_friend_id", "relationship_privacy_deferred"), retention: "while_both_accounts_exist", deletion: "remove_when_either_account_permanently_deleted", retainedForOthers: "not_retained_after_either_account_deleted" },
+  future_self_note_deliveries: excluded("id,note_id,schedule_version,deliver_on,status,lease_token,lease_expires_at,attempts,claimed_at,delivered_at", "note_id_to_owner_id", "private_delivery_operations"),
+  future_self_note_idempotency_keys: excluded("owner_id,idempotency_key,request_fingerprint,note_id,created_at", "owner_id", "note_submission_integrity_state"),
+  // The body stays out until an export owner decides how an undelivered note may be exported;
+  // the API never returns it to anyone before its Auckland delivery date.
+  future_self_notes: owned({
+    owner: "owner_id", retention: "while_owned", deletion: "purge_with_account",
+    access: "owner_scoped_note_procedure", retainedForOthers: "not_applicable", trashRestore: "not_applicable",
+    included: fields("id,owner_id,deliver_on,status,delivered_at,created_at,updated_at"),
+    excluded: fields("body,schedule_version"),
+  }, "postsIncluded"),
   legacy_cloudinary_media: excluded("media_id,cloudinary_public_id,cloudinary_url,legacy_type", "post_media_to_post", "unverified_legacy_object_provenance"),
   legal_document_versions: excluded("id,kind,version,content_digest,status,material_change,notice_starts_at,effective_at,urgent_change_reason,created_at", "public_policy_catalog", "published_documents_elsewhere"),
   media_reservation: owned({
@@ -215,7 +228,7 @@ export const exportDataInventory: Readonly<Record<string, ExportTableDecision>> 
   posts: owned({
     owner: "author_id", retention: "while_owned_or_restorable", deletion: "purge_with_account_or_post_trash",
     access: "owner_scoped_post_procedure", retainedForOthers: "not_applicable", trashRestore: "include_only_while_restorable",
-    included: fields("id,author_id,local_date,prompt_id,reflective_answer,caption,rating,audience,accepted_at,released_at,trashed_at,restore_until,trash_purge_due_at,created_at,updated_at"),
+    included: fields("id,author_id,local_date,prompt_id,reflective_answer,caption,rating,audience,weather_condition,weather_temperature_c,weather_place_name,accepted_at,released_at,trashed_at,restore_until,trash_purge_due_at,created_at,updated_at"),
     excluded: fields("trash_generation,trash_lease_token,trash_lease_expires_at,trash_failure_category,trash_next_attempt_at"),
   }, "postsIncluded"),
   profile_avatars: owned({

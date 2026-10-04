@@ -9,6 +9,7 @@ import 'feed_client.dart' show FeedPost;
 import 'post_media.dart';
 import 'post_page.dart';
 import 'posting_day_client.dart' show failureForStatus;
+import '../weather/post_weather.dart';
 
 /// One post the signed-in user may read.
 class PostDetail {
@@ -27,8 +28,12 @@ class PostDetail {
     required this.edited,
     required this.viewerIsAuthor,
     this.revisionCount = 0,
+    this.likeCount = 0,
+    this.viewerHasLiked = false,
+    this.commentCount = 0,
     this.media = const [],
     this.voiceMemo,
+    this.weather,
   });
 
   final String id;
@@ -55,12 +60,50 @@ class PostDetail {
   /// editing, so an edit saved elsewhere in between is a conflict.
   final int revisionCount;
 
+  final int likeCount;
+  final bool viewerHasLiked;
+
+  /// Comments and replies this user can see.
+  final int commentCount;
+
   /// Attached photos or video in display order.
   final List<PostMedia> media;
 
   /// The post's voice memo, or null. Only post detail carries it: feeds and
   /// profile lists do not, so their cards never play audio.
   final PostVoiceMemo? voiceMemo;
+
+  /// The weather the author added, or null. Only post detail carries it: feeds
+  /// and profile lists do not. It is the author's own snapshot, not verified.
+  final PostWeather? weather;
+
+  /// This post with new interaction counts.
+  PostDetail copyWith({
+    int? likeCount,
+    bool? viewerHasLiked,
+    int? commentCount,
+  }) => PostDetail(
+    id: id,
+    authorId: authorId,
+    username: username,
+    displayName: displayName,
+    localDate: localDate,
+    promptText: promptText,
+    reflectiveAnswer: reflectiveAnswer,
+    caption: caption,
+    rating: rating,
+    audience: audience,
+    acceptedAt: acceptedAt,
+    edited: edited,
+    viewerIsAuthor: viewerIsAuthor,
+    revisionCount: revisionCount,
+    likeCount: likeCount ?? this.likeCount,
+    viewerHasLiked: viewerHasLiked ?? this.viewerHasLiked,
+    commentCount: commentCount ?? this.commentCount,
+    media: media,
+    voiceMemo: voiceMemo,
+    weather: weather,
+  );
 
   static PostDetail? tryParse(Object? json) {
     if (json is! Map<String, Object?>) return null;
@@ -108,15 +151,20 @@ class PostDetail {
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
       viewerIsAuthor: json['viewerIsAuthor'] == true,
-      revisionCount: switch (json['revisionCount']) {
-        final int count when count >= 0 => count,
-        _ => 0,
-      },
+      revisionCount: _count(json['revisionCount']),
+      likeCount: _count(json['likeCount']),
+      viewerHasLiked: json['viewerHasLiked'] == true,
+      commentCount: _count(json['commentCount']),
       media: PostMedia.parseList(json['media']),
       voiceMemo: PostVoiceMemo.tryParse(json['voiceMemo']),
+      // A snapshot that fails the same limits the API enforces is treated as
+      // absent, so odd data from a server never reaches the screen.
+      weather: PostWeather.tryParse(json['weather']),
     );
   }
 }
+
+int _count(Object? value) => value is int && value >= 0 ? value : 0;
 
 /// The author's change to a post. Every field is sent, so the server only
 /// saves the ones that differ.
@@ -201,6 +249,9 @@ class ProfilePost extends FeedPost {
     required super.rating,
     required super.acceptedAt,
     required super.edited,
+    super.likeCount,
+    super.viewerHasLiked,
+    super.commentCount,
     super.media,
     required this.audience,
     required this.released,
@@ -232,6 +283,9 @@ class ProfilePost extends FeedPost {
       rating: post.rating,
       acceptedAt: post.acceptedAt,
       edited: post.edited,
+      likeCount: post.likeCount,
+      viewerHasLiked: post.viewerHasLiked,
+      commentCount: post.commentCount,
       media: post.media,
       audience: audience! as String,
       released: released,

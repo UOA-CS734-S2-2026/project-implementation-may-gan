@@ -20,7 +20,7 @@ function render(ui: Parameters<typeof rtlRender>[0]) {
   return { ...view, rerender: (next: Parameters<typeof rtlRender>[0]) => view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>) };
 }
 
-function post(id: string, answer: string, media: unknown[] = []) {
+function post(id: string, answer: string, media: unknown[] = [], counts = { likeCount: 0, viewerHasLiked: false, commentCount: 0 }) {
   return {
     id,
     author: { id: `author-${id}`, username: `friend_${id}`, displayName: `Friend ${id}` },
@@ -33,6 +33,7 @@ function post(id: string, answer: string, media: unknown[] = []) {
     acceptedAt: "2026-09-25T03:00:00.000Z",
     releasedAt: "2026-09-25T12:00:00.000Z",
     edited: false,
+    ...counts,
     media,
   };
 }
@@ -43,6 +44,14 @@ beforeEach(() => {
 });
 
 describe("Feed", () => {
+  it("uses post-shaped skeletons while the feed loads", () => {
+    page.mockReturnValue(new Promise(() => {}));
+    render(<Feed />);
+
+    expect(screen.getByRole("status", { name: "Loading friends' daylies" })).toBeTruthy();
+    expect(document.querySelectorAll(".skeleton")).toHaveLength(42);
+  });
+
   it("starts again from the new day when a page is loaded after midnight", async () => {
     const actor = userEvent.setup();
     page
@@ -60,6 +69,18 @@ describe("Feed", () => {
     expect(page).toHaveBeenNthCalledWith(2, "c1");
     expect(page).toHaveBeenNthCalledWith(3, undefined);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows each card's likes and comments", async () => {
+    page.mockResolvedValueOnce({
+      ok: true,
+      value: { items: [post("1", "Walked to the harbour.", [], { likeCount: 3, viewerHasLiked: true, commentCount: 1 })], nextCursor: null, hasMore: false },
+    });
+
+    render(<Feed />);
+
+    expect(await screen.findByLabelText("3 likes, including yours")).toBeTruthy();
+    expect(screen.getByLabelText("1 comment")).toBeTruthy();
   });
 
   it("shows friends' posts and loads the next page with the cursor", async () => {

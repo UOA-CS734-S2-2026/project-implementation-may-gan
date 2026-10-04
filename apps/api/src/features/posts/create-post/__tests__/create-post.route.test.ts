@@ -81,6 +81,7 @@ describe("POST /api/v1/posts", () => {
       tomorrowNote: { availableOn: "2026-09-26" },
       media: [],
       voiceMemo: null,
+      weather: null,
     });
     expect(JSON.stringify(created)).not.toContain("Bring the camera.");
   });
@@ -288,6 +289,136 @@ describe("POST /api/v1/posts", () => {
 
       const strip = (value: { error: { requestId: string } }) => ({ ...value.error, requestId: undefined });
       expect(strip(theirs as { error: { requestId: string } })).toEqual(strip(missing as { error: { requestId: string } }));
+    });
+  });
+
+  describe("weather", () => {
+    const weather = { condition: "rain", temperatureC: 11, placeName: "Auckland" };
+
+    it("stores the snapshot and returns it, and a retry replays it", async () => {
+      const { deps, memory } = dependencies();
+      const app = createApp({ posts: deps });
+      const created = await post(app, { user: "user-1", json: { ...body, weather } });
+
+      expect(created.status).toBe(201);
+      await expect(created.json()).resolves.toMatchObject({ weather });
+      expect(memory.posts[0]?.weather).toEqual(weather);
+
+      const retry = await post(app, { user: "user-1", json: { ...body, weather } });
+      expect(retry.status).toBe(201);
+      expect(retry.headers.get("idempotent-replayed")).toBe("true");
+      await expect(retry.json()).resolves.toMatchObject({ weather });
+    });
+
+    it("stores null for a post without weather", async () => {
+      const { deps, memory } = dependencies();
+      const response = await post(createApp({ posts: deps }), { user: "user-1" });
+
+      await expect(response.json()).resolves.toMatchObject({ weather: null });
+      expect(memory.posts[0]?.weather).toBeNull();
+    });
+
+    it.each([
+      ["adds weather", undefined, weather],
+      ["drops the weather", weather, undefined],
+      ["changes the condition", weather, { ...weather, condition: "snow" }],
+      ["changes the temperature", weather, { ...weather, temperatureC: 12 }],
+      ["changes the place", weather, { ...weather, placeName: "Wellington" }],
+    ])("conflicts when a retry %s", async (_name, first, second) => {
+      const app = createApp({ posts: dependencies().deps });
+      await post(app, { user: "user-1", json: first ? { ...body, weather: first } : body });
+      const retry = await post(app, { user: "user-1", json: second ? { ...body, weather: second } : body });
+
+      expect(retry.status).toBe(409);
+      await expect(retry.json()).resolves.toMatchObject({ error: { details: { reason: "IDEMPOTENCY_KEY_REUSED" } } });
+    });
+
+    it("accepts the temperature limits and the longest place name, counting emoji once", async () => {
+      for (const [index, snapshot] of [
+        { condition: "clear", temperatureC: -90, placeName: "Vostok" },
+        { condition: "clear", temperatureC: 60, placeName: "Dubai" },
+        { condition: "thunderstorm", temperatureC: 0, placeName: "a".repeat(80) },
+        { condition: "fog", temperatureC: 0, placeName: "🌧".repeat(80) },
+      ].entries()) {
+        const response = await post(createApp({ posts: dependencies().deps }), {
+          user: `user-${index}`,
+          json: { ...body, weather: snapshot },
+        });
+        expect(response.status, JSON.stringify(snapshot)).toBe(201);
+      }
+    });
+
+    it.each([
+      "clear", "partly_cloudy", "cloudy", "fog", "drizzle", "rain", "snow", "thunderstorm",
+    ])("accepts the %s condition", async (condition) => {
+      const response = await post(createApp({ posts: dependencies().deps }), {
+        user: "user-1",
+        json: { ...body, weather: { ...weather, condition } },
+      });
+
+      expect(response.status).toBe(201);
+    });
+
+    it.each([
+      ["an unknown condition", { ...weather, condition: "hail" }],
+      ["a condition in the wrong case", { ...weather, condition: "Rain" }],
+      ["a temperature above the limit", { ...weather, temperatureC: 61 }],
+      ["a temperature below the limit", { ...weather, temperatureC: -91 }],
+      ["a fractional temperature", { ...weather, temperatureC: 18.5 }],
+      ["a temperature sent as text", { ...weather, temperatureC: "18" }],
+      ["a null temperature", { ...weather, temperatureC: null }],
+      ["a missing place name", { condition: "rain", temperatureC: 11 }],
+      ["a missing condition", { temperatureC: 11, placeName: "Auckland" }],
+      ["an empty place name", { ...weather, placeName: "" }],
+      ["a blank place name", { ...weather, placeName: "   " }],
+      ["a place name with leading space", { ...weather, placeName: " Auckland" }],
+      ["a place name with trailing space", { ...weather, placeName: "Auckland " }],
+      ["a place name over the limit", { ...weather, placeName: "a".repeat(81) }],
+      ["a place name with a newline", { ...weather, placeName: "Auck\nland" }],
+      ["a place name with a tab", { ...weather, placeName: "Auck\tland" }],
+      ["a place name with a DEL character", { ...weather, placeName: "Auck\u007fland" }],
+      ["a place name with a C1 control character", { ...weather, placeName: "Auck\u0085land" }],
+      ["a place name sent as a number", { ...weather, placeName: 12 }],
+      ["coordinates", { ...weather, latitude: -36.85, longitude: 174.76 }],
+      ["a nested location", { ...weather, location: { lat: -36.85, lon: 174.76 } }],
+      ["a null snapshot", null],
+      ["a snapshot sent as text", "rain"],
+      ["a snapshot sent as a list", [weather]],
+    ])("rejects %s and stores nothing", async (_name, snapshot) => {
+      const { deps, memory } = dependencies();
+      const response = await post(createApp({ posts: deps }), { user: "user-1", json: { ...body, weather: snapshot } });
+
+      expect(response.status).toBe(422);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_FAILED" } });
+      expect(memory.posts).toHaveLength(0);
+    });
+
+    it("keeps the place name out of validation errors and logs", async () => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const response = await post(createApp({ posts: dependencies().deps }), {
+        user: "user-1",
+        json: { ...body, weather: { ...weather, placeName: "Secret Place\n" } },
+      });
+      const text = await response.text();
+      const logged = JSON.stringify(log.mock.calls);
+      log.mockRestore();
+
+      expect(response.status).toBe(422);
+      expect(text).not.toContain("Secret Place");
+      expect(logged).not.toContain("Secret Place");
+    });
+
+    it("documents the snapshot in OpenAPI as optional in the request and nullable in the response", async () => {
+      const document = await (await createApp().request("/api/v1/openapi.json")).json<{
+        components: { schemas: Record<string, { required?: string[]; properties?: Record<string, { oneOf?: unknown[]; anyOf?: unknown[] }> }> };
+      }>();
+      const { CreateDailyPostRequest: request, DailyPost: response, PostWeather: snapshot } = document.components.schemas;
+
+      expect(request?.required ?? []).not.toContain("weather");
+      expect(request?.properties).toHaveProperty("weather");
+      expect(response?.required).toContain("weather");
+      expect(JSON.stringify(response?.properties?.weather)).toContain('"type":"null"');
+      expect(snapshot?.required).toEqual(["condition", "temperatureC", "placeName"]);
     });
   });
 });

@@ -27,22 +27,42 @@ The composer asks for:
 - **Note to tomorrow's you:** Add a private note of up to 1,000 characters. This is optional and is stored with your post.
 - **Who can see this:** Choose **Friends** or **Solo**. Dayli does not choose for you.
 
-**Friends** posts become visible to your active friends after the next Auckland midnight. **Solo** posts remain visible only to you.
+**Friends** posts become visible to active friends after the next Auckland midnight. If your profile is public, other visitors can read those released posts too, including while signed out. **Solo** posts remain visible only to you. See [Privacy and sharing](./privacy-and-sharing) for the full rule.
 
 Dayli stores tomorrow notes, but there is no screen for reading them yet. Reading a note from the next day is planned.
 
-## Add photos or video on mobile
+## Add media on mobile
 
 On mobile, use **your day in pictures** to add either:
 
 - up to 3 photos, or
 - 1 video no longer than 15 seconds.
 
-Each file can be up to 10 MB, and all media together can be up to 25 MB. Uploads work only in app builds and environments where media upload has been configured. Wait for uploads to finish before you tap **Post**.
+You can also add one recording under **your voice**. Tap once to start and again to stop. Dayli asks for microphone access only when you start recording, and you can listen before keeping the memo. A voice memo can be up to 60 seconds and 2 MB.
+
+Each photo or video can be up to 10 MB. Photos, video, and the voice memo share a 25 MB limit for the post. Uploads work only in app builds and environments where media upload has been configured. Wait for uploads to finish before you tap **Post**.
 
 > **Screenshot placeholder `UD-CDP-02`:** Mobile new dayli composer with safe sample media selected and the audience section visible.
 
-The web composer also has a media picker, but selected files currently stay on your device and are not included in the post. The page tells you this below the picker. If the media matters to your post, use a mobile build with uploads configured.
+The web composer also has a media picker, but selected files currently stay on your device and are not included in the post. The web composer does not record voice memos. If the media matters to your post, use a mobile build with uploads configured.
+
+## Add the weather on mobile
+
+On mobile, **the weather** section can add what it was like outside, such as **Rain · 11°C · Auckland**. It is optional and appears only on your post's detail screen, not in the feed.
+
+Tap **Add the weather**. Dayli explains what it does first, and nothing happens until you choose:
+
+- **Use my location** asks your phone for your approximate location once, only to find the weather. Your phone may ask for permission here. The location is not stored and is not sent to Dayli. Only the weather, the temperature, and the name of the place go on your post.
+- **Choose a place instead** lets you search for a city or town by name. It needs no location permission.
+- **Not now** closes the box without changing anything. You can add the weather another time.
+
+You see exactly what will be on your post before you post, and you can tap the close button to remove it. You cannot add or change the weather after you post.
+
+If you say no to location, or location is switched off, Dayli tells you and offers **Choose a place** instead. If you refused permission and your phone will not ask again, **Open Settings** takes you to where you can change it. Posting never needs the weather. While Dayli is still getting it, the **Post** button waits and says **Getting the weather…**. Tap **Skip** if you would rather post without it.
+
+The weather comes from Open-Meteo.com, and your phone looks up the name of the place. The web composer does not have a weather section yet.
+
+> **Screenshot placeholder `UD-CDP-03`:** Mobile weather section showing the explanation before the location prompt, using a simulator location and no real place.
 
 ## Drafts and the deadline
 
@@ -58,7 +78,7 @@ In every case, a post counts only after the server accepts it. Starting before m
 
 Check your answer, rating, and audience. On the web or mobile, choose **Post**. Keep the composer open while mobile media is uploading.
 
-After posting, find your own dayli under **my days** or on your profile. Before a Friends post is released, it is marked **Not released yet**. A Solo post is marked **Only you**.
+After posting, find your own dayli under **my days** or on your profile. Before a Friends post is released, it is marked **Not released yet**. A Solo post is marked **Only you**. Open a post in the mobile app to play its voice memo. Playback starts only when you tap it; feed and profile cards do not play audio.
 
 ## Make a change after posting
 

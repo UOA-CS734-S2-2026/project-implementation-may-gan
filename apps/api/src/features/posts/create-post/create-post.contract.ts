@@ -12,6 +12,7 @@ import { z } from "@hono/zod-openapi";
 import { rateLimitErrorResponse } from "../../../http/rate-limit-contract";
 import { nullMember } from "../shared/post-media.contract";
 import { boundedText, DAILY_POST_LIMITS, postAudienceSchema } from "../shared/post-content.contract";
+import { nullablePostWeatherSchema, postWeatherSchema } from "../shared/post-weather.contract";
 
 export const createDailyPostRequestSchema = z
   .object({
@@ -46,6 +47,10 @@ export const createDailyPostRequestSchema = z
           + "Omit it or send an empty list for a text-only post.",
         example: ["0f8fad5b-d9cb-469f-a165-70867728950e"],
       }),
+    weather: postWeatherSchema.optional().openapi({
+      description: "An optional weather snapshot from the author's phone. Omit it for a post without weather. "
+        + "The server checks its shape and ranges but cannot verify it. It cannot be added or changed after the post is created.",
+    }),
   })
   .strict()
   .openapi("CreateDailyPostRequest");
@@ -100,6 +105,7 @@ export const dailyPostSchema = z
     voiceMemo: z
       .union([dailyPostVoiceMemoSchema, nullMember])
       .openapi({ description: "The attached voice memo, or null when the post has none." }),
+    weather: nullablePostWeatherSchema.openapi({ description: "The post's weather snapshot, or null when the post has none." }),
   })
   .openapi("DailyPost");
 

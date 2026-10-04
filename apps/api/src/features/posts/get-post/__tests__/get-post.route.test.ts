@@ -24,6 +24,7 @@ const detail: PostDetailRecord = {
   viewerIsAuthor: false,
   media: [],
   voiceMemo: null,
+  weather: null,
   publicMediaDelivery: false,
 };
 
@@ -87,6 +88,25 @@ describe("GET /api/v1/posts/{postId}", () => {
     expect(publicMediaDelivery).toBe(false);
     await expect(response.json()).resolves.toEqual(expected);
     expect(repo.findPost).toHaveBeenCalledWith("user-viewer", "post-1", fixedNow);
+  });
+
+  it("returns the post's weather snapshot, including to an anonymous reader of a public post", async () => {
+    const weather = { condition: "rain", temperatureC: 11, placeName: "Auckland" } as const;
+    const repo = repository(async () => ({ ...detail, weather }));
+
+    const signedIn = await get({ repository: repo });
+    expect(signedIn.status).toBe(200);
+    await expect(signedIn.json()).resolves.toMatchObject({ weather });
+
+    const anonymous = await get({ repository: repo }, undefined, null);
+    expect(anonymous.status).toBe(200);
+    await expect(anonymous.json()).resolves.toMatchObject({ weather });
+  });
+
+  it("returns null weather for a post without a snapshot", async () => {
+    const response = await get({ repository: repository(async () => detail) });
+
+    await expect(response.json()).resolves.toMatchObject({ weather: null });
   });
 
   it("conceals a missing or unreadable post as 404", async () => {

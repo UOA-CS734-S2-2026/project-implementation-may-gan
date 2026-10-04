@@ -61,6 +61,18 @@ git checkout ios/Runner/Info.plist ios/Runner.xcodeproj/project.pbxproj
 
 The last line drops reformatting and an unrelated build setting the tools add. The native launch screen can't show Flutter UI, so it shows the full Dayli logo on the landing screen's cream until the first frame. The website's circular favicon is `apps/web/app/icon.svg` with `favicon.ico` as the fallback.
 
+## Weather on posts
+
+The composer's **the weather** section adds a condition, a temperature, and a place name to a post. Nothing runs until the author taps **Add the weather** and picks an option in the explanation, and the system's location prompt follows only **Use my location**.
+
+- Weather and place search come from [Open-Meteo](https://open-meteo.com), which needs no key. Its free tier is for non-commercial use and asks for attribution, which the composer shows. Revisit it before a commercial launch.
+- Location uses `geolocator` at low accuracy, one reading at a time, through a position *subscription* that is cancelled on success, timeout, Skip and composer disposal. Do not switch it to `getCurrentPosition` with a `timeLimit`: on iOS that only stops the Dart wait and leaves the native request running. A fix older than ten minutes is skipped. Android declares `ACCESS_COARSE_LOCATION` only; keep it that way, and check the merged manifest after adding a plugin. iOS uses the `NSLocationWhenInUseUsageDescription` string in `Info.plist`.
+- The place name comes from the phone's geocoder through `geocoding`, so the position goes to the platform's place lookup. Posts never carry coordinates, and the position is cut to two decimal places before any request.
+- All of it sits behind `WeatherServices` in `AppServices`. Tests replace the provider, location and place namer with the fakes in `test/support/weather_fakes.dart`, so no test touches the network or the phone.
+- To try it on an emulator, set a location in the emulator's extended controls (Android) or **Features > Location** (iOS Simulator) and use a made-up place. Do not put a real address in a screenshot.
+
+Only automated tests and an Android debug build have exercised this so far. The iOS side has not been built or run, so check the permission prompt on a simulator or an iPhone before relying on it.
+
 ## Design
 
 The app keeps the WDCC Dayli frontend's branding and lays it out for phones. That frontend was imported under the reuse approval in [product decisions](../../docs/dayli/product-decisions.md#existing-frontend-reuse), from [UOA-CS732-S1-2026/group-project-wdcc](https://github.com/UOA-CS732-S1-2026/group-project-wdcc) at commit `3f961fe`. `assets/wdcc/` holds its logo, dot grid, squiggles, and search icon. The logo's CSS-variable fills are replaced by their fallback colour, and the squiggles are exported from their React components with WDCC's stroke colours.
@@ -87,6 +99,7 @@ Only the data layer is missing features:
 - `lib/drafts/`: protected daily drafts (#17). Each user's draft is stored as JSON in Keychain or Android encrypted storage, never in shared preferences or files. It carries its Auckland day, prompt, idempotency key, and attachment references.
 - `lib/compose/`: the daily composer (#18). It has the prompt, optional media, a rating, the answer, the word dump, an optional note to tomorrow, and a solo or friends choice with no default. Edits are saved as the author types, and the draft is removed only after the server accepts the post. A draft from a day that has ended is shown as missed and is never backdated. If today already has a post, unposted words stay readable until the author discards them. See [daily posts and release timing](../docs/content/docs/systems/daily-posts-and-release-timing/index.mdx) for how acceptance and retries work.
 - `lib/compose/media_compressor.dart`, `media_upload_controller.dart`, and `lib/api/media_upload_client.dart`: compress, reserve, upload, and complete each attachment (#22). See [media uploads and storage](../docs/content/docs/systems/media-uploads-and-storage/index.mdx#what-the-clients-do-today).
+- `lib/compose/composer_link.dart`, `lib/app/pending_destination.dart`, `ios/Runner/ComposerIntents.swift`, and `android/app/src/main/res/xml/shortcuts.xml`: Siri, Shortcuts, and the Android launcher shortcut open today's composer through a `dayli://app/post` link, optionally with a rating, and never post (#37). See [native composer entry points](../../docs/dayli/native-composer-entry-points.md).
 - `lib/posts/post_submitter.dart`: `GeneratedPostSubmitter` sends the draft through the generated Dart client with its stored idempotency key and the bearer session. It maps each `409` reason, `401`, `422`, outages, and lost connections to results the composer handles.
 
 iOS keeps Keychain entries after an app is deleted. On the first launch of a new installation, `clearProtectedStorageAfterReinstall` wipes the previous installation's session and drafts. A draft that can no longer be decrypted, for example after the platform key is invalidated, is removed and the author is told.

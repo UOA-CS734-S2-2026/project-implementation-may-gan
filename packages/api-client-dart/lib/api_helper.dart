@@ -68,6 +68,9 @@ String parameterToString(dynamic value) {
   if (value is ApiErrorCode) {
     return ApiErrorCodeTypeTransformer().encode(value).toString();
   }
+  if (value is FutureSelfNoteStatus) {
+    return FutureSelfNoteStatusTypeTransformer().encode(value).toString();
+  }
   if (value is Mbti) {
     return MbtiTypeTransformer().encode(value).toString();
   }
@@ -87,6 +90,9 @@ String parameterToString(dynamic value) {
   }
   if (value is PostMediaContentType) {
     return PostMediaContentTypeTypeTransformer().encode(value).toString();
+  }
+  if (value is PostWeatherCondition) {
+    return PostWeatherConditionTypeTransformer().encode(value).toString();
   }
   if (value is ProfileVisibility) {
     return ProfileVisibilityTypeTransformer().encode(value).toString();

@@ -21,6 +21,16 @@ export interface FcmNotificationInput {
   conversationId: string;
 }
 
+export interface GenericFcmNotificationInput {
+  token: string;
+  eventId: string;
+  type: "direct_message";
+  targetType: "conversation";
+  targetId: string;
+  title: string;
+  body: string;
+}
+
 export type FcmResult =
   | { ok: true }
   | { ok: false; retryable: boolean; category: "transient" | "rate_limited" | "provider_rejected" | "unauthorized" };
@@ -112,24 +122,29 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
     return accessToken.value;
   }
 
+  async function sendPayload(payload: unknown, signal?: AbortSignal): Promise<FcmResult> {
+    try {
+      if (signal?.aborted) return { ok: false, retryable: true, category: "transient" };
+      const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${await oauthToken(signal)}`, "content-type": "application/json" },
+        body: JSON.stringify(payload), signal,
+      });
+      if (response.ok) return { ok: true };
+      if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };
+      if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
+      if (response.status >= 500) return { ok: false, retryable: true, category: "transient" };
+      return { ok: false, retryable: false, category: "provider_rejected" };
+    } catch {
+      return { ok: false, retryable: true, category: "transient" };
+    }
+  }
+
   return {
-    async send(notification: FcmNotificationInput, options?: { signal: AbortSignal }): Promise<FcmResult> {
-      try {
-        if (options?.signal.aborted) return { ok: false, retryable: true, category: "transient" };
-        const response = await fetcher(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(input.serviceAccount.projectId)}/messages:send`, {
-          method: "POST",
-          headers: { authorization: `Bearer ${await oauthToken(options?.signal)}`, "content-type": "application/json" },
-          body: JSON.stringify(buildFcmPayload(notification)), signal: options?.signal,
-        });
-        if (response.ok) return { ok: true };
-        if (response.status === 401 || response.status === 403) return { ok: false, retryable: true, category: "unauthorized" };
-        if (response.status === 429) return { ok: false, retryable: true, category: "rate_limited" };
-        if (response.status >= 500) return { ok: false, retryable: true, category: "transient" };
-        return { ok: false, retryable: false, category: "provider_rejected" };
-      } catch {
-        return { ok: false, retryable: true, category: "transient" };
-      }
-    },
+    send: (notification: FcmNotificationInput, options?: { signal: AbortSignal }) =>
+      sendPayload(buildFcmPayload(notification), options?.signal),
+    sendGeneric: (notification: GenericFcmNotificationInput, options?: { signal: AbortSignal }) =>
+      sendPayload(buildGenericFcmPayload(notification), options?.signal),
   };
 }
 
@@ -140,5 +155,21 @@ export function buildFcmPayload(notification: FcmNotificationInput) {
     data: { eventId: notification.eventId, conversationId: notification.conversationId },
     android: { collapse_key: notification.conversationId },
     apns: { headers: { "apns-collapse-id": notification.conversationId } },
+  } };
+}
+
+export function buildGenericFcmPayload(notification: GenericFcmNotificationInput) {
+  return { message: {
+    token: notification.token,
+    notification: { title: notification.title, body: notification.body },
+    data: {
+      version: "1",
+      eventId: notification.eventId,
+      type: notification.type,
+      targetType: notification.targetType,
+      targetId: notification.targetId,
+    },
+    android: { collapse_key: notification.targetId },
+    apns: { headers: { "apns-collapse-id": notification.targetId } },
   } };
 }

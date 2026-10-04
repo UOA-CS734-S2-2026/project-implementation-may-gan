@@ -1,5 +1,6 @@
 import type { AucklandDayService, ClockLike } from "@dayli/domain";
 import { isAudioContentType, MAX_POST_VOICE_MEMOS, MAX_POST_MEDIA_BYTES, MAX_POST_PHOTOS } from "@dayli/contracts";
+import type { PostWeather } from "../shared/post-weather.contract";
 
 export type DailyPostAudience = "solo" | "friends";
 
@@ -14,6 +15,8 @@ export interface CreateDailyPostInput {
   tomorrowNote?: string;
   /** Validated media reservation IDs, in display order. */
   attachments?: readonly string[];
+  /** The author's weather snapshot, already checked for shape and range. */
+  weather?: PostWeather;
 }
 
 /** One attachment of a stored post, in display order. */
@@ -36,6 +39,7 @@ export interface StoredDailyPost {
   releasedAt: Date;
   tomorrowNoteAvailableOn: string | null;
   media: StoredPostMedia[];
+  weather: PostWeather | null;
 }
 
 export interface NewDailyPost {
@@ -51,6 +55,7 @@ export interface NewDailyPost {
   releasedAt: Date;
   tomorrowNote: { id: string; note: string; availableOn: string } | null;
   media: Array<{ id: string; reservationId: string; order: number }>;
+  weather: PostWeather | null;
   idempotencyKey: string;
   requestFingerprint: string;
 }
@@ -171,7 +176,9 @@ function readNow(clock: ClockLike): Date {
  *
  * A post without attachments keeps the version 1 encoding, so a retry of a
  * request stored before attachments existed still matches its fingerprint.
- * Attachments switch to version 2, which appends their IDs in order.
+ * Attachments switch to version 2, which appends their IDs in order. A post
+ * with weather uses version 3, which appends the attachments (possibly empty)
+ * and then the snapshot, so a retry that adds or changes weather conflicts.
  */
 export async function fingerprintDailyPostRequest(input: CreateDailyPostInput): Promise<string> {
   const fields = [
@@ -184,8 +191,11 @@ export async function fingerprintDailyPostRequest(input: CreateDailyPostInput): 
     input.tomorrowNote ?? null,
   ];
   const attachments = input.attachments ?? [];
+  const { weather } = input;
   const canonical = JSON.stringify(
-    attachments.length === 0 ? [1, ...fields] : [2, ...fields, [...attachments]],
+    weather
+      ? [3, ...fields, [...attachments], [weather.condition, weather.temperatureC, weather.placeName]]
+      : attachments.length === 0 ? [1, ...fields] : [2, ...fields, [...attachments]],
   );
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -304,6 +314,7 @@ export function createDailyPostService(dependencies: CreateDailyPostServiceDepen
             ? null
             : { id: generateId(), note: input.tomorrowNote, availableOn: nextDay },
           media: attachments.map(({ reservationId }, order) => ({ id: generateId(), reservationId, order })),
+          weather: input.weather ?? null,
           idempotencyKey,
           requestFingerprint,
         });

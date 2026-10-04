@@ -31,6 +31,7 @@ class PostDetail {
     required this.viewerIsAuthor,
     this.media = const [],
     required this.voiceMemo,
+    required this.weather,
   });
 
   final String id;
@@ -79,6 +80,9 @@ class PostDetail {
   /// The post's voice memo with a private download URL that expires after 5 minutes, or null when the post has none. Only post detail carries it; feeds and profile lists do not.
   final PostVoiceMemo? voiceMemo;
 
+  /// The weather snapshot the author added, or null when the post has none. It is the author's own snapshot, not verified. Only post detail carries it; feeds and profile lists do not.
+  final PostWeather? weather;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -100,7 +104,8 @@ class PostDetail {
           other.commentCount == commentCount &&
           other.viewerIsAuthor == viewerIsAuthor &&
           _deepEquality.equals(other.media, media) &&
-          other.voiceMemo == voiceMemo;
+          other.voiceMemo == voiceMemo &&
+          other.weather == weather;
 
   @override
   int get hashCode =>
@@ -122,11 +127,12 @@ class PostDetail {
       (commentCount.hashCode) +
       (viewerIsAuthor.hashCode) +
       (media.hashCode) +
-      (voiceMemo == null ? 0 : voiceMemo!.hashCode);
+      (voiceMemo == null ? 0 : voiceMemo!.hashCode) +
+      (weather == null ? 0 : weather!.hashCode);
 
   @override
   String toString() =>
-      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, revisionCount=$revisionCount, likeCount=$likeCount, viewerHasLiked=$viewerHasLiked, commentCount=$commentCount, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo]';
+      'PostDetail[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, edited=$edited, revisionCount=$revisionCount, likeCount=$likeCount, viewerHasLiked=$viewerHasLiked, commentCount=$commentCount, viewerIsAuthor=$viewerIsAuthor, media=$media, voiceMemo=$voiceMemo, weather=$weather]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -156,6 +162,11 @@ class PostDetail {
     } else {
       json[r'voiceMemo'] = null;
     }
+    if (this.weather != null) {
+      json[r'weather'] = this.weather;
+    } else {
+      json[r'weather'] = null;
+    }
     return json;
   }
 
@@ -182,6 +193,8 @@ class PostDetail {
     List<PostMedia>? media,
     PostVoiceMemo? voiceMemo,
     bool voiceMemoSetToNull = false,
+    PostWeather? weather,
+    bool weatherSetToNull = false,
   }) =>
       PostDetail(
         id: id ?? this.id,
@@ -202,6 +215,7 @@ class PostDetail {
         viewerIsAuthor: viewerIsAuthor ?? this.viewerIsAuthor,
         media: media ?? this.media,
         voiceMemo: voiceMemoSetToNull ? null : voiceMemo ?? this.voiceMemo,
+        weather: weatherSetToNull ? null : weather ?? this.weather,
       );
 
   /// Returns a new [PostDetail] instance and imports its values from
@@ -283,6 +297,8 @@ class PostDetail {
             'Required key "PostDetail[media]" has a null value in JSON.');
         assert(json.containsKey(r'voiceMemo'),
             'Required key "PostDetail[voiceMemo]" is missing from JSON.');
+        assert(json.containsKey(r'weather'),
+            'Required key "PostDetail[weather]" is missing from JSON.');
         return true;
       }());
 
@@ -305,6 +321,7 @@ class PostDetail {
         viewerIsAuthor: mapValueOfType<bool>(json, r'viewerIsAuthor')!,
         media: PostMedia.listFromJson(json[r'media']),
         voiceMemo: PostVoiceMemo.fromJson(json[r'voiceMemo']),
+        weather: PostWeather.fromJson(json[r'weather']),
       );
     }
     return null;
@@ -379,6 +396,7 @@ class PostDetail {
     'viewerIsAuthor',
     'media',
     'voiceMemo',
+    'weather',
   };
 }
 

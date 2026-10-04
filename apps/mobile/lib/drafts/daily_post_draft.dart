@@ -1,3 +1,5 @@
+import '../weather/post_weather.dart';
+
 /// Who can read a post once it is released.
 enum PostAudience {
   friends('friends'),
@@ -242,6 +244,7 @@ class DailyPostDraft {
     this.audience,
     this.tomorrowNote = '',
     this.attachments = const [],
+    this.weather,
   });
 
   static const schemaVersion = 1;
@@ -263,6 +266,11 @@ class DailyPostDraft {
   final String tomorrowNote;
   final List<DraftAttachment> attachments;
 
+  /// The weather the author added, or null. It holds a condition, a
+  /// temperature and a place name, never coordinates. Like [audience] it does
+  /// not make an otherwise empty draft worth keeping.
+  final PostWeather? weather;
+
   bool get isEmpty =>
       reflectiveAnswer.trim().isEmpty &&
       caption.trim().isEmpty &&
@@ -281,6 +289,7 @@ class DailyPostDraft {
     PostAudience? audience,
     String? tomorrowNote,
     List<DraftAttachment>? attachments,
+    PostWeather? Function()? weather,
   }) => DailyPostDraft(
     userId: userId,
     localDate: localDate,
@@ -294,6 +303,7 @@ class DailyPostDraft {
     audience: audience ?? this.audience,
     tomorrowNote: tomorrowNote ?? this.tomorrowNote,
     attachments: attachments ?? this.attachments,
+    weather: weather == null ? this.weather : weather(),
   );
 
   Map<String, Object?> toJson() => {
@@ -310,6 +320,7 @@ class DailyPostDraft {
     'audience': audience?.wireValue,
     'tomorrowNote': tomorrowNote,
     'attachments': [for (final attachment in attachments) attachment.toJson()],
+    if (weather != null) 'weather': weather!.toJson(),
   };
 
   /// Returns null for anything that is not a complete version-1 draft, so a
@@ -355,6 +366,9 @@ class DailyPostDraft {
                 .whereType<DraftAttachment>()
                 .toList(growable: false)
           : const [],
+      // A snapshot that fails the API's limits is dropped, so a corrupted
+      // entry can never make the post fail validation.
+      weather: PostWeather.tryParse(json['weather']),
     );
   }
 }

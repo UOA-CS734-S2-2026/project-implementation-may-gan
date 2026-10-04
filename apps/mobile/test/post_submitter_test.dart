@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -13,6 +14,7 @@ DailyPostDraft draft({
   String caption = '',
   String tomorrowNote = '',
   PostAudience? audience = PostAudience.friends,
+  PostWeather? weather,
 }) => DailyPostDraft(
   userId: 'user-1',
   localDate: '2026-09-25',
@@ -28,6 +30,7 @@ DailyPostDraft draft({
   attachments: const [
     DraftAttachment(localPath: '/photos/0.jpg', mediaType: 'image'),
   ],
+  weather: weather,
 );
 
 String post({String id = 'post-1'}) => jsonEncode({
@@ -114,6 +117,56 @@ void main() {
     expect(body['caption'], 'Sunset at the wharf');
     expect(body['tomorrowNote'], 'Bring the camera.');
     expect(body['audience'], 'solo');
+  });
+
+  test('sends the weather snapshot with exactly its three fields', () async {
+    await submitter((_) async => http.Response(post(), 201)).submit(
+      draft(
+        weather: const PostWeather(
+          condition: WeatherCondition.partlyCloudy,
+          temperatureC: -3,
+          placeName: 'Queenstown 🌧',
+        ),
+      ),
+    );
+
+    final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+    expect(body['weather'], {
+      'condition': 'partly_cloudy',
+      'temperatureC': -3,
+      'placeName': 'Queenstown 🌧',
+    });
+    // Nothing else about where the author is can ride along.
+    expect(body.keys, isNot(contains('latitude')));
+    expect(body.keys, isNot(contains('location')));
+  });
+
+  test('sends every condition the way the API spells it', () async {
+    for (final condition in WeatherCondition.values) {
+      requests.clear();
+      await submitter((_) async => http.Response(post(), 201)).submit(
+        draft(
+          weather: PostWeather(
+            condition: condition,
+            temperatureC: 10,
+            placeName: 'Auckland',
+          ),
+        ),
+      );
+
+      final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+      expect(
+        (body['weather'] as Map<String, dynamic>)['condition'],
+        condition.wireValue,
+      );
+    }
+  });
+
+  test('leaves the weather out entirely when none was added', () async {
+    await submitter((_) async => http.Response(post(), 201)).submit(draft());
+
+    final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+    expect(body.containsKey('weather'), isFalse);
   });
 
   test('sends validated uploads as reservation IDs, in draft order', () async {

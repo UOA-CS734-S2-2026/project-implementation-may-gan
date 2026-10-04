@@ -2,6 +2,7 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/api/feed_client.dart';
 import 'package:dayli_mobile/api/friends_client.dart';
 import 'package:dayli_mobile/api/post_client.dart';
+import 'package:dayli_mobile/api/profile_client.dart';
 import 'package:dayli_mobile/home/home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -177,6 +178,58 @@ void main() {
 
     expect(posts.profileRequests, [('jos', null), ('jos', null)]);
     expect(find.text('Edited answer.'), findsOneWidget);
+  });
+
+  testProfile('updates the card and Loved after liking from a profile', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    ProfileDetails ada0({required int loved}) => ProfileDetails(
+      id: 'user-ada',
+      username: 'ada',
+      displayName: 'Ada',
+      detailsVisible: true,
+      bio: null,
+      isOwner: false,
+      streak: const PostingStreak(current: 1, longest: 1, postedToday: false),
+      stats: ProfileStats(posts: 1, friends: 1, loved: loved),
+    );
+    final profiles = FakeProfileClient({'ada': ada0(loved: 2)});
+    final posts = FakePostClient(
+      [ApiSuccess(postDetail('1'))],
+      [
+        ApiSuccess(page([profilePost('1')])),
+        ApiSuccess(
+          page([profilePost('1', likeCount: 1, viewerHasLiked: true)]),
+        ),
+      ],
+    );
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'ada': ada}),
+      posts: posts,
+      profiles: profiles,
+    );
+    await openProfile(tester, harness, 'ada');
+    expect(find.bySemanticsLabel('2 Loved'), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const Key('profile.posts.post.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.posts.post.1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('post.like')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('post.like')));
+    await tester.pumpAndSettle();
+    profiles.profiles['ada'] = ada0(loved: 3);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('3 Loved'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('1 like, including yours, 0 comments'),
+      findsOneWidget,
+    );
+    semantics.dispose();
   });
 
   testProfile('asks a non-friend to add them and never loads posts', (

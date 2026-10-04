@@ -39,7 +39,8 @@ This separation matters most when something goes wrong. A component should be ab
 Next.js routes live under `apps/web/app`. A folder such as `(main)` is a route group. It chooses a shared layout but does not add text to the URL. For example:
 
 - `app/(main)/home/page.tsx` owns `/home`.
-- `app/(main)/u/[username]/page.tsx` owns a profile URL with a dynamic username.
+- `app/(public)/u/[username]/page.tsx` owns a public profile URL with a dynamic username.
+- `app/(public)/u/[username]/[postId]/page.tsx` owns public post detail.
 - `app/(auth)/sign-in/page.tsx` owns `/sign-in` inside the authentication layout.
 - `app/api/[...path]/route.ts` is an optional browser API proxy route, not a product screen.
 
@@ -88,9 +89,11 @@ The posting screen makes the distinction concrete. `ClientPage.tsx` loads the cu
 
 Use TanStack Query for a new read when the result should be cached, refetched, paged, or invalidated with related data. A small one-off screen may use explicit React state, as the current posting-day screen does. Follow the nearby implemented feature rather than converting unrelated code to make every screen identical.
 
-## Keep private cache data tied to an account
+## Keep private and optional-session cache data tied to an account
 
 A browser can sign out and sign in as another person without closing the tab. A cache key such as `["feed"]` could briefly show the first person's private feed to the second person. That is not merely stale UI. It is the wrong account's data.
+
+Public profile and post reads add another transition: the same URL can first load anonymously, then reload after sign-in with a known actor. Their keys use the actor ID or `"anonymous"`, and the route clears inaccessible profile, post, revision, and media state when access changes. Do not move optional-session data into an identity-free cache just because the anonymous response is public.
 
 Dayli protects private query data in two ways:
 
@@ -140,7 +143,7 @@ This division is worth copying. The screen owns words and actions. The hook owns
 
 The API owns Better Auth. In the default browser mode, `lib/auth/client.ts` talks to the configured API origin and includes credentials so the browser sends its secure session cookie. `SessionProvider` exposes the resolved user to Client Components and keeps the first hydrated render consistent with server HTML.
 
-Signed-in routes have a client gate in `UsernameSetupGate`. It waits for session resolution, sends signed-out visitors to `/sign-in`, and sends accounts without a username to `/setup-username`.
+Signed-in routes have a client gate in `UsernameSetupGate`. It waits for session resolution, sends signed-out visitors to `/sign-in`, and sends accounts without a username to `/setup-username`. The `(public)` profile and post route group deliberately sits outside this gate. It uses optional-session reads, shows a restricted state for private profiles, and sends write intents through sign-in before returning to the original URL.
 
 Dayli also has an explicitly enabled same-origin browser proxy mode. When `NEXT_PUBLIC_WEB_API_PROXY_ENABLED` is true:
 

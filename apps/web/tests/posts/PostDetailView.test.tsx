@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PostDetailView } from "@/features/posts/get-post/PostDetailView";
+import { interactionsApi } from "@/features/interactions/shared/interactions.api";
 import { postsApi } from "@/features/posts/shared/posts.api";
 import { rememberPublicIntent } from "@/lib/routing/public-return-intent";
 
@@ -14,6 +15,14 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn() }),
   usePathname: () => "/u/ana_walks/post-1",
   useSearchParams: () => new URLSearchParams(search),
+}));
+vi.mock("@/features/interactions/shared/interactions.api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/interactions/shared/interactions.api")>()),
+  interactionsApi: {
+    comments: vi.fn(async () => ({ ok: true, value: { items: [], nextCursor: null, hasMore: false } })),
+    setLike: vi.fn(),
+    likes: vi.fn(),
+  },
 }));
 vi.mock("@/features/posts/shared/posts.api", () => ({
   postsApi: { get: vi.fn(), media: vi.fn(), update: vi.fn(), remove: vi.fn(), revisions: vi.fn() },
@@ -45,6 +54,9 @@ function detail(overrides: Record<string, unknown> = {}) {
     releasedAt: "2026-09-29T11:00:00.000Z",
     edited: false,
     revisionCount: 0,
+    likeCount: 0,
+    viewerHasLiked: false,
+    commentCount: 0,
     viewerIsAuthor: false,
     media: [],
     ...overrides,
@@ -59,6 +71,14 @@ beforeEach(() => {
 });
 
 describe("PostDetailView", () => {
+  it("uses a post-shaped skeleton while the dayli loads", () => {
+    get.mockReturnValue(new Promise(() => {}));
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    expect(screen.getByRole("status", { name: "Loading dayli" })).toBeTruthy();
+    expect(document.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+  });
+
   it("shows the post with its stored prompt, rating, and Auckland date", async () => {
     get.mockResolvedValue({ ok: true, value: detail() });
     render(<PostDetailView username="ana_walks" postId="post-1" />);
@@ -342,8 +362,32 @@ describe("PostDetailView", () => {
     get.mockResolvedValue({ ok: true, value: detail() });
     render(<PostDetailView username="ana_walks" postId="post-1" />);
 
-    expect(await screen.findByText(/Nothing was submitted/)).toBeTruthy();
     await waitFor(() => expect(get.mock.calls.length).toBeGreaterThanOrEqual(2));
+    // The intent is consumed, not replayed: nothing is liked and the link is cleaned up.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/u/ana_walks/post-1"));
+    expect(interactionsApi.setLike).not.toHaveBeenCalled();
+    expect(screen.queryByText(/not available in this version/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Like" })).toBeTruthy();
+  });
+
+  it("puts the cursor in the comment box for a returned comment intent, and posts nothing", async () => {
+    search = "intent=comment";
+    rememberPublicIntent("/u/ana_walks/post-1?intent=comment");
+    get.mockResolvedValue({ ok: true, value: detail() });
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    const box = await screen.findByRole("textbox", { name: "Add a comment" });
+    await waitFor(() => expect(document.activeElement).toBe(box));
+    expect(replace).toHaveBeenCalledWith("/u/ana_walks/post-1");
+  });
+
+  it("shows the real like and comment controls, not sign-in buttons, to a signed-in viewer", async () => {
+    get.mockResolvedValue({ ok: true, value: detail() });
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    expect(await screen.findByRole("button", { name: "Like" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Add a comment" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "like" })).toBeNull();
   });
 
   it("conceals and evicts stale content and media after a 404 refetch", async () => {

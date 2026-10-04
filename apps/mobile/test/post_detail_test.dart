@@ -6,6 +6,7 @@ import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_page.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/ui/dayli_button.dart';
+import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
@@ -503,9 +504,13 @@ void main() {
       final harness = harnessWith(
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
       );
+      var postChanges = 0;
+      harness.postActivity.addListener(() => postChanges++);
       await confirmDelete(tester, harness);
 
       expect(harness.posts.deleted, ['1']);
+      // Deleting may end a streak, so profiles reload it.
+      expect(postChanges, 1);
       expect(find.byKey(const Key('post.deleted')), findsOneWidget);
       expect(find.byKey(const Key('post.menu')), findsNothing);
       expect(find.byKey(const Key('home.feed.post.1')), findsOneWidget);
@@ -517,7 +522,10 @@ void main() {
         FakePostClient([ApiSuccess(postDetail('1', viewerIsAuthor: true))]),
       );
       harness.posts.deleteResult = const ApiError(ServiceUnavailable());
+      var postChanges = 0;
+      harness.postActivity.addListener(() => postChanges++);
       await confirmDelete(tester, harness);
+      expect(postChanges, 0);
 
       expect(find.byKey(const Key('post.deleteFailed')), findsOneWidget);
       expect(find.text('Walked to the harbour.'), findsOneWidget);
@@ -758,6 +766,85 @@ void main() {
     expect(first.media.id, 'm-1');
     expect(second.media.id, 'm-2');
     expect(first.semanticLabel, "Friend 1's photo 1 of 2");
+  });
+
+  group('weather', () {
+    const rain = PostWeather(
+      condition: WeatherCondition.rain,
+      temperatureC: 11,
+      placeName: 'Auckland',
+    );
+
+    testWidgets('shows a friend the weather the author added', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1', weather: rain))]),
+      );
+      await openPost(tester, harness);
+
+      expect(find.byKey(const Key('post.weather')), findsOneWidget);
+      expect(find.text('Rain · 11°C · Auckland'), findsOneWidget);
+    });
+
+    testWidgets('shows the author their own weather', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([
+          ApiSuccess(postDetail('1', viewerIsAuthor: true, weather: rain)),
+        ]),
+      );
+      await openPost(tester, harness);
+
+      expect(find.text('Rain · 11°C · Auckland'), findsOneWidget);
+    });
+
+    test('survives a change to the post\'s like and comment counts', () {
+      final liked = postDetail(
+        '1',
+        weather: rain,
+      ).copyWith(likeCount: 3, viewerHasLiked: true, commentCount: 2);
+
+      expect(liked.weather, rain);
+      expect(liked.likeCount, 3);
+      expect(liked.viewerHasLiked, isTrue);
+      expect(liked.commentCount, 2);
+      // A post without weather stays without it.
+      expect(postDetail('1').copyWith(likeCount: 1).weather, isNull);
+    });
+
+    testWidgets('shows nothing for a post without weather', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1'))]),
+      );
+      await openPost(tester, harness);
+
+      expect(find.byKey(const Key('post.weather')), findsNothing);
+      expect(find.textContaining('°C'), findsNothing);
+    });
+
+    testWidgets('reads aloud with the unit spelled out', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1', weather: rain))]),
+      );
+      await openPost(tester, harness);
+
+      expect(
+        tester.getSemantics(find.byKey(const Key('post.weather'))).label,
+        contains('Weather: Rain, 11 degrees Celsius, Auckland'),
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('is not on the feed card that opens the post', (tester) async {
+      final harness = harnessWith(
+        FakePostClient([ApiSuccess(postDetail('1', weather: rain))]),
+      );
+      await signIn(tester, harness);
+
+      // The feed shows the post, but never its place.
+      expect(find.byKey(const Key('home.feed.post.1')), findsOneWidget);
+      expect(find.textContaining('Auckland'), findsNothing);
+      expect(find.textContaining('°C'), findsNothing);
+    });
   });
 
   group('a voice memo', () {

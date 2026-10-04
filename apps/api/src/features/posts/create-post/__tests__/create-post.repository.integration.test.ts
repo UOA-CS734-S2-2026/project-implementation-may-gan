@@ -26,7 +26,7 @@ function requireLocalTestUrl(value: string): string {
 (enabled ? describe : describe.skip)("PostgreSQL daily post creation", () => {
   const migrator = createDayliDatabase(requireLocalTestUrl(migratorUrl ?? "postgresql://localhost:5433/dayli_test"));
   const app = createDayliDatabase(requireLocalTestUrl(appUrl ?? "postgresql://localhost:5433/dayli_test"));
-  const users = Array.from({ length: 4 }, (_, index) => `post-create-${crypto.randomUUID()}-${index}`);
+  const users = Array.from({ length: 7 }, (_, index) => `post-create-${crypto.randomUUID()}-${index}`);
   const now = new Date("2026-09-25T03:00:00.000Z");
   const clock = () => now;
   const input: CreateDailyPostInput = {
@@ -85,6 +85,41 @@ function requireLocalTestUrl(value: string): string {
       keys: sql<number>`(select count(*) from ${schema.postIdempotencyKeys} where ${schema.postIdempotencyKeys.authorId} = ${users[0]!})::int`,
     }).from(sql`(values (1)) as query_source`);
     expect(row).toEqual({ posts: 1, notes: 1, keys: 1 });
+  });
+
+  it("stores the weather snapshot in its columns, replays it, and reads null for a post without one", async () => {
+    const weather = { condition: "thunderstorm", temperatureC: -3, placeName: "Queenstown 🌧" } as const;
+    const created = await service().createDailyPost(users[4]!, "weather-key", { ...input, weather });
+    const replayed = await service().createDailyPost(users[4]!, "weather-key", { ...input, weather });
+
+    expect(created.post.weather).toEqual(weather);
+    expect(replayed).toEqual({ post: created.post, replayed: true });
+    const [row] = await migrator.db.select({
+      condition: schema.posts.weatherCondition,
+      temperatureC: schema.posts.weatherTemperatureC,
+      placeName: schema.posts.weatherPlaceName,
+    }).from(schema.posts).where(eq(schema.posts.id, created.post.id));
+    expect(row).toEqual({ condition: "thunderstorm", temperatureC: -3, placeName: "Queenstown 🌧" });
+
+    const plain = await service().createDailyPost(users[5]!, "plain-key", input);
+    expect(plain.post.weather).toBeNull();
+    const [plainRow] = await migrator.db.select({
+      condition: schema.posts.weatherCondition,
+      temperatureC: schema.posts.weatherTemperatureC,
+      placeName: schema.posts.weatherPlaceName,
+    }).from(schema.posts).where(eq(schema.posts.id, plain.post.id));
+    expect(plainRow).toEqual({ condition: null, temperatureC: null, placeName: null });
+  });
+
+  it("rejects a retry that adds weather to an earlier post, without changing it", async () => {
+    const created = await service().createDailyPost(users[6]!, "weather-added-key", input);
+    await expect(service().createDailyPost(users[6]!, "weather-added-key", {
+      ...input,
+      weather: { condition: "rain", temperatureC: 11, placeName: "Auckland" },
+    })).rejects.toMatchObject({ reason: "IDEMPOTENCY_KEY_REUSED" });
+    const [row] = await migrator.db.select({ condition: schema.posts.weatherCondition })
+      .from(schema.posts).where(eq(schema.posts.id, created.post.id));
+    expect(row?.condition).toBeNull();
   });
 
   it("keeps a trashed post's key used and returns no content on replay", async () => {

@@ -25,6 +25,8 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         .select({
           tokenCiphertext: schema.pushDevices.tokenCiphertext,
           tokenKeyVersion: schema.pushDevices.tokenKeyVersion,
+          tokenHash: schema.pushDevices.tokenHash,
+          sessionId: schema.pushDevices.sessionId,
           participantsAvailable,
         })
         .from(schema.pushDevices)
@@ -41,6 +43,10 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
             and(isNotNull(schema.user.banExpires), lte(schema.user.banExpires, sql`now()`)),
           ),
         ))
+        .innerJoin(schema.accountNotificationPreferences, and(
+          eq(schema.accountNotificationPreferences.userId, schema.pushDevices.userId),
+          eq(schema.accountNotificationPreferences.enabled, true),
+        ))
         .innerJoin(schema.conversationMembers, eq(
           schema.conversationMembers.conversationId,
           job.conversationId,
@@ -56,6 +62,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           eq(schema.pushDevices.id, job.deviceRegistrationId),
           eq(schema.pushDevices.userId, job.recipientId),
           eq(schema.pushDevices.optedIn, true),
+          isNull(schema.pushDevices.notificationSchemaVersion),
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
           isNull(schema.pushDevices.invalidatedAt),
           not(blocked),
@@ -68,13 +75,23 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
         return null;
       }
       const token = await protector.decrypt({ ciphertext: row.tokenCiphertext, keyVersion: row.tokenKeyVersion });
-      return token ? { token, valid: true } : null;
+      return token ? {
+        token,
+        valid: true,
+        registrationGeneration: { sessionId: row.sessionId, tokenHash: row.tokenHash },
+      } : null;
     },
-    async invalidate(registrationId) {
+    async invalidate(job, generation) {
       await database
         .update(schema.pushDevices)
         .set({ invalidatedAt: sql`now()`, optedIn: false })
-        .where(eq(schema.pushDevices.id, registrationId));
+        .where(and(
+          eq(schema.pushDevices.id, job.deviceRegistrationId!),
+          eq(schema.pushDevices.userId, job.recipientId),
+          eq(schema.pushDevices.sessionId, generation.sessionId),
+          eq(schema.pushDevices.tokenHash, generation.tokenHash),
+          isNull(schema.pushDevices.invalidatedAt),
+        ));
     },
   };
 }
@@ -86,9 +103,9 @@ export function createHyperdrivePushDestinationResolver(hyperdrive: HyperdriveBi
       try { return await createPostgresPushDestinationResolver(client.db, protector).resolve(job); }
       finally { await client.close(); }
     },
-    async invalidate(id) {
+    async invalidate(job, generation) {
       const client = createHyperdriveDatabase(hyperdrive);
-      try { await createPostgresPushDestinationResolver(client.db, protector).invalidate(id); }
+      try { await createPostgresPushDestinationResolver(client.db, protector).invalidate(job, generation); }
       finally { await client.close(); }
     },
   };

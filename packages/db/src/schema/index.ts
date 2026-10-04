@@ -44,6 +44,7 @@ import {
   termsAcceptances,
 } from "./legal";
 import { user, usernameReservations } from "./users";
+import { futureSelfNoteDeliveries, futureSelfNoteIdempotencyKeys, futureSelfNotes } from "./future-self-notes";
 import { accountGoogleReauthenticationIntents } from "./google-reauth";
 import {
   accountNotificationPreferences,
@@ -136,6 +137,14 @@ export const rateLimit = pgTable("rateLimit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+/** One weather snapshot per post, set when the post is created. All three
+ * columns are present or all absent, and no coordinates are ever stored. The
+ * condition set mirrors the API contract in @dayli/contracts. */
+export const WEATHER_CONDITIONS = ["clear", "partly_cloudy", "cloudy", "fog", "drizzle", "rain", "snow", "thunderstorm"] as const;
+export const WEATHER_TEMPERATURE_MIN_C = -90;
+export const WEATHER_TEMPERATURE_MAX_C = 60;
+export const WEATHER_PLACE_NAME_MAX_CODE_POINTS = 80;
+
 /**
  * A post is one accepted response for one author and Auckland calendar day.
  * Once accepted, localDate is immutable because tomorrow-note availability is
@@ -151,6 +160,9 @@ export const posts = pgTable("posts", {
   caption: text("caption"),
   rating: integer("rating").notNull(),
   audience: postAudience("audience").notNull(),
+  weatherCondition: text("weather_condition"),
+  weatherTemperatureC: bigint("weather_temperature_c", { mode: "number" }),
+  weatherPlaceName: text("weather_place_name"),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
   releasedAt: timestamp("released_at", { withTimezone: true }).notNull(),
   trashedAt: timestamp("trashed_at", { withTimezone: true }),
@@ -178,6 +190,16 @@ export const posts = pgTable("posts", {
     sql`${table.caption} is null or char_length(${table.caption}) <= 1000`,
   ),
   check("posts_release_after_acceptance_check", sql`${table.releasedAt} > ${table.acceptedAt}`),
+  check("posts_weather_presence_check", sql`
+    (${table.weatherCondition} is null) = (${table.weatherTemperatureC} is null) and
+    (${table.weatherCondition} is null) = (${table.weatherPlaceName} is null)
+  `),
+  check("posts_weather_condition_check", sql`${table.weatherCondition} is null or ${table.weatherCondition} in (${sql.raw(WEATHER_CONDITIONS.map((condition) => `'${condition}'`).join(", "))})`),
+  check("posts_weather_temperature_check", sql`${table.weatherTemperatureC} is null or ${table.weatherTemperatureC} between ${sql.raw(String(WEATHER_TEMPERATURE_MIN_C))} and ${sql.raw(String(WEATHER_TEMPERATURE_MAX_C))}`),
+  check(
+    "posts_weather_place_name_check",
+    sql`${table.weatherPlaceName} is null or (char_length(${table.weatherPlaceName}) between 1 and ${sql.raw(String(WEATHER_PLACE_NAME_MAX_CODE_POINTS))} and ${table.weatherPlaceName} = btrim(${table.weatherPlaceName}) and ${table.weatherPlaceName} !~ '[[:cntrl:]]')`,
+  ),
   check("posts_trash_generation_check", sql`${table.trashGeneration} between 0 and 9007199254740991`),
   check("posts_trash_deadlines_check", sql`
     (${table.trashedAt} is null and ${table.restoreUntil} is null and ${table.trashPurgeDueAt} is null and
@@ -462,6 +484,14 @@ export {
 } from "./notifications";
 
 export {
+  futureSelfNoteDeliveries,
+  futureSelfNoteDeliveryStatus,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNoteStatus,
+  futureSelfNotes,
+} from "./future-self-notes";
+
+export {
   accountLifecycleState,
   accountLifecycles,
   accountManagementGrantAction,
@@ -505,6 +535,9 @@ export const schema = {
   dailyPrompts,
   friendRequests,
   friendships,
+  futureSelfNoteDeliveries,
+  futureSelfNoteIdempotencyKeys,
+  futureSelfNotes,
   legalDocumentVersions,
   legacyCloudinaryMedia,
   mediaReservation,

@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { buildFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../fcm";
+import { buildFcmPayload, buildGenericFcmPayload, createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../fcm";
 import { createPushOutboxHandler } from "../push-dispatcher";
 
 const job = { id: "push-job", eventId: "event", recipientId: "peer", conversationId: "conversation", changeSequence: "4", channel: "push" as const, deviceRegistrationId: "device", attempts: 1, leaseToken: "lease", leaseExpiresAt: new Date() };
@@ -18,6 +18,27 @@ describe("FCM HTTP v1 adapter", () => {
     expect(payload).toContain('"eventId":"event"');
     expect(payload).not.toContain("Alice");
     expect(payload).not.toContain("message body");
+  });
+
+  it("builds the approved versioned direct-message preview envelope", () => {
+    expect(buildGenericFcmPayload({
+      token: "private-token",
+      eventId: "event",
+      type: "direct_message",
+      targetType: "conversation",
+      targetId: "conversation",
+      title: "Current sender",
+      body: "Current edited text",
+    })).toEqual({ message: {
+      token: "private-token",
+      notification: { title: "Current sender", body: "Current edited text" },
+      data: {
+        version: "1", eventId: "event", type: "direct_message",
+        targetType: "conversation", targetId: "conversation",
+      },
+      android: { collapse_key: "conversation" },
+      apns: { headers: { "apns-collapse-id": "conversation" } },
+    } });
   });
 
   it("reuses one OAuth token across a dispatcher batch", async () => {
@@ -39,9 +60,12 @@ describe("FCM HTTP v1 adapter", () => {
   it("invalidates a permanently rejected registration and treats stale policy as suppression", async () => {
     const invalidate = vi.fn(async () => undefined);
     const sender = { send: vi.fn(async () => ({ ok: false as const, retryable: false, category: "provider_rejected" as const })) };
-    const handler = createPushOutboxHandler({ destinations: { resolve: async () => ({ token: "private", valid: true }), invalidate }, sender });
+    const registrationGeneration = { sessionId: "session", tokenHash: "generation" };
+    const handler = createPushOutboxHandler({ destinations: {
+      resolve: async () => ({ token: "private", valid: true, registrationGeneration }), invalidate,
+    }, sender });
     await expect(handler(job)).resolves.toMatchObject({ ok: false, category: "provider_rejected" });
-    expect(invalidate).toHaveBeenCalledWith("device");
+    expect(invalidate).toHaveBeenCalledWith(job, registrationGeneration);
     const suppressed = createPushOutboxHandler({ destinations: { resolve: async () => null, invalidate }, sender });
     await expect(suppressed(job)).resolves.toEqual({ ok: true });
   });

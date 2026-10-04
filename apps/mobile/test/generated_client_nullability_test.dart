@@ -24,6 +24,7 @@ void main() {
       'viewerIsAuthor': false,
       'media': <Object>[],
       'voiceMemo': null,
+      'weather': null,
     });
 
     expect(post, isNotNull);

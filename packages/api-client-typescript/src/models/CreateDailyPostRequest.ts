@@ -20,6 +20,13 @@ import {
     PostAudienceToJSON,
     PostAudienceToJSONTyped,
 } from './PostAudience';
+import type { PostWeather } from './PostWeather';
+import {
+    PostWeatherFromJSON,
+    PostWeatherFromJSONTyped,
+    PostWeatherToJSON,
+    PostWeatherToJSONTyped,
+} from './PostWeather';
 
 /**
  *
@@ -59,6 +66,10 @@ export interface CreateDailyPostRequest {
      * Validated media reservation IDs from POST /api/v1/media-reservations, in display order. Up to 3 photos or 1 video, never both, plus at most 1 voice memo, up to 25 MB in total. Omit it or send an empty list for a text-only post.
      */
     attachments?: Array<string>;
+    /**
+     * An optional weather snapshot from the author's phone. Omit it for a post without weather. The server checks its shape and ranges but cannot verify it. It cannot be added or changed after the post is created.
+     */
+    weather?: PostWeather;
 }
 
 
@@ -93,6 +104,7 @@ export function CreateDailyPostRequestFromJSONTyped(json: any, ignoreDiscriminat
         'audience': PostAudienceFromJSON(json['audience']),
         'tomorrowNote': json['tomorrowNote'] == null ? undefined : json['tomorrowNote'],
         'attachments': json['attachments'] == null ? undefined : json['attachments'],
+        'weather': json['weather'] == null ? undefined : PostWeatherFromJSON(json['weather']),
     };
 }
 
@@ -115,5 +127,6 @@ export function CreateDailyPostRequestToJSONTyped(value?: CreateDailyPostRequest
         'audience': PostAudienceToJSON(value['audience']),
         'tomorrowNote': value['tomorrowNote'],
         'attachments': value['attachments'],
+        'weather': PostWeatherToJSON(value['weather']),
     };
 }

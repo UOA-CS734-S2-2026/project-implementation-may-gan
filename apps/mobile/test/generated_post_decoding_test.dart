@@ -1,10 +1,13 @@
+import 'dart:convert';
+
 import 'package:dayli_api_client/api.dart' as generated;
 import 'package:flutter_test/flutter_test.dart';
 
 // These decode through the generated models, which the app's own post parsers
 // avoid. They guard the OpenAPI document's nullability for `voiceMemo`: a
 // post without a voice memo sends `voiceMemo: null`, and the generated model
-// must accept it instead of asserting non-null and force-unwrapping.
+// must accept it instead of asserting non-null and force-unwrapping. The same
+// holds for `weather`.
 //
 // They live here, not in packages/api-client-dart/test, because
 // `pnpm generate:clients` deletes and rebuilds that whole package.
@@ -28,6 +31,7 @@ Map<String, dynamic> _postDetail(Map<String, dynamic> extra) => {
   'viewerIsAuthor': false,
   'media': <Object>[],
   'voiceMemo': null,
+  'weather': null,
   ...extra,
 };
 
@@ -45,7 +49,14 @@ Map<String, dynamic> _dailyPost(Map<String, dynamic> extra) => {
   'tomorrowNote': {'availableOn': '2026-09-26'},
   'media': <Object>[],
   'voiceMemo': null,
+  'weather': null,
   ...extra,
+};
+
+const _weather = {
+  'condition': 'rain',
+  'temperatureC': 11,
+  'placeName': 'Auckland',
 };
 
 void main() {
@@ -102,6 +113,97 @@ void main() {
       );
 
       expect(post!.voiceMemo!.id, 'media-9');
+    });
+  });
+
+  group('weather', () {
+    test('decodes a post whose weather is null', () {
+      final detail = generated.PostDetail.fromJson(_postDetail({}));
+      final created = generated.DailyPost.fromJson(_dailyPost({}));
+
+      expect(detail!.weather, isNull);
+      expect(created!.weather, isNull);
+    });
+
+    test('keeps a null weather as an explicit null when encoding', () {
+      final json = generated.PostDetail.fromJson(_postDetail({}))!.toJson();
+
+      expect(json.containsKey('weather'), isTrue);
+      expect(json['weather'], isNull);
+    });
+
+    test('decodes a post with a weather snapshot', () {
+      final detail = generated.PostDetail.fromJson(
+        _postDetail({'weather': _weather}),
+      );
+      final created = generated.DailyPost.fromJson(
+        _dailyPost({'weather': _weather}),
+      );
+
+      expect(detail!.weather!.condition, generated.PostWeatherCondition.rain);
+      expect(detail.weather!.temperatureC, 11);
+      expect(detail.weather!.placeName, 'Auckland');
+      expect(created!.weather!.placeName, 'Auckland');
+    });
+
+    test('decodes every condition the API can send', () {
+      for (final condition in const [
+        'clear',
+        'partly_cloudy',
+        'cloudy',
+        'fog',
+        'drizzle',
+        'rain',
+        'snow',
+        'thunderstorm',
+      ]) {
+        final post = generated.DailyPost.fromJson(
+          _dailyPost({
+            'weather': {..._weather, 'condition': condition},
+          }),
+        );
+
+        expect(post!.weather, isNotNull, reason: condition);
+      }
+    });
+
+    test('encodes a request snapshot with exactly its three fields', () {
+      final request = generated.CreateDailyPostRequest(
+        localDate: '2026-09-25',
+        promptId: 'prompt-1',
+        reflectiveAnswer: 'Walked to the harbour.',
+        rating: 7,
+        audience: generated.PostAudience.friends,
+        weather: generated.PostWeather(
+          condition: generated.PostWeatherCondition.snow,
+          temperatureC: -3,
+          placeName: 'Queenstown',
+        ),
+      );
+
+      final body = jsonDecode(jsonEncode(request)) as Map<String, dynamic>;
+
+      expect(body['weather'], {
+        'condition': 'snow',
+        'temperatureC': -3,
+        'placeName': 'Queenstown',
+      });
+    });
+
+    test('writes an absent weather as null, which the API rejects', () {
+      // The generated model does this for every optional field, so the app
+      // strips nulls before sending (see createRequestFor). This pins the
+      // behaviour that makes the stripping necessary.
+      final request = generated.CreateDailyPostRequest(
+        localDate: '2026-09-25',
+        promptId: 'prompt-1',
+        reflectiveAnswer: 'Walked to the harbour.',
+        rating: 7,
+        audience: generated.PostAudience.friends,
+      );
+
+      expect(request.toJson().containsKey('weather'), isTrue);
+      expect(request.toJson()['weather'], isNull);
     });
   });
 }

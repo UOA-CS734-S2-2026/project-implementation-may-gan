@@ -25,6 +25,9 @@ class ProfilePost {
     required this.releasedAt,
     required this.released,
     required this.edited,
+    required this.likeCount,
+    required this.viewerHasLiked,
+    required this.commentCount,
     this.media = const [],
   });
 
@@ -55,6 +58,16 @@ class ProfilePost {
   /// True when the author has edited the post since it was accepted.
   final bool edited;
 
+  /// Minimum value: 0
+  final int likeCount;
+
+  final bool viewerHasLiked;
+
+  /// Comments and replies the caller can see, leaving out deleted ones and people across a block.
+  ///
+  /// Minimum value: 0
+  final int commentCount;
+
   /// Attached photos or video in display order, each with a private download URL that expires after 5 minutes.
   final List<PostMedia> media;
 
@@ -74,6 +87,9 @@ class ProfilePost {
           other.releasedAt == releasedAt &&
           other.released == released &&
           other.edited == edited &&
+          other.likeCount == likeCount &&
+          other.viewerHasLiked == viewerHasLiked &&
+          other.commentCount == commentCount &&
           _deepEquality.equals(other.media, media);
 
   @override
@@ -91,11 +107,14 @@ class ProfilePost {
       (releasedAt.hashCode) +
       (released.hashCode) +
       (edited.hashCode) +
+      (likeCount.hashCode) +
+      (viewerHasLiked.hashCode) +
+      (commentCount.hashCode) +
       (media.hashCode);
 
   @override
   String toString() =>
-      'ProfilePost[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, released=$released, edited=$edited, media=$media]';
+      'ProfilePost[id=$id, author=$author, localDate=$localDate, prompt=$prompt, reflectiveAnswer=$reflectiveAnswer, caption=$caption, rating=$rating, audience=$audience, acceptedAt=$acceptedAt, releasedAt=$releasedAt, released=$released, edited=$edited, likeCount=$likeCount, viewerHasLiked=$viewerHasLiked, commentCount=$commentCount, media=$media]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -115,6 +134,9 @@ class ProfilePost {
     json[r'releasedAt'] = this.releasedAt.toUtc().toIso8601String();
     json[r'released'] = this.released;
     json[r'edited'] = this.edited;
+    json[r'likeCount'] = this.likeCount;
+    json[r'viewerHasLiked'] = this.viewerHasLiked;
+    json[r'commentCount'] = this.commentCount;
     json[r'media'] = this.media;
     return json;
   }
@@ -135,6 +157,9 @@ class ProfilePost {
     DateTime? releasedAt,
     bool? released,
     bool? edited,
+    int? likeCount,
+    bool? viewerHasLiked,
+    int? commentCount,
     List<PostMedia>? media,
   }) =>
       ProfilePost(
@@ -150,6 +175,9 @@ class ProfilePost {
         releasedAt: releasedAt ?? this.releasedAt,
         released: released ?? this.released,
         edited: edited ?? this.edited,
+        likeCount: likeCount ?? this.likeCount,
+        viewerHasLiked: viewerHasLiked ?? this.viewerHasLiked,
+        commentCount: commentCount ?? this.commentCount,
         media: media ?? this.media,
       );
 
@@ -210,6 +238,18 @@ class ProfilePost {
             'Required key "ProfilePost[edited]" is missing from JSON.');
         assert(json[r'edited'] != null,
             'Required key "ProfilePost[edited]" has a null value in JSON.');
+        assert(json.containsKey(r'likeCount'),
+            'Required key "ProfilePost[likeCount]" is missing from JSON.');
+        assert(json[r'likeCount'] != null,
+            'Required key "ProfilePost[likeCount]" has a null value in JSON.');
+        assert(json.containsKey(r'viewerHasLiked'),
+            'Required key "ProfilePost[viewerHasLiked]" is missing from JSON.');
+        assert(json[r'viewerHasLiked'] != null,
+            'Required key "ProfilePost[viewerHasLiked]" has a null value in JSON.');
+        assert(json.containsKey(r'commentCount'),
+            'Required key "ProfilePost[commentCount]" is missing from JSON.');
+        assert(json[r'commentCount'] != null,
+            'Required key "ProfilePost[commentCount]" has a null value in JSON.');
         assert(json.containsKey(r'media'),
             'Required key "ProfilePost[media]" is missing from JSON.');
         assert(json[r'media'] != null,
@@ -230,6 +270,9 @@ class ProfilePost {
         releasedAt: mapDateTime(json, r'releasedAt', r'')!,
         released: mapValueOfType<bool>(json, r'released')!,
         edited: mapValueOfType<bool>(json, r'edited')!,
+        likeCount: mapValueOfType<int>(json, r'likeCount')!,
+        viewerHasLiked: mapValueOfType<bool>(json, r'viewerHasLiked')!,
+        commentCount: mapValueOfType<int>(json, r'commentCount')!,
         media: PostMedia.listFromJson(json[r'media']),
       );
     }
@@ -299,6 +342,9 @@ class ProfilePost {
     'releasedAt',
     'released',
     'edited',
+    'likeCount',
+    'viewerHasLiked',
+    'commentCount',
     'media',
   };
 }

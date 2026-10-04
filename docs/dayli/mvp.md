@@ -14,7 +14,7 @@ Then deliver the daily loop: protected offline drafts, camera, posting fallback 
 | --- | --- |
 | Unlock push and closing nudge | Opt-in generic reminders, quiet hours, stale-nudge rejection. Feed access never depends on push arrival. |
 | Camera-first capture | Preview, retake, compress, save draft; attachment fallback after denial. The Flutter composer takes a photo or records a video of up to 15 seconds with the device camera, using the system camera screen for preview and retake, or picks from the library; either goes through the same compress, upload and draft steps. |
-| Weather | Permission-based coarse location/provider snapshot; omit or select place manually. |
+| Weather | Optional condition, temperature, and place name from a one-time approximate location, shown on post detail only. No coordinates are stored. Omit it, or choose a place manually when location is refused or unavailable. See [weather context](product-decisions.md#weather-context). |
 | Music | Supported OS/provider title and artist; manual selection when unavailable. No universal cross-app access. |
 | Ambient sound | Explicit one-second recording with preview/removal. Never silent capture. |
 | Voice memo | One optional explicit in-app recording of up to 60 seconds with preview/removal, recorded on mobile only; every device can play it. Never silent capture. Separate from ambient sound (#63). |

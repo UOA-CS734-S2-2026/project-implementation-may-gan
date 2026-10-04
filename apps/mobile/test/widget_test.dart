@@ -786,6 +786,8 @@ void main() {
     tester,
   ) async {
     final harness = TestHarness();
+    var postChanges = 0;
+    harness.postActivity.addListener(() => postChanges++);
     await tester.pumpWidget(
       DayliApp(services: harness.services, useGoogleFonts: false),
     );
@@ -900,6 +902,8 @@ void main() {
     expect(harness.mediaUploads.completed, ['reservation-1']);
     expect(find.byKey(const Key('home.empty')), findsOneWidget);
     expect(harness.drafts.drafts, isEmpty);
+    // The accepted post refreshes the streak.
+    expect(postChanges, 1);
   });
 
   testWidgets('keeps and shows the words when today is already posted', (
@@ -908,6 +912,8 @@ void main() {
     final harness = TestHarness(
       submission: const SubmissionRejected(SubmissionConflict.alreadyPosted),
     );
+    var postChanges = 0;
+    harness.postActivity.addListener(() => postChanges++);
     await tester.pumpWidget(
       DayliApp(services: harness.services, useGoogleFonts: false),
     );
@@ -976,6 +982,8 @@ void main() {
       'Written on a second phone',
     );
     expect(harness.submitter.submitted.single.audience, PostAudience.friends);
+    // A refused post leaves the confirmed streak alone.
+    expect(postChanges, 0);
 
     await tester.tap(find.byKey(const Key('composer.discardDraft')));
     await tester.pumpAndSettle();

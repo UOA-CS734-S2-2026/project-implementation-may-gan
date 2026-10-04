@@ -18,6 +18,9 @@ const feedPost: FeedPostRecord = {
   acceptedAt: "2026-09-25T03:00:00.000Z",
   releasedAt: "2026-09-25T12:00:00.000Z",
   edited: false,
+  likeCount: 0,
+  viewerHasLiked: false,
+  commentCount: 0,
   media: [],
 };
 

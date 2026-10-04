@@ -22,7 +22,7 @@ Agreed in October 2026 for #79 and #80. The post's author and their active frien
 
 The server owns the daily prompt for each Auckland calendar day. Version-one reference data reuses the 366 prompts and stable `prompt-MM-DD` IDs from `732-workspace/group-project-wdcc` at source commit `7d2dfd6`. Prompt rows are immutable. A changed prompt is a new versioned row with a new ID and an Auckland effective date; historical posts continue to reference the original prompt row and text.
 
-The submitted tomorrow note is an immutable author-only note stored outside ordinary post and revision projections. It becomes visible only to its author from the following Auckland day. It is separate from a chosen-date future-self note. Editing post content never exposes the tomorrow note early or to another reader.
+The submitted tomorrow note is an immutable author-only note stored outside ordinary post and revision projections. It becomes visible only to its author from the following Auckland day. It is separate from a chosen-date future-self note, which is a standalone owner-only note with its own date, edit rules, and delivery record (see [Future-self notes](future-self-notes.md)). Editing post content never exposes the tomorrow note early or to another reader.
 
 ## Blocking and messages
 
@@ -42,6 +42,8 @@ A profile shows the owner every post they have written, including solo posts and
 
 The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
 
+Mood history sits on the profile and reaches only the owner and their active friends, even on a public account whose posts anyone can read. Friends see ratings from released `friends` posts only; a solo post counts as posted but shows no rating. It covers the last 30 days, 90 days, or year, and compares that range with the same-length range before it. It shows how many days had a post and how many didn't, starts counting from the day the account joined, and makes no diagnostic claims.
+
 ## Public post access
 
 Account visibility is the only anonymous journal-read grant. A released `friends` post from a public account is readable through its profile and direct URL without signing in. Changing the account to private, changing the post to `solo`, making it unreleased, deleting it, or moving it to Trash removes that access immediately. Private-account posts still require the owner or an active friend. `solo` and unreleased posts remain owner-only. There are no opaque share links or per-post public tokens.
@@ -54,13 +56,27 @@ A post accepts up to three photos, or one video. Photos and a video are not mixe
 
 The initial release supports iOS 16 and newer and Android 10, API 29, and newer. Features unavailable on a supported device need a documented fallback.
 
+## Weather context
+
+A daily post may carry one weather snapshot: a condition, a whole-number temperature in °C, and a place name. It is shown on the post's detail screen only, not in the feed, profile lists, or revisions. Music context is a separate, later decision and is not part of this.
+
+Dayli does not store or log coordinates, and the API never receives them. The app reads an approximate location once, asks Open-Meteo for the current weather there, takes the place name from the phone's own geocoder, and sends only the three fields. The provider and the phone's geocoder see the location; Dayli does not. Because the phone obtains the snapshot, the API checks its shape and ranges but cannot prove the weather is real, so the app and docs describe it as the author's snapshot and never as verified.
+
+- **Provider:** Open-Meteo, for current weather and for searching a place by name. It needs no API key, so no secret is involved. Its free tier is for non-commercial use and requires attribution, which the app shows. A commercial launch needs a paid plan or another provider, so revisit this before launch.
+- **Conditions:** a fixed set the app maps provider codes onto: clear, partly cloudy, cloudy, fog, drizzle, rain, snow, and thunderstorm. A code outside the mapping is rejected rather than guessed, and the snapshot is omitted.
+- **Limits:** the temperature is between -90 and 60. The place name is trimmed, 1 to 80 characters, with no control characters. The condition, temperature, and place name are all present or all absent.
+- **Location accuracy:** the app requests approximate location only: coarse on Android, reduced or low accuracy on iOS. It does not claim the same precision on every device.
+- **Permission:** the weather row is optional and never attached by default. The app explains what it uses and keeps, then offers "Use my location", "Choose a place instead", and "Not now". It asks the operating system only after the first of those, and never when the composer opens or at launch. iOS asks once per install, so after a refusal the app points to Settings and offers the manual choice. A refusal, restricted location, location services turned off, or a provider failure never blocks posting.
+- **Manual place:** the author searches for a place by name and the app fetches the weather for it. The author does not type a condition or temperature by hand. If the phone cannot supply a place name for the current location, the app offers the same search.
+- **Editing:** a snapshot is set when the post is created and is not editable afterwards. Deleting the post removes it with the rest of the post.
+
 ## Database provider and migrations
 
 Neon PostgreSQL 18 is the database provider. Staging uses a separate Neon project for synthetic data only. The staging owner reports restricted roles, grants, and migrations verified. Hyperdrive and an API Worker are attached, and the full private transaction proof passed at `1fb6388`. A synthetic staging browser account was created for a manual email/password test. Google, Resend, and native auth remain untested. Production will use a separate project and is not deployed. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected manual workflow documented in [Database migrations](database-migrations.md).
 
 ## Deletion, backups, and recovery
 
-Deleted posts and accounts must become inaccessible through the application immediately. The planned cleanup job runs as the `migrator` role and removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Immutable-history triggers must allow this bypass only for that cleanup role; every batch must be recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
+Deleted posts and accounts must become inaccessible through the application immediately. The planned cleanup job runs as the `migrator` role and removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Future-self note delivery rows and idempotency rows are removed before future-self notes, and those notes before the account, because the note-to-account key does not cascade. Immutable-history triggers must allow this bypass only for that cleanup role; every batch must be recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
 
 For course and pilot stages, the recovery point objective is 24 hours and the recovery time objective is 8 hours. These are targets until a recorded restoration exercise verifies them.
 

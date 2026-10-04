@@ -1,0 +1,12 @@
+{
+  "title": "Interactions",
+  "pages": [
+    "interactions.unlike",
+    "interactions.like",
+    "interactions.listLikes",
+    "interactions.listComments",
+    "interactions.createComment",
+    "interactions.updateComment",
+    "interactions.deleteComment"
+  ]
+}
