@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
 import '../ui/dayli_button.dart';
+import '../ui/weather_line.dart';
 import '../weather/post_weather.dart';
 import '../weather/weather_failure.dart';
 import '../weather/weather_provider.dart';
@@ -31,22 +32,6 @@ String weatherFailureMessage(WeatherFailure failure) => switch (failure) {
     'The weather service sent something Dayli could not use. Try again, or '
         'leave the weather out.',
 };
-
-IconData weatherIcon(WeatherCondition condition) => switch (condition) {
-  WeatherCondition.clear => Icons.wb_sunny_rounded,
-  WeatherCondition.partlyCloudy => Icons.wb_cloudy_outlined,
-  WeatherCondition.cloudy => Icons.cloud_rounded,
-  WeatherCondition.fog => Icons.foggy,
-  WeatherCondition.drizzle => Icons.grain_rounded,
-  WeatherCondition.rain => Icons.water_drop_rounded,
-  WeatherCondition.snow => Icons.ac_unit_rounded,
-  WeatherCondition.thunderstorm => Icons.thunderstorm_rounded,
-};
-
-/// How a snapshot reads, such as "Rain · 11°C · Auckland".
-String weatherSummary(PostWeather weather) =>
-    '${weather.condition.label} · ${weather.temperatureC}°C · '
-    '${weather.placeName}';
 
 /// What the author picked in the explanation.
 enum WeatherChoice { location, place }

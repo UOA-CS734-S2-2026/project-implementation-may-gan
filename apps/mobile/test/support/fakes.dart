@@ -30,6 +30,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart' show TestWidgetsFlutterBinding;
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:dayli_mobile/weather/weather_location.dart';
 import 'package:dayli_mobile/weather/weather_lookup.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -510,6 +511,7 @@ PostDetail postDetail(
   int rating = 8,
   List<PostMedia> media = const [],
   PostVoiceMemo? voiceMemo,
+  PostWeather? weather,
 }) => PostDetail(
   id: id,
   authorId: 'author-$id',
@@ -527,6 +529,7 @@ PostDetail postDetail(
   revisionCount: revisionCount,
   media: media,
   voiceMemo: voiceMemo,
+  weather: weather,
 );
 
 /// A signed voice memo for widget tests.

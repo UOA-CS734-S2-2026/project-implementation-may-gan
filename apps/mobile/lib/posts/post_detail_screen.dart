@@ -11,6 +11,7 @@ import '../ui/dayli_button.dart';
 import '../ui/post_dates.dart';
 import '../ui/surfaces.dart';
 import '../ui/voice_player.dart';
+import '../ui/weather_line.dart';
 
 import 'edit_post_screen.dart';
 import 'post_comments.dart';
@@ -588,6 +589,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 key: const Key('post.meta'),
                 style: muted,
               ),
+              if (post.weather case final weather?) ...[
+                const SizedBox(height: 6),
+                // The author's own snapshot of the weather when they posted.
+                // Only this screen shows it; feeds and profile lists do not.
+                WeatherLine(
+                  key: const Key('post.weather'),
+                  weather: weather,
+                  style: muted,
+                ),
+              ],
               if (post.edited)
                 Align(
                   alignment: Alignment.centerLeft,
