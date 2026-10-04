@@ -9,6 +9,7 @@ import 'feed_client.dart' show FeedPost;
 import 'post_media.dart';
 import 'post_page.dart';
 import 'posting_day_client.dart' show failureForStatus;
+import '../weather/post_weather.dart';
 
 /// One post the signed-in user may read.
 class PostDetail {
@@ -32,6 +33,7 @@ class PostDetail {
     this.commentCount = 0,
     this.media = const [],
     this.voiceMemo,
+    this.weather,
   });
 
   final String id;
@@ -71,6 +73,10 @@ class PostDetail {
   /// profile lists do not, so their cards never play audio.
   final PostVoiceMemo? voiceMemo;
 
+  /// The weather the author added, or null. Only post detail carries it: feeds
+  /// and profile lists do not. It is the author's own snapshot, not verified.
+  final PostWeather? weather;
+
   /// This post with new interaction counts.
   PostDetail copyWith({
     int? likeCount,
@@ -96,6 +102,7 @@ class PostDetail {
     commentCount: commentCount ?? this.commentCount,
     media: media,
     voiceMemo: voiceMemo,
+    weather: weather,
   );
 
   static PostDetail? tryParse(Object? json) {
@@ -150,6 +157,9 @@ class PostDetail {
       commentCount: _count(json['commentCount']),
       media: PostMedia.parseList(json['media']),
       voiceMemo: PostVoiceMemo.tryParse(json['voiceMemo']),
+      // A snapshot that fails the same limits the API enforces is treated as
+      // absent, so odd data from a server never reaches the screen.
+      weather: PostWeather.tryParse(json['weather']),
     );
   }
 }

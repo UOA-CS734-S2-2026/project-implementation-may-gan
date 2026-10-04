@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <!-- Asked only when the author taps "Record" for a voice memo. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Approximate location only, asked when the author chooses to add the
+         weather to a post. The precise permission is deliberately not declared. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- Posting never needs a camera, so devices without one can still install. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../api/api_failure.dart';
 import '../api/posting_day_client.dart';
 import '../drafts/daily_post_draft.dart';
+import '../weather/post_weather.dart';
 
 /// Why the server refused to accept a draft.
 enum SubmissionConflict {
@@ -200,13 +201,36 @@ generated.CreateDailyPostRequest createRequestFor(
         if (attachment.status == AttachmentUploadStatus.validated)
           if (attachment.reservationId case final id?) id,
     ],
+    weather: switch (draft.weather) {
+      final weather? => _generatedWeather(weather),
+      null => null,
+    },
   );
 }
 
+generated.PostWeather _generatedWeather(PostWeather weather) =>
+    generated.PostWeather(
+      condition: switch (weather.condition) {
+        WeatherCondition.clear => generated.PostWeatherCondition.clear,
+        WeatherCondition.partlyCloudy =>
+          generated.PostWeatherCondition.partlyCloudy,
+        WeatherCondition.cloudy => generated.PostWeatherCondition.cloudy,
+        WeatherCondition.fog => generated.PostWeatherCondition.fog,
+        WeatherCondition.drizzle => generated.PostWeatherCondition.drizzle,
+        WeatherCondition.rain => generated.PostWeatherCondition.rain,
+        WeatherCondition.snow => generated.PostWeatherCondition.snow,
+        WeatherCondition.thunderstorm =>
+          generated.PostWeatherCondition.thunderstorm,
+      },
+      temperatureC: weather.temperatureC,
+      placeName: weather.placeName,
+    );
+
 /// The generated model writes absent optional fields as `null`, and
 /// `attachments` as an empty list, which the API's strict schema rejects
-/// (an API without attachment support rejects the field outright). This
-/// omits both, so a text-only post sends exactly what it always has.
+/// (an API without attachment support rejects the field outright). A `null`
+/// `weather` is rejected too: the API accepts the snapshot or no field at all.
+/// This omits all three, so a text-only post sends exactly what it always has.
 class _CreateDailyPostRequest extends generated.CreateDailyPostRequest {
   _CreateDailyPostRequest({
     required super.localDate,
@@ -217,6 +241,7 @@ class _CreateDailyPostRequest extends generated.CreateDailyPostRequest {
     required super.audience,
     super.tomorrowNote,
     super.attachments,
+    super.weather,
   });
 
   @override
