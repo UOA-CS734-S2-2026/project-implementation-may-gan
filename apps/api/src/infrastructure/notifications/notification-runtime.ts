@@ -1,7 +1,7 @@
 import type { HyperdriveBinding } from "@dayli/db";
 import { createFcmHttpV1Sender, normalizeFcmServiceAccount } from "../push/fcm";
 import { createWorkerPushTokenProtector } from "../push/token-encryption";
-import { createHyperdriveDirectMessageNotificationResolver } from "./direct-message-resolver";
+import { createHyperdriveNotificationResolver } from "./notification-resolver";
 import { createNotificationDispatcher, type NotificationDispatcher } from "./notification-dispatcher";
 import { createHyperdriveNotificationStore } from "./notification-store";
 
@@ -32,7 +32,7 @@ export async function createNotificationDeliveryDispatcher(
   const fcm = createFcmHttpV1Sender({ serviceAccount: account });
   return createNotificationDispatcher({
     store: createHyperdriveNotificationStore(env.HYPERDRIVE),
-    resolver: createHyperdriveDirectMessageNotificationResolver(env.HYPERDRIVE, protector),
+    resolver: createHyperdriveNotificationResolver(env.HYPERDRIVE, protector),
     sender: { send: (notification, options) => fcm.sendGeneric(notification, options) },
   });
 }

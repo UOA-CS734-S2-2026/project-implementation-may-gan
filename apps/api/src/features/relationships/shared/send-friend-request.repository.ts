@@ -1,4 +1,5 @@
 import { schema } from "@dayli/db";
+import { publishFriendRequestNotification } from "../../notifications/shared/publish-notification";
 import { and, count, eq, gte, min } from "drizzle-orm";
 import { RelationshipStoreError, type StoredRelationshipSnapshot } from "./relationship-service";
 import type { RelationshipPostgresContext } from "./relationship-postgres";
@@ -25,9 +26,10 @@ export async function insertFriendRequest(context: RelationshipPostgresContext, 
     const oldest = usage.oldest ? new Date(usage.oldest).getTime() : Date.now();
     throw new RelationshipStoreError("THROTTLED", { retryAfterSeconds: Math.max(1, Math.ceil((oldest + 86_400_000 - new Date(createdAt).getTime()) / 1000)) });
   }
+  const requestId = crypto.randomUUID();
   try {
     await context.queryable.insert(schema.friendRequests).values({
-      id: crypto.randomUUID(),
+      id: requestId,
       senderId,
       recipientId,
       status: "pending",
@@ -36,6 +38,9 @@ export async function insertFriendRequest(context: RelationshipPostgresContext, 
   } catch (error) {
     if ((error as { code?: string }).code === "23505") throw new RelationshipStoreError("REQUEST_EXISTS");
     throw error;
+  }
+  if (context.notificationPublishersEnabled === true) {
+    await publishFriendRequestNotification(context.queryable, { requestId, recipientId, createdAt: createdAtDate });
   }
   return context.snapshot(senderId, recipientId);
 }

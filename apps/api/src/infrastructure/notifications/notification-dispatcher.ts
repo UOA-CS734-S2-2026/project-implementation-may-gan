@@ -1,4 +1,5 @@
 import type { DeliveryResult } from "../jobs/dispatch-outbox";
+import type { GenericFcmNotificationInput } from "../push/fcm";
 import { retryDelayMs } from "../jobs/dispatch-outbox";
 import type { DirectMessageNotificationResolver } from "./direct-message-resolver";
 import type { NotificationStore } from "./notification-store";
@@ -7,8 +8,8 @@ export interface GenericNotificationSender {
   send(input: {
     token: string;
     eventId: string;
-    type: "direct_message";
-    targetType: "conversation";
+    type: GenericFcmNotificationInput["type"];
+    targetType: GenericFcmNotificationInput["targetType"];
     targetId: string;
     title: string;
     body: string;
@@ -180,8 +181,8 @@ async function sendWithTimeout(
     targetId: notification.targetId,
     title: notification.title,
     body: notification.body,
-    type: "direct_message",
-    targetType: "conversation",
+    type: notification.type ?? "direct_message",
+    targetType: notification.targetType ?? "conversation",
   }, { signal: controller.signal }));
   const settled: Promise<DeliveryResult> = operation.then(
     (result) => result,

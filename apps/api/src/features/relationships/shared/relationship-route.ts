@@ -34,6 +34,7 @@ export interface RelationshipsRouteDependencies {
   /** Denies discovery and relationship mutations until the actor has a public handle. */
   hasUsername?: (userId: string) => Promise<boolean>;
   rateLimiter?: ActorRateLimiter;
+  dispatchImmediately?: () => Promise<unknown>;
 }
 
 export const relationshipSecurity: Array<Record<string, string[]>> = [
@@ -62,7 +63,7 @@ function errorBody(
 
 export function relationshipServiceError(context: Context, error: unknown) {
   if (!(error instanceof RelationshipServiceError)) {
-    console.error("dayli relationship operation failed", error);
+    console.error("dayli relationship operation failed");
     return context.json(errorBody("SERVICE_UNAVAILABLE", "Relationship storage is temporarily unavailable."), 503);
   }
 

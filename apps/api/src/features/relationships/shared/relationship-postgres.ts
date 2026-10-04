@@ -6,6 +6,7 @@ export type RelationshipRow = Record<string, unknown>;
 
 export interface RelationshipPostgresContext {
   queryable: RelationshipQueryable;
+  notificationPublishersEnabled?: boolean;
   lockPair(leftUserId: string, rightUserId: string): Promise<void>;
   requireTarget(leftUserId: string, rightUserId: string): Promise<void>;
   requireActiveTarget(leftUserId: string, rightUserId: string): Promise<void>;

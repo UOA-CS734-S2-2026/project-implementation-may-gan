@@ -5,6 +5,7 @@ import { allowsAccountCapability } from "../../features/account-policy/shared/ac
 import { conversationParticipantsAvailable } from "../../features/messaging/shared/conversation-participants";
 import { readAccountPolicy } from "../../features/account-policy/shared/account-policy.repository";
 import type { PushTokenProtector } from "../push/token-encryption";
+import type { GenericFcmNotificationInput } from "../push/fcm";
 import type { NotificationJob } from "./notification-store";
 
 export interface ResolvedDirectMessageNotification {
@@ -13,6 +14,8 @@ export interface ResolvedDirectMessageNotification {
   targetId: string;
   title: string;
   body: string;
+  type?: GenericFcmNotificationInput["type"];
+  targetType?: GenericFcmNotificationInput["targetType"];
   /** Internal compare-and-set identity. Never include it in provider payloads or logs. */
   registrationGeneration: { sessionId: string; tokenHash: string };
 }

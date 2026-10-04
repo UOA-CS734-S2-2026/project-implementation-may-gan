@@ -62,7 +62,7 @@ function relationshipPairKey(leftUserId: string, rightUserId: string): string {
 }
 
 export class PostgresRelationshipsStore implements RelationshipStore {
-  constructor(private readonly database: DayliDatabase) {}
+  constructor(private readonly database: DayliDatabase, private readonly options: { notificationPublishersEnabled?: boolean } = {}) {}
 
   withTransaction<T>(operation: (transaction: RelationshipTransaction) => Promise<T>): Promise<T> {
     return this.database.transaction(async (transaction) => operation(this.transaction(transaction)));
@@ -193,7 +193,7 @@ export class PostgresRelationshipsStore implements RelationshipStore {
         .returning({ id: friendRequests.id });
       return { other, request };
     };
-    const context: RelationshipPostgresContext = { queryable, lockPair, requireTarget, requireActiveTarget, activeBlock, snapshot, finishRequest };
+    const context: RelationshipPostgresContext = { queryable, notificationPublishersEnabled: this.options.notificationPublishersEnabled === true, lockPair, requireTarget, requireActiveTarget, activeBlock, snapshot, finishRequest };
 
     return {
       getSnapshot: snapshot,
@@ -215,16 +215,16 @@ export class PostgresRelationshipsStore implements RelationshipStore {
   }
 }
 
-export function createPostgresRelationshipsStore(database: DayliDatabase): RelationshipStore {
-  return new PostgresRelationshipsStore(database);
+export function createPostgresRelationshipsStore(database: DayliDatabase, options: { notificationPublishersEnabled?: boolean } = {}): RelationshipStore {
+  return new PostgresRelationshipsStore(database, options);
 }
 
-export function createHyperdriveRelationshipsStore(hyperdrive: HyperdriveBinding): RelationshipStore {
+export function createHyperdriveRelationshipsStore(hyperdrive: HyperdriveBinding, options: { notificationPublishersEnabled?: boolean } = {}): RelationshipStore {
   return {
     async withTransaction<T>(operation: (transaction: RelationshipTransaction) => Promise<T>) {
       const database = createHyperdriveDatabase(hyperdrive);
       try {
-        return await new PostgresRelationshipsStore(database.db).withTransaction(operation);
+        return await new PostgresRelationshipsStore(database.db, options).withTransaction(operation);
       } finally {
         await database.close();
       }

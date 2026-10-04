@@ -41,7 +41,7 @@ export function buildDrizzleActiveAccountFilter(database: Queryable, subjectId: 
 function activeFriendship(
   database: Queryable,
   authorId: typeof schema.posts.authorId,
-  viewerId: string,
+  viewerId: string | SQLWrapper,
 ) {
   // #73 persists an active friendship in both directions. Requiring both rows
   // avoids treating a stale or partially-written directional projection as a
@@ -72,7 +72,7 @@ function activeFriendship(
 function activeBlock(
   database: Queryable,
   authorId: typeof schema.posts.authorId,
-  viewerId: string,
+  viewerId: string | SQLWrapper,
 ) {
   return exists(
     database
@@ -158,6 +158,18 @@ export function buildDrizzlePostVisibilityFilter(
   // Export uses a separate owner-scoped Trash projection for restorable items.
   // Normal post, media, revision, and active-export reads never include Trash.
   return and(isNull(posts.trashedAt), activeAccount, media, notBlocked, access);
+}
+
+/** Same friends-only release rules as the feed, also usable for correlated recipient queries. */
+export function buildDrizzleFriendsReleaseFilter(database: Queryable, viewerId: string | SQLWrapper, localDate: string, now: Date) {
+  return and(
+    ne(schema.posts.authorId, viewerId), eq(schema.posts.localDate, localDate),
+    eq(schema.posts.audience, "friends"), lte(schema.posts.releasedAt, now),
+    isNull(schema.posts.trashedAt), isNotNull(schema.user.username),
+    buildDrizzleActiveAccountFilter(database, schema.posts.authorId),
+    activeFriendship(database, schema.posts.authorId, viewerId),
+    not(activeBlock(database, schema.posts.authorId, viewerId)),
+  );
 }
 
 /** List filtering is applied before limit/offset, preventing page holes/leaks. */

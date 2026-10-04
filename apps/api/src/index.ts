@@ -1,5 +1,6 @@
 import { createAppForEnv, app } from "./app";
-import type { ApiEnv } from "./env";
+import { notificationPublishersEnabled, type ApiEnv } from "./env";
+import { publishDailyNotifications } from "./infrastructure/notifications/daily-notification-scheduler";
 import { createMediaCleanupDispatcherForEnv } from "./infrastructure/jobs/media-cleanup-runtime";
 import { createMessagingDeliveryDispatcher } from "./infrastructure/jobs/messaging-delivery-runtime";
 import { createFutureSelfNoteDeliveryDispatcherForEnv } from "./infrastructure/jobs/future-self-note-delivery-runtime";
@@ -29,7 +30,7 @@ export default {
   scheduled(_event: ScheduledEvent, env: ApiEnv, context: ExecutionContext): void {
     // Scheduled repair owns a fresh database client. It never reuses request-scoped state.
     if (env.USER_REALTIME) context.waitUntil(createMessagingDeliveryDispatcher({ ...env, USER_REALTIME: env.USER_REALTIME }).dispatchScheduled());
-    context.waitUntil(createNotificationDeliveryDispatcher(env).then((dispatcher) => dispatcher.dispatchScheduled()));
+    context.waitUntil(runNotificationMaintenance(env));
     context.waitUntil(runMediaCleanup(env));
     context.waitUntil(runGoogleIntentExpiry(env));
     const allStagingExports = stagingExportAllUsersEnabled(env);
@@ -40,6 +41,21 @@ export default {
     context.waitUntil(runFutureSelfNoteDelivery(env));
   },
 };
+
+async function runNotificationMaintenance(env: ApiEnv): Promise<void> {
+  if (notificationPublishersEnabled(env)) {
+    try {
+      await withHyperdriveDatabase(env.HYPERDRIVE, (database) => publishDailyNotifications(database, { now: new Date() }));
+    } catch {
+      console.error("notification publication failed");
+    }
+  }
+  try {
+    await (await createNotificationDeliveryDispatcher(env)).dispatchScheduled();
+  } catch {
+    console.error("notification maintenance failed");
+  }
+}
 
 /** Counts only. The summary never carries object keys, owners, or errors. */
 async function runGoogleIntentExpiry(env: ApiEnv): Promise<void> {
