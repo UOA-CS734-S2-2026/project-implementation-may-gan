@@ -58,7 +58,7 @@ Tap **Add the weather**. Dayli explains what it does first, and nothing happens 
 
 You see exactly what will be on your post before you post, and you can tap the close button to remove it. You cannot add or change the weather after you post.
 
-If you say no to location, or location is switched off, Dayli tells you and offers **Choose a place** instead. If you refused permission and your phone will not ask again, **Open Settings** takes you to where you can change it. Posting never needs the weather.
+If you say no to location, or location is switched off, Dayli tells you and offers **Choose a place** instead. If you refused permission and your phone will not ask again, **Open Settings** takes you to where you can change it. Posting never needs the weather. While Dayli is still getting it, the **Post** button waits and says **Getting the weather…**. Tap **Skip** if you would rather post without it.
 
 The weather comes from Open-Meteo.com, and your phone looks up the name of the place. The web composer does not have a weather section yet.
 

@@ -4,6 +4,7 @@ import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
 import 'package:dayli_mobile/compose/weather_input.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
+import 'package:dayli_mobile/ui/dayli_button.dart';
 import 'package:dayli_mobile/weather/coordinates.dart';
 import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:dayli_mobile/weather/weather_failure.dart';
@@ -476,6 +477,136 @@ void main() {
 
       expect(find.byKey(_card), findsNothing);
       expect(harness.weatherProvider.readings, isEmpty);
+    });
+  });
+
+  group('posting while the weather is being fetched', () {
+    const submit = Key('composer.submit');
+
+    /// A draft that is ready to post, so only the weather is in question.
+    Future<void> readyDraft() => harness.drafts.write(
+      DailyPostDraft(
+        userId: 'user-1',
+        localDate: '2026-09-25',
+        promptId: 'prompt-09-25',
+        promptText: 'What made you smile today?',
+        idempotencyKey: 'saved-key',
+        updatedAt: DateTime.utc(2026, 9, 25),
+        reflectiveAnswer: 'Coffee by the harbour',
+        rating: 7,
+        audience: PostAudience.friends,
+      ),
+    );
+
+    VoidCallback? onPressed(WidgetTester tester) =>
+        tester.widget<DayliButton>(find.byKey(submit)).onPressed;
+
+    String label(WidgetTester tester) =>
+        tester.widget<DayliButton>(find.byKey(submit)).label;
+
+    /// Starts "Use my location" and leaves the lookup waiting.
+    Future<void> startSlowLookup(WidgetTester tester) async {
+      harness.weatherProvider.hold = Completer<void>();
+      await _openExplanation(tester);
+      await tester.tap(find.byKey(_useLocation));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    testWidgets('holds the Post button until the weather arrives', (
+      tester,
+    ) async {
+      await readyDraft();
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+      expect(onPressed(tester), isNotNull);
+      expect(label(tester), 'Post');
+
+      await startSlowLookup(tester);
+
+      expect(find.byKey(const Key('composer.weather.working')), findsOneWidget);
+      expect(onPressed(tester), isNull);
+      expect(label(tester), 'Getting the weather…');
+      await tester.tap(find.byKey(submit), warnIfMissed: false);
+      await tester.pump();
+      expect(harness.submitter.submitted, isEmpty);
+
+      harness.weatherProvider.hold!.complete();
+      await tester.pumpAndSettle();
+
+      expect(onPressed(tester), isNotNull);
+      expect(label(tester), 'Post');
+    });
+
+    testWidgets('sends the weather when the author posts after waiting', (
+      tester,
+    ) async {
+      await readyDraft();
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await startSlowLookup(tester);
+      // Posting is attempted mid-lookup and goes nowhere.
+      await tester.tap(find.byKey(submit), warnIfMissed: false);
+      await tester.pump();
+
+      harness.weatherProvider.hold!.complete();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(submit));
+      await tester.pumpAndSettle();
+
+      expect(harness.submitter.submitted, hasLength(1));
+      expect(harness.submitter.submitted.single.weather, rainInAuckland);
+    });
+
+    testWidgets('lets the author skip the lookup and post without it', (
+      tester,
+    ) async {
+      await readyDraft();
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await startSlowLookup(tester);
+
+      await tester.tap(find.byKey(const Key('composer.weather.cancel')));
+      await tester.pump();
+
+      expect(find.byKey(const Key('composer.weather.working')), findsNothing);
+      expect(find.byKey(_add), findsOneWidget);
+      expect(find.byKey(const Key('composer.weather.problem')), findsNothing);
+      expect(onPressed(tester), isNotNull);
+
+      // The lookup finishing later must not slip weather into the draft.
+      harness.weatherProvider.hold!.complete();
+      await tester.pumpAndSettle();
+      expect(find.byKey(_card), findsNothing);
+
+      await tester.tap(find.byKey(submit));
+      await tester.pumpAndSettle();
+
+      expect(harness.submitter.submitted, hasLength(1));
+      expect(harness.submitter.submitted.single.weather, isNull);
+    });
+
+    testWidgets('does not let a skipped lookup block a second one', (
+      tester,
+    ) async {
+      await readyDraft();
+      await _openComposer(tester, harness);
+      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await startSlowLookup(tester);
+      await tester.tap(find.byKey(const Key('composer.weather.cancel')));
+      await tester.pump();
+      final skipped = harness.weatherProvider.hold!;
+
+      harness.weatherProvider.hold = null;
+      await _openExplanation(tester);
+      await tester.tap(find.byKey(_useLocation));
+      await tester.pumpAndSettle();
+      expect(find.byKey(_card), findsOneWidget);
+
+      // The first lookup finishing late changes nothing.
+      skipped.complete();
+      await tester.pumpAndSettle();
+      expect(find.byKey(_card), findsOneWidget);
     });
   });
 

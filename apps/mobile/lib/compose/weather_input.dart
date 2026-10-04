@@ -62,7 +62,7 @@ class WeatherInput extends StatelessWidget {
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) {
-        if (controller.isWorking) return const _Working();
+        if (controller.isWorking) return _Working(onCancel: controller.cancel);
         final current = weather;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,14 +85,16 @@ class WeatherInput extends StatelessWidget {
 }
 
 class _Working extends StatelessWidget {
-  const _Working();
+  const _Working({required this.onCancel});
+
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
     return Container(
       key: const Key('composer.weather.working'),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 6, 6, 6),
       decoration: BoxDecoration(
         color: colors.backgroundSecondary,
         borderRadius: BorderRadius.circular(18),
@@ -105,9 +107,17 @@ class _Working extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 14),
-          Text(
-            'Getting the weather…',
-            style: DayliText.sans(context, size: DayliTextSize.base),
+          Expanded(
+            child: Text(
+              'Getting the weather…',
+              style: DayliText.sans(context, size: DayliTextSize.base),
+            ),
+          ),
+          // Posting waits for the weather, so this is the way to post without it.
+          TextButton(
+            key: const Key('composer.weather.cancel'),
+            onPressed: onCancel,
+            child: const Text('Skip'),
           ),
         ],
       ),
