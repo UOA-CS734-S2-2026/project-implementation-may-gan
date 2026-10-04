@@ -9,6 +9,7 @@ src/apis/InteractionsApi.ts
 src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
+src/apis/NotificationsApi.ts
 src/apis/PostingDaysApi.ts
 src/apis/PostsApi.ts
 src/apis/ProfileApi.ts
@@ -58,6 +59,7 @@ src/models/FutureSelfNoteDetail.ts
 src/models/FutureSelfNotePage.ts
 src/models/FutureSelfNoteStatus.ts
 src/models/GetMessagingUnread200Response.ts
+src/models/GetNotificationPreference200Response.ts
 src/models/GoogleReauthenticationIntent.ts
 src/models/GoogleReauthenticationRequest.ts
 src/models/HealthResponse.ts
@@ -133,6 +135,7 @@ src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/TrashedPostStatus.ts
 src/models/UpdateFutureSelfNoteRequest.ts
+src/models/UpdateNotificationPreferenceRequest.ts
 src/models/UpdatePostCommentRequest.ts
 src/models/UpdatePostRequest.ts
 src/models/UpdateProfileRequest.ts

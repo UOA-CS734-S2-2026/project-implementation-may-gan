@@ -6,6 +6,15 @@ export interface FcmServiceAccount {
   projectId: string;
 }
 
+interface FirebaseServiceAccountDocument {
+  client_email?: unknown;
+  private_key?: unknown;
+  project_id?: unknown;
+  clientEmail?: unknown;
+  privateKey?: unknown;
+  projectId?: unknown;
+}
+
 export interface FcmNotificationInput {
   token: string;
   eventId: string;
@@ -16,6 +25,80 @@ export type FcmResult =
   | { ok: true }
   | { ok: false; retryable: boolean; category: "transient" | "rate_limited" | "provider_rejected" | "unauthorized" };
 
+export class FcmOAuthError extends Error {
+  constructor(public readonly category: "signing_invalid" | "response_rejected" | "response_invalid" | "transport_failed") {
+    super(category);
+  }
+}
+
+/**
+ * Normalizes Firebase's standard snake-case document. The camel-case fields
+ * remain accepted only for Workers already configured with the earlier shape.
+ */
+export function normalizeFcmServiceAccount(value: unknown): FcmServiceAccount | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const document = value as FirebaseServiceAccountDocument;
+  const clientEmail = document.client_email ?? document.clientEmail;
+  const privateKey = document.private_key ?? document.privateKey;
+  const projectId = document.project_id ?? document.projectId;
+  if (![clientEmail, privateKey, projectId].every((field) => typeof field === "string" && field.length > 0)) return undefined;
+  return { clientEmail: clientEmail as string, privateKey: privateKey as string, projectId: projectId as string };
+}
+
+/** OAuth-only helper. It never constructs or sends an FCM message request. */
+export async function requestFcmOAuthToken(input: {
+  serviceAccount: FcmServiceAccount;
+  fetch?: typeof globalThis.fetch;
+  now?: () => Date;
+  signal?: AbortSignal;
+}): Promise<{ token: string; expiresAt: number }> {
+  const fetcher = input.fetch ?? globalThis.fetch;
+  const now = input.now ?? (() => new Date());
+  let assertion: string;
+  try {
+    const key = await importPKCS8(input.serviceAccount.privateKey, "RS256");
+    assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/firebase.messaging" })
+      .setProtectedHeader({ alg: "RS256", typ: "JWT" })
+      .setIssuer(input.serviceAccount.clientEmail)
+      .setSubject(input.serviceAccount.clientEmail)
+      .setAudience("https://oauth2.googleapis.com/token")
+      .setIssuedAt(Math.floor(now().getTime() / 1_000))
+      .setExpirationTime("5m")
+      .sign(key);
+  } catch {
+    throw new FcmOAuthError("signing_invalid");
+  }
+
+  let response: Response;
+  try {
+    response = await fetcher("https://oauth2.googleapis.com/token", {
+      method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+      redirect: "error",
+      signal: input.signal,
+    });
+  } catch {
+    throw new FcmOAuthError("transport_failed");
+  }
+  if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
+    throw new FcmOAuthError("response_invalid");
+  }
+  if (!response.ok) throw new FcmOAuthError("response_rejected");
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new FcmOAuthError("response_invalid");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new FcmOAuthError("response_invalid");
+  const tokenResponse = body as { access_token?: unknown; expires_in?: unknown };
+  if (typeof tokenResponse.access_token !== "string" || tokenResponse.access_token.length === 0 || typeof tokenResponse.expires_in !== "number" || !Number.isFinite(tokenResponse.expires_in) || tokenResponse.expires_in <= 0) {
+    throw new FcmOAuthError("response_invalid");
+  }
+  return { token: tokenResponse.access_token, expiresAt: now().getTime() + tokenResponse.expires_in * 1_000 };
+}
+
 /** Worker-compatible FCM HTTP v1 sender. It never includes sender or message text. */
 export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount; fetch?: typeof globalThis.fetch; now?: () => Date }) {
   const fetcher = input.fetch ?? globalThis.fetch;
@@ -24,23 +107,8 @@ export function createFcmHttpV1Sender(input: { serviceAccount: FcmServiceAccount
 
   async function oauthToken(signal?: AbortSignal): Promise<string> {
     if (accessToken && accessToken.expiresAt > now().getTime() + 30_000) return accessToken.value;
-    const key = await importPKCS8(input.serviceAccount.privateKey, "RS256");
-    const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/firebase.messaging" })
-      .setProtectedHeader({ alg: "RS256", typ: "JWT" })
-      .setIssuer(input.serviceAccount.clientEmail)
-      .setSubject(input.serviceAccount.clientEmail)
-      .setAudience("https://oauth2.googleapis.com/token")
-      .setIssuedAt(Math.floor(now().getTime() / 1_000))
-      .setExpirationTime("5m")
-      .sign(key);
-    const response = await fetcher("https://oauth2.googleapis.com/token", {
-      method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }), signal,
-    });
-    if (!response.ok) throw new Error("FCM OAuth token request failed.");
-    const body = await response.json() as { access_token?: unknown; expires_in?: unknown };
-    if (typeof body.access_token !== "string") throw new Error("FCM OAuth response was invalid.");
-    accessToken = { value: body.access_token, expiresAt: now().getTime() + Number(body.expires_in ?? 300) * 1_000 };
+    const token = await requestFcmOAuthToken({ serviceAccount: input.serviceAccount, fetch: fetcher, now, signal });
+    accessToken = { value: token.token, expiresAt: token.expiresAt };
     return accessToken.value;
   }
 

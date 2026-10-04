@@ -13,6 +13,11 @@ on:
         description: Optional reviewed main commit SHA, staging schema must exactly match it
         required: false
         type: string
+      push_readiness:
+        description: Run OAuth-only push readiness before secret synchronization
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: write
@@ -37,6 +42,7 @@ jobs:
       migration_mode: ${{ steps.release.outputs.migration_mode }}
       browser_proxy_enabled: ${{ steps.release.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ steps.release.outputs.tooling_sha }}
+      push_readiness: ${{ steps.release.outputs.push_readiness }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,6 +55,7 @@ jobs:
           DISPATCH_SHA: ${{ github.sha }}
           TOOLING_SHA: ${{ github.workflow_sha }}
           STAGING_BROWSER_PROXY_ENABLED: ${{ vars.STAGING_BROWSER_PROXY_ENABLED || 'false' }}
+          PUSH_READINESS: ${{ github.event_name == 'workflow_dispatch' && inputs.push_readiness || 'false' }}
         run: node scripts/capture-staging-release.mjs
       - name: Capture non-sensitive deployed release attribution
         env:
@@ -73,6 +80,7 @@ jobs:
       migration_mode: ${{ needs.capture.outputs.migration_mode }}
       browser_proxy_enabled: ${{ needs.capture.outputs.browser_proxy_enabled }}
       tooling_sha: ${{ needs.capture.outputs.tooling_sha }}
+      push_readiness: ${{ needs.capture.outputs.push_readiness }}
     secrets: inherit
 
   web:

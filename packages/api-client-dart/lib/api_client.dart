@@ -290,6 +290,8 @@ class ApiClient {
           return FutureSelfNoteStatusTypeTransformer().decode(value);
         case 'GetMessagingUnread200Response':
           return GetMessagingUnread200Response.fromJson(value);
+        case 'GetNotificationPreference200Response':
+          return GetNotificationPreference200Response.fromJson(value);
         case 'GoogleReauthenticationIntent':
           return GoogleReauthenticationIntent.fromJson(value);
         case 'GoogleReauthenticationRequest':
@@ -440,6 +442,8 @@ class ApiClient {
           return TrashedPostStatus.fromJson(value);
         case 'UpdateFutureSelfNoteRequest':
           return UpdateFutureSelfNoteRequest.fromJson(value);
+        case 'UpdateNotificationPreferenceRequest':
+          return UpdateNotificationPreferenceRequest.fromJson(value);
         case 'UpdatePostCommentRequest':
           return UpdatePostCommentRequest.fromJson(value);
         case 'UpdatePostRequest':

@@ -19,14 +19,14 @@ function requireMatch(source, pattern, message) {
 
 export function assertStagingReleaseContract({ release, api, web, migrations, cleanup }) {
   requireMatch(release, /workflow_run:\n {4}workflows: \[CI\]\n {4}branches: \[main\]\n {4}types: \[completed\]/, "staging release must run only after main CI");
-  requireMatch(release, /workflow_dispatch:\n {4}inputs:\n {6}commit_sha:\n {8}description: Optional reviewed main commit SHA, staging schema must exactly match it\n {8}required: false\n {8}type: string/, "manual dispatch must retain the reviewed rollback SHA input and exact-schema condition");
+  requireMatch(release, /workflow_dispatch:\n {4}inputs:\n {6}commit_sha:\n {8}description: Optional reviewed main commit SHA, staging schema must exactly match it\n {8}required: false\n {8}type: string\n {6}push_readiness:\n {8}description: Run OAuth-only push readiness before secret synchronization\n {8}required: false\n {8}default: false\n {8}type: boolean/, "manual dispatch must retain the reviewed rollback SHA input and make OAuth readiness an explicit false-by-default choice");
   requireMatch(release, /github\.event\.workflow_run\.head_branch == 'main'/, "workflow_run must require main as the source branch");
   requireMatch(release, /github\.event\.workflow_run\.head_repository\.full_name == github\.repository/, "workflow_run must reject fork sources");
   requireMatch(release, /environment: staging/, "release capture must require the protected staging environment");
   requireMatch(release, /ref: main\n {10}fetch-depth: 0/, "release capture must fetch main history");
-  requireMatch(release, /EVENT_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}[\s\S]*?INPUT_SHA: \$\{\{ inputs\.commit_sha \}\}[\s\S]*?DISPATCH_SHA: \$\{\{ github\.sha \}\}[\s\S]*?TOOLING_SHA: \$\{\{ github\.workflow_sha \}\}[\s\S]*?run: node scripts\/capture-staging-release\.mjs/, "release must capture event, rollback, dispatch, and immutable tooling SHAs through the release selector");
-  requireMatch(release, /outputs:\n {6}commit_sha: \$\{\{ steps\.release\.outputs\.commit_sha \}\}\n {6}migration_mode: \$\{\{ steps\.release\.outputs\.migration_mode \}\}/, "release capture must expose its computed migration mode");
-  requireMatch(release, /api:\n {4}needs: capture\n {4}uses: \.\/\.github\/workflows\/staging-hyperdrive\.yml[\s\S]*?commit_sha: \$\{\{ needs\.capture\.outputs\.commit_sha \}\}[\s\S]*?migration_mode: \$\{\{ needs\.capture\.outputs\.migration_mode \}\}[\s\S]*?browser_proxy_enabled: \$\{\{ needs\.capture\.outputs\.browser_proxy_enabled \}\}[\s\S]*?tooling_sha: \$\{\{ needs\.capture\.outputs\.tooling_sha \}\}[\s\S]*?secrets: inherit/, "API must use the captured release, migration mode, and tooling contract");
+  requireMatch(release, /EVENT_SHA: \$\{\{ github\.event\.workflow_run\.head_sha \}\}[\s\S]*?INPUT_SHA: \$\{\{ inputs\.commit_sha \}\}[\s\S]*?DISPATCH_SHA: \$\{\{ github\.sha \}\}[\s\S]*?TOOLING_SHA: \$\{\{ github\.workflow_sha \}\}[\s\S]*?PUSH_READINESS: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.push_readiness \|\| 'false' \}\}[\s\S]*?run: node scripts\/capture-staging-release\.mjs/, "release must capture event, rollback, dispatch, immutable tooling, and manual-only readiness inputs through the release selector");
+  requireMatch(release, /outputs:\n {6}commit_sha: \$\{\{ steps\.release\.outputs\.commit_sha \}\}\n {6}migration_mode: \$\{\{ steps\.release\.outputs\.migration_mode \}\}[\s\S]*?push_readiness: \$\{\{ steps\.release\.outputs\.push_readiness \}\}/, "release capture must expose its computed migration and readiness modes");
+  requireMatch(release, /api:\n {4}needs: capture\n {4}uses: \.\/\.github\/workflows\/staging-hyperdrive\.yml[\s\S]*?commit_sha: \$\{\{ needs\.capture\.outputs\.commit_sha \}\}[\s\S]*?migration_mode: \$\{\{ needs\.capture\.outputs\.migration_mode \}\}[\s\S]*?browser_proxy_enabled: \$\{\{ needs\.capture\.outputs\.browser_proxy_enabled \}\}[\s\S]*?tooling_sha: \$\{\{ needs\.capture\.outputs\.tooling_sha \}\}[\s\S]*?push_readiness: \$\{\{ needs\.capture\.outputs\.push_readiness \}\}[\s\S]*?secrets: inherit/, "API must use the captured release, migration mode, tooling, and manual readiness contract");
   requireMatch(release, /web:\n {4}needs: \[capture, api\]\n {4}uses: \.\/\.github\/workflows\/staging-web\.yml[\s\S]*?commit_sha: \$\{\{ needs\.capture\.outputs\.commit_sha \}\}[\s\S]*?browser_proxy_enabled: \$\{\{ needs\.capture\.outputs\.browser_proxy_enabled \}\}[\s\S]*?tooling_sha: \$\{\{ needs\.capture\.outputs\.tooling_sha \}\}[\s\S]*?secrets: inherit/, "web must wait for API and use the captured release and tooling contract");
   requireMatch(release, /group: staging-release\n {2}cancel-in-progress: false/, "release concurrency must not cancel an active deployment");
 
@@ -39,6 +39,7 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
     }
     requireMatch(workflow, /browser_proxy_enabled:\n {8}required: true\n {8}type: string/, `${name} must require the captured proxy mode`);
     requireMatch(workflow, /tooling_sha:\n {8}required: true\n {8}type: string/, `${name} must require an immutable tooling SHA`);
+    if (name === "API") requireMatch(workflow, /push_readiness:\n {8}required: true\n {8}type: string/, "API must require the captured manual readiness mode");
     requireMatch(workflow, /environment: staging/, `${name} must require the protected staging environment`);
     requireMatch(workflow, /ref: \$\{\{ inputs\.commit_sha \}\}/, `${name} must check out the captured SHA`);
     requireMatch(workflow, /CAPTURED_BROWSER_PROXY_ENABLED: \$\{\{ inputs\.browser_proxy_enabled \}\}/, `${name} must use the captured proxy mode`);
@@ -79,6 +80,15 @@ export function assertStagingReleaseContract({ release, api, web, migrations, cl
   ]) {
     assert.ok(schemaGateIndex < api.indexOf(mutatingStep), `schema gate must run before ${mutatingStep}`);
   }
+
+  const dryRunIndex = api.indexOf("Dry-run generated Worker configurations");
+  const readinessIndex = api.indexOf("Run OAuth-only push readiness");
+  const readinessUploadIndex = api.indexOf("Upload sanitized push readiness artifact");
+  const secretSyncIndex = api.indexOf("Synchronize reviewed Worker secrets after configuration dry-runs");
+  assert.ok(dryRunIndex >= 0 && readinessIndex >= 0 && readinessUploadIndex >= 0, "API must include the OAuth-only readiness and its artifact upload");
+  requireMatch(api, /Run OAuth-only push readiness\n {8}if: inputs\.push_readiness == 'true'[\s\S]*?FCM_SERVICE_ACCOUNT_JSON: \$\{\{ secrets\.FCM_SERVICE_ACCOUNT_JSON \}\}[\s\S]*?CANDIDATE_COMMIT_SHA: \$\{\{ inputs\.commit_sha \}\}[\s\S]*?run: pnpm --dir deployment-tooling exec tsx scripts\/staging-push-readiness\.ts/, "OAuth readiness must use the candidate commit and protected source secret only after explicit opt-in");
+  requireMatch(api, /Upload sanitized push readiness artifact\n {8}if: \$\{\{ always\(\) && inputs\.push_readiness == 'true' \}\}/, "OAuth readiness must upload its sanitized artifact even after a failed readiness check");
+  assert.ok(dryRunIndex < readinessIndex && readinessIndex < readinessUploadIndex && readinessUploadIndex < secretSyncIndex, "OAuth readiness must run after credential-free dry-runs and before secret synchronization");
 
   requireMatch(web, /Check out immutable release tooling[\s\S]*?ref: \$\{\{ inputs\.tooling_sha \}\}[\s\S]*?path: deployment-tooling/, "web must check out immutable tooling separately from the historical application release");
 

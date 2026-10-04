@@ -11,6 +11,7 @@ lib/api/interactions_api.dart
 lib/api/legal_api.dart
 lib/api/media_api.dart
 lib/api/messaging_api.dart
+lib/api/notifications_api.dart
 lib/api/posting_days_api.dart
 lib/api/posts_api.dart
 lib/api/profile_api.dart
@@ -66,6 +67,7 @@ lib/model/future_self_note_detail.dart
 lib/model/future_self_note_page.dart
 lib/model/future_self_note_status.dart
 lib/model/get_messaging_unread200_response.dart
+lib/model/get_notification_preference200_response.dart
 lib/model/google_reauthentication_intent.dart
 lib/model/google_reauthentication_request.dart
 lib/model/health_response.dart
@@ -141,6 +143,7 @@ lib/model/set_message_reaction_request.dart
 lib/model/test_response.dart
 lib/model/trashed_post_status.dart
 lib/model/update_future_self_note_request.dart
+lib/model/update_notification_preference_request.dart
 lib/model/update_post_comment_request.dart
 lib/model/update_post_request.dart
 lib/model/update_profile_request.dart

@@ -1,5 +1,5 @@
 {
-  "id": "9e2f7e7a-7c8f-4ce6-a1e4-17687ba8e09f",
+  "id": "87a50e53-3ed7-4305-a201-e8e3e4127c68",
   "prevId": "7ee58924-8595-42a3-aaef-83f6f9b31547",
   "version": "7",
   "dialect": "postgresql",
@@ -697,6 +697,60 @@
           "value": "\"account_management_grants\".\"consumed_at\" is null or \"account_management_grants\".\"consumed_at\" <= \"account_management_grants\".\"expires_at\""
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.account_notification_preferences": {
+      "name": "account_notification_preferences",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "account_notification_preferences_user_id_user_id_fk": {
+          "name": "account_notification_preferences_user_id_user_id_fk",
+          "tableFrom": "account_notification_preferences",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.account_purge_receipts": {
@@ -1469,6 +1523,100 @@
       },
       "isRLSEnabled": false
     },
+    "public.data_export_cleanup_incidents": {
+      "name": "data_export_cleanup_incidents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "failure_category": {
+          "name": "failure_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "failure_count": {
+          "name": "failure_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "first_failed_at": {
+          "name": "first_failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_failed_at": {
+          "name": "last_failed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "data_export_cleanup_incidents_expiry_idx": {
+          "name": "data_export_cleanup_incidents_expiry_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"data_export_cleanup_incidents\".\"expires_at\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "data_export_cleanup_incident_digest_check": {
+          "name": "data_export_cleanup_incident_digest_check",
+          "value": "\"data_export_cleanup_incidents\".\"id\" ~ '^[0-9a-f]{64}$'"
+        },
+        "data_export_cleanup_incident_category_check": {
+          "name": "data_export_cleanup_incident_category_check",
+          "value": "\"data_export_cleanup_incidents\".\"failure_category\" = 'storage'"
+        },
+        "data_export_cleanup_incident_count_check": {
+          "name": "data_export_cleanup_incident_count_check",
+          "value": "\"data_export_cleanup_incidents\".\"failure_count\" between 1 and 9007199254740991"
+        },
+        "data_export_cleanup_incident_clock_check": {
+          "name": "data_export_cleanup_incident_clock_check",
+          "value": "\"data_export_cleanup_incidents\".\"last_failed_at\" >= \"data_export_cleanup_incidents\".\"first_failed_at\" and (\"data_export_cleanup_incidents\".\"resolved_at\" is null or \"data_export_cleanup_incidents\".\"resolved_at\" >= \"data_export_cleanup_incidents\".\"last_failed_at\")"
+        },
+        "data_export_cleanup_incident_retention_check": {
+          "name": "data_export_cleanup_incident_retention_check",
+          "value": "(\"data_export_cleanup_incidents\".\"resolved_at\" is null and \"data_export_cleanup_incidents\".\"expires_at\" is null) or (\"data_export_cleanup_incidents\".\"resolved_at\" is not null and \"data_export_cleanup_incidents\".\"expires_at\" = \"data_export_cleanup_incidents\".\"resolved_at\" + interval '720 hours')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.data_export_object_cleanup_tasks": {
       "name": "data_export_object_cleanup_tasks",
       "schema": "",
@@ -1484,6 +1632,24 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "upload_id": {
+          "name": "upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "upload_started_at": {
+          "name": "upload_started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "verified_absent_at": {
+          "name": "verified_absent_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1595,6 +1761,14 @@
         "data_export_object_cleanup_tasks_archive_key_check": {
           "name": "data_export_object_cleanup_tasks_archive_key_check",
           "value": "char_length(\"data_export_object_cleanup_tasks\".\"archive_object_key\") between 1 and 1024"
+        },
+        "data_export_cleanup_upload_pair_check": {
+          "name": "data_export_cleanup_upload_pair_check",
+          "value": "(\"data_export_object_cleanup_tasks\".\"upload_id\" is null) = (\"data_export_object_cleanup_tasks\".\"upload_started_at\" is null)"
+        },
+        "data_export_cleanup_upload_id_check": {
+          "name": "data_export_cleanup_upload_id_check",
+          "value": "\"data_export_object_cleanup_tasks\".\"upload_id\" is null or (char_length(\"data_export_object_cleanup_tasks\".\"upload_id\") between 1 and 512 and \"data_export_object_cleanup_tasks\".\"upload_id\" ~ '^[A-Za-z0-9_+/=-]+$')"
         },
         "data_export_object_cleanup_tasks_attempt_count_check": {
           "name": "data_export_object_cleanup_tasks_attempt_count_check",
@@ -2127,389 +2301,6 @@
         "friendships_distinct_users_check": {
           "name": "friendships_distinct_users_check",
           "value": "\"friendships\".\"user_id\" <> \"friendships\".\"friend_id\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.future_self_note_deliveries": {
-      "name": "future_self_note_deliveries",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "note_id": {
-          "name": "note_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "schedule_version": {
-          "name": "schedule_version",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deliver_on": {
-          "name": "deliver_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "future_self_note_delivery_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'claimed'"
-        },
-        "lease_token": {
-          "name": "lease_token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lease_expires_at": {
-          "name": "lease_expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "claimed_at": {
-          "name": "claimed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "delivered_at": {
-          "name": "delivered_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "future_self_note_deliveries_lease_idx": {
-          "name": "future_self_note_deliveries_lease_idx",
-          "columns": [
-            {
-              "expression": "lease_expires_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"future_self_note_deliveries\".\"status\" = 'claimed'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_note_deliveries_note_id_future_self_notes_id_fk": {
-          "name": "future_self_note_deliveries_note_id_future_self_notes_id_fk",
-          "tableFrom": "future_self_note_deliveries",
-          "tableTo": "future_self_notes",
-          "columnsFrom": [
-            "note_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "future_self_note_deliveries_note_version_unique": {
-          "name": "future_self_note_deliveries_note_version_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "note_id",
-            "schedule_version"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "future_self_note_deliveries_schedule_version_check": {
-          "name": "future_self_note_deliveries_schedule_version_check",
-          "value": "\"future_self_note_deliveries\".\"schedule_version\" between 1 and 9007199254740991"
-        },
-        "future_self_note_deliveries_attempts_check": {
-          "name": "future_self_note_deliveries_attempts_check",
-          "value": "\"future_self_note_deliveries\".\"attempts\" between 1 and 9007199254740991"
-        },
-        "future_self_note_deliveries_state_check": {
-          "name": "future_self_note_deliveries_state_check",
-          "value": "(\"future_self_note_deliveries\".\"status\" = 'claimed' and \"future_self_note_deliveries\".\"lease_token\" is not null and \"future_self_note_deliveries\".\"lease_expires_at\" is not null and \"future_self_note_deliveries\".\"delivered_at\" is null)\n      or (\"future_self_note_deliveries\".\"status\" = 'delivered' and \"future_self_note_deliveries\".\"lease_token\" is null and \"future_self_note_deliveries\".\"lease_expires_at\" is null and \"future_self_note_deliveries\".\"delivered_at\" is not null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.future_self_note_idempotency_keys": {
-      "name": "future_self_note_idempotency_keys",
-      "schema": "",
-      "columns": {
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "idempotency_key": {
-          "name": "idempotency_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "request_fingerprint": {
-          "name": "request_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "note_id": {
-          "name": "note_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "future_self_note_idempotency_keys_note_id_idx": {
-          "name": "future_self_note_idempotency_keys_note_id_idx",
-          "columns": [
-            {
-              "expression": "note_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_note_idempotency_keys_owner_id_user_id_fk": {
-          "name": "future_self_note_idempotency_keys_owner_id_user_id_fk",
-          "tableFrom": "future_self_note_idempotency_keys",
-          "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "future_self_note_keys_note_id_fk": {
-          "name": "future_self_note_keys_note_id_fk",
-          "tableFrom": "future_self_note_idempotency_keys",
-          "tableTo": "future_self_notes",
-          "columnsFrom": [
-            "note_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "future_self_note_idempotency_keys_pk": {
-          "name": "future_self_note_idempotency_keys_pk",
-          "columns": [
-            "owner_id",
-            "idempotency_key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "future_self_note_idempotency_keys_key_check": {
-          "name": "future_self_note_idempotency_keys_key_check",
-          "value": "char_length(\"future_self_note_idempotency_keys\".\"idempotency_key\") between 1 and 255"
-        },
-        "future_self_note_idempotency_keys_fingerprint_check": {
-          "name": "future_self_note_idempotency_keys_fingerprint_check",
-          "value": "\"future_self_note_idempotency_keys\".\"request_fingerprint\" ~ '^[0-9a-f]{64}$'"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.future_self_notes": {
-      "name": "future_self_notes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "deliver_on": {
-          "name": "deliver_on",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "future_self_note_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'scheduled'"
-        },
-        "schedule_version": {
-          "name": "schedule_version",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "delivered_at": {
-          "name": "delivered_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "future_self_notes_owner_deliver_on_idx": {
-          "name": "future_self_notes_owner_deliver_on_idx",
-          "columns": [
-            {
-              "expression": "owner_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "deliver_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "future_self_notes_due_idx": {
-          "name": "future_self_notes_due_idx",
-          "columns": [
-            {
-              "expression": "deliver_on",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"future_self_notes\".\"status\" = 'scheduled'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "future_self_notes_owner_id_user_id_fk": {
-          "name": "future_self_notes_owner_id_user_id_fk",
-          "tableFrom": "future_self_notes",
-          "tableTo": "user",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "future_self_notes_body_length_check": {
-          "name": "future_self_notes_body_length_check",
-          "value": "char_length(\"future_self_notes\".\"body\") between 1 and 1000 and \"future_self_notes\".\"body\" = btrim(\"future_self_notes\".\"body\")"
-        },
-        "future_self_notes_schedule_version_check": {
-          "name": "future_self_notes_schedule_version_check",
-          "value": "\"future_self_notes\".\"schedule_version\" between 1 and 9007199254740991"
-        },
-        "future_self_notes_delivery_state_check": {
-          "name": "future_self_notes_delivery_state_check",
-          "value": "(\"future_self_notes\".\"status\" = 'scheduled' and \"future_self_notes\".\"delivered_at\" is null)\n      or (\"future_self_notes\".\"status\" = 'delivered' and \"future_self_notes\".\"delivered_at\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -3493,6 +3284,387 @@
         "messaging_participants_state_user_check": {
           "name": "messaging_participants_state_user_check",
           "value": "(\"messaging_participants\".\"state\" = 'active' and \"messaging_participants\".\"user_id\" is not null) or (\"messaging_participants\".\"state\" = 'deleted' and \"messaging_participants\".\"user_id\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.notification_deliveries": {
+      "name": "notification_deliveries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "event_id": {
+          "name": "event_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipient_id": {
+          "name": "recipient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device_registration_id": {
+          "name": "device_registration_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "notification_delivery_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "available_at": {
+          "name": "available_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_category": {
+          "name": "failure_category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "notification_deliveries_due_idx": {
+          "name": "notification_deliveries_due_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "available_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_deliveries_lease_idx": {
+          "name": "notification_deliveries_lease_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notification_deliveries_recipient_idx": {
+          "name": "notification_deliveries_recipient_idx",
+          "columns": [
+            {
+              "expression": "recipient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_deliveries_recipient_id_user_id_fk": {
+          "name": "notification_deliveries_recipient_id_user_id_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "user",
+          "columnsFrom": [
+            "recipient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_event_recipient_fk": {
+          "name": "notification_deliveries_event_recipient_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "notification_events",
+          "columnsFrom": [
+            "event_id",
+            "recipient_id"
+          ],
+          "columnsTo": [
+            "id",
+            "recipient_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notification_deliveries_device_recipient_fk": {
+          "name": "notification_deliveries_device_recipient_fk",
+          "tableFrom": "notification_deliveries",
+          "tableTo": "push_devices",
+          "columnsFrom": [
+            "device_registration_id",
+            "recipient_id"
+          ],
+          "columnsTo": [
+            "id",
+            "user_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "notification_deliveries_event_device_unique": {
+          "name": "notification_deliveries_event_device_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "event_id",
+            "device_registration_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "notification_deliveries_attempts_check": {
+          "name": "notification_deliveries_attempts_check",
+          "value": "\"notification_deliveries\".\"attempts\" between 0 and 20"
+        },
+        "notification_deliveries_lease_pair_check": {
+          "name": "notification_deliveries_lease_pair_check",
+          "value": "(\"notification_deliveries\".\"lease_token\" is null) = (\"notification_deliveries\".\"lease_expires_at\" is null)"
+        },
+        "notification_deliveries_status_lease_check": {
+          "name": "notification_deliveries_status_lease_check",
+          "value": "\n    (\"notification_deliveries\".\"status\" = 'leased' and \"notification_deliveries\".\"lease_token\" is not null) or\n    (\"notification_deliveries\".\"status\" <> 'leased' and \"notification_deliveries\".\"lease_token\" is null)\n  "
+        },
+        "notification_deliveries_terminal_check": {
+          "name": "notification_deliveries_terminal_check",
+          "value": "\n    (\"notification_deliveries\".\"status\" = 'delivered' and \"notification_deliveries\".\"delivered_at\" is not null) or\n    (\"notification_deliveries\".\"status\" <> 'delivered' and \"notification_deliveries\".\"delivered_at\" is null)\n  "
+        },
+        "notification_deliveries_failure_check": {
+          "name": "notification_deliveries_failure_check",
+          "value": "\"notification_deliveries\".\"failure_category\" is null or char_length(\"notification_deliveries\".\"failure_category\") between 1 and 100"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.notification_events": {
+      "name": "notification_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "notification_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipient_id": {
+          "name": "recipient_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deduplication_key": {
+          "name": "deduplication_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_type": {
+          "name": "source_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notification_events_recipient_created_idx": {
+          "name": "notification_events_recipient_created_idx",
+          "columns": [
+            {
+              "expression": "recipient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "notification_events_recipient_id_user_id_fk": {
+          "name": "notification_events_recipient_id_user_id_fk",
+          "tableFrom": "notification_events",
+          "tableTo": "user",
+          "columnsFrom": [
+            "recipient_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "notification_events_dedup_unique": {
+          "name": "notification_events_dedup_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "kind",
+            "recipient_id",
+            "deduplication_key"
+          ]
+        },
+        "notification_events_id_recipient_unique": {
+          "name": "notification_events_id_recipient_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "recipient_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "notification_events_dedup_key_check": {
+          "name": "notification_events_dedup_key_check",
+          "value": "char_length(\"notification_events\".\"deduplication_key\") between 1 and 255"
+        },
+        "notification_events_source_type_check": {
+          "name": "notification_events_source_type_check",
+          "value": "char_length(\"notification_events\".\"source_type\") between 1 and 64"
+        },
+        "notification_events_source_id_check": {
+          "name": "notification_events_source_id_check",
+          "value": "char_length(\"notification_events\".\"source_id\") between 1 and 255"
+        },
+        "notification_events_target_type_check": {
+          "name": "notification_events_target_type_check",
+          "value": "char_length(\"notification_events\".\"target_type\") between 1 and 64"
+        },
+        "notification_events_target_id_check": {
+          "name": "notification_events_target_id_check",
+          "value": "char_length(\"notification_events\".\"target_id\") between 1 and 255"
+        },
+        "notification_events_expiry_check": {
+          "name": "notification_events_expiry_check",
+          "value": "\"notification_events\".\"expires_at\" > \"notification_events\".\"created_at\""
         }
       },
       "isRLSEnabled": false
@@ -4701,6 +4873,12 @@
           "notNull": true,
           "default": true
         },
+        "notification_schema_version": {
+          "name": "notification_schema_version",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "registered_at": {
           "name": "registered_at",
           "type": "timestamp with time zone",
@@ -4768,10 +4946,23 @@
             "user_id",
             "installation_id"
           ]
+        },
+        "push_devices_id_user_unique": {
+          "name": "push_devices_id_user_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "user_id"
+          ]
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "push_devices_notification_schema_version_check": {
+          "name": "push_devices_notification_schema_version_check",
+          "value": "\"push_devices\".\"notification_schema_version\" is null or \"push_devices\".\"notification_schema_version\" = 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.rateLimit": {
@@ -5930,22 +6121,6 @@
         "ended"
       ]
     },
-    "public.future_self_note_delivery_status": {
-      "name": "future_self_note_delivery_status",
-      "schema": "public",
-      "values": [
-        "claimed",
-        "delivered"
-      ]
-    },
-    "public.future_self_note_status": {
-      "name": "future_self_note_status",
-      "schema": "public",
-      "values": [
-        "scheduled",
-        "delivered"
-      ]
-    },
     "public.legal_document_kind": {
       "name": "legal_document_kind",
       "schema": "public",
@@ -6017,6 +6192,27 @@
       "values": [
         "active",
         "deleted"
+      ]
+    },
+    "public.notification_delivery_status": {
+      "name": "notification_delivery_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "leased",
+        "delivered",
+        "suppressed",
+        "failed"
+      ]
+    },
+    "public.notification_kind": {
+      "name": "notification_kind",
+      "schema": "public",
+      "values": [
+        "direct_message",
+        "friend_request",
+        "final_hour_reminder",
+        "friends_post_release"
       ]
     },
     "public.operator_case_decision": {
