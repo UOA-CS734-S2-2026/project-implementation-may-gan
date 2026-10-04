@@ -40,14 +40,25 @@ abstract interface class LocationAccess {
   Future<void> openLocationSettings();
 
   /// One approximate position. Throws a `WeatherException` when the phone
-  /// cannot supply it. It never keeps listening.
-  Future<Coordinates> currentPosition();
+  /// cannot supply it. It never keeps listening: whichever way this ends, the
+  /// phone's location request is stopped. [cancelled] completing ends it early.
+  Future<Coordinates> currentPosition({Future<void>? cancelled});
 }
 
 class DeviceLocationAccess implements LocationAccess {
-  const DeviceLocationAccess({this.timeout = const Duration(seconds: 12)});
+  const DeviceLocationAccess({
+    this.timeout = const Duration(seconds: 12),
+    this.maxFixAge = const Duration(minutes: 10),
+    this.clock = DateTime.now,
+  });
 
+  /// How long to wait for a position before giving up.
   final Duration timeout;
+
+  /// The oldest position worth using. iOS can hand over its last known
+  /// location first, which may be hours old, so an older one is skipped.
+  final Duration maxFixAge;
+  final DateTime Function() clock;
 
   static LocationPermissionStatus _status(LocationPermission permission) =>
       switch (permission) {
@@ -80,16 +91,39 @@ class DeviceLocationAccess implements LocationAccess {
   }
 
   @override
-  Future<Coordinates> currentPosition() async {
+  Future<Coordinates> currentPosition({Future<void>? cancelled}) async {
+    // A subscription, not `getCurrentPosition`: on iOS that call's time limit
+    // only stops waiting, while the phone keeps looking for a fix. Cancelling
+    // a subscription is what stops the phone's location request.
+    final fix = Completer<Position>();
+    void fail(Object error, [StackTrace? stack]) {
+      if (!fix.isCompleted) fix.completeError(error, stack);
+    }
+
+    // Low accuracy asks for about a kilometre, which is all the weather
+    // needs, and on Android is served by the coarse permission alone.
+    final subscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.low,
+          ),
+        ).listen(
+          (position) {
+            if (fix.isCompleted) return;
+            if (clock().difference(position.timestamp) > maxFixAge) return;
+            fix.complete(position);
+          },
+          onError: fail,
+          onDone: () =>
+              fail(const WeatherException(WeatherFailure.locationUnavailable)),
+        );
+    unawaited(
+      cancelled?.then(
+        (_) => fail(const WeatherException(WeatherFailure.locationUnavailable)),
+      ),
+    );
     try {
-      // Low accuracy asks for about a kilometre, which is all the weather
-      // needs, and on Android is served by the coarse permission alone.
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: LocationSettings(
-          accuracy: LocationAccuracy.low,
-          timeLimit: timeout,
-        ),
-      );
+      final position = await fix.future.timeout(timeout);
       final coordinates = Coordinates(position.latitude, position.longitude);
       if (!coordinates.isValid) {
         throw const WeatherException(WeatherFailure.locationUnavailable);
@@ -105,6 +139,8 @@ class DeviceLocationAccess implements LocationAccess {
       throw const WeatherException(WeatherFailure.permissionDenied);
     } catch (_) {
       throw const WeatherException(WeatherFailure.locationUnavailable);
+    } finally {
+      await subscription.cancel();
     }
   }
 }

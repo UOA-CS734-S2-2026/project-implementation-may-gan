@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../weather/post_weather.dart';
@@ -26,6 +28,9 @@ class WeatherInputController extends ChangeNotifier {
   int _generation = 0;
   bool _disposed = false;
 
+  /// Completes to stop the phone's location request for the lookup in progress.
+  Completer<void>? _stopLocation;
+
   /// Whether a snapshot is being fetched.
   bool get isWorking => _working;
 
@@ -43,7 +48,7 @@ class WeatherInputController extends ChangeNotifier {
 
   /// Weather where the phone is. Asks the system for permission only when it
   /// still can, and only here, after the author chose "Use my location".
-  Future<void> useCurrentLocation() => _run(() async {
+  Future<void> useCurrentLocation() => _run((cancelled) async {
     final location = lookup.location;
     if (!await location.servicesEnabled()) {
       throw const WeatherException(WeatherFailure.servicesDisabled);
@@ -54,7 +59,7 @@ class WeatherInputController extends ChangeNotifier {
     }
     switch (status) {
       case LocationPermissionStatus.granted:
-        return lookup.atCurrentLocation();
+        return lookup.atCurrentLocation(cancelled: cancelled);
       case LocationPermissionStatus.askable:
         throw const WeatherException(WeatherFailure.permissionDenied);
       case LocationPermissionStatus.blocked:
@@ -63,7 +68,7 @@ class WeatherInputController extends ChangeNotifier {
   });
 
   /// Weather at a place the author picked. Needs no permission.
-  Future<void> usePlace(PlaceMatch place) => _run(() => lookup.atPlace(place));
+  Future<void> usePlace(PlaceMatch place) => _run((_) => lookup.atPlace(place));
 
   /// Places matching [query], for the author to pick from.
   Future<List<PlaceMatch>> searchPlaces(String query) =>
@@ -77,6 +82,7 @@ class WeatherInputController extends ChangeNotifier {
   /// A result that arrives afterwards is ignored.
   void cancel() {
     if (!_working) return;
+    _stopLocationRequest();
     _generation++;
     _working = false;
     _failure = null;
@@ -90,14 +96,24 @@ class WeatherInputController extends ChangeNotifier {
     _notify();
   }
 
-  Future<void> _run(Future<PostWeather> Function() fetch) async {
+  void _stopLocationRequest() {
+    final stop = _stopLocation;
+    _stopLocation = null;
+    if (stop != null && !stop.isCompleted) stop.complete();
+  }
+
+  Future<void> _run(
+    Future<PostWeather> Function(Future<void> cancelled) fetch,
+  ) async {
     if (_working) return;
     final generation = ++_generation;
+    final stop = Completer<void>();
+    _stopLocation = stop;
     _working = true;
     _failure = null;
     _notify();
     try {
-      final weather = await fetch();
+      final weather = await fetch(stop.future);
       if (_stale(generation)) return;
       onWeather(weather);
     } on WeatherException catch (error) {
@@ -109,6 +125,7 @@ class WeatherInputController extends ChangeNotifier {
       if (_stale(generation)) return;
       _failure = WeatherFailure.locationUnavailable;
     } finally {
+      if (identical(_stopLocation, stop)) _stopLocation = null;
       if (!_stale(generation)) {
         _working = false;
         _notify();
@@ -124,6 +141,8 @@ class WeatherInputController extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Closing the composer mid-lookup must not leave the phone locating.
+    _stopLocationRequest();
     _disposed = true;
     super.dispose();
   }
