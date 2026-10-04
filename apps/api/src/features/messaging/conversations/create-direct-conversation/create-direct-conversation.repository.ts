@@ -19,6 +19,7 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
     private readonly queryable: Queryable,
     private readonly actorId: string,
     private readonly recipientId: string,
+    private readonly notificationPublishersEnabled: boolean,
   ) {}
 
   async isPairBlocked(actorId: string, recipientId: string): Promise<boolean> {
@@ -205,7 +206,9 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         createdAt,
       })
       .returning(messageProjectionSelection);
-    await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, createdAt);
+    await appendConversationChange(this.queryable, input.conversationId, "message.created", input.messageId, null, createdAt, {
+      notificationPublishersEnabled: this.notificationPublishersEnabled,
+    });
     const [recipient] = await this.queryable
       .select({ id: schema.messagingParticipants.id })
       .from(schema.messagingParticipants)
@@ -246,12 +249,17 @@ class PostgresDirectTransaction implements DirectConversationTransaction {
         createdAt,
       })
       .returning(messageProjectionSelection);
-    await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, createdAt);
+    await appendConversationChange(this.queryable, input.conversation.id, "message.created", input.messageId, null, createdAt, {
+      notificationPublishersEnabled: this.notificationPublishersEnabled,
+    });
     return toStoredMessage(message!);
   }
 }
 
-export function createPostgresDirectConversationStore(database: DayliDatabase): DirectConversationStore {
+export function createPostgresDirectConversationStore(
+  database: DayliDatabase,
+  options: { notificationPublishersEnabled?: boolean } = {},
+): DirectConversationStore {
   return {
     withDirectTransaction: (actorId, recipientId, action) => database.transaction(async (tx) => {
       await tx
@@ -261,17 +269,25 @@ export function createPostgresDirectConversationStore(database: DayliDatabase): 
         .orderBy(asc(schema.user.id))
         .for("update");
       await lockRelationshipPair(tx, actorId, recipientId);
-      return action(new PostgresDirectTransaction(tx, actorId, recipientId));
+      return action(new PostgresDirectTransaction(
+        tx,
+        actorId,
+        recipientId,
+        options.notificationPublishersEnabled === true,
+      ));
     }),
   };
 }
 
-export function createHyperdriveDirectConversationStore(hyperdrive: HyperdriveBinding): DirectConversationStore {
+export function createHyperdriveDirectConversationStore(
+  hyperdrive: HyperdriveBinding,
+  options: { notificationPublishersEnabled?: boolean } = {},
+): DirectConversationStore {
   return {
     async withDirectTransaction(actorId, recipientId, action) {
       const database = createHyperdriveDatabase(hyperdrive);
       try {
-        return await createPostgresDirectConversationStore(database.db).withDirectTransaction(actorId, recipientId, action);
+        return await createPostgresDirectConversationStore(database.db, options).withDirectTransaction(actorId, recipientId, action);
       } finally {
         await database.close();
       }

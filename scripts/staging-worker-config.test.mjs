@@ -20,6 +20,7 @@ test("generates the staging Worker Durable Object migration and repair cron", ()
   assert.deepEqual(api.ratelimits, rateLimitConfig);
   assert.equal(api.vars.API_RATE_LIMIT_SCOPE, "staging");
   assert.equal(api.vars.NOTIFICATION_PUBLISHERS_ENABLED, "false");
+  assert.equal(api.vars.NOTIFICATION_DELIVERY_ENABLED, "false");
   assert.equal(api.vars.DIRECT_MESSAGE_SEND_LIMIT, "30");
   assert.equal(api.vars.BETTER_AUTH_BASE_URL, "https://api.staging.example.test");
   assert.equal(api.vars.PUBLIC_API_BASE_URL, "https://api.staging.example.test");
@@ -48,6 +49,7 @@ test("keeps native rate-limit mappings and environment scopes aligned", () => {
     assert.deepEqual(config.ratelimits, rateLimitConfig, file);
     assert.equal(config.vars.API_RATE_LIMIT_SCOPE, scope, file);
     assert.equal(config.vars.NOTIFICATION_PUBLISHERS_ENABLED, "false", file);
+    assert.equal(config.vars.NOTIFICATION_DELIVERY_ENABLED, "false", file);
     assert.equal(config.vars.DIRECT_MESSAGE_SEND_LIMIT, "30", file);
   }
 });
@@ -95,7 +97,8 @@ test("binds the separate worker only on staging and requires complete synthetic 
   };
   assert.deepEqual(createStagingWorkerConfigs({ ...input, mediaVars, exportWorkerHyperdriveId: workerId, exportProofVars: proofVars }).api.vars,
     { API_RATE_LIMIT_SCOPE: "staging", BETTER_AUTH_BASE_URL: input.authApiOrigin,
-      NOTIFICATION_PUBLISHERS_ENABLED: "false", DIRECT_MESSAGE_SEND_LIMIT: "30",
+      NOTIFICATION_PUBLISHERS_ENABLED: "false", NOTIFICATION_DELIVERY_ENABLED: "false",
+      DIRECT_MESSAGE_SEND_LIMIT: "30",
       PUBLIC_API_BASE_URL: input.authApiOrigin,
       BETTER_AUTH_TRUSTED_ORIGINS: `${input.authApiOrigin},${input.authWebOrigin}`,
       ...input.authVars, ...mediaVars, ...proofVars });

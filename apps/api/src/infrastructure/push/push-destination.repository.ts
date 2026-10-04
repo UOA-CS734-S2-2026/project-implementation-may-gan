@@ -41,6 +41,10 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
             and(isNotNull(schema.user.banExpires), lte(schema.user.banExpires, sql`now()`)),
           ),
         ))
+        .innerJoin(schema.accountNotificationPreferences, and(
+          eq(schema.accountNotificationPreferences.userId, schema.pushDevices.userId),
+          eq(schema.accountNotificationPreferences.enabled, true),
+        ))
         .innerJoin(schema.conversationMembers, eq(
           schema.conversationMembers.conversationId,
           job.conversationId,
@@ -56,6 +60,7 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
           eq(schema.pushDevices.id, job.deviceRegistrationId),
           eq(schema.pushDevices.userId, job.recipientId),
           eq(schema.pushDevices.optedIn, true),
+          isNull(schema.pushDevices.notificationSchemaVersion),
           or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
           isNull(schema.pushDevices.invalidatedAt),
           not(blocked),
@@ -74,7 +79,10 @@ export function createPostgresPushDestinationResolver(database: DayliDatabase, p
       await database
         .update(schema.pushDevices)
         .set({ invalidatedAt: sql`now()`, optedIn: false })
-        .where(eq(schema.pushDevices.id, registrationId));
+        .where(and(
+          eq(schema.pushDevices.id, registrationId),
+          isNull(schema.pushDevices.invalidatedAt),
+        ));
     },
   };
 }

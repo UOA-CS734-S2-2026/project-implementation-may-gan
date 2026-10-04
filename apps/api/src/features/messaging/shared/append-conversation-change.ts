@@ -1,5 +1,6 @@
 import { schema, sql, type DayliDatabase } from "@dayli/db";
 import { and, eq, gt, isNotNull, isNull, or, type SQL } from "drizzle-orm";
+import { publishDirectMessageNotification } from "./direct-message-notification";
 
 type Queryable = Pick<DayliDatabase, "insert" | "select" | "update">;
 
@@ -11,6 +12,7 @@ export async function appendConversationChange(
   messageId: string | null,
   memberId: string | null,
   now: Date | SQL,
+  options: { notificationPublishersEnabled?: boolean } = {},
 ): Promise<void> {
   const [change] = await queryable
     .update(schema.conversations)
@@ -74,7 +76,7 @@ export async function appendConversationChange(
     })));
   }
 
-  if (kind !== "message.created" || !messageId) return;
+  if (kind !== "message.created" || !messageId || !options.notificationPublishersEnabled) return;
 
   const [message] = await queryable
     .select({ senderParticipantId: schema.messages.senderParticipantId })
@@ -84,6 +86,17 @@ export async function appendConversationChange(
     ? change.participantHighId
     : change.participantLowId;
   if (!peerParticipantId) throw new Error("Conversation peer participant is missing.");
+  const [recipient] = await queryable
+    .select({ id: schema.messagingParticipants.userId })
+    .from(schema.messagingParticipants)
+    .where(and(
+      eq(schema.messagingParticipants.id, peerParticipantId),
+      eq(schema.messagingParticipants.state, "active"),
+      isNotNull(schema.messagingParticipants.userId),
+    ))
+    .limit(1);
+  if (!recipient?.id) return;
+
   const devices = await queryable
     .select({ id: schema.pushDevices.id, recipientId: schema.user.id })
     .from(schema.pushDevices)
@@ -93,6 +106,10 @@ export async function appendConversationChange(
       eq(schema.messagingParticipants.state, "active"),
     ))
     .innerJoin(schema.user, eq(schema.user.id, schema.messagingParticipants.userId))
+    .innerJoin(schema.accountNotificationPreferences, and(
+      eq(schema.accountNotificationPreferences.userId, schema.pushDevices.userId),
+      eq(schema.accountNotificationPreferences.enabled, true),
+    ))
     .leftJoin(schema.accountLifecycles, eq(schema.accountLifecycles.userId, schema.pushDevices.userId))
     .innerJoin(schema.session, and(
       eq(schema.session.id, schema.pushDevices.sessionId),
@@ -101,11 +118,19 @@ export async function appendConversationChange(
     ))
     .where(and(
       eq(schema.pushDevices.optedIn, true),
+      isNull(schema.pushDevices.notificationSchemaVersion),
       or(isNull(schema.accountLifecycles.state), eq(schema.accountLifecycles.state, "active")),
       isNull(schema.pushDevices.invalidatedAt),
       isNotNull(schema.pushDevices.tokenCiphertext),
       isNotNull(schema.pushDevices.tokenKeyVersion),
     ));
+
+  await publishDirectMessageNotification(queryable, {
+    messageId,
+    conversationId,
+    recipientId: recipient.id,
+    createdAt: now,
+  });
 
   for (const device of devices) {
     await queryable.insert(schema.messagingOutbox).values({

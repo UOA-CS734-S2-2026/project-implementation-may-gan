@@ -68,6 +68,8 @@ suite("send message Postgres repository", () => {
       { userId: users[9]!, friendId: users[8]!, state: "active", stateChangedAt: new Date() },
       { userId: users[10]!, friendId: users[11]!, state: "active", stateChangedAt: new Date() },
       { userId: users[11]!, friendId: users[10]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[20]!, friendId: users[21]!, state: "active", stateChangedAt: new Date() },
+      { userId: users[21]!, friendId: users[20]!, state: "active", stateChangedAt: new Date() },
       ...[[28, 29], [28, 30], [31, 32], [31, 33], [34, 35]].flatMap(([left, right]) => [
         { userId: users[left]!, friendId: users[right]!, state: "active" as const, stateChangedAt: new Date() },
         { userId: users[right]!, friendId: users[left]!, state: "active" as const, stateChangedAt: new Date() },
@@ -88,6 +90,37 @@ suite("send message Postgres repository", () => {
     } finally {
       await Promise.all([database.close(), contender.close()]);
     }
+  });
+
+  it("publishes one logical intent from each creation endpoint and none for a canonical replay", async () => {
+    const enabledServices = createMessagingPersistenceServices(database.db, {
+      notificationPublishersEnabled: true,
+    });
+    const created = await enabledServices.direct.create(users[20]!, {
+      recipientId: users[21]!,
+      clientMessageId: crypto.randomUUID(),
+      text: "initial notification source",
+    });
+    const clientMessageId = crypto.randomUUID();
+    const sent = await enabledServices.send.send(users[20]!, created.conversation.id, {
+      clientMessageId,
+      text: "second notification source",
+    });
+    const replay = await enabledServices.send.send(users[20]!, created.conversation.id, {
+      clientMessageId,
+      text: "second notification source",
+    });
+    expect(replay).toMatchObject({ replayed: true, message: { id: sent.message.id } });
+
+    const events = await database.db.select({ sourceId: schema.notificationEvents.sourceId })
+      .from(schema.notificationEvents)
+      .where(and(
+        eq(schema.notificationEvents.kind, "direct_message"),
+        eq(schema.notificationEvents.recipientId, users[21]!),
+        inArray(schema.notificationEvents.sourceId, [created.message.id, sent.message.id]),
+      ));
+    expect(events).toHaveLength(2);
+    expect(new Set(events.map(({ sourceId }) => sourceId))).toEqual(new Set([created.message.id, sent.message.id]));
   });
 
   it("enforces membership and atomically persists replies, idempotency, sequence, and realtime outbox work", async () => {

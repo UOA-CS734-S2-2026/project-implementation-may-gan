@@ -46,7 +46,12 @@ export interface SendMessageStore {
 }
 
 class PostgresMessageTransaction implements SendMessageTransaction {
-  constructor(private readonly queryable: MessageWriteQueryable, private readonly actorId: string, private readonly conversationId: string) {}
+  constructor(
+    private readonly queryable: MessageWriteQueryable,
+    private readonly actorId: string,
+    private readonly conversationId: string,
+    private readonly notificationPublishersEnabled: boolean,
+  ) {}
   async getAccess(actorId: string, conversationId: string): Promise<ConversationAccess> {
     return getAccess(this.queryable, actorId, conversationId);
   }
@@ -122,27 +127,43 @@ class PostgresMessageTransaction implements SendMessageTransaction {
     return toStoredMessage(message!);
   }
   async appendPeerChange(input: ConversationPeerChange): Promise<void> {
-    return appendPeerChange(this.queryable, input);
+    return appendPeerChange(this.queryable, input, { notificationPublishersEnabled: this.notificationPublishersEnabled });
   }
 }
 
-export function createPostgresMessageWriteStore(database: DayliDatabase): SendMessageStore {
+export function createPostgresMessageWriteStore(
+  database: DayliDatabase,
+  options: { notificationPublishersEnabled?: boolean } = {},
+): SendMessageStore {
   return {
     withConversationTransaction: (actorId, conversationId, operation) =>
       database.transaction((transaction) =>
         withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
-          operation(new PostgresMessageTransaction(lockedTransaction, actorId, conversationId)))),
+          operation(new PostgresMessageTransaction(
+            lockedTransaction,
+            actorId,
+            conversationId,
+            options.notificationPublishersEnabled === true,
+          )))),
   };
 }
 
-export function createHyperdriveMessageWriteStore(hyperdrive: HyperdriveBinding): SendMessageStore {
+export function createHyperdriveMessageWriteStore(
+  hyperdrive: HyperdriveBinding,
+  options: { notificationPublishersEnabled?: boolean } = {},
+): SendMessageStore {
   return {
     async withConversationTransaction(actorId, conversationId, operation) {
       const database = createHyperdriveDatabase(hyperdrive);
       try {
         return await database.db.transaction((transaction) =>
           withLockedConversationMessageTransaction(transaction, conversationId, (lockedTransaction) =>
-            operation(new PostgresMessageTransaction(lockedTransaction, actorId, conversationId))));
+            operation(new PostgresMessageTransaction(
+              lockedTransaction,
+              actorId,
+              conversationId,
+              options.notificationPublishersEnabled === true,
+            ))));
       } finally {
         await database.close();
       }
