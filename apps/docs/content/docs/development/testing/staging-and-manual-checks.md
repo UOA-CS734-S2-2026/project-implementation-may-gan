@@ -22,6 +22,7 @@ Dayli's deployed staging proof is split across a few sources:
 - `apps/api/test/__tests__/hyperdrive.staging.test.ts` checks a query, transactions, constraints, role permissions, fresh-invocation visibility, and cleanup through the deployed staging Worker binding.
 - `.github/workflows/staging-web.yml` builds and deploys the staging web application for the captured release.
 - `.github/workflows/staging-auth-smoke.yml` runs the deployed browser authentication journey described in [synthetic testing](./synthetic-testing).
+- `.github/workflows/verify-staging-export-worker.yml` checks that the separate restricted export Hyperdrive points to the expected staging database through the `lifecycle_worker` role. It does not enable exports.
 - `.github/workflows/run-database-migrations.yml` is a separate manual migration workflow with explicit target and production safeguards. It is not a general application release workflow.
 
 Local workflow contract checks live in `scripts/staging-release-contract.test.mjs`, `scripts/verify-staging-schema-target.test.mjs`, and related `scripts/staging-*.test.mjs` files. They check the automation rules without contacting staging.
@@ -48,6 +49,12 @@ A staging release needs more than a successful deploy command. The API schema, W
 The Hyperdrive test creates a unique group, verifies committed and rolled-back rows, checks PostgreSQL constraint classes, confirms the app role cannot perform forbidden updates or DDL, and checks cleanup from a fresh invocation. The workflow writes a sanitized JSON result and retains its artifact for 90 days. It does not retain database URLs or row values as evidence.
 
 The release workflow also retains a non-sensitive attribution artifact for one day. The authentication smoke can use it to report which release triggered the run. That attribution does not prove that the same revision was still deployed when a later browser check started, so the smoke reports the deployed revision as unverified.
+
+## Restricted export proof
+
+Export has a narrower staging path than ordinary feature checks. The coordinated API deployment accepts the proof only when all four reviewed `STAGING_EXPORT_PROOF_*` values and the separate `EXPORT_WORKER_HYPERDRIVE` binding are present. Runtime code then limits requests, build claims, downloads, and cleanup claims to one named synthetic owner. The build window can extend no more than one hour, while cleanup stays active through the later operator review so a delayed archive cannot be left behind.
+
+This path is not enabled by the general export constant, and neither checked-in client enables its export interface. A successful target check, local export test, browser or emulator fixture journey, or synthetic staging proof establishes only the boundary it exercised. None of them proves self-service export is available to staging users or that production exists.
 
 ## Manual feature checks
 

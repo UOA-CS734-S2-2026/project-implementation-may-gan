@@ -22,7 +22,7 @@ Agreed in October 2026 for #79 and #80. The post's author and their active frien
 
 The server owns the daily prompt for each Auckland calendar day. Version-one reference data reuses the 366 prompts and stable `prompt-MM-DD` IDs from `732-workspace/group-project-wdcc` at source commit `7d2dfd6`. Prompt rows are immutable. A changed prompt is a new versioned row with a new ID and an Auckland effective date; historical posts continue to reference the original prompt row and text.
 
-The submitted tomorrow note is an immutable author-only note stored outside ordinary post and revision projections. It becomes visible only to its author from the following Auckland day. It is separate from a chosen-date future-self note. Editing post content never exposes the tomorrow note early or to another reader.
+The submitted tomorrow note is an immutable author-only note stored outside ordinary post and revision projections. It becomes visible only to its author from the following Auckland day. It is separate from a chosen-date future-self note, which is a standalone owner-only note with its own date, edit rules, and delivery record (see [Future-self notes](future-self-notes.md)). Editing post content never exposes the tomorrow note early or to another reader.
 
 ## Blocking and messages
 
@@ -42,6 +42,8 @@ A profile shows the owner every post they have written, including solo posts and
 
 The owner can change their bio, public name, profile visibility, and username. A username can change at most once every 30 days; the previous handle stays reserved for 30 days, and links to it redirect to the new one. The avatar is a photo the owner uploads; provider photos such as a Google account picture are never shown.
 
+Mood history sits on the profile and reaches only the owner and their active friends, even on a public account whose posts anyone can read. Friends see ratings from released `friends` posts only; a solo post counts as posted but shows no rating. It covers the last 30 days, 90 days, or year, and compares that range with the same-length range before it. It shows how many days had a post and how many didn't, starts counting from the day the account joined, and makes no diagnostic claims.
+
 ## Public post access
 
 Account visibility is the only anonymous journal-read grant. A released `friends` post from a public account is readable through its profile and direct URL without signing in. Changing the account to private, changing the post to `solo`, making it unreleased, deleting it, or moving it to Trash removes that access immediately. Private-account posts still require the owner or an active friend. `solo` and unreleased posts remain owner-only. There are no opaque share links or per-post public tokens.
@@ -60,7 +62,7 @@ Neon PostgreSQL 18 is the database provider. Staging uses a separate Neon projec
 
 ## Deletion, backups, and recovery
 
-Deleted posts and accounts must become inaccessible through the application immediately. The planned cleanup job runs as the `migrator` role and removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Immutable-history triggers must allow this bypass only for that cleanup role; every batch must be recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
+Deleted posts and accounts must become inaccessible through the application immediately. The planned cleanup job runs as the `migrator` role and removes active database records and media in dependency order: post children (`tomorrow_notes`, `post_revisions`, legacy media, and `post_media`) before posts, then relationship rows and post children before accounts. Future-self note delivery rows and idempotency rows are removed before future-self notes, and those notes before the account, because the note-to-account key does not cascade. Immutable-history triggers must allow this bypass only for that cleanup role; every batch must be recorded and retried on failure. Encrypted backups may retain deleted data for up to 30 days while they age out. Operators do not use backups to selectively restore content that a user deleted.
 
 For course and pilot stages, the recovery point objective is 24 hours and the recovery time objective is 8 hours. These are targets until a recorded restoration exercise verifies them.
 

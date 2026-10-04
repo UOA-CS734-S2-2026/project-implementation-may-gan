@@ -50,6 +50,8 @@ function browserType(options = {}) {
   function page() {
     let currentUrl = `${STAGING_ORIGIN}/`;
     let redirectPending;
+    const listeners = { request: [], response: [] };
+    const signInRequest = { url: () => `${STAGING_ORIGIN}/api/auth/sign-in/email`, method: () => "POST" };
 
     function scheduleSignInRedirect(pathname, search) {
       const signInUrl = `${STAGING_ORIGIN}/sign-in?next=${encodeURIComponent(`${pathname}${search}`)}`;
@@ -63,6 +65,7 @@ function browserType(options = {}) {
     }
     return {
       url: () => currentUrl,
+      on: (event, listener) => { listeners[event].push(listener); },
       goto: async (url) => {
         if (options.unexpectedOrigin && !state.unexpectedOriginInjected) {
           state.unexpectedOriginInjected = true;
@@ -125,8 +128,15 @@ function browserType(options = {}) {
         if (locator.name === "Sign in") {
           return { click: async () => {
             state.signInAttempts += 1;
-            state.session = !options.sessionMissingAfterFailedLogin;
-            if (!options.loginNavigationFails) currentUrl = protectedUrl;
+            if (!options.signInRequestMissing) {
+              for (const listener of listeners.request) listener(signInRequest);
+              if (!options.signInResponseMissing) {
+                for (const listener of listeners.response) listener({ request: () => signInRequest, status: () => options.signInHttpStatus ?? 200 });
+              }
+            }
+            state.session = !options.sessionMissingAfterFailedLogin && !options.signInRequestMissing
+              && !options.signInResponseMissing && (options.signInHttpStatus ?? 200) === 200;
+            if (!options.loginNavigationFails && state.session) currentUrl = protectedUrl;
           } };
         }
         if (locator.name === "Sign out") {
@@ -158,14 +168,17 @@ function browserType(options = {}) {
       if (options.unexpectedBetweenOperations && state.newPages === 2) await interceptUnexpected("between-operations");
       return page();
     },
-    cookies: async () => [{
-      name: state.sessionCookieName,
-      secure: true,
-      httpOnly: true,
-      sameSite: options.cookieMismatch ? "Strict" : "Lax",
-      domain: new URL(STAGING_ORIGIN).hostname,
-      path: "/",
-    }],
+    cookies: async () => {
+      if (options.cookieObservationError) throw new Error(options.errorText);
+      return state.session ? [{
+        name: state.sessionCookieName,
+        secure: true,
+        httpOnly: true,
+        sameSite: options.cookieMismatch ? "Strict" : "Lax",
+        domain: new URL(STAGING_ORIGIN).hostname,
+        path: "/",
+      }] : [];
+    },
     close: async () => { if (options.closeError) throw new Error(options.errorText); },
   };
   return {
@@ -284,7 +297,7 @@ test("cleanup waits for a streamed anonymous redirect when a session disappears"
   assert.equal(result.fake.state.signOutAttempts, 0);
   assert.ok(result.fake.state.streamedRedirects >= 2);
   assert.ok(result.fake.state.streamedRedirectWaits >= 2);
-  assert.match(result.output, /step=journey outcome=failed .*category=login_failed/);
+  assert.match(result.output, /step=journey outcome=failed .*category=login_cookie_missing/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });
@@ -304,7 +317,47 @@ test("a session created before failed sign-in navigation is cleaned up once", as
   assert.equal(result.fake.state.session, false);
   assert.equal(result.fake.state.signInAttempts, 1);
   assert.equal(result.fake.state.signOutAttempts, 1);
-  assert.match(result.output, /category=login_failed/);
+  assert.match(result.output, /category=login_navigation_timeout/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("failed sign-in reports only a fixed network or cookie category", async () => {
+  const cases = [
+    [{ signInRequestMissing: true }, "login_no_request"],
+    [{ signInResponseMissing: true }, "login_no_response"],
+    [{ signInHttpStatus: 401 }, "login_http_401"],
+    [{ signInHttpStatus: 429 }, "login_http_429"],
+    [{ signInHttpStatus: 503 }, "login_http_error"],
+    [{ sessionMissingAfterFailedLogin: true }, "login_cookie_missing"],
+    [{ loginNavigationFails: true }, "login_navigation_timeout"],
+  ];
+  for (const [options, expected] of cases) {
+    const result = await runDefault({ ...options, loginNavigationFails: true,
+      errorText: "failed-login private-password session=private-cookie" });
+    assert.equal(result.passed, false);
+    assert.match(result.output, new RegExp(`step=journey outcome=failed .*category=${expected}`));
+    assert.match(result.output, /step=cleanup outcome=passed/);
+    assertNoSensitiveOutput(result);
+  }
+});
+
+test("cleanup accepts a queried sign-in URL when no session was created", async () => {
+  const result = await runDefault({ loginNavigationFails: true, signInHttpStatus: 401,
+    errorText: "failed-login private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.equal(result.fake.state.session, false);
+  assert.equal(result.fake.state.signOutAttempts, 0);
+  assert.match(result.output, /category=login_http_401/);
+  assert.match(result.output, /step=cleanup outcome=passed/);
+  assertNoSensitiveOutput(result);
+});
+
+test("an observer failure reports a fixed category without exposing the exception", async () => {
+  const result = await runDefault({ loginNavigationFails: true, cookieObservationError: true,
+    errorText: "observer private-password session=private-cookie" });
+  assert.equal(result.passed, false);
+  assert.match(result.output, /step=journey outcome=failed .*category=login_observation_failed/);
   assert.match(result.output, /step=cleanup outcome=passed/);
   assertNoSensitiveOutput(result);
 });

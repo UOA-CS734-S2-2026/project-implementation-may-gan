@@ -8,6 +8,7 @@ import '../app/app_scope.dart';
 import '../app/theme.dart';
 import '../auth/public_return_intent.dart';
 import '../auth/session_controller.dart';
+import '../profile/mood_history_card.dart';
 import '../profile/profile_about.dart';
 import '../profile/profile_posts.dart';
 import '../profile/profile_stats.dart';
@@ -189,9 +190,13 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
     return _posts;
   }
 
+  /// Bumped on pull to refresh so the mood history reloads too.
+  int _moodRefresh = 0;
+
   Future<void> _refresh() async {
     setState(() {
       _profile = _startLoad();
+      _moodRefresh++;
     });
     await Future.wait([?_profile, ?_posts?.refresh()]);
   }
@@ -517,6 +522,18 @@ class _SocialProfileScreenState extends State<SocialProfileScreen> {
                   ],
                 ),
               ),
+              // Mood history reaches the owner and active friends only, even
+              // when the account is public.
+              if (signedIn && (isMe || relationship == 'friends'))
+                MoodHistoryCard(
+                  // A new account never sees the previous one's view.
+                  key: ValueKey(('mood', _session?.user?.id, info.username)),
+                  profiles: AppScope.of(context).profiles,
+                  username: info.username,
+                  displayName: displayName,
+                  isMe: isMe,
+                  refreshCount: _moodRefresh,
+                ),
               const SizedBox(height: 20),
               if (posts != null)
                 ProfilePostsSection(

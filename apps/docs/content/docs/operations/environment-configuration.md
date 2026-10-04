@@ -26,7 +26,7 @@ Values beginning with `NEXT_PUBLIC_` are public build inputs. They must never co
 
 ## GitHub `staging` environment variables
 
-The protected GitHub environment contained these 12 variables. GitHub Actions reads them through the `vars` context.
+The protected GitHub environment inventory contained these 12 ordinary variables. GitHub Actions reads them through the `vars` context. The current deployment code also recognizes four staging-only export proof variables described below; this page does not claim they are presently set.
 
 | Variable | Purpose and source | Consumer | Destination |
 | --- | --- | --- | --- |
@@ -45,6 +45,19 @@ The protected GitHub environment contained these 12 variables. GitHub Actions re
 
 Sources: `.github/workflows/staging-release.yml`, `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-web.yml`, `scripts/run-staging-api-deploy.mjs`, `scripts/staging-auth-bindings.mjs`, `scripts/staging-media-bindings.mjs`, and `scripts/staging-worker-config.mjs`.
 
+### Staging export proof variables recognized by the workflow
+
+These four values form one all-or-nothing gate. The deployment script rejects a partial set, any approval value other than `synthetic-only`, or a proof without the separate export Hyperdrive binding.
+
+| Variable | Runtime purpose |
+| --- | --- |
+| `STAGING_EXPORT_PROOF_APPROVED` | Must equal `synthetic-only`; no production scope can open this path. |
+| `STAGING_EXPORT_PROOF_USER_ID` | Limits export requests and worker claims to one synthetic owner. |
+| `STAGING_EXPORT_PROOF_BUILD_UNTIL` | Allows archive builds for at most one hour from the runtime check. |
+| `STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER` | Sets the operator review checkpoint at least 48 hours after the build window. Cleanup remains enabled so delayed provider work can finish. |
+
+These variables can make a reviewed staging proof possible. Their presence in workflow code is not evidence that a proof window is currently open or that an ordinary account can request an export.
+
 ## GitHub `staging` environment secrets
 
 The protected environment contained these 11 secret names. GitHub does not expose their values through the listing API, and values were not compared with Cloudflare.
@@ -53,7 +66,7 @@ The protected environment contained these 11 secret names. GitHub does not expos
 | --- | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | Better Auth signing secret generated for staging. | API configuration validation and approved secret sync | API Worker secret `BETTER_AUTH_SECRET`. Changing it invalidates existing signed sessions. |
 | `CLOUDFLARE_API_TOKEN` | Least-privilege deployment token created in Cloudflare. It is control-plane access, not an application secret. | Wrangler deployments, Cloudflare validation, and secret sync | CI-only. It must not be copied into any Worker. |
-| `CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID` | Opaque ID of the separately provisioned, restricted export Hyperdrive configuration. | The newer `origin/main` workflow `verify-staging-export-worker.yml` | CI-only read-only target verification. The observed Workers had no standalone export Worker, and the observed API bindings did not include `EXPORT_WORKER_HYPERDRIVE`. |
+| `CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID` | Opaque ID of the separately provisioned, restricted export Hyperdrive configuration. | `verify-staging-export-worker.yml` and `staging-hyperdrive.yml` | The first workflow performs read-only target verification. The deployment workflow can project it as API binding `EXPORT_WORKER_HYPERDRIVE`; that binding alone does not enable ordinary exports. |
 | `CLOUDFLARE_STAGING_HYPERDRIVE_ID` | Opaque ID of the ordinary app Hyperdrive configuration. | Schema-target verification and API config generation | API resource binding `HYPERDRIVE`. The managed app-role database credentials remain in Hyperdrive, outside the Worker secret list. |
 | `DATABASE_URL` | Direct, unpooled staging `migrator` URL provisioned from the database provider. | Migration planning, application, verification, and database-target checks | CI-only. It must never be added to the API Worker or a web build. |
 | `GOOGLE_CLIENT_SECRET` | Web OAuth client secret from the staging Google project. | Approved secret sync when all Google client IDs are configured | API Worker secret `GOOGLE_CLIENT_SECRET`. |
@@ -63,7 +76,7 @@ The protected environment contained these 11 secret names. GitHub does not expos
 | `SMOKE_TEST_EMAIL` | Credentials for the staging-only browser smoke account. | `staging-auth-smoke.yml` | CI-only browser test input. |
 | `SMOKE_TEST_PASSWORD` | Password for the same staging-only smoke account. | `staging-auth-smoke.yml` | CI-only browser test input. |
 
-Sources: `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-auth-smoke.yml`, `.github/workflows/run-database-migrations.yml`, `scripts/staging-secret-sync.mjs`, and `origin/main:.github/workflows/verify-staging-export-worker.yml`. The checked-out `staging-hyperdrive.yml` does not consume the export Hyperdrive ID. The newer workflow on `origin/main` does, so the secret is not unused. That workflow only verifies that the restricted, uncached Hyperdrive reaches the same database through the `lifecycle_worker` role. It does not bind a Worker or enable exports.
+Sources: `.github/workflows/staging-hyperdrive.yml`, `.github/workflows/staging-auth-smoke.yml`, `.github/workflows/run-database-migrations.yml`, `.github/workflows/verify-staging-export-worker.yml`, `scripts/staging-secret-sync.mjs`, `scripts/run-staging-api-deploy.mjs`, and `scripts/staging-worker-config.mjs`. The target workflow verifies that the restricted, uncached Hyperdrive reaches the same database through the `lifecycle_worker` role. The staging deployment can now bind it to the API Worker, but export requests remain closed unless the complete synthetic proof gate is also valid.
 
 ## Repository-level configuration
 
@@ -139,7 +152,9 @@ This Worker had no secrets. Its bindings were:
 | `IMAGES` | Images |
 | `WORKER_SELF_REFERENCE` | Service binding to `dayli-docs` |
 
-Only these three Workers were present in the observed account listing. There was no standalone export Worker. The separate export Hyperdrive secret and its verification workflow are preparation, not evidence that export execution is deployed. On newer `main`, the API also requires an `EXPORT_WORKER_HYPERDRIVE` binding and a release gate before export execution becomes available. This guide deliberately does not provide an enablement recipe for that unfinished path.
+Only these three Workers were present in the recorded account listing. There was no standalone export Worker. Current code runs the narrowly gated export builder and cleanup from the API Worker's scheduled handler, so a fourth Worker is not a requirement. It does require the separate `EXPORT_WORKER_HYPERDRIVE` binding, private R2 configuration, and the complete synthetic proof gate. The recorded binding table above predates that projection and does not prove a current deployment either way.
+
+Normal export execution is still a compile-time false constant. Web and Flutter also keep their export clients disabled. The staging gate admits only its named synthetic owner during the bounded build window, then retains cleanup for review. Do not describe that as self-service staging or production activation.
 
 ## How staging deployment moves configuration
 
@@ -161,7 +176,7 @@ Do not begin by editing a generated `wrangler.staging.jsonc` file. It is an outp
 2. Check the consumer and destination in the tables above. A CI-only secret must remain CI-only.
 3. Provision the smallest provider grant that works. R2 keys should be bucket-scoped. Deployment tokens should have only the control-plane permissions used by the workflows. Database roles must keep `migrator`, app, and restricted lifecycle work separate.
 4. Update the protected `staging` environment through the approved repository settings process. Do not paste values into an issue, terminal transcript, workflow output, or committed env file.
-5. Run the workflow that owns the setting. Runtime API and web changes go through the coordinated staging release. The smoke credentials belong to the authentication smoke workflow. The restricted export Hyperdrive has a read-only verification workflow on newer `main`.
+5. Run the workflow that owns the setting. Runtime API and web changes go through the coordinated staging release. The smoke credentials belong to the authentication smoke workflow. The restricted export Hyperdrive has a read-only target workflow; only the coordinated API deployment can project its binding and any complete synthetic proof gate.
 6. Verify names first, then run a focused service check. Name presence alone is not a health check.
 
 Provider tuples must remain complete. Google needs all three public client IDs and `GOOGLE_CLIENT_SECRET`. Resend needs `STAGING_RESEND_FROM` and `RESEND_API_KEY`. R2 needs the bucket name and both S3 credential parts. The deployment scripts reject incomplete pairs rather than deploying a partly configured API.
@@ -192,7 +207,7 @@ Rotate the direct `migrator` credential and the application connection separatel
 
 - `DATABASE_URL` is the workflow's direct migrator URL. Update it in GitHub, then run the target and migration verification before retiring the old credential.
 - Application credentials belong to the provider-managed `HYPERDRIVE` configuration. Follow the database and Hyperdrive provider procedure, preserve the restricted app role, and use the schema-target check to confirm identity. Do not copy the app URL into GitHub as `DATABASE_URL`.
-- The export Hyperdrive uses the separate restricted `lifecycle_worker` role. Its ID must differ from the ordinary app Hyperdrive ID. Use the read-only export target workflow on a checkout that contains it. Do not infer that the export feature is enabled from a successful connection check.
+- The export Hyperdrive uses the separate restricted `lifecycle_worker` role. Its ID must differ from the ordinary app Hyperdrive ID. Use the read-only export target workflow to check identity. A successful connection or projected binding does not enable exports for ordinary accounts.
 
 ### Smoke account
 
@@ -239,7 +254,7 @@ Review generated configuration logic without generating a secrets file:
 ```bash
 git grep -n 'secrets\.' -- .github/workflows
 git grep -n 'process.env' -- scripts/run-staging-api-deploy.mjs scripts/sync-staging-api-secrets.mjs
-git show origin/main:.github/workflows/verify-staging-export-worker.yml
+git show HEAD:.github/workflows/verify-staging-export-worker.yml
 ```
 
 Do not print `gh auth token`, shell environment dumps, raw Worker settings responses, database URLs, or secret values. Do not reconstruct a complete env file from this inventory.

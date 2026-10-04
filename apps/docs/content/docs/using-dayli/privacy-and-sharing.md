@@ -1,20 +1,20 @@
 ---
 title: Privacy and sharing
-description: Understand post audiences, profile visibility, messages, and planned share links.
+description: Understand post audiences, public profiles, direct links, and messages.
 ---
 
 # Privacy and sharing
 
-Each dayli has an audience. Your profile also has a visibility setting. Both affect who can read a released Friends post.
+Dayli has separate controls for a post's audience and your profile details. It is worth checking both, because changing one does not change the other.
 
 ## Choose an audience for every dayli
 
-The composer requires you to choose an audience before posting:
+The composer makes you choose an audience before posting:
 
-- **Friends:** Only you can read the post until the next Auckland midnight. After release, active friends can read it. If your profile is public, other visitors can also read it through your profile or a direct post link, including when signed out. A signed-in account you have blocked cannot read it.
-- **Solo:** Only you can read the post, before and after release.
+- **Friends:** The post is released after the next Auckland midnight. Active friends can read it. If your profile is public, anyone with the profile or post address can read it too. A signed-in account you have blocked cannot read it.
+- **Solo:** Only you can see the post.
 
-There is no default selection. The friends feed remains limited to active friends; making your profile public does not put your posts in other people's feeds.
+There is no default selection. The audience and profile visibility work together, so check both before posting. The friends feed remains limited to active friends; making your profile public does not put your posts in other people's feeds.
 
 Your own archive marks a Solo post **Only you**. It marks a Friends post **Not released yet** until release time.
 
@@ -22,26 +22,30 @@ Your own archive marks a Solo post **Only you**. It marks a Friends post **Not r
 
 <!-- Screenshot ID: UD-PS-01 -->
 
-On the web, a public profile and its released Friends posts can be opened at `/u/{username}` and `/u/{username}/{postId}` without signing in. The mobile app also accepts signed-out profile and post routes. Dayli does not provide separate revocable share links yet; a public post link stays readable while the post and profile remain public.
+Dayli has direct profile and post pages on web and mobile. A signed-out reader can open a public profile at `/u/{username}` and a released Friends post at `/u/{username}/{postId}` on the web. Mobile supports the matching profile deep link and `/posts/{id}` post route. Private profiles show a restricted view, while Solo and unreleased posts remain unavailable.
+
+These addresses follow the current profile setting. They are not separate share tokens, and there is no per-link revocation control. Making the profile private or changing a post to Solo removes public access on the next request. It cannot erase content someone already downloaded or captured.
 
 ## Set profile visibility
 
-Open **Settings** on the web. On mobile, tap the profile circle at the top and open **settings**. Use **Private profile** to choose who can read your profile and released Friends posts:
+Open **Settings** on the web. On mobile, tap the profile circle at the top and open **settings**. The profile visibility choices explain who can see your bio and streak:
 
-- With a private profile, active friends can see your bio and streak and read released Friends posts. Other unblocked visitors see only your username.
-- With a public profile, unblocked visitors can see your public name, bio, avatar, streak, and released Friends posts. This includes signed-out visitors.
+- A private profile limits profile details and released Friends posts to active friends.
+- A public profile lets signed-in and signed-out readers see its public details and released Friends posts.
 
-Changing the setting also affects Friends posts you released earlier. Switching to public opens them to other visitors. Switching back to private removes that access on subsequent requests. Solo and unreleased posts remain visible only to you.
+This setting does not override a Solo audience or release a Friends post early. Public readers do not receive owner-only profile fields.
 
-![Dayli web Settings page with profile editing fields](/images/using-dayli/privacy-web-profile-visibility.webp)
+Changing the setting also affects Friends posts you released earlier. Switching to public opens them to other readers. Switching back to private removes that access on subsequent requests.
+
+![Dayli web Settings page showing the profile visibility control](/images/using-dayli/privacy-web-profile-visibility.webp)
 
 <!-- Screenshot ID: UD-PS-02 -->
 
 ## Friends and changing access
 
-Removing a friend ends their friend access immediately. They can still read released Friends posts if your profile is public. Removing a friend cannot erase a post or message they already saw, copied, downloaded, or captured.
+Removing a friend ends friend-only access in Dayli. If your profile is public, that person can still read released Friends posts as a public reader. Make the profile private or change a post to Solo to remove that public route. None of these changes can erase a post or message somebody already saw, copied, downloaded, or captured.
 
-Dayli has backend support for blocked relationships, but there is no block control in the current web or mobile interface. A block denies access to the blocked account while it is signed in. Content on a public profile remains available to signed-out visitors.
+Dayli has backend support for blocked relationships, but there is no block control in the current web or mobile interface.
 
 ## Messages are a different sharing channel
 

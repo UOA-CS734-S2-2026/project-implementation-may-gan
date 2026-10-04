@@ -3,8 +3,16 @@
   "pages": [
     "posts.create",
     "posts.listFeed",
+    "posts.listTrash",
+    "posts.trash",
+    "posts.restore",
     "posts.get",
+    "posts.update",
+    "posts.listProfilePosts",
+    "posts.getMediaContent",
+    "posts.getVoiceMemoContent",
     "posts.getMedia",
-    "posts.listProfilePosts"
+    "posts.getVoiceMemo",
+    "posts.listRevisions"
   ]
 }

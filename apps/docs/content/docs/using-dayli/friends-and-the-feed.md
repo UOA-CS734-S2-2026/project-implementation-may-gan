@@ -45,11 +45,17 @@ It does not show:
 - your own posts
 - posts from someone who is not currently your friend
 
-Use **my days** to see your own posts. Open a friend's profile to browse their older released Friends posts that you can still access.
+Use **my days** to see your own posts. Open a friend's profile to browse their older released Friends posts that you can still access. Public profiles and released Friends posts can also be opened from their direct web or mobile links without signing in. The daylies feed itself remains signed-in and friend-only.
 
 > **Screenshot placeholder `UD-FF-02`:** Web daylies feed showing released sample posts from friends.
 
 If a post says **This dayli isn't available. It may have been deleted, or you may no longer have access.**, refresh the page. If it remains unavailable, your relationship or access may have changed.
+
+## Likes and comments
+
+The backend supports likes, comments, and one level of replies for an author and their active friends. These interactions require a signed-in account with a username. Public readers and signed-in nonfriends cannot use them, even when they can read the post through a public profile.
+
+The current web and mobile post pages do not yet connect their **like** and **comment** buttons to this backend. The buttons ask a signed-out reader to sign in, then explain that the action is unavailable. They do not submit anything. This is an interface gap, not permission to call the interaction routes anonymously.
 
 ## Messages and requests
 

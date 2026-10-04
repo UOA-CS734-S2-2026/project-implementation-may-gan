@@ -11,6 +11,7 @@ export const messagingErrorCodes = [
   "REPLY_NOT_FOUND",
   "REACTION_NOT_ALLOWED",
   "VALIDATION_FAILED",
+  "RATE_LIMITED",
 ] as const;
 
 export type MessagingErrorCode = (typeof messagingErrorCodes)[number];
@@ -28,11 +29,15 @@ const messages: Record<MessagingErrorCode, string> = {
   REPLY_NOT_FOUND: "The reply target was not found in this conversation.",
   REACTION_NOT_ALLOWED: "This reaction is not allowed.",
   VALIDATION_FAILED: "The request contains invalid values.",
+  RATE_LIMITED: "Too many new messages were sent. Try again later.",
 };
 
 /** A transport-neutral policy error. Routes must map this without disclosing block direction. */
 export class MessagingError extends Error {
-  constructor(readonly code: MessagingErrorCode) {
+  constructor(
+    readonly code: MessagingErrorCode,
+    readonly retryAfterSeconds?: number,
+  ) {
     super(messages[code]);
     this.name = "MessagingError";
   }

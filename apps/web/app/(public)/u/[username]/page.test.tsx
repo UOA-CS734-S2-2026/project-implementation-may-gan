@@ -21,7 +21,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/u/ada",
   useSearchParams: () => new URLSearchParams(query),
 }));
-const profiles = vi.hoisted(() => ({ profilesApi: { details: vi.fn(), update: vi.fn(), changeUsername: vi.fn() } }));
+const emptyPeriod = { from: "2026-09-01", to: "2026-09-30", trackedDays: 30, postedDays: 0, missingDays: 29, average: null, lowest: null, highest: null };
+const profiles = vi.hoisted(() => ({ profilesApi: { details: vi.fn(), update: vi.fn(), changeUsername: vi.fn(), moodHistory: vi.fn() } }));
 vi.mock("@/features/profiles/shared/profiles.api", () => profiles);
 vi.mock("@/features/posts/list-profile-posts/ProfilePosts", () => ({ ProfilePosts: ({ username }: { username: string }) => <p>posts for {username}</p> }));
 
@@ -40,6 +41,7 @@ function renderProfile(username = "ada") {
 
 describe("public profile", () => {
   beforeEach(() => {
+    profiles.profilesApi.moodHistory.mockResolvedValue({ ok: true, value: { range: "30d", trackedFrom: "2026-01-01", days: [], hiddenDays: [], current: emptyPeriod, previous: emptyPeriod } });
     vi.clearAllMocks();
     actorId = "actor";
     query = "";

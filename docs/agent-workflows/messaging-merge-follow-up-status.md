@@ -4,31 +4,39 @@ Follow-up started: 2026-10-04T01:15:17Z.
 Deadline: 2026-10-04T09:15:17Z, unchanged by retries.
 Scope: PRs #267, #269, #271, #272 and #275 only.
 
-## Merged
+This snapshot records four completed merges and the final quota integration prepared for review. Original expired batch histories are not overwritten or restarted.
 
-PR #275 was rebase-merged with the user-authorized admin review bypass at 2026-10-04T01:38:35Z.
+## Completed merges
 
-- Reviewed and verified PR head: b57863d597ff5b98153ea9dc643778a5c278f738.
-- Immutable integration base: 4fa63050507400898f42b7308c6abae9f2e034ee.
-- Merge commit on main: c6c9036fdcdc3fdda13e7cb50973c63f57203735.
-- Exact-head hosted CI run: 37168052703. TypeScript, Web E2E, Contracts and Flutter, and PostgreSQL integration all passed.
-- Coordinator full browser and local verification passed. Logs: /tmp/e2e-current-main-coordinator-browser-b57863d5.log and /tmp/e2e-current-main-coordinator-verify-b57863d5.log, retained locally.
-- Fresh independent review approved with no findings. Six contract tests, ten sign-in tests, twelve discovered spec/project pairs, web lint/typecheck, API boundaries and syntax checks passed.
-- Expected-head merge command used --rebase --admin --match-head-commit. No protection settings changed and main was not force-pushed.
+| PR | Reviewed and verified head | Actual main merge commit | Exact-head hosted CI run |
+| --- | --- | --- | --- |
+| #275 E2E/auth repair | b57863d597ff5b98153ea9dc643778a5c278f738 | c6c9036fdcdc3fdda13e7cb50973c63f57203735 | 37168052703 |
+| #267 planning publication | 344b83175b8643cf7f0c7a26b1cf0f73acf8f412 | 7242472c040584b15c1b6359c96f6622ed04f120 | 37169079998 |
+| #271 readiness tooling | 42f0b8df35615f54e2429cb2f5fc6d3ea588fdff | 6d2710e8f2d7a71e8bffe22b0485636098d6d0dc | 37170609867 |
+| #269 notification foundation | 8da585c8f9687d93b751a26648466c5ae01c98a4 | 0932aa4fa6627f0eba43ca2163a54f9cf69fd46a | 37171477253 |
 
-The browser repair now isolates each spec and project, rejects no-op default runs and retains real navigation and geometry assertions. Production Better Auth limits are unchanged. The installed rule is three sign-in or sign-up requests per source IP within ten seconds, correcting the earlier sixty-second diagnosis.
+Each exact-head run passed TypeScript, Web E2E, Contracts and Flutter, and PostgreSQL integration. Each head received a clean independent advisory review and coordinator local verification before merge. Application heads also passed the complete isolated browser suite. The coordinator used expected-head rebase-and-merge with the user-authorized admin bypass only of the GitHub approving-review gate. No human review was fabricated, protection changed, or main force-pushed.
 
-## In progress
+The E2E repair isolates every spec/project pair and requires real passing tests. Existing eight intentional skips remain unchanged. Production Better Auth limits remain three sign-in or sign-up requests per source IP within ten seconds. Navigation and message geometry assertions were preserved.
 
-- #267: current-main planning publication with recorded owner authorization amendments and this bounded follow-up. All seventeen approved input digests were rechecked unchanged.
-- #269: implementor-sol is integrating notification foundation in a fresh clean worktree. Its unmerged migration must follow main's existing 0051_post_likes_comments.
-- #271: implementor-terra is integrating mock-tested readiness tooling in a fresh clean worktree. No real OAuth/provider operation is authorized.
-- #272: awaits the preceding schema integration before final migration numbering. The quota feature remains within its original approved semantics.
+The notification migration is 0053_purple_mordo. Existing SQL, snapshots and handwritten 0052 remain intact. Notification publishers remain disabled. The foundation does not implement the downstream consent-aware dispatcher or mobile delivery acceptance.
 
-Published remote heads for #269/#271/#272 are still their older revisions until fresh local verification and independent reviews complete. Their historical check results are not treated as current-head evidence.
+## Remaining quota integration
+
+PR #272 retains its original rolling quota semantics, including exact PostgreSQL boundaries, shared sender locking and idempotent retries. The implementation agent integrated merged notification main 0932aa4fa6627f0eba43ca2163a54f9cf69fd46a and regenerated only the unmerged index addition as 0054_tricky_blindfold. Existing SQL, snapshots and review records through 0053 remain byte-for-byte intact. The new snapshot points to the current 0053 snapshot and adds only messages_sender_created_at_idx.
+
+The index migration retains a five-second lock timeout, five-minute statement timeout and the disclosed regular-index write-lock waiver. Agent verification passed at implementation head 1e0484eef5aac34fe10d2b2dfa8c810b6332b8ff, including full local verification, 379 API PostgreSQL tests, notification storage/grant integration, 510 Flutter tests, generated-client consistency and the complete browser suite. The coordinator added this status update afterward. Fresh final-head coordinator verification, independent review and all four hosted checks still gate the merge. Do not treat earlier-head evidence as those final gates.
+
+## Automatic staging observations
+
+The existing automatic coordinated staging release after #275 succeeded in run 37169205523, including reviewed migration handling, allowlisted secret synchronization, API/web deployment and Hyperdrive proof. Its separate automatic authentication smoke failed login and cleanup in run 37169323195. No manual retry or cleanup was performed by this coordinator, and cleanup of that earlier fixture is not confirmed here.
+
+The later automatic release after #271 succeeded in run 37171779577. Its automatic authentication smoke succeeded in run 37171890096. That later success is not proof of live push readiness, physical-device delivery, deployed notification latency or cleanup of a different failed fixture.
+
+The notification merge's main CI run 37172102435 failed its web build with a Turbopack Google-font import-map error. Its deployment workflows were skipped, so 0932 is not claimed as deployed here. Its pre-merge exact-head PR CI had passed all four jobs. No font/build policy was changed or check bypassed. The final quota head must still pass its own complete hosted CI; the following main and automatic release outcomes must be inspected after merge. A skipped or cancelled workflow is not deployment evidence.
 
 ## Preserved and excluded
 
-The original dirty checkout and older runner worktrees remain intact. No unmerged changes from other contributors are imported. Original batch deadlines and historical statuses are preserved; this follow-up does not restart downstream notification or live evidence tickets. Quiet-hours #265 remains excluded.
+All seventeen approved input digests remain unchanged. The original dirty checkout and older runner worktrees remain intact. No unmerged work from other contributors is imported. Downstream notification tickets #260/#261/#262/#34/#263 and live evidence #141/#130/#131 are not resumed by this follow-up. Quiet-hours #265 remains excluded.
 
-Automatic staging operations after eligible merges are limited by the recorded staging approval. Their actual outcomes still need inspection. Production, manual dispatch, Firebase/APNs provisioning, live readiness, notification sends, physical-device actions and key rotation remain unauthorized.
+Automatic staging operations remain limited to the recorded approval and protected target gates. Production, manual workflow dispatch, Firebase/APNs provisioning, real OAuth readiness, notification sends, physical-device actions and key rotation remain unauthorized. No secrets are printed or committed.
