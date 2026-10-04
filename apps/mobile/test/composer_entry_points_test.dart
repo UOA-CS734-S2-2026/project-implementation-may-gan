@@ -1,3 +1,4 @@
+import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/app/app.dart';
 import 'package:dayli_mobile/auth/username_setup_screen.dart';
 import 'package:dayli_mobile/compose/composer_screen.dart';
@@ -187,6 +188,33 @@ void main() {
 
         expect(harness.drafts.drafts['user-1']?.rating, 7);
         expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        expect(harness.submitter.submitted, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'keeps the linked rating until a retry makes the draft editable',
+      (tester) async {
+        final harness = await signedInApp(tester);
+        harness.postingDays.result = const ApiError(NetworkUnavailable());
+
+        await openLink(tester, 'dayli://app/post?rating=7');
+        expect(find.text("Today's prompt isn't here yet"), findsOneWidget);
+
+        harness.postingDays.result = ApiSuccess(postingDay());
+        await tester.tap(find.text('Try again'));
+        await settleDraft(tester);
+
+        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        expect(harness.drafts.drafts['user-1']?.rating, 7);
+
+        // Applied once: a later slider move stays.
+        final slider = find.byType(Slider, skipOffstage: false);
+        await tester.ensureVisible(slider);
+        await tester.pumpAndSettle();
+        await tester.drag(slider, const Offset(-200, 0));
+        await settleDraft(tester);
+        expect(find.text('7/10', skipOffstage: false), findsNothing);
         expect(harness.submitter.submitted, isEmpty);
       },
     );

@@ -85,15 +85,19 @@ class _ComposerScreenState extends State<ComposerScreen>
     final userId = services.session.user?.id;
     if (userId == null) return;
     _userId = userId;
-    _controller = ComposerController(
-      userId: userId,
-      postingDays: services.postingDays,
-      drafts: services.drafts,
-      submitter: services.submitter,
-      clock: services.clock,
-      onUnauthenticated: () => services.session.sessionExpired(),
-      requireUploadedMedia: services.mediaUploads != null,
-    )..addListener(_syncText);
+    _controller =
+        ComposerController(
+            userId: userId,
+            postingDays: services.postingDays,
+            drafts: services.drafts,
+            submitter: services.submitter,
+            clock: services.clock,
+            onUnauthenticated: () => services.session.sessionExpired(),
+            requireUploadedMedia: services.mediaUploads != null,
+          )
+          ..addListener(_syncText)
+          ..addListener(_applyLinkedRating);
+    _pendingRating = widget.initialRating;
     final uploads = services.mediaUploads;
     if (uploads != null) {
       _voice = VoiceMemoRecorderController(
@@ -118,10 +122,7 @@ class _ComposerScreenState extends State<ComposerScreen>
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    _recovery = _controller!.load().then((_) {
-      _prefillRating();
-      return _recoverLostCapture();
-    });
+    _recovery = _controller!.load().then((_) => _recoverLostCapture());
   }
 
   @override
@@ -129,16 +130,30 @@ class _ComposerScreenState extends State<ComposerScreen>
     super.didUpdateWidget(oldWidget);
     // Every composer link that reaches an open composer fills the rating
     // again, even when it names the rating the widget already had.
-    if (widget.linkSequence != oldWidget.linkSequence) _prefillRating();
+    if (widget.linkSequence != oldWidget.linkSequence) {
+      _pendingRating = widget.initialRating;
+      _applyLinkedRating();
+    }
   }
 
-  /// Sets the linked rating, like moving the slider, once today's draft is
-  /// editable. It replaces a rating already in the draft. A posted or missed
-  /// day is left as it is.
-  void _prefillRating() {
-    final rating = widget.initialRating;
-    if (!mounted || rating == null) return;
-    _controller?.update(rating: () => rating);
+  /// The rating from the latest composer link, until it has been applied.
+  int? _pendingRating;
+
+  /// Sets the linked rating, like moving the slider, the first time today's
+  /// draft is editable after the link arrived, including after a failed load
+  /// and a retry. It replaces a rating already in the draft, but only once,
+  /// so later slider moves stay. A posted or missed day is left as it is.
+  void _applyLinkedRating() {
+    final rating = _pendingRating;
+    final controller = _controller;
+    if (rating == null ||
+        controller == null ||
+        controller.phase != ComposerPhase.editing ||
+        controller.submitting) {
+      return;
+    }
+    _pendingRating = null;
+    controller.update(rating: () => rating);
   }
 
   /// Copies a newly loaded draft into the text fields once, without fighting
@@ -160,7 +175,9 @@ class _ComposerScreenState extends State<ComposerScreen>
     WidgetsBinding.instance.removeObserver(this);
     _voice?.dispose();
     _uploads?.dispose();
-    _controller?.removeListener(_syncText);
+    _controller
+      ?..removeListener(_syncText)
+      ..removeListener(_applyLinkedRating);
     _controller?.dispose();
     _answer.dispose();
     _caption.dispose();
