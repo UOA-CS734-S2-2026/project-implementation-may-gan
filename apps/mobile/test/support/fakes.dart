@@ -13,6 +13,7 @@ import 'package:dayli_mobile/api/media_upload_client.dart';
 import 'package:dayli_mobile/api/posting_day_client.dart';
 import 'package:dayli_mobile/api/profile_client.dart';
 import 'package:dayli_mobile/app/app_scope.dart';
+import 'package:dayli_mobile/auth/biometric_service.dart';
 import 'package:dayli_mobile/auth/native_session.dart';
 import 'package:dayli_mobile/auth/session_controller.dart';
 import 'package:dayli_mobile/compose/media_compressor.dart';
@@ -767,7 +768,6 @@ class TestHarness {
   );
   final mediaCompressor = FakeMediaCompressor();
   final mediaUploads = FakeMediaUploadClient();
-  final biometric = FakeBiometricService();
   final biometric = FakeBiometricService();
 
   /// The weather provider, phone location and place lookup the composer uses.
