@@ -91,8 +91,10 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final colors = DayliColors.of(context);
-    final lilac = const Color(0xFFDCC8E6).withValues(alpha: 0.5); // Faint pastel lilac
-    
+    final lilac = const Color(
+      0xFFDCC8E6,
+    ).withValues(alpha: 0.5); // Faint pastel lilac
+
     final unavailable = _result == BiometricResult.unavailable;
     final lockedOut = _result == BiometricResult.lockedOut;
     final busy = _authenticating || _recovering;
@@ -159,7 +161,7 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                   colorFilter: ColorFilter.mode(lilac, BlendMode.srcIn),
                 ),
               ),
-              
+
               // Main Content
               Positioned.fill(
                 child: SafeArea(
@@ -218,8 +220,14 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                               icon: const Icon(Icons.login_rounded),
                               label: const Text('Sign in again'),
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                                textStyle: DayliText.sans(context, weight: FontWeight.w600),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                                textStyle: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w600,
+                                ),
                               ),
                             )
                           else
@@ -229,8 +237,14 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                               icon: const Icon(Icons.fingerprint_rounded),
                               label: const Text('Unlock'),
                               style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                                textStyle: DayliText.sans(context, weight: FontWeight.w600),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 16,
+                                ),
+                                textStyle: DayliText.sans(
+                                  context,
+                                  weight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           if (lockedOut) ...[
@@ -238,7 +252,9 @@ class _LockScreenState extends State<LockScreen> with WidgetsBindingObserver {
                             TextButton(
                               key: const Key('lock.recoverInstead'),
                               onPressed: busy ? null : _recover,
-                              child: const Text('Sign in with your account instead'),
+                              child: const Text(
+                                'Sign in with your account instead',
+                              ),
                             ),
                           ],
                           if (unavailable || lockedOut) ...[
