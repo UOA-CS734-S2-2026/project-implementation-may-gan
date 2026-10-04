@@ -26,6 +26,7 @@ class PostDetail {
     required this.acceptedAt,
     required this.edited,
     required this.viewerIsAuthor,
+    this.revisionCount = 0,
     this.media = const [],
   });
 
@@ -48,6 +49,10 @@ class PostDetail {
   final DateTime acceptedAt;
   final bool edited;
   final bool viewerIsAuthor;
+
+  /// Earlier versions this user can read. The author sends it back when
+  /// editing, so an edit saved elsewhere in between is a conflict.
+  final int revisionCount;
 
   /// Attached photos or video in display order.
   final List<PostMedia> media;
@@ -98,7 +103,80 @@ class PostDetail {
       acceptedAt: acceptedAt,
       edited: json['edited'] == true,
       viewerIsAuthor: json['viewerIsAuthor'] == true,
+      revisionCount: switch (json['revisionCount']) {
+        final int count when count >= 0 => count,
+        _ => 0,
+      },
       media: PostMedia.parseList(json['media']),
+    );
+  }
+}
+
+/// The author's change to a post. Every field is sent, so the server only
+/// saves the ones that differ.
+class PostEdit {
+  const PostEdit({
+    required this.expectedRevisionCount,
+    required this.reflectiveAnswer,
+    required this.caption,
+    required this.rating,
+    required this.audience,
+  });
+
+  final int expectedRevisionCount;
+  final String reflectiveAnswer;
+
+  /// Null removes the caption.
+  final String? caption;
+  final int rating;
+
+  /// `solo` or `friends`.
+  final String audience;
+}
+
+/// An earlier version of a post, which an edit replaced at [replacedAt].
+class PostRevision {
+  const PostRevision({
+    required this.revisionNumber,
+    required this.reflectiveAnswer,
+    required this.caption,
+    required this.rating,
+    required this.audience,
+    required this.replacedAt,
+  });
+
+  final int revisionNumber;
+  final String reflectiveAnswer;
+  final String? caption;
+  final int rating;
+
+  /// `solo` or `friends`.
+  final String audience;
+  final DateTime replacedAt;
+
+  static PostRevision? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final number = json['revisionNumber'];
+    final answer = json['reflectiveAnswer'];
+    final caption = json['caption'];
+    final rating = json['rating'];
+    final audience = json['audience'];
+    final replacedAt = DateTime.tryParse('${json['replacedAt']}');
+    if (number is! int ||
+        answer is! String ||
+        (caption != null && caption is! String) ||
+        rating is! int ||
+        (audience != 'solo' && audience != 'friends') ||
+        replacedAt == null) {
+      return null;
+    }
+    return PostRevision(
+      revisionNumber: number,
+      reflectiveAnswer: answer,
+      caption: caption as String?,
+      rating: rating,
+      audience: audience! as String,
+      replacedAt: replacedAt,
     );
   }
 }
@@ -169,6 +247,20 @@ abstract interface class PostClient {
 
   /// A fresh download URL for one attachment whose earlier URL expired.
   Future<ApiResult<PostMedia>> media(String postId, String mediaId);
+
+  /// Saves the author's edit and returns the post as it is now. [Conflict]
+  /// means another edit was saved after [PostEdit.expectedRevisionCount].
+  Future<ApiResult<PostDetail>> update(String postId, PostEdit edit);
+
+  /// Deletes the author's post by moving it to Trash. Trashing it again also
+  /// succeeds. [ServiceUnavailable] while Trash is switched off.
+  Future<ApiResult<void>> delete(String postId);
+
+  /// Earlier versions of a post, newest first.
+  Future<ApiResult<PostPage<PostRevision>>> revisions(
+    String postId, {
+    String? cursor,
+  });
 }
 
 /// Reads posts and profile posts with the stored Better Auth bearer session.
@@ -318,5 +410,108 @@ class GeneratedPostClient implements PostClient {
     return media == null || media.url == null
         ? const ApiError(ServiceUnavailable())
         : ApiSuccess(media);
+  }
+
+  @override
+  Future<ApiResult<PostDetail>> update(String postId, PostEdit edit) async {
+    final sent = await _send(
+      (api) => api.postsUpdateWithHttpInfo(
+        postId,
+        generated.UpdatePostRequest(
+          expectedRevisionCount: edit.expectedRevisionCount,
+          reflectiveAnswer: edit.reflectiveAnswer,
+          caption: edit.caption,
+          rating: edit.rating,
+          audience: generated.PostAudience.fromJson(edit.audience)!,
+        ),
+      ),
+    );
+    if (sent case ApiError(:final failure)) return ApiError(failure);
+    final response = (sent as ApiSuccess<http.Response>).value;
+    return switch (response.statusCode) {
+      HttpStatus.ok => _decode(response, PostDetail.tryParse),
+      HttpStatus.notFound => const ApiError(NotFound()),
+      HttpStatus.conflict => const ApiError(
+        Conflict('This dayli was edited somewhere else since you opened it.'),
+      ),
+      final status => ApiError(failureForStatus(status, null)),
+    };
+  }
+
+  @override
+  Future<ApiResult<void>> delete(String postId) async {
+    final sent = await _send((api) => api.postsTrashWithHttpInfo(postId));
+    if (sent case ApiError(:final failure)) return ApiError(failure);
+    final response = (sent as ApiSuccess<http.Response>).value;
+    return switch (response.statusCode) {
+      HttpStatus.ok => const ApiSuccess(null),
+      HttpStatus.notFound ||
+      HttpStatus.unprocessableEntity => const ApiError(NotFound()),
+      HttpStatus.conflict => const ApiError(
+        Conflict("This dayli can't be deleted right now."),
+      ),
+      final status => ApiError(failureForStatus(status, null)),
+    };
+  }
+
+  @override
+  Future<ApiResult<PostPage<PostRevision>>> revisions(
+    String postId, {
+    String? cursor,
+  }) async {
+    final sent = await _send(
+      (api) => api.postsListRevisionsWithHttpInfo(postId, cursor: cursor),
+    );
+    if (sent case ApiError(:final failure)) return ApiError(failure);
+    final response = (sent as ApiSuccess<http.Response>).value;
+    return switch (response.statusCode) {
+      HttpStatus.ok => _decode(
+        response,
+        (json) => PostPage.tryParse(json, PostRevision.tryParse),
+      ),
+      HttpStatus.notFound => const ApiError(NotFound()),
+      HttpStatus.unprocessableEntity when cursor == null => const ApiError(
+        NotFound(),
+      ),
+      final status => ApiError(failureForStatus(status, null)),
+    };
+  }
+
+  /// Sends one request with the stored bearer session.
+  Future<ApiResult<http.Response>> _send(
+    Future<http.Response> Function(generated.PostsApi api) request,
+  ) async {
+    final token = await _bearerToken();
+    if (token == null) return const ApiError(Unauthenticated());
+
+    final auth = generated.HttpBearerAuth()..accessToken = token;
+    final client = generated.ApiClient(
+      basePath: _baseUrl,
+      authentication: auth,
+    );
+    if (_httpClient != null) client.client = _httpClient;
+    try {
+      return ApiSuccess(await request(generated.PostsApi(client)));
+    } on generated.ApiException catch (error) {
+      return ApiError(failureForStatus(error.code, error.innerException));
+    } on IOException {
+      return const ApiError(NetworkUnavailable());
+    }
+  }
+
+  static ApiResult<T> _decode<T>(
+    http.Response response,
+    T? Function(Object? json) parse,
+  ) {
+    final Object? json;
+    try {
+      json = jsonDecode(response.body);
+    } on FormatException {
+      return const ApiError(ServiceUnavailable());
+    }
+    final value = parse(json);
+    return value == null
+        ? const ApiError(ServiceUnavailable())
+        : ApiSuccess(value);
   }
 }

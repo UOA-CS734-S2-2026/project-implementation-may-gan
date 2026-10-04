@@ -30,8 +30,8 @@ class PostMedia {
   /// A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead.
   final String url;
 
-  /// When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one.
-  final DateTime expiresAt;
+  /// When a signed private URL stops working. Null for a Worker URL that reauthorizes every request.
+  final DateTime? expiresAt;
 
   @override
   bool operator ==(Object other) =>
@@ -50,7 +50,7 @@ class PostMedia {
       (contentType.hashCode) +
       (order.hashCode) +
       (url.hashCode) +
-      (expiresAt.hashCode);
+      (expiresAt == null ? 0 : expiresAt!.hashCode);
 
   @override
   String toString() =>
@@ -62,7 +62,11 @@ class PostMedia {
     json[r'contentType'] = this.contentType;
     json[r'order'] = this.order;
     json[r'url'] = this.url;
-    json[r'expiresAt'] = this.expiresAt.toUtc().toIso8601String();
+    if (this.expiresAt != null) {
+      json[r'expiresAt'] = this.expiresAt!.toUtc().toIso8601String();
+    } else {
+      json[r'expiresAt'] = null;
+    }
     return json;
   }
 
@@ -74,13 +78,14 @@ class PostMedia {
     int? order,
     String? url,
     DateTime? expiresAt,
+    bool expiresAtSetToNull = false,
   }) =>
       PostMedia(
         id: id ?? this.id,
         contentType: contentType ?? this.contentType,
         order: order ?? this.order,
         url: url ?? this.url,
-        expiresAt: expiresAt ?? this.expiresAt,
+        expiresAt: expiresAtSetToNull ? null : expiresAt ?? this.expiresAt,
       );
 
   /// Returns a new [PostMedia] instance and imports its values from
@@ -112,8 +117,6 @@ class PostMedia {
             'Required key "PostMedia[url]" has a null value in JSON.');
         assert(json.containsKey(r'expiresAt'),
             'Required key "PostMedia[expiresAt]" is missing from JSON.');
-        assert(json[r'expiresAt'] != null,
-            'Required key "PostMedia[expiresAt]" has a null value in JSON.');
         return true;
       }());
 
@@ -122,7 +125,7 @@ class PostMedia {
         contentType: PostMediaContentType.fromJson(json[r'contentType'])!,
         order: mapValueOfType<int>(json, r'order')!,
         url: mapValueOfType<String>(json, r'url')!,
-        expiresAt: mapDateTime(json, r'expiresAt', r'')!,
+        expiresAt: mapDateTime(json, r'expiresAt', r''),
       );
     }
     return null;

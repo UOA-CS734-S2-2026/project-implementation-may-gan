@@ -1,17 +1,36 @@
-import { FetchError, PostsApi, ResponseError, type PostDetail, type PostMedia, type ProfilePost, type ProfilePostsPage } from "@dayli/api-client";
+import {
+  FetchError,
+  PostsApi,
+  ResponseError,
+  type PostAudience,
+  type PostDetail,
+  type PostMedia,
+  type PostRevision,
+  type PostRevisionsPage,
+  type ProfilePost,
+  type UpdatePostRequest,
+} from "@dayli/api-client";
 import { apiConfiguration } from "@/lib/api/config";
 
-export type { PostDetail, PostMedia, ProfilePost, ProfilePostsPage };
+export type { PostAudience, PostDetail, PostMedia, PostRevision, PostRevisionsPage, ProfilePost, UpdatePostRequest };
+export type ProfilePostsPage = {
+  items: ProfilePost[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
 
-export type PostFailure = "unauthenticated" | "notFound" | "network" | "unavailable";
+export type PostFailure = "unauthenticated" | "notFound" | "conflict" | "invalid" | "network" | "unavailable";
 export type PostResult<T> = { ok: true; value: T } | { ok: false; failure: PostFailure };
 
-async function toFailure(error: unknown): Promise<PostFailure> {
+/** For a write, 422 is a field the server rejected rather than a bad ID. */
+async function toFailure(error: unknown, writes = false): Promise<PostFailure> {
   if (error instanceof ResponseError) {
     if (error.response.status === 401) return "unauthenticated";
     // 404 covers both a missing post and one the viewer may not read; 422 is
     // an ID that could never exist.
-    if (error.response.status === 404 || error.response.status === 422) return "notFound";
+    if (error.response.status === 404) return "notFound";
+    if (error.response.status === 409) return "conflict";
+    if (error.response.status === 422) return writes ? "invalid" : "notFound";
     return "unavailable";
   }
   if (error instanceof FetchError || error instanceof TypeError) return "network";
@@ -41,14 +60,56 @@ export const postsApi = {
     }
   },
 
-  /** 404 is an unknown or blocked profile; a profile you may not read posts on is an empty page. */
-  async profilePage(username: string, cursor?: string): Promise<PostResult<ProfilePostsPage>> {
+  /** Saves an edit by the author and returns the post as it is now. */
+  async update(postId: string, changes: UpdatePostRequest): Promise<PostResult<PostDetail>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      return { ok: true, value: await new PostsApi(configuration).postsUpdate({ postId, updatePostRequest: changes }) };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error, true) };
+    }
+  },
+
+  /** Deletes the author's post by moving it to Trash; unavailable while Trash is switched off. */
+  async remove(postId: string): Promise<PostResult<void>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      await new PostsApi(configuration).postsTrash({ postId });
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error, true) };
+    }
+  },
+
+  async revisions(postId: string, cursor?: string): Promise<PostResult<PostRevisionsPage>> {
     const configuration = apiConfiguration();
     if (!configuration) return { ok: false, failure: "unavailable" };
     try {
       return {
         ok: true,
-        value: await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username }),
+        value: await new PostsApi(configuration).postsListRevisions(cursor ? { postId, cursor } : { postId }),
+      };
+    } catch (error) {
+      return { ok: false, failure: await toFailure(error) };
+    }
+  },
+
+  /** 404 is an unknown or blocked profile; a profile you may not read posts on is an empty page. */
+  async profilePage(username: string, cursor?: string): Promise<PostResult<ProfilePostsPage>> {
+    const configuration = apiConfiguration();
+    if (!configuration) return { ok: false, failure: "unavailable" };
+    try {
+      const page = await new PostsApi(configuration).postsListProfilePosts(cursor ? { username, cursor } : { username });
+      // Public and restricted archive rendering belongs to DPP-003. Existing
+      // signed-in screens consume only complete archive pages for now.
+      if (page.kind !== "archive" || !page.items || page.nextCursor === undefined || page.hasMore === undefined) {
+        return { ok: false, failure: "notFound" };
+      }
+      return {
+        ok: true,
+        value: { items: page.items, nextCursor: page.nextCursor, hasMore: page.hasMore },
       };
     } catch (error) {
       return { ok: false, failure: await toFailure(error) };

@@ -165,6 +165,32 @@ void main() {
       expect(harness.submitter.submitted, isEmpty);
     });
 
+    testWidgets(
+      'the same link again restores its rating after the slider moved',
+      (tester) async {
+        final harness = await signedInApp(tester);
+
+        await openLink(tester, 'dayli://app/post?rating=7');
+        await settleDraft(tester);
+        expect(find.text('7/10'), findsOneWidget);
+
+        // Move the slider away from the linked rating.
+        final slider = find.byType(Slider, skipOffstage: false);
+        await tester.ensureVisible(slider);
+        await tester.pumpAndSettle();
+        await tester.drag(slider, const Offset(-200, 0));
+        await settleDraft(tester);
+        expect(find.text('7/10'), findsNothing);
+
+        await openLink(tester, 'dayli://app/post?rating=7');
+        await settleDraft(tester);
+
+        expect(harness.drafts.drafts['user-1']?.rating, 7);
+        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
+        expect(harness.submitter.submitted, isEmpty);
+      },
+    );
+
     testWidgets('a link that is not the composer opens home', (tester) async {
       await signedInApp(tester);
 

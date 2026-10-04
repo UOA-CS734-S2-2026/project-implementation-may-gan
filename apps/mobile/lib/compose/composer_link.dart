@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'composer_controller.dart';
 
 /// The custom URL scheme that opens today's composer from outside the app:
@@ -34,4 +36,18 @@ String composerLocation(Uri uri) {
   return rating == null
       ? composerPath
       : '$composerPath?$composerRatingParameter=$rating';
+}
+
+/// Counts composer links as they arrive from outside the app. The composer
+/// treats each arrival as an event, so the same link opened twice still fills
+/// the rating twice.
+class ComposerLinkSequence extends ChangeNotifier {
+  int _count = 0;
+
+  int get current => _count;
+
+  void arrived() {
+    _count++;
+    notifyListeners();
+  }
 }

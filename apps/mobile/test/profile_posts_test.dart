@@ -132,6 +132,53 @@ void main() {
     expect(find.text('The whole answer.'), findsOneWidget);
   });
 
+  testProfile('reloads my days after a post is edited', (tester) async {
+    final posts = FakePostClient(
+      [ApiSuccess(postDetail('1', viewerIsAuthor: true))],
+      [
+        ApiSuccess(page([profilePost('1', username: 'jos')])),
+        ApiSuccess(
+          page([profilePost('1', username: 'jos', answer: 'Edited answer.')]),
+        ),
+      ],
+    );
+    posts.updateResults
+      ..clear()
+      ..add(
+        ApiSuccess(
+          postDetail('1', viewerIsAuthor: true, answer: 'Edited answer.'),
+        ),
+      );
+    final harness = TestHarness(
+      friends: ProfileFriendsClient({'jos': me}),
+      posts: posts,
+    );
+    await openProfile(tester, harness, 'jos');
+
+    await tester.ensureVisible(find.byKey(const Key('profile.posts.post.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('profile.posts.post.1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('post.menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('post.edit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('editPost.answer')),
+      'Edited answer.',
+    );
+    await tester.ensureVisible(find.byKey(const Key('editPost.save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editPost.save')));
+    await tester.pumpAndSettle();
+    expect(posts.edits, hasLength(1));
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(posts.profileRequests, [('jos', null), ('jos', null)]);
+    expect(find.text('Edited answer.'), findsOneWidget);
+  });
+
   testProfile('asks a non-friend to add them and never loads posts', (
     tester,
   ) async {

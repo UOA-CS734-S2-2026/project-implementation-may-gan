@@ -44,6 +44,11 @@ import {
     PostMediaToJSON,
 } from '../models/PostMedia';
 import {
+    type PostRevisionsPage,
+    PostRevisionsPageFromJSON,
+    PostRevisionsPageToJSON,
+} from '../models/PostRevisionsPage';
+import {
     type PostVoiceMemo,
     PostVoiceMemoFromJSON,
     PostVoiceMemoToJSON,
@@ -59,15 +64,20 @@ import {
     PostsRestore200ResponseToJSON,
 } from '../models/PostsRestore200Response';
 import {
-    type ProfilePostsPage,
-    ProfilePostsPageFromJSON,
-    ProfilePostsPageToJSON,
-} from '../models/ProfilePostsPage';
+    type ReadableProfilePosts,
+    ReadableProfilePostsFromJSON,
+    ReadableProfilePostsToJSON,
+} from '../models/ReadableProfilePosts';
 import {
     type TrashedPostStatus,
     TrashedPostStatusFromJSON,
     TrashedPostStatusToJSON,
 } from '../models/TrashedPostStatus';
+import {
+    type UpdatePostRequest,
+    UpdatePostRequestFromJSON,
+    UpdatePostRequestToJSON,
+} from '../models/UpdatePostRequest';
 
 export interface PostsCreateRequest {
     /**
@@ -98,7 +108,25 @@ export interface PostsGetMediaRequest {
     mediaId: string;
 }
 
+export interface PostsGetMediaContentRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     *
+     */
+    mediaId: string;
+}
+
 export interface PostsGetVoiceMemoRequest {
+    /**
+     *
+     */
+    postId: string;
+}
+
+export interface PostsGetVoiceMemoContentRequest {
     /**
      *
      */
@@ -131,6 +159,21 @@ export interface PostsListProfilePostsRequest {
     limit?: number;
 }
 
+export interface PostsListRevisionsRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     * Opaque continuation cursor
+     */
+    cursor?: string;
+    /**
+     *
+     */
+    limit?: number;
+}
+
 export interface PostsRestoreRequest {
     /**
      *
@@ -143,6 +186,17 @@ export interface PostsTrashRequest {
      *
      */
     postId: string;
+}
+
+export interface PostsUpdateRequest {
+    /**
+     *
+     */
+    postId: string;
+    /**
+     *
+     */
+    updatePostRequest: UpdatePostRequest;
 }
 
 /**
@@ -254,7 +308,7 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.
      * Read one post
      */
     async postsGetRaw(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostDetail>> {
@@ -265,7 +319,7 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.
+     * Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.
      * Read one post
      */
     async postsGet(requestParameters: PostsGetRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
@@ -337,6 +391,69 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
+     * Creates request options for postsGetMediaContent without sending the request
+     */
+    async postsGetMediaContentRequestOpts(requestParameters: PostsGetMediaContentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetMediaContent().'
+            );
+        }
+
+        if (requestParameters['mediaId'] == null) {
+            throw new runtime.RequiredError(
+                'mediaId',
+                'Required parameter "mediaId" was null or undefined when calling postsGetMediaContent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/media/{mediaId}/content`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+        urlPath = urlPath.replace('{mediaId}', encodeURIComponent(String(requestParameters['mediaId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized post media bytes
+     */
+    async postsGetMediaContentRaw(requestParameters: PostsGetMediaContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.postsGetMediaContentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized post media bytes
+     */
+    async postsGetMediaContent(requestParameters: PostsGetMediaContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.postsGetMediaContentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Creates request options for postsGetVoiceMemo without sending the request
      */
     async postsGetVoiceMemoRequestOpts(requestParameters: PostsGetVoiceMemoRequest): Promise<runtime.RequestOpts> {
@@ -388,6 +505,61 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsGetVoiceMemo(requestParameters: PostsGetVoiceMemoRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostVoiceMemo> {
         const response = await this.postsGetVoiceMemoRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsGetVoiceMemoContent without sending the request
+     */
+    async postsGetVoiceMemoContentRequestOpts(requestParameters: PostsGetVoiceMemoContentRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsGetVoiceMemoContent().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/voice-memo/content`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized voice memo bytes
+     */
+    async postsGetVoiceMemoContentRaw(requestParameters: PostsGetVoiceMemoContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Blob>> {
+        const requestOptions = await this.postsGetVoiceMemoContentRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.BlobApiResponse(response);
+    }
+
+    /**
+     * Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.
+     * Read currently authorized voice memo bytes
+     */
+    async postsGetVoiceMemoContent(requestParameters: PostsGetVoiceMemoContentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Blob> {
+        const response = await this.postsGetVoiceMemoContentRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -490,22 +662,85 @@ export class PostsApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * Returns one person\'s posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
      * List the posts on a profile
      */
-    async postsListProfilePostsRaw(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ProfilePostsPage>> {
+    async postsListProfilePostsRaw(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ReadableProfilePosts>> {
         const requestOptions = await this.postsListProfilePostsRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ProfilePostsPageFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ReadableProfilePostsFromJSON(jsonValue));
     }
 
     /**
-     * Returns one person\'s posts, newest Auckland day first. On the caller\'s own profile this includes solo and unreleased posts. On anyone else\'s it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.
+     * Returns one person\'s posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.
      * List the posts on a profile
      */
-    async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ProfilePostsPage> {
+    async postsListProfilePosts(requestParameters: PostsListProfilePostsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ReadableProfilePosts> {
         const response = await this.postsListProfilePostsRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsListRevisions without sending the request
+     */
+    async postsListRevisionsRequestOpts(requestParameters: PostsListRevisionsRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsListRevisions().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        if (requestParameters['cursor'] != null) {
+            queryParameters['cursor'] = requestParameters['cursor'];
+        }
+
+        if (requestParameters['limit'] != null) {
+            queryParameters['limit'] = requestParameters['limit'];
+        }
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}/revisions`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        };
+    }
+
+    /**
+     * Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+     * List a post\'s earlier versions
+     */
+    async postsListRevisionsRaw(requestParameters: PostsListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostRevisionsPage>> {
+        const requestOptions = await this.postsListRevisionsRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostRevisionsPageFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.
+     * List a post\'s earlier versions
+     */
+    async postsListRevisions(requestParameters: PostsListRevisionsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostRevisionsPage> {
+        const response = await this.postsListRevisionsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -657,6 +892,71 @@ export class PostsApi extends runtime.BaseAPI {
      */
     async postsTrash(requestParameters: PostsTrashRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<TrashedPostStatus> {
         const response = await this.postsTrashRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates request options for postsUpdate without sending the request
+     */
+    async postsUpdateRequestOpts(requestParameters: PostsUpdateRequest): Promise<runtime.RequestOpts> {
+        if (requestParameters['postId'] == null) {
+            throw new runtime.RequiredError(
+                'postId',
+                'Required parameter "postId" was null or undefined when calling postsUpdate().'
+            );
+        }
+
+        if (requestParameters['updatePostRequest'] == null) {
+            throw new runtime.RequiredError(
+                'updatePostRequest',
+                'Required parameter "updatePostRequest" was null or undefined when calling postsUpdate().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+        if (this.configuration && this.configuration.accessToken) {
+            const token = this.configuration.accessToken;
+            const tokenString = await token("BearerAuth", []);
+
+            if (tokenString) {
+                headerParameters["Authorization"] = `Bearer ${tokenString}`;
+            }
+        }
+
+        let urlPath = `/api/v1/posts/{postId}`;
+        urlPath = urlPath.replace('{postId}', encodeURIComponent(String(requestParameters['postId'])));
+
+        return {
+            path: urlPath,
+            method: 'PATCH',
+            headers: headerParameters,
+            query: queryParameters,
+            body: UpdatePostRequestToJSON(requestParameters['updatePostRequest']),
+        };
+    }
+
+    /**
+     * Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+     * Edit a post
+     */
+    async postsUpdateRaw(requestParameters: PostsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PostDetail>> {
+        const requestOptions = await this.postsUpdateRequestOpts(requestParameters);
+        const response = await this.request(requestOptions, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => PostDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.
+     * Edit a post
+     */
+    async postsUpdate(requestParameters: PostsUpdateRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PostDetail> {
+        const response = await this.postsUpdateRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -1,8 +1,9 @@
-import { and, desc, eq, exists, isNotNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { getAucklandDay } from "@dayli/domain";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
 import { buildDrizzlePostVisibilityFilter } from "../../permissions";
+import { postEdited } from "../shared/post-edited";
 import { readAttachedMedia, type PostMediaRef } from "../shared/post-media";
 import { afterPostCursor, decodePostCursor, encodePostCursor } from "../shared/post-page-cursor";
 import type { FeedPage, FeedPost } from "./list-feed.contract";
@@ -41,7 +42,7 @@ function previousDay(localDate: string): string {
  * unchanged post is never repeated or skipped between pages.
  */
 export function createPostgresFeedRepository(database: DayliDatabase): FeedRepository {
-  const { posts, user, dailyPrompts, postRevisions } = schema;
+  const { posts, user, dailyPrompts } = schema;
   return {
     async listFeed(viewerId, now, limit, rawCursor) {
       const cursor = decodePostCursor(rawCursor);
@@ -63,12 +64,7 @@ export function createPostgresFeedRepository(database: DayliDatabase): FeedRepos
           rating: posts.rating,
           acceptedAt: posts.acceptedAt,
           releasedAt: posts.releasedAt,
-          edited: exists(
-            database
-              .select({ revisionId: postRevisions.id })
-              .from(postRevisions)
-              .where(eq(postRevisions.postId, posts.id)),
-          ).mapWith(Boolean),
+          edited: postEdited(viewerId),
         })
         .from(posts)
         .innerJoin(user, eq(posts.authorId, user.id))

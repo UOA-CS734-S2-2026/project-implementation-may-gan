@@ -15,6 +15,7 @@ class PostPreviewCard extends StatelessWidget {
     required this.keyPrefix,
     this.label,
     this.linkAuthor = true,
+    this.onChanged,
   });
 
   final FeedPost post;
@@ -27,6 +28,10 @@ class PostPreviewCard extends StatelessWidget {
 
   /// Whether the author row opens their profile. Off on that profile itself.
   final bool linkAuthor;
+
+  /// Called after the opened post was edited or deleted, so the list that
+  /// shows this card can refresh.
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +184,10 @@ class PostPreviewCard extends StatelessWidget {
       label: 'Open ${post.displayName}\'s dayli',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => context.push('/posts/${post.id}'),
+        onTap: () async {
+          final changed = await context.push<bool>('/posts/${post.id}');
+          if (changed == true) onChanged?.call();
+        },
         child: card,
       ),
     );

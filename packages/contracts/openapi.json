@@ -20,6 +20,329 @@
       }
     },
     "schemas": {
+      "ProfilePostsPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfilePost"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "ProfilePost": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "author": {
+            "$ref": "#/components/schemas/ProfilePostAuthor"
+          },
+          "localDate": {
+            "$ref": "#/components/schemas/AucklandDate"
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/ProfilePostPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "friends"
+            ],
+            "description": "`solo` appears only on the caller's own profile."
+          },
+          "acceptedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "releasedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "released": {
+            "type": "boolean",
+            "description": "False only on the caller's own profile, for a post whose day has not been released yet."
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True when the author has edited the post since it was accepted."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "localDate",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience",
+          "acceptedAt",
+          "releasedAt",
+          "released",
+          "edited",
+          "media"
+        ],
+        "description": "One post on a profile. Tomorrow notes are not part of this projection."
+      },
+      "OpaqueId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "example": "post_01K4Y6P8K2"
+      },
+      "ProfilePostAuthor": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName"
+        ]
+      },
+      "AucklandDate": {
+        "type": "string",
+        "format": "date",
+        "example": "2026-09-10"
+      },
+      "ProfilePostPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
+      "UtcTimestamp": {
+        "type": "string",
+        "format": "date-time",
+        "example": "2026-09-09T12:00:00Z"
+      },
+      "PostMedia": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "contentType": {
+            "$ref": "#/components/schemas/PostMediaContentType"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead."
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a signed private URL stops working. Null for a Worker URL that reauthorizes every request."
+          }
+        },
+        "required": [
+          "id",
+          "contentType",
+          "order",
+          "url",
+          "expiresAt"
+        ]
+      },
+      "PostMediaContentType": {
+        "type": "string",
+        "enum": [
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+          "image/heic",
+          "video/mp4",
+          "video/quicktime"
+        ]
+      },
+      "RestrictedProfilePosts": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "restricted"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "username"
+        ],
+        "description": "The complete archive response for a private account when the caller is neither its owner nor an active friend."
+      },
+      "PublicProfile": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "public"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "The parent-authorized Worker avatar route when a current avatar exists, otherwise null."
+          },
+          "streak": {
+            "$ref": "#/components/schemas/PostingStreak"
+          }
+        },
+        "required": [
+          "kind",
+          "username",
+          "displayName",
+          "bio",
+          "avatarUrl",
+          "streak"
+        ],
+        "description": "The anonymous-safe basics for a public account."
+      },
+      "PostingStreak": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "current": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Consecutive Auckland days with an accepted post, ending today, or yesterday while today is still open."
+          },
+          "longest": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lastPostDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "postedToday": {
+            "type": "boolean"
+          },
+          "asOf": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the values were calculated for. They hold until that day's midnight unless a post is accepted or deleted."
+              }
+            ]
+          }
+        },
+        "required": [
+          "current",
+          "longest",
+          "lastPostDate",
+          "postedToday",
+          "asOf"
+        ],
+        "description": "Null whenever the bio is hidden. Solo and friends posts both count; drafts and failed submissions do not."
+      },
+      "RestrictedProfile": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "restricted"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "kind",
+          "username"
+        ],
+        "description": "The complete response for a private account when the caller is neither its owner nor an active friend."
+      },
       "HealthResponse": {
         "type": "object",
         "properties": {
@@ -66,16 +389,6 @@
           "aucklandDate",
           "requestedLimit"
         ]
-      },
-      "UtcTimestamp": {
-        "type": "string",
-        "format": "date-time",
-        "example": "2026-09-09T12:00:00Z"
-      },
-      "AucklandDate": {
-        "type": "string",
-        "format": "date",
-        "example": "2026-09-10"
       },
       "ApiError": {
         "type": "object",
@@ -247,6 +560,89 @@
         "required": [
           "status",
           "generation"
+        ]
+      },
+      "AccountExportStatus": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "requested",
+              "building",
+              "ready",
+              "failed",
+              "cancelled",
+              "expired"
+            ]
+          },
+          "requestedAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "readyAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "expiresAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          }
+        },
+        "required": [
+          "requestId",
+          "status",
+          "requestedAt",
+          "readyAt",
+          "expiresAt"
+        ]
+      },
+      "AccountExportRequestResult": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "building",
+              "ready",
+              "expired"
+            ]
+          },
+          "requestedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "requestId",
+          "status",
+          "requestedAt"
         ]
       },
       "PasswordReauthenticationGrant": {
@@ -490,12 +886,6 @@
           "expiresAt",
           "upload"
         ]
-      },
-      "OpaqueId": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 128,
-        "example": "post_01K4Y6P8K2"
       },
       "MediaContentType": {
         "type": "string",
@@ -787,17 +1177,6 @@
           "order"
         ]
       },
-      "PostMediaContentType": {
-        "type": "string",
-        "enum": [
-          "image/jpeg",
-          "image/png",
-          "image/webp",
-          "image/heic",
-          "video/mp4",
-          "video/quicktime"
-        ]
-      },
       "DailyPostVoiceMemo": {
         "type": "object",
         "properties": {
@@ -1023,43 +1402,6 @@
           "text"
         ]
       },
-      "PostMedia": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/OpaqueId"
-          },
-          "contentType": {
-            "$ref": "#/components/schemas/PostMediaContentType"
-          },
-          "order": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include media is a 503 instead."
-          },
-          "expiresAt": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UtcTimestamp"
-              },
-              {
-                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/media/{mediaId}, for a fresh one."
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "contentType",
-          "order",
-          "url",
-          "expiresAt"
-        ]
-      },
       "TrashedPostStatus": {
         "type": "object",
         "properties": {
@@ -1141,7 +1483,12 @@
           },
           "edited": {
             "type": "boolean",
-            "description": "True when the author has edited the post since it was accepted."
+            "description": "True when the caller can read an earlier version of the post."
+          },
+          "revisionCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends."
           },
           "viewerIsAuthor": {
             "type": "boolean"
@@ -1177,11 +1524,12 @@
           "acceptedAt",
           "releasedAt",
           "edited",
+          "revisionCount",
           "viewerIsAuthor",
           "media",
           "voiceMemo"
         ],
-        "description": "One post the caller may read. Tomorrow notes are not part of this projection."
+        "description": "One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection."
       },
       "PostDetailAuthor": {
         "type": "object",
@@ -1235,14 +1583,15 @@
             "description": "A private download URL that expires at expiresAt. When media storage is unavailable, a response that would include a voice memo is a 503 instead."
           },
           "expiresAt": {
-            "allOf": [
+            "anyOf": [
               {
                 "$ref": "#/components/schemas/UtcTimestamp"
               },
               {
-                "description": "When url stops working. Fetch the post again, or GET /api/v1/posts/{postId}/voice-memo, for a fresh one."
+                "type": "null"
               }
-            ]
+            ],
+            "description": "When a signed private URL stops working. Null for a Worker URL that reauthorizes every request."
           }
         },
         "required": [
@@ -1252,13 +1601,85 @@
           "expiresAt"
         ]
       },
-      "ProfilePostsPage": {
+      "ReadableProfilePosts": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "archive",
+              "restricted"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfilePost"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "description": "A restricted response has only kind and username. An archive response has kind and every ProfilePostsPage field."
+      },
+      "UpdatePostRequest": {
+        "type": "object",
+        "properties": {
+          "expectedRevisionCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The `revisionCount` of the post the author last read. If another edit has been saved since, the request is a 409.",
+            "example": 0
+          },
+          "reflectiveAnswer": {
+            "type": "string",
+            "example": "Walked to the harbour after class, then home along the beach."
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null removes the caption.",
+            "example": "Sunset at the wharf"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "example": 8
+          },
+          "audience": {
+            "$ref": "#/components/schemas/PostAudience"
+          }
+        },
+        "required": [
+          "expectedRevisionCount",
+          "reflectiveAnswer",
+          "caption",
+          "rating",
+          "audience"
+        ],
+        "additionalProperties": false,
+        "description": "Every editable field, as the post should read after the edit. Only values that differ are saved, and only then is a revision stored. The prompt, day, media and tomorrow note cannot be edited."
+      },
+      "PostRevisionsPage": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProfilePost"
+              "$ref": "#/components/schemas/PostRevision"
             }
           },
           "nextCursor": {
@@ -1275,20 +1696,13 @@
           "hasMore"
         ]
       },
-      "ProfilePost": {
+      "PostRevision": {
         "type": "object",
         "properties": {
-          "id": {
-            "$ref": "#/components/schemas/OpaqueId"
-          },
-          "author": {
-            "$ref": "#/components/schemas/ProfilePostAuthor"
-          },
-          "localDate": {
-            "$ref": "#/components/schemas/AucklandDate"
-          },
-          "prompt": {
-            "$ref": "#/components/schemas/ProfilePostPrompt"
+          "revisionNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1 is the version first posted."
           },
           "reflectiveAnswer": {
             "type": "string"
@@ -1301,87 +1715,21 @@
             "type": "integer"
           },
           "audience": {
-            "type": "string",
-            "enum": [
-              "solo",
-              "friends"
-            ],
-            "description": "`solo` appears only on the caller's own profile."
+            "$ref": "#/components/schemas/PostAudience"
           },
-          "acceptedAt": {
+          "replacedAt": {
             "$ref": "#/components/schemas/UtcTimestamp"
-          },
-          "releasedAt": {
-            "$ref": "#/components/schemas/UtcTimestamp"
-          },
-          "released": {
-            "type": "boolean",
-            "description": "False only on the caller's own profile, for a post whose day has not been released yet."
-          },
-          "edited": {
-            "type": "boolean",
-            "description": "True when the author has edited the post since it was accepted."
-          },
-          "media": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PostMedia"
-            },
-            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
           }
         },
         "required": [
-          "id",
-          "author",
-          "localDate",
-          "prompt",
+          "revisionNumber",
           "reflectiveAnswer",
           "caption",
           "rating",
           "audience",
-          "acceptedAt",
-          "releasedAt",
-          "released",
-          "edited",
-          "media"
+          "replacedAt"
         ],
-        "description": "One post on a profile. Tomorrow notes are not part of this projection."
-      },
-      "ProfilePostAuthor": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/OpaqueId"
-          },
-          "username": {
-            "type": "string",
-            "minLength": 1
-          },
-          "displayName": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "required": [
-          "id",
-          "username",
-          "displayName"
-        ]
-      },
-      "ProfilePostPrompt": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/OpaqueId"
-          },
-          "text": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "text"
-        ]
+        "description": "An earlier version of a post, which an edit replaced at `replacedAt`. The prompt, day and media are the same as the current post."
       },
       "PendingRequestPage": {
         "type": "object",
@@ -1913,6 +2261,148 @@
           "username"
         ]
       },
+      "ReadableProfile": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "authorized",
+              "public",
+              "restricted"
+            ]
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detailsVisible": {
+            "type": "boolean",
+            "description": "False when the account is private and the caller is not an active friend. The bio is then null."
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "mbti": {
+            "$ref": "#/components/schemas/Mbti"
+          },
+          "whatIDo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when unset or when the bio is hidden."
+          },
+          "listeningTo": {
+            "type": "string",
+            "nullable": true,
+            "description": "Null when unset or when the bio is hidden."
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri",
+            "description": "A link to the profile photo that expires after 10 minutes. Null when there is no photo or the bio is hidden."
+          },
+          "streak": {
+            "$ref": "#/components/schemas/PostingStreak"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/ProfileStats"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ProfileOwnerSettings"
+          }
+        },
+        "required": [
+          "kind",
+          "username"
+        ],
+        "description": "A restricted response has only kind and username. A public response adds displayName, bio, avatarUrl, and streak. An authorized response has every ProfileDetails field."
+      },
+      "Mbti": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "INTJ",
+          "INTP",
+          "ENTJ",
+          "ENTP",
+          "INFJ",
+          "INFP",
+          "ENFJ",
+          "ENFP",
+          "ISTJ",
+          "ISFJ",
+          "ESTJ",
+          "ESFJ",
+          "ISTP",
+          "ISFP",
+          "ESTP",
+          "ESFP",
+          null
+        ],
+        "description": "Null when unset or when the bio is hidden."
+      },
+      "ProfileStats": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "posts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Accepted posts, solo ones included; the streak already reveals which days had one."
+          },
+          "friends": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "posts",
+          "friends"
+        ],
+        "description": "Null whenever the bio is hidden."
+      },
+      "ProfileOwnerSettings": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "profileVisibility": {
+            "$ref": "#/components/schemas/ProfileVisibility"
+          },
+          "usernameChangeAvailableAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true,
+                "description": "When the username can next change, or null when it can change now."
+              }
+            ]
+          }
+        },
+        "required": [
+          "profileVisibility",
+          "usernameChangeAvailableAt"
+        ],
+        "description": "Present only on the caller's own profile."
+      },
+      "ProfileVisibility": {
+        "type": "string",
+        "enum": [
+          "public",
+          "private"
+        ],
+        "description": "`private` shows the bio and streak to active friends only. Posts are always friends only."
+      },
       "ProfileDetails": {
         "type": "object",
         "properties": {
@@ -1978,130 +2468,8 @@
           "streak",
           "stats",
           "owner"
-        ]
-      },
-      "Mbti": {
-        "type": "string",
-        "nullable": true,
-        "enum": [
-          "INTJ",
-          "INTP",
-          "ENTJ",
-          "ENTP",
-          "INFJ",
-          "INFP",
-          "ENFJ",
-          "ENFP",
-          "ISTJ",
-          "ISFJ",
-          "ESTJ",
-          "ESFJ",
-          "ISTP",
-          "ISFP",
-          "ESTP",
-          "ESFP",
-          null
         ],
-        "description": "Null when unset or when the bio is hidden."
-      },
-      "PostingStreak": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "current": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Consecutive Auckland days with an accepted post, ending today, or yesterday while today is still open."
-          },
-          "longest": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "lastPostDate": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AucklandDate"
-              },
-              {
-                "nullable": true
-              }
-            ]
-          },
-          "postedToday": {
-            "type": "boolean"
-          },
-          "asOf": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AucklandDate"
-              },
-              {
-                "description": "The Auckland day the values were calculated for. They hold until that day's midnight unless a post is accepted or deleted."
-              }
-            ]
-          }
-        },
-        "required": [
-          "current",
-          "longest",
-          "lastPostDate",
-          "postedToday",
-          "asOf"
-        ],
-        "description": "Null whenever the bio is hidden. Solo and friends posts both count; drafts and failed submissions do not."
-      },
-      "ProfileStats": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "posts": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "Accepted posts, solo ones included; the streak already reveals which days had one."
-          },
-          "friends": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "posts",
-          "friends"
-        ],
-        "description": "Null whenever the bio is hidden."
-      },
-      "ProfileOwnerSettings": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "profileVisibility": {
-            "$ref": "#/components/schemas/ProfileVisibility"
-          },
-          "usernameChangeAvailableAt": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/UtcTimestamp"
-              },
-              {
-                "nullable": true,
-                "description": "When the username can next change, or null when it can change now."
-              }
-            ]
-          }
-        },
-        "required": [
-          "profileVisibility",
-          "usernameChangeAvailableAt"
-        ],
-        "description": "Present only on the caller's own profile."
-      },
-      "ProfileVisibility": {
-        "type": "string",
-        "enum": [
-          "public",
-          "private"
-        ],
-        "description": "`private` shows the bio and streak to active friends only. Posts are always friends only."
+        "description": "The full profile projection returned only to the owner or an active friend."
       },
       "UpdateProfileRequest": {
         "type": "object",
@@ -2530,6 +2898,225 @@
           },
           "503": {
             "description": "Cancellation is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/export": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.getExportStatus",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Read the owner's export request state",
+        "responses": {
+          "200": {
+            "description": "Current export request state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountExportStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies this read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Export is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/export/request": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.requestExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Request one private account export",
+        "responses": {
+          "200": {
+            "description": "An export request already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountExportRequestResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "A new export was requested.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountExportRequestResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies this request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Export is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/account/export/{requestId}/download": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "operationId": "account.downloadExport",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Download a ready export through a fresh authenticated stream",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "requestId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private ZIP archive.",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account policy denies this download.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No ready export exists for this session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Export is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3317,7 +3904,7 @@
             }
           },
           "409": {
-            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
+            "description": "The posting day has closed or not yet opened, the prompt no longer matches, a post already exists for the day, the idempotency key was used for a different request, the post from an earlier submission with this key is in Trash (`POST_TRASHED`), an attachment is still uploading (`MEDIA_NOT_READY`), or an attachment can't be used and must be uploaded again (`MEDIA_UNAVAILABLE`). `details.reason` identifies which.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3718,8 +4305,9 @@
         ],
         "operationId": "posts.get",
         "summary": "Read one post",
-        "description": "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Anyone else needs a released `friends` post by an active friend with no block in either direction. A missing post and a post the caller may not read both return 404.",
+        "description": "Returns a post the caller may read. Authors can read their own solo and unreleased posts. Released `friends` posts are also readable by active friends and by anyone when the author has a public profile. A known signed-in block is denied before public-profile access. A missing post and a post the caller may not read both return 404.",
         "security": [
+          {},
           {
             "BearerAuth": []
           },
@@ -3756,7 +4344,7 @@
             }
           },
           "401": {
-            "description": "Authentication is required.",
+            "description": "Presented credentials are invalid or expired.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3805,7 +4393,491 @@
             }
           },
           "503": {
+            "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.update",
+        "summary": "Edit a post",
+        "description": "Lets the author change the reflective answer, caption, rating, and audience of their post, before or after release. The request carries all four, and only values that differ are saved. Each saved edit keeps the previous version as a revision. Send the `revisionCount` you last read as `expectedRevisionCount`; a 409 means another edit was saved first. Repeating an edit that is already saved returns the post without adding a revision.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The post as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist, was deleted, or belongs to someone else. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another edit was saved after the caller read the post. Read it again and reapply the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The post ID or a field is invalid, or a field is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
             "description": "Post storage is temporarily unavailable, or the post has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{username}/posts": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listProfilePosts",
+        "summary": "List the posts on a profile",
+        "description": "Returns one person's posts, newest Auckland day first. Owners retain solo and unreleased posts. Active friends and public-profile readers receive released `friends` posts. A private non-friend receives only the username and a generic restricted state, with no page metadata. Access is re-checked on every page. Unknown, inactive, banned, and blocked profiles all return 404.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$",
+              "example": "ben"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the profile's posts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadableProfilePosts"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The profile does not exist or is blocked in either direction. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The username or query contains invalid values, including an unrecognised cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/media/{mediaId}/content": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getMediaContent",
+        "summary": "Read currently authorized post media bytes",
+        "description": "Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "media-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "mediaId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The media bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested media byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The media is absent, detached, or its current parent is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/voice-memo/content": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.getVoiceMemoContent",
+        "summary": "Read currently authorized voice memo bytes",
+        "description": "Rechecks the current post and attachment on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The voice memo bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested voice memo byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The voice memo is absent, detached, or its current parent is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Media is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4044,14 +5116,14 @@
         }
       }
     },
-    "/api/v1/profiles/{username}/posts": {
+    "/api/v1/posts/{postId}/revisions": {
       "get": {
         "tags": [
           "Posts"
         ],
-        "operationId": "posts.listProfilePosts",
-        "summary": "List the posts on a profile",
-        "description": "Returns one person's posts, newest Auckland day first. On the caller's own profile this includes solo and unreleased posts. On anyone else's it includes only released `friends` posts, and only while the two are active friends; otherwise the page is empty. Access is re-checked on every page. Unknown, banned and blocked profiles all return 404.",
+        "operationId": "posts.listRevisions",
+        "summary": "List a post's earlier versions",
+        "description": "Returns earlier versions of a post the caller may read, newest first. The author sees every version. Anyone else sees only versions that were already shared with friends, so text written while the post was solo stays private. A missing post and a post the caller may not read both return 404.",
         "security": [
           {
             "BearerAuth": []
@@ -4063,14 +5135,17 @@
         "parameters": [
           {
             "schema": {
-              "type": "string",
-              "minLength": 2,
-              "maxLength": 32,
-              "pattern": "^[a-zA-Z0-9_]+$",
-              "example": "ben"
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
             },
             "required": true,
-            "name": "username",
+            "name": "postId",
             "in": "path"
           },
           {
@@ -4099,11 +5174,11 @@
         ],
         "responses": {
           "200": {
-            "description": "One page of the profile's posts.",
+            "description": "One page of earlier versions.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfilePostsPage"
+                  "$ref": "#/components/schemas/PostRevisionsPage"
                 }
               }
             }
@@ -4119,7 +5194,7 @@
             }
           },
           "404": {
-            "description": "The profile does not exist or is blocked in either direction. The cases are indistinguishable.",
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4129,7 +5204,7 @@
             }
           },
           "422": {
-            "description": "The username or query contains invalid values, including an unrecognised cursor.",
+            "description": "The post ID or query contains invalid values, including an unrecognised cursor.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4158,7 +5233,7 @@
             }
           },
           "503": {
-            "description": "Post storage is temporarily unavailable, or the page has media and media storage is unavailable.",
+            "description": "Post storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8520,8 +9595,9 @@
         ],
         "operationId": "profile.getDetails",
         "summary": "Read a profile's details",
-        "description": "Returns the public name and, when the caller may see it, the bio. The owner always sees their bio; anyone else sees it when the account is public or when they are active friends. The owner also gets their visibility and when their username can next change. A handle the owner gave up in the last 30 days resolves to their current profile. Unknown, banned and blocked profiles all return 404.",
+        "description": "Returns anonymous-safe basics for a public account, the normal authorized profile to its owner or an active friend, or exactly the username and a generic restricted state for a private account. Unknown, inactive, banned, and blocked profiles all return 404.",
         "security": [
+          {},
           {
             "BearerAuth": []
           },
@@ -8545,17 +9621,17 @@
         ],
         "responses": {
           "200": {
-            "description": "The profile.",
+            "description": "The readable or restricted profile projection.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProfileDetails"
+                  "$ref": "#/components/schemas/ReadableProfile"
                 }
               }
             }
           },
           "401": {
-            "description": "Authentication is required.",
+            "description": "Presented credentials are invalid.",
             "content": {
               "application/json": {
                 "schema": {
@@ -8605,6 +9681,111 @@
           },
           "503": {
             "description": "Profile storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/profiles/{username}/avatar": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "operationId": "profile.getAvatar",
+        "summary": "Read a currently authorized profile avatar",
+        "description": "Rechecks current profile visibility and blocks on every request, then streams the private object without exposing a provider URL or object key.",
+        "security": [
+          {},
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 32,
+              "pattern": "^[a-zA-Z0-9_]+$"
+            },
+            "required": true,
+            "name": "username",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The avatar bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "The requested avatar byte range.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The authorized representation has not changed."
+          },
+          "401": {
+            "description": "Presented credentials are invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The avatar is absent or its current profile is not readable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "An authorized conditional request precondition failed. The response has no provider body."
+          },
+          "416": {
+            "description": "The requested byte range is not satisfiable. The response has no provider body."
+          },
+          "429": {
+            "description": "Rate limit reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Avatar media is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

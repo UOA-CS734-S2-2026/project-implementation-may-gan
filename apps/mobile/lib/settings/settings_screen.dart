@@ -85,7 +85,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final session = AppScope.of(context).session;
+    final services = AppScope.of(context);
+    final session = services.session;
     final user = session.user;
     final colors = DayliColors.of(context);
     final name = user?.name ?? '';
@@ -229,6 +230,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Padding(padding: EdgeInsets.all(12), child: LegalLinks()),
                     ],
                   ),
+                  if (services.accountExports != null) ...[
+                    const SizedBox(height: 24),
+                    const _GroupLabel('your data'),
+                    _Group(
+                      children: [
+                        ListTile(
+                          title: const Text('Your data export'),
+                          onTap: () => context.push('/account/export'),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   const _GroupLabel('profile and privacy'),
                   _Group(

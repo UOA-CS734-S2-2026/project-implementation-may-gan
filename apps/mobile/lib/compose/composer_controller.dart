@@ -440,6 +440,17 @@ class ComposerController extends ChangeNotifier {
         _message =
             'An earlier version of this dayli was already posted, so these '
             "edits can't be posted. They're still saved on this device.";
+      case SubmissionRejected(conflict: SubmissionConflict.postTrashed):
+        // The earlier submission was posted and then moved to Trash. A new key lets
+        // the author post these words again while the day is open.
+        _draft = current.copyWith(
+          idempotencyKey: _newKey(),
+          updatedAt: _clock(),
+        );
+        _scheduleSave();
+        _message =
+            'This dayli was posted and then moved to Trash. Your words are still '
+            'here; post again to share them.';
       case SubmissionFailed(failure: Unauthenticated()):
         _message = 'Sign in again to post. Your dayli is saved on this device.';
         _onUnauthenticated();

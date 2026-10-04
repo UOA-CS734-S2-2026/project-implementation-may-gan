@@ -262,6 +262,25 @@ void main() {
     });
   }
 
+  test('starts a new submission when the posted dayli was deleted', () async {
+    submitter.result = const SubmissionRejected(SubmissionConflict.postTrashed);
+    final composer = controller();
+    await composer.load();
+    fill(composer);
+    final firstKey = composer.draft!.idempotencyKey;
+    await composer.submit();
+    await composer.close();
+
+    expect(composer.phase, ComposerPhase.editing);
+    expect(composer.message, contains('posted and then moved to Trash'));
+    expect(composer.draft!.reflectiveAnswer, contains('harbour'));
+    expect(composer.draft!.idempotencyKey, isNot(firstKey));
+    expect(
+      drafts.drafts['user-1']!.idempotencyKey,
+      composer.draft!.idempotencyKey,
+    );
+  });
+
   test(
     'reloads the day when the draft is dated before the server day',
     () async {

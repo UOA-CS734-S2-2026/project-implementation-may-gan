@@ -32,6 +32,7 @@ Both apps use a Hono API on Cloudflare Workers. Keep PostgreSQL, Drizzle, Better
 - [Native composer entry points](native-composer-entry-points.md): Siri, Shortcuts, the Android launcher shortcut, and the `dayli://` composer link.
 - [Friends feed](friends-feed.md): who can see which posts in `GET /api/v1/feed`, and its pagination.
 - [Post detail](post-detail.md): `GET /api/v1/posts/{postId}`, who can read one post, and 404 concealment.
+- [Editing and deleting posts](post-editing.md): `PATCH /api/v1/posts/{postId}`, revision history, and deleting through post Trash.
 - [Profiles](profiles.md): profile details, who sees the bio, editing, and username changes.
 - [Profile archive](profile-archive.md): `GET /api/v1/profiles/{username}/posts`, who sees which posts on a profile.
 

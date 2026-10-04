@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,9 +8,11 @@ import '../app/theme.dart';
 import '../drafts/daily_post_draft.dart';
 import '../ui/dayli_button.dart';
 import '../ui/form_input.dart';
+import '../ui/post_inputs.dart';
 import 'composer_controller.dart';
 import 'deadline_countdown.dart';
 import 'media_input.dart';
+import 'media_picker.dart';
 import 'media_upload_controller.dart';
 
 /// The daily composer as a full-screen page: today's prompt, media, a 1–10
@@ -20,9 +24,13 @@ import 'media_upload_controller.dart';
 /// against the rating range. It only fills the slider: nothing is posted until
 /// the author chooses who can see the dayli and taps Post.
 class ComposerScreen extends StatefulWidget {
-  const ComposerScreen({super.key, this.initialRating});
+  const ComposerScreen({super.key, this.initialRating, this.linkSequence = 0});
 
   final int? initialRating;
+
+  /// Counts the composer links that have arrived. A new value means a link
+  /// just reached this composer, so its rating is applied again.
+  final int linkSequence;
 
   @override
   State<ComposerScreen> createState() => _ComposerScreenState();
@@ -38,6 +46,16 @@ class _ComposerScreenState extends State<ComposerScreen> {
   final _tomorrowNote = TextEditingController();
   String? _boundDraftKey;
 
+  /// Why the camera couldn't be used, and whether only Settings can fix it.
+  String? _captureNotice;
+  bool _settingsCanFix = false;
+
+  String? _userId;
+
+  /// Settles what the system handed back after Android ended the app. A pick
+  /// waits for it, so a new record never lands on top of an unsettled one.
+  Future<void> _recovery = Future.value();
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -45,6 +63,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
     final services = AppScope.of(context);
     final userId = services.session.user?.id;
     if (userId == null) return;
+    _userId = userId;
     _controller = ComposerController(
       userId: userId,
       postingDays: services.postingDays,
@@ -63,14 +82,18 @@ class _ComposerScreenState extends State<ComposerScreen> {
         onUnauthenticated: () => services.session.sessionExpired(),
       )..start();
     }
-    _controller!.load().then((_) => _prefillRating());
+    _recovery = _controller!.load().then((_) {
+      _prefillRating();
+      return _recoverLostCapture();
+    });
   }
 
   @override
   void didUpdateWidget(ComposerScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // A second link can reach a composer that is already open.
-    if (widget.initialRating != oldWidget.initialRating) _prefillRating();
+    // Every composer link that reaches an open composer fills the rating
+    // again, even when it names the rating the widget already had.
+    if (widget.linkSequence != oldWidget.linkSequence) _prefillRating();
   }
 
   /// Sets the linked rating, like moving the slider, once today's draft is
@@ -107,12 +130,127 @@ class _ComposerScreenState extends State<ComposerScreen> {
     super.dispose();
   }
 
-  Future<void> _pick(ComposerController controller, int slot) async {
+  /// Asks where the next attachment comes from. The camera is offered first, and
+  /// only the first slot can take a video.
+  Future<void> _choose(ComposerController controller, int slot) async {
     _uploads?.clearNotice();
+    final source = await showModalBottomSheet<_MediaSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _SourceSheet(videoAllowed: slot == 0),
+    );
+    if (source == null || !mounted) return;
+    setState(() {
+      _captureNotice = null;
+      _settingsCanFix = false;
+    });
+    await _recovery;
+    final draft = controller.draft;
+    final userId = _userId;
+    if (!mounted || draft == null || userId == null) return;
+
+    // Android may end the app while the camera or library is open. Who started
+    // this pick is written down first, so that only they can get its result.
+    final captures = AppScope.of(context).pendingCaptures;
+    await captures.begin(userId: userId, draftKey: _draftKey(draft));
+    try {
+      switch (source) {
+        case _MediaSource.photo:
+          await _capture(controller, slot, (picker) => picker.capturePhoto());
+        case _MediaSource.video:
+          await _capture(controller, slot, (picker) => picker.captureVideo());
+        case _MediaSource.library:
+          await _pick(controller, slot);
+      }
+    } finally {
+      await captures.finish();
+    }
+  }
+
+  static String _draftKey(DailyPostDraft draft) =>
+      '${draft.localDate}:${draft.idempotencyKey}';
+
+  Future<void> _pick(ComposerController controller, int slot) async {
     final picker = AppScope.of(context).mediaPicker;
     final picked = slot == 0
         ? await picker.pickPhotoOrVideo()
         : await picker.pickPhoto();
+    _attach(controller, slot, picked);
+  }
+
+  /// Takes a photo or video. Whatever happens, the rest of the composer, the
+  /// library and posting without media all keep working.
+  Future<void> _capture(
+    ComposerController controller,
+    int slot,
+    Future<CaptureOutcome> Function(MediaPicker picker) take,
+  ) async {
+    final outcome = await take(AppScope.of(context).mediaPicker);
+    if (!mounted) return;
+    switch (outcome) {
+      case Captured(:final attachment):
+        _attach(controller, slot, attachment);
+      case CaptureCancelled():
+        break;
+      case CaptureFailed(:final reason):
+        setState(() {
+          _captureNotice = switch (reason) {
+            CaptureFailure.denied =>
+              'Camera access was declined. You can still choose from your '
+                  'library.',
+            CaptureFailure.permanentlyDenied =>
+              'Camera access is off for Dayli. Turn it on in Settings, or '
+                  'choose from your library.',
+            CaptureFailure.restricted =>
+              'The camera is restricted on this device. You can still choose '
+                  'from your library.',
+            CaptureFailure.unavailable =>
+              'No camera is available. You can still choose from your '
+                  'library.',
+          };
+          _settingsCanFix = reason == CaptureFailure.permanentlyDenied;
+        });
+    }
+  }
+
+  /// Android can end the app while the camera or library is open, and then hands
+  /// what the system finished to whoever asks first. That is the same for every
+  /// account on the phone, so it is only added here when the user and the draft
+  /// that started the pick are the ones open now. Otherwise it is kept for its
+  /// owner or removed, and never shown to this user.
+  Future<void> _recoverLostCapture() async {
+    if (!mounted) return;
+    final controller = _controller;
+    final userId = _userId;
+    if (controller == null || userId == null) return;
+    final services = AppScope.of(context);
+    try {
+      // Always asked, so what the system holds is settled rather than left
+      // for a later composer, possibly another user's.
+      final lost = await services.mediaPicker.recoverLostCapture();
+      final draft = controller.draft;
+      final recovered = await services.pendingCaptures.recover(
+        userId: userId,
+        // A draft that didn't load can't be anyone's.
+        draftKey: draft == null ? '' : _draftKey(draft),
+        lost: lost,
+      );
+      if (!mounted || draft == null || recovered == null) return;
+      final known = draft.attachments.any(
+        (attachment) => attachment.localPath == recovered.localPath,
+      );
+      if (known || !canAddAttachment(draft.attachments)) return;
+      _attach(controller, draft.attachments.length, recovered);
+    } catch (_) {
+      // Recovery is a courtesy; the composer works without it.
+    }
+  }
+
+  void _attach(
+    ComposerController controller,
+    int slot,
+    DraftAttachment? picked,
+  ) {
     final draft = controller.draft;
     if (picked == null || draft == null) return;
     final attachments = [...draft.attachments];
@@ -123,6 +261,9 @@ class _ComposerScreenState extends State<ComposerScreen> {
     }
     controller.update(attachments: attachments);
   }
+
+  Future<void> _openSettings() =>
+      AppScope.of(context).mediaPicker.openSettings();
 
   void _remove(ComposerController controller, int slot) {
     final draft = controller.draft;
@@ -139,16 +280,18 @@ class _ComposerScreenState extends State<ComposerScreen> {
     if (uploads == null) {
       return MediaInput(
         attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       );
     }
     return ListenableBuilder(
       listenable: uploads,
       builder: (context, _) => MediaInput(
         attachments: draft.attachments,
-        onPick: (slot) => _pick(controller, slot),
+        onPick: (slot) => _choose(controller, slot),
         onRemove: (slot) => _remove(controller, slot),
         error: error,
         uploads: true,
@@ -159,6 +302,8 @@ class _ComposerScreenState extends State<ComposerScreen> {
         notice: uploads.notice,
         problem: uploads.problem,
         onRetry: uploads.retryNow,
+        captureNotice: _captureNotice,
+        onOpenSettings: _settingsCanFix ? _openSettings : null,
       ),
     );
   }
@@ -327,7 +472,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         ),
         _Lockable(
           locked: locked,
-          child: _RatingSlider(
+          child: RatingSlider(
             value: draft.rating,
             onChanged: (rating) => controller.update(rating: () => rating),
           ),
@@ -387,7 +532,7 @@ class _ComposerScreenState extends State<ComposerScreen> {
         const _SectionLabel('who can see this'),
         _Lockable(
           locked: locked,
-          child: _AudiencePicker(
+          child: AudiencePicker(
             value: draft.audience,
             invalid: errors.audience != null,
             onChanged: (audience) => controller.update(audience: audience),
@@ -564,83 +709,6 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// A 1–10 slider that starts unset, so a rating is always chosen on purpose.
-/// The first tap or drag on the track sets it.
-class _RatingSlider extends StatelessWidget {
-  const _RatingSlider({required this.value, required this.onChanged});
-
-  final int? value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = DayliColors.of(context);
-    final rated = value != null;
-    final ends = DayliText.sans(
-      context,
-      size: DayliTextSize.sm,
-      color: colors.foregroundTertiary,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 6,
-            activeTrackColor: rated
-                ? colors.foregroundAccent
-                : colors.backgroundTertiary,
-            inactiveTrackColor: colors.backgroundTertiary,
-            thumbColor: rated
-                ? colors.foregroundAccent
-                : colors.foregroundTertiary,
-            overlayColor: colors.foregroundAccent.withValues(alpha: 0.12),
-            activeTickMarkColor: Colors.white.withValues(alpha: 0.6),
-            inactiveTickMarkColor: colors.foregroundTertiary.withValues(
-              alpha: 0.5,
-            ),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 12),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 24),
-            showValueIndicator: ShowValueIndicator.never,
-          ),
-          child: Slider(
-            key: const Key('composer.rating'),
-            min: DailyPostLimits.ratingMin.toDouble(),
-            max: DailyPostLimits.ratingMax.toDouble(),
-            divisions: DailyPostLimits.ratingMax - DailyPostLimits.ratingMin,
-            value: (value ?? DailyPostLimits.ratingMin).toDouble(),
-            semanticFormatterCallback: (rating) =>
-                rated ? '${rating.round()} out of 10' : 'Not rated yet',
-            onChanged: (rating) => onChanged(rating.round()),
-            // Slider skips onChanged when the new value equals the one it was
-            // built with. Unset, that is 1, so a tap on 1 would otherwise be
-            // lost; onChangeEnd always reports where the interaction ended.
-            onChangeEnd: (rating) => onChanged(rating.round()),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
-            children: [
-              Text('1', style: ends),
-              Expanded(
-                child: rated
-                    ? const SizedBox.shrink()
-                    : Text(
-                        'Slide to rate your day',
-                        textAlign: TextAlign.center,
-                        style: ends,
-                      ),
-              ),
-              Text('10', style: ends),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _Notice extends StatelessWidget {
   const _Notice(this.text);
 
@@ -808,109 +876,41 @@ class _UnpostedDraft extends StatelessWidget {
   }
 }
 
-/// Solo or friends, with nothing chosen until the author picks one.
-class _AudiencePicker extends StatelessWidget {
-  const _AudiencePicker({
-    required this.value,
-    required this.invalid,
-    required this.onChanged,
-  });
+enum _MediaSource { photo, video, library }
 
-  final PostAudience? value;
-  final bool invalid;
-  final ValueChanged<PostAudience> onChanged;
+/// Where the next photo or video comes from.
+class _SourceSheet extends StatelessWidget {
+  const _SourceSheet({required this.videoAllowed});
+
+  final bool videoAllowed;
 
   @override
   Widget build(BuildContext context) {
-    final colors = DayliColors.of(context);
-    Widget option(
-      PostAudience audience,
-      IconData icon,
-      String title,
-      String body,
-    ) {
-      final selected = value == audience;
-      return Expanded(
-        child: Semantics(
-          button: true,
-          inMutuallyExclusiveGroup: true,
-          selected: selected,
-          label: '$title. $body',
-          excludeSemantics: true,
-          child: Material(
-            color: selected
-                ? colors.foregroundAccent
-                : colors.backgroundSecondary,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(
-                color: invalid ? colors.danger : Colors.transparent,
-              ),
-            ),
-            child: InkWell(
-              key: Key('composer.audience.${audience.wireValue}'),
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => onChanged(audience),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 88),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        icon,
-                        size: 22,
-                        color: selected ? Colors.white : colors.foreground,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        title,
-                        style: DayliText.serif(
-                          context,
-                          size: DayliTextSize.lg,
-                          weight: FontWeight.w600,
-                          color: selected ? Colors.white : colors.foreground,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        body,
-                        style: DayliText.sans(
-                          context,
-                          size: DayliTextSize.sm,
-                          color: selected
-                              ? Colors.white.withValues(alpha: 0.85)
-                              : colors.foregroundSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Both cards match the taller one's height.
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          option(
-            PostAudience.friends,
-            Icons.group_rounded,
-            'Friends',
-            'Your friends see it after midnight.',
+          ListTile(
+            key: const Key('composer.media.source.photo'),
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.of(context).pop(_MediaSource.photo),
           ),
-          const SizedBox(width: 10),
-          option(
-            PostAudience.solo,
-            Icons.lock_rounded,
-            'Solo',
-            'Only you can see it.',
+          if (videoAllowed)
+            ListTile(
+              key: const Key('composer.media.source.video'),
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Record a video'),
+              subtitle: const Text('Up to 15 seconds'),
+              onTap: () => Navigator.of(context).pop(_MediaSource.video),
+            ),
+          ListTile(
+            key: const Key('composer.media.source.library'),
+            leading: const Icon(Icons.photo_library_outlined),
+            title: Text(
+              videoAllowed ? 'Choose a photo or video' : 'Choose a photo',
+            ),
+            onTap: () => Navigator.of(context).pop(_MediaSource.library),
           ),
         ],
       ),

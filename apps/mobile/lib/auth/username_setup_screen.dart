@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../app/app_scope.dart';
 import '../app/theme.dart';
@@ -130,6 +131,11 @@ class _UsernameSetupScreenState extends State<UsernameSetupScreen> {
                   fullWidth: true,
                   onPressed: _busy ? null : _submit,
                 ),
+                if (AppScope.of(context).accountExports != null)
+                  TextButton(
+                    onPressed: () => context.push('/account/export'),
+                    child: const Text('Your data export'),
+                  ),
                 TextButton(
                   onPressed: _busy
                       ? null

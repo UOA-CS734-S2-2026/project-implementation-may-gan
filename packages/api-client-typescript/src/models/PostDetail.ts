@@ -43,7 +43,7 @@ import {
 } from './PostDetailAuthor';
 
 /**
- * One post the caller may read. Tomorrow notes are not part of this projection.
+ * One post the caller may read, including an anonymously readable public-profile post. Tomorrow notes are not part of this projection.
  * @export
  * @interface PostDetail
  */
@@ -89,9 +89,13 @@ export interface PostDetail {
      */
     releasedAt: Date;
     /**
-     * True when the author has edited the post since it was accepted.
+     * True when the caller can read an earlier version of the post.
      */
     edited: boolean;
+    /**
+     * Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends.
+     */
+    revisionCount: number;
     /**
      *
      */
@@ -132,6 +136,7 @@ export function instanceOfPostDetail(value: object): value is PostDetail {
     if (!('acceptedAt' in value) || value['acceptedAt'] === undefined) return false;
     if (!('releasedAt' in value) || value['releasedAt'] === undefined) return false;
     if (!('edited' in value) || value['edited'] === undefined) return false;
+    if (!('revisionCount' in value) || value['revisionCount'] === undefined) return false;
     if (!('viewerIsAuthor' in value) || value['viewerIsAuthor'] === undefined) return false;
     if (!('media' in value) || value['media'] === undefined) return false;
     if (!('voiceMemo' in value) || value['voiceMemo'] === undefined) return false;
@@ -159,6 +164,7 @@ export function PostDetailFromJSONTyped(json: any, ignoreDiscriminator: boolean)
         'acceptedAt': (json['acceptedAt'] == null ? json['acceptedAt'] : parseDateTime(json['acceptedAt'])),
         'releasedAt': (json['releasedAt'] == null ? json['releasedAt'] : parseDateTime(json['releasedAt'])),
         'edited': json['edited'],
+        'revisionCount': json['revisionCount'],
         'viewerIsAuthor': json['viewerIsAuthor'],
         'media': ((json['media'] as Array<any>).map(PostMediaFromJSON)),
         'voiceMemo': PostVoiceMemoFromJSON(json['voiceMemo']),
@@ -187,6 +193,7 @@ export function PostDetailToJSONTyped(value?: PostDetail | null, ignoreDiscrimin
         'acceptedAt': value['acceptedAt'] == null ? value['acceptedAt'] : serializeDateTime(value['acceptedAt']),
         'releasedAt': value['releasedAt'] == null ? value['releasedAt'] : serializeDateTime(value['releasedAt']),
         'edited': value['edited'],
+        'revisionCount': value['revisionCount'],
         'viewerIsAuthor': value['viewerIsAuthor'],
         'media': ((value['media'] as Array<any>).map(PostMediaToJSON)),
         'voiceMemo': PostVoiceMemoToJSON(value['voiceMemo']),
