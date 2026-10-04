@@ -93,7 +93,14 @@ test("messaging harness projects select their tagged tests during discovery", ()
   assert.doesNotMatch(spec, /project\.name/);
 });
 
-test("hosted web E2E failures retain Playwright diagnostics", () => {
+test("hosted web E2E failures retain Playwright traces", () => {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
-  assert.match(workflow, /if: failure\(\)[\s\S]*actions\/upload-artifact@v4[\s\S]*apps\/web\/playwright-report[\s\S]*apps\/web\/test-results/);
+  const config = fs.readFileSync(path.join(repoRoot, "apps/web/playwright.config.ts"), "utf8");
+  const runner = fs.readFileSync(path.join(repoRoot, "scripts/test-web-e2e.sh"), "utf8");
+  assert.match(config, /trace: "retain-on-failure"/);
+  assert.match(runner, /set -Eeuo pipefail/);
+  assert.match(runner, /playwright test "\$@" --reporter=json/);
+  assert.doesNotMatch(runner, /rm -rf [^\n]*test-results/);
+  assert.match(workflow, /if: failure\(\)[\s\S]*actions\/upload-artifact@v4[\s\S]*path: apps\/web\/test-results/);
+  assert.doesNotMatch(workflow, /apps\/web\/playwright-report/);
 });
