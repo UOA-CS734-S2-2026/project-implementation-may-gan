@@ -796,6 +796,20 @@ void main() {
       expect(find.text('Rain · 11°C · Auckland'), findsOneWidget);
     });
 
+    test('survives a change to the post\'s like and comment counts', () {
+      final liked = postDetail(
+        '1',
+        weather: rain,
+      ).copyWith(likeCount: 3, viewerHasLiked: true, commentCount: 2);
+
+      expect(liked.weather, rain);
+      expect(liked.likeCount, 3);
+      expect(liked.viewerHasLiked, isTrue);
+      expect(liked.commentCount, 2);
+      // A post without weather stays without it.
+      expect(postDetail('1').copyWith(likeCount: 1).weather, isNull);
+    });
+
     testWidgets('shows nothing for a post without weather', (tester) async {
       final harness = harnessWith(
         FakePostClient([ApiSuccess(postDetail('1'))]),
