@@ -56,6 +56,20 @@ A post accepts up to three photos, or one video. Photos and a video are not mixe
 
 The initial release supports iOS 16 and newer and Android 10, API 29, and newer. Features unavailable on a supported device need a documented fallback.
 
+## Weather context
+
+A daily post may carry one weather snapshot: a condition, a whole-number temperature in °C, and a place name. It is shown on the post's detail screen only, not in the feed, profile lists, or revisions. Music context is a separate, later decision and is not part of this.
+
+Dayli does not store or log coordinates, and the API never receives them. The app reads an approximate location once, asks Open-Meteo for the current weather there, takes the place name from the phone's own geocoder, and sends only the three fields. The provider and the phone's geocoder see the location; Dayli does not. Because the phone obtains the snapshot, the API checks its shape and ranges but cannot prove the weather is real, so the app and docs describe it as the author's snapshot and never as verified.
+
+- **Provider:** Open-Meteo, for current weather and for searching a place by name. It needs no API key, so no secret is involved. Its free tier is for non-commercial use and requires attribution, which the app shows. A commercial launch needs a paid plan or another provider, so revisit this before launch.
+- **Conditions:** a fixed set the app maps provider codes onto: clear, partly cloudy, cloudy, fog, drizzle, rain, snow, and thunderstorm. A code outside the mapping is rejected rather than guessed, and the snapshot is omitted.
+- **Limits:** the temperature is between -90 and 60. The place name is trimmed, 1 to 80 characters, with no control characters. The condition, temperature, and place name are all present or all absent.
+- **Location accuracy:** the app requests approximate location only: coarse on Android, reduced or low accuracy on iOS. It does not claim the same precision on every device.
+- **Permission:** the weather row is optional and never attached by default. The app explains what it uses and keeps, then offers "Use my location", "Choose a place instead", and "Not now". It asks the operating system only after the first of those, and never when the composer opens or at launch. iOS asks once per install, so after a refusal the app points to Settings and offers the manual choice. A refusal, restricted location, location services turned off, or a provider failure never blocks posting.
+- **Manual place:** the author searches for a place by name and the app fetches the weather for it. The author does not type a condition or temperature by hand. If the phone cannot supply a place name for the current location, the app offers the same search.
+- **Editing:** a snapshot is set when the post is created and is not editable afterwards. Deleting the post removes it with the rest of the post.
+
 ## Database provider and migrations
 
 Neon PostgreSQL 18 is the database provider. Staging uses a separate Neon project for synthetic data only. The staging owner reports restricted roles, grants, and migrations verified. Hyperdrive and an API Worker are attached, and the full private transaction proof passed at `1fb6388`. A synthetic staging browser account was created for a manual email/password test. Google, Resend, and native auth remain untested. Production will use a separate project and is not deployed. Schema changes are additive, forward-only Drizzle migrations owned by `packages/db` and released staging-before-production through the protected manual workflow documented in [Database migrations](database-migrations.md).
