@@ -9,6 +9,9 @@ import { verifyStagingTrashProofTarget } from "./verify-staging-trash-proof-targ
 const workflow = readFileSync(new URL("../.github/workflows/staging-trash-lifecycle-proof.yml", import.meta.url), "utf8");
 const proof = readFileSync(new URL("../packages/db/scripts/staging-trash-lifecycle-proof.ts", import.meta.url), "utf8");
 const entrypoint = readFileSync(new URL("../apps/api/src/features/system/hyperdrive/integration-entrypoint.ts", import.meta.url), "utf8");
+const apiIndex = readFileSync(new URL("../apps/api/src/index.ts", import.meta.url), "utf8");
+const probeModule = readFileSync(new URL("../apps/api/src/features/system/hyperdrive/test-worker.ts", import.meta.url), "utf8");
+const stagingTest = readFileSync(new URL("../apps/api/test/__tests__/staging-trash-proof.staging.test.ts", import.meta.url), "utf8");
 const sha = "a".repeat(40);
 
 test("accepts only one exact target, current main, and deployed revision", () => {
@@ -44,6 +47,9 @@ test("preflights the restricted same-database worker and private deployed revisi
   assert.match(workflow, /vitest\.staging-trash-proof\.config\.ts/);
   assert.match(entrypoint, /proveStagingRevision/);
   assert.match(entrypoint, /provePostTrashWorkerFence/);
+  assert.match(apiIndex, /export \{ HyperdriveIntegrationEntrypoint \}/);
+  assert.match(probeModule, /export \{ HyperdriveIntegrationEntrypoint \}/);
+  assert.match(stagingTest, /awaitRpcDeployment/);
   assert.match(entrypoint, /appRole\?\.currentUser !== "app"/);
   assert.match(entrypoint, /appRole\.canReport !== false/);
   assert.match(entrypoint, /workerRole\?\.currentUser !== "lifecycle_worker"/);
