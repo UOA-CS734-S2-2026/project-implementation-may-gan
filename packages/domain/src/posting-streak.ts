@@ -1,4 +1,5 @@
 import type { AucklandDate } from "./auckland-day.js";
+import { dateFromDayNumber, dayNumber } from "./calendar-days.js";
 
 export interface PostingStreak {
   /** Consecutive posted days ending today, or yesterday while today is still open. */
@@ -8,14 +9,6 @@ export interface PostingStreak {
   readonly lastPostDate: AucklandDate | null;
   /** True when today's post has been accepted. */
   readonly postedToday: boolean;
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Calendar days since 1970-01-01. `YYYY-MM-DD` dates carry no zone, so UTC arithmetic is exact. */
-function dayNumber(date: string): number {
-  const [year, month, day] = date.split("-").map(Number);
-  return Date.UTC(year!, month! - 1, day!) / DAY_MS;
 }
 
 /**
@@ -44,6 +37,6 @@ export function calculatePostingStreak(postedDates: readonly string[], today: Au
   // `run` is the streak ending on the last posted day; it is still current
   // only if that day is today or yesterday.
   const current = last >= todayNumber - 1 ? run : 0;
-  const lastPostDate = new Date(last * DAY_MS).toISOString().slice(0, 10) as AucklandDate;
+  const lastPostDate = dateFromDayNumber(last);
   return { current, longest, lastPostDate, postedToday };
 }

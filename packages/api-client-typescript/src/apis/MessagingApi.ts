@@ -84,6 +84,11 @@ import {
     MessageToJSON,
 } from '../models/Message';
 import {
+    type MessageCreationRateLimitError,
+    MessageCreationRateLimitErrorFromJSON,
+    MessageCreationRateLimitErrorToJSON,
+} from '../models/MessageCreationRateLimitError';
+import {
     type RegisterPushDeviceRequest,
     RegisterPushDeviceRequestFromJSON,
     RegisterPushDeviceRequestToJSON,

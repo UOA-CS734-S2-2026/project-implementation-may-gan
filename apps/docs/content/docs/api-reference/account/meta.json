@@ -1,0 +1,13 @@
+{
+  "title": "Account",
+  "pages": [
+    "account.getDeletionStatus",
+    "account.requestDeletion",
+    "account.cancelDeletion",
+    "account.getExportStatus",
+    "account.requestExport",
+    "account.downloadExport",
+    "account.reauthenticatePassword",
+    "account.beginGoogleReauthentication"
+  ]
+}

@@ -1,0 +1,6 @@
+reason: The migration runner applies each file atomically. The new tables, enums, constraints, indexes, grants, and nullable capability column must appear together before any disabled notification publisher can use them.
+affected_data_and_clients: Existing devices remain legacy because the capability column is nullable. Existing and new accounts remain opted out because absence and the stored default both mean false.
+rollout_sequence: Apply the additive schema first, verify grants and constraints, then deploy the API while notification publishers remain disabled.
+backup_checkpoint: Confirm the approved target recovery checkpoint before running the migration.
+forward_fix_plan: Stop on failure and add a reviewed forward migration. Do not edit migration history after application.
+reviewer: Database, API authorization, and privacy reviewers required.

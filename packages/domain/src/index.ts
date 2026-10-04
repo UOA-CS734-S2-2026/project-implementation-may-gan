@@ -26,3 +26,5 @@ export type {
 } from "./auckland-day.js";
 export { calculatePostingStreak } from "./posting-streak.js";
 export type { PostingStreak } from "./posting-streak.js";
+export { moodHistoryRanges, moodHistoryWindow, summarizeMoodHistory } from "./mood-history.js";
+export type { MoodHistory, MoodHistoryRange, MoodHistoryWindow, MoodPeriodSummary, MoodRating } from "./mood-history.js";

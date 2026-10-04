@@ -71,6 +71,14 @@ beforeEach(() => {
 });
 
 describe("PostDetailView", () => {
+  it("uses a post-shaped skeleton while the dayli loads", () => {
+    get.mockReturnValue(new Promise(() => {}));
+    render(<PostDetailView username="ana_walks" postId="post-1" />);
+
+    expect(screen.getByRole("status", { name: "Loading dayli" })).toBeTruthy();
+    expect(document.querySelectorAll(".skeleton").length).toBeGreaterThan(0);
+  });
+
   it("shows the post with its stored prompt, rating, and Auckland date", async () => {
     get.mockResolvedValue({ ok: true, value: detail() });
     render(<PostDetailView username="ana_walks" postId="post-1" />);

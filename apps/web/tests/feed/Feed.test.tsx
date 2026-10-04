@@ -44,6 +44,14 @@ beforeEach(() => {
 });
 
 describe("Feed", () => {
+  it("uses post-shaped skeletons while the feed loads", () => {
+    page.mockReturnValue(new Promise(() => {}));
+    render(<Feed />);
+
+    expect(screen.getByRole("status", { name: "Loading friends' daylies" })).toBeTruthy();
+    expect(document.querySelectorAll(".skeleton")).toHaveLength(42);
+  });
+
   it("starts again from the new day when a page is loaded after midnight", async () => {
     const actor = userEvent.setup();
     page

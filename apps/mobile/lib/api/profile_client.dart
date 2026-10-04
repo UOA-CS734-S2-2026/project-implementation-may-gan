@@ -196,6 +196,145 @@ class ProfileDetails {
   }
 }
 
+/// The ranges a mood history covers, each ending today in Auckland.
+enum MoodRange {
+  days30('30d', '30 days'),
+  days90('90d', '90 days'),
+  year('1y', 'Year');
+
+  const MoodRange(this.wire, this.label);
+
+  final String wire;
+  final String label;
+}
+
+/// One posted day and its rating.
+class MoodDay {
+  const MoodDay({required this.localDate, required this.rating});
+
+  final String localDate;
+  final int rating;
+
+  static MoodDay? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final localDate = json['localDate'];
+    final rating = json['rating'];
+    if (localDate is! String || rating is! int) return null;
+    return MoodDay(localDate: localDate, rating: rating);
+  }
+}
+
+/// A summary of one range. [average], [lowest] and [highest] are null with
+/// no posts.
+class MoodPeriod {
+  const MoodPeriod({
+    required this.from,
+    required this.to,
+    required this.trackedDays,
+    required this.postedDays,
+    required this.missingDays,
+    this.average,
+    this.lowest,
+    this.highest,
+  });
+
+  final String from;
+  final String to;
+
+  /// Days since the account's first day; earlier days are not missing data.
+  final int trackedDays;
+  final int postedDays;
+
+  /// Tracked days that ended without a post. Today is not missing yet.
+  final int missingDays;
+  final double? average;
+  final int? lowest;
+  final int? highest;
+
+  static MoodPeriod? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final from = json['from'];
+    final to = json['to'];
+    final tracked = json['trackedDays'];
+    final posted = json['postedDays'];
+    final missing = json['missingDays'];
+    final average = json['average'];
+    final lowest = json['lowest'];
+    final highest = json['highest'];
+    if (from is! String ||
+        to is! String ||
+        tracked is! int ||
+        posted is! int ||
+        missing is! int ||
+        (average != null && average is! num) ||
+        (lowest != null && lowest is! int) ||
+        (highest != null && highest is! int)) {
+      return null;
+    }
+    return MoodPeriod(
+      from: from,
+      to: to,
+      trackedDays: tracked,
+      postedDays: posted,
+      missingDays: missing,
+      average: (average as num?)?.toDouble(),
+      lowest: lowest as int?,
+      highest: highest as int?,
+    );
+  }
+}
+
+/// A profile's ratings over a range, with the range before it for
+/// comparison. It reaches the same people as the profile's posts: the owner
+/// and their active friends.
+class MoodHistory {
+  const MoodHistory({
+    required this.trackedFrom,
+    required this.days,
+    required this.current,
+    required this.previous,
+    this.hiddenDays = const [],
+  });
+
+  /// The account's first day, or its earliest post if that is sooner.
+  final String trackedFrom;
+
+  /// Rated days in [current] the viewer can see, oldest first.
+  final List<MoodDay> days;
+
+  /// Days in [current] with a post the viewer can't see, such as a solo post.
+  /// They are neither rated nor missing.
+  final List<String> hiddenDays;
+  final MoodPeriod current;
+  final MoodPeriod previous;
+
+  static MoodHistory? tryParse(Object? json) {
+    if (json is! Map<String, Object?>) return null;
+    final trackedFrom = json['trackedFrom'];
+    final rawDays = json['days'];
+    final rawHidden = json['hiddenDays'] ?? const <Object?>[];
+    final current = MoodPeriod.tryParse(json['current']);
+    final previous = MoodPeriod.tryParse(json['previous']);
+    if (trackedFrom is! String ||
+        rawDays is! List ||
+        rawHidden is! List ||
+        rawHidden.any((day) => day is! String) ||
+        current == null ||
+        previous == null) {
+      return null;
+    }
+    final days = rawDays.map(MoodDay.tryParse).toList();
+    if (days.any((day) => day == null)) return null;
+    return MoodHistory(
+      trackedFrom: trackedFrom,
+      days: days.cast<MoodDay>(),
+      hiddenDays: rawHidden.cast<String>(),
+      current: current,
+      previous: previous,
+    );
+  }
+}
+
 abstract interface class ProfileClient {
   /// [NotFound] when the profile is unknown or blocked.
   Future<ApiResult<ProfileDetails>> details(String username);
@@ -213,6 +352,10 @@ abstract interface class ProfileClient {
   /// Returns the current handle. A taken handle or a change within 30 days of
   /// the last one is a [Conflict].
   Future<ApiResult<String>> changeUsername(String username);
+
+  /// A profile's mood history. [NotFound] when the profile is unknown or
+  /// blocked; anyone but the owner and their friends is refused.
+  Future<ApiResult<MoodHistory>> moodHistory(String username, MoodRange range);
 }
 
 /// Used where no profile API is configured, such as widget tests that never
@@ -237,6 +380,12 @@ class UnavailableProfileClient implements ProfileClient {
   @override
   Future<ApiResult<String>> changeUsername(String username) async =>
       const ApiError(ServiceUnavailable());
+
+  @override
+  Future<ApiResult<MoodHistory>> moodHistory(
+    String username,
+    MoodRange range,
+  ) async => const ApiError(ServiceUnavailable());
 }
 
 /// Calls the profile routes with the stored Better Auth bearer session. Bodies
@@ -368,5 +517,16 @@ class GeneratedProfileClient implements ProfileClient {
     (json) => json is Map<String, Object?> && json['username'] is String
         ? json['username']! as String
         : null,
+  );
+
+  @override
+  Future<ApiResult<MoodHistory>> moodHistory(
+    String username,
+    MoodRange range,
+  ) => _send(
+    (client) => generated.PostsApi(
+      client,
+    ).postsGetProfileMoodWithHttpInfo(username, range: range.wire),
+    MoodHistory.tryParse,
   );
 }

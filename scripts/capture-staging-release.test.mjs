@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { captureRelease, validateBrowserProxyMode } from "./capture-staging-release.mjs";
+import { captureRelease, validateBrowserProxyMode, validatePushReadiness } from "./capture-staging-release.mjs";
 
 function git(root, args) {
   return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
@@ -44,53 +44,62 @@ test("automatic staging releases accept only the current main commit", () => wit
     eventSha: currentSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
 
   assert.throws(() => captureRelease({
     eventSha: previousSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
   }), /no longer the current main commit/);
 }));
 
-test("manual dispatch allows a reachable explicit rollback but not a stale default target", () => withReleaseRepository(({ root, previousSha, currentSha }) => {
+test("manual dispatch captures an explicit OAuth readiness request", () => withReleaseRepository(({ root, previousSha, currentSha }) => {
   assert.deepEqual(captureRelease({
     inputSha: previousSha,
     dispatchSha: currentSha,
     toolingSha: currentSha,
     browserProxyEnabled: "true",
+    pushReadiness: "true",
     cwd: root,
-  }), { commitSha: previousSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "true" });
+  }), { commitSha: previousSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "true", pushReadiness: "true" });
 
   assert.deepEqual(captureRelease({
     inputSha: currentSha,
     dispatchSha: currentSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, migrationMode: "rollback-verify-only", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
 
   assert.deepEqual(captureRelease({
     dispatchSha: currentSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
-  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false" });
+  }), { commitSha: currentSha, migrationMode: "forward", toolingSha: currentSha, browserProxyEnabled: "false", pushReadiness: "false" });
 
   assert.throws(() => captureRelease({
     dispatchSha: previousSha,
     toolingSha: currentSha,
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
   }), /main advanced before this manual dispatch was captured/);
 }));
 
-test("captured browser proxy mode must be an explicit boolean", () => {
+test("captured browser proxy and push-readiness modes must be explicit booleans", () => {
   assert.equal(validateBrowserProxyMode("true"), "true");
   assert.equal(validateBrowserProxyMode("false"), "false");
   assert.throws(() => validateBrowserProxyMode("enabled"), /must be true or false/);
+  assert.equal(validatePushReadiness("true"), "true");
+  assert.equal(validatePushReadiness("false"), "false");
+  assert.throws(() => validatePushReadiness("enabled"), /must be true or false/);
 });
 
 test("release capture rejects an unpinned tooling revision", () => withReleaseRepository(({ root, currentSha }) => {
@@ -98,6 +107,7 @@ test("release capture rejects an unpinned tooling revision", () => withReleaseRe
     dispatchSha: currentSha,
     toolingSha: "main",
     browserProxyEnabled: "false",
+    pushReadiness: "false",
     cwd: root,
   }), /workflow tooling commit SHA is invalid/);
 }));

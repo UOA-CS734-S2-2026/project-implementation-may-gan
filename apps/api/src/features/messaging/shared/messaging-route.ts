@@ -7,6 +7,20 @@ export function messagingUnavailable(context: Context) {
 }
 
 export function messagingFailure(context: Context, error: MessagingError) {
+  if (error.code === "RATE_LIMITED") {
+    const retryAfterSeconds = error.retryAfterSeconds;
+    if (!retryAfterSeconds || !Number.isInteger(retryAfterSeconds) || retryAfterSeconds < 1) {
+      throw new Error("Rate-limited messaging errors require a positive integer retry value.");
+    }
+    context.header("Retry-After", String(retryAfterSeconds));
+    return apiErrorResponse(
+      context,
+      429,
+      "RATE_LIMITED",
+      error.message,
+      { retryAfterSeconds },
+    ) as never;
+  }
   const status = error.code === "NOT_FOUND"
     ? 404
     : error.code === "VALIDATION_FAILED"
