@@ -56,6 +56,17 @@ class BiometricService extends ChangeNotifier {
   BiometricService(this._store, this._auth)
     : _isEnabled = _store.readEnabled() {
     _isLocked = _isEnabled; // A cold start with the lock on begins locked.
+    _updateNativeSecurity(_isEnabled);
+  }
+
+  static const _channel = MethodChannel('nz.ac.auckland.dayli/security');
+
+  Future<void> _updateNativeSecurity(bool enabled) async {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await _channel.invokeMethod('setSecure', {'secure': enabled});
+      } catch (_) {}
+    }
   }
 
   static const unlockReason = 'Unlock Dayli';
@@ -145,6 +156,7 @@ class BiometricService extends ChangeNotifier {
       _isLocked = false;
       _isObscured = false;
     }
+    _updateNativeSecurity(enabled);
     notifyListeners();
     return BiometricResult.success;
   }
@@ -163,6 +175,7 @@ class BiometricService extends ChangeNotifier {
     _isEnabled = false;
     _isLocked = false;
     _isObscured = false;
+    _updateNativeSecurity(false);
     notifyListeners();
     return true;
   }
