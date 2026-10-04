@@ -1,4 +1,5 @@
 import rateLimitBindings from "../apps/api/rate-limit-bindings.json" with { type: "json" };
+import { createStagingTrashProofProbe } from "./create-staging-trash-proof-probe.mjs";
 
 const sharedWorkerConfig = {
   $schema: "node_modules/wrangler/config-schema.json",
@@ -120,6 +121,16 @@ export function createStagingWorkerConfigs({
     main: "src/features/system/hyperdrive/test-worker.ts",
     name: "dayli-api-hyperdrive-integration-test",
     workers_dev: false,
+    // The staging suite also attests the deployed revision and R2 target.
+    // Bind only its public expectations, never API vars or credentials.
+    ...(mediaVars.R2_ACCOUNT_ID !== undefined || mediaVars.R2_BUCKET_NAME !== undefined ? {
+      vars: createStagingTrashProofProbe({
+        targetSha: releaseSha,
+        serviceName: workerName,
+        storageAccountId: mediaVars.R2_ACCOUNT_ID,
+        storageBucketName: mediaVars.R2_BUCKET_NAME,
+      }).vars,
+    } : {}),
     services: [{
       binding: "STAGING_API",
       service: workerName,

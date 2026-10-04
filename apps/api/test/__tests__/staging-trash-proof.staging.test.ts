@@ -14,6 +14,8 @@ declare global {
 
 describe("private staging Trash attestation", () => {
   it("matches the exact deployed revision", async () => {
+    expect(env.EXPECTED_STAGING_RELEASE_SHA).toMatch(/^[a-f0-9]{40}$/);
+    expect(env.EXPECTED_STAGING_STORAGE_DIGEST).toMatch(/^[a-f0-9]{64}$/);
     const proof = await awaitRpcDeployment(
       "proveStagingRevision",
       () => env.STAGING_API.proveStagingRevision(),
