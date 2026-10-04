@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { notificationPublishersEnabled } from "./env";
+import { notificationPublishersEnabled } from "../env";
 
 describe("notification publisher feature flag", () => {
   it("enables only the exact true value", () => {

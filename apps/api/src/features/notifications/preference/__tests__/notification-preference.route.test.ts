@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createApp } from "../../../app";
+import { createApp } from "../../../../app";
 
 describe("notification preference routes", () => {
   it("reads a missing owner row as disabled and writes only the verified owner", async () => {

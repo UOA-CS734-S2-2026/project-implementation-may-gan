@@ -1,7 +1,7 @@
 import { createDayliDatabase, schema } from "@dayli/db";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createPostgresNotificationPreferenceStore } from "./notification-preference.repository";
+import { createPostgresNotificationPreferenceStore } from "../notification-preference.repository";
 
 const connectionString = process.env.TEST_APP_DATABASE_URL;
 const enabled = Boolean(connectionString);
