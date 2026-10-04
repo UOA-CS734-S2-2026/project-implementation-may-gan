@@ -66,6 +66,7 @@ export function registerPostTrashRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, d
     try {
       const result = await dependencies.repository.transition({ userId: actor.userId, sessionId: actor.sessionId, postId: context.req.valid("param").postId, action: "trash" });
       if (result.outcome === "not_found") return apiErrorResponse(context, 404, "NOT_FOUND", "Post not found.");
+      if (result.outcome === "invalid_session") return apiErrorResponse(context, 401, "UNAUTHENTICATED", "The session is no longer valid.");
       if (result.outcome !== "trashed" && result.outcome !== "already_trashed") return apiErrorResponse(context, 409, "CONFLICT", "The post cannot be moved to Trash.", { reason: result.outcome });
       return result.status ? context.json(response(result.status), 200) : unavailable(context);
     } catch { return unavailable(context); }
@@ -78,6 +79,7 @@ export function registerPostTrashRoutes(app: OpenAPIHono<AuthenticatedApiEnv>, d
     try {
       const result = await dependencies.repository.transition({ userId: actor.userId, sessionId: actor.sessionId, postId: context.req.valid("param").postId, action: "restore" });
       if (result.outcome === "not_found") return apiErrorResponse(context, 404, "NOT_FOUND", "Post not found.");
+      if (result.outcome === "invalid_session") return apiErrorResponse(context, 401, "UNAUTHENTICATED", "The session is no longer valid.");
       if (result.outcome !== "restored" && result.outcome !== "already_active") return apiErrorResponse(context, 409, "CONFLICT", "The post cannot be restored.", { reason: result.outcome });
       return context.json({ status: "restored" as const }, 200);
     } catch { return unavailable(context); }

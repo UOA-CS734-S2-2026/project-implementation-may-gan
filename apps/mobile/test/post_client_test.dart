@@ -412,10 +412,39 @@ void main() {
     ).delete('post-1');
     expect((refused as ApiError).failure, isA<Conflict>());
 
-    // Trash is switched off until it's enabled for the environment.
     final off = await client((_) => http.Response('{}', 503)).delete('post-1');
     expect((off as ApiError).failure, isA<ServiceUnavailable>());
   });
+
+  test(
+    'preserves sanitized restore conflict reasons and authentication expiry',
+    () async {
+      for (final entry in {
+        'day_occupied': 'already has a replacement',
+        'expired': 'restore period has ended',
+        'restricted': 'account lifecycle is restricted',
+        'conflict': 'Cleanup has already claimed',
+      }.entries) {
+        final result = await client(
+          (_) => http.Response(
+            jsonEncode({
+              'error': {
+                'details': {'reason': entry.key},
+              },
+            }),
+            409,
+          ),
+        ).restore('post-1');
+        final failure = (result as ApiError).failure as Conflict;
+        expect(failure.reason, entry.key);
+        expect(failure.message, contains(entry.value));
+      }
+      final expiredSession = await client(
+        (_) => http.Response('{}', 401),
+      ).restore('post-1');
+      expect((expiredSession as ApiError).failure, isA<Unauthenticated>());
+    },
+  );
 
   test('reads a page of earlier versions with its cursor', () async {
     final result = await client(

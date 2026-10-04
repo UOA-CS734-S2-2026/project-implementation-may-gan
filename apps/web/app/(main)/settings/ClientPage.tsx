@@ -17,7 +17,7 @@ import { TrashPanel } from "@/features/posts/trash/TrashPanel";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, isPending } = useSession();
+  const { user, session, isPending } = useSession();
   const [username, setUsername] = useState<string>();
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export default function SettingsPage() {
           <LinkGoogleAccount />
         </section>
 
-        <TrashPanel key={user.id} actorId={user.id} />
+        <TrashPanel key={`${user.id}:${session?.id ?? "no-session"}`} actorId={user.id} />
 
         <section className="space-y-2 rounded-lg border border-foreground/10 p-4">
           <h2 className="text-sm font-medium">Legal</h2>

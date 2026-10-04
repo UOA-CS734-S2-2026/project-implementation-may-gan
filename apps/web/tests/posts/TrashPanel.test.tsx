@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TrashPanel } from "@/features/posts/trash/TrashPanel";
 import { postsApi } from "@/features/posts/shared/posts.api";
 
+const { replace, signOut } = vi.hoisted(() => ({
+  replace: vi.fn(),
+  signOut: vi.fn(async () => undefined),
+}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+vi.mock("@/lib/auth/client", () => ({ authClient: { signOut } }));
+
 vi.mock("@/features/posts/shared/posts.api", async (original) => {
   const actual = await original<typeof import("@/features/posts/shared/posts.api")>();
   return { ...actual, postsApi: { trash: vi.fn(), restore: vi.fn() } };
@@ -27,7 +34,7 @@ function subject() {
 }
 
 describe("TrashPanel", () => {
-  beforeEach(() => { api.trash.mockReset(); api.restore.mockReset(); });
+  beforeEach(() => { api.trash.mockReset(); api.restore.mockReset(); replace.mockReset(); signOut.mockClear(); });
 
   it("shows the restore and permanent cleanup deadlines, then removes a restored post", async () => {
     api.trash.mockResolvedValueOnce({ ok: true, value: [post] }).mockResolvedValue({ ok: true, value: [] });
@@ -42,10 +49,31 @@ describe("TrashPanel", () => {
 
   it("keeps the post visible and explains a replacement conflict", async () => {
     api.trash.mockResolvedValue({ ok: true, value: [post] });
-    api.restore.mockResolvedValue({ ok: false, failure: "conflict" });
+    api.restore.mockResolvedValue({ ok: false, failure: "dayOccupied" });
     subject();
     fireEvent.click(await screen.findByRole("button", { name: "Restore" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("already has a replacement");
     expect(screen.getByText("Dayli from 2026-10-04")).toBeInTheDocument();
+  });
+
+  it("disables restore when the deadline passes without another app update", async () => {
+    api.trash.mockResolvedValue({ ok: true, value: [{
+      ...post,
+      restoreUntil: new Date(Date.now() + 100),
+      purgeDueAt: new Date(Date.now() + 1_000),
+    }] });
+    subject();
+    expect(await screen.findByRole("button", { name: "Restore" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Restore period ended" }, { timeout: 2_000 })).toBeDisabled();
+  });
+
+  it("clears private Trash data and redirects when the live session is rejected", async () => {
+    api.trash.mockResolvedValue({ ok: true, value: [post] });
+    api.restore.mockResolvedValue({ ok: false, failure: "unauthenticated" });
+    subject();
+    fireEvent.click(await screen.findByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+    expect(replace).toHaveBeenCalledWith("/sign-in");
+    expect(screen.queryByText("Dayli from 2026-10-04")).not.toBeInTheDocument();
   });
 });

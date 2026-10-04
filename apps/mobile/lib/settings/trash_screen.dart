@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_failure.dart';
@@ -19,6 +21,10 @@ class _TrashScreenState extends State<TrashScreen> {
   String? _restoring;
   int _request = 0;
   SessionController? _session;
+  String? _boundActor;
+  int? _boundGeneration;
+  DateTime? _deadlineNow;
+  Timer? _deadlineTimer;
 
   @override
   void didChangeDependencies() {
@@ -27,6 +33,8 @@ class _TrashScreenState extends State<TrashScreen> {
     if (!identical(_session, session)) {
       _session?.removeListener(_sessionChanged);
       _session = session..addListener(_sessionChanged);
+      _boundActor = session.user?.id;
+      _boundGeneration = session.generation;
       _load();
     }
   }
@@ -34,18 +42,28 @@ class _TrashScreenState extends State<TrashScreen> {
   @override
   void dispose() {
     _session?.removeListener(_sessionChanged);
+    _deadlineTimer?.cancel();
     super.dispose();
   }
 
   void _sessionChanged() {
+    final actor = _session?.user?.id;
+    final generation = _session?.generation;
+    final unchanged =
+        _session?.status == SessionStatus.signedIn &&
+        actor == _boundActor &&
+        generation == _boundGeneration;
+    if (unchanged) return;
     _request++;
-    if (_session?.status != SessionStatus.signedIn) {
-      setState(() {
-        _posts = null;
-        _failure = null;
-        _restoring = null;
-      });
-      if (mounted) Navigator.maybePop(context);
+    _deadlineTimer?.cancel();
+    _posts = null;
+    _failure = null;
+    _restoring = null;
+    _boundActor = actor;
+    _boundGeneration = generation;
+    if (mounted) {
+      setState(() {});
+      Navigator.maybePop(context);
     }
   }
 
@@ -57,6 +75,7 @@ class _TrashScreenState extends State<TrashScreen> {
       _session?.status == SessionStatus.signedIn;
 
   Future<void> _load() async {
+    if (_restoring != null) return;
     final session = _session;
     final actor = session?.user?.id;
     if (session == null ||
@@ -71,10 +90,18 @@ class _TrashScreenState extends State<TrashScreen> {
     });
     final result = await AppScope.of(context).postTrash.listTrash();
     if (!_current(request, generation, actor)) return;
+    if (result case ApiError(failure: Unauthenticated())) {
+      _posts = null;
+      _failure = null;
+      setState(() {});
+      await session.sessionExpired();
+      return;
+    }
     setState(() {
       switch (result) {
         case ApiSuccess(:final value):
           _posts = value;
+          _scheduleDeadlineUpdate();
         case ApiError(:final failure):
           _failure = failure;
       }
@@ -92,11 +119,21 @@ class _TrashScreenState extends State<TrashScreen> {
     });
     final result = await AppScope.of(context).postTrash.restore(post.id);
     if (!_current(request, generation, actor)) return;
+    if (result case ApiError(failure: Unauthenticated())) {
+      setState(() {
+        _posts = null;
+        _failure = null;
+        _restoring = null;
+      });
+      await session.sessionExpired();
+      return;
+    }
     switch (result) {
       case ApiSuccess():
         setState(() {
           _posts = _posts?.where((item) => item.id != post.id).toList();
           _restoring = null;
+          _scheduleDeadlineUpdate();
         });
       case ApiError(:final failure):
         setState(() {
@@ -104,6 +141,26 @@ class _TrashScreenState extends State<TrashScreen> {
           _restoring = null;
         });
     }
+  }
+
+  void _scheduleDeadlineUpdate() {
+    _deadlineTimer?.cancel();
+    final now = AppScope.of(context).clock();
+    _deadlineNow = now;
+    final future =
+        (_posts ?? const <TrashedPost>[])
+            .map((post) => post.restoreUntil)
+            .where((deadline) => deadline.isAfter(now))
+            .toList()
+          ..sort();
+    if (future.isEmpty) return;
+    _deadlineTimer = Timer(
+      future.first.difference(now) + const Duration(milliseconds: 25),
+      () {
+        if (!mounted) return;
+        setState(_scheduleDeadlineUpdate);
+      },
+    );
   }
 
   String _deadline(DateTime value) =>
@@ -133,7 +190,7 @@ class _TrashScreenState extends State<TrashScreen> {
                 padding: const EdgeInsets.only(top: 16),
                 child: Text(
                   _failure is Conflict
-                      ? 'This day already has a replacement, so the original cannot be restored.'
+                      ? (_failure as Conflict).message
                       : 'Trash could not be updated. Your posts have not been changed.',
                   key: const Key('trash.error'),
                   style: TextStyle(color: colors.danger),
@@ -153,7 +210,9 @@ class _TrashScreenState extends State<TrashScreen> {
               ...?_posts?.map((post) {
                 final restorable =
                     !post.pendingCleanup &&
-                    !AppScope.of(context).clock().isAfter(post.restoreUntil);
+                    !(_deadlineNow ?? AppScope.of(context).clock()).isAfter(
+                      post.restoreUntil,
+                    );
                 return Card(
                   key: Key('trash.${post.id}.${post.generation}'),
                   child: ListTile(
