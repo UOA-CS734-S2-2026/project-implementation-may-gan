@@ -172,6 +172,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 28),
+                  const _GroupLabel('profile and privacy'),
+                  Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: colors.foregroundAccent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        key: const Key('settings.editProfile'),
+                        onTap: () => context.push('/profile/edit'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 16,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Edit profile',
+                                      style: DayliText.sans(
+                                        context,
+                                        weight: FontWeight.w600,
+                                        color: colors.foregroundAccent,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Public name, bio, username, and who sees them.',
+                                      style: DayliText.sans(
+                                        context,
+                                        size: DayliTextSize.sm,
+                                        color: colors.foregroundAccent.withValues(alpha: 0.8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                color: colors.foregroundAccent,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   const _GroupLabel('account'),
                   _Group(
                     children: [
@@ -223,13 +277,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  const _GroupLabel('legal'),
-                  const _Group(
-                    children: [
-                      Padding(padding: EdgeInsets.all(12), child: LegalLinks()),
-                    ],
-                  ),
                   if (services.accountExports != null) ...[
                     const SizedBox(height: 24),
                     const _GroupLabel('your data'),
@@ -242,53 +289,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  const _GroupLabel('profile and privacy'),
-                  _Group(
-                    children: [
-                      InkWell(
-                        key: const Key('settings.editProfile'),
-                        onTap: () => context.push('/profile/edit'),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Edit profile',
-                                      style: DayliText.sans(
-                                        context,
-                                        weight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Public name, bio, username, and who sees them.',
-                                      style: DayliText.sans(
-                                        context,
-                                        size: DayliTextSize.sm,
-                                        color: colors.foregroundTertiary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                color: colors.foregroundTertiary,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 24),
                   _Group(
                     children: [
@@ -330,6 +330,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       size: DayliTextSize.sm,
                       color: colors.foregroundTertiary,
                     ),
+                  ),
+                  const SizedBox(height: 24),
+                  const _GroupLabel('legal'),
+                  _Group(
+                    children: [
+                      InkWell(
+                        key: const Key('settings.legal.privacy'),
+                        onTap: () => context.push('/privacy'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          child: Row(
+                            children: [
+                              Text('Privacy Policy', style: DayliText.sans(context, weight: FontWeight.w500)),
+                            ],
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        key: const Key('settings.legal.terms'),
+                        onTap: () => context.push('/terms'),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          child: Row(
+                            children: [
+                              Text('Terms of Service', style: DayliText.sans(context, weight: FontWeight.w500)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
