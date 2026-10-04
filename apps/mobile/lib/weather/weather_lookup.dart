@@ -34,8 +34,9 @@ class WeatherLookup {
   final PlaceNamer placeNamer;
 
   /// The weather where the phone is, named by its own geocoder. Throws a
-  /// `WeatherException` saying why not.
-  Future<PostWeather> atCurrentLocation() async {
+  /// `WeatherException` saying why not. [cancelled] completing stops the
+  /// phone's location request, such as when the author skips the weather.
+  Future<PostWeather> atCurrentLocation({Future<void>? cancelled}) async {
     if (!await location.servicesEnabled()) {
       throw const WeatherException(WeatherFailure.servicesDisabled);
     }
@@ -47,7 +48,9 @@ class WeatherLookup {
       case LocationPermissionStatus.blocked:
         throw const WeatherException(WeatherFailure.permissionBlocked);
     }
-    final Coordinates position = (await location.currentPosition()).approximate;
+    final Coordinates position = (await location.currentPosition(
+      cancelled: cancelled,
+    )).approximate;
     // Both lookups start together: the weather and the name are independent.
     // A name lookup that fails counts as no name, and cannot surface as an
     // unhandled error if the weather lookup fails first.

@@ -64,6 +64,12 @@ class FakeLocationAccess implements LocationAccess {
   /// What the system prompt leaves the permission as, when it is shown.
   LocationPermissionStatus? afterRequest;
 
+  /// When set, a position waits for this before it answers.
+  Completer<void>? positionHold;
+
+  /// The cancel signal each position request was given.
+  final List<Future<void>?> positionSignals = [];
+
   int requests = 0;
   int positions = 0;
   int settingsOpened = 0;
@@ -89,8 +95,10 @@ class FakeLocationAccess implements LocationAccess {
   Future<void> openLocationSettings() async => locationSettingsOpened++;
 
   @override
-  Future<Coordinates> currentPosition() async {
+  Future<Coordinates> currentPosition({Future<void>? cancelled}) async {
     positions++;
+    positionSignals.add(cancelled);
+    await positionHold?.future;
     if (positionFailure != null) throw WeatherException(positionFailure!);
     return position;
   }
