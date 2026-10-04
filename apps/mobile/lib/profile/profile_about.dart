@@ -46,6 +46,8 @@ class ProfileAboutCards extends StatelessWidget {
       decoration: BoxDecoration(
         color: tint.bg,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tint.label.withValues(alpha: 0.2)),
+        boxShadow: DayliShadows.md,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
