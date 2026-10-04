@@ -1,8 +1,9 @@
 # MN-003 implementation and merge approval
 
-Status: queued until MN-002/#260 is merged. Implementation has not started.
-Started: not yet started.
-Fixed deadline: set to eight hours after actual runner start before delegation. Retries cannot extend it.
+Status: invocation started after MN-002/#260 merged in PR #296.
+Started: 2026-10-04T08:17:48Z.
+Fixed deadline: 2026-10-04T16:17:48Z. Retries cannot extend it.
+Preflight merged main: c1363064a211342845cd335c46d16fc69a2341e1.
 Repository: UOA-CS734-S2-2026/project-implementation-may-gan.
 Ticket: MN-003, GitHub #261 only.
 Branch: 261/mobile-notification-consent. Target: main.
