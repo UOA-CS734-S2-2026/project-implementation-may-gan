@@ -94,9 +94,11 @@ Flutter compresses and uploads each attachment before posting. `POST /api/v1/pos
 
 That design prevents an object path or client claim from acting as attachment permission. The full upload and private download flow lives in [Media uploads and storage](/docs/systems/media-uploads-and-storage).
 
-## A weather snapshot rides along
+## A weather snapshot can ride along
 
-A weather snapshot lives in the protected draft, so it survives restarts, prompt refreshes, and the retry after an expired upload. Flutter post detail shows it under the date as, for example, **Rain · 11°C · Auckland**, with Open-Meteo credited in the composer.
+A post may carry one optional weather snapshot: a condition, a whole-degree temperature, and a place name. It is validated and stored in the same write as the post, and it is part of the retry fingerprint, so a retry that adds or changes it conflicts instead of quietly differing. It is chosen while writing and cannot be added or changed once the post is accepted, which is why the edit request has no `weather` field.
+
+The phone fetches the weather itself and the API never sees a coordinate. How the app asks for location, validates the provider, and holds posting while a lookup runs is in [Location and weather contexts](/docs/systems/location-and-weather-contexts).
 
 ## Release, audience, and later edits
 

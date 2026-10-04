@@ -39,7 +39,7 @@ Before calling it supported, check sign-in, session restoration, authenticated A
 
 #### Context
 
-Mobile can add a weather snapshot (condition, temperature, and place name) to a post, shown on post detail only. The phone fetches it from Open-Meteo and the API validates its shape and range. See [Daily posts and release timing](/docs/systems/location-and-weather-contexts).
+Mobile can add a weather snapshot (condition, temperature, and place name) to a post, shown on post detail only. The phone fetches it from Open-Meteo and the API validates its shape and range. See [Location and weather contexts](/docs/systems/location-and-weather-contexts).
 
 #### Problem
 
