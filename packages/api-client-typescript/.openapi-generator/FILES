@@ -4,6 +4,7 @@
 README.md
 package.json
 src/apis/AccountApi.ts
+src/apis/InteractionsApi.ts
 src/apis/LegalApi.ts
 src/apis/MediaApi.ts
 src/apis/MessagingApi.ts
@@ -33,6 +34,7 @@ src/models/CreateDirectConversation200ResponseConversationPeer.ts
 src/models/CreateDirectConversationRequest.ts
 src/models/CreateMediaReservationRequest.ts
 src/models/CreateMediaReservationResponse.ts
+src/models/CreatePostCommentRequest.ts
 src/models/CreateRealtimeTicket201Response.ts
 src/models/CurrentLegalRegistrationTerms.ts
 src/models/CurrentPostingDayResponse.ts
@@ -53,6 +55,7 @@ src/models/GetMessagingUnread200Response.ts
 src/models/GoogleReauthenticationIntent.ts
 src/models/GoogleReauthenticationRequest.ts
 src/models/HealthResponse.ts
+src/models/InteractionPerson.ts
 src/models/LegalAcceptanceRequest.ts
 src/models/LegalAcceptanceResponse.ts
 src/models/ListConversationChanges200Response.ts
@@ -71,14 +74,22 @@ src/models/Message.ts
 src/models/MessageReactionsInner.ts
 src/models/MessageReactionsInnerReactorsInner.ts
 src/models/MessageReplyPreview.ts
+src/models/OnThisDayMemories.ts
+src/models/OnThisDayMemory.ts
+src/models/OnThisDayMemoryPrompt.ts
 src/models/PasswordReauthenticationGrant.ts
 src/models/PasswordReauthenticationRequest.ts
 src/models/PendingRelationshipRequest.ts
 src/models/PendingRequestPage.ts
 src/models/PostAudience.ts
+src/models/PostComment.ts
+src/models/PostCommentsPage.ts
 src/models/PostDetail.ts
 src/models/PostDetailAuthor.ts
 src/models/PostDetailPrompt.ts
+src/models/PostLike.ts
+src/models/PostLikeSummary.ts
+src/models/PostLikesPage.ts
 src/models/PostMedia.ts
 src/models/PostMediaContentType.ts
 src/models/PostRevision.ts
@@ -115,6 +126,7 @@ src/models/SetAvatarRequest.ts
 src/models/SetMessageReactionRequest.ts
 src/models/TestResponse.ts
 src/models/TrashedPostStatus.ts
+src/models/UpdatePostCommentRequest.ts
 src/models/UpdatePostRequest.ts
 src/models/UpdateProfileRequest.ts
 src/models/UsernameProfile.ts

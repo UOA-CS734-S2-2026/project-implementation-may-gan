@@ -35,6 +35,11 @@ export const postDetailSchema = z
     revisionCount: z.number().int().min(0).openapi({
       description: "Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends.",
     }),
+    likeCount: z.number().int().min(0),
+    viewerHasLiked: z.boolean(),
+    commentCount: z.number().int().min(0).openapi({
+      description: "Comments and replies the caller can see, leaving out deleted ones and people across a block.",
+    }),
     viewerIsAuthor: z.boolean(),
     media: z.array(postMediaSchema).openapi({
       description: "Attached photos or video in display order, each with a private download URL that expires after 5 minutes.",

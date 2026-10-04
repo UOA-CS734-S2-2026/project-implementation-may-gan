@@ -89,7 +89,7 @@ void main() {
         await settleDraft(tester);
 
         expect(find.byType(ComposerScreen), findsOneWidget);
-        expect(find.text('7/10'), findsOneWidget);
+        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
         expect(harness.drafts.drafts['user-1']?.rating, 7);
         // The link only fills the slider. No audience is chosen and nothing
         // is sent until the author taps Post.
@@ -133,7 +133,7 @@ void main() {
       );
       await settleDraft(tester);
 
-      expect(find.text('4/10'), findsOneWidget);
+      expect(find.text('4/10', skipOffstage: false), findsOneWidget);
       final draft = harness.drafts.drafts['user-1']!;
       expect(draft.audience, isNull);
       expect(draft.reflectiveAnswer, isEmpty);
@@ -172,7 +172,7 @@ void main() {
 
         await openLink(tester, 'dayli://app/post?rating=7');
         await settleDraft(tester);
-        expect(find.text('7/10'), findsOneWidget);
+        expect(find.text('7/10', skipOffstage: false), findsOneWidget);
 
         // Move the slider away from the linked rating.
         final slider = find.byType(Slider, skipOffstage: false);
@@ -180,7 +180,7 @@ void main() {
         await tester.pumpAndSettle();
         await tester.drag(slider, const Offset(-200, 0));
         await settleDraft(tester);
-        expect(find.text('7/10'), findsNothing);
+        expect(find.text('7/10', skipOffstage: false), findsNothing);
 
         await openLink(tester, 'dayli://app/post?rating=7');
         await settleDraft(tester);
@@ -216,7 +216,7 @@ void main() {
       await settleDraft(tester);
 
       expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('6/10'), findsOneWidget);
+      expect(find.text('6/10', skipOffstage: false), findsOneWidget);
       expect(harness.submitter.submitted, isEmpty);
     });
   });
@@ -244,7 +244,7 @@ void main() {
       await settleDraft(tester);
 
       expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('7/10'), findsOneWidget);
+      expect(find.text('7/10', skipOffstage: false), findsOneWidget);
       expect(harness.submitter.submitted, isEmpty);
     });
 
@@ -282,7 +282,7 @@ void main() {
       await settleDraft(tester);
 
       expect(find.byType(ComposerScreen), findsOneWidget);
-      expect(find.text('5/10'), findsOneWidget);
+      expect(find.text('5/10', skipOffstage: false), findsOneWidget);
       expect(harness.submitter.submitted, isEmpty);
     });
 

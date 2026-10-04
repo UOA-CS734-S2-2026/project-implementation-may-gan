@@ -7,7 +7,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Dayli uses the camera when you take a photo or record a short video for your daily post.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Dayli records sound with the videos you take for your daily post.</string>
+	<string>Dayli uses the microphone only while you record a voice memo for your daily post, and for the sound in videos you take.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>Dayli Mobile</string>
+	<string>Dayli</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -42,7 +42,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>dayli_mobile</string>
+	<string>Dayli</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

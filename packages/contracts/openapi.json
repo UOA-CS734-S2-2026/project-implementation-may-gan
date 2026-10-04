@@ -1490,6 +1490,18 @@
             "minimum": 0,
             "description": "Earlier versions the caller can read. The author sees every saved edit and sends this as `expectedRevisionCount` when editing. Anyone else sees only versions that were already shared with friends."
           },
+          "likeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "viewerHasLiked": {
+            "type": "boolean"
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Comments and replies the caller can see, leaving out deleted ones and people across a block."
+          },
           "viewerIsAuthor": {
             "type": "boolean"
           },
@@ -1525,6 +1537,9 @@
           "releasedAt",
           "edited",
           "revisionCount",
+          "likeCount",
+          "viewerHasLiked",
+          "commentCount",
           "viewerIsAuthor",
           "media",
           "voiceMemo"
@@ -1634,6 +1649,121 @@
         ],
         "description": "A restricted response has only kind and username. An archive response has kind and every ProfilePostsPage field."
       },
+      "OnThisDayMemories": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "Today's Auckland date, chosen by the server."
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OnThisDayMemory"
+            },
+            "description": "At most one memory per earlier year, newest year first."
+          }
+        },
+        "required": [
+          "date",
+          "items"
+        ]
+      },
+      "OnThisDayMemory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "localDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the post was written for."
+              }
+            ]
+          },
+          "yearsAgo": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Whole years between the post's Auckland day and today."
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "friends"
+            ],
+            "description": "Who could read the post. Memories are owner-only either way; this labels the original audience."
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/OnThisDayMemoryPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True when the author has edited the post since it was accepted."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          }
+        },
+        "required": [
+          "id",
+          "localDate",
+          "yearsAgo",
+          "rating",
+          "audience",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "edited",
+          "media"
+        ],
+        "description": "One of the caller's own earlier posts. Tomorrow notes are not part of this projection."
+      },
+      "OnThisDayMemoryPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
       "UpdatePostRequest": {
         "type": "object",
         "properties": {
@@ -1730,6 +1860,208 @@
           "replacedAt"
         ],
         "description": "An earlier version of a post, which an edit replaced at `replacedAt`. The prompt, day and media are the same as the current post."
+      },
+      "PostLikeSummary": {
+        "type": "object",
+        "properties": {
+          "likeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "viewerHasLiked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "likeCount",
+          "viewerHasLiked"
+        ]
+      },
+      "PostLikesPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostLike"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "PostLike": {
+        "type": "object",
+        "properties": {
+          "person": {
+            "$ref": "#/components/schemas/InteractionPerson"
+          },
+          "likedAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          }
+        },
+        "required": [
+          "person",
+          "likedAt"
+        ]
+      },
+      "InteractionPerson": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "displayName"
+        ]
+      },
+      "PostCommentsPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostComment"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "hasMore"
+        ],
+        "description": "Comments and replies in the order they were written. A reply always comes after its top-level comment, so clients group replies under it as pages arrive."
+      },
+      "PostComment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "postId": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "parentCommentId": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OpaqueId"
+              },
+              {
+                "nullable": true,
+                "description": "The top-level comment this replies to. Replies go one level deep."
+              }
+            ]
+          },
+          "author": {
+            "$ref": "#/components/schemas/InteractionPerson"
+          },
+          "text": {
+            "type": "string"
+          },
+          "createdAt": {
+            "$ref": "#/components/schemas/UtcTimestamp"
+          },
+          "editedAt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/UtcTimestamp"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "viewerCanEdit": {
+            "type": "boolean",
+            "description": "True for the comment's author."
+          },
+          "viewerCanDelete": {
+            "type": "boolean",
+            "description": "True for the comment's author and the post's author."
+          }
+        },
+        "required": [
+          "id",
+          "postId",
+          "parentCommentId",
+          "author",
+          "text",
+          "createdAt",
+          "editedAt",
+          "viewerCanEdit",
+          "viewerCanDelete"
+        ]
+      },
+      "CreatePostCommentRequest": {
+        "type": "object",
+        "properties": {
+          "clientCommentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[\\x21-\\x7e]+$",
+            "description": "A client-generated ID, such as a UUID, reused for every retry of this comment. A retry returns the comment already made.",
+            "example": "0f8fad5b-d9cb-469f-a165-70867728950e"
+          },
+          "text": {
+            "type": "string",
+            "example": "That sunset!"
+          },
+          "parentCommentId": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 128,
+            "example": "post_01K4Y6P8K2",
+            "description": "Replies to this top-level comment on the same post. Leave it out, or send null, for a top-level comment. Replies to replies are not allowed."
+          }
+        },
+        "required": [
+          "clientCommentId",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "UpdatePostCommentRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "example": "That sunset!"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
       },
       "PendingRequestPage": {
         "type": "object",
@@ -5116,6 +5448,85 @@
         }
       }
     },
+    "/api/v1/me/memories/on-this-day": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listOnThisDay",
+        "summary": "List the caller's On This Day memories",
+        "description": "Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's memories for today.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnThisDayMemories"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has not chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable, or a memory has media and media storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/posts/{postId}/revisions": {
       "get": {
         "tags": [
@@ -5234,6 +5645,921 @@
           },
           "503": {
             "description": "Post storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/like": {
+      "put": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.like",
+        "summary": "Like a post",
+        "description": "Likes a post the caller may read, including their own. Liking a post already liked changes nothing, so retries are safe. Returns the like count and whether the caller likes it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The post's like count and whether the caller likes it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostLikeSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.unlike",
+        "summary": "Unlike a post",
+        "description": "Removes the caller's like from a post they may read. Unliking a post that isn't liked changes nothing, so retries are safe. Returns the like count and whether the caller likes it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The post's like count and whether the caller likes it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostLikeSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/likes": {
+      "get": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.listLikes",
+        "summary": "List who liked a post",
+        "description": "Returns the people who liked a post the caller may read, newest first. People the caller has blocked, or who blocked the caller, are left out.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of likes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostLikesPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/comments": {
+      "get": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.listComments",
+        "summary": "List the comments on a post",
+        "description": "Returns comments and replies on a post the caller may read, oldest first. Deleted comments, replies under a deleted comment, and comments by people across a block from the caller are left out. Each comment says whether the caller may edit or delete it.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque continuation cursor"
+            },
+            "required": false,
+            "description": "Opaque continuation cursor",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of comments and replies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostCommentsPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.createComment",
+        "summary": "Comment on a post",
+        "description": "Adds a comment, or a reply to a top-level comment, on a post the caller may read. Replies go one level deep. A retry with the same `clientCommentId` returns the comment already made with 200.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePostCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A retry of a comment already made.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostComment"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The new comment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post does not exist or the caller may not read it. The two cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The `clientCommentId` was already used for a different comment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The text is invalid, or `parentCommentId` is not a visible top-level comment on this post.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/comments/{commentId}": {
+      "patch": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.updateComment",
+        "summary": "Edit a comment",
+        "description": "Lets the commenter change their comment while they can still read the post. The comment is then marked edited. Anyone else's comment returns 404.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "comment-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The comment as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostComment"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post or comment does not exist, or the caller may not read or change it. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Interactions"
+        ],
+        "operationId": "interactions.deleteComment",
+        "summary": "Delete a comment",
+        "description": "Lets the commenter, or the post's author, delete a comment. Deleting a top-level comment also hides its replies. Deleting a comment that is already deleted also returns 204.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "post-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "postId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/OpaqueId"
+                },
+                {
+                  "example": "comment-1"
+                }
+              ]
+            },
+            "required": true,
+            "name": "commentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The comment is deleted."
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller hasn't chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The post or comment does not exist, or the caller may not read or change it. The cases are indistinguishable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The request contains invalid values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Interaction storage is temporarily unavailable.",
             "content": {
               "application/json": {
                 "schema": {

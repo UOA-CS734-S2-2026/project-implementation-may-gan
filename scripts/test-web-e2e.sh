@@ -5,6 +5,32 @@
 set -Eeuo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Better Auth deliberately limits sign-up and sign-in bursts by source IP. Give
+# every spec and browser project its own complete local fixture so no scenario
+# can spend another scenario's production-equivalent auth budget.
+if [[ -z "${DAYLI_WEB_E2E_SINGLE_FIXTURE:-}" && "$#" -eq 0 ]]; then
+  aggregate_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e-aggregate.XXXXXX")"
+  trap 'rm -rf "$aggregate_dir"' EXIT INT TERM
+  plan_report="$aggregate_dir/plan.json"
+  (
+    cd "$repo_root/apps/web"
+    PLAYWRIGHT_JSON_OUTPUT_FILE="$plan_report" pnpm exec playwright test --list --reporter=json >/dev/null
+  )
+  result_reports=()
+  fixture_number=0
+  while IFS=$'\t' read -r spec project; do
+    fixture_number=$((fixture_number + 1))
+    result_report="$aggregate_dir/result-${fixture_number}.json"
+    result_reports+=("$result_report")
+    echo "Running e2e/$spec for $project in an isolated local fixture"
+    DAYLI_WEB_E2E_SINGLE_FIXTURE=1 E2E_RESULT_FILE="$result_report" \
+      bash "$repo_root/scripts/test-web-e2e.sh" "e2e/$spec" "--project=$project"
+  done < <(node "$repo_root/scripts/web-e2e-isolation.mjs" plan "$plan_report")
+  node "$repo_root/scripts/web-e2e-isolation.mjs" summarize "${result_reports[@]}"
+  exit 0
+fi
+
 compose_file="$repo_root/packages/db/docker-compose.yml"
 compose_project="dayli-web-e2e-${$}-${RANDOM}"
 temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/dayli-web-e2e.XXXXXX")"
@@ -12,8 +38,11 @@ certificate="$temporary_dir/localhost.pem"
 key="$temporary_dir/localhost-key.pem"
 api_log="$temporary_dir/api.log"
 web_log="$temporary_dir/web.log"
+media_log="$temporary_dir/media.log"
+media_root="$temporary_dir/media-objects"
 api_pid=""
 web_pid=""
+media_pid=""
 
 find_free_port() {
   node -e 'const server = require("node:net").createServer(); server.listen(0, "127.0.0.1", () => { console.log(server.address().port); server.close(); });'
@@ -22,6 +51,7 @@ find_free_port() {
 postgres_port="$(find_free_port)"
 api_port="$(find_free_port)"
 web_port="$(find_free_port)"
+media_port="$(find_free_port)"
 api_origin="https://localhost:${api_port}"
 web_origin="https://localhost:${web_port}"
 export POSTGRES_PORT="$postgres_port"
@@ -46,13 +76,15 @@ stop_process() {
 cleanup() {
   local status=$?
   trap - EXIT INT TERM
-  for pid in "$web_pid" "$api_pid"; do stop_process "$pid"; done
+  for pid in "$web_pid" "$api_pid" "$media_pid"; do stop_process "$pid"; done
   docker compose -p "$compose_project" -f "$compose_file" down -v --remove-orphans >/dev/null 2>&1 || true
   if [[ "$status" -ne 0 ]]; then
     echo 'API log:' >&2
     [[ -f "$api_log" ]] && tail -n 100 "$api_log" >&2 || true
     echo 'Web log:' >&2
     [[ -f "$web_log" ]] && tail -n 100 "$web_log" >&2 || true
+    echo 'Media store log:' >&2
+    [[ -f "$media_log" ]] && tail -n 100 "$media_log" >&2 || true
   fi
   rm -rf "$temporary_dir"
   exit "$status"
@@ -108,6 +140,12 @@ LOCAL_TEST_POSTGRES_PORT="$postgres_port" \
   DATABASE_URL="postgresql://migrator:migrator@localhost:${postgres_port}/dayli_test" \
   pnpm db:migrate
 
+echo 'Starting disposable local media store'
+mkdir -p "$media_root"
+node "$repo_root/scripts/fixtures/local-s3-media-server.mjs" "$media_root" "$media_port" >"$media_log" 2>&1 &
+media_pid=$!
+wait_for_url "http://127.0.0.1:${media_port}/health" "$media_pid" 'Local media store'
+
 echo 'Starting isolated local API'
 (
   exec env \
@@ -120,7 +158,12 @@ echo 'Starting isolated local API'
       --persist-to "$temporary_dir/wrangler" --log-level warn \
       --var 'BETTER_AUTH_SECRET:e2e-only-secret-that-is-at-least-32-characters' \
       --var "BETTER_AUTH_BASE_URL:${api_origin}" \
-      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin},${web_origin}"
+      --var "BETTER_AUTH_TRUSTED_ORIGINS:${api_origin},${web_origin}" \
+      --var 'R2_ACCOUNT_ID:local-e2e' \
+      --var 'R2_BUCKET_NAME:dayli-media-e2e' \
+      --var 'R2_ACCESS_KEY_ID:local-e2e-access' \
+      --var 'R2_SECRET_ACCESS_KEY:local-e2e-secret-that-is-not-a-real-credential' \
+      --var "R2_LOCAL_ENDPOINT:http://127.0.0.1:${media_port}"
 ) >"$api_log" 2>&1 &
 api_pid=$!
 wait_for_url "${api_origin}/api/v1/health" "$api_pid" 'API'
@@ -139,4 +182,10 @@ wait_for_url "$web_origin" "$web_pid" 'Web application'
 echo 'Running Playwright browser journeys'
 # `pnpm run <script> -- <args>` passes the separator through to shell scripts.
 if [[ "${1:-}" == "--" ]]; then shift; fi
-E2E_WEB_ORIGIN="$web_origin" pnpm --filter @dayli/web exec playwright test "$@"
+if [[ -n "${E2E_RESULT_FILE:-}" ]]; then
+  E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" \
+    PLAYWRIGHT_JSON_OUTPUT_FILE="$E2E_RESULT_FILE" pnpm --filter @dayli/web exec playwright test "$@" --reporter=json
+else
+  E2E_WEB_ORIGIN="$web_origin" E2E_API_ORIGIN="$api_origin" E2E_POSTGRES_CONTAINER="${compose_project}-postgres-1" E2E_MEDIA_ROOT="$media_root" E2E_MEDIA_BUCKET="dayli-media-e2e" \
+    pnpm --filter @dayli/web exec playwright test "$@"
+fi

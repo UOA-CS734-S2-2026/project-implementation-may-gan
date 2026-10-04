@@ -3,6 +3,7 @@ import { validateStagingOrigins } from "./staging-origins.mjs";
 import { readCloudflareSecretNames, readStagingAuthBindings } from "./staging-auth-bindings.mjs";
 import { assertStagingR2BucketAccess, readStagingMediaBindings } from "./staging-media-bindings.mjs";
 import { createStagingWorkerConfigs, readStagingBrowserProxyMode, serializeWranglerConfig } from "./staging-worker-config.mjs";
+import { verifyStagingExportWorkerTarget } from "./verify-staging-export-worker-target.mjs";
 import {
   assertProjectedWorkerSecretPairing,
   readStagingWorkerSecretSource,
@@ -39,6 +40,16 @@ const accountId = required("CLOUDFLARE_ACCOUNT_ID");
 const apiToken = required("CLOUDFLARE_API_TOKEN");
 const hyperdriveId = required("CLOUDFLARE_STAGING_HYPERDRIVE_ID");
 const hyperdriveName = required("STAGING_HYPERDRIVE_NAME");
+const exportWorkerHyperdriveId = process.env.CLOUDFLARE_STAGING_EXPORT_WORKER_HYPERDRIVE_ID;
+const proofKeys = ["STAGING_EXPORT_PROOF_APPROVED", "STAGING_EXPORT_PROOF_USER_ID",
+  "STAGING_EXPORT_PROOF_BUILD_UNTIL", "STAGING_EXPORT_PROOF_CLEANUP_REVIEW_AFTER"];
+const proofValues = proofKeys.map((key) => process.env[key]);
+if (proofValues.some(Boolean) && !proofValues.every(Boolean)) {
+  throw new Error("Staging export proof settings must be supplied together.");
+}
+const exportProofVars = proofValues.every(Boolean)
+  ? Object.fromEntries(proofKeys.map((key, index) => [key, proofValues[index]])) : {};
+if (exportWorkerHyperdriveId) await verifyStagingExportWorkerTarget({});
 if (!idPattern.test(accountId) || !idPattern.test(hyperdriveId)) throw new Error("Refusing an invalid Cloudflare account or Hyperdrive ID.");
 if (required("STAGING_API_SERVICE_NAME") !== expectedWorkerName) throw new Error("STAGING_API_SERVICE_NAME must be dayli-api-staging.");
 if (!hyperdriveNamePattern.test(hyperdriveName)) throw new Error("Refusing an invalid expected Hyperdrive name.");
@@ -81,6 +92,8 @@ if (mediaBindings.vars.R2_BUCKET_NAME !== undefined) {
 const { api, probe } = createStagingWorkerConfigs({
   workerName: expectedWorkerName,
   hyperdriveId,
+  exportWorkerHyperdriveId,
+  exportProofVars,
   authApiOrigin: apiOrigin,
   authWebOrigin: webOrigin,
   authVars: authBindings.vars,

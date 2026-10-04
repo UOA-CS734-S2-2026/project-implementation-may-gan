@@ -3,11 +3,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Asked only when the author taps "Take photo" or "Record video". -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Asked only when the author taps "Record" for a voice memo. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Posting never needs a camera, so devices without one can still install. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:allowBackup="false"
-        android:label="dayli_mobile"
+        android:label="Dayli"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

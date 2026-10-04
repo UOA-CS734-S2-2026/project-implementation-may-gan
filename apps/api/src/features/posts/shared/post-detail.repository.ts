@@ -1,7 +1,7 @@
 import { and, count, eq, isNotNull, sql } from "drizzle-orm";
 import { schema, type DayliDatabase, type HyperdriveBinding } from "@dayli/db";
 import { withHyperdriveDatabase } from "../../../infrastructure/database/hyperdrive";
-import { buildDrizzlePostVisibilityFilter, findPrivatelyVisiblePostMedia } from "../../permissions";
+import { buildDrizzleCommentVisibilityFilter, buildDrizzlePostVisibilityFilter, findPrivatelyVisiblePostMedia } from "../../permissions";
 import {
   readAttachedVoiceMemo,
   readAttachedMedia,
@@ -31,7 +31,7 @@ export interface PostDetailRepository {
  * anyone when its author has a public profile.
  */
 export function createPostgresPostDetailRepository(database: DayliDatabase): PostDetailRepository {
-  const { posts, user, dailyPrompts, postRevisions } = schema;
+  const { posts, user, dailyPrompts, postRevisions, postLikes, postComments } = schema;
   return {
     async findPost(viewerId, postId, now) {
       const [row] = await database
@@ -67,6 +67,18 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         .from(postRevisions)
         .where(visibleRevisions(row.id, viewerIsAuthor));
       const revisionCount = revisions?.count ?? 0;
+      const [likes] = await database.select({ count: count() }).from(postLikes).where(eq(postLikes.postId, row.id));
+      // A signed-out reader of a public post has no likes of their own.
+      const liked = viewerId === null ? [] : await database
+        .select({ userId: postLikes.userId })
+        .from(postLikes)
+        .where(and(eq(postLikes.postId, row.id), eq(postLikes.userId, viewerId)))
+        .limit(1);
+      // The same rule as the comment list, so the count matches what the viewer can open.
+      const [comments] = await database
+        .select({ count: count() })
+        .from(postComments)
+        .where(and(eq(postComments.postId, row.id), buildDrizzleCommentVisibilityFilter(database, viewerId)));
       const media = (await readAttachedMedia(database, [row.id])).get(row.id) ?? [];
       const voiceMemo = await readAttachedVoiceMemo(database, row.id);
       const attachedMediaId = media[0]?.id ?? voiceMemo?.id;
@@ -89,6 +101,9 @@ export function createPostgresPostDetailRepository(database: DayliDatabase): Pos
         releasedAt: row.releasedAt.toISOString(),
         edited: revisionCount > 0,
         revisionCount,
+        likeCount: likes?.count ?? 0,
+        viewerHasLiked: liked.length > 0,
+        commentCount: comments?.count ?? 0,
         viewerIsAuthor,
         media,
         voiceMemo,

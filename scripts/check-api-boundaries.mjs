@@ -5,7 +5,8 @@ import { dirname, relative, resolve, sep } from "node:path";
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const tsModule = await import(resolve(repositoryRoot, "apps/api/node_modules/typescript/lib/typescript.js"));
 const ts = tsModule.default ?? tsModule;
-const featureRoot = resolve(repositoryRoot, "apps/api/src/features");
+const apiSourceRoot = resolve(repositoryRoot, "apps/api/src");
+const featureRoot = resolve(apiSourceRoot, "features");
 const apiTestRoot = resolve(repositoryRoot, "apps/api/test");
 const fixtureMarker = ".boundary-fixture.ts";
 const allowedFeatureRootFiles = new Set([
@@ -349,11 +350,25 @@ async function runFixtureChecks(errors) {
 }
 
 async function main() {
+  const sourceFiles = await collectTypeScriptFiles(apiSourceRoot);
+  const testFiles = await collectTypeScriptFiles(apiTestRoot);
   const files = [
     ...await collectTypeScriptFiles(featureRoot),
-    ...await collectTypeScriptFiles(apiTestRoot),
+    ...testFiles,
   ];
   const errors = [];
+  for (const file of sourceFiles) {
+    const path = normalized(relative(apiSourceRoot, file));
+    if (path.endsWith(".test.ts") && !path.split("/").includes("__tests__")) {
+      errors.push(`${normalized(relative(repositoryRoot, file))} must be placed in an owning __tests__ directory.`);
+    }
+  }
+  for (const file of testFiles) {
+    const path = normalized(relative(apiTestRoot, file));
+    if (path.endsWith(".test.ts") && !path.startsWith("__tests__/")) {
+      errors.push(`${normalized(relative(repositoryRoot, file))} must be placed in test/__tests__/.`);
+    }
+  }
   for (const file of files) await checkFile(file, errors);
   await runFixtureChecks(errors);
   if (errors.length > 0) {

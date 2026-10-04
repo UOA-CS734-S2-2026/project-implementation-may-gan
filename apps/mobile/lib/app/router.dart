@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
 import '../auth/auth_screens.dart';
+import '../auth/public_return_intent.dart';
 import '../auth/session_controller.dart';
 import '../auth/username_setup_screen.dart';
 import '../compose/composer_link.dart';
@@ -26,6 +27,9 @@ import 'splash_screen.dart';
 const _publicLocations = {'/welcome', '/sign-in', '/sign-up'};
 const _legalLocations = {'/privacy', '/terms'};
 
+bool _isPublicContent(String location) =>
+    location.startsWith('/u/') || location.startsWith('/posts/');
+
 /// A public welcome and auth pages; signed-in tabs inside the shell; and the
 /// composer and settings as full-screen pages above it.
 GoRouter buildRouter(
@@ -34,15 +38,87 @@ GoRouter buildRouter(
   PendingDestination? pending,
   ComposerLinkSequence? links,
 }) {
+  final waiting = pending ?? PendingDestination();
   final linkSequence = links ?? ComposerLinkSequence();
+  PublicReturnIntent? presentedIntent;
+  String? presentedLocation;
+
+  PublicReturnIntent? takeIntent(GoRouterState state) {
+    final actorId = session.user?.id;
+    if (session.status != SessionStatus.signedIn || actorId == null) {
+      presentedIntent = null;
+      presentedLocation = null;
+      return null;
+    }
+    final location = state.uri.toString();
+    final fresh = session.consumePublicReturnIntent(state.uri);
+    if (fresh != null) {
+      presentedIntent = fresh;
+      presentedLocation = location;
+      return fresh;
+    }
+    if (presentedLocation == location &&
+        presentedIntent?.boundActorId == actorId) {
+      return presentedIntent;
+    }
+    presentedIntent = null;
+    presentedLocation = null;
+    return null;
+  }
+
   return GoRouter(
     initialLocation: initialLocation,
     refreshListenable: session,
-    redirect: _sessionRedirect(
-      session,
-      pending ?? PendingDestination(),
-      linkSequence,
-    ),
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+      final uri = state.uri;
+      if (location == composerPath) {
+        // Each link from outside the app is an event, even a repeat of the
+        // last one.
+        if (uri.scheme == composerLinkScheme) linkSequence.arrived();
+        // Keep only a valid rating, and drop the custom scheme and host.
+        final composer = composerLocation(uri);
+        if (session.status != SessionStatus.signedIn) {
+          waiting.remember(composer);
+        } else if (uri.toString() != composer) {
+          return composer;
+        }
+      } else if (uri.scheme == composerLinkScheme) {
+        // An outside link can only open the composer.
+        return '/';
+      }
+      if (_legalLocations.contains(location)) return null;
+      final public = _publicLocations.contains(location);
+      final publicContent = _isPublicContent(location);
+      final returnIntent =
+          location == '/sign-in' ||
+              location == '/sign-up' ||
+              location == '/setup-username'
+          ? session.resolvePublicReturnIntent(state.uri)
+          : null;
+      switch (session.status) {
+        case SessionStatus.unknown:
+          // Public deep links render while session restoration runs. Once the
+          // actor is known, the screen refetches under that account.
+          return publicContent || location == '/splash' ? null : '/splash';
+        case SessionStatus.signedOut:
+          return public || publicContent ? null : '/welcome';
+        case SessionStatus.needsUsernameSetup:
+          if (location == '/account/export') return null;
+          if (location == '/setup-username') return null;
+          return returnIntent == null
+              ? '/setup-username'
+              : returnIntent.authLocation('/setup-username');
+        case SessionStatus.signedIn:
+          if (location == '/sign-in' ||
+              location == '/sign-up' ||
+              location == '/setup-username') {
+            return returnIntent?.returnLocation ?? waiting.take() ?? '/';
+          }
+          if (location == '/splash' || public) return waiting.take() ?? '/';
+          return null;
+      }
+    },
     routes: [
       GoRoute(path: '/splash', builder: (_, _) => const SplashScreen()),
       GoRoute(
@@ -92,8 +168,28 @@ GoRouter buildRouter(
       ),
       GoRoute(
         path: '/posts/:id',
-        builder: (_, state) =>
-            PostDetailScreen(postId: state.pathParameters['id']!),
+        builder: (_, state) {
+          final intent = takeIntent(state);
+          return PostDetailScreen(
+            postId: state.pathParameters['id']!,
+            intent: intent?.action,
+            intentActorId: intent?.boundActorId,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/u/:username',
+        builder: (_, state) {
+          final intent = takeIntent(state);
+          final profile = SocialProfileScreen(
+            username: state.pathParameters['username']!,
+            intent: intent?.action,
+            intentActorId: intent?.boundActorId,
+          );
+          return session.status == SessionStatus.signedIn
+              ? AppShell(location: state.matchedLocation, child: profile)
+              : profile;
+        },
       ),
       ShellRoute(
         builder: (_, state, child) =>
@@ -101,12 +197,6 @@ GoRouter buildRouter(
         routes: [
           GoRoute(path: '/', builder: (_, _) => const HomeScreen()),
           GoRoute(path: '/friends', builder: (_, _) => const FriendsScreen()),
-          GoRoute(
-            path: '/u/:username',
-            builder: (_, state) => SocialProfileScreen(
-              username: state.pathParameters['username']!,
-            ),
-          ),
           GoRoute(path: '/me', builder: (_, _) => const MyDaysScreen()),
           GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
           GoRoute(
@@ -128,45 +218,3 @@ GoRouter buildRouter(
     ],
   );
 }
-
-/// A composer link (see [composerLinkScheme]) goes through the same session
-/// checks as every other location. Until the person is signed in with a
-/// username, [pending] remembers it and the composer opens afterwards.
-GoRouterRedirect _sessionRedirect(
-  SessionController session,
-  PendingDestination pending,
-  ComposerLinkSequence links,
-) => (context, state) {
-  final location = state.matchedLocation;
-  final uri = state.uri;
-  if (location == composerPath) {
-    // Each link from outside the app is an event, even a repeat of the last one.
-    if (uri.scheme == composerLinkScheme) links.arrived();
-    // Keep only a valid rating, and drop the custom scheme and host.
-    final composer = composerLocation(uri);
-    if (session.status != SessionStatus.signedIn) {
-      pending.remember(composer);
-    } else if (uri.toString() != composer) {
-      return composer;
-    }
-  } else if (uri.scheme == composerLinkScheme) {
-    // An outside link can only open the composer.
-    return '/';
-  }
-  if (_legalLocations.contains(location)) return null;
-  final public = _publicLocations.contains(location);
-  switch (session.status) {
-    case SessionStatus.unknown:
-      return location == '/splash' ? null : '/splash';
-    case SessionStatus.signedOut:
-      return public ? null : '/welcome';
-    case SessionStatus.needsUsernameSetup:
-      return location == '/setup-username' || location == '/account/export'
-          ? null
-          : '/setup-username';
-    case SessionStatus.signedIn:
-      return public || location == '/splash' || location == '/setup-username'
-          ? pending.take() ?? '/'
-          : null;
-  }
-};

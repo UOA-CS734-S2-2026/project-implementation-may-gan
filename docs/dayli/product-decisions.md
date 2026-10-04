@@ -14,6 +14,10 @@ Agreed in October 2026 for #76–#78. Authors can edit the reflective answer, ca
 
 Authors can delete a post at any time, which moves it to Trash (#250). It disappears for everyone at once and can be restored for 7 days. If that Auckland day hasn't ended, they can post again for it; a past day can never be reposted, and a restore is refused once the day has a newer post. Cleanup follows the [deletion rules](#deletion-backups-and-recovery) below.
 
+## Likes and comments
+
+Agreed in October 2026 for #79 and #80. The post's author and their active friends can like it and comment on it, and lose that ability the moment they lose access to the post. A public account lets anyone signed in read its released posts, but not like or comment on them. Comments take one level of replies. Commenters can edit and delete their own comments. The post's author can delete, but not edit, any comment on their post. Deleting a top-level comment hides its replies. People across a block don't see each other's likes or comments on a shared friend's post.
+
 ## Daily prompt versions and tomorrow notes
 
 The server owns the daily prompt for each Auckland calendar day. Version-one reference data reuses the 366 prompts and stable `prompt-MM-DD` IDs from `732-workspace/group-project-wdcc` at source commit `7d2dfd6`. Prompt rows are immutable. A changed prompt is a new versioned row with a new ID and an Auckland effective date; historical posts continue to reference the original prompt row and text.
@@ -30,7 +34,7 @@ The messaging planning conversation selected text direct messaging on web and Fl
 
 Foreground updates use hibernating WebSockets with small change notifications and authorized REST fetches, not periodic polling. Mobile push through FCM/APNs is in scope, with configuration and physical-device verification as release gates. Image/video attachments remain blocked on the separate R2 upload owner. Group chats are deferred until group membership and blocking rules are agreed.
 
-The [messaging handoff](../implementation/messaging-implementation-handoff.md) distinguishes these confirmed choices from proposed defaults requiring review, including request reopening, reaction limits, and push presentation. These clarifications do not mark any messaging feature as implemented.
+The [messaging system guide](../../apps/docs/content/docs/systems/messaging/index.mdx) records the implemented request states, reaction limits, and generic push presentation. Provider and physical-device checks remain release gates.
 
 ## Profiles
 
