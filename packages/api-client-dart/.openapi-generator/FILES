@@ -82,6 +82,9 @@ lib/model/message.dart
 lib/model/message_reactions_inner.dart
 lib/model/message_reactions_inner_reactors_inner.dart
 lib/model/message_reply_preview.dart
+lib/model/on_this_day_memories.dart
+lib/model/on_this_day_memory.dart
+lib/model/on_this_day_memory_prompt.dart
 lib/model/password_reauthentication_grant.dart
 lib/model/password_reauthentication_request.dart
 lib/model/pending_relationship_request.dart

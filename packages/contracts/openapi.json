@@ -1649,6 +1649,121 @@
         ],
         "description": "A restricted response has only kind and username. An archive response has kind and every ProfilePostsPage field."
       },
+      "OnThisDayMemories": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "Today's Auckland date, chosen by the server."
+              }
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OnThisDayMemory"
+            },
+            "description": "At most one memory per earlier year, newest year first."
+          }
+        },
+        "required": [
+          "date",
+          "items"
+        ]
+      },
+      "OnThisDayMemory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "localDate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AucklandDate"
+              },
+              {
+                "description": "The Auckland day the post was written for."
+              }
+            ]
+          },
+          "yearsAgo": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Whole years between the post's Auckland day and today."
+          },
+          "rating": {
+            "type": "integer"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "friends"
+            ],
+            "description": "Who could read the post. Memories are owner-only either way; this labels the original audience."
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/OnThisDayMemoryPrompt"
+          },
+          "reflectiveAnswer": {
+            "type": "string"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "edited": {
+            "type": "boolean",
+            "description": "True when the author has edited the post since it was accepted."
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PostMedia"
+            },
+            "description": "Attached photos or video in display order, each with a private download URL that expires after 5 minutes."
+          }
+        },
+        "required": [
+          "id",
+          "localDate",
+          "yearsAgo",
+          "rating",
+          "audience",
+          "prompt",
+          "reflectiveAnswer",
+          "caption",
+          "edited",
+          "media"
+        ],
+        "description": "One of the caller's own earlier posts. Tomorrow notes are not part of this projection."
+      },
+      "OnThisDayMemoryPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/OpaqueId"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      },
       "UpdatePostRequest": {
         "type": "object",
         "properties": {
@@ -5322,6 +5437,85 @@
           },
           "503": {
             "description": "Post or media storage is temporarily unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/memories/on-this-day": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "operationId": "posts.listOnThisDay",
+        "summary": "List the caller's On This Day memories",
+        "description": "Returns the caller's own posts from today's Auckland month and day in earlier years, newest year first, at most one per year. Only the caller's posts are ever returned, solo and friends alike. Posts in Trash or awaiting purge, and posts from the current year, are left out. A 29 February post is a memory only on 29 February of a later leap year. The date is the server's current Auckland date and cannot be supplied by the client.",
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's memories for today.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnThisDayMemories"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has not chosen a username yet.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests.",
+            "headers": {
+              "Retry-After": {
+                "description": "Conservative wait in seconds.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Post storage is temporarily unavailable, or a memory has media and media storage is unavailable.",
             "content": {
               "application/json": {
                 "schema": {
