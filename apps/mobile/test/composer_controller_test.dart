@@ -4,6 +4,7 @@ import 'package:dayli_mobile/api/api_failure.dart';
 import 'package:dayli_mobile/compose/composer_controller.dart';
 import 'package:dayli_mobile/drafts/daily_post_draft.dart';
 import 'package:dayli_mobile/posts/post_submitter.dart';
+import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -496,6 +497,165 @@ void main() {
         ),
       ),
     );
+  });
+
+  group('weather', () {
+    const rain = PostWeather(
+      condition: WeatherCondition.rain,
+      temperatureC: 11,
+      placeName: 'Auckland',
+    );
+
+    Future<ComposerController> withWeather() async {
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      composer.update(weather: () => rain);
+      return composer;
+    }
+
+    test('is added to the draft and saved with it', () async {
+      final composer = await withWeather();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(composer.draft!.weather, rain);
+      expect(drafts.drafts['user-1']!.weather, rain);
+      composer.dispose();
+    });
+
+    test('is removed without touching anything else', () async {
+      final composer = await withWeather();
+      composer.update(weather: () => null);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(composer.draft!.weather, isNull);
+      expect(composer.draft!.rating, 7);
+      expect(composer.draft!.attachments, const [photo]);
+      expect(drafts.drafts['user-1']!.weather, isNull);
+      composer.dispose();
+    });
+
+    test('stays when other fields are edited', () async {
+      final composer = await withWeather();
+      composer.update(
+        reflectiveAnswer: 'Different words',
+        caption: 'A caption',
+        rating: () => 3,
+        audience: PostAudience.solo,
+        tomorrowNote: 'Another note',
+        attachments: const [],
+      );
+
+      expect(composer.draft!.weather, rain);
+      composer.dispose();
+    });
+
+    test('is restored with a saved draft', () async {
+      await drafts.write(
+        DailyPostDraft(
+          userId: 'user-1',
+          localDate: '2026-09-25',
+          promptId: 'prompt-09-25',
+          promptText: 'What made you smile today?',
+          idempotencyKey: 'saved-key',
+          updatedAt: DateTime.utc(2026, 9, 25),
+          reflectiveAnswer: 'Half written',
+          weather: rain,
+        ),
+      );
+      final composer = controller();
+      await composer.load();
+
+      expect(composer.draft!.weather, rain);
+      expect(composer.draft!.idempotencyKey, 'saved-key');
+      composer.dispose();
+    });
+
+    test('stays when the prompt text was refreshed from the server', () async {
+      await drafts.write(
+        DailyPostDraft(
+          userId: 'user-1',
+          localDate: '2026-09-25',
+          promptId: 'prompt-09-25',
+          promptText: 'An older wording',
+          idempotencyKey: 'saved-key',
+          updatedAt: DateTime.utc(2026, 9, 25),
+          weather: rain,
+        ),
+      );
+      final composer = controller();
+      await composer.load();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(composer.draft!.promptText, 'What made you smile today?');
+      expect(composer.draft!.weather, rain);
+      expect(drafts.drafts['user-1']!.weather, rain);
+      composer.dispose();
+    });
+
+    test('is sent with the post', () async {
+      final composer = await withWeather();
+      await composer.submit();
+
+      expect(submitter.submitted.single.weather, rain);
+      composer.dispose();
+    });
+
+    test('is not sent when none was added', () async {
+      final composer = controller();
+      await composer.load();
+      fill(composer);
+      await composer.submit();
+
+      expect(submitter.submitted.single.weather, isNull);
+      composer.dispose();
+    });
+
+    test(
+      'is kept when the server refuses an upload and it is retried',
+      () async {
+        submitter.result = const SubmissionRejected(
+          SubmissionConflict.mediaUnavailable,
+        );
+        const validated = DraftAttachment(
+          localPath: '/photos/0.jpg',
+          mediaType: 'image',
+          compressedPath: '/support/dayli-media/0.jpg',
+          contentType: 'image/jpeg',
+          byteSize: 1000,
+          reservationId: 'reservation-1',
+          status: AttachmentUploadStatus.validated,
+        );
+        final composer = await withWeather();
+        composer.update(attachments: const [validated]);
+        await composer.submit();
+        await composer.close();
+
+        expect(
+          composer.draft!.attachments.single.status,
+          AttachmentUploadStatus.pending,
+        );
+        expect(composer.draft!.weather, rain);
+        expect(drafts.drafts['user-1']!.weather, rain);
+        composer.dispose();
+      },
+    );
+
+    test('cannot be changed while a post is being sent', () async {
+      final composer = await withWeather();
+      submitter.hold = Completer();
+      final sending = composer.submit();
+      await Future<void>.delayed(Duration.zero);
+
+      composer.update(weather: () => null);
+
+      expect(composer.draft!.weather, rain);
+      submitter.hold!.complete(
+        const SubmissionAccepted(postId: 'post-1', replayed: false),
+      );
+      await sending;
+      composer.dispose();
+    });
   });
 
   group('when the server refuses an attachment', () {

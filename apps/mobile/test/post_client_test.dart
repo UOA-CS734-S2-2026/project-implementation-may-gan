@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dayli_mobile/api/api_failure.dart';
+import 'package:dayli_mobile/weather/post_weather.dart';
 import 'package:dayli_mobile/api/post_client.dart';
 import 'package:dayli_mobile/api/post_media.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -134,6 +135,62 @@ void main() {
       'url': url,
       'expiresAt': '2026-09-26T03:05:00.000Z',
     };
+
+    test('reads the post\'s weather snapshot, or none', () async {
+      final withWeather = await client(
+        (_) => http.Response(
+          jsonEncode({
+            ...body(),
+            'weather': {
+              'condition': 'rain',
+              'temperatureC': 11,
+              'placeName': 'Auckland',
+            },
+          }),
+          200,
+        ),
+      ).get('post-1');
+      expect(
+        (withWeather as ApiSuccess<PostDetail>).value.weather,
+        const PostWeather(
+          condition: WeatherCondition.rain,
+          temperatureC: 11,
+          placeName: 'Auckland',
+        ),
+      );
+
+      // A post without one sends null, and an older server sends nothing.
+      for (final extra in [
+        {'weather': null},
+        <String, Object?>{},
+      ]) {
+        final without = await client(
+          (_) => http.Response(jsonEncode({...body(), ...extra}), 200),
+        ).get('post-1');
+        expect((without as ApiSuccess<PostDetail>).value.weather, isNull);
+      }
+    });
+
+    test('drops a weather snapshot that fails the API\'s own limits', () async {
+      for (final bad in <Object?>[
+        {'condition': 'hail', 'temperatureC': 11, 'placeName': 'Auckland'},
+        {'condition': 'rain', 'temperatureC': 99, 'placeName': 'Auckland'},
+        {'condition': 'rain', 'temperatureC': 1.5, 'placeName': 'Auckland'},
+        {'condition': 'rain', 'temperatureC': 11, 'placeName': ''},
+        {'condition': 'rain', 'temperatureC': 11, 'placeName': 'Auck\nland'},
+        {'condition': 'rain', 'temperatureC': 11},
+        'rain',
+        [1, 2],
+      ]) {
+        final result = await client(
+          (_) => http.Response(jsonEncode({...body(), 'weather': bad}), 200),
+        ).get('post-1');
+
+        // The post still opens, just without the snapshot.
+        expect((result as ApiSuccess<PostDetail>).value.weather, isNull);
+        expect(result.value.id, 'post-1');
+      }
+    });
 
     test('reads the post\'s voice memo, or none', () async {
       final withMemo = await client(

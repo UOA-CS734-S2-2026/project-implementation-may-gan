@@ -8,6 +8,7 @@ import '../api/posting_day_client.dart';
 import '../drafts/daily_post_draft.dart';
 import '../drafts/draft_store.dart';
 import '../posts/post_submitter.dart';
+import '../weather/post_weather.dart';
 
 /// Limits mirror the server contract documented in the daily-posts system guide. The API
 /// remains authoritative.
@@ -362,6 +363,7 @@ class ComposerController extends ChangeNotifier {
     PostAudience? audience,
     String? tomorrowNote,
     List<DraftAttachment>? attachments,
+    PostWeather? Function()? weather,
   }) {
     final current = _draft;
     if (current == null || _submitting || _phase != ComposerPhase.editing) {
@@ -374,6 +376,7 @@ class ComposerController extends ChangeNotifier {
       audience: audience,
       tomorrowNote: tomorrowNote,
       attachments: attachments,
+      weather: weather,
       updatedAt: _clock(),
     );
     _message = null;
