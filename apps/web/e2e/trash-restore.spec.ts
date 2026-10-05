@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { signUpWithExplicitConsent } from "./support/legal-consent";
 
 test.setTimeout(60_000);
 
@@ -10,12 +11,9 @@ test("an owner moves a post to Trash, sees concealment, and restores it", async 
   const apiOrigin = process.env.E2E_API_ORIGIN!;
 
   await page.goto("/sign-up");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Public name (optional)").fill("Trash E2E");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Let's go" }).click();
-  await expect(page).toHaveURL(/\/home$/);
+  await signUpWithExplicitConsent(page, {
+    username, publicName: "Trash E2E", email, password,
+  });
 
   const postId = await page.evaluate(async (api) => {
     const dayResponse = await fetch(`${api}/api/v1/posting-days/current`, { credentials: "include" });

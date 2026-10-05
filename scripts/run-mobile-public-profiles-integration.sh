@@ -29,12 +29,15 @@ public_username="dpp_public_${suffix}"
 private_username="dpp_private_${suffix}"
 viewer_username="dpp_viewer_${suffix}"
 second_viewer_username="dpp_viewer_two_${suffix}"
+blocked_username="dpp_legal_blocked_${suffix}"
 public_email="${public_username}@example.test"
 private_email="${private_username}@example.test"
 viewer_email="${viewer_username}@example.test"
 second_viewer_email="${second_viewer_username}@example.test"
+blocked_email="${blocked_username}@example.test"
 viewer_password="$(openssl rand -hex 18)"
 second_viewer_password="$(openssl rand -hex 18)"
+blocked_password="$(openssl rand -hex 18)"
 fixture_password="$(openssl rand -hex 18)"
 replay_intent_id="$(openssl rand -hex 24)"
 replay_issued_at="$(node -e 'process.stdout.write(String(Date.now()))')"
@@ -131,12 +134,38 @@ sign_up() {
   local fixture_ip="$4"
   local headers="$temporary_dir/${username}.headers"
   local body="$temporary_dir/${username}.json"
-  local status
+  local current="$temporary_dir/${username}-legal-current.json"
+  local intent="$temporary_dir/${username}-legal-intent.json"
+  local intent_payload token binding status
+
+  status="$(curl --silent --show-error --insecure --output "$current" --write-out '%{http_code}' \
+    "${host_api_origin}/api/v1/legal/current")"
+  if [[ "$status" != "200" ]]; then
+    echo "Current registration Terms failed with HTTP ${status}." >&2
+    return 1
+  fi
+  intent_payload="$(node -e '
+    const value = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"));
+    if (value.status !== "effective" || typeof value.termsVersionId !== "string" || !/^[0-9a-f]{64}$/.test(value.termsContentDigest)) process.exit(1);
+    process.stdout.write(JSON.stringify({ flow: "email", termsVersionId: value.termsVersionId, termsContentDigest: value.termsContentDigest, acceptedTermsAndDeclaredAge16: true }));
+  ' "$current")"
+  status="$(curl --silent --show-error --insecure --output "$intent" --write-out '%{http_code}' \
+    --request POST "${host_api_origin}/api/v1/legal/registration-intent" \
+    --header 'content-type: application/json' --data "$intent_payload")"
+  if [[ "$status" != "200" ]]; then
+    echo "Explicit registration intent failed with HTTP ${status}." >&2
+    return 1
+  fi
+  token="$(node -e 'const value = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if (!/^[0-9a-f]{64}$/.test(value.token)) process.exit(1); process.stdout.write(value.token)' "$intent")"
+  binding="$(node -e 'const value = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if (!/^[0-9a-f]{64}$/.test(value.binding)) process.exit(1); process.stdout.write(value.binding)' "$intent")"
+
   status="$(curl --silent --show-error --insecure \
     --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
     --request POST "${host_api_origin}/api/auth/sign-up/email" \
     --header 'content-type: application/json' \
     --header "cf-connecting-ip: ${fixture_ip}" \
+    --header "x-dayli-registration-intent: ${token}" \
+    --header "x-dayli-registration-binding: ${binding}" \
     --data "{\"name\":\"Synthetic ${username}\",\"username\":\"${username}\",\"displayUsername\":\"Synthetic ${username}\",\"email\":\"${email}\",\"password\":\"${password}\"}")"
   if [[ "$status" != "200" ]]; then
     echo "Synthetic account setup failed with HTTP ${status}." >&2
@@ -195,6 +224,9 @@ LOCAL_TEST_POSTGRES_PORT="$postgres_port" \
   MIGRATION_TARGET=local \
   DATABASE_URL="postgresql://migrator:migrator@localhost:${postgres_port}/dayli_test" \
   pnpm db:migrate >/dev/null
+node "$repo_root/scripts/fixtures/local-legal-publications.mjs" | \
+  docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+    psql -v ON_ERROR_STOP=1 -U migrator -d dayli_test >/dev/null
 
 echo 'Starting disposable local Worker'
 (
@@ -223,7 +255,8 @@ public_token="$(sign_up "$public_username" "$public_email" "$fixture_password" '
 private_token="$(sign_up "$private_username" "$private_email" "$fixture_password" '198.51.100.12')"
 viewer_token="$(sign_up "$viewer_username" "$viewer_email" "$viewer_password" '198.51.100.13')"
 second_viewer_token="$(sign_up "$second_viewer_username" "$second_viewer_email" "$second_viewer_password" '198.51.100.14')"
-if [[ -z "$public_token" || -z "$private_token" || -z "$viewer_token" || -z "$second_viewer_token" ]]; then
+blocked_token="$(sign_up "$blocked_username" "$blocked_email" "$blocked_password" '198.51.100.16')"
+if [[ -z "$public_token" || -z "$private_token" || -z "$viewer_token" || -z "$second_viewer_token" || -z "$blocked_token" ]]; then
   echo 'Synthetic account setup returned no native session token.' >&2
   exit 1
 fi
@@ -246,10 +279,17 @@ viewer_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -
   psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${viewer_email}'")"
 second_viewer_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
   psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${second_viewer_email}'")"
-if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" || -z "$second_viewer_user_id" ]]; then
+blocked_user_id="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+  psql -At -U postgres -d dayli_test -c "select id from public.\"user\" where email = '${blocked_email}'")"
+if [[ -z "$public_user_id" || -z "$private_user_id" || -z "$viewer_user_id" || -z "$second_viewer_user_id" || -z "$blocked_user_id" ]]; then
   echo 'Synthetic accounts were not persisted.' >&2
   exit 1
 fi
+
+# Turn only this synthetic account into a genuine legacy legal-gate fixture.
+docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U postgres -d dayli_test \
+  -c "delete from public.age_declarations where user_id = '${blocked_user_id}'; delete from public.terms_acceptances where user_id = '${blocked_user_id}';" >/dev/null
 
 public_media_key="media/${public_user_id}/${public_media_id}.png"
 public_media_path="$temporary_dir/media/dayli-media-local/$public_media_key"
@@ -327,6 +367,8 @@ export DPP004_EXPIRED_TOKEN="$public_token"
 export DPP004_SECOND_VIEWER_TOKEN="$second_viewer_token"
 export DPP005_SECOND_VIEWER_EMAIL="$second_viewer_email"
 export DPP005_SECOND_VIEWER_PASSWORD="$second_viewer_password"
+export DPP005_BLOCKED_EMAIL="$blocked_email"
+export DPP005_BLOCKED_PASSWORD="$blocked_password"
 export DPP004_CA_PEM_B64="$(base64 < "$certificate" | tr -d '\n')"
 export DPP005_CONFLICT_POST_ID="$conflict_post_id"
 export DPP005_REPLAY_INTENT_ID="$replay_intent_id"
@@ -351,6 +393,8 @@ const keys = [
   'DPP004_SECOND_VIEWER_TOKEN',
   'DPP005_SECOND_VIEWER_EMAIL',
   'DPP005_SECOND_VIEWER_PASSWORD',
+  'DPP005_BLOCKED_EMAIL',
+  'DPP005_BLOCKED_PASSWORD',
   'DPP004_CA_PEM_B64',
   'DPP005_CONFLICT_POST_ID',
   'DPP005_REPLAY_INTENT_ID',
@@ -371,6 +415,7 @@ run_public_case() {
   flutter test integration_test/public_profiles_real_test.dart \
     -d "$device_id" --dart-define-from-file="$defines" --plain-name "$name"
 }
+run_public_case 'blocked existing account explicitly accepts the current legal policy'
 run_public_case 'password sign-in returns to like intent and writes only after confirmation'
 run_public_case 'password sign-in returns to friend intent without sending until tapped'
 native_messages_before="$(docker compose -p "$compose_project" -f "$compose_file" exec -T postgres psql -At -U postgres -d dayli_test -c "select count(*) from messages m join conversations c on c.id = m.conversation_id where m.sender_id = '$second_viewer_user_id' and m.body = 'Explicit native message.' and c.user_low_id = least('$public_user_id', '$second_viewer_user_id') and c.user_high_id = greatest('$public_user_id', '$second_viewer_user_id')")"
@@ -387,7 +432,7 @@ clear_auth_limits
 echo 'Cold restarting Android for the non-authentication lifecycle matrix and replay proof'
 flutter test integration_test/public_profiles_real_test.dart \
   -d "$device_id" --dart-define-from-file="$defines" \
-  --name '^(?!password sign-in|consumes the externally recorded|failed sign-in).*$'
+  --name '^(?!password sign-in|consumes the externally recorded|failed sign-in|blocked existing account).*$'
 
 assert_count() {
   local label="$1" query="$2"

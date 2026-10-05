@@ -139,6 +139,9 @@ LOCAL_TEST_POSTGRES_PORT="$postgres_port" \
   MIGRATION_TARGET=local \
   DATABASE_URL="postgresql://migrator:migrator@localhost:${postgres_port}/dayli_test" \
   pnpm db:migrate
+node "$repo_root/scripts/fixtures/local-legal-publications.mjs" | \
+  docker compose -p "$compose_project" -f "$compose_file" exec -T postgres \
+    psql -v ON_ERROR_STOP=1 -U migrator -d dayli_test >/dev/null
 
 echo 'Starting disposable local media store'
 mkdir -p "$media_root"

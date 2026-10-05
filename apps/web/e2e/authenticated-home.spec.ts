@@ -1,4 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import { acceptRequiredLegalConsent, signUpAcceptedApiFixture, signUpWithExplicitConsent } from "./support/legal-consent";
+
+function database(query: string): void {
+  execFileSync("docker", ["exec", process.env.E2E_POSTGRES_CONTAINER!, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "dayli_test", "-c", query], { stdio: "pipe" });
+}
 
 test("a person can sign up, leave, and return to their account", async ({ page }, testInfo) => {
   const suffix = testInfo.project.name.replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -15,13 +21,9 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   ]);
   await expect(page).toHaveURL(/\/sign-up$/);
 
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Public name (optional)").fill(`E2E ${testInfo.project.name}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Let's go" }).click();
-
-  await expect(page).toHaveURL(/\/home$/);
+  await signUpWithExplicitConsent(page, {
+    username, publicName: `E2E ${testInfo.project.name}`, email, password,
+  });
 
   if (testInfo.project.name === "mobile-chromium") {
     await page.locator('label[for="mobile-nav-toggle"]').first().click();
@@ -63,4 +65,26 @@ test("a person can sign up, leave, and return to their account", async ({ page }
   await page.reload();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText(email, { exact: true }).last()).toBeVisible();
+});
+
+test("a blocked existing account explicitly accepts the current legal policy", async ({ page }, testInfo) => {
+  const suffix = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(-18);
+  const account = {
+    username: `legal${suffix}`,
+    publicName: "Legal Gate E2E",
+    email: `legal${suffix}@example.test`,
+    password: "e2e-password-123",
+  };
+  await signUpAcceptedApiFixture(page, account);
+
+  database(`delete from age_declarations where user_id = (select id from "user" where username = '${account.username}'); delete from terms_acceptances where user_id = (select id from "user" where username = '${account.username}')`);
+  await page.request.post(`${process.env.E2E_API_ORIGIN}/api/auth/sign-out`);
+  await page.context().clearCookies();
+
+  await page.goto("/sign-in");
+  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Password").fill(account.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/legal\/acceptance(?:\?|$)/);
+  await acceptRequiredLegalConsent(page);
 });
